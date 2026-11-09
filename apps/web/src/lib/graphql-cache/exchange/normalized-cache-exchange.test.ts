@@ -1,6 +1,7 @@
 import {
   SaveEmailDraftDocument,
   SetEmailThreadArchivedDocument,
+  SoupDocument,
   UpdateNotificationsDocument,
 } from '@service-storage/graphql/generated/graphql';
 import {
@@ -32,6 +33,7 @@ import {
   subscribe,
 } from 'wonka';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
+import { resolveCrmExternalWriteTypes } from '../../queries/soup/graphql/external-write-scope';
 import { createUrqlQuery } from '../../urql-solid/create-urql-query';
 import { CacheNavigationError } from '../host/navigation-error';
 import { createRetirableCacheHost } from '../host/retirable-host';
@@ -55,6 +57,8 @@ import {
   type WriteResult,
 } from '../protocol';
 import { entityFromArgument } from './entity-resolvers';
+import { recordExternalWrite } from './external-writes';
+import { liveQueryData } from './live-query';
 import { NOOP_MUTATION_QUEUE_TELEMETRY } from './mutation-queue-telemetry';
 import {
   HYDRATE_ONLY_CONTEXT_KEY,
@@ -601,6 +605,12 @@ function harness(
   const client = {
     reexecuteOperation: vi.fn(),
     query: vi.fn((_query, _variables, _context) => ({
+      toPromise: () => Promise.resolve({ data: {} }),
+    })),
+    createRequestOperation: vi.fn((kind, request, context) =>
+      makeOperation(kind, request, context)
+    ),
+    executeRequestOperation: vi.fn((_operation) => ({
       toPromise: () => Promise.resolve({ data: {} }),
     })),
     mutation: vi.fn((query, variables, context) => ({
@@ -1907,6 +1917,124 @@ describe('normalizedCacheExchange', () => {
     expect(forwarded).toHaveLength(1);
   });
 
+  it.each([false, true])(
+    'never restores stale message membership after a newer network result (persisted: %s)',
+    async (persisted) => {
+      vi.useFakeTimers();
+      try {
+        const cached = { messages: ['first'], isRead: true };
+        const fresh = { messages: ['first', 'second'], isRead: true };
+        const affectedRead = deferred<ReadResult>();
+        const write = deferred<WriteResult>();
+        host.readQuery = vi
+          .fn()
+          .mockResolvedValueOnce({ kind: 'hit', data: cached })
+          .mockImplementationOnce(() => affectedRead.promise)
+          .mockResolvedValue({ kind: 'hit', data: fresh });
+        host.writeQuery = vi.fn(() => write.promise);
+        const { ops, results, forwarded, network } =
+          controlledQueryHarness(host);
+
+        ops.next(makeOp(1, 'cache-and-network'));
+        await vi.advanceTimersByTimeAsync(0);
+        host.pushAffected([1]);
+        await vi.advanceTimersByTimeAsync(0);
+
+        network.next(queryResult(forwarded[0]!, fresh));
+        await vi.advanceTimersByTimeAsync(0);
+        expect(results.map((result) => result.data)).toEqual([cached, fresh]);
+
+        const acknowledgeWrite = () =>
+          write.resolve({
+            revision: INITIAL_CACHE_REVISION,
+            revisionAdvanced: true,
+            changed: [],
+            affectedOps: [],
+            reset: false,
+          });
+        if (persisted) {
+          acknowledgeWrite();
+          await vi.advanceTimersByTimeAsync(0);
+        }
+        affectedRead.resolve({ kind: 'hit', data: cached });
+        await vi.advanceTimersByTimeAsync(0);
+        if (!persisted) acknowledgeWrite();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(results.map((result) => result.data)).toEqual([cached, fresh]);
+        expect(forwarded).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  );
+
+  it.each(['watch', 'fallback'])(
+    'reconciles pending edits with fresh message membership after discarding an older %s read',
+    async (reader) => {
+      vi.useFakeTimers();
+      try {
+        const cached = { messages: ['first'], isRead: false };
+        const fresh = { messages: ['first', 'second'], isRead: false };
+        const reconciled = { ...fresh, isRead: true };
+        const lateSnapshot = {
+          kind: 'hit' as const,
+          data: { ...cached, isRead: true },
+          revision: parseCacheRevision('2'),
+        };
+        const affectedRead = deferred<typeof lateSnapshot>();
+        const write = deferred<WriteResult>();
+        const read = vi
+          .fn()
+          .mockResolvedValueOnce({
+            kind: 'hit',
+            data: cached,
+            revision: parseCacheRevision('1'),
+          })
+          .mockImplementationOnce(() => affectedRead.promise)
+          .mockResolvedValue({
+            kind: 'hit',
+            data: reconciled,
+            revision: parseCacheRevision('3'),
+          });
+        host.watchQuery =
+          reader === 'watch'
+            ? read
+            : vi.fn(async () => ({ kind: 'unsupported' as const }));
+        host.readQuery = read;
+        host.writeQuery = vi.fn(() => write.promise);
+        const { ops, results, forwarded, network } =
+          controlledQueryHarness(host);
+
+        ops.next(makeOp(1, 'cache-and-network'));
+        await vi.advanceTimersByTimeAsync(0);
+        host.pushAffected([1]);
+        await vi.advanceTimersByTimeAsync(0);
+        network.next(queryResult(forwarded[0]!, fresh));
+        await vi.advanceTimersByTimeAsync(0);
+        const live = liveQueryData(results.at(-1)!);
+
+        affectedRead.resolve(lateSnapshot);
+        await vi.advanceTimersByTimeAsync(0);
+        expect(live).toEqual(fresh);
+        write.resolve({
+          revision: parseCacheRevision('3'),
+          revisionAdvanced: true,
+          changed: [],
+          affectedOps: [],
+          reset: false,
+        });
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(live).toEqual(reconciled);
+        expect(results.map((result) => result.data)).toEqual([cached, fresh]);
+        expect(forwarded).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    }
+  );
+
   it('preserves optimistic rereads that finish after network persistence', async () => {
     const write = deferred<WriteResult>();
     const affectedRead = deferred<ReadResult>();
@@ -2938,6 +3066,109 @@ describe('normalizedCacheExchange', () => {
         expect(forwarded).toHaveLength(2);
       }
     );
+
+    it.each([false, true])(
+      'fences CRM responses dispatched before a confirmed REST write (hydration=%s)',
+      async (hydration) => {
+        const { ops, network, forwarded, results } =
+          controlledQueryHarness(host);
+        ops.next(hydration ? makeHydrationOp(1) : makeOp(1, 'network-only'));
+        await tick();
+        recordExternalWrite(host, ['GraphqlSoupCrmContact']);
+        network.next(
+          queryResult(forwarded[0], {
+            item: {
+              __typename: 'GraphqlSoupCrmContact',
+              id: 'contact-1',
+              hidden: false,
+            },
+          })
+        );
+        await tick();
+        expect(results).toEqual([]);
+        expect(host.writes).toEqual([]);
+        expect(forwarded).toHaveLength(2);
+        const fresh = {
+          item: {
+            __typename: 'GraphqlSoupCrmContact',
+            id: 'contact-1',
+            hidden: true,
+          },
+        };
+        network.next(queryResult(forwarded[1], fresh));
+        await tick();
+        expect(results.at(-1)?.data).toEqual(fresh);
+      }
+    );
+
+    it.each([false, true])(
+      'fences empty and CRM-free pages with declared membership dependencies (hydration=%s)',
+      async (hydration) => {
+        const { ops, network, forwarded, results } =
+          controlledQueryHarness(host);
+        const operation = hydration
+          ? makeHydrationOp(1)
+          : makeOp(1, 'network-only');
+        ops.next(
+          makeOperation('query', operation, {
+            ...operation.context,
+            externalCacheWriteTypes: ['GraphqlSoupCrmContact'],
+          })
+        );
+        await tick();
+        recordExternalWrite(host, ['GraphqlSoupCrmContact']);
+        network.next(queryResult(forwarded[0], { items: [] }));
+        await tick();
+        expect(results).toEqual([]);
+        expect(host.writes).toEqual([]);
+        expect(forwarded).toHaveLength(2);
+        recordExternalWrite(host, ['GraphqlSoupCrmContact']);
+        network.next(
+          queryResult(forwarded[1], {
+            items: [{ __typename: 'GraphqlSoupDocument', id: 'document-1' }],
+          })
+        );
+        await tick();
+        expect(results).toEqual([]);
+        expect(host.writes).toEqual([]);
+        expect(forwarded).toHaveLength(3);
+        const restored = {
+          items: [
+            {
+              __typename: 'GraphqlSoupCrmContact',
+              id: 'contact-1',
+              hidden: false,
+            },
+          ],
+        };
+        network.next(queryResult(forwarded[2], restored));
+        await tick();
+        expect(results.at(-1)?.data).toEqual(restored);
+      }
+    );
+
+    it('keeps unrelated in-flight responses after a REST CRM write', async () => {
+      const { ops, network, forwarded, results } = controlledQueryHarness(host);
+      const operation = makeOp(1, 'network-only');
+      ops.next(
+        makeOperation('query', operation, {
+          ...operation.context,
+          externalCacheWriteTypes: [],
+        })
+      );
+      await tick();
+      recordExternalWrite(host, [
+        'GraphqlSoupCrmCompany',
+        'GraphqlSoupCrmContact',
+      ]);
+      const document = {
+        item: { __typename: 'GraphqlSoupDocument', id: 'document-1' },
+      };
+      network.next(queryResult(forwarded[0], document));
+      await tick();
+      expect(results.at(-1)?.data).toEqual(document);
+      expect(forwarded).toHaveLength(1);
+    });
 
     it('honors cache-only if a subscriber changes policy before an obsolete response arrives', async () => {
       const { ops, network, forwarded } = controlledQueryHarness(host);
@@ -5118,6 +5349,119 @@ describe('normalizedCacheExchange', () => {
       });
     });
 
+    it.each(['initial', 'continuation'] as const)(
+      'fences a contextless %s fallback shared by a later CRM observer',
+      async (mode) => {
+        const variables = {
+          input:
+            mode === 'initial'
+              ? {
+                  initial: {
+                    filters: {
+                      crmContactFilter: { literal: { hidden: false } },
+                    },
+                  },
+                }
+              : { continuation: { cursor: 'durable-opaque-page' } },
+        };
+        const commit = host.commitOptimisticWrite.bind(host);
+        host.commitOptimisticWrite = async (...args) => ({
+          ...(await commit(...args)),
+          revalidations: [
+            {
+              query: stringifyDocument(SoupDocument),
+              operationName: 'Soup',
+              variablesJson: JSON.stringify(variables),
+            },
+          ],
+        });
+        const requests: Array<ReturnType<typeof deferred<Response>>> = [];
+        const client = createClient({
+          url: 'http://test/graphql',
+          preferGetMethod: false,
+          exchanges: [
+            normalizedCacheExchange(host, {
+              externalWriteTypes: resolveCrmExternalWriteTypes,
+            }),
+            fetchExchange,
+          ],
+          fetch: vi.fn(async (_input, init) => {
+            const body =
+              typeof init?.body === 'string' ? JSON.parse(init.body) : {};
+            if (body.query?.includes('mutation'))
+              return new Response(JSON.stringify({ data: optimistic }), {
+                headers: { 'content-type': 'application/json' },
+              });
+            const response = deferred<Response>();
+            requests.push(response);
+            return response.promise;
+          }),
+        });
+        await executeOptimisticMutation(
+          client,
+          MUTATION,
+          { input: {} },
+          optimistic,
+          {
+            uuid: crypto.randomUUID(),
+          }
+        ).toPromise();
+        await vi.waitFor(() => expect(requests).toHaveLength(1));
+        const results: OperationResult[] = [];
+        const subscription = client
+          .query(SoupDocument, variables, {
+            requestPolicy: 'network-only',
+            externalCacheWriteTypes: ['GraphqlSoupCrmContact'],
+          })
+          .subscribe((result) => results.push(result));
+        try {
+          await tick();
+          expect(requests).toHaveLength(1);
+          recordExternalWrite(host, ['GraphqlSoupCrmContact']);
+          const old = {
+            user: { id: 'viewer', soup: { items: [], nextCursor: null } },
+          };
+          requests[0].resolve(
+            new Response(JSON.stringify({ data: old }), {
+              headers: { 'content-type': 'application/json' },
+            })
+          );
+          await vi.waitFor(() => expect(requests).toHaveLength(2));
+          expect(results).toEqual([]);
+          expect(
+            host.writes.some(
+              (write) => JSON.stringify(write.data) === JSON.stringify(old)
+            )
+          ).toBe(false);
+          const restored = {
+            user: {
+              id: 'viewer',
+              soup: {
+                items: [
+                  {
+                    __typename: 'GraphqlSoupCrmContact',
+                    id: 'contact-1',
+                    hidden: false,
+                  },
+                ],
+                nextCursor: null,
+              },
+            },
+          };
+          requests[1].resolve(
+            new Response(JSON.stringify({ data: restored }), {
+              headers: { 'content-type': 'application/json' },
+            })
+          );
+          await vi.waitFor(() =>
+            expect(results.at(-1)?.data).toEqual(restored)
+          );
+        } finally {
+          subscription.unsubscribe();
+        }
+      }
+    );
+
     it.each(['query', 'persistence'] as const)(
       'bounds conditional link recovery while %s is stalled without retrying a committed mutation',
       async (stage) => {
@@ -5141,13 +5485,19 @@ describe('normalizedCacheExchange', () => {
           const { ops, client, results, forwarded } = harness(host, undefined, {
             onCacheError,
           });
-          vi.mocked(client.query).mockReturnValue({
+          vi.mocked(client.executeRequestOperation).mockReturnValue({
             toPromise: () => read.promise,
           } as never);
           ops.next(makeMutationOp(1, optimistic));
           await vi.advanceTimersByTimeAsync(0);
           expect(host.commits).toHaveLength(1);
-          expect(client.query).toHaveBeenCalledOnce();
+          expect(client.query).not.toHaveBeenCalled();
+          expect(client.executeRequestOperation).toHaveBeenCalledOnce();
+          // urql drops a query whose key has a dispatch outstanding.
+          const [repair] = vi.mocked(client.executeRequestOperation).mock
+            .calls[0];
+          expect(repair.key).toBeLessThan(0);
+          expect(repair.key).not.toBe(createRequest(QUERY, {}).key);
           if (stage === 'persistence') {
             read.resolve({
               ...queryResult(makeOp(2, 'network-only')),

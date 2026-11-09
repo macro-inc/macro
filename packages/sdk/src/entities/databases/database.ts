@@ -36,6 +36,7 @@ import {
   queryDatabases,
 } from './query';
 import type { DatabaseRow } from './row';
+import { SavedQuery, type SaveQueryOptions } from './saved-query';
 import { DatabaseTable } from './table';
 import type { DatabaseView } from './view';
 import { DatabaseWebhook } from './webhook';
@@ -251,6 +252,9 @@ function soleResult<
  * loads lazily on first field access and is dropped after any mutation.
  */
 export class Database extends MacroEntity<DatabaseDetail> {
+  /** How entity-addressed APIs identify this entity's type. */
+  readonly entityType = 'database';
+
   /** Access requests and direct user grants. */
   readonly access = new EntityAccess(this.client, 'database', this);
 
@@ -263,6 +267,16 @@ export class Database extends MacroEntity<DatabaseDetail> {
   private assertOwns(part: string, owner: Database): void {
     if (owner.id !== this.id)
       throw new MacroError(`${part} does not belong to database ${this.id}`);
+  }
+
+  /** The database's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/database/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
   }
 
   /** A handle to a database by id. Details load on first access. */
@@ -314,6 +328,26 @@ export class Database extends MacroEntity<DatabaseDetail> {
       ...options,
       database: this,
     });
+  }
+
+  /**
+   * Save a `SELECT` as a live question and get its answer's block. Answer
+   * a question about the data, or a request for a chart, with this: run the
+   * SQL with {@link query} first, then save exactly that SQL. The server
+   * refuses anything but one `SELECT` that compiles here, and chart columns
+   * the `SELECT` does not return. Put {@link SavedQuery.toBlock} in a
+   * document verbatim; it re-runs for whoever views it, with their
+   * permissions. Pass `table` when the question is about one table.
+   */
+  async saveQuery(
+    options: SaveQueryOptions & {
+      /** The table the question is about. */
+      table?: DatabaseTable;
+    },
+  ): Promise<SavedQuery> {
+    const { table, ...save } = options;
+    if (table) this.assertOwns(`table ${table.id}`, table.database);
+    return SavedQuery.save(this.client, { database: this, table }, save);
   }
 
   /** @internal Drop the schema snapshot after a successful SQL write. */

@@ -4,7 +4,7 @@
 //!
 //! The crate follows the hexagonal layout used elsewhere in this workspace:
 //! - [`domain`] holds the cost model, ports, and the service that computes
-//!   cost from a model id and token counts or audio duration.
+//!   cost from a model id and token counts, audio duration, or provider credits.
 //! - [`outbound`] holds the Postgres storage adapter.
 //! - [`inbound`] holds the axum router mounted in the document cognition
 //!   service (DCS).

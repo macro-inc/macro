@@ -9,6 +9,8 @@ const PAGE_SIZE = 50;
 /**
  * Saved views: named filter definitions the app shows in a surface's sidebar,
  * such as Email. Each user orders the views they can see for themselves.
+ *
+ * @routing Use when creating, editing, reordering or removing saved views, the named filters in the Email or Tasks sidebar; not favorites or pins.
  */
 export class SavedViewsNamespace {
   constructor(private readonly client: MacroClient) {}

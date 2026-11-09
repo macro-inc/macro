@@ -891,7 +891,12 @@ where
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::Reattach => {
-                self.reattach(session_id).await?;
+                // Prompts queued behind a turn the drop interrupted are
+                // restored with the session; only a turn end or a new prompt
+                // dispatches otherwise, and an idle session gets neither.
+                if self.reattach(session_id).await? && !self.busy.is_pending(session_id) {
+                    self.dispatch_next(session_id).await?;
+                }
                 Ok(CommandOutcome::Completed)
             }
             HarnessCommand::Delete => {
@@ -1610,20 +1615,25 @@ where
             // moment the prompt lands: the egress proxy judges every call by who
             // prompted the turn it belongs to, and it may be serving the call on
             // another replica.
-            if let Err(error) = self
-                .sessions
-                .set_turn_prompter(
-                    session_id,
-                    &TurnPrompter {
-                        action_id: entry.action_id,
-                        user: entry.actor.clone(),
-                        kind: if matches!(&entry.action, AgentAction::Prompt(prompt) if prompt.notifications.as_ref().is_some_and(|input| input.system_turn)) {
-                            agent_session::domain::model::PrompterKind::System
-                        } else { agent_session::domain::model::PrompterKind::User },
-                    },
-                )
-                .await
-            {
+            // A prompt typed into the session itself also follows it for its
+            // sender, which lists a session started from a thread for them.
+            let recorded = async {
+                self.sessions
+                    .set_turn_prompter(
+                        session_id,
+                        &TurnPrompter {
+                            action_id: entry.action_id,
+                            user: entry.actor.clone(),
+                            kind: entry.prompter_kind(),
+                        },
+                    )
+                    .await?;
+                if let Some(user) = entry.direct_prompter() {
+                    self.sessions.add_follower(session_id, user).await?;
+                }
+                Ok::<_, AgentSessionError>(())
+            };
+            if let Err(error) = recorded.await {
                 // A claimed conversation turn fails as an undelivered one
                 // does, so its journal never shows it running.
                 if let Some(store) = conversation_store {

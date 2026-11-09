@@ -9,6 +9,8 @@ import { getOwner } from 'solid-js';
 export interface OpenEventComposerOptions {
   event?: CalendarEvent;
   initialValues?: EventEditorInitialValues;
+  /** Values that arrive after the composer opens, applied only to an untouched form. */
+  suggestedValues?: Promise<Partial<EventEditorInitialValues>>;
   onCalendarChange?: (calendarId: string, color: string) => void;
   /** Called with a new event once it exists, before the composer closes. */
   onCreated?: (created: CreatedCalendarEvent) => void;
@@ -32,6 +34,7 @@ export function useOpenEventComposer() {
         params: {
           event: options.event,
           initialValues: options.initialValues,
+          suggestedValues: options.suggestedValues,
           onCalendarChange: options.onCalendarChange,
           onDirtyChange: (dirty: boolean) => {
             formDirty = dirty;

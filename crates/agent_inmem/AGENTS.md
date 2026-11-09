@@ -19,7 +19,10 @@ milliseconds instead of waiting on container provisioning.
 - `src/domain/session.rs` / `src/domain/replay.rs`: in-process session state
   and log replay on reconnect.
 - `src/domain/admission.rs` + `src/outbound/approval_gate.rs`: usage/plan
-  admission and tool-approval gating for in-memory sessions.
+  admission and tool-approval gating for in-memory sessions. Turns admit and
+  meter as the session's feature (`AgentState::feature`, from
+  `SessionFacts::billing` via `session_feature`): `AgentSession`, or
+  `NonBillableAgentSession` when the opener set `SessionBilling::NonBillable`.
 - `src/domain/model_access.rs` (`SessionModels`) and `AgentState::turn_agent_key`:
   an agent with its own usable API key (`agent_api_keys`) runs every turn on
   it without admission, and its session offers only that provider's models.
@@ -66,11 +69,21 @@ DecideReview are eager internal tools in both standard and code modes.
 
 ## Gotchas
 
+- Owners with `auto-skills` (`domain::entity_routing`) route SDK entities on
+  code-mode turns: the prompt is `routed_prompt` (no area guidance) and the
+  entities `select_documentation` picks bring their `@agent` guide with their
+  index into the turn part. Everyone else keeps `prompt`, which inlines every
+  guide.
 - `auto` is a picker entry, not a routable id: `RigTurnEngine` asks its
   `AutoModelSelector` (Jev through cognition's named decisions, 1 s budget) per turn and runs
   Opus 5.5 (hard), GPT-6.1 Sol (mid) or Gemini 3.8 Flash (simple, and
   whenever Jev is unavailable). Capability lookups go through
   `models::resolve`.
+- Owners with the `auto-skills` flag route each turn's request to their skills
+  (`skills::domain::selection`, Jev, 1 s). Loaded skills are appended to the
+  user message that loaded them in the model's copy only, and remembered per
+  session in `SessionSkills` (memory; lost on restart). Eval:
+  `route_evaluation` (ignored; needs `TYPESAFE_API_KEY`).
 - Keep session-aware `NameSearch`, `ContentSearch`, and `ListEntities` native in
   code mode; legacy `ReadChat` must not appear in either runtime tool catalog.
 - Every turn cuts tool results over `agent::ToolResultLimit`'s limit (about

@@ -80,6 +80,8 @@ interface SoupItemsQueryOptions {
   /** Seed mixed lists from indexed non-email members; keep the full server query. */
   graphqlLocalReconciliation?: 'without-email';
   meta?: {
+    /** Keep view-specific REST previews out of the shared entity normalizer. */
+    normalize?: boolean;
     groupBy?: GroupByField;
     groupKey?: string;
     itemFilter?: (item: SoupApiItem) => boolean;
@@ -244,7 +246,8 @@ function restSoupAstItemsQueryOptions(
   enabled: boolean | undefined,
   staleTime: StaleTime | undefined,
   meta: RestSoupAstItemsMeta,
-  showSupportedForeignEntities: boolean | undefined
+  showSupportedForeignEntities: boolean | undefined,
+  keepPrevious: boolean | undefined
 ) {
   const { params, body, groupBy, transport } = args;
 
@@ -313,6 +316,7 @@ function restSoupAstItemsQueryOptions(
     // Retry remains available explicitly from that state.
     staleTime,
     placeholderData: (prev, prevQuery) => {
+      if (keepPrevious === false) return undefined;
       // Keep the previous rows on screen while params/filters change, but
       // not across a grouping switch — the old groups would render under
       // the new grouping (e.g. status groups while assignee groups load).
@@ -329,7 +333,7 @@ function restSoupAstItemsQueryOptions(
     meta: {
       ...meta,
       groupBy,
-      normalize: true,
+      normalize: meta?.normalize ?? true,
     },
   });
 }
@@ -345,7 +349,8 @@ const useRestSoupAstItemsQuery = (
       options?.().enabled !== false && !options?.().networkPaused,
       options?.().staleTime,
       options?.().meta,
-      options?.().showSupportedForeignEntities
+      options?.().showSupportedForeignEntities,
+      options?.().keepPreviousData
     )
   );
 };

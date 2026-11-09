@@ -193,6 +193,7 @@ fn soup_response_schema_exposes_frontend_fields() {
         "GraphqlChannelMentionMetadata",
         "GraphqlEntityAccessRequestedMetadata",
         "GraphqlEntityAccessGrantedMetadata",
+        "GraphqlChannelAccessRequestedMetadata",
     ] {
         assert!(
             metadata
@@ -646,7 +647,7 @@ fn scheduled_actions_hang_off_the_authenticated_user() {
     assert_sdl_line(&sdl, "scheduledActions: [GraphqlScheduledAction!]!");
     assert_sdl_line(
         &sdl,
-        "union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionMultipleTrigger",
+        "union GraphqlScheduledActionTrigger = GraphqlScheduledActionCronTrigger | GraphqlScheduledActionEventsTrigger | GraphqlScheduledActionOnceTrigger | GraphqlScheduledActionMultipleTrigger",
     );
     assert!(sdl.contains("AI routines the authenticated user can access."));
     for value in [

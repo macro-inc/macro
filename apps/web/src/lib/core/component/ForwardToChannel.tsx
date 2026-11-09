@@ -52,10 +52,7 @@ type Recipient = WithCustomUserInput<'user' | 'contact' | 'channel'>;
 interface MobileForwardToChannelLayoutProps
   extends Pick<
     ForwardToChannelProps,
-    | 'submitPermissionInfo'
-    | 'hideAccessLevelSelector'
-    | 'editPermissionEnabled'
-    | 'allowedAccessLevels'
+    'submitPermissionInfo' | 'editPermissionEnabled' | 'allowedAccessLevels'
   > {
   isAuthenticated: Accessor<boolean | undefined>;
   selectedOptions: Accessor<Recipient[]>;
@@ -134,10 +131,7 @@ function MobileForwardToChannelLayout(
         </div>
       </Show>
       <Show
-        when={
-          props.submitPermissionInfo?.userPermissions === Permissions.OWNER &&
-          !props.hideAccessLevelSelector
-        }
+        when={props.submitPermissionInfo?.userPermissions === Permissions.OWNER}
       >
         <div class="px-3 py-2 flex items-center">
           <span class="text-sm text-ink-muted pr-2">Access:</span>
@@ -185,7 +179,6 @@ interface ForwardToChannelProps {
     handleSubmit: () => void;
     canSubmit: () => boolean;
   }) => void;
-  hideAccessLevelSelector?: boolean;
   initialAccessLevel?: AccessLevel | null;
   /** Levels the picker offers; all when absent. */
   allowedAccessLevels?: readonly AccessLevel[];
@@ -523,11 +516,12 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       }
 
       if (targets.length > 1) {
-        toast.success('Messages sent successfully');
+        toast.success('Messages sent');
       } else {
         const result = results[0];
         if (result) {
-          toast.success('Message sent successfully', {
+          toast.success('Message sent', {
+            dismissStyle: 'icon',
             actions: [
               {
                 label: 'View in channel',
@@ -596,7 +590,6 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             triedToSubmit={triedToSubmit}
             destinationOptions={destinationOptions}
             submitPermissionInfo={props.submitPermissionInfo}
-            hideAccessLevelSelector={props.hideAccessLevelSelector}
             allowedAccessLevels={props.allowedAccessLevels}
             submitAccessLevel={submitAccessLevel}
             setSubmitAccessLevel={setSubmitAccessLevel}
@@ -627,7 +620,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             <Show
               when={
                 props.submitPermissionInfo?.userPermissions ===
-                  Permissions.OWNER && !props.hideAccessLevelSelector
+                Permissions.OWNER
               }
             >
               <div class="shrink-0 pr-2 flex items-center gap-2">

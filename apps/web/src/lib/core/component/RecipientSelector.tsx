@@ -347,7 +347,9 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
                     fallback={
                       <Show when={showEmail} fallback={name || email}>
                         {name}
-                        <span class="ml-[0.5em] opacity-50">{email}</span>
+                        {/* An en space is the 0.5em gap; unlike a margin, Safari's truncated-text tooltip keeps it. */}
+                        {' '}
+                        <span class="opacity-50">{email}</span>
                       </Show>
                     }
                   >

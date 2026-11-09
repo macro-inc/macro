@@ -20,6 +20,7 @@
 //! is why the in-memory runtime is the one provider that needs no wire format
 //! for them. See [`system_prompt`] for how the sections are ordered.
 
+use std::pin::Pin;
 use std::sync::Arc;
 
 use agent::{AgentError, AgentLoop, ReadToolResult, StreamPart, SystemPrompt, ToolResultLimit};
@@ -35,12 +36,15 @@ use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use model_owner::Owner;
 use sqlx::PgPool;
 use tokio::sync::mpsc;
+use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 use crate::domain::auto_model::{AutoModelSelector, DefaultAutoModel, JevAutoModel};
 use crate::domain::engine::{AgentIdentity, ReplyDelivery, TurnEngine, TurnRequest};
+use crate::domain::entity_routing::{EntityRoutingPolicy, NoEntityRouting};
+use crate::domain::skill_routing::{NoSkillRouting, SessionSkills, SkillRoutingPolicy};
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
-use crate::domain::tool_mode::{StandardTools, ToolMode, ToolModeSelector};
+use crate::domain::tool_mode::ToolMode;
 use crate::inbound::ask_user::{AskUser, AskUserContext};
 
 #[path = "outbound/rig_engine/opener.rs"]
@@ -78,8 +82,10 @@ pub struct RigTurnEngine {
     memory: Arc<MemoryServiceImpl<PgMemoryRepo>>,
     native_tools: Arc<NativeTools>,
     code_mode_tools: Arc<NativeTools>,
-    tool_mode: Arc<dyn ToolModeSelector>,
     auto_model: Arc<dyn AutoModelSelector>,
+    skill_routing: Arc<dyn SkillRoutingPolicy>,
+    session_skills: Arc<SessionSkills>,
+    entity_routing: Arc<dyn EntityRoutingPolicy>,
     tool_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
 }
@@ -100,11 +106,13 @@ impl RigTurnEngine {
                 ai_tools::tools_for_agent_code_mode,
                 true,
             )),
-            tool_mode: Arc::new(StandardTools),
             auto_model: match &tool_context.cognition_tool_context.service {
                 Some(cognition) => Arc::new(JevAutoModel::new(Arc::clone(cognition))),
                 None => Arc::new(DefaultAutoModel),
             },
+            skill_routing: Arc::new(NoSkillRouting),
+            session_skills: Arc::new(SessionSkills::default()),
+            entity_routing: Arc::new(NoEntityRouting),
             tool_context,
             gate: Arc::new(UngatedNativeTools),
         }
@@ -117,10 +125,17 @@ impl RigTurnEngine {
         self
     }
 
-    /// Select the owner's tool presentation once per conversational turn.
+    /// Decide per turn whether the owner's turns load their skills on their own.
     #[must_use]
-    pub fn with_tool_mode(mut self, selector: Arc<dyn ToolModeSelector>) -> Self {
-        self.tool_mode = selector;
+    pub fn with_skill_routing(mut self, policy: Arc<dyn SkillRoutingPolicy>) -> Self {
+        self.skill_routing = policy;
+        self
+    }
+
+    /// Decide per turn whether the owner's code-mode turns route SDK entities.
+    #[must_use]
+    pub fn with_entity_routing(mut self, policy: Arc<dyn EntityRoutingPolicy>) -> Self {
+        self.entity_routing = policy;
         self
     }
 }
@@ -273,6 +288,9 @@ struct NativeTools {
     with_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
     without_user_input: Arc<AsyncToolCollection<InMemToolContext>>,
     prompt: String,
+    /// [`Self::prompt`] without area guidance, for turns that route SDK
+    /// entities.
+    routed_prompt: String,
     code_mode: bool,
     deferred: Arc<[ai_toolset::SearchableTool]>,
     /// Every native tool's name, for the opening line's model to guess the
@@ -304,6 +322,7 @@ impl NativeTools {
             without_user_input: Arc::new(tools_for_turn(other_tools, false)),
             code_mode,
             prompt: tools.prompt.to_string(),
+            routed_prompt: tools.routed_prompt.to_string(),
             deferred: tools.deferred,
             tool_names,
         }
@@ -328,8 +347,10 @@ impl TurnEngine for RigTurnEngine {
         let memory = Arc::clone(&self.memory);
         let native_tools = Arc::clone(&self.native_tools);
         let code_mode_tools = Arc::clone(&self.code_mode_tools);
-        let tool_mode = Arc::clone(&self.tool_mode);
         let auto_model = Arc::clone(&self.auto_model);
+        let skill_routing = Arc::clone(&self.skill_routing);
+        let session_skills = Arc::clone(&self.session_skills);
+        let entity_routing = Arc::clone(&self.entity_routing);
         let tool_context = self.tool_context.clone();
         let gate = Arc::clone(&self.gate);
         let metering = agent::MeteringContext::current();
@@ -340,9 +361,11 @@ impl TurnEngine for RigTurnEngine {
                     return;
                 };
                 request.model = model;
-                let Some(selected) = select_tool_mode(tool_mode.as_ref(), &request).await else {
-                    return;
-                };
+                let (routes, entities_routed) = tokio::join!(
+                    routes_skills(skill_routing.as_ref(), &request),
+                    routes_entities(entity_routing.as_ref(), &request),
+                );
+                let selected = tool_mode(&request);
                 let native_tools = match selected {
                     ToolMode::Standard => native_tools,
                     ToolMode::Code => code_mode_tools,
@@ -351,9 +374,15 @@ impl TurnEngine for RigTurnEngine {
                 // The product toolset makes this future large. Keep its state
                 // on the heap when adding the panic boundary, including in
                 // unoptimized local builds with Tokio's default worker stack.
+                let skills = TurnRouting {
+                    routes,
+                    sessions: &session_skills,
+                    entities: entities_routed,
+                };
                 let turn = Box::pin(drive_turn(
                     &memory,
                     &native_tools,
+                    skills,
                     tool_context,
                     gate,
                     request,
@@ -412,35 +441,77 @@ async fn select_auto_model(
     }
 }
 
-// A failed/missing code-mode MCP connection must never leave a turn with only the
-// small direct set. Summaries neither evaluate flags nor advertise tools.
-async fn select_tool_mode(
-    selector: &dyn ToolModeSelector,
-    request: &TurnRequest,
-) -> Option<ToolMode> {
+// Only conversation turns load skills; summaries read no instructions.
+async fn routes_skills(policy: &dyn SkillRoutingPolicy, request: &TurnRequest) -> bool {
+    let Owner::User(owner) = &request.owner else {
+        return false;
+    };
+    request.purpose == crate::domain::engine::TurnPurpose::Conversation
+        && policy.routes(owner).await
+}
+
+// Only a user's conversation turns route SDK entities; summaries read none.
+async fn routes_entities(policy: &dyn EntityRoutingPolicy, request: &TurnRequest) -> bool {
+    let Owner::User(owner) = &request.owner else {
+        return false;
+    };
+    request.purpose == crate::domain::engine::TurnPurpose::Conversation
+        && policy.routes(owner).await
+}
+
+/// What a turn loads on its own: the user's skills (and what its session has
+/// loaded already), and the SDK areas its request needs.
+struct TurnRouting<'a> {
+    routes: bool,
+    sessions: &'a SessionSkills,
+    entities: bool,
+}
+
+/// Route the turn's request to the user's skills. Boxed: the skill service's
+/// listing future is deep enough to overflow the turn's own future type.
+fn select_skills<'a>(
+    context: &'a ToolServiceContext,
+    owner: &'a MacroUserIdStr<'static>,
+    request: skills::domain::selection::SkillRequest<'a>,
+    already_loaded: &'a [uuid::Uuid],
+    cancel: &'a CancellationToken,
+) -> Pin<Box<dyn Future<Output = skills::domain::selection::SkillSelection> + Send + 'a>> {
+    Box::pin(skills::domain::selection::select_skills(
+        context.skill_tool_context.service.as_ref(),
+        context.cognition_tool_context.service.as_ref(),
+        owner,
+        request,
+        already_loaded,
+        cancel,
+    ))
+}
+
+// Every conversation turn of a user's session runs code mode. A failed or
+// missing code-mode MCP connection must never leave a turn with only the small
+// direct set, and summaries advertise no tools.
+fn tool_mode(request: &TurnRequest) -> ToolMode {
     if request.purpose != crate::domain::engine::TurnPurpose::Conversation {
-        return Some(ToolMode::Standard);
+        return ToolMode::Standard;
     }
-    let (Owner::User(owner), Some(mcp)) = (&request.owner, &request.mcp_tools) else {
-        return Some(ToolMode::Standard);
+    let (Owner::User(_), Some(mcp)) = (&request.owner, &request.mcp_tools) else {
+        return ToolMode::Standard;
     };
     let catalog = mcp.searchable_catalog();
-    if !CODE_MODE_MCP_TOOLS
+    if CODE_MODE_MCP_TOOLS
         .iter()
         .all(|name| catalog.iter().any(|tool| tool.name == *name))
     {
-        return Some(ToolMode::Standard);
-    }
-    tokio::select! {
-        biased;
-        _ = request.cancel.cancelled() => None,
-        mode = selector.select(owner) => Some(mode),
+        ToolMode::Code
+    } else {
+        tracing::warn!("code-mode tools unavailable; running the turn with direct tools");
+        ToolMode::Standard
     }
 }
 
 async fn drive_turn(
     memory: &MemoryServiceImpl<PgMemoryRepo>,
     native_tools: &NativeTools,
+    skills: TurnRouting<'_>,
     base_context: ToolServiceContext,
     gate: Arc<dyn NativeToolGate>,
     request: TurnRequest,
@@ -452,6 +523,7 @@ async fn drive_turn(
         session_id,
         awaiting,
         owner,
+        feature,
         model,
         reasoning_effort,
         speed,
@@ -499,7 +571,7 @@ async fn drive_turn(
 
     // Started before anything else so its line is out before the turn's
     // model has a first token.
-    let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner.clone());
+    let usage_ctx = ai_usage::UsageContext::new(feature, owner.clone());
     let agent = identity.as_ref().map_or_else(
         || "Macro".to_owned(),
         |identity| format!("{} (@{})", identity.name, identity.handle),
@@ -541,25 +613,34 @@ async fn drive_turn(
     // Chat's tools with the session's prompt: the user tools (`SendEmail`,
     // `CreateCalendarEvent`) defer to the user, and this runtime finishes
     // them in the turn through `reviewer`.
-    let (system_prompt, toolset, deferred) = if summarizing {
+    let (system_prompt, toolset, deferred, loaded_skills) = if summarizing {
         (
             SystemPrompt::from(instructions.unwrap_or_default()),
             Arc::new(AsyncToolCollection::<InMemToolContext>::new()),
             Arc::from(Vec::new()),
+            Vec::new(),
         )
     } else {
-        let requested = messages
+        let user_messages: Vec<String> = messages
             .iter()
-            .rev()
-            .find(|message| message.role == agent::types::Role::User)
-            .and_then(|message| message.content.user_message_text())
-            .unwrap_or_default();
+            .filter(|message| message.role == agent::types::Role::User)
+            .filter_map(|message| message.content.user_message_text())
+            .collect();
+        let requested = user_messages.last().cloned().unwrap_or_default();
+        // Routed turns leave area guidance out of the prompt; the entities the
+        // request needs bring theirs, with their indexes, in the turn's part.
+        let routed = native_tools.code_mode && skills.entities;
         let docs = async {
             if native_tools.code_mode {
                 agent_code_mode::domain::select_documentation(
                     &owner,
                     &requested,
                     base_context.cognition_tool_context.service.as_ref(),
+                    if routed {
+                        agent_code_mode::domain::Guidance::Selected
+                    } else {
+                        agent_code_mode::domain::Guidance::Inline
+                    },
                     &cancel,
                 )
                 .await
@@ -567,9 +648,38 @@ async fn drive_turn(
                 String::new()
             }
         };
-        let (user_memory, sdk_docs) = tokio::join!(fetch_user_memory(memory, &owner), docs);
+        let loaded_skills = async {
+            if !skills.routes {
+                return Vec::new();
+            }
+            let selection = select_skills(
+                &base_context,
+                &owner,
+                skills::domain::selection::SkillRequest {
+                    latest: &requested,
+                    previous: user_messages
+                        .len()
+                        .checked_sub(2)
+                        .map(|index| user_messages[index].as_str()),
+                },
+                &skills.sessions.loaded_ids(session_id),
+                &cancel,
+            )
+            .await;
+            skills.sessions.add(
+                session_id,
+                user_messages.len().saturating_sub(1),
+                selection.loaded,
+            )
+        };
+        let (user_memory, sdk_docs, loaded_skills) =
+            tokio::join!(fetch_user_memory(memory, &owner), docs, loaded_skills);
         let prompt = system_prompt(
-            &native_tools.prompt,
+            if routed {
+                &native_tools.routed_prompt
+            } else {
+                &native_tools.prompt
+            },
             &sdk_docs,
             session_id,
             delivery,
@@ -581,6 +691,7 @@ async fn drive_turn(
             prompt,
             native_tools.for_turn(user_input.is_some()),
             Arc::clone(&native_tools.deferred),
+            loaded_skills,
         )
     };
     // Carry the feature on the context so tool-spawned subagents attribute to it.
@@ -711,6 +822,10 @@ async fn drive_turn(
         }
     }));
 
+    // Loaded skills ride with the request that loaded them, in the model's copy
+    // of the conversation only.
+    let mut messages = messages;
+    crate::domain::skill_routing::inject(&mut messages, &loaded_skills);
     let rig_messages = agent::to_rig_messages_limited(&messages, &tool_results);
     let result = async {
         let mut stream = session.send_message(rig_messages).await?;

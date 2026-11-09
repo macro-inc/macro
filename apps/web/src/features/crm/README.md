@@ -32,7 +32,7 @@ The root adapters construct production dependencies. `context` defines the
 capabilities; it does not import their implementations. Views consume these
 capabilities, primitives receive narrow inputs, and components render props.
 Core modules remain independent of Solid, service clients, and app state.
-`mark-record-notifications-seen.ts` integrates with shared list activation so
+`features/notifications/mark-row-seen.ts` integrates with shared list activation so
 opening a company or contact clears its row's unread notifications immediately.
 It uses the row's attached notifications before falling back to an entity read;
 the shared notification source owns optimistic state and failure rollback.
@@ -44,6 +44,12 @@ booleans through component props or the CRM source contract.
 
 Shared entity representations, transport clients, property editors, and
 collection mechanics remain shared. CRM owns its record queries and cache updates.
+Pipeline board positions load through the pipeline-authorized endpoint and are
+cached by pipeline and view. Move results update the originating view's cache,
+even if the viewer switches boards while saving. The adapter supplies the selected
+view ID so switching boards also retires unfinished visual moves and sort prompts.
+`browser-test/board.tsx` exercises shared cards, lane composition, and saved ordering with synthetic data.
+
 Successful domain block and unblock mutations evict indexed company rows and
 contact suggestions from the GraphQL cache before refreshing CRM and Soup
 queries. Refresh mounted GraphQL lists that can contain CRM records too: the
@@ -56,18 +62,78 @@ CRM supplies row/header/empty state slots, filter choices, grouping policy, and
 its own collection state to the shared collection renderer. Shared collection code must not acquire CRM hooks or
 CRM-specific state again.
 
-Company and contact Overview pages expose `RecordVisibilityAction` for removal
-and restoration through the existing hidden mutations. Keep admin/owner checks,
-confirmation of the company-wide contact cascade, and the restore action on the
-open record. The information panel's visibility checkbox uses the same state.
+Visible contact and company toolbars put the archive-system icon beside Copy link.
+Archived identities group one Archived chip with a flat secondary Restore button;
+on phones the group wraps beneath the name. Keep identity actions and metadata at
+the compact property scale: 24px visible height, 12px text and 12px icons.
+Interactive controls reserve 10px above and below their touch faces for separate
+44px targets; transparent extensions receive those taps without enlarging the paint.
+Use flat controls here because the glass finish owns its own press pseudo-elements.
+Top-toolbar controls retain their separate navigation scale.
+The chip owns hover/focus/tap explanation; Restore does not trigger that explanation.
+`RecordVisibilityAction` handles confirmation, pending, cancellation and retry.
+Only admins/owners can change visibility. Company archive cascades to all people
+and disables email syncing; company restore explicitly confirms restoring every
+person, including individually archived people, while email syncing stays off.
+A person under an archived company routes to that company before restoration.
+Both information panels start with Record details and References; company-only
+Properties, Lists and Email sharing follow, with no duplicate visibility toggle.
+
+Contact headers and Record details share `ContactEmailField` and
+`ContactCompanyField`. Their Tasks-style pills add an email only when blank and link/switch company
+only for server-classified personal-provider emails. Existing email and
+ineligible company values are read-only; no clear/unlink actions are exposed.
+The separate Go to button navigates without selecting.
+Keep these property controls at a 24px visible face with 12px type/icons;
+reserve separate 44px touch targets with transparent expansion and margins.
+Desktop uses the property popover and entity picker; touch uses the shared dialog
+and picker sheet. Drafts remain visible on rejection, pending saves cannot be
+repeated, and record identity keys retire drafts when the record changes.
+After a desktop email addition, return focus to the read-only value in the
+originating property; it is programmatically focusable without adding a tab stop.
+Only committed responses update contact details, both company lists, address
+lookups and normalized contact fields, with session and stale-response fences.
+
+People, Companies and company Team use an exclusive Visible/Archived filter.
+`people-visibility` keeps the workspace choice local to the account/team/role/view,
+preserves search and other display choices, and sanitizes shared/persisted contact
+filters. Archived People is current-administered-team scoped, server filtered
+before pagination; visible People remains viewer-wide. Team applies the same
+exclusive choice to its embedded contact response, including effective parent state.
+
+Successful REST mutations write confirmed flags through the normalized Soup update
+path and patch paginated suggestions, company search pages, REST Soup and embedded
+detail snapshots. Confirmed detail snapshots become stale without an immediate
+refetch; active initial reads that were cancelled are restarted.
+Pre-write REST reads are cancelled; the normalized exchange fences older responses
+containing or declaring the affected CRM types before publication, hydration or
+persistence. Flat and grouped Soup pages retain their initial filter dependencies
+on continuations, so old empty pages cannot briefly hide a restored record.
+Imperative and durable revalidations recover these dependencies at dispatch, before
+urql can share them with a later mounted reader. Unknown opaque continuation scopes
+conservatively fence both CRM types; known initial scopes retain explicit exclusions.
+Refreshes target CRM-capable readers, leaving unrelated lists alone. A refresh
+failure is logged separately and never misreports a committed save as rejected.
+Session identity is captured before dispatch so a late response cannot populate a
+replacement session. Ordinary Cmd-K continues to exclude archived companies and
+people through its existing feeds and normalized projections; it has no recovery UI.
+
+`browser-test/archive` uses production record headers, toolbar actions, tabs,
+SidePanel, Team filtering and confirmations with synthetic storage and isolated
+shell services/entity-row metadata. It does not verify authenticated persistence.
+`browser-test/people` additionally exercises the production AST compiler and live
+GraphQL page source. Exchange tests cover the normalized-cache race boundary.
+Run the fixture's `playwright.config.ts` from `apps/web`.
 Both hidden mutations emit `crm.visibility_change` through request and cache
 refresh completion, with the opaque record ID, record type, requested hidden
 state, and outcome. `crm.visibility_change.refresh` times cache invalidation and
 the dependent query refreshes before the mutation stops being pending.
+`crm.people_visibility` measures the display choice through the next paint;
+Soup retains its existing query/loading instrumentation.
 
-`task-composer.ts` owns the CRM task preset: Companies/Contacts are visible,
-Status remains a task default but is not initially shown. CRM registers live
-`{ task: TaskComposerContext }` values with the provider in
+`task-composer.ts` owns the CRM task preset: the records a new task starts
+associated with. The Customer / Contact pill belongs to the shared task composer,
+not this preset. CRM registers live `{ task: TaskComposerContext }` values with the provider in
 `command/context/create-context.tsx`, scoped to its pane. The app shell owns the
 provider and supplies the layout's focus accessor; no global registry or manager
 key is involved. The workspace registers the unassociated preset; nested record
@@ -78,13 +144,16 @@ The selected-record fallback survives detail query errors until the record close
 Global task creation snapshots the focused pane's getter before opening, without
 fetching details or capturing navigation history. Record contexts isolate drafts.
 
-`enable-crm-activity` gates workspace activity tabs and whether CRM supplies its
-composer context. It defaults off everywhere and can be overridden locally with
+`enable-crm-activity` gates workspace activity tabs (labelled Sales Tasks, Sales Email,
+Sales Notes and Sales Calls), whether CRM supplies its
+composer context, and, with `enable-crm`, the Customer / Contact pill in the task
+composer and Universal Input's task mode. Those two read both flags through
+`customerContactEnabled`. It defaults off everywhere and can be overridden locally with
 `VITE_ENABLE_CRM_ACTIVITY=true`. Off hides activity navigation and skips activity
 queries; saved activity links wait for flag loading, then fall back to Companies.
 The standard record task action still associates the task with its record.
-The shared composer, registry and launcher never read this flag. With no supplied
-context, the standard composer opens immediately. Each opening snapshots its
+The registry and launcher never read this flag. With no supplied context, the
+standard composer opens immediately. Each opening snapshots its
 context; later flag, focus or record changes leave the open draft unchanged.
 The Soup and email SQL optimizations are independent of this frontend gate.
 
@@ -99,14 +168,15 @@ links; Notes excludes task, snippet and skill Markdown subtypes. Email matches
 visible company domains/contact addresses in the viewer's own mailbox, without
 team-scope widening or requiring a property link on the email.
 
-Databases is a row-linked activity view, not a direct database-to-CRM relation.
-It opts into database rows with the same server-resolved CRM selector and lists
-each containing database once, intersected with authorized database discovery.
-A company includes rows linked to its visible contacts; a contact does not inherit
-its company's rows. Empty row matches never fall back to all databases. Preserve
-Soup pagination and CRM-link invalidation rather than enumerating CRM IDs or table
-IDs in the browser. Database creation uses the existing app action; a database
-joins the CRM list only after a row has a Companies or Contacts link.
+Customers has no Databases view or record section. A database that holds work
+outside companies and contacts is a generic pipeline: `recordType` is null, the
+primary column starts as an optional Name text column anyone can retype or delete
+(the first column then titles rows), and rows are added directly in
+the shared editor with no record picker or stage requirements. CSV import needs
+a record to resolve, so it is hidden for generic pipelines; export includes Name.
+Retired routes keep old links working: middleware sends a record's `databases`
+section to the record, and a database opened under Customers to `/database/<id>`.
+A saved `databases` workspace tab opens Companies.
 
 CRM collection and record lists use full-height empty states, horizontally
 centered and raised toward the toolbar, with
@@ -139,9 +209,9 @@ a record independently of the row; additional values use the shared overflow men
 Email still matches visible company domains and contact addresses for feed
 membership, but the row displays only stored properties, not inferred matches.
 No separate CRM association metadata lookup or row footer runs during paging.
-Linked Tasks, Email, Notes, Calls and Databases open through nested Customers
-routes from workspace activity and record sections. Tasks, Emails, Calls and
-Databases record sections append only `<item-id>` because their section determines
+Linked Tasks, Email, Notes and Calls open through nested Customers
+routes from workspace activity and record sections. Tasks, Emails and Calls
+record sections append only `<item-id>` because their section determines
 the renderer; Tasks also omit the redundant `md/task` suffix. These sections reject
 redundant typed item URLs rather than retaining fallback routes. Workspace activity
 retains `<item-type>/<item-id>` and document metadata; record Files and overview
@@ -159,15 +229,15 @@ source trail without an extra separator; do not duplicate the selected title in
 the prefix. Modified clicks keep their existing split behavior.
 Standalone record previews retain their normal navigation outside the workspace.
 Record-detail lists and activity membership remain unchanged.
-Sidebar Tasks reuse the production Tasks filters, sort, grouping, and list/board/Gantt
+Sales Tasks reuse the production Tasks filters, sort, grouping, and list/board/Gantt
 layouts (subject to the normal feature flags and touch fallback). They use a separate
 CRM persistence scope, and every query, including search and grouped continuation,
 retains the mandatory CRM association. Record-detail Tasks stay unchanged.
-Email reuses the shared read/done/attachment/calendar/tag facets. Notes expose creator
-and tag filters; Calls expose audience and tag filters. These lists have independent
+Sales Email reuses the shared read/done/attachment/calendar/tag facets. Sales Notes expose
+creator and tag filters; Sales Calls expose audience and tag filters. These lists have independent
 per-entry search, sort direction, and date/none grouping settings. Date headings follow
-the selected sort field in viewer-local time. Email defaults to last-update date groups;
-Notes and Calls default to no grouping. Local-only filters continue paging through
+the selected sort field in viewer-local time. Sales Email defaults to last-update date groups;
+Sales Notes and Sales Calls default to no grouping. Local-only filters continue paging through
 empty pages; clearing filters never clears the CRM scope.
 
 Activity extends the existing authorized CRM association path rather than
@@ -180,3 +250,15 @@ When changing behavior, test the responsible primitive or pure function. When
 moving behavior, retain query keys, persistence keys, mutation ordering, loading
 boundaries, routes, and markup. Run CRM tests plus affected shared collection and
 user-card tests, TypeScript checking, `just check`, and the real CRM browser flows.
+
+Pipeline stage requirements are CRM policy over the shared database editor.
+Remove a required field's rules before deleting its options, since option
+deletion clears values even on rows outside the submitted operation batch.
+`queries/stage-requirements.ts` adapts the pipeline-authorized rules; the toolbar
+opens the shared-control dialog, and Add deal derives its required fields from
+stable option/column IDs. Keep drafts on a refused save. The server is authoritative
+for table, board, timeline, agent and import writes. Board and timeline creation
+use the host composer so stage and date-range defaults reach Add deal. CSV writes split refused batches,
+commit valid entries, and show record-specific failures; option labels enter the
+local cache only after their batch commits. The backend-free regression is
+`bunx playwright test --config src/features/crm/browser-test/playwright.config.ts stage-requirements.browser.e2e.ts`.

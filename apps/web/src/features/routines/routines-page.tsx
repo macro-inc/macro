@@ -1,14 +1,30 @@
 import { useViewControlHotkeys } from '@app/components/view-shell';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { useHasPaidAccess } from '@core/auth/license';
+import { defaultModelForPlan } from '@core/component/AI/constant';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  enableRoutineCodeSteps,
+  enableRoutineConditions,
+  enableRoutineStarterTemplates,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { Show, Suspense } from 'solid-js';
+import { RoutineSuggestionsSection } from '../routine-suggestions/routine-suggestions';
 import { getErrorMessage } from './core/routine-draft';
+import {
+  featuredTemplates,
+  newRoutineDraft,
+  type RoutineTemplate,
+} from './core/routine-templates';
+import { useRoutineCatalog } from './queries/catalog';
 import { createRoutineListSource } from './queries/routine-sources';
-import { createRoutineTargetDisplay } from './queries/routine-target-display';
 import { RoutineDetail } from './routine-detail';
+import { startRoutineDraft } from './routine-draft-start';
 import { routineContent, routineIdFromContent } from './routine-navigation';
+import { RoutineNew } from './routine-new';
 import { RoutinesListView } from './views/routines-list';
 
 function RoutinesContent() {
@@ -34,18 +50,31 @@ function RoutinesContent() {
       },
     },
   });
-  const display = createRoutineTargetDisplay();
   const source = createRoutineListSource((error) =>
     toast.alert('Could not update routine', { subtext: getErrorMessage(error) })
   );
+  const decisions = useFeatureFlag(enableRoutineConditions);
+  const starterTemplates = useFeatureFlag(enableRoutineStarterTemplates);
+  const hasPaidAccess = useHasPaidAccess();
+  const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
+  const catalog = useRoutineCatalog();
+  /** New routine: describe it, pick a template, or start fresh. */
   function create() {
     layout.popoverSplit({
       type: 'component',
       id: 'routine-compose',
-      params: {
-        onCreated: (id: string) => open(id),
-      },
+      params: { onStart: () => open('new') },
     });
+  }
+  /** A template card skips New routine and opens its page already started. */
+  function startFrom(template: RoutineTemplate) {
+    startRoutineDraft(
+      newRoutineDraft(template, {
+        defaultModel: defaultModelForPlan(hasPaidAccess()),
+        codeSteps: codeSteps().enabled,
+      })
+    );
+    open('new');
   }
   return (
     <Show
@@ -55,20 +84,32 @@ function RoutinesContent() {
         <RoutinesListView
           source={source}
           userId={userId}
-          targetLabel={display.targetLabel}
-          targetModel={display.targetModel}
           registerSearchFocus={(focus) => (focusSearch = focus)}
-          onCreate={create}
+          onCreate={() => create()}
           onOpen={(id) => open(id)}
+          templates={
+            starterTemplates().enabled
+              ? featuredTemplates(catalog(), decisions().enabled)
+              : []
+          }
+          onTemplate={startFrom}
+          footer={<RoutineSuggestionsSection />}
         />
       }
     >
       {(id) => (
-        <RoutineDetail
-          scheduleId={id}
-          onBack={() => open()}
-          onOpen={(id) => open(id)}
-        />
+        <Show
+          when={id !== 'new'}
+          fallback={
+            <RoutineNew onCreated={(id) => open(id)} onCancel={() => open()} />
+          }
+        >
+          <RoutineDetail
+            scheduleId={id}
+            onBack={() => open()}
+            onOpen={(id) => open(id)}
+          />
+        </Show>
       )}
     </Show>
   );

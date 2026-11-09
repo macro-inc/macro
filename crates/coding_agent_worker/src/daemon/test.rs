@@ -1,5 +1,24 @@
 use super::*;
 
+#[test]
+fn a_fresh_dial_is_not_a_held_connection_until_it_has_lasted() {
+    let (connected, mut runtime) = watch::channel(false);
+    assert!(!runtime_held_since_last_look(&mut runtime));
+
+    connected.send_replace(true);
+    assert!(!runtime_held_since_last_look(&mut runtime));
+    assert!(runtime_held_since_last_look(&mut runtime));
+
+    // A drop and redial between looks starts the wait over.
+    connected.send_replace(false);
+    connected.send_replace(true);
+    assert!(!runtime_held_since_last_look(&mut runtime));
+    assert!(runtime_held_since_last_look(&mut runtime));
+
+    connected.send_replace(false);
+    assert!(!runtime_held_since_last_look(&mut runtime));
+}
+
 #[tokio::test]
 async fn stop_does_not_wait_for_in_flight_work() {
     let daemon = Daemon {
@@ -7,6 +26,8 @@ async fn stop_does_not_wait_for_in_flight_work() {
         task: tokio::spawn(std::future::pending()),
         turns: ActiveTurns::default(),
         handoff: crate::harness::Handoffs::channel().1,
+        runtime_connected: watch::channel(false).1,
+        _presence_watch: AbortOnDropHandle::new(tokio::spawn(async {})),
     };
 
     tokio::time::timeout(Duration::from_secs(1), daemon.stop())
@@ -39,7 +60,6 @@ async fn startup_without_agents_serves_model_probes_and_stop_closes_the_runtime(
     let credentials = HarnessCredentials {
         harness_id: harness_id::HarnessId::TEST_A,
         token: "mhns_test".to_owned(),
-        scope: crate::config::HarnessScope::User,
     };
     let storage_task = tokio::spawn(async move {
         let (mut socket, _) = storage.accept().await.unwrap();
@@ -154,7 +174,6 @@ async fn a_handed_off_agent_keeps_running_and_streaming_under_the_next_daemon() 
     let credentials = HarnessCredentials {
         harness_id: harness_id::HarnessId::TEST_A,
         token: "mhns_test".to_owned(),
-        scope: crate::config::HarnessScope::User,
     };
     tokio::spawn(serve_storage(storage));
 

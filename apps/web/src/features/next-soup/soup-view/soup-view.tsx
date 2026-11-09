@@ -50,7 +50,6 @@ import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/view
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
   markChannelNotificationsSeenOnOpen,
-  markRowNotificationsSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   restoreSoupFocus,
@@ -103,6 +102,7 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import InfoIcon from '@icon/system/regular/info.svg';
 import Spinner from '@icon/system/regular/spinner.svg';
 import { Telemetry } from '@macro-inc/observability';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn, Layer } from '@ui';
@@ -250,6 +250,8 @@ interface SoupViewProps {
   header?: JSX.Element;
   /** Compose a detail outlet while keeping the list's state initialized. */
   renderContent?: (list: () => JSX.Element) => JSX.Element;
+  /** Pinned above the list's rows, such as a block's tutorial row. */
+  listStart?: JSX.Element;
 }
 
 export const SoupView = (props: SoupViewProps) => {
@@ -516,7 +518,7 @@ export const SoupView = (props: SoupViewProps) => {
       </Show>
       <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
         <Suspense>
-          <SoupViewList />
+          <SoupViewList listStart={props.listStart} />
         </Suspense>
       </div>
       <Suspense>
@@ -544,6 +546,8 @@ export const SoupView = (props: SoupViewProps) => {
 interface SoupViewListProps {
   rowEntry?: SoupRowEntry;
   listHeader?: JSX.Element;
+  /** Scrolls above the rows, outside them, so list focus skips it. */
+  listStart?: JSX.Element;
   groupHeader?: import('solid-js').Component<
     GroupHeaderProps & { highlighted?: boolean }
   >;
@@ -578,6 +582,7 @@ export const SoupViewList = (props: SoupViewListProps) => (
     <SoupViewListContent
       rowEntry={props.rowEntry}
       listHeader={props.listHeader}
+      listStart={props.listStart}
       groupHeader={props.groupHeader}
       customScrollbarHidden={props.customScrollbarHidden}
       scopeId={props.scopeId}
@@ -1239,6 +1244,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                         scrollerRef={setListScrollerRef}
                         virtualizerClass="scrollbar-hidden"
                         class="overflow-hidden flex min-w-0"
+                        start={props.listStart}
                         virtualizerRef={registerVirtualizerHandler}
                         onScrollBottom={debouncedFetchMore}
                         scrollBottomOffset={300}
@@ -1500,6 +1506,8 @@ interface SoupListProps {
   rows: SoupRow[];
   isSticky?: (row: SoupRow) => boolean;
   cache?: CacheSnapshot;
+  /** Scrolls above the rows, below the touch inset. */
+  start?: JSX.Element;
 }
 
 const SoupList = (props: SoupListProps) => {
@@ -1510,12 +1518,16 @@ const SoupList = (props: SoupListProps) => {
 
   const [topSpacerRef, setTopSpacerRef] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacerRef);
+  const [topInsetRef, setTopInsetRef] = createSignal<HTMLDivElement>();
+  const topInsetSize = createElementSize(topInsetRef);
 
   // Full-frame touch devices: rows under-scroll the status bar; this in-scroll
   // spacer is their resting inset (safe-top — list views have no header).
   // Keyed on touch, not width: an iPad is a full-frame native app but is wider
   // than the mobile breakpoint, so a width check would leave it at 0.
-  const topInset = () => (isTouchDevice() ? (topSpacerSize.height ?? 0) : 0);
+  const topInset = () => (isTouchDevice() ? (topInsetSize.height ?? 0) : 0);
+  // Rows start below the inset and any leading content.
+  const startMargin = () => topSpacerSize.height ?? 0;
 
   const handleScroll = (offset: number) => {
     const handle = virtualizerHandle();
@@ -1572,15 +1584,18 @@ const SoupList = (props: SoupListProps) => {
         }}
         {...soupListContainerAttribute}
       >
-        <div
-          ref={setTopSpacerRef}
-          aria-hidden
-          class="h-0 block touch:h-(--mobile-content-inset-top)"
-        />
+        <div ref={setTopSpacerRef}>
+          <div
+            ref={setTopInsetRef}
+            aria-hidden
+            class="h-0 block touch:h-(--mobile-content-inset-top)"
+          />
+          {props.start}
+        </div>
         <StickyVirtualizer
           cache={props.cache}
           ref={registerVirtualizerHandler}
-          startMargin={topInset()}
+          startMargin={startMargin()}
           data={props.rows}
           isSticky={props.isSticky}
           stickyInset={topInset()}

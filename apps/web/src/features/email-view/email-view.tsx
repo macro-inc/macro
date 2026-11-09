@@ -139,7 +139,9 @@ function EmailDesktopLayout(props: {
   focusList: () => void;
   setListPane: (pane: EmailListPane | undefined) => void;
 }) {
-  const { readingPane } = useEmailView();
+  const { readingPane, composing } = useEmailView();
+  // A new email takes the list's place, so the reading pane folds away.
+  const readerBeside = () => readingPane() && !composing();
   const [storedListWidth, setListWidth] = usePreference(
     'macro:pref:email:reading-pane-list-width',
     { default: LIST_WIDTH.default }
@@ -154,7 +156,7 @@ function EmailDesktopLayout(props: {
       resizable
       aside={{ preserveDuringResize: false }}
       main={
-        readingPane()
+        readerBeside()
           ? {
               preferredWidth: 640,
               width: listWidth(),
@@ -170,7 +172,7 @@ function EmailDesktopLayout(props: {
         max: 4000,
         whenNarrow: 'hide',
       }}
-      detailOpen={readingPane()}
+      detailOpen={readerBeside()}
     >
       <ViewShell.Aside>
         <EmailSidebar />
@@ -189,7 +191,12 @@ function EmailDesktopLayout(props: {
 const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = [
   ...EMAIL_TABS.filter((tab) => tab.id === 'focus'),
   ...EMAIL_TABS.filter((tab) => tab.id !== 'focus'),
-].map((tab) => ({ value: tab.id, label: tab.label }));
+].map((tab) => ({
+  value: tab.id,
+  get label() {
+    return tab.label;
+  },
+}));
 
 function EmailMobileLayout(props: ParentProps) {
   const isVisible = useVisibleEmailTab();
@@ -234,6 +241,7 @@ function EmailViewRoot() {
     state,
     setTab,
     selectedThread,
+    composing,
     list: listController,
     readingPane,
     setReadingPane,
@@ -260,10 +268,11 @@ function EmailViewRoot() {
     tab: () => state.tab,
     setTab,
     // Beside the reading pane the list stays on screen with a thread open;
-    // without it an open thread replaces the list.
+    // without it a thread replaces the list, as a new email always does.
     listHasKeyboard: () => {
       const pane = listPane();
-      return pane ? !pane.readerHasKeyboard() : selectedThread() === undefined;
+      if (pane) return !pane.readerHasKeyboard();
+      return selectedThread() === undefined && !composing();
     },
     hasSelection: () => listController.selection.count() > 0,
   });

@@ -75,6 +75,10 @@ pub(crate) mod compaction;
 /// a stop, or the connection going away.
 const TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
+/// What a failed turn says to the person it answers, wherever its reply is
+/// read. The failure itself goes to the prompt's error, not to them.
+const TURN_FAILED_REPLY: &str = "I ran into an error and stopped before finishing.";
+
 /// Whole milliseconds since `started`, saturating; a span field, not a clock.
 fn elapsed_ms(started: Instant) -> u64 {
     u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX)
@@ -125,6 +129,8 @@ pub struct AgentState {
     pub session_id: AgentSessionId,
     /// The session's owner; turns run on their behalf.
     pub owner: Owner,
+    /// What the session's turns are admitted and metered as.
+    pub feature: ai_usage::AiFeature,
     /// How the session's replies reach their reader.
     pub delivery: ReplyDelivery,
     /// Runs the actual turns.
@@ -948,7 +954,7 @@ async fn run_turn(
         tokio::select! {
             biased;
             _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-            result = admit_turn(state.admission.as_ref(), &state.owner) => result.map_err(|error|
+            result = admit_turn(state.admission.as_ref(), &state.owner, state.feature) => result.map_err(|error|
                 AcpError::new(-32603, error.to_string()).data(serde_json::json!({
                     "code": error.code(), "retryable": error.is_retryable(),
                 }))
@@ -1023,6 +1029,7 @@ async fn run_turn(
         session_id: state.session_id,
         awaiting: Arc::clone(&awaiting),
         owner: state.owner.clone(),
+        feature: state.feature,
         model,
         reasoning_effort,
         speed,
@@ -1121,12 +1128,22 @@ async fn run_turn(
             )),
         ));
     }
-    if let Some(failure) = &failure {
+    // The turn's text is the reply a channel thread reads, so it says the
+    // turn failed and leaves why to the prompt's error.
+    if failure.is_some() {
+        // Readers join a turn's text chunks, so set this apart from any
+        // text the turn already said.
+        let said_something = turn_parts
+            .iter()
+            .any(|part| matches!(part, AssistantMessagePart::Text { .. }));
+        let reply = if said_something {
+            format!("\n\n{TURN_FAILED_REPLY}")
+        } else {
+            TURN_FAILED_REPLY.to_owned()
+        };
         let _ = connection.send_notification(SessionNotification::new(
             acp_session_id.clone(),
-            SessionUpdate::AgentMessageChunk(ContentChunk::new(
-                format!("The agent stopped on an error: {failure}").into(),
-            )),
+            SessionUpdate::AgentMessageChunk(ContentChunk::new(reply.into())),
         ));
     }
     state.push_turn(request_id, prompt, turn_parts);

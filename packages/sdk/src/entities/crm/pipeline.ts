@@ -1,8 +1,11 @@
 import type {
   AccessiblePipeline,
+  CardPosition,
   ColumnDetail,
   CreatePipeline,
   DatabaseOp,
+  DatabaseView as DatabaseViewRecord,
+  EditPipelineRequest,
   OpBatch,
   StorageRow,
   StorageRowsQuery,
@@ -10,13 +13,37 @@ import type {
 } from '../../../generated/storage/types.gen';
 import { Lazy, MacroNotFoundError, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { Document } from '../documents/document';
 import { MacroEntity } from '../entity';
+import { PropertyOption } from '../properties/property-option';
 import {
   type SharePermissionOptions,
   sharePermissionBody,
 } from '../sharing/permissions';
 import { Team } from '../teams/team';
 import { User } from '../users/user';
+import { Company } from './company';
+import { Contact } from './contact';
+import {
+  fieldChange,
+  fieldInputs,
+  PipelineEntry,
+  type PipelineField,
+  type PipelineFieldChange,
+  type PipelineFieldInputs,
+  type PipelineFieldTotal,
+  type PipelineImport,
+  type PipelineOptionCounts,
+  type PipelineRecordInput,
+  pipelineImport,
+} from './pipeline-entry';
+
+/** Required fields for one option of a pipeline stage column. */
+export type PipelineStageRequirement = {
+  stageColumn: PipelineColumn;
+  stage: PropertyOption;
+  requiredFields: PipelineColumn[];
+};
 
 /** A CRM pipeline with its own sharing boundary and backing table. */
 export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
@@ -105,9 +132,92 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
     );
   }
 
+  /** Read stage rules with column and option handles that survive renames. */
+  async stageRequirements(): Promise<PipelineStageRequirement[]> {
+    const rules = unwrap(
+      await this.client.storage.getCrmPipelineStageRequirements({
+        path: { id: this.id },
+      }),
+    );
+    // Rules are read fresh; resolve their identities against a fresh schema too.
+    this.tableDetail.clear();
+    const table = await this.table();
+    const detail = await this.tableRecord();
+    const column = (id: string) => {
+      const record = detail.columns.find((entry) => entry.column.id === id);
+      if (!record)
+        throw new MacroNotFoundError(
+          'A required field was deleted; reload the pipeline',
+        );
+      return PipelineColumn.from(this.client, table, record);
+    };
+    return rules.map((rule) => {
+      const record = detail.columns.find(
+        (entry) => entry.column.id === rule.stageColumnId,
+      );
+      const option = record?.definition.property_options.find(
+        (entry) => entry.id === rule.stageId,
+      );
+      if (!record || !option)
+        throw new MacroNotFoundError(
+          'A required stage was deleted; reload the pipeline',
+        );
+      return {
+        stageColumn: column(rule.stageColumnId),
+        stage: PropertyOption.from(
+          this.client,
+          record.definition.definition.id,
+          option,
+        ),
+        requiredFields: rule.requiredColumnIds.map(column),
+      };
+    });
+  }
+
+  /** Require fields when entering a stage; an empty list removes that stage's rule. */
+  async setStageRequirements(
+    stageColumn: PipelineColumn,
+    stage: PropertyOption,
+    requiredFields: PipelineColumn[],
+  ): Promise<void> {
+    if (
+      [stageColumn, ...requiredFields].some(
+        (column) => column.table.pipeline.id !== this.id,
+      )
+    )
+      throw new Error('Fields belong to another pipeline');
+    this.tableDetail.clear();
+    const column = (await this.tableRecord()).columns.find(
+      (entry) => entry.column.id === stageColumn.id,
+    );
+    if (!column || column.definition.definition.id !== stage.definitionId)
+      throw new Error('The stage option belongs to another field');
+    await this.mutate((client) =>
+      client.storage.setCrmPipelineStageRequirement({
+        path: { id: this.id },
+        body: {
+          stageColumnId: stageColumn.id,
+          stageId: stage.id,
+          requiredColumnIds: requiredFields.map((field) => field.id),
+        },
+      }),
+    );
+  }
+
   /** Read the backing table through the pipeline's authorization boundary. */
   async table(): Promise<PipelineTable> {
     return PipelineTable.from(this.client, this, await this.tableRecord());
+  }
+
+  /** Saved card order through this pipeline's authorization boundary. */
+  async viewPositions(view: PipelineView): Promise<CardPosition[]> {
+    if (view.table.pipeline.id !== this.id)
+      throw new Error('View belongs to another pipeline');
+    return unwrap(
+      await this.client.storage.getCrmPipelineViewPositions({
+        path: { id: this.id, view: view.id },
+      }),
+    );
   }
 
   /** @internal Cached table snapshot shared by all pipeline table handles. */
@@ -155,6 +265,258 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
     });
   }
 
+  /**
+   * Add companies or contacts as entries (deals), filling fields by name: a
+   * stage by its label, a person as `'me'` or an email. A generic pipeline's
+   * entries name no record, only fields. A record already in the pipeline is
+   * not added again unless `allowDuplicates` (a separate second deal); its
+   * entry comes back in `alreadyPresent`.
+   */
+  async addRecords(
+    entries: { record?: PipelineRecordInput; set?: PipelineFieldInputs }[],
+    options: { allowDuplicates?: boolean } = {},
+  ): Promise<{
+    added: PipelineEntry[];
+    alreadyPresent: PipelineEntry[];
+    version: number | undefined;
+  }> {
+    const body = {
+      entries: entries.map(({ record, set }) => ({
+        ...(record && recordTarget(record)),
+        set: fieldInputs(set ?? {}),
+      })),
+      allowDuplicates: options.allowDuplicates ?? false,
+    };
+    const result = unwrap(
+      await this.client.storage.addCrmPipelineEntries({
+        path: { id: this.id },
+        body,
+      }),
+    );
+    this.tableDetail.clear();
+    const recordType = await this.trackedRecordType();
+    const entry = (record: (typeof result.added)[number]) =>
+      PipelineEntry.from(this.client, this, recordType, record);
+    return {
+      added: result.added.map(entry),
+      alreadyPresent: result.alreadyPresent.map(entry),
+      version: result.version ?? undefined,
+    };
+  }
+
+  /**
+   * Set fields of entries by name, all or nothing: a stage by its label, a
+   * person as `'me'` or an email, `null` to empty. Name an entry, or a company
+   * or contact with exactly one entry here. Pass `baseVersion` (from
+   * {@link CrmPipeline.find}) to refuse the change if the pipeline changed
+   * since. Each returned entry carries the fields the update set.
+   */
+  async updateEntries(
+    updates: {
+      entry: PipelineEntry | Company | Contact;
+      set: PipelineFieldInputs;
+    }[],
+    options: { baseVersion?: number } = {},
+  ): Promise<{
+    updated: { entry: PipelineEntry; changes: PipelineFieldChange[] }[];
+    version: number | undefined;
+  }> {
+    const body = {
+      updates: updates.map(({ entry, set }) => ({
+        ...entryTarget(this, entry),
+        set: fieldInputs(set),
+      })),
+      baseVersion: options.baseVersion,
+    };
+    const result = unwrap(
+      await this.client.storage.updateCrmPipelineEntries({
+        path: { id: this.id },
+        body,
+      }),
+    );
+    this.tableDetail.clear();
+    const recordType = await this.trackedRecordType();
+    return {
+      updated: result.updated.map((updated) => {
+        const fields = Object.fromEntries(
+          updated.changes.flatMap((change) =>
+            change.after ? [[change.field, change.after]] : [],
+          ),
+        );
+        return {
+          entry: PipelineEntry.from(this.client, this, recordType, {
+            ...updated,
+            fields,
+          }),
+          changes: updated.changes.map(fieldChange),
+        };
+      }),
+      version: result.version ?? undefined,
+    };
+  }
+
+  /**
+   * Delete entries: each entry given, and every entry of each company or
+   * contact given. The companies and contacts stay in the CRM. Returns the
+   * deleted entries as they were.
+   */
+  async removeRecords(
+    targets: (PipelineEntry | Company | Contact)[],
+  ): Promise<{ removed: PipelineEntry[]; version: number | undefined }> {
+    const entryIds: string[] = [];
+    const recordIds: string[] = [];
+    for (const target of targets) {
+      if (target instanceof PipelineEntry) {
+        if (target.pipeline.id !== this.id)
+          throw new Error('Entry belongs to another pipeline');
+        entryIds.push(target.id);
+      } else recordIds.push(target.id);
+    }
+    const result = unwrap(
+      await this.client.storage.removeCrmPipelineEntries({
+        path: { id: this.id },
+        body: { entryIds, recordIds },
+      }),
+    );
+    this.tableDetail.clear();
+    const recordType = await this.trackedRecordType();
+    return {
+      removed: result.removed.map((entry) =>
+        PipelineEntry.from(this.client, this, recordType, entry),
+      ),
+      version: result.version ?? undefined,
+    };
+  }
+
+  /**
+   * Read entries by field name and label: `where` filters (`{ Stage: 'Demo' }`,
+   * a list for any of several, `null` for empty), only some companies or
+   * contacts, or a search of their names, domains and emails; sorted by a
+   * field. Also answers per-stage counts and number totals (such as Revenue)
+   * over every match, and the pipeline's fields and version.
+   *
+   * @param query.limit Most entries to return, 1 to 5000 (default 50); counts and totals cover every match.
+   */
+  async find(
+    query: {
+      where?: PipelineFieldInputs;
+      records?: (Company | Contact)[];
+      search?: string;
+      sortBy?: string;
+      descending?: boolean;
+      limit?: number;
+    } = {},
+  ): Promise<{
+    entries: PipelineEntry[];
+    matched: number;
+    complete: boolean;
+    counts: PipelineOptionCounts[];
+    totals: PipelineFieldTotal[];
+    fields: PipelineField[];
+    version: number;
+  }> {
+    const found = unwrap(
+      await this.client.storage.findCrmPipelineEntries({
+        path: { id: this.id },
+        body: {
+          filters: fieldInputs(query.where ?? {}),
+          recordIds: query.records?.map((record) => record.id),
+          search: query.search,
+          sortBy: query.sortBy,
+          descending: query.descending,
+          limit: query.limit,
+        },
+      }),
+    );
+    const { fields, version, recordType } = found.pipeline;
+    return {
+      entries: found.entries.map((entry) =>
+        PipelineEntry.from(this.client, this, recordType, entry),
+      ),
+      matched: found.matched,
+      complete: found.complete,
+      counts: found.counts,
+      totals: found.totals,
+      fields,
+      version,
+    };
+  }
+
+  /**
+   * Rename or share the pipeline and change its fields and options by name,
+   * in one change: add fields (text, number, checkbox, date, link, select,
+   * multi_select, person or people), rename or delete fields, and add,
+   * relabel or delete options (new Stage options become the last stages).
+   * Returns the fields and version afterwards.
+   */
+  async edit(
+    changes: EditPipelineRequest,
+  ): Promise<{ fields: PipelineField[]; version: number }> {
+    const edited = await this.mutate((client) =>
+      client.storage.editCrmPipeline({ path: { id: this.id }, body: changes }),
+    );
+    this.tableDetail.clear();
+    return { fields: edited.fields, version: edited.version };
+  }
+
+  /**
+   * Add a CSV's rows as entries: CSV text, or a CSV document. Columns match
+   * fields by name; Company and Domain (or Contact and Email) name each row's
+   * record, created when the team lacks it. Records already here are not
+   * added again, and select options the CSV needs are added.
+   */
+  async importCsv(source: string | Document): Promise<PipelineImport> {
+    const body =
+      typeof source === 'string' ? { csv: source } : { documentId: source.id };
+    const outcome = unwrap(
+      await this.client.storage.importCrmPipelineCsv({
+        path: { id: this.id },
+        body,
+      }),
+    );
+    this.tableDetail.clear();
+    return pipelineImport(this, outcome);
+  }
+
+  /**
+   * Every entry as CSV text: Company and Domain (or Contact and Email), then
+   * one column per field, people as emails; {@link CrmPipeline.importCsv}
+   * reads the same layout. `complete` is false past 5000 entries.
+   */
+  async exportCsv(): Promise<{
+    csv: string;
+    name: string;
+    rows: number;
+    complete: boolean;
+  }> {
+    return unwrap(
+      await this.client.storage.getCrmPipelineCsv({ path: { id: this.id } }),
+    );
+  }
+
+  /** Save every entry as a CSV file in the caller's Macro files, laid out as {@link CrmPipeline.exportCsv} returns it. */
+  async exportCsvFile(): Promise<{
+    document: Document;
+    rows: number;
+    complete: boolean;
+  }> {
+    const exported = unwrap(
+      await this.client.storage.exportCrmPipelineCsv({ path: { id: this.id } }),
+    );
+    return {
+      document: Document.byId(this.client, exported.documentId),
+      rows: exported.rows,
+      complete: exported.complete,
+    };
+  }
+
+  /** @internal Whether entries track companies or contacts; `undefined` for a generic pipeline. */
+  private async trackedRecordType(): Promise<
+    'company' | 'contact' | undefined
+  > {
+    return (await this.detail.get()).recordType ?? undefined;
+  }
+
   /** Apply an atomic generated database operation batch through this pipeline.
    * As with Database.applyOps, batch-local UUIDs may name resources minted earlier in the batch. */
   async applyOps(
@@ -177,6 +539,26 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
     this.tableDetail.clear();
     return result;
   }
+}
+
+/** The wire form of a record to add. */
+function recordTarget(
+  record: PipelineRecordInput,
+): { recordId: string } | { email: string } {
+  if (record instanceof Company || record instanceof Contact)
+    return { recordId: record.id };
+  return { email: record.email };
+}
+
+/** The wire form of an entry to change. */
+function entryTarget(
+  pipeline: CrmPipeline,
+  entry: PipelineEntry | Company | Contact,
+): { entryId: string } | { recordId: string } {
+  if (!(entry instanceof PipelineEntry)) return { recordId: entry.id };
+  if (entry.pipeline.id !== pipeline.id)
+    throw new Error('Entry belongs to another pipeline');
+  return { entryId: entry.id };
 }
 
 /** Backing table of a CRM pipeline. */
@@ -215,6 +597,13 @@ export class PipelineTable extends MacroEntity<TableDetail> {
     );
   }
 
+  /** Stored views in display order. */
+  async views(): Promise<PipelineView[]> {
+    return (await this.pipeline.tableRecord()).views.map((view) =>
+      PipelineView.byId(this, view.id),
+    );
+  }
+
   /** Table version for optimistic operation batches. */
   async version(): Promise<number> {
     return (await this.pipeline.tableRecord()).table.version;
@@ -228,6 +617,51 @@ export class PipelineTable extends MacroEntity<TableDetail> {
   /** Rows from the authorized pipeline surface. */
   rows(): AsyncGenerator<PipelineRow> {
     return this.pipeline.rows();
+  }
+}
+
+/** A view owned and authorized by its CRM pipeline. */
+export class PipelineView {
+  private constructor(
+    /** The pipeline table this view shows. */
+    readonly table: PipelineTable,
+    /** View identity within the pipeline. */
+    readonly id: string,
+  ) {}
+
+  /** A handle to a stored view within a pipeline table. */
+  static byId(table: PipelineTable, id: string): PipelineView {
+    return new PipelineView(table, id);
+  }
+
+  /** The current view definition from the pipeline's shared schema cache. */
+  async detail(): Promise<DatabaseViewRecord> {
+    const found = (await this.table.pipeline.tableRecord()).views.find(
+      (view) => view.id === this.id,
+    );
+    if (!found)
+      throw new MacroNotFoundError(
+        `view ${this.id} is not on table ${this.table.id}`,
+      );
+    return found;
+  }
+
+  /**
+   * Read only cards with saved positions; unplaced cards are omitted.
+   * A saved lane may be stale after a row's grouping value changes outside a
+   * card move. Compare each lane with the row's current grouping before using it.
+   */
+  positions(): Promise<CardPosition[]> {
+    return this.table.pipeline.viewPositions(this);
+  }
+
+  /** Serialize identity without an authenticated client. */
+  toJSON(): { id: string; tableId: string; pipelineId: string } {
+    return {
+      id: this.id,
+      tableId: this.table.id,
+      pipelineId: this.table.pipeline.id,
+    };
   }
 }
 
@@ -318,6 +752,14 @@ export class PipelineColumn extends MacroEntity<ColumnDetail> {
     if (!record)
       throw new MacroNotFoundError(`Pipeline column ${this.id} is unavailable`);
     return record;
+  }
+
+  /** Selectable options, including stable stage identities for requirement rules. */
+  async options(): Promise<PropertyOption[]> {
+    const column = await this.fetch();
+    return column.definition.property_options.map((option) =>
+      PropertyOption.from(this.client, column.definition.definition.id, option),
+    );
   }
 
   /** Whether the caller can write this column. */

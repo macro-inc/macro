@@ -15,6 +15,7 @@ vi.mock('@tauri-apps/plugin-http', () => ({ fetch: nativeFetch }));
 import {
   createPlatformFetch,
   initializePlatformFetch,
+  installPlatformFetch,
   platformFetch,
   webviewFetch,
 } from './platformFetch';
@@ -94,6 +95,24 @@ it('keeps remote authentication and arbitrary email images on the native transpo
   expect(browser).not.toHaveBeenCalled();
 });
 
+it('passes the abort signal of a Request to the native transport', async () => {
+  const request = createPlatformFetch(vi.fn<typeof fetch>());
+  const requestAbort = new AbortController();
+  const initAbort = new AbortController();
+  const input = new Request('https://gateway.example/auth', {
+    signal: requestAbort.signal,
+  });
+  await request(input);
+  await request(input, { signal: initAbort.signal });
+  // A Request copies its signal, so assert on the abort reaching the transport.
+  const [fromRequest, fromInit] = nativeFetch.mock.calls.map(
+    ([, init]) => init?.signal
+  );
+  requestAbort.abort();
+  expect(fromRequest?.aborted).toBe(true);
+  expect(fromInit).toBe(initAbort.signal);
+});
+
 it('uses the captured browser fetch after the global override', async () => {
   const browser = vi
     .fn<typeof fetch>()
@@ -123,3 +142,51 @@ it('keeps configured local and same-origin APIs on the native cookie jar', async
   await request(new URL('/auth-assets/icon.png', document.baseURI));
   expect(browser).toHaveBeenCalledTimes(1);
 });
+
+it('routes the installed global fetch to the native transport without recursing', async () => {
+  const browser = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response('browser'));
+  vi.stubGlobal('fetch', browser);
+  installPlatformFetch();
+  await fetch('https://gateway.example/auth/user/legacy_user_permissions');
+  await platformFetch('https://gateway.example/auth/jwt/macro_api_token');
+  await fetch('https://api.klipy.com/v2/search');
+  expect(nativeFetch).toHaveBeenCalledTimes(2);
+  expect(browser).toHaveBeenCalledTimes(1);
+});
+
+it('routes installed loopback and localhost-named URLs by service and origin', async () => {
+  const browser = vi
+    .fn<typeof fetch>()
+    .mockResolvedValue(new Response('browser'));
+  vi.stubGlobal('fetch', browser);
+  installPlatformFetch();
+  await fetch('/auth/user/legacy_user_permissions');
+  await fetch('https://images.example/image?localhost=true');
+  await fetch('/src/index.tsx');
+  expect(nativeFetch).toHaveBeenCalledTimes(2);
+  expect(browser).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+  'asset://localhost/',
+  'http://asset.localhost/',
+  'https://asset.localhost/',
+])(
+  'keeps installed fetches of local files on the webview asset protocol %s',
+  async (endpoint) => {
+    vi.stubGlobal('__TAURI_INTERNALS__', {
+      convertFileSrc: (path: string, protocol: string) =>
+        `${endpoint.replace('asset', protocol)}${encodeURIComponent(path)}`,
+    });
+    const browser = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response('browser'));
+    vi.stubGlobal('fetch', browser);
+    installPlatformFetch();
+    await fetch(convertFileSrc('/media/preview.jpg'));
+    expect(browser).toHaveBeenCalledTimes(1);
+    expect(nativeFetch).not.toHaveBeenCalled();
+  }
+);

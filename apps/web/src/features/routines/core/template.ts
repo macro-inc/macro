@@ -7,6 +7,7 @@ import type {
 } from '@service-scheduled-action/generated/schemas';
 import { match } from 'ts-pattern';
 import type { ScheduleDraft } from './draft';
+import type { StepDraft } from './routine-steps';
 
 const MENTION_PATTERN =
   /<m-(user|document)-mention>([\s\S]*?)<\/m-\1-mention>/g;
@@ -55,6 +56,40 @@ function isSameUser(mention: { id: string; email?: string }, userId: string) {
   );
 }
 
+/** A JSON value with every string in it passed through `fill`. */
+/**
+ * The steps with every text that can mention people or items passed through
+ * `fill`: each Ask AI step's instructions. Sharing reads references from the
+ * same texts that activation fills in.
+ */
+export function mapStepTexts(
+  steps: StepDraft[],
+  fill: (text: string) => string
+): StepDraft[] {
+  return steps.map((step) =>
+    match(step)
+      .returnType<StepDraft>()
+      .with({ kind: 'agent' }, (agent) => ({
+        ...agent,
+        instructions: fill(agent.instructions),
+      }))
+      // Code reads its inputs from the trigger; a template can't fill it in.
+      .with({ kind: 'code' }, (step) => step)
+      .exhaustive()
+  );
+}
+
+/** Every text in a routine that can mention people or items. */
+export function routineTexts(draft: ScheduleDraft): string[] {
+  if (!draft.steps) return [draft.basePrompt ?? '', draft.prompt];
+  const texts: string[] = [];
+  mapStepTexts(draft.steps, (text) => {
+    texts.push(text);
+    return text;
+  });
+  return texts;
+}
+
 /** The ID a variable is keyed by within one template. */
 export function variableKey(variable: TemplateVariable): string {
   return match(variable)
@@ -69,13 +104,17 @@ export function variableKey(variable: TemplateVariable): string {
  * in as whoever activates it, and every other reference stays the same.
  */
 export function extractTemplateVariables(args: {
-  prompt: string;
+  /** Every text that can mention people or items (`routineTexts`). */
+  texts: readonly string[];
   /** The time zone its schedules run in; absent for event-only routines. */
   timezone: string | undefined;
   authorId: string;
 }): TemplateVariable[] {
   const variables = new Map<string, TemplateVariable>();
-  for (const [, kind, json] of args.prompt.matchAll(MENTION_PATTERN)) {
+  const mentions = args.texts.flatMap((text) => [
+    ...text.matchAll(MENTION_PATTERN),
+  ]);
+  for (const [, kind, json] of mentions) {
     const mention = parseMention(kind, json);
     if (!mention || variables.has(mention.id)) continue;
     variables.set(
@@ -133,7 +172,7 @@ export function templateShareBody(args: {
   return {
     description: args.shared?.description ?? '',
     variables: extractTemplateVariables({
-      prompt: args.draft?.prompt ?? '',
+      texts: args.draft ? routineTexts(args.draft) : [],
       timezone: routineTimezone(args.draft),
       authorId: args.authorId,
     }).map((variable) => ({
@@ -199,6 +238,7 @@ export function fillTemplateTrigger(args: {
     .returnType<ActionTrigger>()
     .with({ type: 'cron' }, (cron) => ({ ...cron, timezone }))
     .with({ type: 'events' }, (events) => events)
+    .with({ type: 'once' }, (once) => once)
     .with({ type: 'multiple' }, (multiple) => ({
       ...multiple,
       triggers: multiple.triggers.map((item) =>

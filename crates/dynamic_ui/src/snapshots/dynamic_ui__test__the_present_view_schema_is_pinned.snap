@@ -287,7 +287,7 @@ expression: schema
         {
           "properties": {
             "clause": {
-              "$ref": "#/$defs/DocumentFilterExpression"
+              "$ref": "#/$defs/DocumentFilterClause"
             },
             "op": {
               "const": "not",

@@ -211,6 +211,11 @@ export type ListFilterGroup<
   /** In a searchable group, offers typed text no option lists as one. */
   createOption?: (query: string) => ListControlOption<TOptionId> | undefined;
   contentClass?: string;
+  /** Keep the source ordering instead of promoting selected options. */
+  preserveOrder?: boolean;
+  /** Optional content below a searchable group's options. */
+  footer?: JSX.Element;
+  onOpenChange?: (open: boolean) => void;
 };
 
 export type ListFilterDropdownProps<
@@ -435,6 +440,9 @@ export function ListFilterDropdown<
                   }
                   placeholder={group().searchPlaceholder}
                   createOption={group().createOption}
+                  preserveOrder={group().preserveOrder}
+                  footer={group().footer}
+                  onOpenChange={group().onOpenChange}
                 />
               </Show>
             )}

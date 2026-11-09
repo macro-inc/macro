@@ -79,6 +79,8 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
+- `call_participants.client` defaults to `person` for older call writers;
+  programmatic joins set `agent` or `api_key` after recording attendance.
 - Never hand-edit `.sqlx/query-*.json` or invent a migration timestamp.
 - Keep concurrent index migrations to one statement with `-- no-transaction`;
   build replacement indexes before dropping old constraints, and validate large
@@ -113,7 +115,16 @@ The import ledger accepts Jira Cloud sources with `jira_issue`, `jira_project`
 and `jira_epic` kinds. Jira has its own concurrent partial team-claim index; source
 and kind constraints expand without rewriting existing rows and validate separately.
 
+`crm_pipeline_stage_requirements` stores pipeline-owned rules keyed by stage
+column, option and required column IDs. Foreign-key cascades remove rules when
+any referenced stage, field or pipeline is explicitly deleted; renames preserve them.
+
 `mcp_oauth_*` tables hold the public MCP OAuth broker's state (registrations,
 refresh token bindings, pending authorizations, issued codes); their queries and
 expiry sweep belong to `mcp_auth_proxy`. Rows carry `expires_at` and have no
 foreign keys; the broker deletes expired rows.
+
+- Spam/Trash candidate indexes cover `email_messages(link_id, id)` only for the corresponding positive `mailbox_state` JSON containment predicate; keep query literals aligned with the partial-index predicates.
+- If either concurrent folder-index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
+
+- `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.

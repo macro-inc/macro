@@ -125,6 +125,100 @@ export const removeUnsubscribeItemResponse = zod
   );
 
 /**
+ * @summary Atomically mute or snooze items for the authenticated user.
+ */
+export const unsubscribeItemsBody = zod.object({
+  items: zod.array(
+    zod.object({
+      item_id: zod.string(),
+      item_type: zod
+        .enum([
+          'user',
+          'chat',
+          'channel',
+          'channel_message',
+          'document',
+          'project',
+          'email_thread',
+          'calendar_event',
+          'team',
+          'call',
+          'foreign_entity',
+          'static_file',
+          'crm_company',
+          'crm_contact',
+          'crm_pipeline',
+          'reminder',
+          'skill',
+          'agent_session',
+          'scheduled_action',
+          'initiative',
+          'database',
+          'database_row',
+          'form',
+          'external_chat',
+        ])
+        .describe('The type of an entity in Macro'),
+    })
+  ),
+  snoozed_until: zod.iso
+    .datetime({})
+    .nullish()
+    .describe('A future resume time. Omit to mute indefinitely.'),
+});
+
+export const unsubscribeItemsResponse = zod
+  .object({})
+  .describe(
+    'Empty response is required due to custom fetch forcing `response.json()`'
+  );
+
+/**
+ * @summary Atomically resume delivery for the authenticated user's items.
+ */
+export const removeUnsubscribeItemsBody = zod.object({
+  items: zod.array(
+    zod.object({
+      item_id: zod.string(),
+      item_type: zod
+        .enum([
+          'user',
+          'chat',
+          'channel',
+          'channel_message',
+          'document',
+          'project',
+          'email_thread',
+          'calendar_event',
+          'team',
+          'call',
+          'foreign_entity',
+          'static_file',
+          'crm_company',
+          'crm_contact',
+          'crm_pipeline',
+          'reminder',
+          'skill',
+          'agent_session',
+          'scheduled_action',
+          'initiative',
+          'database',
+          'database_row',
+          'form',
+          'external_chat',
+        ])
+        .describe('The type of an entity in Macro'),
+    })
+  ),
+});
+
+export const removeUnsubscribeItemsResponse = zod
+  .object({})
+  .describe(
+    'Empty response is required due to custom fetch forcing `response.json()`'
+  );
+
+/**
  * @summary Unsubscribes user from all notifications.
  */
 export const unsubscribeAllResponse = zod
@@ -970,6 +1064,18 @@ export const listTypedNotificationsResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
+                          isAgent: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether the invite creates an agent account.'
+                            ),
                           reminder: zod
                             .boolean()
                             .optional()
@@ -2127,6 +2233,44 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "The attempt to join, which is also this notification's id."
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional requester profile picture URL.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'A person asked to join a channel the recipient participates in.'
+                        ),
+                      tag: zod.enum(['channel_access_requested']),
+                    })
+                    .describe(
+                      'Someone asked to join a channel the user participates in.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -2183,6 +2327,50 @@ export const listTypedNotificationsResponse = zod
       .describe('The next page cursor if it exists.'),
   })
   .describe('The strongly typed response for listing user notifications.');
+
+/**
+ * @summary Soft-delete multiple user notifications.
+ */
+export const bulkDeleteUserNotificationsV2Body = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
+
+/**
+ * @summary Mark notifications as done.
+ */
+export const bulkMarkNotificationsDoneBody = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
+
+/**
+ * @summary Mark notifications as seen.
+ */
+export const bulkMarkNotificationsSeenBody = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
+
+/**
+ * @summary Mark notifications as not done.
+ */
+export const bulkMarkNotificationsUndoneBody = zod
+  .object({
+    notificationIds: zod
+      .array(zod.uuid())
+      .describe('The ids of the notifications to handle'),
+  })
+  .describe('the notification ids that we are bulk updating');
 
 /**
  * Rows that fail to deserialize are dropped with a warning log.
@@ -3019,6 +3207,18 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
+                          isAgent: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether the invite creates an agent account.'
+                            ),
                           reminder: zod
                             .boolean()
                             .optional()
@@ -4176,6 +4376,44 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "The attempt to join, which is also this notification's id."
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional requester profile picture URL.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'A person asked to join a channel the recipient participates in.'
+                        ),
+                      tag: zod.enum(['channel_access_requested']),
+                    })
+                    .describe(
+                      'Someone asked to join a channel the user participates in.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -5062,6 +5300,18 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .enum(['free', 'premium'])
                             .optional()
                             .describe('What a team invitee gets by joining.'),
+                          inviterName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                            ),
+                          isAgent: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether the invite creates an agent account.'
+                            ),
                           reminder: zod
                             .boolean()
                             .optional()
@@ -6219,6 +6469,44 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
+                          channelName: zod.string().optional(),
+                          channelType: zod.enum([
+                            'public',
+                            'private',
+                            'directMessage',
+                            'team',
+                          ]),
+                        })
+                        .describe(
+                          'Common metadata for notifications on channels'
+                        )
+                        .and(
+                          zod.object({
+                            requestId: zod
+                              .uuid()
+                              .describe(
+                                "The attempt to join, which is also this notification's id."
+                              ),
+                            senderProfilePictureUrl: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Optional requester profile picture URL.'
+                              ),
+                          })
+                        )
+                        .describe(
+                          'A person asked to join a channel the recipient participates in.'
+                        ),
+                      tag: zod.enum(['channel_access_requested']),
+                    })
+                    .describe(
+                      'Someone asked to join a channel the user participates in.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           outcome: zod
                             .enum(['succeeded', 'failed'])
                             .describe(
@@ -7044,6 +7332,16 @@ export const getTypedNotificationByIdResponse = zod
                     .enum(['free', 'premium'])
                     .optional()
                     .describe('What a team invitee gets by joining.'),
+                  inviterName: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      "The inviter's display name, when they have set one. It is user-provided, so it is shown\non one line, capped, and escaped; the email falls back to the inviter's address."
+                    ),
+                  isAgent: zod
+                    .boolean()
+                    .optional()
+                    .describe('Whether the invite creates an agent account.'),
                   reminder: zod
                     .boolean()
                     .optional()
@@ -8112,6 +8410,40 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
+                  channelName: zod.string().optional(),
+                  channelType: zod.enum([
+                    'public',
+                    'private',
+                    'directMessage',
+                    'team',
+                  ]),
+                })
+                .describe('Common metadata for notifications on channels')
+                .and(
+                  zod.object({
+                    requestId: zod
+                      .uuid()
+                      .describe(
+                        "The attempt to join, which is also this notification's id."
+                      ),
+                    senderProfilePictureUrl: zod
+                      .string()
+                      .nullish()
+                      .describe('Optional requester profile picture URL.'),
+                  })
+                )
+                .describe(
+                  'A person asked to join a channel the recipient participates in.'
+                ),
+              tag: zod.enum(['channel_access_requested']),
+            })
+            .describe(
+              'Someone asked to join a channel the user participates in.'
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
                   outcome: zod
                     .enum(['succeeded', 'failed'])
                     .describe(
@@ -8154,50 +8486,6 @@ export const getTypedNotificationByIdResponse = zod
         .describe('When the notification was viewed\/seen.'),
     })
   );
-
-/**
- * @summary Soft-delete multiple user notifications.
- */
-export const bulkDeleteUserNotificationsV2Body = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
-
-/**
- * @summary Mark notifications as done.
- */
-export const bulkMarkNotificationsDoneBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
-
-/**
- * @summary Mark notifications as seen.
- */
-export const bulkMarkNotificationsSeenBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
-
-/**
- * @summary Mark notifications as not done.
- */
-export const bulkMarkNotificationsUndoneBody = zod
-  .object({
-    notificationIds: zod
-      .array(zod.uuid())
-      .describe('The ids of the notifications to handle'),
-  })
-  .describe('the notification ids that we are bulk updating');
 
 /**
  * @summary Soft-delete a single user notification.

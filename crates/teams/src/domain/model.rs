@@ -315,10 +315,10 @@ pub struct TeamMembers {
 #[derive(Debug, Clone, serde::Deserialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct PatchTeamCrmSettingsRequest {
-    /// The desired CRM state for the team.
+    /// Legacy compatibility flag. True is a no-op; false is rejected.
     pub enabled: bool,
-    /// On a disabled → enabled transition, whether to backfill the CRM
-    /// from members' existing email history. Ignored when disabling.
+    /// Retained for compatibility and ignored. Email backfill requires
+    /// each member's explicit consent through CRM email privacy settings.
     #[serde(default = "default_crm_backfill")]
     #[cfg_attr(feature = "axum", schema(default = true))]
     pub backfill: bool,
@@ -328,23 +328,18 @@ fn default_crm_backfill() -> bool {
     true
 }
 
-/// Response for `PATCH /team/crm`. Reports both the resulting state
-/// and whether this call changed it; for the enable-flip case it also
-/// reports the backfill fan-out tallies.
+/// Compatibility response for `PATCH /team/crm`. CRM records are always
+/// available; this endpoint does not enroll mailboxes or backfill emails.
 #[derive(Debug, Clone, serde::Serialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct PatchTeamCrmSettingsResponse {
-    /// The resulting `crm_enabled` value after the call.
+    /// Always true: CRM records are available to team members.
     pub enabled: bool,
-    /// True if this call flipped the value (false → true or true →
-    /// false). False if the team was already at the requested state.
+    /// Always false: the legacy command does not change availability.
     pub changed: bool,
-    /// Number of members for whom a `PopulateCrmForUser` message was
-    /// enqueued. Non-zero only on a disabled → enabled transition;
-    /// per-user enqueue failures are logged and swallowed.
+    /// Always zero: mailbox contributions require individual consent.
     pub backfill_enqueued: usize,
-    /// Number of members whose enqueue failed (and was swallowed).
-    /// Non-zero only on a disabled → enabled transition.
+    /// Always zero: this endpoint does not enqueue backfills.
     pub backfill_failed: usize,
 }
 
@@ -366,6 +361,8 @@ pub struct TeamInviteDetails {
     pub created_at: DateTime<Utc>,
     /// When the invite was last sent
     pub last_sent_at: DateTime<Utc>,
+    /// Whether the invite creates an agent account
+    pub is_agent: bool,
 }
 
 /// Deserializes an optional field while preserving explicit `null` values.
@@ -460,8 +457,8 @@ pub struct Team {
     pub(crate) slug: String,
     #[cfg_attr(feature = "axum", schema(value_type = String))]
     pub(crate) owner_id: MacroUserIdStr<'static>,
-    /// Whether the CRM is enabled for this team (from `team_crm_settings`;
-    /// `false` when no row exists).
+    /// CRM record availability, always true for teams. This compatibility
+    /// field does not indicate whether any mailbox contributes emails.
     pub(crate) crm_enabled: bool,
     /// The email domain new users are automatically joined to this team
     /// with, when automatic domain joining is enabled (None otherwise).
@@ -529,7 +526,7 @@ impl Team {
         self.owner_id.as_ref()
     }
 
-    /// Whether the CRM is enabled for this team
+    /// CRM record availability, independent of email contribution consent.
     pub fn crm_enabled(&self) -> bool {
         self.crm_enabled
     }
@@ -588,6 +585,8 @@ pub struct TeamInvite<'a> {
     pub team_invite_id: uuid::Uuid,
     /// The email of the user
     pub email: Email<Lowercase<'a>>,
+    /// Whether the invite creates an agent account
+    pub is_agent: bool,
 }
 
 impl TeamInvite<'static> {
@@ -597,6 +596,7 @@ impl TeamInvite<'static> {
             team_id: self.team_id,
             team_invite_id: self.team_invite_id,
             email: self.email.to_owned(),
+            is_agent: self.is_agent,
         }
     }
 }
@@ -623,6 +623,8 @@ pub struct DueInviteReminder {
     pub paying: bool,
     /// Whether the team has a subscription
     pub has_subscription: bool,
+    /// Whether the invite creates an agent account
+    pub is_agent: bool,
 }
 
 /// Snapshot of a team invite before it is accepted.
@@ -642,6 +644,8 @@ pub struct TeamInviteSnapshot<'a> {
     pub created_at: DateTime<Utc>,
     /// When the invite was last sent
     pub last_sent_at: DateTime<Utc>,
+    /// Whether the invite creates an agent account
+    pub is_agent: bool,
 }
 
 /// Result of accepting a team invite, including the data needed to roll it back.

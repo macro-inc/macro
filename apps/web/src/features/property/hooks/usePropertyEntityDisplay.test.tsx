@@ -344,3 +344,22 @@ describe('usePropertyEntityDisplay CRM references', () => {
     }
   );
 });
+
+it('retains exact message navigation when the source changes within one channel', () => {
+  const [messageId, setMessageId] = createSignal<string | undefined>('reply');
+  const display = createRoot((dispose) => {
+    disposals.push(dispose);
+    return usePropertyEntityDisplay(
+      () => 'channel',
+      () => 'CHANNEL',
+      {
+        specificMessageId: messageId,
+      }
+    );
+  });
+  expect(display.linkParams()).toEqual({ channel_message_id: 'reply' });
+  setMessageId('other-reply');
+  expect(display.linkParams()).toEqual({ channel_message_id: 'other-reply' });
+  setMessageId(undefined);
+  expect(display.linkParams()).toBeUndefined();
+});

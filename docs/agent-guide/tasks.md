@@ -2,6 +2,8 @@
 
 ## Surface
 
+The main Tasks list (List layout, not project or CRM task lists) starts with the Tasks `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits outside the virtualized rows, so list keyboard focus skips it.
+
 `Go to Tasks` → `/app/component/tasks`. Task views: `My tasks`, `All tasks`, and `Created by me`.
 The single-row desktop header contains the title, `Filter`, a separate
 `Task layout` single-select icon group for `List`, `Board`, and enabled `Gantt`,
@@ -629,6 +631,7 @@ It opens a separate `/app/reviews` shell whose sidebar lists `Pull requests`,
 `Authored by me`, `Assigned to me`, `Involves me`, and `Review requests`;
 `Involves me` is selected by default. The selected tab is stored in the URL and
 survives opening a PR and returning through the breadcrumb.
+The top of the Reviews list (List layout) holds the GitHub `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog.
 The list contains accessible GitHub pull requests of any status. `Involves me`
 uses the server's participant filter for your linked GitHub account: author,
 requested reviewer, assignee, commenter, or reviewer. Participant IDs are retained
@@ -813,8 +816,9 @@ the centered composer dialog. Both layouts are views in
 `apps/web/src/features/task-composer/views` composing the shared
 `TaskComposer` parts.
 
-After creation, the `Task created` toast shows an `Open` action. Touch devices
-omit `Open (New Split)`; desktop keeps both actions. Either action immediately dismisses the toast before opening
+After creation, the `Task created` toast shows primary `Open` and, on desktop,
+secondary `Open split` to its left, with a close icon instead of Dismiss.
+Touch devices omit `Open split` and the close icon. Either action immediately dismisses the toast before opening
 the task. Verify the toast at phone and tablet widths with touch
 emulation: the message and action fit without clipping, and `Open` visits the
 created task in place.
@@ -838,7 +842,7 @@ created task in place.
 3. `type_text` the title, then press **Ctrl+Enter** to create, or tap `Create Task` on
    touch (the button enables once there is a title). Dialog also offers `Continue editing in split` to open the
    task as a full document.
-   Creating shows a `Task created` toast with `Open` (and `Open (New Split)` on
+   Creating shows a `Task created` toast with `Open` (and `Open split` on
    desktop) as soon as the server returns, then copies the task link in the
    background. A denied or prompted clipboard write never delays or replaces
    that toast.
@@ -848,15 +852,22 @@ The app shell's creation-context provider snapshots the focused pane's preset
 before the composer opens. It reads the layout's existing focus accessor, not a
 global context registry; no detail fetch or navigation-state capture is needed.
 Without a preset, the standard property row and draft are used. The shared
-composer is not feature-flagged. Create-menu actions, shortcuts, and pane buttons
+composer's only flag gate is the Customer / Contact pill below. Create-menu actions, shortcuts, and pane buttons
 capture the provider during setup and read the preset when invoked.
 
-Customers supplies its preset when PostHog `enable-crm-activity` is enabled:
-**Companies** and **Contacts** replace Status in the initial row; Status still
-starts as Not Started on the saved task. Record-level task creation prefills the
-company or contact, including the contact's company when already loaded. With the
-CRM flag off or loading, record-level creation uses the standard property row
-while retaining its record-scoped draft and associations. **Add property** opens the same property
+With PostHog `enable-crm` and `enable-crm-activity` both on, every opening of the
+composer, and Universal Input's task mode, shows one **Customer / Contact** pill, a single-choice picker of companies
+and contacts that writes the Companies and Contacts properties. Picking a company
+leaves the contact unset; picking a contact also sets its company, and the pill
+shows the contact with both named on hover. A team with no CRM records sees the
+pill with "No customers or contacts found". Neither property is offered separately
+under **Add property** while the pill shows. With either flag off, there is no pill
+and both stay under **Add property**.
+
+Customers supplies its preset when `enable-crm-activity` is on. Record-level task
+creation prefills the company or contact, including the contact's company when
+already loaded. With the CRM flag off or loading, record-level creation uses the
+standard property row while retaining its record-scoped draft and associations. **Add property** opens the same property
 editor as the document/task side panel: search by name or type, select a property
 and enter its value, or create a property from an unmatched search. Assignments
 and values stay in the task draft until creation; opening or closing the editor
@@ -889,6 +900,32 @@ also show up in Files/`All` and in AI-chat document listings.
 To bring tasks over from Linear, Jira, Asana, and other apps, use the **Import
 tasks** card at the bottom of the Tasks sidebar; see
 [Import from connected apps](setup-cards.md#import-from-connected-apps).
+
+### Source experiment
+
+With `enable-task-source-property` enabled, **Create task** from an email thread,
+a channel message, or a document selection opens the composer with **Source**
+already populated and visible. Source is the existing single-item entity property,
+not description text or an external URL field. Channel sources retain the exact
+message ID, including replies. Existing description mentions remain unchanged.
+The local override is `VITE_ENABLE_TASK_SOURCE_PROPERTY=true`; development builds
+enable the experiment by default, while production defers to PostHog.
+
+Open the linked item from Source, or use its picker to replace or clear the value.
+A task opened without a source preset can add **Source** through **Add property**
+and select an existing Macro item, such as a document or task. Source uses the same
+mobile picker sheet as other entity properties. Arbitrary external URLs and
+multiple sources are outside the experiment.
+
+Verify email and channel task buttons before entering any composer text: Source
+must already show the link glyph and originating item's icon and title, without
+a `Source:` prefix. Confirm both glyphs stay vertically centered with the title
+on desktop and touch. Create the task and reopen it to confirm Source persists.
+For a channel reply, follow Source and confirm the exact reply
+opens; open and dismiss the picker without changing the value, then repeat.
+Replace Source with a document, clear Source, and recover an unconfirmed draft to
+check the selected value survives. Repeat on touch with the stacked picker sheet.
+Disable the flag and confirm the original task-button behavior remains unchanged.
 
 ## Projects
 
@@ -966,8 +1003,9 @@ Submitting closes the composer at once; a full composer returns its split to
 Projects, and Back skips the submitted composer. One request creates the project
 together with its selected properties: a value the server rejects fails the whole
 create, so no half-configured project is left behind. When the server answers, a
-`Project created` toast offers `Open` and `Open (New Split)` (on touch devices
-both open in place); nothing navigates on its own. The Projects list then
+`Project created` toast offers secondary `Open split` to the left of primary `Open`,
+with a desktop close icon instead of Dismiss (on touch devices both actions open
+in place); nothing navigates on its own. The Projects list then
 refreshes in the background to include the new row. If creation fails, the
 composer reopens as a popover with the draft and the error.
 Closing the popover without submitting keeps the underlying view open.
@@ -1158,6 +1196,21 @@ with the PR's status, title, `owner/repo#N`, and line changes. Clicking it opens
 Macro in a new split (in place on touch devices); a PR Macro has not synced yet opens on
 GitHub instead.
 
+Assignees lists and searches current team members and available agents, keeping
+each surface's existing search placeholder, styling, and selected-first ordering
+when opening the picker. Rows stay in place while selecting or deselecting.
+Existing selected outsiders remain visible and removable,
+including references absent from contacts. The picker has no contact discovery;
+a removed outsider cannot be added again unless they join the team.
+
+The same scope applies to task/project creation and editing, bulk Set assignee,
+and desktop/mobile Assignee filters. Existing **Me** and **Unassigned** choices
+keep their semantics; Created by and custom people fields keep their contact lists.
+Check that a teammate absent from contacts appears and can be selected, that
+searching by email cannot select an unassigned outsider, and that an existing
+outsider can be removed. Repeat with keyboard navigation and a touch picker
+sheet; Cancel still discards drafts and Done still applies them.
+
 The Assignees picker offers people and available agents together. Agent rows show
 their name and an `Agent` label; saved agents also show their `@handle`. Search by
 name or handle to find one. Built-in session agents follow the same availability
@@ -1289,3 +1342,7 @@ mention, and mention menu row, including completing and reopening without a relo
 The Task, Subtask, Project, and Tag entries use a wide menu with original icons and muted descriptions. Subtask opens a parent-task picker, then the normal task composer. Saving includes the selected Parent task property; if that link cannot be confirmed, keep the created task and show a warning instead of asking the user to create it again. Canceling either step creates nothing.
 
 ![Described task creation choices](images/creation-menu-descriptions.png)
+
+Opening a row clears its unread state immediately; direct details mark read when
+ready. See [reading items](notifications.md#reading-items) for failure, keyboard,
+mobile, and email inbox checks.

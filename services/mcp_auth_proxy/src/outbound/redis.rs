@@ -12,7 +12,8 @@ use std::{
 
 use crate::domain::{
     models::{
-        IssuedAuthorizationCode, PendingAuthorization, RefreshTokenBinding, RegisteredClient,
+        CodeDelivery, IssuedAuthorizationCode, PendingAuthorization, RefreshTokenBinding,
+        RegisteredClient,
     },
     ports::{
         ClientRegistrationStore, GrantRevokedFuture, RefreshTokenBindingFuture,
@@ -383,6 +384,10 @@ struct StoredPendingAuthorization {
     code_challenge: String,
     client_state: String,
     client_redirect_uri: String,
+    #[serde(default)]
+    browser_binding_digest: Option<String>,
+    #[serde(default)]
+    deliver_manually: bool,
 }
 
 impl From<PendingAuthorization> for StoredPendingAuthorization {
@@ -392,6 +397,8 @@ impl From<PendingAuthorization> for StoredPendingAuthorization {
             code_challenge: value.code_challenge,
             client_state: value.client_state,
             client_redirect_uri: value.client_redirect_uri,
+            browser_binding_digest: value.browser_binding_digest,
+            deliver_manually: value.delivery == CodeDelivery::Manual,
         }
     }
 }
@@ -403,6 +410,12 @@ impl From<StoredPendingAuthorization> for PendingAuthorization {
             code_challenge: value.code_challenge,
             client_state: value.client_state,
             client_redirect_uri: value.client_redirect_uri,
+            browser_binding_digest: value.browser_binding_digest,
+            delivery: if value.deliver_manually {
+                CodeDelivery::Manual
+            } else {
+                CodeDelivery::Redirect
+            },
         }
     }
 }
@@ -471,6 +484,32 @@ impl InflightAuthStore for RedisInflightAuth {
                     format!("failed to persist pending authorization for key {key}")
                 })?;
             Ok(())
+        }
+    }
+
+    fn find_pending(
+        &self,
+        session_id: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<PendingAuthorization>>> + Send {
+        let client = self.client.clone();
+        let key = Self::pending_key(session_id);
+        async move {
+            let mut conn = client
+                .get_multiplexed_async_connection()
+                .await
+                .context("unable to connect to redis")?;
+            let value: Option<String> = redis::cmd("GET")
+                .arg(&key)
+                .query_async(&mut conn)
+                .await
+                .with_context(|| format!("failed to read pending authorization for key {key}"))?;
+            value
+                .map(|json| {
+                    serde_json::from_str::<StoredPendingAuthorization>(&json)
+                        .map(PendingAuthorization::from)
+                        .context("failed to deserialize pending authorization")
+                })
+                .transpose()
         }
     }
 

@@ -385,7 +385,7 @@ describe('database board', () => {
       const field = screen.getByLabelText('Value');
       expect(field.classList.contains('min-w-16')).toBe(true);
       const display = within(field).getByRole('button', {
-        name: 'Value: Empty. Click to edit',
+        name: 'Value: —. Click to edit',
       });
       // JSDOM has no layout; the board's reserved display area is 64 by 24.
       vi.spyOn(display, 'getBoundingClientRect').mockReturnValue(

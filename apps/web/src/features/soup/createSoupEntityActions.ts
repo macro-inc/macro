@@ -31,7 +31,6 @@ import {
 } from '@app/features/next-soup/actions';
 import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
 import {
-  markRowNotificationsSeenOnOpen,
   openEntityInSplitFromUnifiedList,
   restoreSoupFocus,
 } from '@app/features/next-soup/utils';
@@ -51,7 +50,9 @@ import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { isEmailEntity, isGithubPrEntity, isTaskEntity } from '@entity';
+import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { useIsTeamAdmin } from '@queries/team/teams';
 import type { Component, JSX } from 'solid-js';
 
 type SoupEntityActionItem = {
@@ -113,6 +114,7 @@ export function createSoupEntityActions(
   const analytics = useAnalytics();
   const projectsFlag = useFeatureFlag(enableProjects);
   const userId = useUserId();
+  const isTeamAdmin = useIsTeamAdmin();
   const notificationSource = useGlobalNotificationSource();
   const crmActions = createCrmEntityActionItems();
 
@@ -133,6 +135,7 @@ export function createSoupEntityActions(
   });
 
   const deleteAction = makeDeleteAction({
+    isTeamAdmin,
     userId: () => userId(),
   });
 

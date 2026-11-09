@@ -480,6 +480,8 @@ fn message_json(message: &Message) -> Value {
         Err(_) => message.content.clone(),
     };
     json!({
+        // The discussion a reply joins: a reply's root, or the message itself.
+        "thread_id": message.thread_id.unwrap_or(message.id),
         "sender": sender,
         "sent_at": message.created_at,
         "edited": message.edited_at.is_some(),

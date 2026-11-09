@@ -387,6 +387,7 @@ export const SearchableFilterSubmenu = (props: {
   preserveOrder?: boolean;
   /** Offers typed text as an option, such as an address no suggestion lists. */
   createOption?: (query: string) => SearchableOption | undefined;
+  footer?: JSX.Element;
 }) => {
   const submenu = createFilterSubmenuHover({
     open: props.open,
@@ -453,6 +454,7 @@ export const SearchableFilterSubmenu = (props: {
             inputRef={setInputRef}
             preserveOrder={props.preserveOrder}
             createOption={props.createOption}
+            footer={props.footer}
           />
         </Dropdown.Group>
       </Dropdown.SubContent>

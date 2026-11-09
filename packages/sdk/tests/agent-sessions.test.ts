@@ -220,6 +220,47 @@ describe('AgentSession', () => {
     await expect(requests[1]?.json()).resolves.toEqual({ archived: false });
   });
 
+  test('registers, unregisters, and lists work as entity handles', async () => {
+    const registration = {
+      id: '0198a4cc-e138-7670-a308-a6b766602702',
+      accountId: 'macro|agent@example.com',
+      agentSessionId: sessionId,
+      registeredAt: '2026-08-24T12:00:00Z',
+    };
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      if (request.method === 'DELETE') {
+        return new Response(null, { status: 204 });
+      }
+      return Response.json(
+        request.method === 'PUT' ? registration : [registration],
+      );
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+    const agentSession = macro.agentSessions.byId(sessionId);
+
+    const registered = await agentSession.registerAsWork();
+    await agentSession.unregisterAsWork();
+    const [listed] = await macro.agentSessions.registeredWork();
+
+    expect(registered.session.id).toBe(sessionId);
+    expect(registered.account.id).toBe('macro|agent@example.com');
+    expect(registered.registeredAt).toBe('2026-08-24T12:00:00Z');
+    expect(listed?.session.id).toBe(sessionId);
+    expect(
+      requests.map((request) => `${request.method} ${request.url}`),
+    ).toEqual([
+      `PUT https://agent.example.test/agent-sessions/${sessionId}/work-registration`,
+      `DELETE https://agent.example.test/agent-sessions/${sessionId}/work-registration`,
+      'GET https://agent.example.test/agent-work-registrations',
+    ]);
+  });
+
   test('resizes a session sandbox through the agent-harness service', async () => {
     let request: Request | undefined;
     globalThis.fetch = (async (input) => {
@@ -469,6 +510,28 @@ describe('AgentSession', () => {
     });
   });
 
+  test('a created session serializes with its web app link', async () => {
+    globalThis.fetch = (async (_input) =>
+      Response.json({ session }, { status: 201 })) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+      webAppUrl: 'https://app.example.test',
+    });
+
+    const created = await macro.agentSessions.createManaged({
+      prompt: 'Fix it',
+    });
+
+    expect(created.webUrl()).toBe(
+      'https://app.example.test/app/agent/0198a4cc-e138-7670-a308-a6b766602700',
+    );
+    expect(JSON.parse(JSON.stringify(created))).toMatchObject({
+      id: '0198a4cc-e138-7670-a308-a6b766602700',
+      url: 'https://app.example.test/app/agent/0198a4cc-e138-7670-a308-a6b766602700',
+    });
+  });
+
   test('prompt is sugar over control and reports queueing', async () => {
     let request: Request | undefined;
     globalThis.fetch = (async (input) => {
@@ -508,6 +571,7 @@ describe('AgentSession', () => {
     const messages: FoldedMessage[] = [
       {
         agentSessionId: sessionId,
+        key: '0:agent',
         turn: 0,
         author: { kind: 'agent' },
         requestId: null,
@@ -537,6 +601,169 @@ describe('AgentSession', () => {
     expect(request?.url).toBe(
       `https://agent.example.test/agent-sessions/${sessionId}/log/folded`,
     );
+  });
+
+  test('lists the caller updates as session handles', async () => {
+    let request: Request | undefined;
+    globalThis.fetch = (async (input) => {
+      request = input instanceof Request ? input : new Request(input);
+      return Response.json({
+        items: [
+          {
+            sessionId,
+            sessionName: 'Fix login',
+            harness: 'cursor',
+            pullRequestUrl: null,
+            kind: 'tool_approval',
+            summary: 'Approve send_email on Gmail',
+            since: '2026-11-01T10:00:00Z',
+            options: [],
+          },
+        ],
+        truncated: false,
+        truncationNotice: null,
+      });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    const updates = await macro.agentSessions.updates();
+
+    expect(request?.method).toBe('GET');
+    expect(request?.url).toBe(
+      'https://agent.example.test/agent-sessions/updates',
+    );
+    expect(updates.truncated).toBe(false);
+    expect(updates.truncationNotice).toBeUndefined();
+    expect(updates.items).toHaveLength(1);
+    expect(updates.items[0]?.session.id).toBe(sessionId);
+    expect(updates.items[0]).toMatchObject({
+      sessionName: 'Fix login',
+      harness: 'cursor',
+      pullRequestUrl: undefined,
+      kind: 'tool_approval',
+      summary: 'Approve send_email on Gmail',
+      since: '2026-11-01T10:00:00Z',
+      options: [],
+    });
+  });
+
+  test('lists only the held tool calls still pending as answerable approvals', async () => {
+    const bot = { id: session.botId, name: 'Agent', handle: 'agent' };
+    const messages: FoldedMessage[] = [
+      {
+        agentSessionId: sessionId,
+        key: '0:agent',
+        turn: 0,
+        author: { kind: 'agent' },
+        requestId: null,
+        parts: [
+          { kind: 'text', text: 'Sending it now.' },
+          {
+            kind: 'tool_approval',
+            approvalId: 'approval-answered',
+            serverSlug: 'macro',
+            serverName: 'Macro',
+            toolName: 'send_email',
+            arguments: { to: 'a' },
+            requestedBy: 'macro|teammate@example.com',
+            status: 'approved',
+            resolvedBy: 'macro|owner@example.com',
+            remembered: false,
+          },
+          {
+            kind: 'tool_approval',
+            approvalId: 'approval-pending',
+            serverSlug: 'gmail',
+            serverName: 'Gmail',
+            toolName: 'send_email',
+            arguments: { to: 'b' },
+            requestedBy: 'macro|teammate@example.com',
+            status: 'pending',
+            resolvedBy: null,
+            remembered: false,
+          },
+        ],
+        stop: null,
+        pending: false,
+        segments: [],
+        phase: null,
+        postedAt: null,
+      },
+    ];
+    const requests: Request[] = [];
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      if (request.url.endsWith('/log/folded')) {
+        return Response.json({ bot, messages });
+      }
+      return Response.json({ status: 'approved' });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    const pending = await macro.agentSessions
+      .byId(sessionId)
+      .pendingApprovals();
+
+    expect(pending).toHaveLength(1);
+    expect(pending[0]?.approval.toJSON()).toEqual({
+      id: 'approval-pending',
+      sessionId,
+    });
+    expect(pending[0]?.requestedBy?.id).toBe('macro|teammate@example.com');
+    expect(pending[0]).toMatchObject({
+      serverName: 'Gmail',
+      toolName: 'send_email',
+      arguments: { to: 'b' },
+    });
+
+    await pending[0]?.approval.answer('approve');
+    expect(requests.map((request) => [request.method, request.url])).toEqual([
+      [
+        'GET',
+        `https://agent.example.test/agent-sessions/${sessionId}/log/folded`,
+      ],
+      [
+        'POST',
+        `https://agent.example.test/agent-sessions/${sessionId}/tool-approvals/approval-pending`,
+      ],
+    ]);
+  });
+
+  test('links a session to a task and returns the task handle', async () => {
+    const taskId = '0198a4cc-e138-7670-a308-a6b7666027aa';
+    let request: Request | undefined;
+    globalThis.fetch = (async (input) => {
+      request = input instanceof Request ? input : new Request(input);
+      return Response.json({
+        taskId,
+        reference: 'MACRO-abc',
+        pullRequestUrl: 'https://github.com/acme/web/pull/7',
+      });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    const linked = await macro.agentSessions
+      .byId(sessionId)
+      .linkTask(macro.tasks.byId(taskId));
+
+    expect(request?.method).toBe('PUT');
+    expect(request?.url).toBe(
+      `https://agent.example.test/agent-sessions/${sessionId}/task`,
+    );
+    expect(await request?.json()).toEqual({ taskId });
+    expect(linked.task.id).toBe(taskId);
+    expect(linked.reference).toBe('MACRO-abc');
+    expect(linked.pullRequestUrl).toBe('https://github.com/acme/web/pull/7');
   });
 
   test('lists the queue and edits, steers, or removes an entry through its handle', async () => {
@@ -599,4 +826,65 @@ describe('AgentSession', () => {
       `https://agent.example.test/agent-sessions/${sessionId}/queue/${actionId}`,
     );
   });
+});
+
+test('session activity keeps invocation filters and lazily advances its cursor', async () => {
+  const requests: URL[] = [];
+  const invocationId = '0198a4cc-e138-7670-a308-a6b766602709';
+  const timestamp = '2026-11-05T12:00:00Z';
+  globalThis.fetch = (async (input) => {
+    const request = input instanceof Request ? input : new Request(input);
+    requests.push(new URL(request.url));
+    return Response.json({
+      activities: [
+        {
+          id: `row-${requests.length}`,
+          agent_correlation_id: invocationId,
+          actor_id: 'bot|0198a4cc-e138-7670-a308-a6b766602701',
+          subject_id: 'macro|owner@example.com',
+          entity_type: 'document',
+          entity_id: 'document-fixture',
+          action: 'edited',
+          action_payload: null,
+          occurred_at: timestamp,
+        },
+      ],
+      nextCursor:
+        requests.length === 1 ? { occurredAt: timestamp, id: 'row-1' } : null,
+    });
+  }) as typeof fetch;
+  const macro = new Macro({
+    token: 'fixture',
+    hosts: { 'agent-harness': 'https://agent.example.test' },
+  });
+  const session = macro.agentSessions.byId(sessionId);
+  const invocation = session.invocations.byId(invocationId);
+  const activity = invocation.activity({ limit: 1 });
+  expect(requests).toHaveLength(0);
+  const first = await activity.next();
+  expect(first.value?.invocation?.id).toBe(invocationId);
+  expect(requests).toHaveLength(1);
+  const second = await activity.next();
+  expect(second.value?.snapshot.id).toBe('row-2');
+  expect((await activity.next()).done).toBe(true);
+  expect(requests).toHaveLength(2);
+  expect(
+    requests.every(
+      (url) => url.searchParams.get('agentCorrelationId') === invocationId,
+    ),
+  ).toBe(true);
+  expect(requests[1].searchParams.get('beforeAt')).toBe(timestamp);
+  expect(requests[1].searchParams.get('beforeId')).toBe('row-1');
+  expect(JSON.stringify(invocation)).not.toContain('fixture');
+});
+
+test('session activity rejects another session invocation without a request', () => {
+  const macro = new Macro({ token: 'fixture' });
+  const session = macro.agentSessions.byId(sessionId);
+  const foreign = macro.agentSessions
+    .byId('other')
+    .invocations.byId('invocation');
+  expect(() => session.activity({ invocation: foreign })).toThrow(
+    'must belong to this session',
+  );
 });

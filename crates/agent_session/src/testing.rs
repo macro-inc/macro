@@ -88,11 +88,15 @@ pub struct InMemoryAgentSessionRepo {
     queues: Arc<Mutex<HashMap<AgentSessionId, Vec<StoredQueuedAction>>>>,
     /// Session -> who prompted its turn, mirroring the `turn_*` columns.
     turn_prompters: Arc<Mutex<HashMap<AgentSessionId, TurnPrompter>>>,
+    /// People who prompted each session directly, in the order they did.
+    followers: Arc<Mutex<HashMap<AgentSessionId, Vec<MacroUserIdStr<'static>>>>>,
     /// Sessions an agent conversation sends its messages to, mirroring the
     /// current rows of `agent_conversation_sessions`.
     conversation_sessions: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
     /// Sessions whose name was generated, mirroring `name_is_generated`.
     generated_names: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
+    /// Session -> whether it is billed, mirroring `agent_session.billing`.
+    billings: Arc<Mutex<HashMap<AgentSessionId, crate::domain::model::SessionBilling>>>,
 }
 
 impl InMemoryAgentSessionRepo {
@@ -109,6 +113,17 @@ impl InMemoryAgentSessionRepo {
             .lock()
             .expect("in-memory session store is not poisoned")
             .insert(session.id, session);
+    }
+
+    /// Who prompted `session` directly, in the order they first did.
+    #[must_use]
+    pub fn followers(&self, session: AgentSessionId) -> Vec<MacroUserIdStr<'static>> {
+        self.followers
+            .lock()
+            .expect("followers poisoned")
+            .get(&session)
+            .cloned()
+            .unwrap_or_default()
     }
 
     /// Make `session` the one an agent conversation's channel sends its
@@ -191,6 +206,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let now = chrono::Utc::now();
         let session = AgentSession {
+            origin: params.origin.clone(),
             repo_branch: params.repo_branch,
             pull_request_url: None,
             task_id: None,
@@ -216,10 +232,12 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             created_at: now,
             modified_at: now,
             source: params.purpose.source(),
-            visibility: params
-                .purpose
-                .visibility(params.bot_id, params.thread_id, false),
+            visibility: params.purpose.visibility(params.thread_id, false),
         };
+        self.billings
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .insert(session.id, params.billing);
         if let Some(hash) = params.egress_token_hash {
             self.egress_token_hashes
                 .lock()
@@ -282,6 +300,26 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.find(id).await?.ok_or(AgentSessionError::NotFound(id))
+    }
+
+    async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
+        if !self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .contains_key(&id)
+        {
+            return Err(AgentSessionError::NotFound(id));
+        }
+        // A session inserted directly, not through `create`, is billed as
+        // the column defaults.
+        Ok(self
+            .billings
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .get(&id)
+            .copied()
+            .unwrap_or_default())
     }
 
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
@@ -393,6 +431,16 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .lock()
             .expect("turn prompters poisoned")
             .insert(id, prompter.clone());
+        Ok(())
+    }
+
+    async fn add_follower(&self, id: AgentSessionId, user: &MacroUserIdStr<'static>) -> Result<()> {
+        self.get(id).await?;
+        let mut followers = self.followers.lock().expect("followers poisoned");
+        let session = followers.entry(id).or_default();
+        if !session.contains(user) {
+            session.push(user.clone());
+        }
         Ok(())
     }
 
@@ -1085,6 +1133,7 @@ impl agent_fold::domain::ports::LogRepo for InMemoryAgentSessionRepo {
 pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
     let now = chrono::Utc::now();
     AgentSession {
+        origin: Default::default(),
         repo_branch: None,
         pull_request_url: None,
         task_id: None,

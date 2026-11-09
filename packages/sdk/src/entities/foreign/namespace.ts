@@ -43,6 +43,9 @@ function withoutNullLogin({
   return { ...user, login: login ?? undefined };
 }
 
+/**
+ * @routing Use when resolving a linked external entity, such as an imported item; not Macro's own items.
+ */
 export class ForeignEntityNamespace {
   constructor(private readonly client: MacroClient) {}
 

@@ -1,10 +1,10 @@
+import { createPointerAutoScroll } from '@app/components/drag-drop/create-pointer-auto-scroll';
 import { t } from '@app/lib/i18n';
 import { useUserId } from '@core/context/user';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn, Tooltip } from '@ui';
 import { createMemo, createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import {
-  CHANNEL_SECTION_MAX_HEIGHT,
   CHANNEL_SECTION_MIN_HEIGHT,
   CHANNEL_SECTION_MIN_ITEMS,
   CHANNEL_SECTION_ROW_HEIGHT,
@@ -22,6 +22,8 @@ export function ResizableRailSection(props: {
   itemCount: number;
   dropEdge?: 'top' | 'bottom';
   dragging?: boolean;
+  outerScrollRoot?: HTMLDivElement;
+  onResizingChange?: (resizing: boolean) => void;
   header: JSX.Element;
   children: JSX.Element;
   rootRef: (element: HTMLDivElement) => void;
@@ -37,7 +39,6 @@ export function ResizableRailSection(props: {
 
   const maximum = () =>
     Math.min(
-      CHANNEL_SECTION_MAX_HEIGHT,
       props.maxHeight,
       contentSize.height && contentSize.height > 0
         ? contentSize.height
@@ -72,6 +73,7 @@ export function ResizableRailSection(props: {
     | {
         pointer: number;
         y: number;
+        current: { x: number; y: number };
         height: number;
         zoom: number;
         top: number;
@@ -80,23 +82,35 @@ export function ResizableRailSection(props: {
       }
     | undefined;
 
-  const draggedHeight = (event: PointerEvent) => {
+  const draggedHeight = (clientY: number) => {
     const element = viewport();
     if (!drag || !element) {
       return height();
     }
 
     const shift = element.getBoundingClientRect().top - drag.top;
-    return clamp(drag.height + (event.clientY - drag.y - shift) / drag.zoom);
+    return clamp(drag.height + (clientY - drag.y - shift) / drag.zoom);
   };
+
+  const autoScroll = createPointerAutoScroll({
+    getViewport: () => props.outerScrollRoot,
+    getPointer: () => (drag?.account === account() ? drag.current : undefined),
+    axis: 'y',
+    allowOutside: true,
+    onScroll: () => {
+      if (drag) setPreview(draggedHeight(drag.current.y));
+    },
+  });
+
   const finish = (event: PointerEvent, cancelled = false) => {
     if (!drag || event.pointerId !== drag.pointer) {
       return;
     }
 
     const current = drag;
-    const nextHeight = draggedHeight(event);
+    const nextHeight = draggedHeight(event.clientY);
     drag = undefined;
+    autoScroll.stop();
 
     if (current.handle.hasPointerCapture?.(current.pointer)) {
       current.handle.releasePointerCapture(current.pointer);
@@ -114,18 +128,24 @@ export function ResizableRailSection(props: {
     }
 
     setPreview(undefined);
+    props.onResizingChange?.(false);
   };
 
   return (
     <div
       ref={props.rootRef}
       class={cn(
-        '@container/rail-section group/rail-section relative min-w-0 shrink-0',
-        props.dragging &&
-          'rounded-lg bg-surface opacity-40 ring-1 ring-edge-muted'
+        '@container/rail-section group/rail-section relative isolate min-w-0 shrink-0',
+        props.dragging && 'opacity-40'
       )}
       data-resizing={preview() !== undefined ? '' : undefined}
     >
+      <Show when={props.dragging}>
+        <div
+          aria-hidden="true"
+          class="pointer-events-none absolute inset-y-0 -left-(--sidebar-gutter) right-0 -z-10 rounded-lg bg-surface ring-1 ring-edge-muted"
+        />
+      </Show>
       <Show when={props.dropEdge}>
         {(edge) => (
           <div
@@ -155,7 +175,9 @@ export function ResizableRailSection(props: {
           {(_resizable) => {
             onCleanup(() => {
               drag = undefined;
+              autoScroll.stop();
               setPreview(undefined);
+              props.onResizingChange?.(false);
             });
 
             return (
@@ -182,6 +204,7 @@ export function ResizableRailSection(props: {
                     drag = {
                       pointer: event.pointerId,
                       y: event.clientY,
+                      current: { x: event.clientX, y: event.clientY },
                       height: element.offsetHeight,
                       zoom:
                         element.getBoundingClientRect().height /
@@ -191,7 +214,9 @@ export function ResizableRailSection(props: {
                       handle: event.currentTarget,
                     };
                     setPreview(element.offsetHeight);
+                    props.onResizingChange?.(true);
                     event.currentTarget.setPointerCapture(event.pointerId);
+                    autoScroll.start();
                   }}
                   onPointerMove={(event) => {
                     if (!drag || event.pointerId !== drag.pointer) {
@@ -203,7 +228,8 @@ export function ResizableRailSection(props: {
                       return;
                     }
 
-                    setPreview(draggedHeight(event));
+                    drag.current = { x: event.clientX, y: event.clientY };
+                    setPreview(draggedHeight(event.clientY));
                   }}
                   onPointerUp={(event) => finish(event)}
                   onPointerCancel={(event) => finish(event, true)}

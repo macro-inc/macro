@@ -68,6 +68,34 @@ fn a_view_of_every_widget_decodes() {
     assert_eq!(serde_json::to_value(&decoded).unwrap(), view);
 }
 
+/// The model's schema negates only a clause, but a view that negates a
+/// combination, as the web's query can, still decodes.
+#[test]
+fn a_negated_combination_decodes() {
+    let view = json!({
+        "widgets": [{
+            "type": "list",
+            "source": {
+                "kind": "query",
+                "query": {
+                    "documentWhere": {
+                        "op": "not",
+                        "clause": {
+                            "op": "or",
+                            "clauses": [
+                                { "include": { "documentDone": true } },
+                                { "op": "not", "clause": { "op": "and", "clauses": [] } }
+                            ]
+                        }
+                    }
+                }
+            }
+        }]
+    });
+    let decoded = decode_view(&view).expect("a negated combination decodes");
+    assert_eq!(serde_json::to_value(&decoded).unwrap(), view);
+}
+
 #[test]
 fn fields_the_types_do_not_name_are_dropped() {
     let view = json!({

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE \"User\" u\n        SET \"isAgent\" = FALSE\n        WHERE u.\"email\" = $1\n          AND u.\"isAgent\"\n          AND NOT u.\"tutorialComplete\"\n          AND NOT EXISTS (SELECT 1 FROM \"UserApiKey\" k WHERE k.user_id = u.\"id\")\n          AND NOT EXISTS (\n              SELECT 1 FROM team_invite ti WHERE ti.email = u.\"email\" AND ti.is_agent\n          )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c8bb1ba1a9013126a7a6e925080dcee285a274fbbc53acc996d9db69f852a329"
+}

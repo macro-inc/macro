@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [features]
 default = []
-ports = []
+ports = ["dep:tokio"]
 outbound-gmail = [
   "ports",
   "dep:base64",
@@ -14,7 +14,6 @@ outbound-gmail = [
   "dep:gmail_client",
   "dep:html-escape",
   "dep:http",
-  "dep:lol_html",
   "dep:mailparse",
   "dep:serde_json",
 ]
@@ -35,7 +34,6 @@ gmail_client = { path = "../gmail_client", optional = true }
 html-escape = { workspace = true, optional = true }
 http = { workspace = true, optional = true }
 httpdate = { workspace = true, optional = true }
-lol_html = { workspace = true, optional = true }
 mail-builder = "0.4.3"
 mailparse = { version = "0.16.1", optional = true }
 models_email = { path = "../models_email" }
@@ -44,6 +42,7 @@ serde_json = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
@@ -54,4 +53,5 @@ macro_db_migrator = { path = "../macro_db_migrator" }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
 sqlx = { workspace = true }
 tokio = { workspace = true }
+tracing-subscriber = { workspace = true }
 wiremock = { workspace = true }

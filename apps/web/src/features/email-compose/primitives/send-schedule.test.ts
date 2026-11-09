@@ -687,7 +687,9 @@ describe('send and schedule ordering', () => {
       const scheduledNotice = vi
         .mocked(composeContext.notices.feedback.success)
         .mock.calls.find(([text]) => text === 'Email scheduled');
-      scheduledNotice?.[1]?.actions?.[0].onClick();
+      scheduledNotice?.[1]?.actions
+        ?.find(({ kind }) => kind === 'undo')
+        ?.onClick();
       await vi.advanceTimersByTimeAsync(0);
       expect(composeContext.delivery.unschedule).toHaveBeenCalledOnce();
       expect(composeContext.delivery.archive).not.toHaveBeenCalled();
@@ -718,7 +720,9 @@ describe('send and schedule ordering', () => {
       const scheduledNotice = vi
         .mocked(composeContext.notices.feedback.success)
         .mock.calls.find(([text]) => text === 'Email scheduled');
-      scheduledNotice?.[1]?.actions?.[0].onClick();
+      scheduledNotice?.[1]?.actions
+        ?.find(({ kind }) => kind === 'undo')
+        ?.onClick();
       await vi.advanceTimersByTimeAsync(0);
       expect(composeContext.delivery.unschedule).toHaveBeenCalledWith(
         expect.objectContaining({ draftId: 'draft', draftGeneration: 3 })
@@ -752,7 +756,9 @@ describe('send and schedule ordering', () => {
       const scheduledNotice = vi
         .mocked(composeContext.notices.feedback.success)
         .mock.calls.find(([text]) => text === 'Email scheduled');
-      scheduledNotice?.[1]?.actions?.[0].onClick();
+      scheduledNotice?.[1]?.actions
+        ?.find(({ kind }) => kind === 'undo')
+        ?.onClick();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(composeContext.delivery.unschedule).toHaveBeenCalledWith({
@@ -802,7 +808,9 @@ describe('send and schedule ordering', () => {
         .mocked(composeContext.notices.feedback.success)
         .mock.calls.find(([text]) => text === 'Email scheduled');
 
-      scheduledNotice?.[1]?.actions?.[0].onClick();
+      scheduledNotice?.[1]?.actions
+        ?.find(({ kind }) => kind === 'undo')
+        ?.onClick();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(composeContext.notices.reportError).toHaveBeenCalledWith(
@@ -831,7 +839,9 @@ describe('send and schedule ordering', () => {
         .mock.calls.find(([text]) => text === 'Email scheduled');
 
       state.edit('Newer reply that must survive');
-      scheduledNotice?.[1]?.actions?.[0].onClick();
+      scheduledNotice?.[1]?.actions
+        ?.find(({ kind }) => kind === 'undo')
+        ?.onClick();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(decodeBase64Utf8(state.collectDraft()?.body_html ?? '')).toContain(
@@ -868,7 +878,9 @@ describe('send and schedule ordering', () => {
     });
     try {
       expect(newer.savedDraftId()).toBe('newer-draft');
-      scheduledNotice?.[1]?.actions?.[0].onClick();
+      scheduledNotice?.[1]?.actions
+        ?.find(({ kind }) => kind === 'undo')
+        ?.onClick();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(newer.savedDraftId()).toBe('newer-draft');
@@ -900,7 +912,9 @@ describe('send and schedule ordering', () => {
       const scheduledNotice = vi
         .mocked(composeContext.notices.feedback.success)
         .mock.calls.find(([text]) => text === 'Email scheduled');
-      scheduledNotice?.[1]?.actions?.[0].onClick();
+      scheduledNotice?.[1]?.actions
+        ?.find(({ kind }) => kind === 'undo')
+        ?.onClick();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(composeContext.notices.feedback.failure).toHaveBeenCalledWith(

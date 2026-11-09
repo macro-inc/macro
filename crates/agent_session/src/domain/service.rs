@@ -78,7 +78,7 @@ use super::ports::{
 };
 use super::retitle::ConversationDigest;
 use super::session::actors::{ActorInput, SessionActor, SessionCommand, SessionMessage, Stepped};
-use super::session::{CloseReason, Input, StopReason as SessionStopReason};
+use super::session::{CloseReason, Input, PermissionPolicy, StopReason as SessionStopReason};
 use crate::domain::events::{AgentSessionLifecycleEvent, SessionRenamedMetadata};
 
 /// Buffered not-yet-accepted commands per session actor.
@@ -196,6 +196,13 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// Get a persisted agent session by id.
     fn get_session(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
+    /// Whether the session's in-process turns are billed to its owner, set
+    /// by whoever opened it.
+    fn session_billing(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<crate::domain::model::SessionBilling>> + Send;
+
     /// A persisted agent session by id, or `None` when there is none.
     fn find_session(
         &self,
@@ -212,11 +219,30 @@ pub trait AgentSessionService: Send + Sync + 'static {
         message: ToServerMessage,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Append a frame nothing projects session state from - no turn,
+    /// status, or model - and push it to the session's viewers, without the
+    /// whole-log fold [`record_frame`](Self::record_frame) runs first. What a
+    /// review writes on every save. Any replica may call this; the frame is
+    /// ordered by when it is stored.
+    fn record_unprojected_frame(
+        &self,
+        id: AgentSessionId,
+        message: ToServerMessage,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Record who prompted the turn `id` is about to run, before it runs.
     fn set_turn_prompter(
         &self,
         id: AgentSessionId,
         prompter: &TurnPrompter,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Record that `user` prompted the session `id` directly, from the
+    /// session itself, so a hidden session lists for them.
+    fn add_follower(
+        &self,
+        id: AgentSessionId,
+        user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Read the persisted identity of the current turn during recovery.
@@ -326,6 +352,15 @@ pub trait AgentSessionService: Send + Sync + 'static {
         &self,
         id: AgentSessionId,
         servers: Vec<McpServer>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Answer the agent's permission requests under `policy` from now on, on
+    /// the session's live connection on this instance. A session attached
+    /// nowhere here needs nothing: its next attach takes a fresh policy.
+    fn set_permission_policy(
+        &self,
+        id: AgentSessionId,
+        policy: PermissionPolicy,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// The session an incoming channel context routes to, if any.
@@ -899,12 +934,23 @@ where
         self.repo.get(id).await
     }
 
+    async fn session_billing(
+        &self,
+        id: AgentSessionId,
+    ) -> Result<crate::domain::model::SessionBilling> {
+        self.repo.billing(id).await
+    }
+
     async fn find_session(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
         self.repo.find(id).await
     }
 
     async fn set_turn_prompter(&self, id: AgentSessionId, prompter: &TurnPrompter) -> Result<()> {
         self.repo.set_turn_prompter(id, prompter).await
+    }
+
+    async fn add_follower(&self, id: AgentSessionId, user: &MacroUserIdStr<'static>) -> Result<()> {
+        self.repo.add_follower(id, user).await
     }
 
     async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {
@@ -1080,6 +1126,51 @@ where
         .unwrap_or(Err(AgentSessionError::LogTimedOut(id)))
     }
 
+    #[tracing::instrument(
+        name = "agent.session.record_unprojected_frame",
+        err,
+        skip(self, message),
+        fields(agent.session.id = %id),
+    )]
+    async fn record_unprojected_frame(
+        &self,
+        id: AgentSessionId,
+        message: ToServerMessage,
+    ) -> Result<()> {
+        tokio::time::timeout(SESSION_PERSIST_TIMEOUT, async {
+            let stored = self
+                .repo
+                .create_projected(
+                    AgentSessionLog {
+                        agent_session_id: id,
+                        user_id: None,
+                        content: Message::ToServer(message),
+                        logged_at: None,
+                    },
+                    None,
+                    None,
+                    None,
+                )
+                .await?;
+            // Best effort, as for every other frame: it is already durable,
+            // so a viewer who misses it reads it on the next log fetch.
+            if let Err(error) = self
+                .realtime
+                .publish(LogAppended {
+                    turn_state: None,
+                    agent_session_id: id,
+                    entries: vec![stored],
+                })
+                .await
+            {
+                tracing::error!(error = ?error, %id, "failed to stream an agent session frame");
+            }
+            Ok(())
+        })
+        .await
+        .unwrap_or(Err(AgentSessionError::LogTimedOut(id)))
+    }
+
     async fn attach_session<Connector>(
         &self,
         id: AgentSessionId,
@@ -1174,6 +1265,24 @@ where
         };
         commands
             .send(SessionMessage::ReplaceMcpServers(servers))
+            .await
+            .map_err(|_| AgentSessionError::Disconnected(id))
+    }
+
+    async fn set_permission_policy(
+        &self,
+        id: AgentSessionId,
+        policy: PermissionPolicy,
+    ) -> Result<()> {
+        let Some(commands) = self
+            .active
+            .get(&id)
+            .and_then(|active| active.commands.clone())
+        else {
+            return Ok(());
+        };
+        commands
+            .send(SessionMessage::SetPermissionPolicy(policy))
             .await
             .map_err(|_| AgentSessionError::Disconnected(id))
     }
@@ -2031,6 +2140,10 @@ where
         self.repo.get(id).await
     }
 
+    async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
+        self.repo.billing(id).await
+    }
+
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
         self.repo.find(id).await
     }
@@ -2049,6 +2162,10 @@ where
 
     async fn set_turn_prompter(&self, id: AgentSessionId, prompter: &TurnPrompter) -> Result<()> {
         self.repo.set_turn_prompter(id, prompter).await
+    }
+
+    async fn add_follower(&self, id: AgentSessionId, user: &MacroUserIdStr<'static>) -> Result<()> {
+        self.repo.add_follower(id, user).await
     }
 
     async fn turn_prompter(&self, id: AgentSessionId) -> Result<Option<TurnPrompter>> {

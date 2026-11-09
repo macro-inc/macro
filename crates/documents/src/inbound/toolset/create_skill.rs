@@ -15,6 +15,7 @@ use crate::domain::models::DocumentError;
 use crate::domain::ports::{
     DocumentService, create::DocumentCreationService, editing::EditingWorkerService,
 };
+use crate::domain::skill_description::SkillDescription;
 
 /// The created skill.
 #[derive(Debug, Serialize, JsonSchema)]
@@ -28,11 +29,16 @@ pub struct CreateSkillResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "CreateSkill",
-    description = "Create a skill: a markdown document of reusable instructions that AI reads and follows when the skill is referenced, as Compose Skill in the app does. Write the instructions as the markdown body. Edit an existing skill with EditDocument; find skills with ListSkills or SearchSkills."
+    description = "Create a skill: a markdown document of reusable instructions that AI reads and follows when the skill is referenced or a request needs it, as Compose Skill in the app does. Write the instructions as the markdown body, and say in description when to use it. Edit an existing skill with EditDocument; find skills with ListSkills or SearchSkills."
 )]
 pub struct CreateSkill {
     #[schemars(description = "The skill's name.")]
     pub skill_name: String,
+
+    #[schemars(
+        description = "When to use the skill, in one line starting \"Use when\", at most 300 characters, e.g. \"Use when drafting release notes; not changelog entries\". Agents load the skill for requests this describes."
+    )]
+    pub description: String,
 
     #[schemars(description = "The skill's instructions, in markdown.")]
     pub markdown: String,
@@ -82,6 +88,11 @@ where
                 internal_error: anyhow::anyhow!("empty skill name"),
             });
         }
+        let description =
+            SkillDescription::parse(&self.description).map_err(|error| ToolCallError {
+                description: error.to_string(),
+                internal_error: error.into(),
+            })?;
         // Mirrors the create_skill route's project body extractor.
         if let Some(project_id) = self.project_id {
             service_context
@@ -115,6 +126,11 @@ where
                     subtype: MarkdownSubtype::Skill,
                 },
             )
+            .await
+            .map_err(failed_to_create_skill)?;
+        service_context
+            .service
+            .describe_new_skill(created.document_id(), description)
             .await
             .map_err(failed_to_create_skill)?;
         let document_id =

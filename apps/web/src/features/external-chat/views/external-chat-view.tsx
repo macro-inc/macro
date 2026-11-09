@@ -14,6 +14,7 @@ import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDr
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
@@ -34,7 +35,6 @@ import {
   createSignal,
   For,
   type JSX,
-  mapArray,
   onCleanup,
   onMount,
   Show,
@@ -43,14 +43,11 @@ import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import { ChatDetails } from '../components/chat-details';
 import { AttachmentChip } from '../components/inbound-attachment';
-import {
-  InboundMedia,
-  type InboundMediaFile,
-} from '../components/inbound-media';
+import { MessageMedia } from '../components/message-media';
 import { RichCard } from '../components/rich-cards';
 import { ExternalChatSystemLine } from '../components/system-line';
 import { useExternalChat } from '../context/external-chat-context';
-import { type InboundAttachment, inlineMediaKind } from '../core/attachments';
+import { inlineMediaKind } from '../core/attachments';
 import {
   backfillStatus,
   type ChatDetail,
@@ -65,6 +62,7 @@ import {
 import { mentionToken } from '../core/mentions';
 import { chatMessageData, senderKey } from '../core/message-data';
 import { richPreview } from '../core/rich';
+import { messageTask } from '../core/task';
 import {
   type ConversationTarget,
   createConversation,
@@ -116,73 +114,6 @@ function ForwardedTag() {
   );
 }
 
-function sameMediaFile(
-  a: InboundMediaFile | undefined,
-  b: InboundMediaFile | undefined
-): boolean {
-  if (!a || !b) return a === b;
-  return (Object.keys(a) as (keyof InboundMediaFile)[]).every(
-    (key) => a[key] === b[key]
-  );
-}
-
-/**
- * A message's images, video and voice notes, played inline. `sent` is what
- * this page showed for a file it sent: its local preview and size stand in
- * until the stored file loads.
- */
-function MessageMedia(props: {
-  attachments: InboundAttachment[];
-  sent?: InboundAttachment[];
-}) {
-  const source = useExternalChat();
-  const media = createMemo(() =>
-    props.attachments.flatMap((attachment, index) => {
-      const local = props.sent?.[index];
-      const file: InboundAttachment = local
-        ? {
-            ...attachment,
-            previewUrl: attachment.previewUrl ?? local.previewUrl,
-            width: attachment.width ?? local.width,
-            height: attachment.height ?? local.height,
-          }
-        : attachment;
-      const kind = inlineMediaKind(file);
-      return kind ? [{ attachment: file, kind }] : [];
-    })
-  );
-  const files = mapArray(
-    () => media().map((file) => file.attachment.fileId ?? ''),
-    (fileId, index) =>
-      // One object per change, so Chat's media rows don't remount.
-      createMemo(
-        (): InboundMediaFile | undefined => {
-          const file = media()[index()];
-          if (!file) return undefined;
-          return {
-            id: fileId || `${file.attachment.ordinal}`,
-            kind: file.kind,
-            fileName: file.attachment.fileName,
-            url: fileId ? source.fileUrl(fileId) : file.attachment.previewUrl,
-            previewUrl: file.attachment.previewUrl,
-            width: file.attachment.width,
-            height: file.attachment.height,
-            durationSeconds: file.attachment.durationSeconds,
-            presentation: file.attachment.presentation,
-          };
-        },
-        undefined,
-        { equals: sameMediaFile }
-      )
-  );
-  const shown = () => files().flatMap((file) => file() ?? []);
-  return (
-    <Show when={shown().length > 0}>
-      <InboundMedia files={shown()} />
-    </Show>
-  );
-}
-
 export function ExternalChatView(props: {
   userId?: string;
   leading?: JSX.Element;
@@ -212,6 +143,7 @@ export function ExternalChatView(props: {
   });
   const [deleting, setDeleting] = createSignal<string>();
   const sidePanel = useSidePanel();
+  const { popoverSplit } = useSplitLayout();
   // The floating details card covers the right of the pane; where the pane
   // is wide enough, the timeline and composer make room for it instead.
   const detailsBeside = () => !isTouchDevice() && !!sidePanel?.isOpen();
@@ -469,6 +401,23 @@ export function ExternalChatView(props: {
               setDeleting(message.id);
             }
           : undefined;
+      },
+      get onCreateTask() {
+        const group = source.chat.data;
+        const task = group && messageTask(message, group);
+        if (!task) return undefined;
+        return () => {
+          popoverSplit({
+            type: 'component',
+            id: 'task-compose',
+            params: {
+              initialTitle: task.title,
+              initialContent: task.content,
+              initialAssigneeIds:
+                task.assigneeIds.length > 0 ? task.assigneeIds : undefined,
+            },
+          });
+        };
       },
     };
   };

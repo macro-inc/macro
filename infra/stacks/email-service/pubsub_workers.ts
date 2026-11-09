@@ -3,13 +3,13 @@ import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
 import {
   DATADOG_API_KEY,
-  DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   EcsDeploymentFailureAlarm,
   withTelemetry,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
 import {
   CLOUD_TRAIL_SNS_TOPIC_ARN,
+  config,
   type DopplerEcsEnvironment,
   stack,
 } from '../../packages/shared';
@@ -33,8 +33,11 @@ type Args = {
 };
 
 export class EmailPubSubWorkers extends pulumi.ComponentResource {
+  // AWSX uses the containers map key as the ECS container name.
+  public readonly containerName = 'service';
   public role: aws.iam.Role;
   public ecr: awsx.ecr.Repository;
+  public imageUri: pulumi.Output<string>;
   public serviceSg: aws.ec2.SecurityGroup;
   public service: awsx.ecs.FargateService;
   public clusterName: pulumi.Output<string> | string;
@@ -60,6 +63,25 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
     this.clusterName = clusterName;
     this.role = role;
 
+    const capacity = {
+      desiredCount: Number(config.require('pubsub_workers_desired_count')),
+      minCapacity: Number(config.require('pubsub_workers_min_capacity')),
+      maxCapacity: Number(config.require('pubsub_workers_max_capacity')),
+    };
+    for (const [name, value] of Object.entries(capacity)) {
+      if (!Number.isInteger(value) || value < 1) {
+        throw new Error(`Pub/sub worker ${name} must be a positive integer`);
+      }
+    }
+    if (
+      capacity.desiredCount < capacity.minCapacity ||
+      capacity.desiredCount > capacity.maxCapacity
+    ) {
+      throw new Error(
+        'Pub/sub worker desired count must be between min and max capacity'
+      );
+    }
+
     // ecr image
     const image = new EcrImage(
       `${BASE_NAME}-ecr-image-${stack}`,
@@ -78,6 +100,7 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
       { parent: this }
     );
     this.ecr = image.ecr;
+    this.imageUri = image.image.imageUri;
 
     // sg - workers only need egress
     this.serviceSg = this.initializeSecurityGroup({
@@ -94,7 +117,8 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
           subnets: vpc.privateSubnetIds,
           securityGroups: [this.serviceSg.id],
         },
-        continueBeforeSteadyState: DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
+        // The consent API deploy waits for these consumers, including old-task drain.
+        continueBeforeSteadyState: false,
         deploymentCircuitBreaker: {
           enable: true,
           rollback: true,
@@ -107,8 +131,8 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
             roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
           containers: withTelemetry(BASE_NAME, {
-            service: {
-              name: BASE_NAME,
+            [this.containerName]: {
+              name: this.containerName,
               image: image.image.imageUri,
               stopTimeout: 10, // 10 seconds to force kill the task
               cpu: stack === 'prod' ? 2048 : 1024,
@@ -139,7 +163,7 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
             }`,
           },
         },
-        desiredCount: stack === 'prod' ? 5 : 1,
+        desiredCount: capacity.desiredCount,
       },
       {
         parent: this,
@@ -148,7 +172,7 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
 
     this.service = service;
 
-    this.setupAutoScaling();
+    this.setupAutoScaling(capacity);
 
     this.setupServiceAlarms();
   }
@@ -184,14 +208,20 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
     return serviceSg;
   }
 
-  setupAutoScaling() {
+  setupAutoScaling({
+    minCapacity,
+    maxCapacity,
+  }: {
+    minCapacity: number;
+    maxCapacity: number;
+  }) {
     if (!this.service) return;
 
     const serviceScalableTarget = new aws.appautoscaling.Target(
       `${BASE_NAME}-scalable-target-${stack}`,
       {
-        maxCapacity: stack === 'prod' ? 10 : 2,
-        minCapacity: stack === 'prod' ? 5 : 1,
+        maxCapacity,
+        minCapacity,
         resourceId: pulumi.interpolate`service/${this.clusterName}/${this.service.service.name}`,
         scalableDimension: 'ecs:service:DesiredCount',
         serviceNamespace: 'ecs',

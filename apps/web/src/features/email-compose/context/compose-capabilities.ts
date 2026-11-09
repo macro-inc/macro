@@ -292,6 +292,12 @@ export interface EmailDelivery {
   }): Promise<void>;
 }
 
+/**
+ * The working-copy version a send from this browser carried. Absent when the
+ * draft was sent from another device.
+ */
+export type SentWorkingCopy = Pick<LocalDraft, 'generation' | 'revision'>;
+
 export type EmailDraftLifecycleState =
   | {
       type: 'editing';
@@ -314,6 +320,7 @@ export type EmailDraftLifecycleState =
       draftId: string;
       threadId: string;
       inboxId: string;
+      sentCopy?: SentWorkingCopy;
       observedAt: number;
     }
   | {
@@ -413,8 +420,16 @@ export interface EmailEditorFiles {
   }): void;
 }
 
+/** Opens a calendar event drafted from an email. */
+export interface EmailCalendarEvents {
+  enabled: Accessor<boolean>;
+  open(email: { subject: string; guests: string[]; text: string }): boolean;
+}
+
 /** Production composition groups capabilities for views to wire into their consumers. */
 export interface EmailComposeContext {
+  /** Absent where the composer has no calendar, such as isolated tests. */
+  calendarEvents?: EmailCalendarEvents;
   operations?: MessageOperationSourceFactory;
   drafts: EmailDraftStorage;
   attachmentStorage: EmailAttachmentStorage;
@@ -437,7 +452,12 @@ export interface ComposeNoticeOptions {
   duration?: number;
   persistent?: boolean;
   /** `kind` picks the action's icon; actions default to undo. */
-  actions?: { label: string; onClick: () => void; kind?: 'undo' | 'open' }[];
+  actions?: {
+    label: string;
+    onClick: () => void;
+    kind?: 'undo' | 'open' | 'save';
+    variant?: 'primary' | 'secondary';
+  }[];
 }
 export interface EmailComposeHost {
   focusSibling?: (direction: 'next' | 'prev') => boolean | void;

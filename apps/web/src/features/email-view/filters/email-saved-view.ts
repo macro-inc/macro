@@ -314,7 +314,8 @@ function tabFilters(tab: EmailTab): Partial<EmailSavedViewFilters> | undefined {
       .with('favorites', () => ({ starred: true }))
       .with('calendar', () => ({ calendarInvite: true }))
       // These tabs list drafts, deliveries, reminders, ranked Focus threads,
-      // or other people's shared threads, none of which a view selects.
+      // other people's shared threads, or provider spam and trash folders,
+      // none of which a view selects.
       .with(
         'sent',
         'drafts',
@@ -322,6 +323,8 @@ function tabFilters(tab: EmailTab): Partial<EmailSavedViewFilters> | undefined {
         'reminders',
         'shared',
         'focus',
+        'spam',
+        'trash',
         () => undefined
       )
       .exhaustive(() => undefined)

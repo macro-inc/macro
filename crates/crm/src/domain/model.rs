@@ -81,25 +81,24 @@ pub struct CrmCompany {
 }
 
 /// Cached metadata about a company keyed on its email domain. Resolved
-/// by [`CompanyMetadataResolver`] (the Apollo.io organization-enrichment
-/// adapter) and stored in `crm_domain_directory`.
+/// by [`CompanyMetadataResolver`] and stored in `crm_domain_directory`.
 ///
 /// Every scalar is `Option` and every list defaults empty: the resolver
-/// may succeed with little data or fail entirely, and both collapse to an
-/// all-empty row so the directory doubles as a negative cache.
+/// may succeed with little data, including an all-empty negative-cache row.
+/// Unavailable results stay pending for a bounded retry instead.
 ///
 /// [`CompanyMetadataResolver`]: crate::domain::company_metadata_resolver::CompanyMetadataResolver
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct DomainMetadata {
-    /// Company display name (Apollo `name`).
+    /// Company display name.
     pub name: Option<String>,
-    /// Short company description (Apollo `short_description`).
+    /// Short company description.
     pub description: Option<String>,
-    /// Logo / icon URL (Apollo `logo_url`).
+    /// Logo / icon URL.
     pub icon_url: Option<String>,
-    /// Apollo's organization id, for re-enrichment / linking.
+    /// Historical Apollo organization id retained for stored-data compatibility.
     pub apollo_organization_id: Option<String>,
-    /// Canonical company website (Apollo `website_url`).
+    /// Canonical company website.
     pub website_url: Option<String>,
     /// LinkedIn company URL.
     pub linkedin_url: Option<String>,
@@ -107,11 +106,11 @@ pub struct DomainMetadata {
     pub twitter_url: Option<String>,
     /// Facebook URL.
     pub facebook_url: Option<String>,
-    /// Primary industry (Apollo `industry`).
+    /// Primary industry.
     pub industry: Option<String>,
-    /// Free-text keywords / tags (Apollo `keywords`).
+    /// Free-text keywords / tags.
     pub keywords: Vec<String>,
-    /// Detected technologies (Apollo `technology_names`).
+    /// Detected technologies.
     pub technologies: Vec<String>,
     /// Estimated headcount.
     pub estimated_num_employees: Option<i32>,
@@ -147,8 +146,7 @@ pub struct DomainMetadata {
     pub postal_code: Option<String>,
     /// HQ country.
     pub country: Option<String>,
-    /// Full Apollo `organization` payload (minus our workspace `account`),
-    /// kept so fields we don't model yet aren't lost.
+    /// Historical provider payload retained alongside the modeled metadata.
     pub raw: Option<Value>,
 }
 
@@ -225,19 +223,13 @@ impl DepopulateContactOutcome {
 /// needs to either accept or reject a CRM-scoped query before it runs.
 #[derive(Debug, Clone)]
 pub struct CrmScopePrecheck {
-    /// `team_crm_settings.crm_enabled` for the requesting team. `false`
-    /// when the team's row exists with `crm_enabled = false`, *or* when no
-    /// row exists at all (older teams predating `team_crm_settings`).
+    /// Compatibility field, always true for current CRM record scopes.
+    /// Email eligibility is checked separately for every candidate thread.
     pub crm_enabled: bool,
     /// One row per requested domain, in the same order as the input list.
-    /// **Exception:** when `crm_enabled = false`, this vec is empty —
-    /// the email service short-circuits on the killswitch before
-    /// consulting per-input rows, so the per-domain probes are skipped
-    /// and callers must not assume length parity with the input list
-    /// without first checking `crm_enabled`.
     pub domains: Vec<CrmDomainStatus>,
     /// One row per requested address, in the same order as the input
-    /// list. Same `crm_enabled = false` exception as [`Self::domains`].
+    /// list.
     pub addresses: Vec<CrmAddressStatus>,
 }
 
@@ -306,8 +298,7 @@ impl CrmPermissionRole {
 }
 
 /// Team-level CRM configuration stored on `team_crm_settings`
-/// (everything except the `crm_enabled` killswitch, which stays owned
-/// by the teams crate).
+/// (excluding the retired `crm_enabled` flag owned by the teams crate).
 #[derive(Debug, Clone)]
 pub struct CrmTeamSettings {
     /// Who can change the deal stage set in CRM settings.
@@ -399,16 +390,16 @@ pub enum CrmError {
     #[error("Querying hidden CRM companies requires admin/owner team role")]
     AdminRoleRequired,
     /// The request changes governance fields of the team CRM settings
-    /// (permission thresholds, closed stages) but the caller's team role
+    /// (permission thresholds, closed stages, or team email exclusions), but the caller's team role
     /// is below admin/owner.
-    #[error("changing crm permission or stage settings requires admin/owner team role")]
+    #[error("changing CRM admin settings requires admin/owner team role")]
     SettingsAdminRequired,
     /// Caller's team role is below the team's `edit_stages_role`.
     #[error("editing deal stages requires the {} team role", .0.as_db_str())]
     StageEditRoleRequired(CrmPermissionRole),
     /// Tried to mutate a CRM company in a way that contradicts its
-    /// `hidden = true` state — currently raised when attempting to
-    /// re-enable `email_sync` on a hidden company.
+    /// `hidden = true` state, including enabling sync or changing a
+    /// contact relation in a way that would reveal an archived record.
     #[error("crm company is hidden")]
     CompanyHidden,
     /// The team already tracks a company for the requested domain.
@@ -417,8 +408,11 @@ pub enum CrmError {
     /// The company already has a contact with the requested email.
     #[error("a crm contact with this email already exists for the company")]
     ContactAlreadyExistsForCompany,
-    /// The team-level `team_crm_settings.crm_enabled` killswitch is off.
-    #[error("crm is not enabled for this team")]
+    /// Another visible contact in the owning team already uses this address.
+    #[error("a crm contact with this email already exists for the team")]
+    ContactAlreadyExistsForTeam,
+    /// The team no longer exists.
+    #[error("crm is unavailable for this team")]
     CrmDisabledForTeam,
     /// Entity access receipt did not contain a valid team UUID.
     #[error("invalid team id in entity access receipt")]

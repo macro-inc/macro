@@ -540,11 +540,27 @@ fn build_address_message_predicate(
     })
 }
 
-/// Exclude physical trash and confirmed absent messages across all providers.
-fn build_trash_check(_resolved: &ResolvedFilters) -> SqlFragment {
-    SqlFragment::raw(
-        "EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash)",
-    )
+/// Exclude absent messages, and trash outside its explicit folder.
+fn build_trash_check(resolved: &ResolvedFilters) -> SqlFragment {
+    build_mailbox_facts_check(resolved, None)
+}
+
+/// The trash check, also requiring `view_fact` from the same
+/// `email_message_mailbox_facts` row. Each probe of that view rebuilds the
+/// message's facts from its labels and pending state, so a view's own fact
+/// shares the trash check's probe instead of adding a second one.
+fn build_mailbox_facts_check(resolved: &ResolvedFilters, view_fact: Option<&str>) -> SqlFragment {
+    let mut predicate = String::from("mf.is_present");
+    if !resolved.include_trash {
+        predicate.push_str(" AND NOT mf.in_trash");
+    }
+    if let Some(fact) = view_fact {
+        predicate.push_str(" AND ");
+        predicate.push_str(fact);
+    }
+    SqlFragment::raw(format!(
+        "EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND {predicate})"
+    ))
 }
 
 /// True when the AST contains at least one pure-address top-level
@@ -573,15 +589,13 @@ pub(super) fn build_thread_address_filter(ast: &Expr<EmailLiteral>) -> SqlFragme
 /// this, the candidate `LIMIT` counts threads that the lateral later
 /// drops, so the page under-fills while still emitting a cursor.
 pub(super) fn wants_message_exists_pushdown(view: &PreviewView) -> bool {
-    !build_view_message_filter(view).is_empty()
+    view_mailbox_fact(view).is_some() || !build_view_message_filter(view).is_empty()
 }
 
 /// Builds the candidate-stage mirror of the lateral message match:
 /// `AND EXISTS (SELECT 1 FROM email_messages m WHERE m.thread_id = t.id AND <lateral predicate>)`.
-/// The predicate is the same trash exclusion + view message filter +
-/// message-level email filter the lateral applies, so a thread enters the
-/// candidate set iff it has a message the lateral will surface — making the
-/// `LIMIT` count real results.
+/// A thread enters the candidate set iff it has a message the lateral will
+/// surface — making the `LIMIT` count real results.
 pub(super) fn build_thread_message_exists_filter(
     ast: &Expr<EmailLiteral>,
     view: &PreviewView,
@@ -590,11 +604,21 @@ pub(super) fn build_thread_message_exists_filter(
     let mut f = SqlFragment::raw(
         " AND EXISTS (SELECT 1 FROM email_messages m WHERE m.thread_id = t.id AND ",
     );
-    f.extend(build_lateral_trash_exclusion(resolved));
-    let view_message_filter = build_view_message_filter(view);
-    if !view_message_filter.is_empty() {
-        f.extend(view_message_filter);
-    }
+    f.extend(build_preview_message_predicate(ast, view, resolved));
+    f.push_raw(")");
+    f
+}
+
+/// The predicate on `m` a thread's preview message must satisfy: present,
+/// outside trash unless the view is Trash, the view's mailbox fact and
+/// message filter, and the message-level email filter.
+pub(super) fn build_preview_message_predicate(
+    ast: &Expr<EmailLiteral>,
+    view: &PreviewView,
+    resolved: &ResolvedFilters,
+) -> SqlFragment {
+    let mut f = build_mailbox_facts_check(resolved, view_mailbox_fact(view));
+    f.extend(build_view_message_filter(view));
     if has_message_literals(ast) {
         f.extend(build_message_email_filter(
             ast,
@@ -602,7 +626,6 @@ pub(super) fn build_thread_message_exists_filter(
             get_sort_timestamp_field(view),
         ));
     }
-    f.push_raw(")");
     f
 }
 
@@ -1029,6 +1052,8 @@ pub(super) fn build_view_thread_filter(view: &PreviewView) -> SqlFragment {
         PreviewView::StandardLabel(PreviewViewStandardLabel::Drafts)
         | PreviewView::StandardLabel(PreviewViewStandardLabel::Starred)
         | PreviewView::StandardLabel(PreviewViewStandardLabel::All)
+        | PreviewView::StandardLabel(PreviewViewStandardLabel::Spam)
+        | PreviewView::StandardLabel(PreviewViewStandardLabel::Trash)
         | PreviewView::StandardLabel(PreviewViewStandardLabel::Important)
         | PreviewView::UserLabel(_) => SqlFragment::empty(),
         PreviewView::StandardLabel(PreviewViewStandardLabel::Other) => {
@@ -1037,13 +1062,29 @@ pub(super) fn build_view_thread_filter(view: &PreviewView) -> SqlFragment {
     }
 }
 
-/// Builds message-level WHERE conditions based on the view type
+/// The `email_message_mailbox_facts` condition that defines a view's
+/// messages, checked in the same probe as presence and trash.
+fn view_mailbox_fact(view: &PreviewView) -> Option<&'static str> {
+    match view {
+        PreviewView::StandardLabel(PreviewViewStandardLabel::All) => Some("NOT mf.in_junk"),
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Spam) => Some("mf.in_junk"),
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Trash) => Some("mf.in_trash"),
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Other) => Some("mf.provider_is_other"),
+        _ => None,
+    }
+}
+
+/// Builds the message-level WHERE conditions a view adds beyond its
+/// mailbox fact (see [`view_mailbox_fact`]).
 pub(super) fn build_view_message_filter(view: &PreviewView) -> SqlFragment {
     match view {
-        PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox) => SqlFragment::empty(),
-        PreviewView::StandardLabel(PreviewViewStandardLabel::All) => SqlFragment::raw(
-            " AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND NOT mf.in_junk)",
-        ),
+        PreviewView::StandardLabel(
+            PreviewViewStandardLabel::Inbox
+            | PreviewViewStandardLabel::All
+            | PreviewViewStandardLabel::Spam
+            | PreviewViewStandardLabel::Trash
+            | PreviewViewStandardLabel::Other,
+        ) => SqlFragment::empty(),
         PreviewView::StandardLabel(PreviewViewStandardLabel::Sent) => {
             SqlFragment::raw(" AND m.is_sent = TRUE")
         }
@@ -1061,9 +1102,6 @@ pub(super) fn build_view_message_filter(view: &PreviewView) -> SqlFragment {
                         WHERE mf.id = m.id AND mf.provider_is_important
                     )
                 )"#,
-        ),
-        PreviewView::StandardLabel(PreviewViewStandardLabel::Other) => SqlFragment::raw(
-            r#" AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.provider_is_other)"#,
         ),
         PreviewView::UserLabel(label_name) => {
             let mut f = SqlFragment::raw(
@@ -1087,6 +1125,9 @@ pub(super) fn build_view_message_filter(view: &PreviewView) -> SqlFragment {
 /// Returns the appropriate timestamp field to use for sorting based on the view
 pub(super) fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
     match view {
+        PreviewView::StandardLabel(
+            PreviewViewStandardLabel::Spam | PreviewViewStandardLabel::Trash,
+        ) => "folder.latest_folder_message_ts",
         PreviewView::StandardLabel(PreviewViewStandardLabel::Sent) => {
             "t.latest_outbound_message_ts"
         }
@@ -1097,9 +1138,4 @@ pub(super) fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
         // equality scan can stop at LIMIT.
         _ => "COALESCE(t.latest_non_spam_message_ts, t.updated_at)",
     }
-}
-
-/// Use the same visibility rule for the candidate and its displayed preview.
-pub(super) fn build_lateral_trash_exclusion(resolved: &ResolvedFilters) -> SqlFragment {
-    build_trash_check(resolved)
 }

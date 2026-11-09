@@ -1,5 +1,6 @@
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isMobile } from '@core/mobile/isMobile';
 import { isPlatform } from '@core/util/platform';
 import type { MessageParent } from '@service-storage/messages';
 import { cn } from '@ui';
@@ -76,15 +77,29 @@ export function MessageEditorContent(props: MessageEditorContentProps) {
           props.messageEditor.save(props.message, nextSnapshot)
         }
       >
-        <Input.Layout.ActionsLeft>
-          <Show when={isPlatform('ios')} fallback={<Input.AttachFilesAction />}>
-            <Input.AttachNativeMediaAction />
-          </Show>
-          <Input.DiscardDraftAction />
-        </Input.Layout.ActionsLeft>
-        <Input.Layout.ActionsRight>
-          <Input.SendAction />
-        </Input.Layout.ActionsRight>
+        {(addMenu) => (
+          <>
+            <Input.Layout.ActionsLeft>
+              <Show
+                when={isMobile()}
+                fallback={
+                  <Show
+                    when={isPlatform('ios')}
+                    fallback={<Input.AttachFilesAction />}
+                  >
+                    <Input.AttachNativeMediaAction />
+                  </Show>
+                }
+              >
+                {addMenu}
+              </Show>
+              <Input.DiscardDraftAction />
+            </Input.Layout.ActionsLeft>
+            <Input.Layout.ActionsRight>
+              <Input.SendAction />
+            </Input.Layout.ActionsRight>
+          </>
+        )}
       </ChannelInput>
     </div>
   );

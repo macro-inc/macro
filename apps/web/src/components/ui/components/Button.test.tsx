@@ -1,3 +1,4 @@
+import { createLazyMemo } from '@solid-primitives/memo';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -31,6 +32,40 @@ describe('Button', () => {
     fireEvent.click(button);
     expect(onClick).toHaveBeenCalledTimes(2);
   });
+
+  it.each([undefined, false])(
+    'keeps memoized content mounted through style and control changes with loading=%s',
+    (initialLoading) => {
+      const [variant, setVariant] = createSignal<'secondary' | 'primary'>(
+        'secondary'
+      );
+      const [loading, setLoading] = createSignal<boolean | undefined>(
+        initialLoading
+      );
+      const [tooltip, setTooltip] = createSignal<string>();
+      render(() => {
+        const content = createLazyMemo(() => <span>Linked item</span>);
+        return (
+          <Button variant={variant()} loading={loading()} tooltip={tooltip()}>
+            <span>{content()}</span>
+          </Button>
+        );
+      });
+      expect(screen.getByRole('button', { name: 'Linked item' })).toBeTruthy();
+
+      setVariant('primary');
+      expect(screen.getByRole('button', { name: 'Linked item' })).toBeTruthy();
+
+      setLoading(true);
+      setLoading(false);
+      expect(screen.getByRole('button', { name: 'Linked item' })).toBeTruthy();
+
+      setTooltip('Open linked item');
+      expect(screen.getByRole('button', { name: 'Linked item' })).toBeTruthy();
+      setTooltip(undefined);
+      expect(screen.getByRole('button', { name: 'Linked item' })).toBeTruthy();
+    }
+  );
 
   it('inherits group settings only through explicit segments', () => {
     render(() => (

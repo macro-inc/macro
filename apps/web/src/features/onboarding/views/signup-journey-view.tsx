@@ -23,6 +23,8 @@ export function SignupJourneyView(props: {
   onBackFromEmail: () => void;
   /** Sends a returning user to sign in. */
   onSignIn: () => void;
+  /** Sends an agent to the agent signup page. */
+  onAgentSignup: () => void;
   /** The host's email sign-up form, shown in place of Google when chosen. */
   emailForm?: JSX.Element;
   showingEmail: boolean;
@@ -59,7 +61,10 @@ export function SignupJourneyView(props: {
       }
       heroFooter={
         journey.step() === 'welcome' && !props.showingEmail ? (
-          <SignInInstead onSignIn={props.onSignIn} />
+          <SignInInstead
+            onSignIn={props.onSignIn}
+            onAgentSignup={props.onAgentSignup}
+          />
         ) : undefined
       }
       explainer={

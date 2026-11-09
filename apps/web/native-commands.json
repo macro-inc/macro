@@ -115,6 +115,8 @@
     "restart_native_update",
     "send_linux_notification",
     "send_macos_notification",
+    "set_bundle_reload_hold",
+    "stage_desktop_pasteboard_files",
     "upload_staged_file_to_presigned_url",
     "whatsapp_passkey_authenticate"
   ]

@@ -2,6 +2,8 @@
 
 ## Calendar — `/app/calendar/<month-or-week-or-day>`
 
+The top of the Calendar sidebar holds the Calendar `TutorialSidebarItem` (from `features/video-tutorials`) once that video is in its catalog; phones have no Calendar sidebar, so no entry.
+
 Microsoft calendars use the same editor and calendar views after calendar consent.
 Conference choices follow the selected calendar's capabilities: Microsoft Teams
 where supported and Google Meet for Google calendars. Selecting a calendar that
@@ -125,8 +127,15 @@ call setup. Existing channel calls and the upcoming-events list remain available
 For local verification, set `VITE_ENABLE_QUICK_CALLS=true` or `false` explicitly.
 
 During a quick or scheduled call, signed-in participants can open **Call chat**
-from its separate button at the far right of the bottom toolbar. Messages persist
-with that call session and are visible in its recording page after it ends.
+with **Open chat** at the bottom-right. On desktop, **Copy Meeting Url** sits at
+the bottom-left and becomes icon-only in narrow panes. Active phone calls fill
+the viewport, with persistent Back and Copy Meeting Url header islands. Media/chat
+controls sit below the video, hide after four idle seconds, and return on tap;
+chat and settings keep them visible. Back returns to the app without hanging up.
+Tap or click a participant to focus them; tap again to restore the grid.
+Talking participants have an accent-colored border.
+Desktop chat fills the call content height; phones use a bottom sheet. Messages
+persist with that call session and are visible in its recording page after it ends.
 Guests can open the same call discussion and read and send text while connected;
 their messages show their name with **(Guest)**. The signed-in composer’s `@` menu includes Macro and available agents;
 mentioning one invokes it in the call thread. Reply on any live message, including
@@ -229,7 +238,7 @@ show progress; the event summary and selected time stay visible. Choose another
 time preserves attendee input. Event booking pages do not show an All meetings
 link back to the profile chooser.
 The private confirmation shows the meeting, date, timezone, location, and guest.
-In the native iOS and Android apps, standalone booking and receipt pages keep a
+In the native desktop, iOS and Android apps, standalone booking and receipt pages keep a
 sticky **Back to Macro** button below the device's top safe-area inset. It returns to
 the app through the router without reloading, including while the page is loading
 or unavailable. Browser pages and embedded booking dialogs omit this button.
@@ -315,7 +324,8 @@ only teammate overlay. Replacing a login session clears team data and open
 teammate details before the new identity loads. Legacy out-of-office rows are
 read-only status displays and do not claim that every absence blocks availability.
 
-The `GetTeamAvailability` AI tool checks the requester together with the selected
+The `GetTeamAvailability` AI tool (and, in code mode, `macro.calendar.teamAvailability`
+over `POST /calendar-events/team/availability`) checks the requester together with the selected
 teammates. It reports confirmed free windows only when every participant has
 complete availability coverage. Hidden, disconnected, stale, or incomplete
 calendars are reported as unknown, never free. Busy blocks contain no event
@@ -459,6 +469,8 @@ call instead of creating duplicates. The invitation includes
 the call link in its description and, when no location was entered, its location.
 Event details show a plain icon row with a standard gray `Join Macro call` button
 and `Copy call link`, without an enclosing border or the full URL.
+Day-view chips, which show an event's location under its time on desktop and phone,
+leave out a location that is only the call link and keep a location typed beside it.
 Editing or rescheduling an owned event retains and updates its selected Macro call.
 Selecting `Macro call` on an owned editable event without one adds a call on save;
 choosing another option removes its generated Macro link from the invitation.
@@ -870,6 +882,7 @@ description, then larger task-style URL-path, duration, and scheduling-type pill
 with matching surfaces. Scheduling type reflects the saved link mode: Individual,
 Collective, or Round robin, with a corresponding icon. Pills wrap on narrow panes
 and align with the title on touch devices. Row content has no hover tooltips.
+The Booking links list, empty or not, starts with the Scheduling `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog.
 Paused links appear dimmed but remain editable. The URL pill offers Copy link and
 Open in new tab. Desktop More and right-click menus share Copy link, Preview,
 Edit, Duplicate, and Delete. Touch rows hide More; hold a row to open the shared
@@ -1386,7 +1399,10 @@ been checked. A series invitation shows its current or next live occurrence.
 Descriptions render sanitized rich text, including emphasis, links, and lists.
 Plain-text line breaks and literal angle brackets (such as `<bob@example.com>`)
 remain readable. Use `Show more` / `Show less` to expand or collapse the description;
-description links use the host's normal link-opening behavior.
+description links use the host's normal link-opening behavior. Long unbroken text
+(Google's Meet separator, long links, forwarded mail) wraps inside the card in a narrow
+pane, and the guest names stay level with their icon beside `+N more`, which
+keeps a 44px tap target on touch.
 
 A published event file (`METHOD:PUBLISH`, what `Forward by email` and, for a Google
 organizer, `Forward invitation` attach) is a shared

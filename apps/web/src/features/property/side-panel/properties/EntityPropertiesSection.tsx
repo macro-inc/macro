@@ -10,6 +10,7 @@ import { AddPropertyButton } from '@property/component/AddPropertyButton';
 import { Modals } from '@property/component/modal';
 import { ProjectLinkPill } from '@property/component/ProjectLinkPill';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
+import { SourceLinkPill } from '@property/component/SourceLinkPill';
 import {
   PropertiesProvider,
   type PropertySaveHandler,
@@ -764,14 +765,29 @@ function SinglePill(props: {
 
   return (
     <PropertyNS.Tooltip property={props.property}>
-      <Show when={props.opensProject} fallback={pill()}>
-        <ProjectLinkPill
-          property={props.property}
-          variant="ghost"
-          iconClass="touch:size-4"
-          fallback={pill()}
-        />
-      </Show>
+      <Switch fallback={pill()}>
+        <Match
+          when={
+            props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.SOURCE
+          }
+        >
+          <SourceLinkPill
+            property={props.property}
+            showSourceIcon={false}
+            variant="ghost"
+            iconClass="touch:size-4"
+            fallback={pill()}
+          />
+        </Match>
+        <Match when={props.opensProject}>
+          <ProjectLinkPill
+            property={props.property}
+            variant="ghost"
+            iconClass="touch:size-4"
+            fallback={pill()}
+          />
+        </Match>
+      </Switch>
     </PropertyNS.Tooltip>
   );
 }

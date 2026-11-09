@@ -13,6 +13,9 @@ here.
   (feature `postgres`); also exposes lookup-by-key for `macro_authorization`.
 - `src/inbound/axum_router.rs` (feature `inbound`): HTTP routes.
 
+These routes refuse an account manager's credential (`AccountHolderOrInternal`),
+whose hash lives in `account_manager_grants` rather than `"UserApiKey"`.
+
 ## Scope
 
 - Owns: the `"UserApiKey"` table's lifecycle.
@@ -22,7 +25,8 @@ here.
 ## Boundaries
 
 - Depends on: `macro_user_id`, `macro_authorization` (feature `inbound`).
-- Used by: `services/document_storage_service`.
+- Used by: `services/document_storage_service`,
+  `services/authentication_service` (agent setup).
 
 ## Checks
 

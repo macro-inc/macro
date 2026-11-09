@@ -191,6 +191,8 @@ export type {
   SliderTrackProps,
 } from './components/Slider';
 export { Slider } from './components/Slider';
+export type { SpinnerProps, SpinnerSize } from './components/Spinner';
+export { Spinner } from './components/Spinner';
 export { Surface } from './components/Surface';
 export { TabSelector } from './components/TabSelector';
 export type {

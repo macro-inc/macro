@@ -117,7 +117,8 @@ jobs:
   deploy:
     name: Deploy Web App
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
-    needs: [build, deploy-cloud-storage]
+    # New clients require the worker's sync protocol support before publication.
+    needs: [build, deploy-cloud-storage, deploy-sync-service]
     env:
       CI: "true"
     steps:

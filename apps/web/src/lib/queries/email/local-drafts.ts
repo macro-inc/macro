@@ -270,8 +270,11 @@ async function copyFile(file: File): Promise<Blob> {
     pending = (async () => {
       const staged = getNativeStagedUpload(file);
       if (!staged) return file;
-      if (!staged.previewSrc)
+      if (!staged.previewSrc) {
+        // Desktop tags the real pasted File, which still holds its bytes.
+        if (file.size === staged.size) return file;
         throw new Error('Attachment bytes are unavailable on this device');
+      }
       const response = await fetch(staged.previewSrc);
       if (!response.ok)
         throw new Error('Unable to preserve attachment on this device');
@@ -1015,6 +1018,11 @@ export async function persistLocalEmailSend(
 }
 export async function removeLocalEmailSend(uuid: string): Promise<void> {
   await localDraftStore.removeSend(await emailStorageSession(), uuid);
+}
+export async function readRemovedEmailSendCopy(
+  draftId: string
+): Promise<Pick<LocalDraft, 'generation' | 'revision'> | undefined> {
+  return await localDraftStore.sentCopy(await emailStorageSession(), draftId);
 }
 export function watchLocalEmailSends(changed: () => void): () => void {
   return localDraftStore.subscribe(changed);

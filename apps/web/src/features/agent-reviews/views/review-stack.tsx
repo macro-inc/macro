@@ -2,22 +2,29 @@ import { CalendarDraftComposer } from '@core/component/AI/component/tool/calenda
 import { EmailDraftComposer } from '@core/component/AI/component/tool/email/DraftComposer';
 import type { UserToolReviewSink } from '@core/component/AI/component/tool/user-tool-review';
 import { fireAndForget } from '@core/util/fireAndForget';
-import {
-  CreateCalendarEvent,
+import type {
+  CreateCalendarEvent_Deserialize,
   SendEmail,
-} from '@service-cognition/generated/tools/schemas';
+} from '@service-agent-reviews/generated/types';
 import { Button } from '@ui/components/Button';
 import { ConfirmDialog } from '@ui/components/ConfirmDialog';
-import { createEffect, createSignal, Match, on, Show, Switch } from 'solid-js';
+import { createEffect, createSignal, on, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ReviewDeck } from '../components/review-deck';
 import {
   ReviewNavigation,
   type ReviewSummary,
 } from '../components/review-navigation';
-import type { Review, ReviewActions, ReviewItem } from '../core/review';
+import type {
+  Review,
+  ReviewActions,
+  ReviewDraft,
+  ReviewItem,
+} from '../core/review';
 import { createReviewController } from '../primitives/review-controller';
-import { validateReviewDraft } from '../primitives/review-draft-validation';
+
+type EmailDraft = SendEmail;
+type CalendarDraft = CreateCalendarEvent_Deserialize;
 
 /** Saved drafts reuse the same composers as chat, with a deck only for batches. */
 export function ReviewStack(props: {
@@ -25,13 +32,8 @@ export function ReviewStack(props: {
   canAct: boolean;
   actions: ReviewActions;
 }) {
-  const controller = createReviewController(
-    () => props.review,
-    props.actions,
-    validateReviewDraft
-  );
+  const controller = createReviewController(() => props.review, props.actions);
   const [index, setIndex] = createSignal(0);
-  const [generation, setGeneration] = createSignal(0);
   const [preparing, setPreparing] = createSignal(false);
   const [navigating, setNavigating] = createSignal(false);
   const [submittedBatch, setSubmittedBatch] = createSignal<string[]>();
@@ -40,8 +42,8 @@ export function ReviewStack(props: {
   const record = controller.record;
   const current = () => record().items[index()];
   const isBatch = () => record().items.length > 1;
-  let readDraft: (() => unknown) | undefined;
-  let readSubmit: (() => Promise<unknown | undefined>) | undefined;
+  let readDraft: (() => ReviewDraft | undefined) | undefined;
+  let readSubmit: (() => Promise<ReviewDraft | undefined>) | undefined;
   let section: HTMLElement | undefined;
   const working = () => controller.busy() || preparing() || navigating();
   const locked = () =>
@@ -101,19 +103,15 @@ export function ReviewStack(props: {
       setNavigating(false);
     }
   }
-  async function reload() {
-    if (!(await controller.reload())) return;
-    readDraft = undefined;
-    readSubmit = undefined;
-    setIndex(Math.min(index(), Math.max(0, record().items.length - 1)));
-    setGeneration((value) => value + 1);
-  }
-  function showInvalidDraft() {
-    const invalid = controller.validation();
-    if (!invalid) return;
-    const next = record().items.findIndex((item) => item.id === invalid.item);
-    if (next >= 0) select(next);
-  }
+  // Editors remount on drafts saved elsewhere or reloaded, and register their
+  // readers again; the selection stays put while that item still exists.
+  createEffect(
+    on(
+      controller.generation,
+      () => setIndex(Math.min(index(), Math.max(0, record().items.length - 1))),
+      { defer: true }
+    )
+  );
   async function submitAll(items: string[]) {
     if (locked() || pending() === 0) return;
     setPreparing(true);
@@ -124,11 +122,7 @@ export function ReviewStack(props: {
         if (draft === undefined) return;
         controller.edit(current().id, draft);
       }
-      if (!(await controller.decide('submit', items))) {
-        showInvalidDraft();
-      } else {
-        setSubmittedBatch(items);
-      }
+      if (await controller.decide('submit', items)) setSubmittedBatch(items);
     } finally {
       setPreparing(false);
     }
@@ -152,7 +146,10 @@ export function ReviewStack(props: {
     }
     return true;
   }
-  const sink = <T,>(id: string): UserToolReviewSink<T> => ({
+  const sink = <T,>(
+    id: string,
+    toDraft: (draft: T) => ReviewDraft
+  ): UserToolReviewSink<T> => ({
     canAct: () =>
       !locked() &&
       record().items.find((item) => item.id === id)?.status === 'pending',
@@ -161,10 +158,10 @@ export function ReviewStack(props: {
         ? 'Only the person whose account this review uses can submit it.'
         : undefined,
     onEdit: (draft) => {
-      controller.edit(id, draft);
+      controller.edit(id, toDraft(draft));
     },
     onExecute: async (draft) => {
-      controller.edit(id, draft);
+      controller.edit(id, toDraft(draft));
       return decideItem('submit', id);
     },
     onReject: () => decideItem('dismiss', id),
@@ -194,7 +191,7 @@ export function ReviewStack(props: {
     ]
       .filter(Boolean)
       .join(' · ');
-  const mountKey = () => `${current()?.id}:${generation()}`;
+  const mountKey = () => `${current()?.id}:${controller.generation()}`;
   return (
     <section
       ref={section}
@@ -205,8 +202,8 @@ export function ReviewStack(props: {
       <Show when={isBatch()}>
         <ReviewNavigation
           title={record().title}
-          items={record().items.map((item) =>
-            reviewSummary(item, record().kind)
+          items={record().items.map((item, position) =>
+            reviewSummary(item, record(), position)
           )}
           index={index()}
           disabled={working()}
@@ -232,7 +229,7 @@ export function ReviewStack(props: {
             variant="secondary"
             size="sm"
             disabled={working()}
-            onClick={() => fireAndForget(reload(), 'agent-reviews')}
+            onClick={() => fireAndForget(controller.reload(), 'agent-reviews')}
           >
             Reload saved review
           </Button>
@@ -241,9 +238,9 @@ export function ReviewStack(props: {
           </span>
         </div>
       </Show>
-      <Show when={controller.validation()?.message}>
+      <Show when={controller.validation()}>
         <p role="alert" class="mb-2 text-sm text-failure">
-          {controller.validation()?.message}
+          {controller.validation()}
         </p>
       </Show>
       <Show when={current()?.error}>
@@ -267,54 +264,56 @@ export function ReviewStack(props: {
       >
         <Show when={mountKey()} keyed>
           {(_key) => {
-            const item = current();
-            if (!item) return null;
-            const email = SendEmail.safeParse(item.draft);
-            const calendar = CreateCalendarEvent.safeParse(item.draft);
-            return (
-              <Switch>
-                <Match when={record().kind === 'email' && email.success}>
+            const readOnly = current()?.status !== 'pending';
+            // A review's kind is fixed when it is saved.
+            return match(record())
+              .with({ kind: 'email' }, (review) => {
+                const item = review.items[index()];
+                if (!item) return null;
+                const toDraft = (draft: EmailDraft): ReviewDraft => ({
+                  kind: 'email',
+                  draft,
+                });
+                return (
                   <EmailDraftComposer
-                    initialData={email.success ? email.data : neverDraft()}
-                    sink={sink(item.id)}
+                    initialData={item.draft}
+                    sink={sink(item.id, toDraft)}
                     debugName={`review-${item.id}`}
-                    readOnly={current()?.status !== 'pending'}
+                    readOnly={readOnly}
                     registerDraftReader={(reader) => {
-                      readDraft = reader;
+                      readDraft = () => mapDraft(reader(), toDraft);
                     }}
                     registerSubmitReader={(reader) => {
-                      readSubmit = reader;
+                      readSubmit = async () =>
+                        mapDraft(await reader(), toDraft);
                     }}
                   />
-                </Match>
-                <Match
-                  when={
-                    record().kind === 'calendar' &&
-                    calendar.success &&
-                    calendar.data.time !== undefined
-                  }
-                >
+                );
+              })
+              .with({ kind: 'calendar' }, (review) => {
+                const item = review.items[index()];
+                if (!item) return null;
+                const toDraft = (draft: CalendarDraft): ReviewDraft => ({
+                  kind: 'calendar',
+                  draft,
+                });
+                return (
                   <CalendarDraftComposer
-                    initialData={
-                      calendar.success
-                        ? { ...calendar.data, time: calendar.data.time }
-                        : neverDraft()
-                    }
-                    sink={sink(item.id)}
+                    initialData={item.draft}
+                    sink={sink(item.id, toDraft)}
                     previewKey={item.id}
                     registerDraftReader={(reader) => {
-                      readDraft = reader;
+                      readDraft = () => mapDraft(reader(), toDraft);
                     }}
                     registerSubmitReader={(reader) => {
-                      readSubmit = reader;
+                      readSubmit = async () =>
+                        mapDraft(await reader(), toDraft);
                     }}
                   />
-                </Match>
-                <Match when={!email.success && !calendar.success}>
-                  <p role="alert">This draft cannot be displayed.</p>
-                </Match>
-              </Switch>
-            );
+                );
+              })
+              .with({ kind: 'import' }, () => null)
+              .exhaustive();
           }}
         </Show>
       </ReviewDeck>
@@ -363,8 +362,11 @@ function startedByAgent(review: Review, item: ReviewItem | undefined) {
     (item?.status === 'submitting' || item?.status === 'completed')
   );
 }
-function neverDraft(): never {
-  throw new Error('Invalid review draft');
+function mapDraft<T>(
+  draft: T | undefined,
+  toDraft: (draft: T) => ReviewDraft
+): ReviewDraft | undefined {
+  return draft === undefined ? undefined : toDraft(draft);
 }
 function reviewWording(kind: Review['kind']) {
   return match(kind)
@@ -412,60 +414,59 @@ function statusLabel(
     .with('pending', undefined, () => 'Draft')
     .exhaustive();
 }
-function reviewSummary(item: ReviewItem, kind: Review['kind']): ReviewSummary {
+function reviewSummary(
+  item: ReviewItem,
+  review: Review,
+  index: number
+): ReviewSummary {
   const summary = {
     id: item.id,
-    title: 'Draft unavailable',
+    title: 'Import plan',
     description: '',
     status: item.error
       ? 'Needs attention'
       : item.status === 'unknown'
         ? 'Check status'
-        : statusLabel(item.status, kind),
+        : statusLabel(item.status, review.kind),
     needsAttention: Boolean(item.error) || item.status === 'unknown',
   };
-  return match(kind)
-    .with('email', () => emailSummary(item, summary))
-    .with('calendar', () => calendarSummary(item, summary))
-    .with('import', () => ({ ...summary, title: 'Import plan' }))
+  return match(review)
+    .with({ kind: 'email' }, (review) => {
+      const email = review.items[index]?.draft;
+      if (!email) return summary;
+      return {
+        ...summary,
+        title: email.subject || '(No subject)',
+        description:
+          email.to
+            .map((recipient) =>
+              recipient.name
+                ? `${recipient.name} <${recipient.email}>`
+                : recipient.email
+            )
+            .join(', ') || 'No recipients',
+      };
+    })
+    .with({ kind: 'calendar' }, (review) => {
+      const event = review.items[index]?.draft;
+      if (!event) return summary;
+      const time = event.time;
+      const description =
+        time.kind === 'allDay'
+          ? `${time.startDate} · All day`
+          : new Date(time.startsAt).toLocaleString(undefined, {
+              month: 'short',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+              timeZoneName: 'short',
+            });
+      return {
+        ...summary,
+        title: event.title || '(Untitled event)',
+        description,
+      };
+    })
+    .with({ kind: 'import' }, () => summary)
     .exhaustive();
-}
-function emailSummary(item: ReviewItem, summary: ReviewSummary): ReviewSummary {
-  const email = SendEmail.safeParse(item.draft);
-  if (!email.success) return summary;
-  return {
-    ...summary,
-    title: email.data.subject || '(No subject)',
-    description:
-      email.data.to
-        ?.map((recipient) =>
-          recipient.name
-            ? `${recipient.name} <${recipient.email}>`
-            : recipient.email
-        )
-        .join(', ') || 'No recipients',
-  };
-}
-function calendarSummary(
-  item: ReviewItem,
-  summary: ReviewSummary
-): ReviewSummary {
-  const calendar = CreateCalendarEvent.safeParse(item.draft);
-  if (!calendar.success) return summary;
-  const time = calendar.data.time;
-  const description =
-    time.kind === 'allDay'
-      ? `${time.startDate} · All day`
-      : new Date(time.startsAt).toLocaleString(undefined, {
-          month: 'short',
-          day: 'numeric',
-          hour: 'numeric',
-          minute: '2-digit',
-          timeZoneName: 'short',
-        });
-  return {
-    ...summary,
-    title: calendar.data.title || '(Untitled event)',
-    description,
-  };
 }

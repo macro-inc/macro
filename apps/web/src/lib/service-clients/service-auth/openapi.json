@@ -825,8 +825,8 @@
     "/cursor-api-key/default-model": {
       "put": {
         "tags": ["crate::api::cursor_api_key::put_cursor_default_model"],
-        "summary": "Choose the model this user's `@cursor` sessions start on.",
-        "description": "Stores the id only; its parameters are resolved from Cursor's own default\nvariant at session start. Not validated against the live model list here —\nthe settings dropdown offers only real ids, and a stale id degrades to the\ndeployment default at spawn rather than failing, so a round trip to Cursor\non every save would buy nothing.",
+        "summary": "Choose the model, and optionally the effort, this user's `@cursor` sessions\nstart on.",
+        "description": "Stores the id and effort value only; the other parameters are resolved from\nCursor's own variants at session start. Saving a model without an effort\nclears the previous effort, which belonged to the previous model. Not\nvalidated against the live model list here — the settings controls offer\nonly real values, and a stale id or effort degrades to the deployment or\nmodel default at spawn rather than failing, so a round trip to Cursor on\nevery save would buy nothing.",
         "operationId": "put_cursor_default_model",
         "requestBody": {
           "content": {
@@ -3020,6 +3020,15 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "is_agent",
+            "in": "query",
+            "description": "**OPTIONAL**. If the sign-in started on the agent signup page. A new account becomes an agent.",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -4122,7 +4131,7 @@
     "/team/crm": {
       "patch": {
         "tags": ["teams::inbound::axum_router::patch_team_crm_settings"],
-        "summary": "Enables or disables CRM for the team. On enable with `backfill`\n(the default), kicks off a best-effort backfill that enqueues a\n`PopulateCrmForUser` message per team member (no-op if CRM is\nalready enabled); without `backfill` the CRM starts empty and fills\nfrom new activity only. On disable,\nflips the flag and purges the team's CRM data (cascading through\n`crm_companies` → `crm_domains` / `crm_contacts` /\n`crm_contact_sources`). Requires the caller to be an Admin or\nOwner of the team.",
+        "summary": "Legacy compatibility endpoint for team admins and owners. Enabling\nis a no-op; disabling is rejected. CRM records remain available.\nEach member manages mailbox contribution through `/crm/email-privacy`;\nthis endpoint does not enroll mailboxes, backfill emails, or purge records.",
         "operationId": "patch_team_crm_settings",
         "requestBody": {
           "content": {
@@ -5128,6 +5137,66 @@
         }
       }
     },
+    "/user/agent_setup": {
+      "post": {
+        "tags": ["user::agent_setup"],
+        "summary": "Finishes an agent's signup: joins the team that invited it and mints its\nSDK token.",
+        "description": "Safe to repeat until the agent confirms it saved the token: a reload replaces\nthe key, and a failed join stays pending for the next attempt.",
+        "operationId": "agent_setup",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSetupResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The account is not an agent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Setup is already confirmed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user/get_names": {
       "post": {
         "tags": ["user::post_get_names"],
@@ -5835,6 +5904,152 @@
         }
       }
     },
+    "/user/profile_picture/file": {
+      "put": {
+        "tags": ["user::put_profile_picture_file"],
+        "summary": "Sets the caller's profile picture to an image they uploaded.",
+        "operationId": "put_profile_picture_file",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PutProfilePictureFileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmptyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The file is not a supported image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The caller has no such file",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["user::put_profile_picture_file"],
+        "summary": "Reserves storage for a new profile picture. Static file storage has no\nMacroDB, so it cannot check API keys; this route lets key holders upload.",
+        "operationId": "create_profile_picture_upload",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateProfilePictureUploadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfilePictureUpload"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a supported image type, or empty",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The image is larger than 16 MB",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many uploads this hour",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user/profile_pictures": {
       "post": {
         "tags": ["user::post_profile_pictures"],
@@ -6322,6 +6537,21 @@
         "description": "A provider an agent can bring its own key for.",
         "enum": ["anthropic", "openai"]
       },
+      "AgentSetupResponse": {
+        "type": "object",
+        "description": "What an agent needs to start using the SDK.",
+        "required": ["api_key", "team_join_failed"],
+        "properties": {
+          "api_key": {
+            "type": "string",
+            "description": "The agent's API key. Shown only here; repeating setup revokes it."
+          },
+          "team_join_failed": {
+            "type": "boolean",
+            "description": "Whether joining the inviting team failed. The invite stays pending:\nrepeating setup tries again, and the invite link works after confirming."
+          }
+        }
+      },
       "AiBillingErrorBody": {
         "type": "object",
         "description": "Error response body.",
@@ -6703,6 +6933,26 @@
           }
         }
       },
+      "CreateProfilePictureUploadRequest": {
+        "type": "object",
+        "required": ["file_name", "content_type", "size_bytes"],
+        "properties": {
+          "content_type": {
+            "type": "string",
+            "description": "Mime type of the image."
+          },
+          "file_name": {
+            "type": "string",
+            "description": "File name, such as `avatar.png`."
+          },
+          "size_bytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Exact size of the image in bytes. Storage rejects a body of any other size.",
+            "minimum": 0
+          }
+        }
+      },
       "CreateTeamRequest": {
         "type": "object",
         "description": "The request body to create a new team",
@@ -6855,6 +7105,10 @@
         "description": "What settings needs to render the Cursor connection.\n\nDeliberately thin. `registered` drives the whole UI; `updatedAt` lets it say\nwhen the key was last replaced, which is the only thing a user can check\nagainst their own memory when a session starts failing.\n\nDeliberately *not* reporting anything about the deployment itself. That is\noperator information: a user who sees it cannot act on it, and a service\nthat cannot reach KMS does not start.",
         "required": ["registered"],
         "properties": {
+          "defaultEffort": {
+            "type": ["string", "null"],
+            "description": "The reasoning effort those sessions start on, as the value of the\ndefault model's effort parameter (e.g. `high`). `None` means the\nmodel's own default; never set without `default_model_id`."
+          },
           "defaultModelId": {
             "type": ["string", "null"],
             "description": "The Cursor model id this user's sessions start on, when they have\nchosen one. `None` means the deployment default is in effect — the\nsettings dropdown shows that as its resting value."
@@ -7125,6 +7379,7 @@
           "email",
           "licenseStatus",
           "tutorialComplete",
+          "isAgent",
           "hasChromeExt",
           "hasTrialed",
           "aiDataConsent",
@@ -7162,6 +7417,10 @@
           "hasTrialed": {
             "type": "boolean",
             "description": "Whether the user has trialed through stripe"
+          },
+          "isAgent": {
+            "type": "boolean",
+            "description": "Whether this is an agent account rather than a person"
           },
           "licenseStatus": {
             "type": "string",
@@ -7821,6 +8080,10 @@
             },
             "description": "The invites to send, each with an email and tier"
           },
+          "is_agent": {
+            "type": "boolean",
+            "description": "Invite these addresses as agents: an address with no account signs up\nas an agent and joins the team when it first signs in."
+          },
           "team_id": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -7965,6 +8228,10 @@
             "type": "string",
             "description": "The email to initiate passwordless authentication for"
           },
+          "is_agent": {
+            "type": "boolean",
+            "description": "Create an agent account if this address has no account yet. Otherwise\n`true` has no effect, and `false` reverts an agent flag nobody has proven:\nsee `revert_unconfirmed_agent`."
+          },
           "redirect_uri": {
             "type": "string",
             "description": "The redirect uri to redirect to after login"
@@ -7991,18 +8258,18 @@
         "properties": {
           "backfill": {
             "type": "boolean",
-            "description": "On a disabled → enabled transition, whether to backfill the CRM\nfrom members' existing email history. Ignored when disabling.",
+            "description": "Retained for compatibility and ignored. Email backfill requires\neach member's explicit consent through CRM email privacy settings.",
             "default": true
           },
           "enabled": {
             "type": "boolean",
-            "description": "The desired CRM state for the team."
+            "description": "Legacy compatibility flag. True is a no-op; false is rejected."
           }
         }
       },
       "PatchTeamCrmSettingsResponse": {
         "type": "object",
-        "description": "Response for `PATCH /team/crm`. Reports both the resulting state\nand whether this call changed it; for the enable-flip case it also\nreports the backfill fan-out tallies.",
+        "description": "Compatibility response for `PATCH /team/crm`. CRM records are always\navailable; this endpoint does not enroll mailboxes or backfill emails.",
         "required": [
           "enabled",
           "changed",
@@ -8012,21 +8279,21 @@
         "properties": {
           "backfill_enqueued": {
             "type": "integer",
-            "description": "Number of members for whom a `PopulateCrmForUser` message was\nenqueued. Non-zero only on a disabled → enabled transition;\nper-user enqueue failures are logged and swallowed.",
+            "description": "Always zero: mailbox contributions require individual consent.",
             "minimum": 0
           },
           "backfill_failed": {
             "type": "integer",
-            "description": "Number of members whose enqueue failed (and was swallowed).\nNon-zero only on a disabled → enabled transition.",
+            "description": "Always zero: this endpoint does not enqueue backfills.",
             "minimum": 0
           },
           "changed": {
             "type": "boolean",
-            "description": "True if this call flipped the value (false → true or true →\nfalse). False if the team was already at the requested state."
+            "description": "Always false: the legacy command does not change availability."
           },
           "enabled": {
             "type": "boolean",
-            "description": "The resulting `crm_enabled` value after the call."
+            "description": "Always true: CRM records are available to team members."
           }
         }
       },
@@ -8264,6 +8531,21 @@
           }
         }
       },
+      "ProfilePictureUpload": {
+        "type": "object",
+        "description": "Where to upload a new profile picture, and the file id to set afterwards.",
+        "required": ["file_id", "upload_url"],
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "description": "Id to pass to `PUT /user/profile_picture/file` once uploaded."
+          },
+          "upload_url": {
+            "type": "string",
+            "description": "Expiring URL to `PUT` the image bytes to."
+          }
+        }
+      },
       "ProfilePictures": {
         "type": "object",
         "required": ["pictures"],
@@ -8321,11 +8603,25 @@
       },
       "PutCursorDefaultModelRequest": {
         "type": "object",
-        "description": "The model the user chose for their sessions.",
+        "description": "The model the user chose for their sessions, and its effort.",
         "properties": {
+          "effort": {
+            "type": ["string", "null"],
+            "description": "The value of the model's reasoning-effort parameter (e.g. `high`), or\n`null` for the model's own default. Ignored without a model."
+          },
           "modelId": {
             "type": ["string", "null"],
             "description": "A Cursor model id (e.g. `grok-4.6`), or `null` to clear the choice and\nfall back to the deployment default."
+          }
+        }
+      },
+      "PutProfilePictureFileRequest": {
+        "type": "object",
+        "required": ["file_id"],
+        "properties": {
+          "file_id": {
+            "type": "string",
+            "description": "Id of an image the caller uploaded to static file storage."
           }
         }
       },
@@ -8693,7 +8989,7 @@
           },
           "crm_enabled": {
             "type": "boolean",
-            "description": "Whether the CRM is enabled for this team (from `team_crm_settings`;\n`false` when no row exists)."
+            "description": "CRM record availability, always true for teams. This compatibility\nfield does not indicate whether any mailbox contributes emails."
           },
           "default_link_share": {
             "oneOf": [
@@ -8746,7 +9042,8 @@
           "team_role",
           "invited_by",
           "created_at",
-          "last_sent_at"
+          "last_sent_at",
+          "is_agent"
         ],
         "properties": {
           "created_at": {
@@ -8766,6 +9063,10 @@
           "invited_by": {
             "type": "string",
             "description": "The user who sent the invitation"
+          },
+          "is_agent": {
+            "type": "boolean",
+            "description": "Whether the invite creates an agent account"
           },
           "last_sent_at": {
             "type": "string",
@@ -9182,6 +9483,10 @@
           },
           "id": {
             "type": "string"
+          },
+          "is_agent": {
+            "type": "boolean",
+            "description": "Whether this is an agent account rather than a person."
           },
           "last_name": {
             "type": ["string", "null"]

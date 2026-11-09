@@ -7,6 +7,7 @@ import type {
   PropertyDefinition as PropertyDefinitionRecord,
   PropertyTargetEntityType as PropertyEntityType,
   PropertyScope,
+  TagScope,
   TagSetResponse,
 } from '../../../generated/properties/types.gen';
 import { unwrap } from '../../utils';
@@ -23,6 +24,7 @@ export type {
   PropertyDefinitionRecord,
   PropertyEntityType,
   PropertyScope,
+  TagScope,
   TagSetResponse,
 };
 
@@ -32,6 +34,8 @@ export { PropertyDefinition, PropertyOption };
  * Property definitions and tag sets. Entity-level reads and writes live on
  * the entity handles ({@link PropertiedEntity.properties}, `setProperty`,
  * `deleteProperty`).
+ *
+ * @routing Use when the request is about an item's custom properties or tags themselves, such as defining a property, creating or editing a tag, or bulk-setting options; not creating or updating a task, deal, event or row, whose own methods set their fields.
  */
 export class PropertiesNamespace {
   constructor(private readonly client: MacroClient) {}
@@ -139,8 +143,45 @@ export class PropertiesNamespace {
     );
   }
 
-  /** The user's tag sets: their personal set, plus their team's when on a team. */
+  /**
+   * The user's tag sets: their personal set, plus their team's when on a team.
+   * A set without a `definition` has no tags yet; {@link createTag} creates it.
+   * Edit or delete a tag through `definition(set.definition.id).options()`.
+   */
   async tags(): Promise<TagSetResponse[]> {
     return unwrap(await this.client.properties.listTags({}));
+  }
+
+  /**
+   * Create a tag, provisioning the tag set on its first tag. Tags match by
+   * label, so check {@link tags} first and never duplicate one in the same set.
+   * Apply it with `item.updatePropertyOptions([{ property, add: [tag] }])`,
+   * where `property` is `definition(tag.definitionId)`.
+   */
+  async createTag(opts: {
+    /** The label, e.g. "Urgent". */
+    label: string;
+    /** A hex color such as `#46A758`. */
+    color?: string;
+    /** `user` (the default) for the user's own tags, `team` for their team's shared tags. */
+    scope?: TagScope;
+  }): Promise<PropertyOption> {
+    const set = unwrap(
+      await this.client.properties.ensureTagSet({
+        body: { scope: opts.scope ?? 'user' },
+      }),
+    );
+    if (!set.definition) {
+      throw new Error('The tag set was not provisioned');
+    }
+
+    return PropertyDefinition.byId(this.client, set.definition.id).addOption({
+      type: 'select_string',
+      option: {
+        value: opts.label,
+        color: opts.color,
+        display_order: set.options.length,
+      },
+    });
   }
 }

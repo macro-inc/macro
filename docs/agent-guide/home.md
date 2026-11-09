@@ -7,6 +7,7 @@ pill strip with a leading filter drawer (Status and Type), pull-to-refresh,
 and swipe-left to mark done. On touch, Signal is a pure notification feed — the viewer's own
 touched-by-me recents are not merged in; that merge is desktop Home's Signal
 only, so sent mail and AI chats without notifications appear only on desktop.
+Signal, including its empty state, starts with the Home tutorial entry (from `features/video-tutorials`) once that video is in its catalog: a `TutorialSidebarItem` in the desktop rail, a `TutorialRow` on touch. It sits outside the virtualized rows, so list keyboard focus skips it.
 
 On a cold launch, notification transport follows the GraphQL Soup flag reactively:
 if the flag arrives after REST starts, the GraphQL notification query must actually
@@ -127,6 +128,17 @@ them back. The DM remains in Channels/DMs; authorized direct session links and
 explicitly saved favorites still open their context. Verify this alongside an
 ordinary standalone session, which remains listed.
 
+A session started from a thread (a mention in a channel, document or call, or a
+task assignment) stays out of Home, Recent and the Agents sidebar for everyone,
+owner included, whichever agent runs it; the thread is where it is reached.
+Follow-up mentions in that thread list it for nobody either. A person who
+prompts the session from the session view itself (after **Open session**)
+follows it: from then on it lists for them in Home, Recent and Agents while they
+can still open it, and nobody else's lists change. Prompting never changes
+anyone's access. Verify with two accounts: mention an agent in a document
+thread and check neither lists it, then have the second account open the
+session, send a prompt, and check the row appears for that account only.
+
 The Agents workspace uses a single left dot for activity and unread state in
 place of the sparkle. Clicking a session row in Home or the Agents sidebar
 clears the row's loaded unread dot immediately; a failed read write restores
@@ -239,6 +251,8 @@ On mobile, the dock uses the bell icon and **Notifications**
 label; Home is desktop-only. Notifications has no merged own-activity feed or
 chat starting pane. Opening a row navigates to its entity. On iOS, rows fade
 underneath the filters and status bar using the shared top edge gradient.
+With `enable-unified-notifications` on, the bell opens the unified
+Notifications view instead (see [notifications.md](notifications.md)).
 
 Notifications have three lifecycle states: `unseen`, `seen`, and `done`. Active means
 unseen or seen. Viewing must not reopen a done notification; undoing done (`Ctrl+Z`

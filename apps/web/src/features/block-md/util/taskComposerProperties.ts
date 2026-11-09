@@ -1,3 +1,4 @@
+import { DEFAULT_TASK_COMPOSER_PROPERTY_IDS } from '@app/features/task-composer/property-defaults';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import { enableProjects } from '@core/constant/featureFlags';
@@ -26,17 +27,8 @@ import type { Accessor } from 'solid-js';
 import { createSignal } from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
 
-/**
- * Props shown in the composer (Linear-style left-to-right order). Project
- * shows only while Projects is enabled.
- */
-export const DEFAULT_TASK_COMPOSER_PROPERTY_IDS = [
-  SYSTEM_PROPERTY_IDS.STATUS,
-  SYSTEM_PROPERTY_IDS.PRIORITY,
-  SYSTEM_PROPERTY_IDS.ASSIGNEES,
-  SYSTEM_PROPERTY_IDS.DUE_DATE,
-  SYSTEM_PROPERTY_IDS.PROJECT,
-];
+export { DEFAULT_TASK_COMPOSER_PROPERTY_IDS } from '@app/features/task-composer/property-defaults';
+
 const COMPOSER_PROPERTY_SET = new Set<string>(
   DEFAULT_TASK_COMPOSER_PROPERTY_IDS
 );
@@ -270,6 +262,8 @@ export function createTaskComposerProperties(args: {
   values?: Accessor<Record<string, PropertyApiValues>>;
   additionalPropertyIds?: Accessor<string[]>;
   initialVisiblePropertyIds?: string[];
+  /** Properties a host edits with its own control: no pill, not addable. */
+  hiddenPropertyIds?: readonly string[];
   allDefinitions?: boolean;
 }) {
   const [propertyValues, setPropertyValues] = createStore<
@@ -359,7 +353,7 @@ export function createTaskComposerProperties(args: {
       ],
       availableDefinitions(),
       projects().enabled
-    );
+    ).filter((id) => !args.hiddenPropertyIds?.includes(id));
   const addableDefinitions = () =>
     availableDefinitions().filter(
       (definition) =>
@@ -384,7 +378,9 @@ export function createTaskComposerProperties(args: {
     availableDefinitions()
       .filter(
         (definition) =>
-          definition.id !== SYSTEM_PROPERTY_IDS.PROJECT || projects().enabled
+          (definition.id !== SYSTEM_PROPERTY_IDS.PROJECT ||
+            projects().enabled) &&
+          !args.hiddenPropertyIds?.includes(definition.id)
       )
       .map((definition) =>
         toPropertyDefinitionDomain(definition, options().get(definition.id))

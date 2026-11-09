@@ -55,6 +55,8 @@ export type SnapshotIngest =
 
 export type LoroManagerOptions = {
   documentId: string;
+  /** Temporary peers share the live document's telemetry without owning it. */
+  ownsTelemetry?: boolean;
   /** Caller-owned initial document flow, never ended by the manager. */
   parentSpan?: Span;
   /**
@@ -90,6 +92,8 @@ export interface SyncEngineManager<
   readonly doc: LoroDoc;
   readonly initialized: boolean;
   readonly peerId: bigint;
+  /** The latest state the manager published, if any. */
+  readonly state: StateUpdate<S> | undefined;
   importUpdate(
     update: LoroRawUpdate
   ): Result<boolean, ResultError<LoroManagerError>[]>;
@@ -148,7 +152,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     this.options = options;
     // Stamp this doc's telemetry with the peer identity as soon as it
     // exists, so every span and log record carries who we are.
-    setTelemetryAttr(options.documentId, 'loro.peer_id', this._doc.peerIdStr);
+    if (options.ownsTelemetry !== false) {
+      setTelemetryAttr(options.documentId, 'loro.peer_id', this._doc.peerIdStr);
+    }
   }
 
   /** The inner LoroDoc. Only touch this if you know what you're doing. */
@@ -627,7 +633,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
     this.initListeners.clear();
     this._mirror?.dispose();
     this._doc.free();
-    disposeTelemetryFor(this.options.documentId);
+    if (this.options.ownsTelemetry !== false) {
+      disposeTelemetryFor(this.options.documentId);
+    }
   }
 }
 

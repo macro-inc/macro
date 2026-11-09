@@ -6,6 +6,7 @@
  */
 import type {
   AgentApiKey,
+  AgentSetupResponse,
   AiBillingErrorBody,
   AppleLoginRequest,
   ChangePlanRequest,
@@ -22,6 +23,7 @@ import type {
   CreateGtmInviteLinkRequest,
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
+  CreateProfilePictureUploadRequest,
   CreateTeamRequest,
   CreditCheckoutRequestBody,
   CreditCheckoutResponse,
@@ -80,10 +82,12 @@ import type {
   PlanCatalogResponse,
   PostGetNamesRequestBody,
   ProfilePictures,
+  ProfilePictureUpload,
   PublicGtmInviteLink,
   PutAgentApiKeyRequest,
   PutCursorApiKeyRequest,
   PutCursorDefaultModelRequest,
+  PutProfilePictureFileRequest,
   PutProfilePictureParams,
   PutUserNameParams,
   RedeemGtmInviteLinkRequest,
@@ -1154,12 +1158,15 @@ export const deleteCursorApiKey = async (
 };
 
 /**
- * Stores the id only; its parameters are resolved from Cursor's own default
-variant at session start. Not validated against the live model list here —
-the settings dropdown offers only real ids, and a stale id degrades to the
-deployment default at spawn rather than failing, so a round trip to Cursor
-on every save would buy nothing.
- * @summary Choose the model this user's `@cursor` sessions start on.
+ * Stores the id and effort value only; the other parameters are resolved from
+Cursor's own variants at session start. Saving a model without an effort
+clears the previous effort, which belonged to the previous model. Not
+validated against the live model list here — the settings controls offer
+only real values, and a stale id or effort degrades to the deployment or
+model default at spawn rather than failing, so a round trip to Cursor on
+every save would buy nothing.
+ * @summary Choose the model, and optionally the effort, this user's `@cursor` sessions
+start on.
  */
 export type putCursorDefaultModelResponse200 = {
   data: CursorApiKeyStatus;
@@ -4786,15 +4793,10 @@ export const toggleTeamAutoJoinDomain = async (
 };
 
 /**
- * @summary Enables or disables CRM for the team. On enable with `backfill`
-(the default), kicks off a best-effort backfill that enqueues a
-`PopulateCrmForUser` message per team member (no-op if CRM is
-already enabled); without `backfill` the CRM starts empty and fills
-from new activity only. On disable,
-flips the flag and purges the team's CRM data (cascading through
-`crm_companies` → `crm_domains` / `crm_contacts` /
-`crm_contact_sources`). Requires the caller to be an Admin or
-Owner of the team.
+ * @summary Legacy compatibility endpoint for team admins and owners. Enabling
+is a no-op; disabling is rejected. CRM records remain available.
+Each member manages mailbox contribution through `/crm/email-privacy`;
+this endpoint does not enroll mailboxes, backfill emails, or purge records.
  */
 export type patchTeamCrmSettingsResponse200 = {
   data: PatchTeamCrmSettingsResponse;
@@ -5948,6 +5950,75 @@ export const getUserInvites = async (
 };
 
 /**
+ * Safe to repeat until the agent confirms it saved the token: a reload replaces
+the key, and a failed join stays pending for the next attempt.
+ * @summary Finishes an agent's signup: joins the team that invited it and mints its
+SDK token.
+ */
+export type agentSetupResponse200 = {
+  data: AgentSetupResponse;
+  status: 200;
+};
+
+export type agentSetupResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type agentSetupResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type agentSetupResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type agentSetupResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type agentSetupResponseSuccess = agentSetupResponse200 & {
+  headers: Headers;
+};
+export type agentSetupResponseError = (
+  | agentSetupResponse401
+  | agentSetupResponse403
+  | agentSetupResponse409
+  | agentSetupResponse500
+) & {
+  headers: Headers;
+};
+
+export type agentSetupResponse =
+  | agentSetupResponseSuccess
+  | agentSetupResponseError;
+
+export const getAgentSetupUrl = () => {
+  return `/user/agent_setup`;
+};
+
+export const agentSetup = async (
+  options?: RequestInit
+): Promise<agentSetupResponse> => {
+  const res = await fetch(getAgentSetupUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: agentSetupResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as agentSetupResponse;
+};
+
+/**
  * @summary Retrieves user names in bulk
  */
 export type getUserNamesResponse200 = {
@@ -6821,6 +6892,157 @@ export const putProfilePicture = async (
     status: res.status,
     headers: res.headers,
   } as putProfilePictureResponse;
+};
+
+/**
+ * @summary Sets the caller's profile picture to an image they uploaded.
+ */
+export type putProfilePictureFileResponse200 = {
+  data: EmptyResponse;
+  status: 200;
+};
+
+export type putProfilePictureFileResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type putProfilePictureFileResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type putProfilePictureFileResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type putProfilePictureFileResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type putProfilePictureFileResponseSuccess =
+  putProfilePictureFileResponse200 & {
+    headers: Headers;
+  };
+export type putProfilePictureFileResponseError = (
+  | putProfilePictureFileResponse400
+  | putProfilePictureFileResponse401
+  | putProfilePictureFileResponse404
+  | putProfilePictureFileResponse500
+) & {
+  headers: Headers;
+};
+
+export type putProfilePictureFileResponse =
+  | putProfilePictureFileResponseSuccess
+  | putProfilePictureFileResponseError;
+
+export const getPutProfilePictureFileUrl = () => {
+  return `/user/profile_picture/file`;
+};
+
+export const putProfilePictureFile = async (
+  putProfilePictureFileRequest: PutProfilePictureFileRequest,
+  options?: RequestInit
+): Promise<putProfilePictureFileResponse> => {
+  const res = await fetch(getPutProfilePictureFileUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(putProfilePictureFileRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putProfilePictureFileResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putProfilePictureFileResponse;
+};
+
+/**
+ * @summary Reserves storage for a new profile picture. Static file storage has no
+MacroDB, so it cannot check API keys; this route lets key holders upload.
+ */
+export type createProfilePictureUploadResponse200 = {
+  data: ProfilePictureUpload;
+  status: 200;
+};
+
+export type createProfilePictureUploadResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type createProfilePictureUploadResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type createProfilePictureUploadResponse413 = {
+  data: ErrorResponse;
+  status: 413;
+};
+
+export type createProfilePictureUploadResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
+export type createProfilePictureUploadResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createProfilePictureUploadResponseSuccess =
+  createProfilePictureUploadResponse200 & {
+    headers: Headers;
+  };
+export type createProfilePictureUploadResponseError = (
+  | createProfilePictureUploadResponse400
+  | createProfilePictureUploadResponse401
+  | createProfilePictureUploadResponse413
+  | createProfilePictureUploadResponse429
+  | createProfilePictureUploadResponse500
+) & {
+  headers: Headers;
+};
+
+export type createProfilePictureUploadResponse =
+  | createProfilePictureUploadResponseSuccess
+  | createProfilePictureUploadResponseError;
+
+export const getCreateProfilePictureUploadUrl = () => {
+  return `/user/profile_picture/file`;
+};
+
+export const createProfilePictureUpload = async (
+  createProfilePictureUploadRequest: CreateProfilePictureUploadRequest,
+  options?: RequestInit
+): Promise<createProfilePictureUploadResponse> => {
+  const res = await fetch(getCreateProfilePictureUploadUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createProfilePictureUploadRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createProfilePictureUploadResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createProfilePictureUploadResponse;
 };
 
 /**
