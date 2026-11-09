@@ -531,6 +531,7 @@ export {
   RoutineExecution,
   type RoutineOptions,
 } from './entities/routines/routine';
+export { RoutineSuggestion } from './entities/routines/suggestion';
 export type { SearchOn, SearchOpts } from './entities/search/options';
 export type {
   SearchOptions,

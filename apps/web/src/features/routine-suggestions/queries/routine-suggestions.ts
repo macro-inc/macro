@@ -4,7 +4,6 @@ import {
   enableRoutineSuggestions,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
-import { getDefaultTimezone } from '@core/util/cron';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { scheduledActionClient } from '@service-scheduled-action/client';
@@ -79,21 +78,6 @@ export function useRoutineSuggestions(): RoutineSuggestionsSource {
       });
     },
   };
-}
-
-/**
- * Start the person's one generation of suggestions (onboarding calls it once
- * their inbox is connected); later calls change nothing.
- */
-export async function generateRoutineSuggestions(): Promise<RoutineSuggestions> {
-  const set = await throwOnErr(() =>
-    scheduledActionClient.generateRoutineSuggestions({
-      timezone: getDefaultTimezone(),
-    })
-  );
-  // A generating answer turns polling on.
-  queryClient.setQueryData(routineSuggestionKeys.all.queryKey, set);
-  return set;
 }
 
 function withoutSuggestion(id: string) {
