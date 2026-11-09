@@ -19,6 +19,8 @@ Document sync: [DSS sync router](architecture/sync-router.md).
 
 Agent guidance per SDK area: [`@routing` and `@agent`](architecture/agent-sdk-guidance.md).
 
+MCP servers: [public MCP and the ChatGPT server](architecture/mcp-surfaces.md).
+
 Bots: [building a bot](guides/bots.md) (set one up in the app, then search and
 post from the TypeScript SDK).
 

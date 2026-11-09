@@ -1,6 +1,7 @@
 export {
   type ErrorCode,
   errorResult,
+  OperationError,
   type OperationResult,
   runOperation,
 } from './call';

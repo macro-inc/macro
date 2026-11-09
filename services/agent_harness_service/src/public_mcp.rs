@@ -1,5 +1,6 @@
 //! Public workspace MCP and OAuth, hosted on the harness's public listener.
 mod analytics;
+mod macro_api_tokens;
 mod markdown_images;
 #[cfg(test)]
 mod test;
@@ -15,6 +16,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use mcp_auth_proxy::{
     domain::{
         redirect_uri::RedirectUriPolicy,
+        resource::McpResources,
         service::{McpAuthProxyService, McpAuthProxyServiceDeps, McpAuthProxyServiceImpl},
     },
     outbound::{
@@ -64,8 +66,15 @@ pub async fn router(
     code_mode: Option<PublicCodeMode>,
 ) -> anyhow::Result<axum::Router> {
     let public_url = macro_service_urls::McpPublicUrl::new()?;
-    let (auth_proxy, backfill) =
-        build_auth_proxy(config, secrets, &public_url, db.clone(), kms).await?;
+    let (auth_proxy, backfill) = build_auth_proxy(
+        config,
+        secrets,
+        &public_url,
+        db.clone(),
+        kms,
+        jwt_args.clone(),
+    )
+    .await?;
     let analytics = build_analytics(config, db);
     let item_base_url = macro_service_urls::AppServiceUrl::new()?.to_string();
     let static_file_base_url =
@@ -157,6 +166,7 @@ async fn build_auth_proxy(
     public_url: &macro_service_urls::McpPublicUrl,
     db: sqlx::PgPool,
     kms: aws_sdk_kms::Client,
+    jwt_args: JwtValidationArgs,
 ) -> anyhow::Result<(
     McpAuthProxyServiceImpl<RedisCutoverAuthStore>,
     impl Future<Output = ()> + Send + 'static,
@@ -212,6 +222,14 @@ async fn build_auth_proxy(
     let redis_client = redis::Client::open(config.redis_uri.as_ref().to_owned())
         .context("failed to initialize redis client for MCP auth proxy")?;
     let legacy_clients = Arc::new(RedisClientRegistry::new(redis_client.clone()));
+    let macro_api_tokens = macro_api_tokens::SignedMacroApiTokens {
+        signer: agent_egress::outbound::macro_mcp::MacroApiTokenSigner::new(
+            db.clone(),
+            config.macro_api_token_issuer.as_ref(),
+            config.macro_api_token_private_secret_key.as_ref(),
+        ),
+        jwt_args,
+    };
     let postgres = PostgresAuthStore::new(
         db,
         Arc::new(AwsKmsCiphertexts::new(
@@ -238,6 +256,11 @@ async fn build_auth_proxy(
         "initialized MCP OAuth redirect URI policy"
     );
 
+    // The ChatGPT MCP server is its own Worker that the broker signs in for.
+    let resources = McpResources::new(
+        format!("{mcp_public_url}/mcp"),
+        format!("{}/mcp", macro_service_urls::McpChatgptServiceUrl::new()?),
+    );
     let auth_proxy = McpAuthProxyServiceImpl::new(McpAuthProxyServiceDeps {
         public_url: mcp_public_url,
         redirect_uri_policy,
@@ -246,6 +269,8 @@ async fn build_auth_proxy(
         refresh_token_bindings: store,
         oauth_provider: Arc::new(auth_provider),
         email_codes: Arc::new(email_codes),
+        resources,
+        macro_api_tokens: Arc::new(macro_api_tokens),
     });
     Ok((auth_proxy, backfill))
 }
