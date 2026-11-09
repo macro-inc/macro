@@ -81,13 +81,21 @@ impl SuggestionRepo for PgSuggestionRepo {
         .transpose()
     }
 
-    async fn begin(&self, user: &MacroUserIdStr<'_>, now: DateTime<Utc>) -> Result<bool> {
+    async fn begin(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        now: DateTime<Utc>,
+        stale_before: DateTime<Utc>,
+    ) -> Result<bool> {
         let started = sqlx::query!(
             r#"INSERT INTO routine_suggestion_generation (user_id, status, started_at)
                VALUES ($1, 'generating', $2)
-               ON CONFLICT (user_id) DO NOTHING"#,
+               ON CONFLICT (user_id) DO UPDATE SET started_at = EXCLUDED.started_at, finished_at = NULL
+               WHERE routine_suggestion_generation.status = 'generating'
+                 AND routine_suggestion_generation.started_at < $3"#,
             user.as_ref(),
             now,
+            stale_before,
         )
         .execute(&self.pool)
         .await?

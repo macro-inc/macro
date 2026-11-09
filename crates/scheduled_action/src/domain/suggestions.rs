@@ -83,6 +83,10 @@ pub const SESSION_TIMEOUT: Duration = Duration::from_secs(240);
 /// How long a session row may stay before the sweep deletes it and its
 /// session.
 pub const STALE_SESSION: Duration = Duration::from_secs(10 * 60);
+/// How long a generation may stay running before it counts as interrupted
+/// (its process stopped) and may start again: longer than a session and its
+/// retry.
+pub const STALE_GENERATION: Duration = Duration::from_secs(10 * 60);
 const SWEEP_BATCH: u16 = 64;
 const FIRST_POLL: Duration = Duration::from_millis(500);
 const MAX_POLL: Duration = Duration::from_secs(2);
@@ -340,7 +344,16 @@ where
         timezone: Tz,
     ) -> Result<RoutineSuggestions> {
         let flags = self.require_flag(user).await?;
-        let started = self.inner.repo.begin(user, Utc::now()).await?;
+        let now = Utc::now();
+        let started = self
+            .inner
+            .repo
+            .begin(
+                user,
+                now,
+                now - chrono::Duration::from_std(STALE_GENERATION)?,
+            )
+            .await?;
         tracing::Span::current().record("routine.suggestions.started", started);
         if started {
             let run = Run {
