@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { UnifiedNotification } from '@notifications/types';
 import type {
   InboxDoneResult,
@@ -160,7 +161,21 @@ export function createInboxList(
       [],
       result.count,
       result,
-      (count, undo) => notices.announceCleared(count, undo, result.complete),
+      (count, undo) => {
+        let dismiss = notices.announceCleared(count, undo, result.complete);
+        // A clear still at work on the server is announced again when it
+        // ends, with its final count.
+        const announceEnd = async (finished: Promise<number | undefined>) => {
+          const total = await finished;
+          if (total === undefined) return;
+          dismiss();
+          dismiss = notices.announceCleared(total, undo, true);
+        };
+        if (result.finished) {
+          fireAndForget(announceEnd(result.finished), 'notifications-inbox');
+        }
+        return () => dismiss();
+      },
       t('notificationsInbox.clear')
     );
   };

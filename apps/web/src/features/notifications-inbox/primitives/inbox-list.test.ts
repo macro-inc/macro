@@ -180,6 +180,57 @@ describe('createInboxList', () => {
     expect(announced.value.pushUndo).toHaveBeenCalled();
   });
 
+  it('announces a clear again with its final count when the server finishes it', async () => {
+    const undo = vi.fn(async () => {});
+    let finish: (count: number | undefined) => void = () => {};
+    const finished = new Promise<number | undefined>((resolve) => {
+      finish = resolve;
+    });
+    const { feed } = fakeFeed({
+      clear: vi.fn(async () => ({
+        count: 40,
+        complete: false,
+        finished,
+        undo,
+      })),
+    });
+    const announced = notices();
+    const inbox = createInboxList(feed, announced.value);
+
+    await inbox.clear({ rowTypes: ['email'], unreadOnly: false });
+    expect(announced.value.announceCleared).toHaveBeenCalledTimes(1);
+
+    finish(4_300);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(announced.dismiss).toHaveBeenCalledOnce();
+    expect(announced.value.announceCleared).toHaveBeenLastCalledWith(
+      4_300,
+      expect.any(Function),
+      true
+    );
+  });
+
+  it('announces nothing more for a clear that was undone before it finished', async () => {
+    const { feed } = fakeFeed({
+      clear: vi.fn(async () => ({
+        count: 40,
+        complete: false,
+        finished: Promise.resolve(undefined),
+        undo: vi.fn(async () => {}),
+      })),
+    });
+    const announced = notices();
+    const inbox = createInboxList(feed, announced.value);
+
+    await inbox.clear({ rowTypes: ['email'], unreadOnly: false });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(announced.value.announceCleared).toHaveBeenCalledTimes(1);
+  });
+
   it('says when a clear took nothing, with nothing to undo', async () => {
     const { feed } = fakeFeed();
     const announced = notices();

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createFakeAttentionFeedClient } from '@queries/attention-feed/tests/fake-client';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -20,6 +21,10 @@ vi.mock('@core/constant/allBlocks', () => ({
   blockNameToDefaultFile: () => 'Untitled',
   itemToSafeName: (item: { name?: string }) => item.name ?? 'Untitled',
 }));
+
+/** The id every clear started in these tests gets. */
+const CLEAR_ID = '0193b1ea-a542-7589-893b-2b4a509c1e76';
+vi.mock('uuid', () => ({ v7: () => '0193b1ea-a542-7589-893b-2b4a509c1e76' }));
 
 const disposals: Array<() => void> = [];
 afterEach(() => {
@@ -79,12 +84,17 @@ function setup(
   const restoreNotifications = vi.fn();
   const overrideNotificationsDone = vi.fn(() => restoreNotifications);
   let feed!: InboxFeedSource;
+  // The gateway's hint that a clear changed, as another device causes.
+  let hintClear: (clearId: string) => void = () => {};
   const dispose = createRoot((rootDispose) => {
     feed = createNotificationInboxSource({
       client: () => fake.client,
       cacheHost: () => fake.host,
       scope,
       enabled: () => true,
+      onClearUpdated: (listener) => {
+        hintClear = listener;
+      },
       overrideNotificationsDone,
       revalidateNotifications,
     });
@@ -102,6 +112,7 @@ function setup(
     feed,
     rowIds,
     row,
+    hintClear: (clearId: string) => hintClear(clearId),
     overrideNotificationsDone,
     restoreNotifications,
     revalidateNotifications,
@@ -115,6 +126,31 @@ async function loaded(mutationData: Record<string, unknown> = {}) {
   await flush();
   return context;
 }
+
+/** A clear of task rows as the server reports it, started at 10:30. */
+const wireClear = (
+  status: string,
+  fields: { rowCount?: number; revision?: number; clearId?: string } = {}
+) => ({
+  clearId: fields.clearId ?? CLEAR_ID,
+  status,
+  rowTypes: ['TASK'],
+  unreadOnly: false,
+  since: null,
+  asOf: '2026-02-01T10:30:00+00:00',
+  rowCount: fields.rowCount ?? 6,
+  revision: fields.revision ?? 1,
+});
+
+/** Answers for the reads of clears, in order; the last one repeats. */
+const clearReads = (...answers: unknown[][]) => {
+  let read = 0;
+  return () => ({
+    user: {
+      notificationInboxClears: answers[Math.min(read++, answers.length - 1)],
+    },
+  });
+};
 
 const doneResult = {
   MarkNotificationInboxRowsDone: {
@@ -294,18 +330,14 @@ describe('createNotificationInboxSource', () => {
     expect(row('document:doc-s#top_level').count).toBe(3);
   });
 
-  it('clears the inbox in one call, hiding the rows it takes, and undoes it with one token', async () => {
+  it('clears the inbox in one call under its own id, hiding the rows it takes, and undoes it by that id', async () => {
     vi.useFakeTimers();
     const { fake, feed, rowIds } = await loaded({
       ClearNotificationInbox: {
-        clearNotificationInbox: {
-          rowCount: 6,
-          undoToken: 'clear:one',
-          complete: true,
-        },
+        clearNotificationInbox: { clear: wireClear('DONE') },
       },
-      UndoNotificationInboxRowsDone: {
-        undoNotificationInboxRowsDone: { patches: [] },
+      UndoNotificationInboxClear: {
+        undoNotificationInboxClear: { clear: wireClear('UNDONE') },
       },
     });
 
@@ -315,11 +347,18 @@ describe('createNotificationInboxSource', () => {
     });
 
     expect(cleared).toMatchObject({ count: 6, complete: true });
+    expect(cleared.finished).toBeUndefined();
     const clears = fake.mutations.filter(
       ({ name }) => name === 'ClearNotificationInbox'
     );
     expect(clears.map(({ variables }) => variables)).toEqual([
-      { input: { scope: { rowTypes: ['TASK'] }, since: null } },
+      {
+        input: {
+          clearId: CLEAR_ID,
+          scope: { rowTypes: ['TASK'] },
+          since: null,
+        },
+      },
     ]);
     // Only the task row matches what was cleared.
     expect(rowIds()).toEqual([
@@ -329,44 +368,181 @@ describe('createNotificationInboxSource', () => {
 
     await cleared.undo();
     const undos = fake.mutations.filter(
-      ({ name }) => name === 'UndoNotificationInboxRowsDone'
+      ({ name }) => name === 'UndoNotificationInboxClear'
     );
-    expect(undos.map(({ variables }) => variables.input)).toEqual([
-      expect.objectContaining({ undoToken: 'clear:one' }),
+    const sent = clears[0].variables.input as { clearId: string };
+    expect(undos.map(({ variables }) => variables)).toEqual([
+      { input: { clearId: sent.clearId } },
     ]);
     expect(rowIds()).toContain('document:doc-a#task');
   });
 
-  it('tries the undo of a clear again while the server is still stopping it', async () => {
+  it('keeps hiding what a clear still at work takes, and announces its end', async () => {
     vi.useFakeTimers();
-    let undoCalls = 0;
-    const { fake, feed } = await loaded({
+    const { fake, feed, rowIds } = await loaded({
       ClearNotificationInbox: {
         clearNotificationInbox: {
-          rowCount: 6,
-          undoToken: 'clear:one',
-          complete: false,
+          clear: wireClear('APPLYING', { rowCount: 2 }),
         },
       },
-      get UndoNotificationInboxRowsDone() {
-        undoCalls += 1;
-        // The first answer is the server's "still stopping".
-        return undoCalls === 1
-          ? undefined
-          : { undoNotificationInboxRowsDone: { patches: [] } };
+      NotificationInboxClears: clearReads(
+        // Nothing at work when the inbox opens.
+        [],
+        [wireClear('APPLYING', { rowCount: 40, revision: 2 })],
+        [wireClear('DONE', { rowCount: 90, revision: 3 })]
+      ),
+    });
+
+    const cleared = await feed.clear({ rowTypes: ['task'], unreadOnly: false });
+    expect(cleared).toMatchObject({ count: 2, complete: false });
+    let finished: number | undefined;
+    fireAndForget(
+      (async () => {
+        finished = await cleared.finished;
+      })(),
+      'test'
+    );
+
+    // The inbox is read again; the server hasn't reached the task row yet.
+    fake.queries.at(-1)?.resolve(inboxPage([docA, docB]));
+    await flush();
+    expect(rowIds()).not.toContain('document:doc-a#task');
+
+    // A task row the server hasn't reached yet arrives with a later page:
+    // it is hidden too. One from after the clear started is not.
+    const later = inboxEntry({
+      docId: 'doc-d',
+      sortAt: '2026-02-01T10:40:00Z',
+      rows: [
+        {
+          id: 'document:doc-d#task',
+          rowType: 'TASK',
+          latestAt: '2026-02-01T10:20:00Z',
+        },
+      ],
+    });
+    const arrived = inboxEntry({
+      docId: 'doc-e',
+      sortAt: '2026-02-01T10:45:00Z',
+      rows: [
+        {
+          id: 'document:doc-e#task',
+          rowType: 'TASK',
+          latestAt: '2026-02-01T10:45:00Z',
+        },
+      ],
+    });
+    fake.subscriptions[0].next({
+      notificationInboxUpdates: [upsertedPatch(later), upsertedPatch(arrived)],
+    });
+    await flush();
+    expect(rowIds()).not.toContain('document:doc-d#task');
+    expect(rowIds()).toContain('document:doc-e#task');
+
+    // Still at work on the first poll, done on the second.
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(finished).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(finished).toBe(90);
+  });
+
+  it('hides the rows of a clear another device started, as soon as it hears of it', async () => {
+    vi.useFakeTimers();
+    const { fake, hintClear, rowIds } = await loaded({
+      NotificationInboxClears: clearReads(
+        // Nothing at work when the inbox opens.
+        [],
+        [wireClear('APPLYING')],
+        [wireClear('DONE', { revision: 2 })]
+      ),
+    });
+    expect(rowIds()).toContain('document:doc-a#task');
+    const refetches = fake.queries.length;
+
+    hintClear(CLEAR_ID);
+    await flush();
+
+    expect(fake.reads.at(-1)).toEqual({
+      name: 'NotificationInboxClears',
+      variables: { clearId: CLEAR_ID },
+    });
+    expect(rowIds()).toEqual([
+      'document:doc-a#top_level',
+      'document:doc-b#top_level',
+    ]);
+
+    // It ends there: the inbox is read again here.
+    hintClear(CLEAR_ID);
+    await flush();
+    expect(fake.queries.length).toBeGreaterThan(refetches);
+  });
+
+  it('shows the rows again when another device undoes a clear', async () => {
+    vi.useFakeTimers();
+    const { hintClear, rowIds } = await loaded({
+      NotificationInboxClears: clearReads(
+        [wireClear('APPLYING')],
+        [wireClear('UNDOING', { revision: 2 })]
+      ),
+    });
+    await flush();
+    expect(rowIds()).not.toContain('document:doc-a#task');
+
+    hintClear(CLEAR_ID);
+    await flush();
+
+    expect(rowIds()).toContain('document:doc-a#task');
+  });
+
+  it('undoes a clear still at work and waits for the server to finish the undo', async () => {
+    vi.useFakeTimers();
+    const { feed, rowIds } = await loaded({
+      ClearNotificationInbox: {
+        clearNotificationInbox: { clear: wireClear('APPLYING') },
       },
+      UndoNotificationInboxClear: {
+        undoNotificationInboxClear: {
+          clear: wireClear('UNDOING', { revision: 2 }),
+        },
+      },
+      NotificationInboxClears: clearReads(
+        [],
+        [wireClear('UNDONE', { revision: 3 })]
+      ),
     });
     const cleared = await feed.clear({ rowTypes: ['task'], unreadOnly: false });
+    expect(rowIds()).not.toContain('document:doc-a#task');
 
-    const undoing = cleared.undo();
+    let undone = false;
+    fireAndForget(
+      (async () => {
+        await cleared.undo();
+        undone = true;
+      })(),
+      'test'
+    );
+    await flush();
+    // The rows are back before the server is done.
+    expect(rowIds()).toContain('document:doc-a#task');
+    expect(undone).toBe(false);
+
     await vi.advanceTimersByTimeAsync(2_000);
-    await undoing;
+    expect(undone).toBe(true);
+    // An undone clear is not announced as finished.
+    expect(await cleared.finished).toBeUndefined();
+  });
 
-    expect(
-      fake.mutations.filter(
-        ({ name }) => name === 'UndoNotificationInboxRowsDone'
-      )
-    ).toHaveLength(2);
+  it('keeps a clear whose reply was lost: the server has it', async () => {
+    vi.useFakeTimers();
+    const { feed, rowIds } = await loaded({
+      // The mutation answers nothing, as a dropped connection leaves it.
+      NotificationInboxClears: clearReads([], [wireClear('DONE')]),
+    });
+
+    const cleared = await feed.clear({ rowTypes: ['task'], unreadOnly: false });
+
+    expect(cleared).toMatchObject({ count: 6, complete: true });
+    expect(rowIds()).not.toContain('document:doc-a#task');
   });
 
   it('sends nothing when every kind is hidden', async () => {
@@ -380,7 +556,7 @@ describe('createNotificationInboxSource', () => {
     expect(rowIds()).toContain('document:doc-a#task');
   });
 
-  it('shows the cleared rows again when the clear fails', async () => {
+  it('shows the cleared rows again when the clear could not be started', async () => {
     vi.useFakeTimers();
     const { feed, rowIds } = await loaded();
 
@@ -592,24 +768,21 @@ describe('createNotificationInboxSource', () => {
     expect(rowIds()).not.toContain('document:doc-b#top_level');
   });
 
-  it('clears unread rows by the scope it sends', async () => {
+  it('names every kind it clears, even when that is all of them', async () => {
     vi.useFakeTimers();
     const { fake, feed } = await loaded({
       ClearNotificationInbox: {
-        clearNotificationInbox: {
-          rowCount: 1,
-          undoToken: 'clear:one',
-          complete: true,
-        },
+        clearNotificationInbox: { clear: wireClear('DONE') },
       },
     });
 
     await feed.clear({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true });
 
-    // Every kind omits rowTypes: the server rejects an empty list.
-    expect(fake.mutations[0].variables).toEqual({
-      input: { scope: { unreadOnly: true }, since: null },
-    });
+    const input = fake.mutations[0].variables.input as {
+      scope: { rowTypes: string[]; unreadOnly: boolean };
+    };
+    expect(input.scope.rowTypes).toHaveLength(ALL_INBOX_ROW_TYPES.length);
+    expect(input.scope.unreadOnly).toBe(true);
   });
 
   it('reads the row as unseen again when marking it seen fails', async () => {

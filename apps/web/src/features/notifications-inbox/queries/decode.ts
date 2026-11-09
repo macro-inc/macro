@@ -1,6 +1,8 @@
 import { attentionFeedSoupItem } from '@queries/attention-feed/attention-feed-entity';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
 import type {
+  NotificationInboxClearFieldsFragment,
+  NotificationInboxClearStatus,
   NotificationInboxEntryFieldsFragment,
   NotificationInboxRowType,
   NotificationInboxScopeInput,
@@ -11,6 +13,7 @@ import type {
   InboxScope,
   NotificationInboxRow,
 } from '../context/notifications-inbox-context';
+import type { InboxClearState, InboxClearStatus } from '../core/inbox-clear';
 import { ALL_INBOX_ROW_TYPES } from '../core/inbox-filters';
 import type {
   InboxActor,
@@ -110,19 +113,50 @@ export function encodeInboxScope(
 }
 
 /**
- * Encode what a clear takes. Every kind omits `rowTypes`: the server rejects
- * an empty list rather than read it as every kind.
+ * Encode what a clear takes. A clear always names its kinds: the server has
+ * no "every kind" for one, so an inbox with every kind hidden clears nothing.
  */
 export function encodeClearScope(
   scope: InboxScope
 ): NotificationInboxScopeInput {
-  const everyType = ALL_INBOX_ROW_TYPES.every((type) =>
-    scope.rowTypes.includes(type)
-  );
-  const kinds = everyType
-    ? {}
-    : { rowTypes: scope.rowTypes.map(toGraphqlRowType) };
-  return scope.unreadOnly ? { ...kinds, unreadOnly: true } : kinds;
+  const rowTypes = scope.rowTypes.map(toGraphqlRowType);
+  return scope.unreadOnly ? { rowTypes, unreadOnly: true } : { rowTypes };
+}
+
+/** A status a newer server adds reads as a clear still at work. */
+const toClearStatus = (
+  status: NotificationInboxClearStatus
+): InboxClearStatus =>
+  match<NotificationInboxClearStatus, InboxClearStatus>(status)
+    .with('APPLYING', () => 'applying')
+    .with('DONE', () => 'done')
+    .with('UNDOING', () => 'undoing')
+    .with('UNDONE', () => 'undone')
+    .with('FAILED', () => 'failed')
+    .exhaustive(() => 'applying');
+
+/**
+ * Read a clear as the server stores it. Kinds this build doesn't know are
+ * left out of what it hides here; the server still clears them.
+ */
+export function toInboxClear(
+  clear: NotificationInboxClearFieldsFragment
+): InboxClearState {
+  return {
+    id: clear.clearId,
+    status: toClearStatus(clear.status),
+    takes: {
+      rowTypes: clear.rowTypes.flatMap((type) => {
+        const known = toRowType(type);
+        return known === 'other' ? [] : [known];
+      }),
+      unreadOnly: clear.unreadOnly,
+      ...(clear.since ? { since: Date.parse(clear.since) } : {}),
+    },
+    asOf: Date.parse(clear.asOf),
+    rows: clear.rowCount,
+    revision: clear.revision,
+  };
 }
 
 /**

@@ -9,7 +9,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { ALL_INBOX_ROW_TYPES } from '../core/inbox-filters';
 import { rowEntity } from '../primitives/row-entity';
 import { commentNotification, inboxEntry } from '../tests/wire';
-import { encodeClearScope, encodeInboxScope, toInboxGroup } from './decode';
+import {
+  encodeClearScope,
+  encodeInboxScope,
+  toInboxClear,
+  toInboxGroup,
+} from './decode';
 
 // Row mapping imports allBlocks, which loads every block module; one of them
 // opens a websocket that jsdom rejects after the test ends.
@@ -308,16 +313,45 @@ describe('encodeInboxScope', () => {
 });
 
 describe('encodeClearScope', () => {
-  it('omits rowTypes for every kind, since the server rejects an empty list', () => {
-    expect(encodeClearScope({ rowTypes: ALL_INBOX_ROW_TYPES })).toEqual({});
+  it('names every kind it takes, never an empty or missing list', () => {
+    const every = encodeClearScope({ rowTypes: ALL_INBOX_ROW_TYPES });
+    expect(every.rowTypes).toHaveLength(ALL_INBOX_ROW_TYPES.length);
     expect(
       encodeClearScope({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true })
-    ).toEqual({ unreadOnly: true });
+    ).toEqual({ rowTypes: every.rowTypes, unreadOnly: true });
   });
 
   it('names the chosen kinds', () => {
     expect(encodeClearScope({ rowTypes: ['email'] })).toEqual({
       rowTypes: ['EMAIL'],
+    });
+  });
+});
+
+describe('toInboxClear', () => {
+  it('reads a clear as the server stores it', () => {
+    expect(
+      toInboxClear({
+        clearId: 'clear-1',
+        status: 'APPLYING',
+        rowTypes: ['TASK', 'EMAIL'],
+        unreadOnly: true,
+        since: '2026-02-01T00:00:00+00:00',
+        asOf: '2026-02-01T10:00:00+00:00',
+        rowCount: 40,
+        revision: 3,
+      })
+    ).toEqual({
+      id: 'clear-1',
+      status: 'applying',
+      takes: {
+        rowTypes: ['task', 'email'],
+        unreadOnly: true,
+        since: Date.parse('2026-02-01T00:00:00Z'),
+      },
+      asOf: Date.parse('2026-02-01T10:00:00Z'),
+      rows: 40,
+      revision: 3,
     });
   });
 });
