@@ -11,6 +11,7 @@ import { fireAndForget } from '../util/fireAndForget';
 import { createEditorEngineState } from './editor-engine-state';
 import { RUST_EDITOR_ENGINE } from './engine-selection';
 import { type DocumentSessionModule, loadDocumentSession } from './load';
+import { prepareEditorEngine } from './prepare-editor-engine';
 
 type EditorEngine = ReturnType<
   typeof createEditorEngineState<DocumentSessionModule>
@@ -22,8 +23,14 @@ export function EditorEngineProvider(props: ParentProps) {
   const engine = createEditorEngineState(
     () => RUST_EDITOR_ENGINE,
     () =>
-      Telemetry.span('editor.engine.initialize', { sampling: 'perf' }, (span) =>
-        loadDocumentSession(span)
+      Telemetry.span(
+        'editor.engine.initialize',
+        { sampling: 'perf' },
+        async (span) => {
+          const module = await loadDocumentSession(span);
+          await prepareEditorEngine(module, span);
+          return module;
+        }
       )
   );
   return (

@@ -11,7 +11,12 @@ for compatibility algorithms; their own Lexical imports remain switched.
 `EditorEngineProvider` owns the app-wide readiness resource under the rollout
 provider. When the cached choice is on, it starts the binary fetch and
 glue import in parallel while the shell paints; initialization compiles the
-binary response with streaming WASM. Flag off makes no native module request.
+binary response with streaming WASM. Before readiness resolves, it waits for two
+animation frames and an idle callback (or a task when idle callbacks are
+unavailable), then calls the real module's idempotent `prepareMacroPaste` export.
+The shell can paint before the linkifier compiles; editors cannot accept a first
+paste before preparation completes. Its work is traced under `paste.prepare`.
+Flag off makes no native module request.
 Failed loading clears the shared initialization promise so a later open can retry.
 
 Place `EditorEngineBoundary` inside the shell above subtrees that construct
@@ -60,4 +65,6 @@ provider with a deterministic flag source. It checks shell visibility during a
 held binary fetch, flag-off network behavior, a synchronous real durable
 attachment with authorization refused, and failed-load retry without a
 fixture-only error boundary. Resolver checks cover both bundling and the test
-runner's SSR module pipeline.
+runner's SSR module pipeline. The paste-preparation browser case holds the idle
+callback, observes the actual generated export calling the real WASM, and checks
+that first contentful paint precedes preparation and editor readiness.

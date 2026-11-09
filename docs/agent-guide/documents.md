@@ -8,7 +8,8 @@ take effect on the next page load.
 Off uses the existing LexicalMarkdown collaboration path and makes no native
 module request. On preloads the session WASM through the app-wide readiness
 resource while the shell paints, then connects EditorView to SessionPort.
-Only editor-building subtrees wait at EditorEngineBoundary. A native load failure
+The shared gate also prepares paste matchers after paint at idle before exposing
+the module. Only editor-building subtrees wait at EditorEngineBoundary. A native load failure
 shows the content retry action while the shell stays mounted and overlay groups
 remain held. Retry initializes the shared engine without changing models. The isolated
 readiness checks are documented in `apps/web/src/lib/core/document-session/README.md`.
