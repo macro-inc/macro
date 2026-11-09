@@ -165,3 +165,5 @@ choice: the built-in paragraph/heading/quote/code/list transforms or an explicit
 choice supplied for an additional/overridden action. It never serializes or
 executes source callbacks. Picker, creation and media workflows need separate
 typed adapters, and InlineSearch lifecycle/application admission remain pending.
+
+The document host allocates its clipboard namespace through the same wrapper allocator as the source editor. Pass that exact value to both `view.namespace` and `EditorSession.createMacroWithNamespace`; cross-instance HTML fallback remains required when namespaces differ.

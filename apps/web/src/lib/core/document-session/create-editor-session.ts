@@ -124,7 +124,13 @@ export function createRustEditorSession(
   const configured = configureSession(
     options,
     (config, now, wall) =>
-      options.module.EditorSession.createMacro(ABI_MAJOR, config, now, wall),
+      options.module.EditorSession.createMacroWithNamespace(
+        ABI_MAJOR,
+        config,
+        now,
+        wall,
+        options.view.namespace
+      ),
     false
   );
   let mounted: ReturnType<typeof mountSessionView> | undefined;
