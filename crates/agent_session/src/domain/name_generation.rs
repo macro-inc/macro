@@ -38,8 +38,13 @@ impl<N> AdmittedAgentSessionNameGenerator<N> {
     }
 
     /// Whether the session's owner may spend on naming. Naming must not
-    /// invent a billing identity for a non-user owner.
+    /// invent a billing identity for a non-user owner, and a background
+    /// session (a routine draft or suggestion) is never listed, so its name
+    /// is never read: it isn't named at all.
     async fn admitted(&self, session: &AgentSession) -> bool {
+        if session.is_background() {
+            return false;
+        }
         let Ok(owner) = session.owner_user() else {
             return false;
         };
