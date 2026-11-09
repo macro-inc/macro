@@ -402,7 +402,7 @@ async fn dropped_submit_reconciles(acknowledge_cancel: bool) {
         .tx
         .send(ToServerMessage::ComputerControlResponse {
             request_id: completion_id,
-            result: ComputerControlResult::SignedIn,
+            result: ComputerControlResult::SignedIn { account: None },
         })
         .unwrap();
     if acknowledge_cancel {

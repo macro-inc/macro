@@ -45,7 +45,7 @@ async fn capabilities_are_reported_with_the_harness_token() {
         matchers::{body_json, header, method, path},
     };
     let server = MockServer::start().await;
-    let capabilities = HarnessCapabilities { screen: true };
+    let capabilities = HarnessCapabilities { screen: true, claude: None };
     Mock::given(method("PUT"))
         .and(path("/harnesses/me/capabilities"))
         .and(header(HARNESS_TOKEN_HEADER, "test-harness-token"))
@@ -91,7 +91,7 @@ async fn setup_reports_join_the_purchase_trace() {
         &http,
         &format!("{}/harnesses/me/capabilities", server.uri()),
         "test-harness-token",
-        &HarnessCapabilities { screen: false },
+        &HarnessCapabilities { screen: false, claude: None },
         Some(parent),
     )
     .await

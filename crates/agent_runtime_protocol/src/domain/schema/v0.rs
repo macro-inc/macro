@@ -162,15 +162,15 @@ pub enum ToRuntimeMessage {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(tag = "command", rename_all = "snake_case")]
 pub enum ComputerCommand {
-    /// Start `claude setup-token` and answer with its sign-in URL.
+    /// Start Claude Code's `/login` in a herdr pane and answer with its
+    /// sign-in URL.
     ClaudeSignInStart,
-    /// Finish the sign-in with the code the user pasted, or the localhost
-    /// callback URL their browser could not reach.
+    /// Type the code the user pasted into the waiting login.
     ClaudeSignInComplete {
-        /// The pasted code or callback URL.
+        /// The pasted code.
         code: String,
     },
-    /// Kill any pending Claude setup-token process.
+    /// Close any pending Claude login pane.
     ClaudeSignInCancel,
     /// Forget the Claude account and return to Macro credits.
     ClaudeSignOut,
@@ -185,12 +185,16 @@ pub enum ComputerControlResult {
         /// Where the user signs in to Claude.
         url: String,
     },
-    /// The pending setup-token process was cancelled.
+    /// The pending login was cancelled.
     SignInCancelled,
     /// The pasted OAuth code was rejected; start a fresh sign-in.
     InvalidCode,
-    /// Claude Code now runs on the user's own account.
-    SignedIn,
+    /// Claude Code now runs on a Claude account.
+    SignedIn {
+        /// The account's email address, when Claude reports one.
+        #[serde(default)]
+        account: Option<String>,
+    },
     /// Claude Code is back on Macro credits.
     SignedOut,
     /// The command failed; the message is safe to show.

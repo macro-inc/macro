@@ -21,6 +21,8 @@ Expiry cleanup retains claimed pairing rows for live hosted harnesses; a missing
 pairing fails closed rather than treating the guest as unclaimed.
 These trusted entry points take no caller: they are for trusted in-process callers that
 already authorized the team admin, never for an HTTP route.
+Hosted harnesses always start with `allow_permission_bypass` on ("Don't ask
+before acting"); paired machines keep it off until their owner turns it on.
 
 ## Start here
 

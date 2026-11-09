@@ -29,6 +29,8 @@ use super::{
 
 /// How long a pairing stays claimable.
 const PAIRING_TTL_MINUTES: i64 = 15;
+/// Whether a bought computer starts with permission prompts skipped.
+const HOSTED_PERMISSION_BYPASS: bool = true;
 /// Suggested delay between claim polls.
 const POLL_INTERVAL_SECONDS: u64 = 5;
 /// Cap on open pairings across the deployment; pairing is a human-paced flow.
@@ -530,7 +532,11 @@ where
                     expires_at: Utc::now() + Duration::minutes(PAIRING_TTL_MINUTES),
                 },
                 NewHarness {
-                    allow_permission_bypass: req.allow_permission_bypass,
+                    // A bought computer is the team's own isolated VM, run
+                    // for agents: it starts with "Don't ask before acting"
+                    // on. Paired machines keep asking until their owner
+                    // turns it on.
+                    allow_permission_bypass: HOSTED_PERMISSION_BYPASS,
                     id: HarnessId::new_from_uuid(Uuid::now_v7()),
                     name,
                     owner: HarnessOwner::User {

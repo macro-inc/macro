@@ -130,8 +130,7 @@ pub struct ClaudeSignInStarted {
 /// `POST /harnesses/{harness_id}/claude-sign-in/complete` body.
 #[derive(Debug, serde::Deserialize, utoipa::ToSchema)]
 pub struct ClaudeSignInComplete {
-    /// The code Claude showed, or the `http://localhost:<port>/callback?...`
-    /// address the browser could not open.
+    /// The code Claude showed after the user signed in.
     pub code: String,
 }
 
@@ -141,6 +140,8 @@ pub struct ClaudeSignInComplete {
 pub struct ClaudeSignedIn {
     /// Always `true`.
     pub signed_in: bool,
+    /// The Claude account's email address, when Claude reports one.
+    pub account: Option<String>,
 }
 
 /// How Claude Code on a computer is paid for.
@@ -216,8 +217,11 @@ where
     state
         .authorize_computer(caller, path.harness_id, HarnessPermission::Manage)
         .await?;
-    state.complete_sign_in(path.harness_id, body.code).await?;
-    Ok(Json(ClaudeSignedIn { signed_in: true }))
+    let account = state.complete_sign_in(path.harness_id, body.code).await?;
+    Ok(Json(ClaudeSignedIn {
+        signed_in: true,
+        account,
+    }))
 }
 
 /// Cancel the pending setup-token process. Its terminal completion releases
@@ -339,7 +343,7 @@ where
         &self,
         harness_id: HarnessId,
         code: String,
-    ) -> Result<(), ComputerRouteError> {
+    ) -> Result<Option<String>, ComputerRouteError> {
         let account_change = bus::AccountChange::claim(&self.redis, harness_id, &self.cleanup)
             .await?
             .cancel_on_drop(self.control.clone(), harness_id);
@@ -355,11 +359,11 @@ where
                         .send(harness_id, ComputerCommand::ClaudeSignInComplete { code })
                         .await?
                     {
-                        ComputerControlResult::SignedIn => {
+                        ComputerControlResult::SignedIn { account } => {
                             harnesses
                                 .set_claude_mode(harness_id, ClaudeMode::OwnAccount)
                                 .await?;
-                            Ok(())
+                            Ok(account)
                         }
                         other => Err(ComputerRouteError::from_result(other)),
                     };

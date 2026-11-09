@@ -219,7 +219,7 @@ token = "mhns_claimed"
 }
 
 #[tokio::test]
-async fn an_enrolled_computer_refreshes_only_its_privileged_token_store() {
+async fn an_enrolled_computer_is_left_alone() {
     let directory = tempfile::tempdir().expect("temp dir");
     let marker = directory.path().join("var/lib/macrod/enrolled");
     std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
@@ -241,21 +241,7 @@ async fn an_enrolled_computer_refreshes_only_its_privileged_token_store() {
     .await
     .unwrap();
     assert_eq!(std::fs::read_to_string(config).unwrap(), "existing config");
-    assert_eq!(
-        host.calls.into_inner(),
-        [
-            "systemctl daemon-reload",
-            "systemctl enable --now macrod-token-store.service",
-        ]
-    );
-    let unit = std::fs::read_to_string(
-        directory
-            .path()
-            .join("etc/systemd/system/macrod-token-store.service"),
-    )
-    .unwrap();
-    assert!(unit.contains("User=root\n"));
-    assert!(unit.contains("computer-token-store --owner "));
+    assert!(host.calls.into_inner().is_empty());
 }
 
 #[tokio::test]

@@ -987,7 +987,6 @@ fn hosted_request() -> CreateHostedPairing {
         team_id: TEAM_ID,
         name: "  Standard computer  ".to_owned(),
         created_by: caller(OWNER_ID),
-        allow_permission_bypass: true,
         computer_id: COMPUTER_ID,
     }
 }
@@ -1024,6 +1023,7 @@ async fn hosted_pairing_registers_an_approved_team_harness_past_the_throttle() {
     assert_eq!(new_harness.name, "Standard computer");
     assert_eq!(new_harness.owner, user_owner(OWNER_ID));
     assert_eq!(new_harness.created_by.as_ref(), OWNER_ID);
+    // Bought computers start with "Don't ask before acting" on.
     assert!(new_harness.allow_permission_bypass);
     assert_eq!(new_harness.computer_id, Some(COMPUTER_ID));
 }
@@ -1163,16 +1163,16 @@ async fn capability_reports_reach_the_repo_and_unknown_harnesses_are_not_found()
         ..FakeRepo::default()
     };
     service(repo.clone())
-        .report_capabilities(HarnessId::TEST_A, HarnessCapabilities { screen: true })
+        .report_capabilities(HarnessId::TEST_A, HarnessCapabilities { screen: true, claude: None })
         .await
         .unwrap();
     assert_eq!(
         repo.calls.lock().unwrap().capability_reports,
-        [(HarnessId::TEST_A, HarnessCapabilities { screen: true })]
+        [(HarnessId::TEST_A, HarnessCapabilities { screen: true, claude: None })]
     );
 
     let result = service(FakeRepo::default())
-        .report_capabilities(HarnessId::TEST_A, HarnessCapabilities { screen: true })
+        .report_capabilities(HarnessId::TEST_A, HarnessCapabilities { screen: true, claude: None })
         .await;
     assert!(matches!(result, Err(HarnessError::NotFound(_))));
 }

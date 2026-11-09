@@ -146,7 +146,6 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
     };
     let marker = paths.at(ENROLLED_MARKER);
     if marker.exists() {
-        install_token_store(&options.config, &paths, host)?;
         tracing::info!(marker = %marker.display(), "already enrolled");
         return Ok(());
     }
@@ -191,7 +190,6 @@ async fn enroll(
         std::fs::create_dir_all(parent)
             .context(format!("could not create {}", parent.display()))?;
     }
-    install_token_store(&options.config, paths, host)?;
     if let Some(parent) = &enrollment.traceparent {
         write_file(
             &paths.at(crate::telemetry::PROVISION_PARENT_PATH),
@@ -202,26 +200,6 @@ async fn enroll(
     std::fs::write(marker, enrollment.computer_id.to_string())
         .context(format!("could not write {}", marker.display()))?;
     tracing::info!("enrolled");
-    Ok(())
-}
-
-/// Keep only the persistence helper privileged; Claude runs as the config owner.
-fn install_token_store(
-    config: &Path,
-    paths: &SystemPaths,
-    host: &impl Host,
-) -> rootcause::Result<()> {
-    let owner = std::fs::metadata(config)
-        .context("could not identify the daemon user")?
-        .uid();
-    let unit = include_str!("computer/token_store.service").replace("{owner}", &owner.to_string());
-    write_file(
-        &paths.at("/etc/systemd/system/macrod-token-store.service"),
-        &unit,
-        0o644,
-    )?;
-    host.systemctl(&["daemon-reload"])?;
-    host.systemctl(&["enable", "--now", "macrod-token-store.service"])?;
     Ok(())
 }
 

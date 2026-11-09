@@ -168,6 +168,26 @@ pub enum HarnessPermission {
 pub struct HarnessCapabilities {
     /// A display Macro can stream (Xvnc on `127.0.0.1:5900`).
     pub screen: bool,
+    /// The Claude account Claude Code on a Macro computer is signed in to;
+    /// absent where macrod does not manage Claude.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub claude: Option<ClaudeAccount>,
+}
+
+/// Claude Code's sign-in on a Macro computer, as `claude auth status` reports it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum ClaudeAccount {
+    /// No Claude account; sessions run on Macro credits.
+    SignedOut,
+    /// Signed in to a Claude account.
+    SignedIn {
+        /// The account's email address, when Claude reports one.
+        account: Option<String>,
+        /// When the sign-in stops refreshing and must be repeated.
+        expires_at: Option<DateTime<Utc>>,
+    },
 }
 
 /// A pre-approved pairing for a Macro computer, minted by the control plane.
@@ -180,8 +200,6 @@ pub struct CreateHostedPairing {
     pub name: String,
     /// The team admin who bought the computer.
     pub created_by: MacroUserIdStr<'static>,
-    /// Whether agents may bypass ACP permission requests on this harness.
-    pub allow_permission_bypass: bool,
     /// The computer the harness runs on.
     pub computer_id: ComputerId,
 }

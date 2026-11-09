@@ -115,6 +115,7 @@ impl Daemon {
         } else {
             None
         };
+        let computer_for_reports = computer.clone();
         let runtime = Runtime::start(
             &config.macro_api,
             &credentials,
@@ -154,6 +155,7 @@ impl Daemon {
             crate::capabilities::spawn_reporter(
                 &config.macro_api,
                 &credentials,
+                computer_for_reports,
                 cancel.clone(),
                 &background,
             )?;

@@ -16,6 +16,7 @@ const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
 /// The box image's Xvnc display.
 pub const SCREEN_ADDRESS: &str = "127.0.0.1:5900";
 const PROBE_TIMEOUT: Duration = Duration::from_secs(1);
+/// How often the screen and Claude sign-in are probed again.
 const SCREEN_INTERVAL: Duration = Duration::from_secs(60);
 const REPORT_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -39,6 +40,7 @@ pub fn is_macro_computer() -> bool {
 pub fn spawn_reporter(
     config: &MacroApi,
     credentials: &HarnessCredentials,
+    computer: Option<std::sync::Arc<crate::computer::Computer>>,
     cancel: CancellationToken,
     tasks: &TaskTracker,
 ) -> rootcause::Result<()> {
@@ -58,7 +60,20 @@ pub fn spawn_reporter(
         let mut interval = tokio::time::interval(SCREEN_INTERVAL);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         loop {
-            interval.tick().await;
+            match &computer {
+                // A sign-in or sign-out reports at once, not a minute later.
+                Some(computer) => tokio::select! {
+                    _ = interval.tick() => {
+                        current.claude = Some(computer.refresh_claude_auth().await.0);
+                    }
+                    () = computer.claude_auth_changed() => {
+                        current.claude = Some(computer.claude_auth().0);
+                    }
+                },
+                None => {
+                    interval.tick().await;
+                }
+            }
             current.screen = listening(SCREEN_ADDRESS).await;
             if reported.as_ref() != Some(&current) {
                 match report(&http, &url, &token, &current, setup_parent).await {

@@ -1,24 +1,27 @@
-//! Signing a Claude account in on a Macro computer: `claude setup-token` in a
-//! hidden terminal. It prints an OAuth URL the user opens in their own
-//! browser; the user then pastes back either the code Claude shows them or,
-//! when Claude redirects to the computer's localhost (which their browser
-//! cannot reach), that callback URL, which macrod opens inside the computer.
-//! Either way `setup-token` prints a long-lived OAuth token.
+//! Signing a Claude account in on a Macro computer: Claude Code's own
+//! interactive login, run in a herdr pane anyone on the computer can watch.
+//!
+//! macrod starts `claude` in a fresh herdr workspace, answers its first-run
+//! questions, and runs `/login` when it opens already onboarded. Claude prints
+//! a sign-in URL that the user opens in their own browser; the code Claude
+//! shows them there comes back through Macro and macrod types it into the
+//! pane. Claude Code then keeps its own credential, which every later
+//! session on the computer uses.
 
 use std::path::Path;
 use std::time::Duration;
 
-use reqwest::Url;
-use rootcause::prelude::ResultExt as _;
+use super::claude_auth::{self, ClaudeAuth};
+use super::herdr_pane::{Herdr, Pane};
 
-use super::pty::Pty;
-
-/// How long `setup-token` may take to print its URL, and then its token.
-const URL_TIMEOUT: Duration = Duration::from_secs(30);
-const TOKEN_TIMEOUT: Duration = Duration::from_secs(60);
-const CALLBACK_TIMEOUT: Duration = Duration::from_secs(30);
+/// How long Claude may take to reach its sign-in URL, and then to accept a code.
+const URL_TIMEOUT: Duration = Duration::from_secs(45);
+const COMPLETE_TIMEOUT: Duration = Duration::from_secs(60);
+const SCREEN_POLL: Duration = Duration::from_millis(500);
 /// Longest pasted code accepted; real ones are far shorter.
 const MAX_CODE_CHARS: usize = 512;
+/// The herdr workspace label people see.
+pub const WORKSPACE_LABEL: &str = "Claude sign-in";
 
 /// A rejected code is distinct from a silent or broken CLI.
 #[derive(Debug, thiserror::Error)]
@@ -31,146 +34,200 @@ pub(super) enum CompleteError {
     Internal(rootcause::Report),
 }
 
-/// A `claude setup-token` waiting for the user.
+/// What Claude Code's screen asks for, from what it shows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Screen {
+    /// First run: the text style picker. Enter takes the default.
+    ThemePicker,
+    /// The login method picker; the subscription login is the first choice.
+    LoginMethod { subscription_selected: bool },
+    /// The sign-in URL, waiting for the pasted code.
+    AwaitingCode { url: String },
+    /// Claude rejected the code.
+    OAuthError,
+    /// The login finished.
+    LoggedIn,
+    /// The folder trust question; Yes is the second choice.
+    TrustFolder,
+    /// The ordinary prompt, where `/login` starts a login.
+    Prompt,
+    /// Anything else, such as Claude still starting.
+    Unknown,
+}
+
+impl Screen {
+    pub(super) fn read(screen: &str) -> Self {
+        if screen.contains("OAuth error") {
+            return Self::OAuthError;
+        }
+        if screen.contains("Login successful") || screen.contains("Logged in as") {
+            return Self::LoggedIn;
+        }
+        if let Some(url) = sign_in_url(screen) {
+            return Self::AwaitingCode { url };
+        }
+        if screen.contains("Select login method") {
+            return Self::LoginMethod {
+                subscription_selected: screen
+                    .lines()
+                    .any(|line| line.trim_start().starts_with("❯ 1.")),
+            };
+        }
+        if screen.contains("Choose the text style") {
+            return Self::ThemePicker;
+        }
+        if screen.contains("Yes, I trust this folder") {
+            return Self::TrustFolder;
+        }
+        if screen.lines().any(|line| line.trim_start().starts_with('❯')) {
+            return Self::Prompt;
+        }
+        Self::Unknown
+    }
+}
+
+/// The OAuth URL on the screen. Claude hard-wraps it to the pane's width,
+/// so its lines run up to the first blank line.
+pub(super) fn sign_in_url(screen: &str) -> Option<String> {
+    let mut lines = screen.lines().skip_while(|line| !line.trim_start().starts_with("https://"));
+    let mut url = lines.next()?.trim().to_owned();
+    for line in lines {
+        let line = line.trim();
+        if line.is_empty() || line.contains(' ') {
+            break;
+        }
+        url.push_str(line);
+    }
+    url.contains("/oauth/authorize?").then_some(url)
+}
+
+/// A pasted code, checked before it is typed into a terminal.
+pub(super) fn pasted_code(pasted: &str) -> Result<&str, CompleteError> {
+    let code = pasted.trim();
+    if code.is_empty()
+        || code.chars().count() > MAX_CODE_CHARS
+        || code
+            .chars()
+            .any(|character| character.is_whitespace() || character.is_control())
+    {
+        return Err(CompleteError::Internal(rootcause::report!(
+            "paste the code Claude showed you"
+        )));
+    }
+    Ok(code)
+}
+
+/// A Claude login waiting in its herdr pane.
 pub struct SignIn {
-    pty: Pty,
-    http: reqwest::Client,
+    pane: Option<Pane>,
+    claude: std::path::PathBuf,
 }
 
 impl SignIn {
-    /// Start `setup-token`.
-    pub fn spawn(claude: &Path) -> rootcause::Result<Self> {
-        let http = reqwest::Client::builder()
-            .timeout(CALLBACK_TIMEOUT)
-            .redirect(reqwest::redirect::Policy::none())
-            .no_proxy()
-            .build()
-            .context("could not build the callback client")?;
+    /// Open the pane and start Claude Code in `cwd`.
+    pub async fn spawn(herdr: &Herdr, claude: &Path, cwd: &Path) -> rootcause::Result<Self> {
+        herdr.ensure_server().await?;
+        let pane = herdr.open_workspace(WORKSPACE_LABEL, cwd).await?;
+        // The login is for this computer's own account, never a key in the
+        // environment macrod inherited.
+        let command = format!(
+            "env -u ANTHROPIC_API_KEY -u ANTHROPIC_AUTH_TOKEN -u ANTHROPIC_BASE_URL -u CLAUDE_CODE_OAUTH_TOKEN {}",
+            shell_words::quote(&claude.to_string_lossy())
+        );
+        pane.run(&command).await?;
         Ok(Self {
-            pty: Pty::spawn(claude, &["setup-token"])?,
-            http,
+            pane: Some(pane),
+            claude: claude.to_owned(),
         })
     }
 
-    /// The URL the user signs in at.
+    fn pane(&self) -> rootcause::Result<&Pane> {
+        self.pane
+            .as_ref()
+            .ok_or_else(|| rootcause::report!("the sign-in pane is closed"))
+    }
+
+    /// Answer Claude's questions until it shows the sign-in URL.
     pub async fn url(&mut self) -> rootcause::Result<String> {
-        tokio::time::timeout(URL_TIMEOUT, self.pty.wait_for(sign_in_url))
-            .await
-            .map_err(|_| rootcause::report!("claude setup-token printed no sign-in URL in time"))?
-    }
-
-    /// Finish with what the user pasted and return the OAuth token.
-    pub async fn complete(&mut self, pasted: &str) -> Result<String, CompleteError> {
-        match Pasted::parse(pasted).map_err(CompleteError::Internal)? {
-            Pasted::Callback(url) => open_callback(&self.http, url)
-                .await
-                .map_err(CompleteError::Internal)?,
-            Pasted::Code(code) => self.pty.type_line(&code).map_err(CompleteError::Internal)?,
-        }
-        tokio::time::timeout(TOKEN_TIMEOUT, self.pty.wait_for(token_result))
-            .await
-            .map_err(|_| CompleteError::Timeout)?
-            .map_err(CompleteError::Internal)?
-    }
-}
-
-/// Open the localhost callback `setup-token` is listening on.
-#[tracing::instrument(name = "macrod.claude.callback", skip_all, err)]
-async fn open_callback(http: &reqwest::Client, url: Url) -> rootcause::Result<()> {
-    let response = http
-        .get(url)
-        .send()
-        .await
-        .map_err(|_| rootcause::report!("could not reach claude setup-token's callback"))?;
-    if !response.status().is_success() && !response.status().is_redirection() {
-        rootcause::bail!(
-            "claude setup-token's callback answered {}",
-            response.status()
-        );
-    }
-    Ok(())
-}
-
-/// What the user pasted back.
-#[derive(Debug, PartialEq, Eq)]
-pub(super) enum Pasted {
-    /// A `http://localhost:<port>/callback?code=...` URL.
-    Callback(Url),
-    /// The code Claude showed them.
-    Code(String),
-}
-
-impl Pasted {
-    pub(super) fn parse(pasted: &str) -> rootcause::Result<Self> {
-        let pasted = pasted.trim();
-        if let Ok(url) = Url::parse(pasted)
-            && url.scheme().starts_with("http")
-        {
-            let local = matches!(url.host_str(), Some("localhost" | "127.0.0.1"));
-            let has_code = url
-                .query_pairs()
-                .any(|(key, value)| key == "code" && !value.is_empty());
-            if url.scheme() == "http"
-                && local
-                && url.port().is_some()
-                && url.username().is_empty()
-                && url.password().is_none()
-                && has_code
-            {
-                return Ok(Self::Callback(url));
+        let pane = self.pane()?;
+        tokio::time::timeout(URL_TIMEOUT, async {
+            let mut asked_login = false;
+            loop {
+                match Screen::read(&pane.screen().await?) {
+                    Screen::AwaitingCode { url } => return Ok(url),
+                    Screen::ThemePicker => pane.press(&["enter"]).await?,
+                    Screen::LoginMethod {
+                        subscription_selected: true,
+                    } => pane.press(&["enter"]).await?,
+                    Screen::LoginMethod {
+                        subscription_selected: false,
+                    } => pane.press(&["up"]).await?,
+                    Screen::TrustFolder => pane.press(&["down", "enter"]).await?,
+                    Screen::Prompt if !asked_login => {
+                        pane.type_text("/login").await?;
+                        pane.press(&["enter"]).await?;
+                        asked_login = true;
+                    }
+                    Screen::OAuthError => pane.press(&["enter"]).await?,
+                    Screen::Prompt | Screen::LoggedIn | Screen::Unknown => {}
+                }
+                tokio::time::sleep(SCREEN_POLL).await;
             }
-            rootcause::bail!("that link is not Claude's localhost sign-in callback");
-        }
-        if pasted.is_empty()
-            || pasted.chars().count() > MAX_CODE_CHARS
-            || pasted
-                .chars()
-                .any(|character| character.is_whitespace() || character.is_control())
+        })
+        .await
+        .map_err(|_| rootcause::report!("Claude Code showed no sign-in URL in time"))?
+    }
+
+    /// Type the pasted code and wait for Claude to accept or reject it.
+    pub async fn complete(&mut self, pasted: &str) -> Result<ClaudeAuth, CompleteError> {
+        let code = pasted_code(pasted)?;
+        let pane = self.pane().map_err(CompleteError::Internal)?;
+        pane.type_text(code).await.map_err(CompleteError::Internal)?;
+        pane.press(&["enter"]).await.map_err(CompleteError::Internal)?;
+        let outcome = tokio::time::timeout(COMPLETE_TIMEOUT, async {
+            loop {
+                let screen = pane.screen().await.map_err(CompleteError::Internal)?;
+                match Screen::read(&screen) {
+                    Screen::OAuthError => return Err(CompleteError::InvalidCode),
+                    Screen::LoggedIn | Screen::TrustFolder | Screen::Prompt => {
+                        let auth = claude_auth::status(&self.claude)
+                            .await
+                            .map_err(CompleteError::Internal)?;
+                        if auth.is_signed_in() {
+                            return Ok(auth);
+                        }
+                    }
+                    _ => {}
+                }
+                tokio::time::sleep(SCREEN_POLL).await;
+            }
+        })
+        .await
+        .map_err(|_| CompleteError::Timeout)?;
+        outcome
+    }
+
+    /// Close the pane, ending Claude Code in it.
+    pub async fn close(mut self) {
+        if let Some(pane) = self.pane.take()
+            && let Err(error) = pane.close().await
         {
-            rootcause::bail!("paste the code Claude showed you, or the page's full address");
+            tracing::warn!(error = ?error, "could not close the Claude sign-in pane");
         }
-        Ok(Self::Code(pasted.to_owned()))
     }
 }
 
-/// The OAuth URL in `setup-token`'s output so far.
-pub(super) fn sign_in_url(output: &str) -> Option<String> {
-    let visible = strip_terminal_codes(output);
-    lazy_regex::regex!(
-        r#"(https://[A-Za-z0-9.\-]+/[^\s"'<>]*oauth/authorize\?[^\s"'<>]+)[\r\n\t ]"#
-    )
-    .captures(&visible)?
-    .get(1)
-    .map(|url| url.as_str().to_owned())
-}
-
-/// The long-lived OAuth token in `setup-token`'s output so far.
-pub(super) fn oauth_token(output: &str) -> Option<String> {
-    let visible = strip_terminal_codes(output);
-    lazy_regex::regex!(r"(sk-ant-oat01-[A-Za-z0-9_\-]{20,})[\r\n\t ]")
-        .captures(&visible)?
-        .get(1)
-        .map(|token| token.as_str().to_owned())
-}
-
-/// Rejections from the OAuth flow in the pinned Claude Code 2.1.214 binary
-/// (nixpkgs in flake.lock). Keep the provider's phrases together and do not
-/// match generic "expired" text, which also appears in successful output.
-fn token_result(output: &str) -> Option<Result<String, CompleteError>> {
-    let visible = strip_terminal_codes(output);
-    if lazy_regex::regex!(
-        r"(?i)\b(?:Invalid code\. Please make sure the full code was copied|Authentication failed: Invalid authorization code|OAuth error:|OAuth state mismatch)"
-    ).is_match(&visible) {
-        return Some(Err(CompleteError::InvalidCode));
+impl Drop for SignIn {
+    fn drop(&mut self) {
+        let Some(pane) = self.pane.take() else {
+            return;
+        };
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            runtime.spawn(async move {
+                if let Err(error) = pane.close().await {
+                    tracing::warn!(error = ?error, "could not close an abandoned Claude sign-in pane");
+                }
+            });
+        }
     }
-    oauth_token(output).map(Ok)
-}
-
-/// Terminal output without escape sequences: CSI (colors, cursor moves) and
-/// OSC (titles, hyperlinks, whose visible text stays).
-pub(super) fn strip_terminal_codes(output: &str) -> String {
-    let without_osc =
-        lazy_regex::regex_replace_all!(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)", output, "");
-    lazy_regex::regex_replace_all!(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b[@-Z\\-_]", &without_osc, "")
-        .into_owned()
 }

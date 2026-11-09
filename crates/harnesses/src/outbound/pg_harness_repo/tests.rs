@@ -703,7 +703,7 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
         }
     );
     assert_eq!(row.computer_id, Some(computer_id));
-    assert_eq!(row.capabilities, HarnessCapabilities { screen: false });
+    assert_eq!(row.capabilities, HarnessCapabilities { screen: false, claude: None });
     assert_eq!(
         repo.computer_harness(computer_id).await.unwrap(),
         Some(harness_id)
@@ -713,7 +713,7 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
         Some(computer_id)
     );
 
-    repo.set_capabilities(harness_id, HarnessCapabilities { screen: true })
+    repo.set_capabilities(harness_id, HarnessCapabilities { screen: true, claude: None })
         .await
         .unwrap();
     repo.set_claude_mode(harness_id, ClaudeMode::OwnAccount)
@@ -739,7 +739,7 @@ async fn hosted_pairing_is_born_approved_rotates_on_retry_and_claims_once(pool: 
         }
     );
     assert_eq!(renamed.computer_id, Some(computer_id));
-    assert_eq!(renamed.capabilities, HarnessCapabilities { screen: true });
+    assert_eq!(renamed.capabilities, HarnessCapabilities { screen: true, claude: None });
     assert_eq!(renamed.claude_mode, ClaudeMode::OwnAccount);
 
     // A retry keeps the pairing and harness and takes the new secret.
@@ -973,10 +973,13 @@ async fn capabilities_replace_the_previous_report(pool: PgPool) {
     .unwrap();
 
     let fresh = repo.get_harness(harness_id).await.unwrap().unwrap();
-    assert_eq!(fresh.capabilities, HarnessCapabilities { screen: false });
+    assert_eq!(fresh.capabilities, HarnessCapabilities { screen: false, claude: None });
     assert_eq!(fresh.computer_id, None);
 
-    let capabilities = HarnessCapabilities { screen: true };
+    let capabilities = HarnessCapabilities {
+        screen: true,
+        claude: Some(harnesses_claude_account()),
+    };
     assert!(
         repo.set_capabilities(harness_id, capabilities.clone())
             .await
@@ -1002,7 +1005,7 @@ async fn capabilities_replace_the_previous_report(pool: PgPool) {
     assert!(repo.delete_harness(harness_id).await.unwrap());
     assert!(
         !repo
-            .set_capabilities(harness_id, HarnessCapabilities { screen: false })
+            .set_capabilities(harness_id, HarnessCapabilities { screen: false, claude: None })
             .await
             .unwrap()
     );
@@ -1244,4 +1247,11 @@ async fn a_reader_sees_a_runtime_but_cannot_run_on_it(pool: PgPool) {
         repo.list_directory_harnesses(user(OWNER_ID)).await.unwrap()[0].access,
         HarnessAccess::Read
     );
+}
+
+fn harnesses_claude_account() -> crate::domain::models::ClaudeAccount {
+    crate::domain::models::ClaudeAccount::SignedIn {
+        account: Some("team@example.com".to_owned()),
+        expires_at: Some("2027-01-01T00:00:00Z".parse().unwrap()),
+    }
 }

@@ -3,10 +3,11 @@
 //!
 //! A computer starts on Macro credits: every `session/new`, `session/load`
 //! and `session/resume` gets Claude Code pointed at Macro's Anthropic gateway,
-//! derived from the session's `macro_internal` MCP server. After a Claude
-//! sign-in the stored OAuth token replaces that, for sessions opened from then
-//! on; signing out deletes the token and returns to credits. The env reaches
-//! Claude Code through the ACP adapter's `_meta.claudeCode.options.env`.
+//! derived from the session's `macro_internal` MCP server. A Claude sign-in
+//! (Claude Code's own `/login`, in a herdr pane) leaves its credential where
+//! Claude Code keeps it, and sessions opened from then on use that account
+//! instead; signing out returns to credits. The env reaches Claude Code
+//! through the ACP adapter's `_meta.claudeCode.options.env`.
 
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
@@ -17,14 +18,14 @@ use tokio_util::sync::CancellationToken;
 
 use crate::config::{Harness, MacroApi};
 
+pub(crate) mod claude_auth;
 #[cfg(unix)]
 mod claude_sign_in;
-#[cfg(unix)]
-mod pty;
+mod herdr_pane;
 #[cfg(test)]
 mod test;
-#[cfg(unix)]
-pub(crate) mod token_store;
+
+pub(crate) use claude_auth::ClaudeAuth;
 
 /// `agent_harness::domain::model::INTERNAL_MCP_NAME`, which macrod cannot
 /// depend on.
@@ -34,16 +35,19 @@ const INTERNAL_MCP_PATH: &str = "/mcp/internal";
 const ANTHROPIC_GATEWAY_PATH: &str = "/anthropic";
 /// ACP methods that start a Claude Code query.
 const SESSION_METHODS: &[&str] = &["session/new", "session/load", "session/resume"];
+/// The home directory the sign-in pane opens in.
+const SIGN_IN_DIRECTORY: &str = "/home/macro";
 
 /// A Macro computer's runtime-side state, shared by every bridge.
 pub struct Computer {
     workspace: PathBuf,
     egress_url: Option<String>,
-    #[cfg(unix)]
-    token_store: token_store::TokenStore,
-    /// The signed-in Claude account's token, when there is one.
-    oauth_token: RwLock<Option<String>>,
+    /// Claude Code's sign-in, as last read or changed.
+    auth: RwLock<ClaudeAuth>,
+    /// Woken whenever `auth` changes, so the capability report follows.
+    auth_changed: tokio::sync::Notify,
     claude_program: PathBuf,
+    herdr: herdr_pane::Herdr,
     #[cfg(unix)]
     sign_in: tokio::sync::Mutex<Option<claude_sign_in::SignIn>>,
     #[cfg(unix)]
@@ -59,30 +63,71 @@ impl Computer {
         workspace: &std::path::Path,
         cancel: CancellationToken,
     ) -> rootcause::Result<Arc<Self>> {
-        #[cfg(unix)]
-        let token_store = token_store::TokenStore::new();
-        #[cfg(unix)]
-        let oauth_token = token_store.load().await?;
-        #[cfg(not(unix))]
-        let oauth_token = None;
         // The Claude Code preset names the installed CLI for its adapter.
         let claude_program = harness
             .env
             .get("CLAUDE_CODE_EXECUTABLE")
             .map_or_else(|| PathBuf::from("claude"), PathBuf::from);
+        let auth = claude_auth::status(&claude_program)
+            .await
+            .inspect_err(|error| tracing::warn!(error = ?error, "could not read the Claude sign-in"))
+            .unwrap_or(ClaudeAuth(harnesses::domain::models::ClaudeAccount::SignedOut));
         Ok(Arc::new(Self {
             workspace: workspace.to_owned(),
             egress_url: macro_api.egress_url.clone(),
-            #[cfg(unix)]
-            token_store,
-            oauth_token: RwLock::new(oauth_token),
+            auth: RwLock::new(auth),
+            auth_changed: tokio::sync::Notify::new(),
             claude_program,
+            herdr: herdr_pane::Herdr::new("herdr"),
             #[cfg(unix)]
             sign_in: tokio::sync::Mutex::new(None),
             #[cfg(unix)]
             sign_in_cancel: RwLock::new(CancellationToken::new()),
             cancel,
         }))
+    }
+
+    /// Claude Code's sign-in, as last read or changed.
+    pub fn claude_auth(&self) -> ClaudeAuth {
+        self.auth
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
+    }
+
+    /// Read Claude Code's sign-in again, catching expiry or a sign-out made
+    /// in a terminal on the computer.
+    pub async fn refresh_claude_auth(&self) -> ClaudeAuth {
+        match claude_auth::status(&self.claude_program).await {
+            Ok(auth) => {
+                self.set_auth(auth.clone());
+                auth
+            }
+            Err(error) => {
+                tracing::warn!(error = ?error, "could not read the Claude sign-in");
+                self.claude_auth()
+            }
+        }
+    }
+
+    /// Wait until the sign-in changes.
+    pub async fn claude_auth_changed(&self) {
+        self.auth_changed.notified().await;
+    }
+
+    fn set_auth(&self, auth: ClaudeAuth) {
+        let changed = {
+            let mut current = self
+                .auth
+                .write()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let changed = *current != auth;
+            *current = auth;
+            changed
+        };
+        if changed {
+            self.auth_changed.notify_waiters();
+        }
     }
 
     /// Run one command from the service.
@@ -111,33 +156,39 @@ impl Computer {
     /// Point a Claude Code session at the signed-in account or the gateway.
     /// Leaves anything but a session-starting request alone.
     pub fn prepare_session(&self, frame: &mut Value) -> rootcause::Result<()> {
-        let token = self
-            .oauth_token
-            .read()
-            .map(|token| token.clone())
-            .unwrap_or_else(|poisoned| poisoned.into_inner().clone());
         prepare_session(
             frame,
-            token.as_deref(),
+            self.claude_auth().is_signed_in(),
             &self.workspace,
             self.egress_url.as_deref(),
         )
     }
 
     #[cfg(unix)]
+    #[tracing::instrument(name = "macrod.claude.sign_in.start", skip_all, err)]
     async fn start_sign_in(&self) -> rootcause::Result<ComputerControlResult> {
         let mut slot = self.sign_in.lock().await;
         // A new start abandons whatever sign-in was waiting.
-        slot.take();
+        if let Some(previous) = slot.take() {
+            previous.close().await;
+        }
         let cancel = CancellationToken::new();
         *self
             .sign_in_cancel
             .write()
             .unwrap_or_else(|poisoned| poisoned.into_inner()) = cancel.clone();
-        let mut sign_in = claude_sign_in::SignIn::spawn(&self.claude_program)?;
+        let mut sign_in = claude_sign_in::SignIn::spawn(
+            &self.herdr,
+            &self.claude_program,
+            std::path::Path::new(SIGN_IN_DIRECTORY),
+        )
+        .await?;
         let url = tokio::select! {
             biased;
-            () = cancel.cancelled() => return Ok(ComputerControlResult::SignInCancelled),
+            () = cancel.cancelled() => {
+                sign_in.close().await;
+                return Ok(ComputerControlResult::SignInCancelled);
+            }
             url = sign_in.url() => url?,
         };
         *slot = Some(sign_in);
@@ -145,16 +196,13 @@ impl Computer {
     }
 
     #[cfg(unix)]
+    #[tracing::instrument(name = "macrod.claude.sign_in.complete", skip_all, err)]
     async fn complete_sign_in(&self, code: &str) -> rootcause::Result<ComputerControlResult> {
         let mut slot = self.sign_in.lock().await;
-        if slot.is_none()
-            && self
-                .oauth_token
-                .read()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .is_some()
-        {
-            return Ok(ComputerControlResult::SignedIn);
+        if slot.is_none() && self.claude_auth().is_signed_in() {
+            return Ok(ComputerControlResult::SignedIn {
+                account: self.claude_auth().account(),
+            });
         }
         let mut sign_in = slot
             .take()
@@ -166,88 +214,48 @@ impl Computer {
             .clone();
         let completed = tokio::select! {
             biased;
-            () = cancel.cancelled() => return Ok(ComputerControlResult::SignInCancelled),
+            () = cancel.cancelled() => {
+                sign_in.close().await;
+                return Ok(ComputerControlResult::SignInCancelled);
+            }
             completed = sign_in.complete(code) => completed,
         };
-        let token = match completed {
-            Ok(token) => token,
+        sign_in.close().await;
+        let auth = match completed {
+            Ok(auth) => auth,
             Err(claude_sign_in::CompleteError::InvalidCode) => {
                 return Ok(ComputerControlResult::InvalidCode);
             }
             Err(error) => return Err(rootcause::report!("{error}")),
         };
-        let previous = self
-            .oauth_token
-            .read()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone();
-        let persisted =
-            persist_sign_in(&self.token_store, &cancel, &token, previous.as_deref()).await?;
-        if matches!(persisted, ComputerControlResult::SignInCancelled) {
-            return Ok(persisted);
-        }
-        slot.take();
-        *self
-            .oauth_token
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(token);
+        let account = auth.account();
+        self.set_auth(auth);
         tracing::info!("Claude account signed in");
-        Ok(ComputerControlResult::SignedIn)
+        Ok(ComputerControlResult::SignedIn { account })
     }
 
     #[cfg(unix)]
     async fn cancel_sign_in(&self) -> rootcause::Result<ComputerControlResult> {
-        // Signal before locking: complete holds the slot while awaiting PTY output.
+        // Signal before locking: complete holds the slot while it waits on Claude.
         self.sign_in_cancel
             .read()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .cancel();
-        self.sign_in.lock().await.take();
+        if let Some(sign_in) = self.sign_in.lock().await.take() {
+            sign_in.close().await;
+        }
         Ok(ComputerControlResult::SignInCancelled)
     }
 
     #[cfg(unix)]
+    #[tracing::instrument(name = "macrod.claude.sign_out", skip_all, err)]
     async fn sign_out(&self) -> rootcause::Result<ComputerControlResult> {
         self.cancel_sign_in().await?;
-        self.token_store.delete().await?;
-        *self
-            .oauth_token
-            .write()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+        claude_auth::sign_out(&self.claude_program).await?;
+        self.set_auth(ClaudeAuth(harnesses::domain::models::ClaudeAccount::SignedOut));
         tracing::info!("Claude account signed out");
         Ok(ComputerControlResult::SignedOut)
     }
-}
-
-/// Persistence must finish or compensate before cancellation can be acknowledged.
-#[cfg(unix)]
-trait SignInTokenStore {
-    fn store(&self, token: Option<&str>) -> impl Future<Output = rootcause::Result<()>> + Send;
-}
-
-#[cfg(unix)]
-impl SignInTokenStore for token_store::TokenStore {
-    async fn store(&self, token: Option<&str>) -> rootcause::Result<()> {
-        match token {
-            Some(token) => self.save(token.to_owned()).await,
-            None => self.delete().await,
-        }
-    }
-}
-
-#[cfg(unix)]
-async fn persist_sign_in(
-    store: &impl SignInTokenStore,
-    cancel: &CancellationToken,
-    token: &str,
-    previous: Option<&str>,
-) -> rootcause::Result<ComputerControlResult> {
-    store.store(Some(token)).await?;
-    if cancel.is_cancelled() {
-        store.store(previous).await?;
-        return Ok(ComputerControlResult::SignInCancelled);
-    }
-    Ok(ComputerControlResult::SignedIn)
 }
 
 impl Drop for Computer {
@@ -279,7 +287,7 @@ fn root_message(error: &rootcause::Report) -> String {
 /// `params._meta.claudeCode.options.env`.
 fn prepare_session(
     frame: &mut Value,
-    oauth_token: Option<&str>,
+    signed_in: bool,
     workspace: &std::path::Path,
     egress_url: Option<&str>,
 ) -> rootcause::Result<()> {
@@ -303,11 +311,13 @@ fn prepare_session(
     if let Some(egress_url) = egress_url {
         route_egress(params, egress_url);
     }
-    let env = match oauth_token {
-        Some(token) => Map::from_iter([("CLAUDE_CODE_OAUTH_TOKEN".to_owned(), Value::from(token))]),
-        None => gateway_env(params.get("mcpServers")).ok_or_else(|| {
+    // Signed in, Claude Code uses its own stored credential: no env at all.
+    let env = if signed_in {
+        Map::new()
+    } else {
+        gateway_env(params.get("mcpServers")).ok_or_else(|| {
             rootcause::report!("a computer session needs the macro_internal gateway credentials")
-        })?,
+        })?
     };
     let mut target = params;
     for key in ["_meta", "claudeCode", "options", "env"] {
