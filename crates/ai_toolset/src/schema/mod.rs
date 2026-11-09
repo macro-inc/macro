@@ -19,4 +19,4 @@ pub use frontend_typegen::{
 };
 pub use generate::{ValidatedSchema, frontend_schemas_builder, generate_validated_input_schema};
 pub use phantom_tool::PhantomTool;
-pub use validate::required_ref_loop;
+pub use validate::{GEMINI_MAX_SCHEMA_DEPTH, nesting_depth, required_ref_loop};
