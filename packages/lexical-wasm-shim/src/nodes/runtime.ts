@@ -10,6 +10,18 @@ interface Binding {
 const bindings = new WeakMap<object, Binding>();
 
 let activeRuntime: NodeRuntime | undefined;
+let hydratingNative = false;
+
+/** Only builtin hydration uses this scope; no native record is allocated. */
+export function withNativeHydration<T>(body: () => T): T {
+  const previous = hydratingNative;
+  hydratingNative = true;
+  try {
+    return body();
+  } finally {
+    hydratingNative = previous;
+  }
+}
 
 export function withNodeRuntime<T>(runtime: NodeRuntime, body: () => T): T {
   const previous = activeRuntime;
@@ -27,6 +39,7 @@ export function constructNode(
   key: string | undefined,
   text: string
 ): void {
+  if (hydratingNative) return;
   if (activeRuntime === undefined)
     throw new Error('node construction requires an active editor');
   if (key !== undefined)
