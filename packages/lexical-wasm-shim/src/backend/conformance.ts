@@ -6,7 +6,7 @@ import type {
 import * as wasm from '../../../lexical-conformance/pkg/web/lexical_conformance_wasm';
 import { foreignHooks } from '../hooks.generated';
 import { bindBackendFactory } from './factory';
-import type { ShimBackend, UpdateMetadata } from './index';
+import type { NodeLifetime, ShimBackend, UpdateMetadata } from './index';
 import { isHostUpdateMetadata } from './update-metadata';
 
 let initialized = false;
@@ -148,6 +148,11 @@ function isNodeMutation(
 
 /** The shim has one model backend, with no production-session fallback. */
 export class ConformanceBackend implements ShimBackend {
+  // The development ABI retains raw records through their captured graph.
+  // Production uses its separate exact-record lease capability instead.
+  nodeLifetime(_handle: number, _node: object): NodeLifetime {
+    return { kind: 'version' };
+  }
   readonly initialVersion = 0;
   private metadataObserved = false;
   private updateMetadata = {
