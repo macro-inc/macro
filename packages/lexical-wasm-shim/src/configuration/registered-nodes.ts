@@ -3,7 +3,6 @@ import { LineBreakNode, ParagraphNode, RootNode } from '../nodes/builtins';
 import { buildRegisteredNodes } from '../nodes/replacement/builder';
 import { normalizeNodeConfig } from '../nodes/replacement/normalize';
 import type {
-  ClassLike,
   InternalNodeConfig,
   NodeClass,
   NodeConfigInput,
@@ -21,7 +20,7 @@ export type RegistryPreparation =
   | {
       readonly configOmitted: false;
       readonly nodes?: readonly NodeConfigInput[];
-      readonly exportDOM?: ReadonlyMap<ClassLike, NodeDOMExport>;
+      readonly exportDOM?: Pick<ReadonlyMap<NodeClass, NodeDOMExport>, 'get'>;
     };
 
 export interface PreparedEditorRegisteredNodes {

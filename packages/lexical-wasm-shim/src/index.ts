@@ -4,8 +4,11 @@ import { $applyNodeReplacement } from './nodes/replacement/helpers';
 
 export type {
   CreateEditorArgs,
+  DOMExportOutputMap,
+  EditableListener,
   EditorConfig,
   EditorDOMRenderConfig,
+  HTMLConfig,
 } from './editor';
 export {
   $getNodeByKey,

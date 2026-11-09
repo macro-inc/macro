@@ -7,6 +7,10 @@ import type {
   CommandPayloadType,
   LexicalCommand,
 } from './commands';
+import {
+  type DOMConversionCache,
+  initializeConversionCache,
+} from './configuration/html-conversions';
 import type {
   CommandListenerPriority,
   CommandListenerPriorityBefore,
@@ -16,6 +20,7 @@ import { ElementNode, LexicalNode, nativeNode, RootNode } from './nodes';
 import type {
   EditorConfig,
   EditorDOMRenderConfig,
+  HTMLConfig,
 } from './nodes/editor-config';
 import { bindReplacementRuntime } from './nodes/replacement/runtime';
 import type {
@@ -64,7 +69,12 @@ export interface CreateEditorArgs {
   readonly parentEditor?: LexicalEditor | null;
   readonly nodes?: readonly NodeConfigInput[];
   readonly onError?: (error: unknown, editor: LexicalEditor) => void;
+  readonly html?: HTMLConfig;
+  readonly editable?: boolean;
 }
+
+export type EditableListener = (editable: boolean) => void | (() => void);
+export type { DOMExportOutputMap, HTMLConfig } from './nodes/editor-config';
 
 export class EditorState {
   private readonly ownership: object;
@@ -125,6 +135,8 @@ export class LexicalEditor {
   readonly _config: EditorConfig;
   readonly _parentEditor: LexicalEditor | null;
   readonly _keyToDOMMap = new Map<string, HTMLElement>();
+  readonly _htmlConversions: DOMConversionCache;
+  _editable: boolean;
   readonly runtime: NodeRuntime;
   get _dirtyLeaves(): Set<string> {
     return this.runtime.backend.getUpdateMetadata().dirtyLeaves;
@@ -137,26 +149,29 @@ export class LexicalEditor {
   }
   private readonly updates: UpdateController;
   private state: EditorState;
+  private readonly editableListeners = new Map<
+    EditableListener,
+    void | (() => void)
+  >();
 
   constructor(editorConfig?: CreateEditorArgs) {
     const config = editorConfig || {};
+    const theme = config.theme || {};
     this._parentEditor =
       editorConfig === undefined
         ? (activeEditor ?? null)
         : config.parentEditor || null;
-    this._config = {
-      namespace:
-        config.namespace ||
-        this._parentEditor?._config.namespace ||
-        Math.random()
-          .toString(36)
-          .replace(/[^a-z]+/g, '')
-          .substring(0, 5),
-      theme: config.theme || {},
-      disableEvents: config.disableEvents || false,
-      dom: { ...DEFAULT_EDITOR_DOM_CONFIG, ...config.dom },
-    };
-    const onError = config.onError;
+    const disableEvents = config.disableEvents || false;
+    const namespace =
+      config.namespace ||
+      this._parentEditor?._config.namespace ||
+      Math.random()
+        .toString(36)
+        .replace(/[^a-z]+/g, '')
+        .substring(0, 5);
+    const configuredNodes = [...(config.nodes || [])];
+    const { onError, html } = config;
+    const editable = config.editable !== undefined ? config.editable : true;
     const registered =
       editorConfig === undefined
         ? prepareRegisteredNodes({
@@ -165,9 +180,26 @@ export class LexicalEditor {
           })
         : prepareRegisteredNodes({
             configOmitted: false,
-            nodes: config.nodes,
+            nodes: configuredNodes,
+            exportDOM: html
+              ? {
+                  get: (klass) =>
+                    html.export ? html.export.get(klass) : undefined,
+                }
+              : undefined,
           });
     this._nodes = registered.registeredNodes;
+    this._config = {
+      disableEvents,
+      dom: { ...DEFAULT_EDITOR_DOM_CONFIG, ...config.dom },
+      namespace,
+      theme,
+    };
+    this._htmlConversions = initializeConversionCache(
+      this._nodes,
+      html ? html.import : undefined
+    );
+    this._editable = editable;
     const backend = createBackend(config, this._config, registered);
     this.runtime = new NodeRuntime(backend, nativeNode);
     this.state = new EditorState(this, backend.initialVersion);
@@ -233,6 +265,30 @@ export class LexicalEditor {
   }
   getEditorState(): EditorState {
     return this.state;
+  }
+  isEditable(): boolean {
+    return this._editable;
+  }
+  setEditable(editable: boolean): void {
+    if (this._editable === editable) return;
+    this._editable = editable;
+    this.updates.notify(() => {
+      for (const [listener, cleanup] of [...this.editableListeners]) {
+        if (cleanup) cleanup();
+        const next = listener(editable);
+        if (this.editableListeners.has(listener))
+          this.editableListeners.set(listener, next);
+        else if (next) next();
+      }
+    });
+  }
+  registerEditableListener(listener: EditableListener): () => void {
+    this.editableListeners.set(listener, undefined);
+    return () => {
+      const cleanup = this.editableListeners.get(listener);
+      this.editableListeners.delete(listener);
+      if (cleanup) cleanup();
+    };
   }
   registerUpdateListener(
     listener: (payload: {
