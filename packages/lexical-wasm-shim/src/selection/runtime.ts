@@ -1,7 +1,7 @@
 import type {
   CompatOperation,
-  CompatReply,
   CompatSelectionPatch,
+  ICompatReply,
   IForeignCallbackValue,
   IForeignKey,
   IForeignNodeRef,
@@ -35,6 +35,7 @@ export interface SelectionRuntime {
     _readOnly: boolean;
     _nodeMap: Map<NodeKey, LexicalNode>;
   };
+  getActiveStateVersion(): bigint;
   isReadOnly(): boolean;
   getNodeByKey(key: NodeKey): LexicalNode | null;
   nativeKey(key: NodeKey): IForeignKey;
@@ -45,8 +46,8 @@ export interface SelectionRuntime {
     operation: CompatOperation,
     args: readonly IForeignCallbackValue[],
     receiver?: IForeignSelectionRef
-  ): CompatReply;
-  writeSelection(patch: CompatSelectionPatch): CompatReply;
+  ): ICompatReply;
+  writeSelection(patch: CompatSelectionPatch): ICompatReply;
   selectionRef(selection: BaseSelection): IForeignSelectionRef | undefined;
   bindSelection(
     selection: BaseSelection,

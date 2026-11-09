@@ -1,6 +1,8 @@
 export {
   bindSelectionReference,
   captureReplySelections,
+  selectionFromNativeValue,
+  selectionFromReference,
   selectionFromSnapshot,
   selectionToSnapshot,
 } from './codec';

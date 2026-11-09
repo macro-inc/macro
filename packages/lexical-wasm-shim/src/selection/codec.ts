@@ -1,10 +1,10 @@
 import {
   CompatOperation,
   CompatPointKind,
-  type CompatReply,
   CompatSelectionData,
   CompatSelectionPatch,
   type ICompatPoint,
+  type ICompatReply,
   type IForeignCallbackValue,
   type IForeignSelectionRef,
 } from '@macro-inc/collaboration/session/compatibility.generated';
@@ -36,6 +36,9 @@ export function bindSelectionReference(
   selection: BaseSelection,
   reference: IForeignSelectionRef
 ): void {
+  if (reference.selectionId === 0) {
+    throw new Error('Native selection references must have a nonzero identity');
+  }
   const runtime = getSelectionRuntime();
   let cache = captures.get(runtime);
   if (cache === undefined) {
@@ -55,6 +58,29 @@ export function bindSelectionReference(
     collected.register(selection, { cache, key, reference });
   }
   runtime.bindSelection(selection, reference);
+}
+
+export function selectionFromReference(
+  reference: IForeignSelectionRef
+): BaseSelection | undefined {
+  return captures.get(getSelectionRuntime())?.get(identity(reference))?.deref();
+}
+
+export function selectionFromNativeValue(
+  value: IForeignCallbackValue
+): BaseSelection | null {
+  const data = value.data;
+  if (data.discriminator === 1 && data.value.value.data.discriminator === 3) {
+    return null;
+  }
+  if (data.discriminator !== 3) {
+    throw new Error('Native callback value is not a selection');
+  }
+  const selection = selectionFromReference(data.value.value);
+  if (selection === undefined) {
+    throw new Error('Native selection value has no captured snapshot');
+  }
+  return selection;
 }
 
 export function utf16(text: string): number[] {
@@ -198,7 +224,7 @@ export function selectionFromSnapshot(
   return selection;
 }
 
-export function captureReplySelections(reply: CompatReply): void {
+export function captureReplySelections(reply: ICompatReply): void {
   for (const snapshot of reply.selections) {
     selectionFromSnapshot(snapshot);
   }
@@ -231,12 +257,13 @@ export function writeSelection(
   activate: boolean
 ): void {
   const runtime = getSelectionRuntime();
-  const reference =
-    selection === null ? undefined : ensureSelectionReference(selection);
+  if (selection !== null) {
+    ensureSelectionReference(selection);
+  }
   const reply = runtime.writeSelection(
     new CompatSelectionPatch({
       historical: runtime.isReadOnly(),
-      stateVersion: reference?.version ?? 0n,
+      stateVersion: runtime.getActiveStateVersion(),
       activate,
       selection: selectionToSnapshot(selection),
     })
