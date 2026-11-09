@@ -115,7 +115,9 @@ for (const enabled of [false, true]) {
       logLevel: 'silent',
       appType: 'custom',
       optimizeDeps: { entries: [] },
-      server: { middlewareMode: true, hmr: false },
+      // This fixture loads a module graph once; watchers waste the host's
+      // shared inotify budget without contributing to the identity assertions.
+      server: { middlewareMode: true, hmr: false, watch: null },
       plugins: [
         bindingFixture(enabled, true),
         lexicalEngineSwitch({
