@@ -93,6 +93,9 @@ impl<Original: NodeType, ReplacementNode: NodeType> Replacement
 /// s2: CFG-05, CFG-07
 pub struct Registry {
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) native_overlays:
+        HashMap<NodeTypeIndex, crate::foreign::native_overlay::NativeOverlay>,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_states: crate::foreign::state::ForeignStateRegistry,
     pub(crate) opaque_unknown_types: bool,
     pub(crate) table_selection_hooks: Option<Arc<dyn TableSelectionHooks>>,
@@ -206,6 +209,8 @@ type TransformRegistrations = Vec<(TransformTarget, RegisteredTransform)>;
 /// Configuration builder; the six built-in types are always registered first.
 pub struct EditorBuilder {
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) native_overlays: Vec<(String, Arc<dyn ForeignHooks>)>,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_states: Vec<ForeignStateConfig>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_instance_hooks: Option<Arc<dyn ForeignInstanceHooks>>,
@@ -230,6 +235,8 @@ impl EditorBuilder {
         Self {
             #[cfg(feature = "foreign-nodes")]
             foreign_states: vec![],
+            #[cfg(feature = "foreign-nodes")]
+            native_overlays: vec![],
             #[cfg(feature = "foreign-nodes")]
             foreign_instance_hooks: None,
             opaque_unknown_types: false,
@@ -259,7 +266,7 @@ impl EditorBuilder {
         self.table_selection_hooks = Some(Arc::new(hooks));
         self
     }
-    /// Register a development runtime node type in builder order.
+    /// Register a runtime node type in builder order.
     #[cfg(feature = "foreign-nodes")]
     pub fn foreign_node(mut self, node: ForeignNodeType) -> Self {
         self.vtables.push(crate::foreign::dispatch::vtable(node));
@@ -367,6 +374,8 @@ impl EditorBuilder {
         }
         let mut registry = Registry {
             #[cfg(feature = "foreign-nodes")]
+            native_overlays: Default::default(),
+            #[cfg(feature = "foreign-nodes")]
             foreign_states: Default::default(),
             opaque_unknown_types: self.opaque_unknown_types,
             table_selection_hooks: self.table_selection_hooks,
@@ -438,6 +447,8 @@ impl EditorBuilder {
         #[cfg(feature = "foreign-nodes")]
         crate::foreign::registry::resolve_parents(&mut registry)?;
         #[cfg(feature = "foreign-nodes")]
+        crate::foreign::native_overlay::install(&mut registry, self.native_overlays)?;
+        #[cfg(feature = "foreign-nodes")]
         crate::foreign::state::validate_declarations(&registry)?;
         for (original, replacement, with) in self.replacements {
             let a = *registry
@@ -507,6 +518,12 @@ impl EditorBuilder {
                     registry.vtables[i].transforms.push(transform.clone());
                 }
             }
+        }
+        #[cfg(feature = "foreign-nodes")]
+        for (index, overlay) in &mut registry.native_overlays {
+            overlay.baseline.transforms = registry.vtables[usize::from(index.get())]
+                .transforms
+                .clone();
         }
         let mut registry = Arc::new(registry);
         let mut rows = vec![];

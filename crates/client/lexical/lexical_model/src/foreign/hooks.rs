@@ -18,7 +18,7 @@ pub struct ForeignData {
     pub fields: SerializedNode,
 }
 
-/// A development-only node class supplied by a runtime host.
+/// A runtime node class supplied by an external host.
 pub struct ForeignNodeType {
     /// Serialized type name, unique in the editor registry.
     pub type_name: Arc<str>,
@@ -34,7 +34,7 @@ pub struct ForeignNodeType {
     pub hooks: Arc<dyn ForeignHooks>,
 }
 
-/// Development-only polymorphic model hooks.
+/// Runtime polymorphic model hooks.
 /// Each default explicitly delegates to the registered parent.
 /// Runtime text setters own the complete mutable operation. Their inherited
 /// native TextNode coercion hooks remain pure and run only on native fallback.

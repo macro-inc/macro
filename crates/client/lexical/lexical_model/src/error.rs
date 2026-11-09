@@ -273,6 +273,13 @@ pub enum Error {
 /// Invalid editor configuration.
 #[derive(Debug, thiserror::Error)]
 pub enum BuildError {
+    /// A native hook overlay was duplicated or targeted an absent/runtime type.
+    #[cfg(feature = "foreign-nodes")]
+    #[error("invalid native hook overlay for {type_name}")]
+    InvalidNativeOverlay {
+        /// Exact serialized target name.
+        type_name: String,
+    },
     /// A runtime node declaration names a state config the builder did not register.
     #[cfg(feature = "foreign-nodes")]
     #[error("unknown foreign state {key}")]

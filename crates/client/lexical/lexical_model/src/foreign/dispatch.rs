@@ -50,6 +50,17 @@ fn read_hook<Value>(
         while let Some(current) = entry.filter(|_| !bypass && ForeignReadOperation::check().is_ok())
         {
             let Some(definition) = &current.foreign else {
+                if super::native_overlay::supported(hook)
+                    && let Some(overlay) = node
+                        .state
+                        .state
+                        .registry
+                        .native_overlays
+                        .get(&current.index)
+                    && let Override::Value(value) = invoke(overlay.hooks.as_ref(), data, node)
+                {
+                    return value;
+                }
                 break;
             };
             if let Override::Value(value) = invoke(definition.hooks.as_ref(), data, node) {
@@ -66,6 +77,28 @@ fn read_hook<Value>(
         let frame = super::projection::NativeProjection::from_payload(node.key, payload);
         node.state.native_projection = Some(&frame);
         return inherit(&payload.table, payload.native.as_any(), node);
+    }
+    if let Some(index) = node.state.type_index(node.key)
+        && let Some(overlay) = node.state.state.registry.native_overlays.get(&index)
+    {
+        let bypass = node
+            .state
+            .foreign_native_calls
+            .is_some_and(|calls| calls.consume(node.key, hook));
+        if !bypass
+            && super::native_overlay::supported(hook)
+            && ForeignReadOperation::check().is_ok()
+            && let Override::Value(value) = invoke(
+                overlay.hooks.as_ref(),
+                &ForeignData {
+                    fields: SerializedNode::new(),
+                },
+                node,
+            )
+        {
+            return value;
+        }
+        return inherit(&overlay.baseline, data, node);
     }
     let table = kind_base(node.state.kind(node.key).unwrap_or(NodeKind::Element));
     inherit(&table, data, node)
@@ -85,6 +118,13 @@ fn mutate<Value>(
     let bypass = tx.foreign_native_calls.consume(key, hook);
     while let Some(current) = entry.filter(|_| !bypass) {
         let Some(definition) = &current.foreign else {
+            if super::native_overlay::supported(hook)
+                && let Some(overlay) = registry.native_overlays.get(&current.index)
+                && let Override::Value(value) =
+                    super::projection::foreign(tx, |tx| invoke(overlay.hooks.as_ref(), tx))?
+            {
+                return value;
+            }
             break;
         };
         if let Override::Value(value) =
@@ -93,6 +133,11 @@ fn mutate<Value>(
             return value;
         }
         entry = definition.extends.and_then(|name| registry.get(name));
+    }
+    if tx.foreign_data(key).is_none()
+        && let Some(overlay) = registry.native_overlays.get(&index)
+    {
+        return inherit(&overlay.baseline, tx);
     }
     super::projection::native(tx, key, inherit)
 }
@@ -182,6 +227,10 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
         Ok(key)
     };
     table.import_exact = table.import;
+    install_methods(&mut table);
+    table
+}
+pub(crate) fn install_methods(table: &mut NodeVTable) {
     table.adjust_export_json = |data, node, json| {
         read_hook(
             ForeignHook::AdjustExportJson,
@@ -529,7 +578,6 @@ pub(crate) fn vtable(definition: ForeignNodeType) -> NodeVTable {
             |parent, tx| (parent.selection_transform)(tx, key),
         )
     };
-    table
 }
 
 pub(crate) fn update_override(

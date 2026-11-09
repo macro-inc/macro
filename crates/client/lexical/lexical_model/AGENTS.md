@@ -8,9 +8,9 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 ## Start here
 
 - `src/lib.rs` exposes the model API.
-- `build.rs` derives development ForeignHook IDs from ForeignHooks; keep upstream aliases on the trait and syn optional behind foreign-nodes.
+- `build.rs` derives ForeignHook IDs from ForeignHooks; keep upstream aliases on the trait and syn optional behind foreign-nodes.
 - `src/node.rs` defines node kinds, inheritance and dispatch.
-- `src/read/record.rs` owns borrowed records and ephemeral copies; `src/foreign/` owns development runtime hooks, registration and state codecs.
+- `src/read/record.rs` owns borrowed records and ephemeral copies; `src/foreign/` owns runtime hooks, registration and state codecs.
 - `src/foreign/render.rs` captures raw base/links and typed native payloads for a separate render metadata batch; never route installed instance hosts through public exportJSON/getters or NodeState serialization in flat Diff. Keep owner registry entries weak and validate exact captured record identities; record_keys includes detached pending records, and snapshot selection identities retain their exact scope. Use foreign_dirty_keys for update deltas instead of scanning all records.
 - `src/foreign/instances.rs` stages semantic JS instance clones with editor-owner namespaces and opaque IDs; validate every base/payload/link acknowledgement before installing the record. Track writable instance updates separately from Rust Arc sharing so read captures never run additional JS constructors.
 - `src/foreign/records.rs` exposes collected records for raw host captures without restoring graph membership; capture_for_foreign_read copies fields without clone hooks or key allocation.
@@ -196,3 +196,5 @@ Consume ForeignReservedKey capabilities for externally constructed native record
 Opt out of class static transforms with without_static_transforms only when an external runtime owns them; explicit transforms and core text normalization remain enabled.
 
 Supply foreign_instance_hooks on the builder when hydration or initial document callbacks need the runtime; install it before initial-state parsing/publication, without running JS constructors during registration.
+
+Install foreign_native_hooks on exact builtin registrations before flag computation; retain their typed payload/index/ancestry and saved native baseline. Dynamic foreign children must execute inherited baseline mutations through native projection, while native payloads use the baseline directly. Import/update/export/clone lifecycle and static-transform callbacks use separate host paths.
