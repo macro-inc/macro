@@ -66,9 +66,6 @@ function ParticipantRow(props: {
             </Badge>
           </Show>
         </div>
-        <Show when={props.speaking && !props.compact}>
-          <p class="text-xs text-accent">{t('calls.speaking')}</p>
-        </Show>
       </div>
       <Show when={props.compact && props.speaking}>
         <CallWaveform class="size-4" speaking={props.speaking} />

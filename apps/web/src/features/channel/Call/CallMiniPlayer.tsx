@@ -504,11 +504,6 @@ export function CallMiniPlayer(props: {
                     ? t('calls.youAreSharing')
                     : t('calls.presenterSharing', { name: participant().name })}
                 </Show>
-                <Show when={audioOnly() && participant().speaking}>
-                  <span class="block text-xs text-success">
-                    {t('calls.speaking')}
-                  </span>
-                </Show>
               </span>
             </div>
           )}

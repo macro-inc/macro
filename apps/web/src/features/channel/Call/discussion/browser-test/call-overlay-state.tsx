@@ -146,7 +146,7 @@ const call = {
       participants.map((participant) => [participant.identity, participant])
     ),
   isLocalSpeaking: () => false,
-  isParticipantSpeaking: () => false,
+  isParticipantSpeaking: () => params.get('speaking') === 'true',
   isConnecting: connecting,
   isAudioMuted: audioMuted,
   microphonePermission: () => permissions?.microphone() ?? 'prompt',
