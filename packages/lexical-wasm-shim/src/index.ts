@@ -51,6 +51,49 @@ export function $getEditor() {
   return getActiveEditor();
 }
 
+export type {
+  CaretDirection,
+  CaretType,
+  DOMExportOutput,
+  EditorSetOptions,
+  EditorThemeClasses,
+  EditorThemeClassName,
+  EditorUpdateOptions,
+  ElementFormatType,
+  FlipDirection,
+  KlassConstructor,
+  LexicalUpdateJSON,
+  NodeKey,
+  NodeMutation,
+  RootMode,
+  SerializedEditor,
+  SerializedElementNode,
+  SerializedLineBreakNode,
+  SerializedParagraphNode,
+  SerializedRootNode,
+  SerializedTabNode,
+  SerializedTextNode,
+  Spread,
+  StepwiseIteratorConfig,
+  TextFormatType,
+  TextModeType,
+} from 'lexical';
+export type {
+  DOMSlot,
+  ElementDOMSlot,
+} from '../../lexical-wasm-view/src/compat/dom-slot';
+export {
+  CAN_USE_BEFORE_INPUT,
+  CAN_USE_DOM,
+  IS_ANDROID,
+  IS_ANDROID_CHROME,
+  IS_APPLE,
+  IS_APPLE_WEBKIT,
+  IS_CHROME,
+  IS_FIREFOX,
+  IS_IOS,
+  IS_SAFARI,
+} from '../../lexical-wasm-view/src/compat/environment';
 export {
   BEFORE_INPUT_COMMAND,
   BLUR_COMMAND,
@@ -145,4 +188,58 @@ export {
   type UpdateTag,
 } from './constants';
 
-export type { LexicalNodeReplacement } from './nodes/replacement';
+export { DEFAULT_EDITOR_DOM_CONFIG } from './editor-dom-config';
+export { ArtificialNode__DO_NOT_USE } from './nodes/artificial';
+export type {
+  BaseStaticNodeConfig,
+  StaticNodeConfigRecord,
+  StaticNodeConfigValue,
+} from './nodes/config';
+export {
+  getStyleObjectFromCSS,
+  setDOMStyleFromCSS,
+  setDOMStyleObject,
+} from './nodes/dom-style';
+export type {
+  DOMChildConversion,
+  DOMConversion,
+  DOMConversionFn,
+  DOMConversionMap,
+  DOMConversionOutput,
+  DOMConversionProp,
+} from './nodes/dom-types';
+export type { DOMSlotForNode } from './nodes/editor-config';
+export {
+  $applyNodeReplacement,
+  $create,
+  getRegisteredNode,
+  getRegisteredNodeOrThrow,
+  getTransformSetFromKlass,
+  type Klass,
+  type LexicalNodeReplacement,
+  type Transform,
+} from './nodes/replacement';
+export {
+  $getState,
+  $getStateChange,
+  $getWritableNodeState,
+  $setState,
+  type AnyStateConfig,
+  createState,
+  type NodeStateJSON,
+  type StateConfig,
+  type StateConfigKey,
+  type StateConfigValue,
+  type StateValueConfig,
+  type StateValueOrUpdater,
+  type ValueOrUpdater,
+} from './nodes/state';
+export {
+  createSharedNodeState,
+  getStaticNodeConfig,
+} from './nodes/static-config';
+export {
+  $parseSerializedNode,
+  type SerializedEditorState,
+  type SerializedLexicalNode,
+} from './serialization';
