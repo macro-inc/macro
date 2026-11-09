@@ -39,6 +39,11 @@ impl Plugin for Keyboard {
                 priority: CommandPriority::Low,
                 placement: Placement::Before,
             },
+            CommandRegistration {
+                command: CommandKind::OutdentContent,
+                priority: CommandPriority::Editor,
+                placement: Placement::After,
+            },
         ]
     }
     fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error> {
@@ -48,10 +53,19 @@ impl Plugin for Keyboard {
                 Ok(Handled::No)
             }
             Command::IndentContent => indent_with_limit(tx),
+            Command::OutdentContent => {
+                let handled = lexical_rich_nodes::rich_text::outdent_content(tx)
+                    .map_err(|lexical_rich_nodes::Error::Model(error)| error)?;
+                Ok(if handled { Handled::Yes } else { Handled::No })
+            }
             Command::Key {
                 command: KeyCommand::Tab,
                 event,
             } => {
+                if !matches!(tx.selection(), Some(Selection::Range(_))) {
+                    return Ok(Handled::No);
+                }
+                tx.prevent_default();
                 let command = if event.as_ref().is_some_and(|e| e.shift) {
                     Command::OutdentContent
                 } else {
@@ -239,3 +253,6 @@ fn indent_with_limit(tx: &mut Transaction<'_>) -> Result<Handled, Error> {
         Handled::Yes
     })
 }
+
+#[cfg(test)]
+mod test;

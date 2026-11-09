@@ -1,0 +1,163 @@
+use super::*;
+use crate::EditorType;
+use lexical_rich_nodes::list::{ListItemNode, ListNode, ListType};
+
+#[test]
+fn ordinary_outdent_moves_plain_and_table_list_items_and_clamps_at_zero() -> Result<(), Error> {
+    for in_table in [false, true] {
+        let mut editor = crate::surface::preset_builder_with_mode(
+            EditorType::MarkdownSync,
+            EditorMode::ViewAttached,
+        )
+        .build()
+        .expect("surface");
+        let (item, _) = editor.update(|tx| {
+            let list = tx.create(ListNode::new(ListType::Bullet, 1))?;
+            let first = tx.create(ListItemNode::default())?;
+            let second = tx.create(ListItemNode::default())?;
+            let one = tx.create_text("one")?;
+            let two = tx.create_text("two")?;
+            tx.append(first, &[one.key()])?;
+            tx.append(second, &[two.key()])?;
+            tx.append(list, &[first.key(), second.key()])?;
+            if in_table {
+                use lexical_rich_nodes::table::{
+                    IncludeHeaders, create_table_node_with_dimensions,
+                };
+                let table =
+                    create_table_node_with_dimensions(tx, 1, 1, IncludeHeaders::All(false))?;
+                let row = tx.first_child(table).expect("row");
+                let cell = tx.first_child(row).expect("cell");
+                tx.append(cell, &[list.key()])?;
+                tx.append(NodeKey::ROOT, &[table.key()])?;
+            } else {
+                tx.append(NodeKey::ROOT, &[list.key()])?;
+            }
+            tx.set_indent(second, 2)?;
+            tx.select_start(two)?;
+            Ok(second)
+        })?;
+        assert_eq!(editor.state().view().indent(item), 2);
+        let selection = editor.state().selection().cloned();
+        for (key_tab, expected) in [(true, 1), (false, 0), (false, 0)] {
+            let command = if key_tab {
+                Command::Key {
+                    command: KeyCommand::Tab,
+                    event: Some(KeyEvent {
+                        key: "Tab".into(),
+                        shift: true,
+                        ..KeyEvent::default()
+                    }),
+                }
+            } else {
+                Command::OutdentContent
+            };
+            let (handled, commit) = editor.dispatch(&command)?;
+            assert_eq!(handled, Handled::Yes);
+            assert_eq!(commit.default_prevented, key_tab);
+            assert_eq!(editor.state().view().indent(item), expected);
+            assert_eq!(editor.state().view().text_content(item), "two");
+            assert_eq!(editor.state().selection(), selection.as_ref());
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn expanded_outdent_changes_each_paragraph_once_and_handles_zero_indent() -> Result<(), Error> {
+    let mut editor = crate::surface::preset_builder_with_mode(
+        EditorType::MarkdownSync,
+        EditorMode::ViewAttached,
+    )
+    .build()
+    .expect("surface");
+    let (blocks, _) = editor.update(|tx| {
+        let a = tx.create(Paragraph {})?;
+        let b = tx.create(Paragraph {})?;
+        let one = tx.create_text("one")?;
+        let two = tx.create_text("two")?;
+        tx.append(a, &[one.key()])?;
+        tx.append(b, &[two.key()])?;
+        tx.append(NodeKey::ROOT, &[a.key(), b.key()])?;
+        tx.set_indent(a, 3)?;
+        tx.set_indent(b, 1)?;
+        let mut range = RangeSelection::collapsed(Point::text(one, Utf16Offset(0)));
+        range.focus = Point::text(two, Utf16Offset(3));
+        tx.set_selection(Some(Selection::Range(range)))?;
+        Ok([a, b])
+    })?;
+    for expected in [[2, 0], [1, 0], [0, 0], [0, 0]] {
+        let (handled, commit) = editor.dispatch(&Command::OutdentContent)?;
+        assert_eq!(handled, Handled::Yes);
+        assert!(!commit.default_prevented);
+        assert_eq!(
+            blocks.map(|key| editor.state().view().indent(key)),
+            expected
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn outdent_yields_for_null_and_node_selection() -> Result<(), Error> {
+    let mut editor = crate::surface::preset_builder_with_mode(
+        EditorType::MarkdownSync,
+        EditorMode::ViewAttached,
+    )
+    .build()
+    .expect("surface");
+    let (block, _) = editor.update(|tx| {
+        let block = tx.create(Paragraph {})?;
+        tx.append(NodeKey::ROOT, &[block.key()])?;
+        tx.set_indent(block, 2)?;
+        tx.set_selection(None)?;
+        Ok(block)
+    })?;
+    for node_selection in [false, true] {
+        editor.update(|tx| {
+            if node_selection {
+                let mut selection = NodeSelection::new();
+                selection.add(block);
+                tx.set_selection(Some(Selection::Node(selection)))?;
+            }
+            Ok(())
+        })?;
+        let before = editor.state().to_json()?;
+        let (handled, commit) = editor.dispatch(&Command::OutdentContent)?;
+        assert_eq!(handled, Handled::No);
+        assert!(!commit.default_prevented);
+        assert_eq!(editor.state().to_json()?, before);
+    }
+    Ok(())
+}
+
+#[test]
+fn ordinary_outdent_reduces_heading_and_quote_indentation() -> Result<(), Error> {
+    for heading in [false, true] {
+        let mut editor = crate::surface::preset_builder_with_mode(
+            EditorType::MarkdownSync,
+            EditorMode::ViewAttached,
+        )
+        .build()
+        .expect("surface");
+        let (block, _) = editor.update(|tx| {
+            let block = if heading {
+                tx.create(HeadingNode::default())?.key()
+            } else {
+                tx.create(QuoteNode {})?.key()
+            };
+            let text = tx.create_text("keep")?;
+            tx.append(block, &[text.key()])?;
+            tx.append(NodeKey::ROOT, &[block])?;
+            tx.set_indent(block, 2)?;
+            tx.select_start(text)?;
+            Ok(block)
+        })?;
+        let (handled, commit) = editor.dispatch(&Command::OutdentContent)?;
+        assert_eq!(handled, Handled::Yes);
+        assert!(!commit.default_prevented);
+        assert_eq!(editor.state().view().indent(block), 1);
+        assert_eq!(editor.state().view().text_content(block), "keep");
+    }
+    Ok(())
+}
