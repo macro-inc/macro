@@ -20,6 +20,9 @@ Use the shared insertion-policy query before choosing a text splice: changed
 typing marks and token boundaries require an insertion command. Reattach a
 running session with `attachRunningSession` to restore text and selection while
 retaining its existing history and synchronization lifecycle.
+Route ordinary native Enter and physical Shift+Enter through the shared model
+key command before applying Android defaults; heading splits and line breaks
+must use the application policy.
 Pass editor editability and content-interaction permission separately. A content
 lock revokes input, paste, formatting and undo entry points without representing
 comment capability; the shared session continues to authorize comment commands.

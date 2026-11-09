@@ -12,6 +12,11 @@ class NativeEditorInputTest {
         instrumentation.runOnMainSync { NativeClipboardScenario.run(instrumentation.targetContext) }
     }
 
+    @Test fun consumedEnterKeepsTextAndPreventionAfterEffectFailure() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync { NativeInputScenario.consumedEnter(instrumentation.targetContext) }
+    }
+
     @Test fun inputConnectionCommitsUnicodeCompositionAndUndo() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.runOnMainSync { NativeInputScenario.run(instrumentation.targetContext) }
