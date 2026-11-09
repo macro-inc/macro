@@ -2,6 +2,19 @@
 
 ## Current checkpoint: development metadata and open production compatibility gates
 
+Namespace producer `1420c15381` is integrated as `eb15086988`; current compatibility
+schema fingerprint is `2b4d927cf4348931633b31c4d5884ab56832f661537e68fbc27ebdc81739baef`.
+Batch host failures retain the original host slot beside the opaque error.
+Retirement fence `195cf57177` is integrated as `f41f24f5b5`: never-issued,
+current and pending versions reject before release effects; repeated issued,
+already-retired versions remain valid empty acknowledgements. The session ABI
+stays2. Independent63 native tests, strict Clippy, wasm32 target check, schema freshness, generated
+session types and scoped checks pass. This does not establish JS exception-owner
+recovery, physical retirement, a hosted factory or artifact readiness. Evidence:
+`retirement-fence-{native-tests,clippy,wasm-check}.log`,
+`retirement-namespace-{schema-freshness,session-types}.log` and
+`fence-checklist-hover-scoped-check.log` under the acceptance directory.
+
 Development metadata `8c894d25ef` / `3008613eb3` is integrated as `6b0c3bdb3a` /
 `b14e0ee091`, with compiler guard `ac179e8327` as `f583385cd7`. Actual dirty facts
 and raw root-cache reads now survive historical read scopes. Independent native
@@ -55,7 +68,7 @@ remains paused. Evidence: `loro-empty-remote-undo-tests.log` and
 
 Sparse native publication `e248a380bf` is integrated as `86382d8abb`, after cold
 audit schema `b57818fbaf` (equivalent producer `6f9798e030`) as `781a0e46fd`.
-Current schema fingerprint is
+The sparse checkpoint's schema fingerprint was
 `24c38b2078bf718c3812f5e0c4d25ee9bbb288845648c291d0eb79df730174eb`.
 Ordinary commits send dirty/normalized/mutated records and every removed subtree
 descendant; explicit snapshots and actual full reconciles remain full. Hot records
@@ -325,13 +338,13 @@ disposable tree without changing compiler options. The independent source audit
 the archived WASM/DTS hashes. The advisory ceiling overage is435,592 bytes;
 initializer, native oracle, positive cache/crossing and parity gates remain open.
 
-The OFF inventory continuation through `647a597688` is integrated, including code,
+The OFF inventory continuation through `2e1b512093` is integrated, including code,
 table picker, checkbox/task conversion, link and mounted TaskList fixtures. Owner browser evidence
 is 114/114 code, 132/132 table and 153/153 link OFF cases, each across three
 viewport profiles; these are not native mobile/virtual-keyboard proofs. The exact
-ledger has 754 selectors across seven explicit reports (full web22,440, media36,
-conversion11, TaskList19, checklist planning32, checklist collection5, iOS caret8),
-including493 new editor units; it is not a summed
+ledger has 768 selectors across eight explicit reports (full web22,440, media36,
+conversion11, TaskList19, checklist planning32, checklist collection5, iOS caret8,
+blame hover14), including507 new editor units; it is not a summed
 full-suite run, deduplicated behavior count or ON acceptance. The 19-case TaskList
 report replaces the earlier 12-case report. No duplicate broad OFF run was
 launched here. TaskList commits `16d9f311d3` / `65fa6cf3b0` are integrated as
@@ -386,12 +399,36 @@ iOS geometry increment `647a597688` is integrated as `d6e6deda2a`. Independent
 supplied window geometry and timers. Two additional mappings refer to existing
 backspace cases; they do not add new tests. Physical keyboard, native iOS layout,
 deletion and animation acceptance remain unverified; module-import warnings are
-preserved. Browser153 still refers to `62601ac3c6`, not an unfinished extension run.
+preserved. The older browser153 result remains pinned to `62601ac3c6`.
 The scanner validates754 mappings and exact owner-path verification finds754
 unique passing selectors across seven untouched reports, with zero disposable-root
 credit and no source/execution binding claim. Evidence:
 `ios-caret-independent-tests.log`, `inventory-754-owner-selector-verification.json`
 and `loro-ios-integration-audit.md` under the acceptance directory.
+
+Rendered checklist extension `5ad1756ae1` is integrated as `9900feb7ec`.
+The owner-run fresh OFF browser report has171 passes (57 scenarios across three
+viewport profiles), zero skips/flaky/unexpected/root-reporter errors and exit0.
+Its report hash/statistics were independently verified, not rerun here. Six new
+scenarios mount the real collector/store/TaskListControlsRenderer with production
+providers and blocked remote requests. **OFF touch filter activation remains
+broken**: after touchend the trigger has pointer-events:none and the bar intercepts
+hits. The keyboard path has an explicit focus precondition and does not establish
+touch access. Production runtime is unchanged; the fixture README preserves source
+locations/reproduction and no ON/service/native keyboard/filter-permission
+admission claim. Evidence: `checklist-browser-171-owner-evidence.json` and
+`retirement-checklist-browser-integration-audit.md`.
+
+Blame controller increment `2e1b512093` is integrated as `80d8a569ff`.
+Independent14/14 cases exercise real-node stable-ID lookup, native selection
+guards, supplied touch capability, dismissal/captured scroll, root replacement
+and disposal. No rendered tooltip or service attribution is proven. The scanner
+validates768 mappings; exact owner-path verification finds768 unique passing
+selectors across eight untouched reports, with zero disposable-root credit and
+no source/execution binding claim. Unit count507 and browser count171 are separate
+evidence, not a whole-suite sum or exhaustive denominator. Logs:
+`blame-hover-independent-tests.log`, `inventory-768-owner-selector-verification.json`
+and `fence-checklist-hover-scoped-check.log` under the acceptance directory.
 
 The three reported package formatting locations also pass read-only Biome checks
 from their package directories: two collaboration files and the view clipboard
