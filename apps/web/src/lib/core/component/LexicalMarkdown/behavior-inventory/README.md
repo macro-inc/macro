@@ -10,7 +10,12 @@ boundaries, mention insertion/deletion/history and media mutation/permission
 guards and checkbox-to-task conversion. Task creation is a service boundary stub;
 its tests exercise actual selection/parsing, parallel completion, batched node
 replacement, partial failures and deleted targets, not remote task creation
-or host authorization. HEIC conversion and transport are boundary stubs in media unit cases;
+or host authorization. TaskList DOM cases use the mounted jsdom host to check
+unmanaged toolbar identity through committed child edits, HTML export and
+removal. Their toolbar sentinel is host-owned test content, not the real
+controls UI. Legacy list cases explicitly dirty an imported node and run the
+production controls transform; bare JSON parsing does not apply factory
+replacements. Native/custom-class hosting remains unverified. HEIC conversion and transport are boundary stubs in media unit cases;
 these do not establish actual decoding or uploads. Direct transformer calls
 cover import/typing modes; direct mention commands do not establish menu UI
 coverage. Remote-label history tests establish grouping, not preservation of
@@ -52,7 +57,7 @@ bun scripts/editor-behavior-inventory.ts /tmp/editor-behavior-source /tmp/editor
 ```
 
 `scripts/editor-behavior-map.ts`, `editor-existing-behavior-map.ts` and
-`editor-async-behavior-map.ts` map
+`editor-async-behavior-map.ts` and `editor-node-behavior-map.ts` map
 concrete reviewed cases to unique source anchors and exact test file/name
 selectors. `behaviors.md` reports each mapping separately from the source-site
 superset. A unique passing result in the supplied report earns OFF pass;
