@@ -10,7 +10,7 @@ import type {
 } from 'lexical';
 
 import { DOMSlot } from '../../../lexical-wasm-view/src/compat/dom-slot';
-import type { LexicalEditor } from '../editor';
+import { getActiveEditor, type LexicalEditor } from '../editor';
 import type { BaseSelection } from '../selection';
 import { $getSelection, $isRangeSelection } from '../selection/helpers';
 import type { RangeSelection } from '../selection/range';
@@ -31,7 +31,6 @@ import {
   nodeByKey,
   nodeCall,
   nodeConfigRecord,
-  nodeIsDirty,
   nodeLatest,
   nodeSelect,
   nodeWritable,
@@ -145,7 +144,8 @@ export class LexicalNode {
     return selected;
   }
   isDirty(): boolean {
-    return nodeIsDirty(this);
+    const dirtyLeaves = getActiveEditor()._dirtyLeaves;
+    return dirtyLeaves !== null && dirtyLeaves.has(this.__key);
   }
   is(other: LexicalNode | null | undefined): boolean {
     return other != null && this.__key === other.__key;

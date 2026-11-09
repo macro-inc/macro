@@ -25,6 +25,8 @@ writes; the legacy conformance backend still makes diagnostic native calls.
 
 - Read captured own fields through `nodeField`; resolve current values through the active graph before reading.
 - Serve public graph and scalar reads from the local mirror without WASM calls.
+- Keep base dirty checks on acknowledged leaves and Element overrides on acknowledged elements; Root reads its captured cache and falls back to active traversal according to the actual read scope and dirty type.
+- Reject missing root-cache and dirty metadata capabilities rather than substituting empty sets or cached text.
 - Send writes through the runtime buffer and preserve upstream native-super dispatch.
 - Reuse `lexical-wasm-view/compat` DOM slots and the actual core classes in method signatures.
 - Preserve upstream generic constraints and self returns; use the centralized runtime adapter only for upstream caller-asserted generic APIs.

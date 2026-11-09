@@ -10,7 +10,11 @@ import type {
   SerializedRootNode,
 } from 'lexical';
 
-import type { LexicalEditor } from '../editor';
+import {
+  getActiveEditor,
+  isCurrentlyReadOnlyMode,
+  type LexicalEditor,
+} from '../editor';
 import type { RangeSelection } from '../selection/range';
 import { LexicalNode } from './base';
 import {
@@ -125,6 +129,15 @@ export class RootNode extends ElementNode {
     throw new Error(
       'getTopLevelElementOrThrow: root nodes are not top level elements'
     );
+  }
+  getTextContent(): string {
+    const cachedText = this.__cachedText;
+    if (cachedText !== null && typeof cachedText !== 'string')
+      throw new Error('backend root cached-text capability is required');
+    return cachedText !== null &&
+      (isCurrentlyReadOnlyMode() || getActiveEditor()._dirtyType === 0)
+      ? cachedText
+      : super.getTextContent();
   }
   remove(): never {
     throw new Error('remove: cannot be called on root nodes');
