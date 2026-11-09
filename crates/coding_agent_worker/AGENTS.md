@@ -124,6 +124,10 @@ external chat replies depend on it. Direct session controls still mint IDs.
   Windows-breaking code there without a cfg gate.
 - The ACP child is killed with its whole tree: a process group on Unix, a Job
   Object on Windows (`src/outbound/acp_process/job.rs`).
+- The musl release allocates with mimalloc (`src/main.rs`). zig's libc
+  `malloc`, which cargo-zigbuild links otherwise, keeps memory freed on another
+  thread, and tokio frees on any worker: resident memory grew by gigabytes over
+  days with a flat live heap. Other targets use the system allocator.
 - Every herdr call goes through the `HerdrCli` facade; add a capability to both
   `cli/legacy.rs` and `cli/hc.rs`. herdr-core has no agent registry or
   worktrees, and status comes only from OSC 7501 (README.md, "Herdr versions").
