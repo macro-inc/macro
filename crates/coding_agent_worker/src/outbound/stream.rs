@@ -27,9 +27,11 @@ mod test;
 
 const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
 
-/// Set on the presence request alone: a timeout on the client would also end the
-/// long-lived event stream.
-const PRESENCE_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long the service has to answer a lookup (owner, bound agents, presence)
+/// or to start answering the event stream, so a stalled request fails and is
+/// retried instead of holding up trigger processing. Set per request: a timeout
+/// on the client would also end the long-lived event stream.
+const ANSWER_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Map the harness's current team grants onto its webhook workspace scope.
 pub fn stream_scope(harness: &Harness) -> WebhookScope {
@@ -89,6 +91,7 @@ impl EventStreamClient {
     ) -> rootcause::Result<(T, Option<SystemTime>)> {
         let response = self
             .credentialed(request)
+            .timeout(ANSWER_TIMEOUT)
             .send()
             .await
             .context(format!("could not reach the service to {what}"))?;
@@ -137,8 +140,7 @@ impl EventStreamClient {
                 "check this harness's presence",
                 self.http
                     .get(format!("{}/harnesses/me", self.base))
-                    .header(RUNTIME_CONNECTED_HEADER, "true")
-                    .timeout(PRESENCE_CHECK_TIMEOUT),
+                    .header(RUNTIME_CONNECTED_HEADER, "true"),
             )
             .await?;
         Ok(harness.connected)
@@ -190,10 +192,10 @@ impl EventStreamClient {
                 .header(LAST_EVENT_ID_HEADER, after)
                 .query(&[("resume", "true")]);
         }
-        let response = self
-            .credentialed(request)
-            .send()
+        // Bounds the wait for the response head only; the body streams on.
+        let response = tokio::time::timeout(ANSWER_TIMEOUT, self.credentialed(request).send())
             .await
+            .context("the service did not start answering the event stream in time")?
             .context("could not reach the service to open the event stream")?;
         let status = response.status();
         if !status.is_success() {
