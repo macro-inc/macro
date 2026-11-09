@@ -16,6 +16,7 @@ import type {
   BaseSelection,
   RawSelectionPoint,
   RawTableSelectionValue,
+  SelectionArgument,
   SelectionValue,
 } from './runtime';
 import { getSelectionRuntime, type SelectionRuntime } from './runtime';
@@ -129,6 +130,12 @@ function decodePoint(point: ICompatPoint): PointType {
 
 function updatePoint(target: RawSelectionPoint, source: ICompatPoint): void {
   const decoded = decodePoint(source);
+  if (
+    target.key === decoded.key &&
+    target.offset === decoded.offset &&
+    target.type === decoded.type
+  )
+    return;
   target.key = decoded.key;
   target.offset = decoded.offset;
   target.type = decoded.type;
@@ -253,9 +260,14 @@ export function selectionFromSnapshot(
       );
     }
     selection = existing ?? new NodeSelection(new Set());
-    selection._nodes = new Set(
-      data.value.keys.map((key) => runtime.publicKey(key))
-    );
+    const keys = data.value.keys.map((key) => runtime.publicKey(key));
+    const previousKeys = Array.from(selection._nodes);
+    if (
+      previousKeys.length !== keys.length ||
+      previousKeys.some((key, index) => key !== keys[index])
+    ) {
+      selection._nodes = new Set(keys);
+    }
   } else {
     if (existing !== undefined && !runtime.isTableSelection(existing)) {
       throw new Error(
@@ -268,9 +280,17 @@ export function selectionFromSnapshot(
     updatePoint(selection.focus, data.value.focus);
   }
   selection.dirty = record.dirty;
-  selection._cachedNodes = record.hasCachedNodes
+  const cached = record.hasCachedNodes
     ? record.cachedNodes.map((reference) => runtime.resolveNode(reference))
     : null;
+  const previousCache = selection._cachedNodes;
+  const unchangedCache =
+    cached === previousCache ||
+    (cached !== null &&
+      previousCache !== null &&
+      cached.length === previousCache.length &&
+      cached.every((node, index) => node === previousCache[index]));
+  if (!unchangedCache) selection._cachedNodes = cached;
   bindSelectionReference(selection, record.reference);
   return selection;
 }
@@ -284,7 +304,7 @@ export function captureReplySelections(reply: ICompatReply): void {
 export function callSelection(
   selection: BaseSelection,
   operation: CompatOperation,
-  args: readonly IForeignCallbackValue[] = []
+  args: readonly SelectionArgument[] = []
 ): IForeignCallbackValue {
   validateSelectionClass(selection);
   const reply = getSelectionRuntime().invokeSelection(
@@ -308,15 +328,10 @@ export function numberArgument(value: number): IForeignCallbackValue {
   return { data: { discriminator: 9, value: { value } } };
 }
 
-export function nodesArgument(nodes: LexicalNode[]): IForeignCallbackValue {
-  return {
-    data: {
-      discriminator: 7,
-      value: {
-        values: nodes.map((node) => getSelectionRuntime().nodeReference(node)),
-      },
-    },
-  };
+export function nodesArgument(
+  nodes: readonly LexicalNode[]
+): SelectionArgument {
+  return { kind: 'nodes', nodes: [...nodes] };
 }
 
 export function nodeArrayResult(value: IForeignCallbackValue): LexicalNode[] {

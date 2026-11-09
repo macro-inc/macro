@@ -332,10 +332,10 @@ export function getSelectionTextContent<
     isDecoratorNode: $isDecoratorNode,
     isLineBreakNode: $isLineBreakNode,
   }: {
-    isElementNode(node: N): node is E;
-    isTextNode(node: N): node is T;
-    isDecoratorNode(node: N): boolean;
-    isLineBreakNode(node: N): boolean;
+    isElementNode: (node: N) => node is E;
+    isTextNode: (node: N) => node is T;
+    isDecoratorNode: (node: N) => boolean;
+    isLineBreakNode: (node: N) => boolean;
   }
 ): string {
   if (nodes.length === 0) return '';

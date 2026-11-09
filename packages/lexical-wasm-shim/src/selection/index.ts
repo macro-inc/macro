@@ -23,4 +23,8 @@ export type {
 export { $createPoint, Point } from './point';
 export { RangeSelection } from './range';
 export type { BaseSelection } from './runtime';
-export { type SelectionRuntime, withSelectionRuntime } from './runtime';
+export {
+  type SelectionArgument,
+  type SelectionRuntime,
+  withSelectionRuntime,
+} from './runtime';
