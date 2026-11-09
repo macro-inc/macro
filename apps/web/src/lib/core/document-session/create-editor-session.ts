@@ -1,5 +1,4 @@
 import type { NativeMarkdownEditingPort } from '@core/component/LexicalMarkdown/editing/nativeMarkdownPorts';
-import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   ABI_MAJOR,
@@ -22,6 +21,8 @@ import {
   type ViewOptions,
 } from '@macro-inc/lexical-wasm-view';
 import type { Span } from '@macro-inc/observability';
+
+import { sessionSocketUrl } from './session-socket-url';
 
 type SessionModule = typeof import('@macro-inc/collaboration/session/wasm');
 
@@ -209,14 +210,7 @@ function configureSession(
       token: (doc) => sessionSpan.run(() => options.authorization.token(doc)),
       subscribe: (callback) => options.authorization.subscribe(callback),
     },
-    socketUrl(doc, token, traceparent) {
-      const url = new URL(
-        `${SYNC_SERVICE_HOSTS.ws}/document/${encodeURIComponent(doc)}/connect`
-      );
-      url.searchParams.set('token', token);
-      if (traceparent) url.searchParams.set('traceparent', traceparent);
-      return url.toString();
-    },
+    socketUrl: sessionSocketUrl,
     telemetry,
     onStatus: options.onStatus,
   };

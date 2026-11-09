@@ -185,7 +185,17 @@ internal class NativeEditorSurfaces(
         retiring.any { it.request.scope.accountGeneration == generation }
 
     fun unmount(scope: SurfaceScope) { current(scope).unmount() }
-    fun stop(scope: SurfaceScope) { retire(current(scope)) }
+    fun stop(scope: SurfaceScope) {
+        validate(scope)
+        val surface = surfaces[scope.surfaceID]
+        if (surface?.request?.scope == scope) {
+            retire(surface)
+            return
+        }
+        require(latestGenerations[scope.surfaceID] == scope.surfaceGeneration) { "Stale surface generation" }
+        // A repeated stop can arrive while durable shutdown is draining or
+        // after its terminal channel event has already been sent.
+    }
 
     fun dispose(onDrained: () -> Unit = {}) {
         checkMain()

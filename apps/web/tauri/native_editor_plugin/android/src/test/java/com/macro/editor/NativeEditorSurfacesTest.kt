@@ -66,8 +66,12 @@ class NativeEditorSurfacesTest {
                 bridge.action(ActionRequest(ActionRequestKind.SetState, 0, "state", state, null, request.scope))
             }
             assertEquals("\"a😀\"", bridge.query(QueryRequest(QueryRequestKind.Text, 0, null, null, request.scope)).json)
+            bridge.permissions(PermissionRequest(request.permissions.copy(current = false), request.scope))
+            bridge.stop(request.scope)
             bridge.stop(request.scope)
             shadowOf(Looper.getMainLooper()).idle()
+            bridge.stop(request.scope)
+            assertEquals(1, events.count { it.kind == SurfaceEventKind.Stopped })
             assertThrows(IllegalArgumentException::class.java) { bridge.create(request) }
             bridge.beginAccount(AccountRequest("other-fixture-user"))
             assertThrows(IllegalArgumentException::class.java) { bridge.query(QueryRequest(QueryRequestKind.Text, 0, null, null, request.scope)) }
