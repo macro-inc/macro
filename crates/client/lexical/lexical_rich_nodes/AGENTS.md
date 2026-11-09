@@ -36,6 +36,7 @@ feature exports owned HTML; browser DOM import and layout stay in views.
 - Use `text::entity` for every text entity; `text_entity` only re-exports it.
 - Register LinkNode before AutoLink; autolink changes are transactional `AUTO_LINK_CHANGED` events.
 - Keep shared Match/Matcher and pinned linkify-it patterns in `utils`; regenerate the oracle corpus with the documented script.
+- Reject impossible schema/email streams by literal triggers and fuzzy domains by the pinned host test before full linkify scans; retain UTF-16 and match ordering against the corpus and unfiltered-regress proptest.
 - Legacy JS regexes match UTF-16 code units with `find_from_ucs2`.
 - Show regex source and flags in matcher Debug output; keep compiled VM internals out of diagnostics.
 
