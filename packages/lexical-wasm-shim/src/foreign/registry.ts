@@ -1,4 +1,3 @@
-import { foreignHookIndex } from '../backend/conformance';
 import { foreignHooks } from '../hooks.generated';
 
 export type NodeKind = 'Element' | 'Text' | 'Decorator' | 'LineBreak' | 'Root';
@@ -60,9 +59,6 @@ export class NativeNodeCatalog {
   private readonly types = new Map<string, NodeClass>();
 
   constructor(classes: readonly NativeNodeClass[]) {
-    const names = foreignHookIndex();
-    if (names.some((name, i) => name !== foreignHooks[i]?.name))
-      throw new Error('foreign hook index mismatch');
     for (const { klass, kind, type: declaredType } of classes) {
       if (this.entries.has(klass))
         throw new TypeError('duplicate native node class');

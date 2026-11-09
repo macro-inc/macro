@@ -62,7 +62,16 @@ export function initializeConformance(
     );
   hookNames = Object.freeze(modelHooks);
   initialized = true;
-  bindBackendFactory((config) => new ConformanceBackend(config));
+  bindBackendFactory((config) => {
+    if (config.nodes !== undefined && config.nodes.length !== 0)
+      throw new Error(
+        'JS node class registration requires the production compatibility host'
+      );
+    return new ConformanceBackend({
+      namespace: config.namespace ?? '',
+      nodes: [],
+    });
+  }, modelHooks);
 }
 
 /** The override mask uses this Rust-derived order, never a second JS hook list. */
@@ -137,6 +146,7 @@ function isNodeMutation(
 
 /** The shim has one model backend, with no production-session fallback. */
 export class ConformanceBackend implements ShimBackend {
+  readonly initialVersion = 0;
   private readonly handle: wasm.EditorHandle;
   private readonly callbacks = new Map<number, Callback>();
   private readonly foreignCallbacks = new Map<string, Callback>();

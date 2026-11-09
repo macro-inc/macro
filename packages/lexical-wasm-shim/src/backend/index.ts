@@ -5,8 +5,9 @@ import type {
 
 export type CommitPacket = HostCommitPacket;
 
-/** Development-only model boundary. Scheduling and JS object handles live above it. */
+/** Engine boundary. Scheduling and JS object handles live above it. */
 export interface ShimBackend {
+  readonly initialVersion: number;
   installForeign(
     type: string,
     dispatch: (message: HostNodeMutation<unknown, unknown>) => unknown

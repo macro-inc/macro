@@ -9,7 +9,7 @@ use the real development conformance host.
 ## Start here
 
 - `src/index.ts`, `src/editor.ts` and `src/nodes/`: native facade foundation over the backend; foreign construction and the complete export surface remain unfinished.
-- `src/backend/factory.ts`: engine binding selected after initialization; root module evaluation never loads WASM.
+- `src/backend/factory.ts`: typed editor configuration and validated hook-order binding selected after initialization; root module evaluation never loads WASM.
 - `src/backend/conformance.ts`: development backend and its runtime WASM import.
 - `src/backend/index.ts`: model boundary; packet types come from Rust generation.
 - `scripts/derive-hooks.ts`: checksum-pinned upstream AST inventory versus the actual model hook enum; generates `src/hooks.generated.ts`.
@@ -97,3 +97,5 @@ Exercise clone staging, original-version reads, native copyNode fresh keys, read
 Use hosting-extract.test.ts for child/selection/destination dispatch and native markdown extraction with selection identity, native super and opaque failure/retry. These backend literals do not replace full subclass acceptance.
 
 Keep native node graph methods on the active runtime; captured raw fields and is() use their original record keys. Save the actual state handle at publication for historical toJSON. Editor-less reads expose state helpers without an active editor. Native constructor field accessors currently read captured versions; writable fields and explicit older-native-prototype dispatch still require their model bridges.
+
+Capture NativeNodeCatalog metadata without consulting an engine; validate the generated hook order when binding the backend, and construct the initial EditorState from that backend's published initialVersion.
