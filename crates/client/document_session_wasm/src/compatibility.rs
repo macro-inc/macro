@@ -10,6 +10,7 @@ mod calls;
 mod capture_index;
 mod class_masks;
 mod lifecycle;
+mod native_calls;
 pub(crate) mod observer;
 mod records;
 mod reservations;
