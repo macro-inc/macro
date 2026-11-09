@@ -62,3 +62,5 @@ Generate session/compatibility.generated.ts from document_session_wasm/abi/compa
 Compatibility generation concatenates the three schemas in explicit source order before invoking the compiler; --check writes only temporary outputs. Do not restore filesystem-glob ordering or overwrite live artifacts during freshness checks.
 
 Use CompatInstanceBind for exact-capture JS instance hydration; validate nonzero owner/class/instance identifiers natively without changing graph state or invoking public serialization.
+
+Deliver external native commits through CompatPublications with their actual dirty sets and tags; current-version queries must not discard undelivered publication metadata.
