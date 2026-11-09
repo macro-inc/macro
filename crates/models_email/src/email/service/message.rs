@@ -461,9 +461,16 @@ pub struct RecentInboxMessage {
     pub cc: Vec<String>,
     /// At most 200 characters.
     pub subject: Option<String>,
-    /// The provider's short preview of the body, at most 300 characters.
+    /// A preview of the body: the provider's, at most 300 characters by
+    /// default, or up to 500 from the body when a caller asks for more.
     pub snippet: Option<String>,
     pub received_at: Option<DateTime<Utc>>,
+    /// The message's labels or folders, by name.
+    #[serde(default)]
+    pub labels: Vec<String>,
+    /// The body as plain text, for a longer preview; never sent.
+    #[serde(skip)]
+    pub body: Option<String>,
 }
 
 /// The newest messages across a user's own inboxes, newest first.

@@ -9,6 +9,10 @@ use scheduled_action::domain::suggestions::ports::{InboxMessage, SuggestionSourc
 
 use crate::routine_sessions::PipedreamConnectedApps;
 
+/// Snippet length suggestions read: past the provider's preview, from the
+/// body.
+const SNIPPET_CHARS: u16 = 500;
+
 /// The newest mail through email_service, which reads it from Gmail and
 /// Outlook, and the apps the person connected through Pipedream.
 pub struct HarnessSuggestionSources<Connections> {
@@ -27,7 +31,7 @@ where
     ) -> anyhow::Result<Vec<InboxMessage>> {
         let response = self
             .email
-            .get_recent_inbox_messages(user.as_ref(), limit)
+            .get_recent_inbox_messages_with_snippets(user.as_ref(), limit, Some(SNIPPET_CHARS))
             .await?;
         Ok(response
             .messages
@@ -39,8 +43,7 @@ where
                 }),
                 to: message.to,
                 subject: message.subject,
-                // The reader doesn't return the provider's labels yet.
-                labels: Vec::new(),
+                labels: message.labels,
                 snippet: message.snippet,
                 received_at: message.received_at,
             })

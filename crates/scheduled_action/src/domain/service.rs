@@ -717,8 +717,16 @@ where
         input: ActionConfiguration,
         suggestion_id: Uuid,
     ) -> Result<ScheduledAction> {
-        self.create(principal, input, None, Some(suggestion_id))
-            .await
+        let created = self
+            .create(principal, input, None, Some(suggestion_id))
+            .await?;
+        // Accepts per suggestion, for the suggestions dashboard.
+        tracing::info!(
+            event = "routine_suggestions.saved",
+            routine.suggestion.id = %suggestion_id,
+            enabled = created.enabled,
+        );
+        Ok(created)
     }
 
     async fn get_actions(

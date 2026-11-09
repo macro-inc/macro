@@ -85,7 +85,6 @@ document_storage_service_client = { path = "../../crates/document_storage_servic
 documents = { path = "../../crates/documents", features = ["ai_tools", "attachment", "outbound", "ports"] }
 doppler-config = { workspace = true }
 email = { path = "../../crates/email", features = ["attachment", "outbound", "sqs"] }
-email_db_client = { path = "../../crates/email_db_client" }
 email_service_client = { path = "../../crates/email_service_client" }
 entity_access = { path = "../../crates/entity_access", features = ["inbound", "outbound"] }
 entity_access_management = { path = "../../crates/entity_access_management" }
