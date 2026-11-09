@@ -736,3 +736,73 @@ fn failed_node_state_parse_keeps_the_original_instance_and_record() -> Result<()
     assert_eq!(editor.state().view().foreign_instance(key), Some(instance));
     Ok(())
 }
+
+#[test]
+fn builder_installs_instance_host_before_initial_state_publication()
+-> Result<(), Box<dyn std::error::Error>> {
+    struct BindInitial(std::sync::Arc<std::sync::atomic::AtomicBool>);
+    impl Plugin for BindInitial {
+        fn name(&self) -> &'static str {
+            "bind-initial-instance"
+        }
+        fn commands(&self) -> &[CommandRegistration] {
+            &[]
+        }
+        fn handle(&self, _: &mut Transaction<'_>, _: &Command) -> Result<Handled, Error> {
+            Ok(Handled::No)
+        }
+        fn after_commit(&self, tx: &mut Transaction<'_>, _: &Commit) -> Result<(), Error> {
+            if !self.0.swap(true, Ordering::SeqCst) {
+                let key = tx.nodes_of_type::<Text>()[0].key();
+                let identity = tx.view().foreign_record_identity(key)?;
+                let instance = ForeignInstance::new(tx.foreign_editor_identity(), 1, 1)?;
+                tx.view().bind_foreign_instance(key, &identity, instance)?;
+            }
+            Ok(())
+        }
+    }
+    let host = Arc::new(Host {
+        classes: vec![(1, "text")],
+        next: AtomicU32::new(2),
+        failure: AtomicU32::new(0),
+        calls: Mutex::new(vec![]),
+    });
+    let bound = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let json = serde_json::from_value(
+        serde_json::json!({"root":{"type":"root","version":1,"children":[{"type":"paragraph","version":1,"children":[{"type":"text","version":1,"text":"before","format":0,"detail":0,"mode":"normal","style":""}]}]}}),
+    )?;
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .foreign_instance_hooks(host.clone())
+        .plugin(BindInitial(bound.clone()))
+        .initial_state(json)
+        .build()?;
+    assert!(bound.load(Ordering::SeqCst));
+    let key = editor.state().view().nodes_of_type::<Text>()[0].key();
+    assert_eq!(
+        editor
+            .state()
+            .view()
+            .foreign_instance(key)
+            .unwrap()
+            .instance_id(),
+        1
+    );
+    editor.update(|tx| {
+        tx.text(key)?.set_text_content("after")?;
+        Ok(())
+    })?;
+    assert_eq!(
+        host.calls.lock().unwrap().as_slice(),
+        &[ForeignCloneMode::CopyOnWrite]
+    );
+    assert_eq!(
+        editor
+            .state()
+            .view()
+            .foreign_instance(key)
+            .unwrap()
+            .instance_id(),
+        2
+    );
+    Ok(())
+}

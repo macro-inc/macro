@@ -207,6 +207,8 @@ type TransformRegistrations = Vec<(TransformTarget, RegisteredTransform)>;
 pub struct EditorBuilder {
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_states: Vec<ForeignStateConfig>,
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_instance_hooks: Option<Arc<dyn ForeignInstanceHooks>>,
     opaque_unknown_types: bool,
     pub(crate) extensions: crate::extension::Extensions,
     pub(crate) duplicate_extension: Option<&'static str>,
@@ -228,6 +230,8 @@ impl EditorBuilder {
         Self {
             #[cfg(feature = "foreign-nodes")]
             foreign_states: vec![],
+            #[cfg(feature = "foreign-nodes")]
+            foreign_instance_hooks: None,
             opaque_unknown_types: false,
             extensions: Default::default(),
             duplicate_extension: None,
@@ -565,6 +569,12 @@ impl EditorBuilder {
         inner.table = rows;
         let mut editor = Editor::new(registry, self.mode, self.keys, self.view_host)
             .map_err(|e| BuildError::InitialState(Box::new(e)))?;
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(hooks) = self.foreign_instance_hooks {
+            editor
+                .install_foreign_instance_hooks(hooks)
+                .map_err(|error| BuildError::InitialState(Box::new(error)))?;
+        }
         editor.extensions = self.extensions;
         (editor.listeners, editor.listener_table) = crate::plugin::listeners(&self.plugins);
         editor.plugins = self.plugins;
