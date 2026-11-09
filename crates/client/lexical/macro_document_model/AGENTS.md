@@ -28,6 +28,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Share URL matching and preview/search/embedding projections through links.rs and parsers.rs.
 - Keep permission gate imports fail-closed; bind each approved source divergence to its full oracle row, exact native error and captured source parse-error messages, and reject stale entries.
 - Custom-code import applies peer/id setters in source order; later imports consult editor-local learned state configs.
+- Keep saved download JSON separate from live sync JSON: regenerate top-level searchText before lifting draft comment wrappers and stripping completion, inline-search and custom-code children.
 - Preserve immutable export reads and shallow JSON order; see [EXPORTS.md](EXPORTS.md) for the S1 Q8 acceptance boundary.
 - Build reader-oriented XML through xml.rs without importing or normalizing stored node payloads.
 - Use ImportPolicy as the single state/base import mechanism; reproduce upstream loss.

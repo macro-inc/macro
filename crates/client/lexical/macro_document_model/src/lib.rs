@@ -65,3 +65,6 @@ pub mod plugins_group_a;
 pub mod plugins_group_b;
 /// Application surface plugin registration.
 pub mod surface;
+
+/// Legacy saved document JSON for downloads, separate from live synchronization.
+pub mod save;

@@ -63,7 +63,7 @@ export function useDownloadDocumentAsJson() {
     if (!editor && !runtime) return;
     const fileNameWithExtension = `${fileName()}.json`;
     const json = runtime
-      ? JSON.parse(runtime.view.query.serializedState())
+      ? JSON.parse(runtime.executor.session.savedState())
       : editor && getSaveState(editor.getEditorState());
     const blob = new Blob([JSON.stringify(json, null, 2)], {
       type: 'application/json',
