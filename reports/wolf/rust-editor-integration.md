@@ -1,6 +1,70 @@
 # Rust editor integration: production compatibility checkpoint
 
-## Current native preview checkpoint
+## Current integrated checkpoint
+
+Source freeze `68329003951f1ef0e004ac78fdda6fee66ab6a1a` is committed and the
+native-only preview is installed. Its tracked tree exactly matches the audited
+private validation tree `bdef18638ce7bd9b5ffa3033c899b514f472352a`; failed private
+root-export attempts and their revert were excluded from integration history.
+No dependency directory, preview server process or compatibility selector changed.
+
+The batch includes native Reconcile/admission and retired records, the publication
+queue with its required bootstrap follow-up, the frozen slash adapter, clipboard
+fixture and guarded snippet command, ten file-paste and four sequential-snippet
+contracts, and the bounded replacement/registry/JSON/root-import/DOM-helper source
+chain. The actual generated compatibility declarations now expose Batch,
+CaptureLeases and TakePublications from the separate explicit compatibility build.
+The seven-exception tooling is present without enabling the held full-package CI
+hook. Later snippet-resolution, savepoint and plugin-manifest producers are excluded.
+
+Current combined adapter tests pass 96/96 and native-only adapter tests pass 22/22.
+Replay passes all 1,421 cases and flat-diff passes 2/2. The publication regression
+captures the actual observer commits before drain and compares every wire receipt
+in FIFO order, including dirty intent, tags and selection. The integrated history
+path produces a tree-removal receipt followed by a selection-clear receipt; neither
+is dropped or coalesced. Exact two-descendant removal and the last-version snapshot
+fence remain asserted. The earlier one-receipt expectation failure is retained as
+failed evidence, superseded by the strict observer-chain regression.
+
+The private workspace rust-check, clippy, format and hakari sequence completed in
+order at nice 19 / two Cargo jobs; formatting changed no source. Earlier component
+checks passed 521 model tests, the complete Macro package including its 20,000-step
+service oracle, 59 native application session tests plus telemetry, seven FFI tests,
+27 JVM tests and instrumentation compilation. Those logs retain their exact source
+scope. The final source passes strict shim types and 41 hooks from 489 sources,
+263 view tests and view types, full app checking and its normal production build,
+nine feature graphs, scoped checks, and 18 keyboard/history cases in Chromium,
+Firefox and WebKit. The existing DOM-import complexity warning remains visible.
+The earlier same-JS-source shim suite remains 326/327: the unchanged 2,396 read
+crossings failure is open, not waived.
+
+The final-source native build has SHA256
+`e36ecb14f26f48ac544fd908fc154889b4b91e4b931b66d7a13c89c88cbdad9f`,
+8,436,344 raw / 1,915,872 Brotli bytes: 1,900 Brotli bytes above the preceding
+preview and 315,872 above the advisory ceiling. Native export inspection passes
+with compatibility disabled; glue and native declarations remain unchanged. The
+separate explicit compatibility artifact was initialized and export-checked with
+its exact generated declarations, but was not installed. No latency improvement,
+full initializer, namespace, GC, plugin ownership or compatibility acceptance is
+inferred from these source and component checks.
+
+The installed preview passes five isolated-browser flows from fresh authentication:
+existing document, new document, typing, undo/redo and fresh sign-in. Both redo
+shortcuts preserve exact raw JSON, durable IDs and model/DOM caret. All four fetched
+WASM responses match the installed hash and no page errors occurred. The first run
+used an expired saved access token and failed with API 401s and refresh HTTP 500s;
+that run is retained separately. Fresh real UI sign-in restored access on the same
+installed artifact. The refresh failure remains an authentication recovery issue,
+not a passing check or an artifact regression attribution.
+
+Evidence uses `/home/wolf/tmp/integration3-acceptance/next-union-*` and
+`next-batch-*`. The workspace, web and main tree-equality receipts remain separate;
+`next-union-preview-install.json` records the complete previous-set backup and
+`next-union-live-hash-proof.json` binds the successful fresh-authentication run.
+End-to-end trace connectivity and the earlier comment-button/table-picker parity
+gaps remain open. Integration3 is not accepted by this checkpoint.
+
+## Previous native preview checkpoint
 
 Source freeze `cafc3c1f80da8c92778e0b9e9a02da2d11c741ea` is built and installed
 with compatibility disabled. The artifact-only update preserves matching glue and
