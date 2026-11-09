@@ -30,6 +30,10 @@ pub fn decode_command(
     let decoders: &[Decoder] = &[
         // WP-58 Group B application commands.
         crate::plugins_group_b::decode_command,
+        // Group A source menu insertion policy.
+        |name, json, generation, _event| {
+            crate::plugins_group_a::decode_command(name, json, generation)
+        },
     ];
     for decode in decoders {
         if let Some(command) = decode(name, json, generation, event)? {
