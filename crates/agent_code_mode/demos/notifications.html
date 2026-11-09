@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inbox</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 16px; }
+  header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  h1 { font-size: 17px; margin: 0 auto 0 0; }
+  .tabs button { border: 1px solid var(--line); background: var(--panel); border-radius: 8px;
+    padding: 5px 10px; }
+  .tabs button[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+  ul { list-style: none; margin: 0; padding: 0; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  li { display: grid; grid-template-columns: 10px 1fr auto; gap: 12px; align-items: center;
+    padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  li:last-child { border-bottom: 0; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .seen .dot { background: transparent; }
+  .kind { font-size: 12px; color: var(--muted); }
+  .title { font-weight: 550; word-break: break-word; }
+  .snippet { color: var(--muted); overflow: hidden; text-overflow: ellipsis;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .done { border: 0; background: var(--chip); border-radius: 8px; padding: 6px 10px; }
+  .empty { padding: 40px 16px; text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Inbox</h1>
+    <div class="tabs">
+      <button id="show-open" aria-pressed="true">Open</button>
+      <button id="show-done" aria-pressed="false">Done</button>
+    </div>
+  </header>
+  <div id="list"><p class="empty">Loading…</p></div>
+</div>
+
+<script type="text/macro" id="feed" lang="ts">
+  /** The first string a notification's metadata carries under one of these keys. */
+  function pick(content: unknown, keys: string[]): string | null {
+    if (typeof content !== 'object' || content === null) return null;
+    const record = content as Record<string, unknown>;
+    for (const key of keys) {
+      const value = record[key];
+      if (typeof value === 'string' && value.trim()) return value;
+    }
+    return null;
+  }
+
+  export default async function ({ done }: { done: boolean }, { macro }: ProgramContext) {
+    const rows = [];
+    for await (const notification of macro.notifications.list({ pageSize: 40 })) {
+      if ((await notification.done()) === done) {
+        const metadata = await notification.metadata();
+        const sender = await notification.sender();
+        rows.push({
+          id: notification.id,
+          kind: metadata.tag.replaceAll('_', ' '),
+          title: pick(metadata.content, [
+            'documentName', 'entityName', 'taskName', 'channelName', 'subject', 'title', 'name',
+          ]) ?? metadata.tag.replaceAll('_', ' '),
+          snippet: pick(metadata.content, ['messageContent', 'snippet', 'body', 'message', 'content']),
+          from: sender ? ((await sender.name()) ?? null) : null,
+          at: await notification.createdAt(),
+          seen: await notification.seen(),
+        });
+      }
+      if (rows.length === 30) break;
+    }
+    return rows;
+  }
+</script>
+
+<script type="text/macro" id="markDone" lang="ts">
+  export default async function (
+    { ids, done }: { ids: string[]; done: boolean },
+    { macro }: ProgramContext,
+  ) {
+    if (done) {
+      await macro.notifications.markDone(ids);
+    } else {
+      await Promise.all(ids.map((id) => macro.notifications.byId(id).markUndone()));
+    }
+    return { count: ids.length };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { feed, markDone } from 'macro:programs';
+
+  const list = document.getElementById('list')!;
+  const openTab = document.getElementById('show-open')!;
+  const doneTab = document.getElementById('show-done')!;
+  let showingDone = false;
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  function relative(at: string) {
+    const minutes = Math.round((Date.now() - new Date(at).getTime()) / 60000);
+    if (minutes < 60) return `${Math.max(minutes, 1)}m`;
+    if (minutes < 60 * 24) return `${Math.round(minutes / 60)}h`;
+    return `${Math.round(minutes / 1440)}d`;
+  }
+
+  async function load() {
+    const wanted = showingDone;
+    const rows = await feed({ done: wanted });
+    if (wanted !== showingDone) return;
+    if (rows.length === 0) {
+      list.replaceChildren(el('p', 'empty', wanted ? 'Nothing marked done yet.' : "You're all caught up."));
+      return;
+    }
+    const ul = el('ul');
+    for (const row of rows) {
+      const li = el('li', row.seen ? 'seen' : '');
+      const text = el('div');
+      const kind = [row.kind, row.from, relative(row.at)].filter(Boolean).join(' · ');
+      text.append(el('div', 'kind', kind), el('div', 'title', row.title));
+      if (row.snippet) text.append(el('div', 'snippet', row.snippet));
+      const button = el('button', 'done', wanted ? 'Reopen' : 'Done');
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        li.style.opacity = '.4';
+        await markDone({ ids: [row.id], done: !wanted });
+        await load();
+      });
+      li.append(el('span', 'dot'), text, button);
+      ul.append(li);
+    }
+    list.replaceChildren(ul);
+  }
+
+  function show(done: boolean) {
+    showingDone = done;
+    openTab.setAttribute('aria-pressed', String(!done));
+    doneTab.setAttribute('aria-pressed', String(done));
+    load();
+  }
+
+  openTab.addEventListener('click', () => show(false));
+  doneTab.addEventListener('click', () => show(true));
+  // Notifications have no live event of their own; a mention or message
+  // usually arrives with one.
+  on(['message.posted', 'message.mentioned', 'document.created'], load);
+  await load();
+</script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Channels</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27; }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: grid; grid-template-columns: 220px 1fr; }
+  input, button { font: inherit; color: inherit; }
+  nav { border-right: 1px solid var(--line); padding: 12px 8px; overflow: auto; }
+  nav h1 { font-size: 13px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: .04em; margin: 4px 8px 10px; }
+  nav button { display: block; width: 100%; text-align: left; background: none; border: 0;
+    padding: 7px 10px; border-radius: 8px; cursor: pointer; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis; }
+  nav button[aria-current="true"] { background: var(--chip); font-weight: 600; }
+  main { display: flex; flex-direction: column; min-width: 0; height: 100%; }
+  main header { padding: 14px 16px; border-bottom: 1px solid var(--line); font-weight: 600; }
+  #messages { flex: 1; overflow: auto; padding: 12px 16px; display: flex;
+    flex-direction: column; gap: 12px; }
+  .message { display: grid; grid-template-columns: 32px 1fr; gap: 10px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent);
+    color: #fff; display: grid; place-items: center; font-weight: 600; font-size: 13px; }
+  .who { font-weight: 600; margin-right: 6px; }
+  .when { color: var(--muted); font-size: 12px; }
+  .body { white-space: pre-wrap; word-break: break-word; margin-top: 2px; }
+  .composer { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--line); }
+  .composer input { flex: 1; min-width: 0; padding: 9px 12px; border: 1px solid var(--line);
+    border-radius: 10px; background: var(--panel); }
+  .composer button { padding: 9px 14px; border: 0; border-radius: 10px; background: var(--accent);
+    color: #fff; cursor: pointer; }
+  .muted { color: var(--muted); }
+  @media (max-width: 640px) {
+    body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    nav { border-right: 0; border-bottom: 1px solid var(--line); display: flex; gap: 4px;
+      overflow-x: auto; padding: 8px; }
+    nav h1 { display: none; }
+    nav button { width: auto; flex: none; }
+  }
+</style>
+</head>
+<body>
+<nav id="channels" aria-label="Channels"><h1>Channels</h1></nav>
+<main>
+  <header id="title">Loading…</header>
+  <div id="messages" aria-live="polite"></div>
+  <div class="composer">
+    <input id="draft" placeholder="Write a message" aria-label="Message">
+    <button id="send">Send</button>
+  </div>
+</main>
+
+<script type="text/macro" id="channelList" lang="ts">
+  export default async function (_args: {}, { macro }: ProgramContext) {
+    const page = await macro.workspace.page({ includeTypes: ['channel'], limit: 40 });
+    return page.items.flatMap((item) =>
+      item.type === 'channel' ? [{ id: item.id, name: item.name ?? 'Untitled channel' }] : [],
+    );
+  }
+</script>
+
+<script type="text/macro" id="messages" lang="ts">
+  export default async function ({ channelId }: { channelId: string }, { macro }: ProgramContext) {
+    const channel = macro.channels.byId(channelId);
+    const recent = [];
+    for await (const message of channel.messages({ pageSize: 30 })) {
+      recent.push(message);
+      if (recent.length === 30) break;
+    }
+
+    const names = new Map<string, Promise<string>>();
+    const rows = await Promise.all(recent.map(async (message) => {
+      const author = await message.author();
+      if (!names.has(author.id)) names.set(author.id, author.name().then((name) => name ?? 'Someone'));
+      return {
+        id: message.id,
+        author: await names.get(author.id)!,
+        content: await message.content(),
+        createdAt: await message.createdAt(),
+      };
+    }));
+    return { name: (await channel.name()) ?? 'Channel', messages: rows.reverse() };
+  }
+</script>
+
+<script type="text/macro" id="post" lang="ts">
+  export default async function (
+    { channelId, text }: { channelId: string; text: string },
+    { macro }: ProgramContext,
+  ) {
+    const message = await macro.channels.byId(channelId).send(text);
+    return { id: message.id };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { channelList, messages, post } from 'macro:programs';
+
+  const nav = document.getElementById('channels')!;
+  const title = document.getElementById('title')!;
+  const list = document.getElementById('messages')!;
+  const draft = document.getElementById('draft') as HTMLInputElement;
+  const sendButton = document.getElementById('send') as HTMLButtonElement;
+  let current: string | null = null;
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  async function openChannel(id: string) {
+    current = id;
+    for (const button of nav.querySelectorAll('button')) {
+      button.setAttribute('aria-current', String(button.dataset.id === id));
+    }
+    const { name, messages: rows } = await messages({ channelId: id });
+    if (current !== id) return;
+    title.textContent = `# ${name}`;
+    if (rows.length === 0) {
+      list.replaceChildren(el('p', 'muted', 'No messages yet. Say hello.'));
+      return;
+    }
+    list.replaceChildren(...rows.map((row) => {
+      const item = el('div', 'message');
+      const text = el('div');
+      const line = el('div');
+      const when = new Date(row.createdAt).toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+      });
+      line.append(el('span', 'who', row.author), el('span', 'when', when));
+      text.append(line, el('div', 'body', row.content));
+      item.append(el('div', 'avatar', row.author.slice(0, 1).toUpperCase()), text);
+      return item;
+    }));
+    list.scrollTop = list.scrollHeight;
+  }
+
+  async function send() {
+    const text = draft.value.trim();
+    if (!text || !current) return;
+    sendButton.disabled = true;
+    draft.value = '';
+    await post({ channelId: current, text });
+    sendButton.disabled = false;
+    await openChannel(current);
+  }
+
+  const channels = await channelList();
+  if (channels.length === 0) title.textContent = 'You are not in any channels yet.';
+  for (const channel of channels) {
+    const button = el('button', '', channel.name);
+    button.dataset.id = channel.id;
+    button.addEventListener('click', () => openChannel(channel.id));
+    nav.append(button);
+  }
+  sendButton.addEventListener('click', send);
+  draft.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') send();
+  });
+  on(['message.posted', 'message.patched', 'message.deleted'], () => {
+    if (current) openChannel(current);
+  });
+  if (channels[0]) await openChannel(channels[0].id);
+</script>
+</body>
+</html>
