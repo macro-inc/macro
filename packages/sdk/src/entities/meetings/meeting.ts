@@ -5,12 +5,40 @@ import type {
 import { MacroNotFoundError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { CallRecord } from '../calls/call-record';
+import { CallConnection, type JoinOptions } from '../calls/connection';
+import { callAdmissionError } from '../calls/errors';
 import { Channel } from '../channels/channel';
 import { MacroEntity } from '../entity';
 import type { User } from '../users/user';
 
 /** A meeting's schedule and invitation link. */
 export class Meeting extends MacroEntity<MeetingRecord> {
+  /** Join this meeting as the current account; always send a program join body. */
+  async join(opts: JoinOptions = {}): Promise<CallConnection> {
+    try {
+      const response = unwrap(
+        await this.client.storage.meetingJoin({
+          path: { token: (await this.detail.get()).shareToken },
+          body: opts,
+        }),
+      );
+      return new CallConnection(this.client, response);
+    } catch (error) {
+      return callAdmissionError(error);
+    }
+  }
+
+  /** Join the link as a named guest. */
+  async joinAsGuest(name: string): Promise<CallConnection> {
+    const response = unwrap(
+      await this.client.storage.meetingGuestJoin({
+        path: { token: (await this.detail.get()).shareToken },
+        body: { displayName: name },
+      }),
+    );
+    return new CallConnection(this.client, response);
+  }
+
   private lookupToken?: string;
 
   private constructor(client: MacroClient, id: string, record?: MeetingRecord) {

@@ -33,7 +33,9 @@ bunx vite --config src/features/onboarding/browser-test/vite.config.ts
   on the saved step. Saved progress wins over `step`.
 
 Tests seed the world through `openFixture` in `fixture-page.ts`. They read the
-world and the recorded analytics through `window.onboardingFixture`.
+world and the recorded analytics through `window.onboardingFixture`, and change
+it in place with its `update` (the routines test streams suggestions in that
+way). Set `PROOF_DIR` to save that test's screenshots there.
 
 Connector logos under `public/connector-icons` are snapshots from Pipedream's
 public app directory. `../tests/connector-icons.json` records each original page

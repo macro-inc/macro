@@ -24,6 +24,7 @@ import {
   useContext,
 } from 'solid-js';
 import { makeMoveToProjectAction } from './make-move-to-project-action';
+import { makeRemoveFromProjectAction } from './make-remove-from-project-action';
 
 type FolderDropTarget = {
   ref: (element: HTMLElement) => void;
@@ -35,8 +36,11 @@ type FolderDropOptions = {
   ownSplitId?: Accessor<string | undefined>;
 };
 
+/** A folder's id, null for Drive's root, undefined where nothing can land. */
+type FolderDropId = string | null | undefined;
+
 export type CreateFolderDropTarget = (
-  folderId: Accessor<string | undefined>,
+  folderId: Accessor<FolderDropId>,
   options?: FolderDropOptions
 ) => FolderDropTarget;
 
@@ -58,18 +62,19 @@ export function createFolderDropTargets(): CreateFolderDropTarget | undefined {
   const folderList = createFolderList();
   const moveEntities = createMoveEntitiesToFolder('folder_drop');
   const moveToProjectAction = makeMoveToProjectAction({ userId: useUserId() });
+  const removeFromProjectAction = makeRemoveFromProjectAction();
   const folders = createMemo(() => indexFolders(folderList.folders()));
   const targets = new Map<
     string | number,
-    FolderDropOptions & { folderId: Accessor<string | undefined> }
+    FolderDropOptions & { folderId: Accessor<FolderDropId> }
   >();
 
   const droppableEntities = (
     data: unknown,
-    folderId: string | undefined,
+    folderId: FolderDropId,
     ownSplitId: string | undefined
   ): EntityData[] => {
-    if (!folderId || !isEntityDragData(data)) return [];
+    if (folderId === undefined || !isEntityDragData(data)) return [];
     if (data.operation() !== 'move') return [];
     if (ownSplitId && data.splitId === ownSplitId) return [];
     const dragged = data.selection?.entities() ?? [data];
@@ -79,9 +84,14 @@ export function createFolderDropTargets(): CreateFolderDropTarget | undefined {
 
   const move = async (
     entities: EntityData[],
-    folderId: string,
+    folderId: string | null,
     clearSelection: () => void
   ) => {
+    if (folderId === null) {
+      // Reports its own success and failure.
+      if (await removeFromProjectAction.execute(entities)) clearSelection();
+      return;
+    }
     const name = folders().get(folderId)?.name ?? folderId;
     try {
       await moveEntities(entities, { id: folderId, name });
@@ -96,7 +106,7 @@ export function createFolderDropTargets(): CreateFolderDropTarget | undefined {
     const data = draggable.data;
     const target = droppable && targets.get(droppable.id);
     const folderId = target?.folderId();
-    if (!folderId || !isEntityDragData(data)) return;
+    if (folderId === undefined || !isEntityDragData(data)) return;
     const entities = droppableEntities(data, folderId, target?.ownSplitId?.());
     if (entities.length === 0) return;
 

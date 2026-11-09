@@ -43,6 +43,11 @@ export default {
     one: 'and {{count}} more',
     other: 'and {{count}} more',
   },
+  stackShowMore: {
+    one: '{{count}} more',
+    other: '{{count}} more',
+  },
+  stackHideShort: 'Hide',
   markedDone: {
     one: 'Marked as done',
     other: 'Marked {{count}} notifications as done',
@@ -54,8 +59,21 @@ export default {
   undo: 'Undo',
   undoFailed: 'Failed to undo',
 
+  // Clearing
+  clear: 'Clear notifications',
+  clearToday: 'Clear today',
+  clearAll: 'Clear all',
+  clearTodayUnread: 'Clear today’s unread',
+  clearAllUnread: 'Clear all unread',
+  clearByKind: 'Clear by kind',
+  cleared: {
+    one: 'Cleared {{count}} notification',
+    other: 'Cleared {{count}} notifications',
+  },
+  clearedNothing: 'Nothing to clear',
+  clearFailed: 'Couldn’t clear notifications',
+
   // List states
-  location: 'Notifications location',
   loading: 'Loading notifications',
   loadFailed: 'Notifications couldn’t be loaded.',
   tryAgain: 'Try again',

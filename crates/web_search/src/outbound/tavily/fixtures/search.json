@@ -1,0 +1,26 @@
+{
+  "query": "rust async runtime comparison",
+  "follow_up_questions": null,
+  "answer": null,
+  "images": [],
+  "results": [
+    {
+      "url": "https://tokio.rs/blog/2025-10-tokio-1-48",
+      "title": "Announcing Tokio 1.48",
+      "content": "Tokio 1.48 ships a faster multi-threaded scheduler and stabilises task dumps.",
+      "score": 0.91,
+      "raw_content": "# Announcing Tokio 1.48\n\nTokio 1.48 ships a faster scheduler.",
+      "published_date": "Tue, 14 Oct 2025 09:00:00 GMT"
+    },
+    {
+      "url": "https://example.com/async-runtimes",
+      "title": "Comparing Rust async runtimes",
+      "content": "Tokio, smol and glommio take different approaches to scheduling.",
+      "score": 0.77,
+      "raw_content": null
+    }
+  ],
+  "response_time": 1.21,
+  "usage": { "credits": 1 },
+  "request_id": "8b3e43c3-1f0d-4b5e-9a37-5a8d3e1b4c11"
+}

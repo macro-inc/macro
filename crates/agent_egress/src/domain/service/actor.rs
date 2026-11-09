@@ -1,9 +1,14 @@
 //! Resolve each call's explicit actor before credentials or approvals.
 
 use super::*;
-use crate::domain::model::{SessionGrant, tool_result_response};
+use crate::domain::approval::{InProcessCall, refusal};
+use crate::domain::model::{
+    AgentSessionId, SessionGrant, disconnected_text, not_connected_text, tool_error_result,
+    tool_result_response,
+};
 use agent_session::domain::model::TurnPrompter;
 use ai_toolset::actor::{ToolActor, add_actor_schema};
+use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::{Value, json};
 
 /// Preserve the original MCP session/callback capabilities for owner calls.
@@ -68,32 +73,12 @@ where
             (actor, user)
         };
         tracing::info!(session = %grant.session, ?actor, listing, "resolved MCP actor");
-        let resolution = match self.credentials.resolve(user, grant.agent, destination).await {
-            Ok(resolution) => resolution,
-            Err(EgressError::UnknownCustomServer(_)) if !listing => return Ok(tool_result_response(id,
-                "This custom MCP server is not connected for the selected actor. Ask them to add or reconnect that server in Agents → Connections. Do not switch accounts unless they requested it.".into())),
-            Err(error) => return Err(error),
-        };
-        let upstream = match resolution {
-            McpResolution::Connected(call) => call,
-            McpResolution::Unconnected(call) if listing => call,
-            McpResolution::Unconnected(_) => {
-                if let McpDestination::Connected(slug) = destination {
-                    return Ok(not_connected_tool_result(
-                        slug,
-                        &grant.display_name(slug),
-                        id,
-                    ));
-                }
-                return Ok(tool_result_response(
-                    id,
-                    "The selected actor has no connection for this tool.".into(),
-                ));
-            }
-            McpResolution::Disconnected { call, .. } if listing => call,
-            McpResolution::Disconnected { name, .. } => {
-                return Ok(disconnected_tool_result(&name, id));
-            }
+        let upstream = match self
+            .resolve_upstream(grant, user, destination, listing)
+            .await?
+        {
+            Ok(upstream) => upstream,
+            Err(text) => return Ok(tool_result_response(id, text)),
         };
         let transport = self
             .actor_mcp
@@ -121,7 +106,170 @@ where
         )
         .await
     }
+
+    /// The upstream `user`'s connection reaches `destination` through, or the
+    /// tool result that says why a call cannot run.
+    async fn resolve_upstream(
+        &self,
+        grant: &SessionGrant,
+        user: &MacroUserIdStr<'static>,
+        destination: &McpDestination,
+        listing: bool,
+    ) -> Result<Result<UpstreamCall, String>, EgressError> {
+        let resolution = match self.credentials.resolve(user, grant.agent, grant.session.as_uuid(), destination).await {
+            Ok(resolution) => resolution,
+            Err(EgressError::UnknownCustomServer(_)) if !listing => return Ok(Err(
+                "This custom MCP server is not connected for the selected actor. Ask them to add or reconnect that server in Agents → Connections. Do not switch accounts unless they requested it.".into())),
+            Err(error) => return Err(error),
+        };
+        Ok(match resolution {
+            McpResolution::Connected(call) => Ok(call),
+            McpResolution::Unconnected(call) if listing => Ok(call),
+            McpResolution::Unconnected(_) => match destination {
+                McpDestination::Connected(slug) => {
+                    Err(not_connected_text(slug, &grant.display_name(slug)))
+                }
+                _ => Err("The selected actor has no connection for this tool.".into()),
+            },
+            McpResolution::Disconnected { call, .. } if listing => Ok(call),
+            McpResolution::Disconnected { name, .. } => Err(disconnected_text(&name)),
+        })
+    }
 }
+
+impl<Sessions, Credentials, Tokens, Forward, Approvals> SessionMcpExchange
+    for EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Approvals>
+where
+    Sessions: SessionAuthority,
+    Credentials: McpCredentials,
+    Tokens: GithubTokens,
+    Forward: Forwarder + 'static,
+    Approvals: OwnerApprovals,
+{
+    /// The session's grant, read by id for an in-process caller that has
+    /// authorized its own request against the session.
+    async fn session_grant(&self, session: AgentSessionId) -> Result<SessionGrant, EgressError> {
+        self.sessions.authorize_session(session).await
+    }
+
+    /// One `tools/list` or `tools/call` on a connected app or custom server as
+    /// `user`, for an in-process caller that already settled which account
+    /// the call spends and that it may spend it.
+    ///
+    /// The same credential resolution and independently authenticated
+    /// transport as a sandbox's requester call, so an app the account has
+    /// not connected, or whose grant died, answers with the same tool result.
+    /// Returns the MCP `result` payload. Listing reads the owner's catalog,
+    /// as every session's discovery does.
+    #[tracing::instrument(skip_all, err, fields(session_id = %grant.session, ?destination))]
+    async fn exchange_as(
+        &self,
+        grant: &SessionGrant,
+        user: &MacroUserIdStr<'static>,
+        destination: &McpDestination,
+        request: Value,
+    ) -> Result<Value, EgressError> {
+        if !matches!(
+            destination,
+            McpDestination::Connected(_) | McpDestination::Custom(_)
+        ) {
+            return Err(EgressError::Unroutable(
+                "only connected apps and custom servers are exchanged here".into(),
+            ));
+        }
+        let listing = request["method"] == "tools/list";
+        let user = if listing { &grant.owner } else { user };
+        let upstream = match self
+            .resolve_upstream(grant, user, destination, listing)
+            .await?
+        {
+            Ok(upstream) => upstream,
+            Err(text) => return Ok(tool_error_result(text)),
+        };
+        if !listing
+            && let Some(text) = self
+                .hold_owner_call(grant, user, destination, &request)
+                .await?
+        {
+            return Ok(tool_error_result(text));
+        }
+        let transport = self
+            .actor_mcp
+            .clone()
+            .ok_or(EgressError::Unauthenticated("actor transport unavailable"))?;
+        match transport
+            .exchange(grant.session, user.clone(), upstream, request)
+            .await
+        {
+            Ok(result) => Ok(result),
+            Err(error) if !listing => {
+                tracing::warn!(?error, "actor MCP exchange failed");
+                Ok(tool_error_result(UNKNOWN_OUTCOME.into()))
+            }
+            Err(error) => Err(error),
+        }
+    }
+}
+
+impl<Sessions, Credentials, Tokens, Forward, Approvals>
+    EgressServiceImpl<Sessions, Credentials, Tokens, Forward, Approvals>
+where
+    Sessions: SessionAuthority,
+    Approvals: OwnerApprovals,
+{
+    /// A call spending the owner's access in a turn somebody else prompted
+    /// waits for the owner, one call at a time, the same as a sandbox's
+    /// held call: the same approval record, announcement and standing
+    /// approvals. `Some` with what to tell the model when it may not run.
+    async fn hold_owner_call(
+        &self,
+        grant: &SessionGrant,
+        user: &MacroUserIdStr<'static>,
+        destination: &McpDestination,
+        request: &Value,
+    ) -> Result<Option<String>, EgressError> {
+        let Some(prompter) = grant.held_prompter().filter(|_| *user == grant.owner) else {
+            return Ok(None);
+        };
+        let (server_slug, server_name) = match destination {
+            McpDestination::Connected(slug) => (slug.as_str().to_owned(), grant.display_name(slug)),
+            McpDestination::Custom(key) => {
+                (format!("custom-{key}"), "custom MCP server".to_owned())
+            }
+            McpDestination::Macro | McpDestination::Preview => {
+                return Err(EgressError::Unroutable(
+                    "only connected apps and custom servers are exchanged here".into(),
+                ));
+            }
+        };
+        let tool = request["params"]["name"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
+        let status = self
+            .approvals
+            .hold_in_process(InProcessCall {
+                session: grant.session,
+                owner: grant.owner.clone(),
+                prompter: prompter.clone(),
+                server_slug,
+                server_name,
+                tool_name: tool.clone(),
+                arguments: request["params"]["arguments"].clone(),
+            })
+            .await?;
+        let current = self.sessions.authorize_session(grant.session).await?;
+        if current.prompter != grant.prompter {
+            return Ok(Some(
+                "The original turn ended; this tool did not run.".into(),
+            ));
+        }
+        Ok(refusal(status, grant.owner.email_str(), &tool))
+    }
+}
+
+/// What a failed call says: it may have run upstream before failing.
+const UNKNOWN_OUTCOME: &str = "The selected account's tool could not complete. Its outcome may be unknown; check state before retrying writes.";
 
 async fn exchange_result(
     transport: &dyn crate::domain::ports::ActorMcpTransport,
@@ -137,7 +285,7 @@ async fn exchange_result(
         Ok(result) => result,
         Err(error) if !listing => {
             tracing::warn!(?error, "actor MCP exchange failed");
-            return Ok(tool_result_response(id, "The selected account's tool could not complete. Its outcome may be unknown; check state before retrying writes.".into()));
+            return Ok(tool_result_response(id, UNKNOWN_OUTCOME.into()));
         }
         Err(error) => return Err(error),
     };

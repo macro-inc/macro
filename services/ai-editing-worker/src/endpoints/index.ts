@@ -6,6 +6,7 @@ import edit from './edit';
 import forms from './forms';
 import lexicalCommit from './lexical-commit';
 import lexicalState from './lexical-state';
+import markdown from './markdown';
 import spreadsheet from './spreadsheet';
 import traces from './traces';
 
@@ -16,6 +17,7 @@ endpoints.route('/canvas', canvas);
 endpoints.route('/forms', forms);
 endpoints.route('/lexical-state', lexicalState);
 endpoints.route('/lexical-commit', lexicalCommit);
+endpoints.route('/markdown', markdown);
 endpoints.route('/comment-mark', commentMark);
 endpoints.route('/traces', traces);
 endpoints.route('/spreadsheet', spreadsheet);

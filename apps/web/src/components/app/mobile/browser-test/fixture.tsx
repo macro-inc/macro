@@ -3,6 +3,7 @@ import '../../../../index.css';
 import { ComposerAddDrawer } from '@app/features/channel/Input/ComposerAddMenu';
 import { MobileSettingsSheet } from '@app/features/settings/MobileSettingsSheet';
 import { SettingsPage, SettingsRow } from '@app/features/settings/primitives';
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import type { SettingsTab } from '@core/constant/SettingsState';
@@ -359,7 +360,10 @@ function PersistentPromptScenario() {
   onMount(() => {
     toast.custom(
       {
-        title: 'Enable Browser Notifications',
+        title: 'Enable notifications',
+        dismissLabel: t('common.notNow'),
+        content: () =>
+          'Get notified about new messages, mentions, comments, and emails.',
         actions: [{ label: 'Enable', onClick: () => press('Enable') }],
       },
       { persistent: true, region: 'mobile-prompt-region' }

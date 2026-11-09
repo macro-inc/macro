@@ -27,7 +27,7 @@ vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
   AskMacroButton: () => null,
 }));
 vi.mock('@channel/Call/chat/CallChatHistory', () => ({
-  CallChatHistory: () => null,
+  CallDiscussionHistory: () => null,
 }));
 vi.mock('@components/app/HeaderActionGroup', () => ({
   HeaderActionGroup: () => null,

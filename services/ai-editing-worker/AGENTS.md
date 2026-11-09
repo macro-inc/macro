@@ -22,10 +22,24 @@ before touching the edit flow.
   bounded cloned values, never cross-request sockets or promises. `render.ts` uses the configured browser and
   the read-only web `canvas-render.html` bundle; `text-layout.ts` revalidates
   asynchronous measurements before the atomic commit. `POST /canvas`
-  joins an already initialized scene; it never creates a competing seed.
+  joins an already initialized scene; it never creates a competing seed. A
+  direct batch that commits nothing answers 409 `outcome: conflict` (stale
+  revision or changed targets) or 422 `outcome: rejected` (code or validation
+  failed before the commit, `CanvasRejectedError`); anything else is 502 and may
+  have applied.
 - `src/ai-editing/`: the agent loop, prompts, tools, and op queue.
 - `src/endpoints/`: one file per surface — `edit.ts`, `docx.ts`, `forms.ts`,
-  `spreadsheet.ts`, `comment-mark.ts`, `lexical-state.ts`, `lexical-commit.ts`.
+  `spreadsheet.ts`, `comment-mark.ts`, `markdown.ts`, `lexical-state.ts`,
+  `lexical-commit.ts`. `spreadsheet.ts` also serves
+  `/spreadsheet/instructions`, the SDK's spreadsheet writer model
+  (`src/spreadsheet/writer.ts`).
+- `src/sync-document.ts`: sync-service's `/state` and revision-checked
+  `/update`, shared by spreadsheets and markdown bodies; callers word its typed
+  failures for their users.
+- `src/markdown/body.ts`: `POST /markdown`, no model. Reads a markdown body with
+  its revision, or replaces it at the revision the caller read (409 otherwise).
+  Unchanged top-level blocks keep their ids and comment marks; changed ones are
+  replaced whole.
 - `src/lexical-commit/`: model-free Lexical reads and commits for programs —
   `merge.ts` is the pure three-way merge by node id, `wanted.ts` validates and
   places the sent blocks, `run.ts` joins as a live peer and applies.
@@ -35,8 +49,9 @@ before touching the edit flow.
 ## Scope
 
 - Owns: the AI document-editing session (joining the doc, agent orchestration,
-  applying edits), Canvas/DOCX/forms/spreadsheet AI endpoints, comment-mark
-  anchoring, and Lexical state reads and commits for programs.
+  applying edits), Canvas/DOCX/forms/spreadsheet AI endpoints, revision-checked
+  markdown body reads and writes, comment-mark anchoring, and Lexical state
+  reads and commits for programs.
 - Not here: the Loro/sync-service wire protocol itself, shared with the web
   app via `@macro-inc/collaboration`; browser auth and sync HTTP policy stay
   in `apps/web`.

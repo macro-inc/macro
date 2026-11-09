@@ -395,7 +395,9 @@ the skill doesn't cover:
   `cd apps/docs && bun run generate:tools` (never hand-edit the MCP tool pages).
 - Gemini drops records (`additionalProperties`): use key/value pair lists. It
   rejects a `$ref` loop of required fields, and so does schema generation:
-  recurse through an optional field or a list that may be empty.
+  recurse through an optional field or a list that may be empty. It also
+  rejects an input schema nested more than 30 levels deep, counting each
+  object and array, and so does schema generation.
 
 ## 14. SDK
 
@@ -492,7 +494,7 @@ cargo x deps --check && cargo x kafka-topics --check
 cd apps/web && bun run gen-api -- --check && bun run check
 cd packages/sdk && just check && just coverage
 just check full
-just run_local                          # or just stack up
+just run_local                          # no terminal needed
 ```
 
 In the browser (the `browser-verifier` subagent): create the entity, share it with

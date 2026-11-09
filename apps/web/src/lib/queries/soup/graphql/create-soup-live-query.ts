@@ -50,6 +50,7 @@ import {
 } from '../../../service-clients/service-storage/graphql-soup';
 import { createUrqlInfiniteQuery } from '../../../urql-solid/create-urql-infinite-query';
 import type { UrqlInfiniteData } from '../../../urql-solid/types';
+import { createHiddenDeferral } from '../../visible-refresh';
 import { registerGraphqlSoupRevalidations } from './active-queries';
 import { soupCacheTelemetry } from './cache-activity-telemetry';
 import { createPredicateQuery } from './create-predicate-query';
@@ -320,6 +321,13 @@ export function createSoupLiveQuery(
         // Keep network data usable while the local cache is unavailable.
       }
     };
+    let latestRevision: CacheRevision | undefined;
+    // Every open tab shares one cache engine. A hidden tab keeps a dirty bit
+    // instead of evaluating this list on each revision or engine replacement.
+    const deferral = createHiddenDeferral(() => {
+      if (latestRevision !== undefined) setCurrentCacheRevision(latestRevision);
+      else fireAndForget(observeCurrentRevision(), 'soup-live-query');
+    });
     const unsubscribeChanges = host.onCacheChanged(
       (revision) => {
         cacheObservation += 1;
@@ -331,7 +339,8 @@ export function createSoupLiveQuery(
           staleFallbackStartedAt = performance.now();
           recordAuthority('stale-fallback');
         }
-        setCurrentCacheRevision(revision);
+        latestRevision = revision;
+        deferral.request();
       },
       // The authority watermark must observe the same writes as the live view.
       { includeHydration: true }
@@ -340,12 +349,14 @@ export function createSoupLiveQuery(
       soupCacheTelemetry.record('generation');
       cacheGeneration += 1;
       invalidateGeneration();
-      fireAndForget(observeCurrentRevision(), 'soup-live-query');
+      latestRevision = undefined;
+      deferral.request();
     });
     fireAndForget(observeCurrentRevision(), 'soup-live-query');
     onCleanup(() => {
       finishStaleFallback(true);
       cacheGeneration += 1;
+      deferral.dispose();
       unsubscribeChanges();
       unsubscribeGeneration();
     });
