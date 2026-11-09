@@ -17530,6 +17530,7 @@ dependencies = [
  "glob",
  "jev",
  "kafka_util",
+ "lazy-regex",
  "lexical_client",
  "macro_authorization",
  "macro_db_migrator",
