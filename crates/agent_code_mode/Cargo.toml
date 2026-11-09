@@ -21,7 +21,10 @@ code_mode_assets = { path = "../code_mode_assets" }
 email = { path = "../email", features = ["ai_tools", "inbound"] }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports", "inbound"] }
 futures = { workspace = true }
+hex = { workspace = true }
 import = { path = "../import" }
+lol_html = { workspace = true }
+lru = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
 mcp_client = { path = "../mcp_client" }
@@ -33,6 +36,7 @@ schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_path_to_error = { workspace = true }
+sha2 = { workspace = true }
 specta = { workspace = true }
 specta-serde = { workspace = true }
 specta-typescript = { workspace = true }
@@ -51,6 +55,7 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 agent_session = { path = "../agent_session", default-features = false, features = ["test-utils", "outbound"] }
 entity_access = { path = "../entity_access", features = ["outbound"] }
+tempfile = { workspace = true }
 
 [package.metadata.cargo-shear]
 # Named only in `#[sqlx::test(migrator = "...")]` strings.

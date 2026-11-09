@@ -26,12 +26,25 @@ stacks. Process isolation belongs to
   contract, `Some(Unattended)` the TypeScript `main({...arguments, macro})`
   contract with optional dry run.
 - `src/domain/document_programs.rs` + `src/inbound/document_router.rs`:
-  `POST /documents/{document_id}/code-executions` runs a program embedded in
-  an HTML document the user has open (the web's `HtmlPreview` posts the file's
-  `text/macro` blocks), as `ToolCaller::Document` with the inputs contract and
-  a plain user token (no agent), gated per user by `DocumentProgramGate`
-  (`enable-html-code-mode`; the harness adapter is `FlaggedDocumentPrograms`).
-  Only directly signed-in users; a token minted for an agent's run is refused.
+  stored HTML documents with server programs. `GET /documents/{id}/build`
+  returns the built page (or the author's diagnostics) and its `sourceHash`;
+  `POST /documents/{id}/code-executions` takes `{sourceHash, program,
+  arguments}` and runs that program's bundle from the server's own build,
+  `409` if the document changed since. The frame never sends source. Both
+  need view access (a receipt minted in the handler), the rollout gate
+  (`DocumentProgramGate`, `enable-html-code-mode`; harness adapter
+  `FlaggedDocumentPrograms`) and a directly signed-in user: a token minted
+  for an agent's run is refused. Runs are `ToolCaller::Document` with the
+  inputs contract and a plain user token (no agent). `DocumentSources` reads
+  the stored file (harness adapter `code_mode/document_sources.rs`); builds
+  are cached by source hash in memory, so a miss only rebuilds.
+- `src/domain/document_programs/build.rs`: the build. `text/macro` blocks are
+  programs (`export default (args, { macro }: ProgramContext)`, plain JSON
+  out); the one `<script type="module" lang="ts">` imports them typed from
+  `macro:programs` and `on` from `macro:client` (`macro_client.ts`). Programs
+  check alone, then with the client; each bundles alone and the client
+  bundles without program source. Diagnostics name blocks, not generated
+  files.
 - `src/domain/reviews.rs`: review revisions, claims and outcomes.
   `src/domain/reviews/drafts.rs` holds the typed drafts and results: items
   keyed by kind, reusing `SendEmail`, `CreateCalendarEvent` and their

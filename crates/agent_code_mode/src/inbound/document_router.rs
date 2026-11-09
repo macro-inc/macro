@@ -1,135 +1,298 @@
-//! Run a document's embedded program as the signed-in user.
-use crate::domain::{CodeModeError, DocumentProgramGate, UserCodeMode, UserExecutionReceipt};
+//! Build a stored HTML document and run its programs as the signed-in user.
+use crate::domain::{
+    BuildOutcome, CodeModeError, DocumentBuild, DocumentProgramError, DocumentProgramGate,
+    DocumentPrograms, DocumentSourceError, ProgramId, RunProgram, SourceHash,
+    UserExecutionReceipt,
+};
 use crate::inbound::axum_router::CodeExecutionApiError;
-use ai_toolset::ToolCaller;
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
-    routing::post,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    routing::{get, post},
 };
-use code_execution::domain::{ExecuteRequest, Unattended};
+use code_execution::domain::Diagnostic;
+use entity_access::domain::{
+    models::{AccessError, EntityAccessReceipt, EntityType, ViewAccessLevel},
+    ports::EntityAccessService,
+};
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
 };
 use macro_uuid::Uuid;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use utoipa::ToSchema;
 
-/// Dependencies for document program runs.
-pub struct DocumentProgramRouterState<Auth> {
-    service: Arc<dyn UserCodeMode>,
+/// Dependencies for document builds and program runs.
+pub struct DocumentProgramRouterState<Access, Auth> {
+    service: Arc<DocumentPrograms>,
     gate: Arc<dyn DocumentProgramGate>,
+    access: Arc<Access>,
     authorization: MacroAuthorizationState<Auth>,
 }
 
-impl<Auth> DocumentProgramRouterState<Auth> {
-    /// Bind the user-scoped runner, its rollout gate and the authorization boundary.
+impl<Access, Auth> DocumentProgramRouterState<Access, Auth> {
+    /// Bind the document service, its rollout gate and the access boundary.
     pub fn new(
-        service: Arc<dyn UserCodeMode>,
+        service: Arc<DocumentPrograms>,
         gate: Arc<dyn DocumentProgramGate>,
+        access: Arc<Access>,
         authorization: MacroAuthorizationState<Auth>,
     ) -> Self {
         Self {
             service,
             gate,
+            access,
             authorization,
         }
     }
 }
 
-impl<Auth> Clone for DocumentProgramRouterState<Auth> {
+impl<Access, Auth> Clone for DocumentProgramRouterState<Access, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
             gate: self.gate.clone(),
+            access: self.access.clone(),
             authorization: self.authorization.clone(),
         }
     }
 }
 
-impl<Auth> FromRef<DocumentProgramRouterState<Auth>> for MacroAuthorizationState<Auth> {
-    fn from_ref(state: &DocumentProgramRouterState<Auth>) -> Self {
+impl<Access, Auth> FromRef<DocumentProgramRouterState<Access, Auth>>
+    for MacroAuthorizationState<Auth>
+{
+    fn from_ref(state: &DocumentProgramRouterState<Access, Auth>) -> Self {
         state.authorization.clone()
     }
 }
 
 /// Mount at the service root; paths are `/documents/{document_id}/...`.
-pub fn document_program_router<Auth>(state: DocumentProgramRouterState<Auth>) -> Router
+pub fn document_program_router<Access, Auth>(
+    state: DocumentProgramRouterState<Access, Auth>,
+) -> Router
 where
+    Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
     Router::new()
         .route(
+            "/documents/{document_id}/build",
+            get(get_document_build::<Access, Auth>),
+        )
+        .route(
             "/documents/{document_id}/code-executions",
-            post(run_document_program::<Auth>),
+            post(run_document_program::<Access, Auth>),
         )
         .with_state(state)
 }
 
-/// A program taken from the open document, with the inputs its caller passed.
+/// A document's build: the page to render, or why it doesn't build.
+#[derive(Serialize, ToSchema)]
+#[serde(tag = "status", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum DocumentBuildResponse {
+    /// The page, with its programs removed and its client script bundled.
+    Built {
+        /// Send with each run, so a run never uses a newer build than the page.
+        #[schema(value_type = String)]
+        source_hash: SourceHash,
+        /// The page to render in the sandboxed preview.
+        html: String,
+        /// The ids of the programs the page may run.
+        #[schema(value_type = Vec<String>)]
+        programs: Vec<ProgramId>,
+    },
+    /// The author's problems, by block.
+    Failed {
+        /// The source this verdict is for.
+        #[schema(value_type = String)]
+        source_hash: SourceHash,
+        /// Each problem, with where it is.
+        diagnostics: Vec<BuildProblem>,
+    },
+}
+
+/// One problem in a document's source.
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildProblem {
+    /// The block it is in, such as `program tasks` or `client script`.
+    pub file: Option<String>,
+    /// What is wrong, with its location.
+    pub message: String,
+}
+
+impl From<DocumentBuild> for DocumentBuildResponse {
+    fn from(build: DocumentBuild) -> Self {
+        match build.outcome.as_ref() {
+            BuildOutcome::Built { html, programs } => Self::Built {
+                source_hash: build.source_hash,
+                html: html.clone(),
+                programs: programs.keys().cloned().collect(),
+            },
+            BuildOutcome::Failed(diagnostics) => Self::Failed {
+                source_hash: build.source_hash,
+                diagnostics: diagnostics.iter().map(BuildProblem::from).collect(),
+            },
+        }
+    }
+}
+
+impl From<&Diagnostic> for BuildProblem {
+    fn from(diagnostic: &Diagnostic) -> Self {
+        Self {
+            file: diagnostic.file.clone(),
+            message: diagnostic.message.clone(),
+        }
+    }
+}
+
+/// Run one program of the build a page shows.
 #[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RunDocumentProgram {
-    /// TypeScript module exporting `async function main({macro, ...arguments})`,
-    /// at most 64 KiB.
-    pub source: String,
-    /// Spread into `main`'s argument beside `macro`.
+    /// `sourceHash` of the build the page was rendered from.
+    #[schema(value_type = String)]
+    pub source_hash: SourceHash,
+    /// The program's id: its block's `id`.
+    #[schema(value_type = String)]
+    pub program: ProgramId,
+    /// The program's first argument.
     #[serde(default)]
     #[schema(value_type = Object)]
     pub arguments: serde_json::Map<String, serde_json::Value>,
     /// Total deadline in milliseconds, from 1 to 30000.
     #[serde(default = "default_timeout_ms")]
     pub timeout_ms: u64,
-    /// Send no writes: each one returns an empty result and is reported as
-    /// skipped, so the run shows what the program would change.
-    #[serde(default)]
-    pub dry_run: bool,
 }
 
 fn default_timeout_ms() -> u64 {
     30_000
 }
 
-#[utoipa::path(post, path = "/documents/{document_id}/code-executions", tag = "documents", operation_id = "run_document_program",
-    params(("document_id" = Uuid, Path, description = "The document the program is embedded in")),
-    request_body = RunDocumentProgram,
-    responses((status = 200, body = UserExecutionReceipt), (status = 400), (status = 401), (status = 403), (status = 404), (status = 500)))]
-/// Run a program from the document the user has open, as that user, and
-/// return its outcome. Only directly signed-in users: a token minted for an
-/// agent's run may not start another run through here.
-#[tracing::instrument(err(Debug), skip_all, fields(%document_id))]
-pub async fn run_document_program<Auth: MacroAuthorizationService>(
-    caller: MacroAuthorizationExtractor<Auth, UserOnly>,
-    State(state): State<DocumentProgramRouterState<Auth>>,
-    Path(document_id): Path<Uuid>,
-    Json(body): Json<RunDocumentProgram>,
-) -> Result<Json<UserExecutionReceipt>, CodeExecutionApiError> {
-    let user = &caller.authorization.macro_user_id;
-    if caller.authorization.agent_id.is_some() {
-        return Err(CodeExecutionApiError(CodeModeError::Forbidden));
+/// [`DocumentProgramError`] as an HTTP response.
+#[derive(Debug)]
+pub struct DocumentProgramApiError(DocumentProgramError);
+
+impl From<DocumentProgramError> for DocumentProgramApiError {
+    fn from(error: DocumentProgramError) -> Self {
+        Self(error)
     }
+}
+
+impl IntoResponse for DocumentProgramApiError {
+    fn into_response(self) -> Response {
+        let message = self.0.to_string();
+        let status = match self.0 {
+            DocumentProgramError::Source(DocumentSourceError::NotFound)
+            | DocumentProgramError::UnknownProgram => StatusCode::NOT_FOUND,
+            DocumentProgramError::Source(DocumentSourceError::NotHtml)
+            | DocumentProgramError::BuildFailed => StatusCode::UNPROCESSABLE_ENTITY,
+            DocumentProgramError::Source(DocumentSourceError::TooLarge) => {
+                StatusCode::PAYLOAD_TOO_LARGE
+            }
+            DocumentProgramError::Changed => StatusCode::CONFLICT,
+            DocumentProgramError::Busy => StatusCode::SERVICE_UNAVAILABLE,
+            DocumentProgramError::Execution(error) => {
+                return CodeExecutionApiError(error).into_response();
+            }
+            DocumentProgramError::Source(DocumentSourceError::Internal(_))
+            | DocumentProgramError::Toolchain => {
+                tracing::error!(error = ?self.0, "document program failed");
+                return (StatusCode::INTERNAL_SERVER_ERROR, "could not build the document")
+                    .into_response();
+            }
+        };
+        (status, message).into_response()
+    }
+}
+
+/// The signed-in user, admitted by the rollout, with view access to the
+/// document. Only directly signed-in users: a token minted for an agent's run
+/// may not start another run through here.
+async fn admit<Access: EntityAccessService, Auth: MacroAuthorizationService>(
+    caller: &MacroAuthorizationExtractor<Auth, UserOnly>,
+    state: &DocumentProgramRouterState<Access, Auth>,
+    document_id: Uuid,
+) -> Result<EntityAccessReceipt<ViewAccessLevel>, DocumentProgramApiError> {
+    let forbidden = || DocumentProgramApiError(CodeModeError::Forbidden.into());
+    if caller.authorization.agent_id.is_some() {
+        return Err(forbidden());
+    }
+    let user = &caller.authorization.macro_user_id;
     if !state.gate.allows(user).await {
-        return Err(CodeExecutionApiError(CodeModeError::NotFound));
+        return Err(DocumentProgramApiError(CodeModeError::NotFound.into()));
     }
     state
-        .service
-        .execute(
+        .access
+        .generate_entity_access_receipt::<ViewAccessLevel>(
             user,
-            &ToolCaller::Document,
             None,
-            ExecuteRequest {
-                source: body.source,
-                timeout_ms: body.timeout_ms,
-            },
-            Some(Unattended {
-                arguments: body.arguments,
-                dry_run: body.dry_run,
-            }),
-            CancellationToken::new(),
+            &document_id.to_string(),
+            EntityType::Document,
         )
         .await
-        .map(Json)
-        .map_err(CodeExecutionApiError)
+        .map_err(|error| match error {
+            // A document the user can't see answers like one that doesn't exist.
+            AccessError::Unauthorized
+            | AccessError::UnauthorizedWithMessage(_)
+            | AccessError::NotFound(_)
+            | AccessError::BadRequest(_) => {
+                DocumentProgramApiError(DocumentSourceError::NotFound.into())
+            }
+            AccessError::Unavailable(_) => DocumentProgramApiError(DocumentProgramError::Busy),
+            AccessError::Internal(report) => {
+                DocumentProgramApiError(DocumentSourceError::Internal(report).into())
+            }
+        })
+}
+
+#[utoipa::path(get, path = "/documents/{document_id}/build", tag = "documents", operation_id = "get_document_build",
+    params(("document_id" = Uuid, Path, description = "A stored HTML document")),
+    responses((status = 200, body = DocumentBuildResponse), (status = 401), (status = 403), (status = 404), (status = 413), (status = 422), (status = 500), (status = 503)))]
+/// Build the document's current source, or return the cached build, for the
+/// preview to render.
+#[tracing::instrument(err(Debug), skip_all, fields(%document_id))]
+pub async fn get_document_build<Access: EntityAccessService, Auth: MacroAuthorizationService>(
+    caller: MacroAuthorizationExtractor<Auth, UserOnly>,
+    State(state): State<DocumentProgramRouterState<Access, Auth>>,
+    Path(document_id): Path<Uuid>,
+) -> Result<Json<DocumentBuildResponse>, DocumentProgramApiError> {
+    let document = admit(&caller, &state, document_id).await?;
+    let build = state.service.build(&document).await?;
+    Ok(Json(build.into()))
+}
+
+#[utoipa::path(post, path = "/documents/{document_id}/code-executions", tag = "documents", operation_id = "run_document_program",
+    params(("document_id" = Uuid, Path, description = "The document the program is in")),
+    request_body = RunDocumentProgram,
+    responses((status = 200, body = UserExecutionReceipt), (status = 400), (status = 401), (status = 403), (status = 404), (status = 409), (status = 422), (status = 500), (status = 503)))]
+/// Run one program of the document's build as the signed-in user and return
+/// its outcome. `409` means the document changed since the page was built.
+#[tracing::instrument(err(Debug), skip_all, fields(%document_id))]
+pub async fn run_document_program<Access: EntityAccessService, Auth: MacroAuthorizationService>(
+    caller: MacroAuthorizationExtractor<Auth, UserOnly>,
+    State(state): State<DocumentProgramRouterState<Access, Auth>>,
+    Path(document_id): Path<Uuid>,
+    Json(body): Json<RunDocumentProgram>,
+) -> Result<Json<UserExecutionReceipt>, DocumentProgramApiError> {
+    let document = admit(&caller, &state, document_id).await?;
+    let receipt = state
+        .service
+        .run(
+            &caller.authorization.macro_user_id,
+            &document,
+            RunProgram {
+                source_hash: body.source_hash,
+                program: body.program,
+                arguments: body.arguments,
+                timeout_ms: body.timeout_ms,
+            },
+            CancellationToken::new(),
+        )
+        .await?;
+    Ok(Json(receipt))
 }
