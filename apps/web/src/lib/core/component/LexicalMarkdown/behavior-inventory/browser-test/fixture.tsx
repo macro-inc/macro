@@ -1,11 +1,17 @@
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
+import { UserContextProvider } from '@core/context/user';
 import { createEmptyHistoryState, registerHistory } from '@lexical/history';
-import { registerList } from '@lexical/list';
+import {
+  $createListItemNode,
+  $createListNode,
+  registerList,
+} from '@lexical/list';
 import { $convertToMarkdownString, CODE } from '@lexical/markdown';
 import { registerRichText } from '@lexical/rich-text';
 import {
   $createCustomCodeNode,
+  $createDocumentMentionNode,
   ALL_TRANSFORMERS,
   NodeReplacements,
   ORDERED_LIST_ENTER,
@@ -17,6 +23,8 @@ import {
   ImageNode,
 } from '@macro-inc/lexical-core/nodes/ImageNode';
 import { HR } from '@macro-inc/lexical-core/transformers/transformers';
+import { queryClient } from '@queries/client';
+import { QueryClientProvider } from '@tanstack/solid-query';
 import {
   $createParagraphNode,
   $createTextNode,
@@ -35,6 +43,7 @@ import { ActionMenu } from '../../component/menu/ActionsMenu';
 import { EmojiMenu } from '../../component/menu/EmojiMenu';
 import { FloatingLinkMenu } from '../../component/menu/FloatingLinkMenu';
 import { FloatingTableMenu } from '../../component/menu/FloatingTableMenu';
+import { TaskListControlsRenderer } from '../../component/task-list/TaskListControls';
 import { FloatingMenuGroup } from '../../context/FloatingMenuContext';
 import {
   type LexicalWrapperBase,
@@ -42,6 +51,7 @@ import {
 } from '../../context/LexicalWrapperContext';
 import { actionsPlugin } from '../../plugins/actions/actionsPlugin';
 import { checklistPlugin } from '../../plugins/checklist/checklistPlugin';
+import { createChecklistControls } from '../../plugins/checklist-controls/checklistControlsPlugin';
 import { codePlugin } from '../../plugins/code/codePlugin';
 import { customDeletePlugin } from '../../plugins/custom-delete/customDeletePlugin';
 import { dragInsertPlugin } from '../../plugins/drag-insert/dragInsertPlugin';
@@ -102,6 +112,9 @@ document.documentElement.dataset.touchDevice = String(isTouchDevice());
 const TITLE = mount('title');
 singleLinePlugin()(TITLE);
 const BODY = mount('body');
+const CONTROLS_ENABLED = new URLSearchParams(location.search).has('controls');
+const CHECKLIST_CONTROLS = createChecklistControls();
+if (CONTROLS_ENABLED) CHECKLIST_CONTROLS.plugin(BODY);
 const [bodyEditable, setBodyEditable] = createSignal(BODY.isEditable());
 BODY.registerEditableListener(setBodyEditable);
 const BODY_WRAPPER: LexicalWrapperBase = {
@@ -188,6 +201,16 @@ render(
           <EmojiMenu editor={BODY} menu={EMOJI_MENU} portalScope="global" />
           <DecoratorRenderer editor={BODY} />
           <NodeAccessoryRenderer editor={BODY} store={ACCESSORIES} />
+          {CONTROLS_ENABLED && (
+            <QueryClientProvider client={queryClient}>
+              <UserContextProvider>
+                <TaskListControlsRenderer
+                  editor={BODY}
+                  data={CHECKLIST_CONTROLS.data}
+                />
+              </UserContextProvider>
+            </QueryClientProvider>
+          )}
           <FloatingMenuGroup>
             <FloatingLinkMenu autoLinkMatchMode="common-tlds" />
             <FloatingTableMenu canEdit={bodyEditable} />
@@ -206,6 +229,42 @@ element('readonly').addEventListener('click', () =>
   toggleEditable(BODY, false)
 );
 element('editable').addEventListener('click', () => toggleEditable(BODY, true));
+element('load-checklists').addEventListener('click', () => {
+  BODY.update(
+    () => {
+      $getRoot()
+        .clear()
+        .append(
+          $createListNode('check').append(
+            $createListItemNode(true).append(
+              $createTextNode('Plain completed')
+            ),
+            $createListItemNode(false).append($createTextNode('Plain open'))
+          ),
+          $createParagraphNode(),
+          $createListNode('check').append(
+            $createListItemNode(false).append(
+              $createDocumentMentionNode({
+                documentId: 'fixture-open-task',
+                documentName: 'Open task',
+                blockName: 'task',
+              }),
+              $createTextNode(' Open row!!')
+            ),
+            $createListItemNode(true).append(
+              $createDocumentMentionNode({
+                documentId: 'fixture-done-task',
+                documentName: 'Done task',
+                blockName: 'task',
+              }),
+              $createTextNode(' Done row')
+            )
+          )
+        );
+    },
+    { discrete: true, tag: HISTORY_PUSH_TAG }
+  );
+});
 element('load-image').addEventListener('click', () => {
   const svg =
     '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><rect width="200" height="100" fill="#4882b8"/></svg>';

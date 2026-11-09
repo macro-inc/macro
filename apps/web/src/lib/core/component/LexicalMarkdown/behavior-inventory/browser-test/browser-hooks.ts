@@ -1,7 +1,7 @@
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 
 // Every isolated fixture file shares native input setup and diagnostic capture.
-export function installBrowserHooks() {
+export function installBrowserHooks(path = '/') {
   const PAGE_ERRORS = new WeakMap<Page, string[]>();
 
   test.beforeEach(async ({ page }) => {
@@ -16,7 +16,7 @@ export function installBrowserHooks() {
       const url = new URL(route.request().url());
       return url.hostname === '127.0.0.1' ? route.continue() : route.abort();
     });
-    await page.goto('/');
+    await page.goto(path);
     await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
   });
 
@@ -36,4 +36,38 @@ export function installBrowserHooks() {
     });
     expect(PAGE_ERRORS.get(page)).toEqual([]);
   });
+}
+
+export async function toggleChecklistMarker(
+  page: Page,
+  check: Locator,
+  hasTouch: boolean
+) {
+  await check.scrollIntoViewIfNeeded();
+  const point = await check.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    const marker = getComputedStyle(element, '::before');
+    return {
+      clientX:
+        bounds.left + parseFloat(marker.left) + parseFloat(marker.width) / 2,
+      clientY:
+        bounds.top + parseFloat(marker.top) + parseFloat(marker.height) / 2,
+    };
+  });
+  expect(
+    await check.evaluate(
+      (element, point) =>
+        document.elementFromPoint(point.clientX, point.clientY) === element,
+      point
+    )
+  ).toBe(true);
+  // Native input uses the visual viewport; DOM rects use the layout viewport.
+  const viewport = await page.evaluate(() => ({
+    left: visualViewport?.offsetLeft ?? 0,
+    top: visualViewport?.offsetTop ?? 0,
+  }));
+  const x = point.clientX - viewport.left;
+  const y = point.clientY - viewport.top;
+  if (hasTouch) await page.touchscreen.tap(x, y);
+  else await page.mouse.click(x, y);
 }
