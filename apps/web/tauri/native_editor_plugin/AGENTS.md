@@ -36,6 +36,7 @@ Android registration exposes bridge commands; it does not select native editing 
 ## Checks
 
 - Use Java 21, Android platform/Build Tools 36 and NDK 30.
+- Run `scripts/check-android-apk.py APK` on linked APKs to check ABI completeness, 64-bit ELF alignment and 16 KB ZIP alignment.
 - Limit Gradle to `--max-workers=4`, and Cargo to `-j2`.
 - Run unit and connected instrumentation tests; compile instrumentation when no
   emulator is available. Record the distinction in the acceptance report.

@@ -105,6 +105,9 @@ Rust library. ARM64 uses `aarch64-linux-android`. Native builds are limited to
 two Cargo jobs. The host-library test path includes the compiler host triple,
 matching binding generation; an Android target directory cannot stand in for it.
 The helper resolves the pinned Tauri Android project through Cargo metadata.
+JNA's Android AAR and host-test JAR use the same pinned version; the native
+loader must support Android's 16 KB pages. Targeted builds filter every packaged
+native library to the selected ABIs, including transitive AAR libraries.
 Use root-qualified Gradle tasks such as `:testDebugUnitTest` when passing filters,
 so a filter for editor tests is not applied to Tauri's own test project.
 App builds package the same target list and build profile as the Tauri build;
@@ -134,3 +137,16 @@ It uses a memory session without an account, network or durable data.
 and physical Undo/Redo, checking both displayed text and the Rust history state.
 Compile-only checks do not establish these device interactions or IME acceptance.
 This activity exists only in the test APK and does not select app editing surfaces.
+
+Validate the packaged native libraries, including JNA, after a linked APK build:
+
+```sh
+python3 apps/web/tauri/native_editor_plugin/scripts/check-android-apk.py /absolute/path/to/test.apk
+```
+
+The SDK/NDK environment supplies Build Tools 36 `zipalign` and `llvm-readelf`.
+The check requires the Rust session and JNA loader in every packaged ABI, checks
+64-bit ELF LOAD alignment and verifies 16 KB APK ZIP alignment. A compile-only
+APK without the Rust library fails this check. See the
+[Android page-size guide](https://developer.android.com/guide/practices/page-sizes)
+and [JNA release changes](https://github.com/java-native-access/jna/blob/master/CHANGES.md).
