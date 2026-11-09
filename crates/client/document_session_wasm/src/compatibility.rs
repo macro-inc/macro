@@ -14,6 +14,7 @@ mod native_calls;
 pub(crate) mod observer;
 mod records;
 mod reservations;
+mod scopes;
 mod selection_ops;
 mod selection_values;
 mod selections;

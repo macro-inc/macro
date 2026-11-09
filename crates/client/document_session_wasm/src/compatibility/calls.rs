@@ -118,7 +118,10 @@ impl Host {
         }
         Ok(key)
     }
-    fn receiver(&self, request: &compat::CompatRequest) -> Result<NodeKey, BoundaryError> {
+    pub(super) fn receiver(
+        &self,
+        request: &compat::CompatRequest,
+    ) -> Result<NodeKey, BoundaryError> {
         if !request.has_receiver {
             return Err(BoundaryError::Invalid("compatibility receiver required"));
         }
@@ -266,19 +269,6 @@ impl Host {
             nodes,
         })
     }
-    fn dispatch(
-        &mut self,
-        tx: &mut Transaction<'_>,
-        request: &compat::CompatRequest,
-    ) -> Result<ResultValue, BoundaryError> {
-        if request.has_receiver {
-            self.receiver(request)?;
-        }
-        if let Some(result) = self.dispatch_selection(tx, request)? {
-            return Ok(result);
-        }
-        self.prepare_node_call(request)?.execute(tx)
-    }
     fn reply(
         &mut self,
         source: Arc<ForeignReadSnapshot>,
@@ -394,7 +384,7 @@ impl EditorSession {
                     session.with_compat_update(pending, |tx| -> Result<_, BoundaryError> {
                         let source = Arc::new(tx.view().snapshot_for_foreign_read()?);
                         let result = source.with_read_transaction(&committed, |peer| {
-                            host.dispatch(peer, &request)
+                            super::scopes::dispatch(host, peer, &request)
                         })??;
                         Ok((source, result))
                     })?;
@@ -423,8 +413,9 @@ impl EditorSession {
                 .ok_or(BoundaryError::Invalid("unknown compatibility version"))?
                 .clone();
             let source = Arc::new(state.view().snapshot_for_foreign_read()?);
-            let result =
-                source.with_read_transaction(&state, |tx| host.dispatch(tx, &request))??;
+            let result = source.with_read_transaction(&state, |tx| {
+                super::scopes::dispatch(host, tx, &request)
+            })??;
             let receiver = if request.has_receiver {
                 Some(host.receiver(&request)?)
             } else {
@@ -452,7 +443,7 @@ impl EditorSession {
         let (pending, result) =
             session.with_compat_update(pending, |tx| -> Result<_, BoundaryError> {
                 let operation = ForeignReadOperation::begin()?;
-                let result = host.dispatch(tx, &request);
+                let result = super::scopes::dispatch(host, tx, &request);
                 let active = tx
                     .selection()
                     .and_then(|_| tx.foreign_selection_identity(SelectionSlot::Active));

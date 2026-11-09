@@ -2,7 +2,7 @@ use super::*;
 use compat::{CompatOperation as Op, ForeignCallbackValue as Value};
 use doc_sync_core::*;
 use lexical_model::*;
-const NO_RECORD: compat::ForeignRecordRef = compat::ForeignRecordRef {
+pub(super) const NO_RECORD: compat::ForeignRecordRef = compat::ForeignRecordRef {
     node: compat::ForeignNodeRef {
         editor_id: 0,
         version: 0,
