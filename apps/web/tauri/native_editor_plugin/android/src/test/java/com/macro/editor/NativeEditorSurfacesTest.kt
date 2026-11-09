@@ -39,7 +39,7 @@ class NativeEditorSurfacesTest {
             assertTrue(events.any { it.kind == SurfaceEventKind.Ready })
             val appearance = mapper.readValue<MountRequest>("""{
               "scope":{"surfaceId":"fixture-surface","surfaceGeneration":1,"accountGeneration":${account.accountGeneration}},
-              "ariaLabel":"Fixture editor","placeholder":"","darkMode":false,"fontSizeCssPx":16,"lineHeightCssPx":24,
+              "mountGeneration":1,"ariaLabel":"Fixture editor","placeholder":"","darkMode":false,"fontSizeCssPx":16,"lineHeightCssPx":24,
               "textColorArgb":4278190080,"hintColorArgb":4286611584
             }""")
             bridge.mount(appearance)
@@ -50,10 +50,23 @@ class NativeEditorSurfacesTest {
             val state = """{"root":{"type":"root","children":[{"type":"paragraph","children":[{"type":"text","text":"a😀"}]}]}}"""
             bridge.action(ActionRequest(ActionRequestKind.SetState, 0, "state", state, null, request.scope))
             assertEquals("\"a😀\"", bridge.query(QueryRequest(QueryRequestKind.Text, 0, null, null, request.scope)).json)
-            bridge.unmount(request.scope)
-            bridge.mount(appearance)
+            bridge.unmount(UnmountRequest(1, request.scope))
+            bridge.unmount(UnmountRequest(1, request.scope))
+            assertThrows(IllegalArgumentException::class.java) { bridge.mount(appearance) }
+            bridge.mount(appearance.copy(mountGeneration = 2))
             val secondPlacement = parent.getChildAt(1)
             require(secondPlacement is FrameLayout)
+            bridge.mount(appearance.copy(mountGeneration = 2))
+            assertSame(secondPlacement, parent.getChildAt(1))
+            assertThrows(IllegalArgumentException::class.java) { bridge.unmount(UnmountRequest(1, request.scope)) }
+            assertThrows(IllegalArgumentException::class.java) { bridge.focus(FocusRequest(true, 1, request.scope)) }
+            val staleLayout = mapper.readValue<LayoutRequest>("""{
+              "scope":{"surfaceId":"fixture-surface","surfaceGeneration":1,"accountGeneration":${account.accountGeneration}},
+              "mountGeneration":1,"left":0,"top":0,"width":100,"height":40,"viewportWidth":100,
+              "clipLeft":0,"clipTop":0,"clipRight":100,"clipBottom":40,"visible":true
+            }""")
+            assertThrows(IllegalArgumentException::class.java) { bridge.layout(staleLayout) }
+            assertSame(secondPlacement, parent.getChildAt(1))
             val replacement = secondPlacement.getChildAt(0)
             require(replacement is NativeEditorView)
             replacement.setSelection(0, 3)

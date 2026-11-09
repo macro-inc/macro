@@ -24,7 +24,7 @@ Android registration exposes bridge commands; it does not select native editing 
 - Keep editing, history and synchronization policy in the shared Rust session.
 - Execute host effects after the FFI call returns, and report durable writes only
   after the storage transaction commits.
-- Match mount generations before applying asynchronous callbacks or focus changes.
+- Match mount generations independently of session generations before placement, focus or unmount; clear pending mount configuration on unmount.
 - Retain retired surface generations until the account changes; never reuse a stopped generation.
 - Check the process-wide lease registry before opening a lease file; use one channel per live OS lease.
 - Use a non-destructive SQLite corruption handler and preserve the original database files.

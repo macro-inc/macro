@@ -196,6 +196,11 @@
         "lineHeightCssPx": {
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "mountGeneration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
         }
       },
       "required": [
@@ -206,7 +211,8 @@
         "textColorArgb",
         "hintColorArgb",
         "fontSizeCssPx",
-        "lineHeightCssPx"
+        "lineHeightCssPx",
+        "mountGeneration"
       ]
     },
     "LayoutRequest": {
@@ -245,6 +251,11 @@
         },
         "visible": {
           "type": "boolean"
+        },
+        "mountGeneration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
         }
       },
       "required": [
@@ -258,7 +269,8 @@
         "clipTop",
         "clipRight",
         "clipBottom",
-        "visible"
+        "visible",
+        "mountGeneration"
       ]
     },
     "FocusRequest": {
@@ -270,11 +282,17 @@
         },
         "focused": {
           "type": "boolean"
+        },
+        "mountGeneration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
         }
       },
       "required": [
         "scope",
-        "focused"
+        "focused",
+        "mountGeneration"
       ]
     },
     "PermissionRequest": {
@@ -520,6 +538,24 @@
       "required": [
         "accountGeneration"
       ]
+    },
+    "UnmountRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "scope": {
+          "$ref": "#/definitions/SurfaceScope"
+        },
+        "mountGeneration": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295
+        }
+      },
+      "required": [
+        "scope",
+        "mountGeneration"
+      ]
     }
   },
   "type": "object",
@@ -569,6 +605,9 @@
     },
     "accountReply": {
       "$ref": "#/definitions/AccountReply"
+    },
+    "unmountRequest": {
+      "$ref": "#/definitions/UnmountRequest"
     }
   },
   "required": [
@@ -586,6 +625,7 @@
     "queryReply",
     "surfaceEvent",
     "accountRequest",
-    "accountReply"
+    "accountReply",
+    "unmountRequest"
   ]
 }

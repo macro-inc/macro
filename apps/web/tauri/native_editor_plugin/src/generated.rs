@@ -48,6 +48,8 @@ pub struct NativeBridgeTypes {
     pub surface_scope: SurfaceScope,
 
     pub token_result_request: TokenResultRequest,
+
+    pub unmount_request: UnmountRequest,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -214,8 +216,11 @@ pub enum Transport {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FocusRequest {
     pub focused: bool,
+
+    pub mount_generation: i64,
 
     pub scope: SurfaceScope,
 }
@@ -234,6 +239,8 @@ pub struct LayoutRequest {
     pub height: f64,
 
     pub left: f64,
+
+    pub mount_generation: i64,
 
     pub scope: SurfaceScope,
 
@@ -278,6 +285,8 @@ pub struct MountRequest {
     pub hint_color_argb: i64,
 
     pub line_height_css_px: f64,
+
+    pub mount_generation: i64,
 
     pub placeholder: String,
 
@@ -402,4 +411,12 @@ pub enum TokenResultRequestAccess {
     CommentMarks,
 
     Full,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UnmountRequest {
+    pub mount_generation: i64,
+
+    pub scope: SurfaceScope,
 }

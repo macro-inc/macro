@@ -19,6 +19,7 @@ export interface NativeBridgeTypes {
   surfacePermissions: SurfacePermissions;
   surfaceScope: SurfaceScope;
   tokenResultRequest: TokenResultRequest;
+  unmountRequest: UnmountRequest;
 }
 
 export interface AccountReply {
@@ -101,6 +102,7 @@ export type Transport = 'none' | 'direct';
 
 export interface FocusRequest {
   focused: boolean;
+  mountGeneration: number;
   scope: SurfaceScope;
 }
 
@@ -111,6 +113,7 @@ export interface LayoutRequest {
   clipTop: number;
   height: number;
   left: number;
+  mountGeneration: number;
   scope: SurfaceScope;
   top: number;
   viewportWidth: number;
@@ -131,6 +134,7 @@ export interface MountRequest {
   fontSizeCssPx: number;
   hintColorArgb: number;
   lineHeightCssPx: number;
+  mountGeneration: number;
   placeholder: string;
   scope: SurfaceScope;
   textColorArgb: number;
@@ -195,3 +199,8 @@ export interface TokenResultRequest {
 }
 
 export type TokenResultRequestAccess = 'none' | 'commentMarks' | 'full';
+
+export interface UnmountRequest {
+  mountGeneration: number;
+  scope: SurfaceScope;
+}
