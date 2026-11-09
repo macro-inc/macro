@@ -71,7 +71,8 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   layout, `windows_update_test.ps1` for a running macrod updating itself,
   `windows_claude_code_test.ps1` for npm-installed Claude Code served over
   ACP), run
-  by the `test_macrod_update` workflow on Linux, macOS and Windows.
+  by the `test_macrod_update` workflow on Linux, macOS and Windows; and
+  `memory_soak.py`, the panel's resident-memory check, run by hand (Checks).
 - `README.md`: native Herdr session behavior (repositories, reconnect, model
   switching, MCP) — read before changing anything under `src/herdr/`.
 
@@ -112,6 +113,11 @@ external chat replies depend on it. Direct session controls still mint IDs.
 - `OPENSSL_NO_VENDOR=0 just build-static` to build and smoke-test the release `macrod` the way
   the tag workflow does (needs the Nix devshell: cargo-zigbuild, zig, cmake).
   The override enables bundled OpenSSL for the musl target in the devshell.
+- Resident memory (Linux, after changing the panel, the relay, or the allocator):
+  `python3 e2e/memory_soak.py --binary <repo root>/target/x86_64-unknown-linux-musl/release/macrod`
+  runs the panel against a fake storage service for 10 minutes and fails if it
+  is still growing after warm-up. Use the `just build-static` binary; a glibc
+  build allocates differently.
 - Windows is built natively on a Namespace Windows runner by
   `build_agent_daemon_on_tag` (MSVC, static CRT). Run that workflow with
   `workflow_dispatch` on your branch to check a Windows-affecting change.
