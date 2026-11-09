@@ -135,6 +135,12 @@ impl Commit {
             })
     }
 }
+#[derive(Clone, Copy)]
+pub(crate) enum CacheReconciliation {
+    Writable,
+    Imported,
+}
+
 impl Transaction<'_> {
     pub(crate) fn selection_will_change(&self) -> bool {
         self.selection_dirty
@@ -146,12 +152,19 @@ impl Transaction<'_> {
             || self.pending.selection != self.editor.state.selection
     }
     /// Flush pending writes and publish atomically; any error leaves the editor unchanged.
-    pub fn commit(mut self) -> Result<Commit, Error> {
+    pub fn commit(self) -> Result<Commit, Error> {
+        self.commit_with_caches(CacheReconciliation::Writable)
+    }
+    pub(crate) fn commit_imported_state(self) -> Result<Commit, Error> {
+        self.commit_with_caches(CacheReconciliation::Imported)
+    }
+    fn commit_with_caches(mut self, caches: CacheReconciliation) -> Result<Commit, Error> {
         self.guard_staged_publication()?;
         if self.dirty_since_flush {
             self.flush()?;
         }
-        self.commit_phase()
+        self.commit_phase_prepared_with_caches(|_| Ok(()), caches)
+            .map(|(commit, ())| commit)
     }
     pub(crate) fn commit_phase(&mut self) -> Result<Commit, Error> {
         self.commit_phase_prepared(|_| Ok(()))
@@ -176,6 +189,13 @@ impl Transaction<'_> {
     fn commit_phase_prepared<T, E: From<Error>>(
         &mut self,
         prepare: impl FnOnce(&Commit) -> Result<T, E>,
+    ) -> Result<(Commit, T), E> {
+        self.commit_phase_prepared_with_caches(prepare, CacheReconciliation::Writable)
+    }
+    fn commit_phase_prepared_with_caches<T, E: From<Error>>(
+        &mut self,
+        prepare: impl FnOnce(&Commit) -> Result<T, E>,
+        caches: CacheReconciliation,
     ) -> Result<(Commit, T), E> {
         self.guard_staged_publication()?;
         #[cfg(feature = "foreign-nodes")]
@@ -236,7 +256,9 @@ impl Transaction<'_> {
                 changes.mutations.insert(*key, mutation);
             }
         }
-        crate::pipeline::apply_model_caches(self)?;
+        if matches!(caches, CacheReconciliation::Writable) {
+            crate::pipeline::apply_model_caches(self)?;
+        }
         #[cfg(feature = "foreign-nodes")]
         ForeignReadOperation::check()?;
         #[cfg(feature = "foreign-nodes")]
