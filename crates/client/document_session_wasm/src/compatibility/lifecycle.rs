@@ -100,6 +100,7 @@ impl EditorSession {
             Ok(false)
         } else {
             host.pending_version = None;
+            host.discard_reservations();
             host.captures
                 .retain(|_, capture| capture.reference.update_id != host.update);
             host.prune_capture_index();
@@ -142,6 +143,7 @@ impl EditorSession {
             .pending
             .take()
             .ok_or(BoundaryError::Invalid("compatibility update required"))?;
+        host.discard_reservations();
         let adoption = document_session::compatibility::CompatUpdate::new(pending);
         let previous_version = host.version;
         let flags = machine.call(adoption.input(), now, Some(wall))?;
@@ -243,6 +245,7 @@ impl EditorSession {
         let (host, _) = self.compat_parts().map_err(js)?;
         host.pending = None;
         host.pending_version = None;
+        host.discard_reservations();
         host.captures
             .retain(|_, capture| capture.reference.update_id != host.update);
         host.prune_capture_index();

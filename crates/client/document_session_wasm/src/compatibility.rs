@@ -11,6 +11,7 @@ mod capture_index;
 mod lifecycle;
 pub(crate) mod observer;
 mod records;
+mod reservations;
 
 pub(crate) struct Host {
     editor: u32,
@@ -25,6 +26,10 @@ pub(crate) struct Host {
     captures: HashMap<u64, records::Capture>,
     selections: BTreeMap<u32, lexical_model::ForeignSelectionIdentity>,
     next_selection: u32,
+    keys: lexical_model::SharedKeyCounter,
+    reservations: HashMap<u64, (u32, std::collections::HashSet<lexical_model::NodeKey>)>,
+    next_reservation: u64,
+    mutation_epoch: u64,
     receipts: observer::Receipts,
     owner: lexical_model::ForeignEditorIdentity,
 }
@@ -58,11 +63,13 @@ impl EditorSession {
             return Err(BoundaryError::Invalid("compatibility editor namespace"));
         }
         let receipts: observer::Receipts = Arc::default();
+        let keys = lexical_model::SharedKeyCounter::new();
         let machine = machine::Machine::create_compat(
             abi,
             config,
             &registration,
             receipts.clone(),
+            keys.clone(),
             now,
             wall,
         )?;
@@ -84,6 +91,10 @@ impl EditorSession {
             captures: HashMap::new(),
             selections: BTreeMap::new(),
             next_selection: 1,
+            keys,
+            reservations: HashMap::new(),
+            next_reservation: 1,
+            mutation_epoch: 0,
             receipts,
             owner,
         };

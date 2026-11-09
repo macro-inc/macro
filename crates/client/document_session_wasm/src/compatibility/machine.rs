@@ -9,6 +9,7 @@ impl Machine {
         config: &[u8],
         registration: &compat::CompatConfig,
         receipts: crate::compatibility::observer::Receipts,
+        keys: lexical_model::SharedKeyCounter,
         mono: f64,
         wall: f64,
     ) -> Result<Self, BoundaryError> {
@@ -84,6 +85,7 @@ impl Machine {
                 },
                 builder: Arc::new(move |mode, peer| {
                     let mut builder = compat_editor_builder(mode, peer)
+                        .key_source(lexical_model::KeySource::Shared(keys.clone()))
                         .plugin(crate::compatibility::observer::Observer(receipts.clone()));
                     for name in classes.keys() {
                         // The same immutable registration set was resolved above.
