@@ -132,6 +132,7 @@ export function CallControlBar(props: {
   disabled: boolean;
   compact?: boolean;
   unframed?: boolean;
+  smallIcons?: boolean;
   showShortcuts?: boolean;
   canLeave?: boolean;
   audioMuted: boolean;
@@ -157,6 +158,7 @@ export function CallControlBar(props: {
   onSettingsOpenChange?: (open: boolean) => void;
   children?: JSX.Element;
 }) {
+  const iconClass = () => (props.smallIcons ? 'size-3.5' : 'size-5');
   let audioOpen = false;
   let videoOpen = false;
   let screenOpen = false;
@@ -201,11 +203,11 @@ export function CallControlBar(props: {
           icon={
             <Show
               when={props.audioMuted || props.audioPermission === 'denied'}
-              fallback={<Microphone class="size-5" />}
+              fallback={<Microphone class={iconClass()} />}
             >
               <MicrophoneSlash
                 class={cn(
-                  'size-5',
+                  iconClass(),
                   props.audioPermission === 'denied' && 'text-ink-subtle'
                 )}
               />
@@ -240,11 +242,11 @@ export function CallControlBar(props: {
           icon={
             <Show
               when={props.videoMuted || props.videoPermission === 'denied'}
-              fallback={<VideoCamera class="size-5" />}
+              fallback={<VideoCamera class={iconClass()} />}
             >
               <VideoCameraSlash
                 class={cn(
-                  'size-5',
+                  iconClass(),
                   props.videoPermission === 'denied' && 'text-ink-subtle'
                 )}
               />
@@ -272,7 +274,7 @@ export function CallControlBar(props: {
             pressed={props.screenSharing}
             disabled={props.disabled || props.screenUnavailable}
             onToggle={props.onToggleScreen}
-            icon={<Screencast class="size-5" />}
+            icon={<Screencast class={iconClass()} />}
           >
             {props.screenMenu}
           </MediaSplitButton>
@@ -290,7 +292,7 @@ export function CallControlBar(props: {
             tooltip={{ content: 'Leave call', placement: 'top' }}
             onClick={props.onLeave}
           >
-            <PhoneDisconnect class="size-5" />
+            <PhoneDisconnect class={iconClass()} />
           </Button>
         </Show>
       </div>

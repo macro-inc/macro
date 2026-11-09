@@ -270,3 +270,49 @@ test('companion controls explain disabled screen audio', async ({
       });
   }
 });
+
+test('companion controls use smaller glyphs without shrinking targets', async ({
+  page,
+}, info) => {
+  test.skip(
+    process.env.CALL_FULL_HOST !== 'true' || info.project.name === 'phone'
+  );
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.addInitScript(() => {
+    const width = new URLSearchParams(location.search).get('playerWidth');
+    if (width) localStorage.setItem('macro:pref:call:mini-player-width', width);
+  });
+  for (const theme of ['dark', 'light']) {
+    for (const surface of ['player-small', 'player-large', 'popover']) {
+      await page.goto(
+        `/src/features/channel/Call/discussion/browser-test/call-overlay.html?surface=${surface === 'popover' ? 'popover' : 'player'}&playerWidth=${surface === 'player-small' ? '256' : '960'}&theme=${theme}&work=off`
+      );
+      const controls = page.locator('[data-call-controls]');
+      await expect(controls).toBeVisible();
+      for (const label of ['Microphone', 'Camera', 'Screen share']) {
+        const button = controls
+          .getByRole('group', { name: label, exact: true })
+          .getByRole('button')
+          .first();
+        expect((await button.locator('svg').first().boundingBox())?.width).toBe(
+          14
+        );
+      }
+      for (const label of ['Reactions', 'Leave call']) {
+        expect(
+          (
+            await controls
+              .getByRole('button', { name: label, exact: true })
+              .locator('svg')
+              .first()
+              .boundingBox()
+          )?.width
+        ).toBe(14);
+      }
+      if (process.env.CALL_REPRO_DIR)
+        await page.screenshot({
+          path: `${process.env.CALL_REPRO_DIR}/L106-${surface}-${theme}.png`,
+        });
+    }
+  }
+});

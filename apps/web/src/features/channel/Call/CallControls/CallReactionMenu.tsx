@@ -84,6 +84,7 @@ export function CallReactionMenu(props: {
   onReaction: (emoji: CallReactionEmoji) => void;
   onOpenChange: (open: boolean) => void;
   compact?: boolean;
+  smallIcon?: boolean;
 }) {
   const [open, setOpen] = createSignal(false);
   const [trigger, setTrigger] = createSignal<HTMLButtonElement>();
@@ -109,7 +110,7 @@ export function CallReactionMenu(props: {
           disabled: open(),
         }}
       >
-        <Smiley class="size-5" />
+        <Smiley class={props.smallIcon ? 'size-3.5' : 'size-5'} />
       </Popover.Trigger>
       <Show when={open()}>
         <Popover.Portal

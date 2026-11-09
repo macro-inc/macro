@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import Microphone from '@icon/system/regular/microphone.svg';
 import MicrophoneSlash from '@icon/system/regular/microphone-slash.svg';
@@ -68,7 +69,12 @@ export function CallQuickControls(props: {
   const ReactionControl = () => (
     <Show when={props.onReaction}>
       {(send) => (
-        <CallReactionMenu compact onReaction={send()} onOpenChange={() => {}} />
+        <CallReactionMenu
+          compact
+          smallIcon={!isMobile()}
+          onReaction={send()}
+          onOpenChange={() => {}}
+        />
       )}
     </Show>
   );
@@ -178,6 +184,7 @@ export function CallQuickControls(props: {
       <CallMediaControls
         compact
         unframed
+        smallIcons={!isMobile()}
         media={call}
         screenUnavailable={screenUnavailable()}
         canLeave={companion.canLeave()}

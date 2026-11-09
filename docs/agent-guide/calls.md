@@ -326,7 +326,10 @@ read-only name.
 
 Join-preview and in-call controls use the standard Macro icon buttons.
 The full and compact call bars keep split and standalone controls at the same
-outer height (40px and 32px respectively), including each split frame's border. In a
+outer height (40px and 32px respectively), including each split frame's border.
+Desktop popover and floating-player controls use 14px glyphs, including their
+reaction and leave actions, without shrinking buttons or carets. Main and phone
+controls retain their existing glyph sizes. In a
 call, one floating-menu surface with a hairline edge, soft shadow, 8px padding
 and 8px gaps contains mic, camera, screen sharing, Team, More and Leave. The chat toggle stays outside this panel. The microphone and camera
 are split buttons (`ButtonGroup`): the left half
