@@ -58,7 +58,7 @@ vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => undefined,
 }));
 vi.mock('@components/app/mobile/MobileEdgeFade', () => ({
-  MobileTopEdgeFade: () => null,
+  MobileTopEdgeFade: () => <div data-testid="top-edge-fade" />,
 }));
 vi.mock('@components/app/mobile/MobilePageActionRow', () => ({
   MobilePageActionRow: () => null,
@@ -265,9 +265,12 @@ it('mounts header contributions when chrome appears and follows its replacement 
   expect(screen.getByRole('button', { name: 'Unread' })).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Compose' })).toBeTruthy();
 
+  expect(screen.getByTestId('top-edge-fade')).toBeTruthy();
+
   routeState.externalChat = false;
   setContent({ type: 'component', id: 'external' });
   expect(container.querySelector('[data-split-header]')).toBeNull();
+  expect(screen.queryByTestId('top-edge-fade')).toBeNull();
   expect(screen.getByRole('textbox', { name: 'Retained view' })).toBe(
     retainedView
   );

@@ -164,6 +164,11 @@ export function SplitPanel(props: SplitPanelProps) {
       ?.entry(props.handle.id as string as PaneId)
       ?.location.route.matches.some((match) => match.id === 'external-chat');
 
+  const externalAccountPage = () =>
+    props.handle.content().type === 'component' &&
+    props.handle.content().id === 'external' &&
+    !hasExternalChat();
+
   const hasSplitHeader = () => {
     const content = props.handle.content();
     return (
@@ -173,7 +178,7 @@ export function SplitPanel(props: SplitPanelProps) {
         content.type === 'component' &&
         (content.id === LIST_VIEW_ID.search ||
           content.id === LIST_VIEW_ID.channels ||
-          (content.id === 'external' && !hasExternalChat()))
+          externalAccountPage())
       )
     );
   };
@@ -393,7 +398,9 @@ export function SplitPanel(props: SplitPanelProps) {
                       )}
                     </Show>
                   </div>
-                  <Show when={!usesComposableLayout()}>
+                  <Show
+                    when={!usesComposableLayout() && !externalAccountPage()}
+                  >
                     <MobileTopEdgeFade />
                   </Show>
                 </Panel.Body>
