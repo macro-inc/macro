@@ -58,6 +58,13 @@ removed IDs feed the unchanged ownership query. A foreign-removal mutation fails
 that query, and empty history emits no applied-undo fact. The session collector is
 read-only and observes IDs before projection fixups, not inferred new op spans.
 
+## Pre-existing production failures
+
+Seed 28 structural undo hides foreign text in native and shipping TypeScript.
+The separate [failure ledger](../KNOWN_FAILURES.md) preserves its exact literal,
+strict ownership failure and immediate Redo recovery evidence. It is excluded
+from successful story coverage; ordinary/generated runs retain all invariants.
+
 ## Remaining M2 producers
 
 Real document_session/lexical_model/lexical_loro editor clients are integrated.
