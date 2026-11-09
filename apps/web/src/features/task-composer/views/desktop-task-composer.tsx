@@ -1,4 +1,7 @@
-import { TaskTemplateControls } from '@app/features/task-templates/task-template-controls';
+import {
+  TaskTemplateControls,
+  TaskTemplateNameStrip,
+} from '@app/features/task-templates/task-template-controls';
 import { EntityComposer } from '@ui';
 import { Show } from 'solid-js';
 import type { TaskComposerController } from '../primitives/task-composer';
@@ -18,6 +21,7 @@ export function DesktopTaskComposer(props: {
       </EntityComposer.Header>
       <TaskComposer.Recovery />
       <EntityComposer.Main inert={props.composer.isSavingTemplate()}>
+        <TaskTemplateNameStrip composer={props.composer} />
         <TaskComposer.Title />
         <TaskComposer.Body />
         <Show when={!props.composer.isTemplateMode()}>

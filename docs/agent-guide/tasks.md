@@ -842,17 +842,16 @@ counts as an edit. Reopening a saved draft preserves this distinction. The
 Customer / Contact row participates in defaults without duplicate property pills.
 
 New template opens template mode over the preserved task draft, without a
-replacement confirmation. The whole Templates back button returns to that
-unchanged draft. The header uses the shared breadcrumb separator and a borderless
-inline template-name editor; a new template starts empty with Template name
-focused. Long names truncate and retain a full-name tooltip. Name edits persist
-as you type, including clearing the name, which disables Save. The body keeps the
-ordinary task-title editor and placeholder without a leading icon. Draft fields,
-description, and task title become initial defaults, but not attachments.
-The footer's Share with team switch controls new
-template ownership. Edit opens the same mode with the saved name and defaults;
-team ownership reads Shared with the owning team, while personal templates have
-no ownership label. Both hide Attach and Create More. Save template
+replacement confirmation. The New template or Edit template back button returns
+to that unchanged draft. An InputGroup strip above the task title contains the
+template icon and a real name input. A new template starts empty with Template
+name focused; editing does not focus the name. Long names truncate. Name edits
+persist as you type, including clearing the name, which disables Save. A new
+template's visibility dropdown offers Only me and the current team; editing a
+team template shows the fixed team avatar and name, while a personal template
+shows no ownership label. This visibility is separate from the footer's task
+sharing switch. The ordinary task title, description, and fields remain below
+the strip. Both hide Attach and Create More. Save template
 saves only the template, then returns with its fields applied. Existing task
 title, prose, and attachments stay intact; blank title or description takes
 the corresponding saved default. Later template switches still confirm before
@@ -879,10 +878,10 @@ edits while retaining launch presets. Verify personal/team creation, draft
 preservation, field-only update
 and reset, no-template selection, repeated Create More, editing, cancellation,
 conflicts, and deletion. Touch retains the tall composer, with Save in its
-reachable header and Cancel in the footer. On narrow full-screen composers, keep
-Templates and Close reachable while the inline name shrinks; Delete is icon-only.
-Check that the new-template name receives focus, the task title edits the saved
-default rather than the template name, and Back or Cancel restores the draft.
+reachable header and Cancel in the footer. On phones visibility stacks below
+the name within the strip; Delete remains icon-only. Check that the new-template
+name receives focus, the task title edits the saved default rather than the
+template name, and Back or Cancel restores the draft.
 At narrow desktop widths, the dropdown stays within the viewport.
 With and without a selected template, Create another must not show an
 unconfirmed-draft recovery banner during submission. Failed unconfirmed attempts

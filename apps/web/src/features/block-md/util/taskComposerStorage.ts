@@ -18,11 +18,15 @@ const storedDraftSchema = taskComposerDraftSchema.extend({
 const STORAGE_KEY = 'task-composer-draft';
 
 /** Recovered submissions keep their sharing choice separate from new-task defaults. */
-export function createTaskComposerSharing(recoveredShare?: boolean) {
+export function createTaskComposerSharing(
+  recoveredShare?: boolean,
+  options?: { initialValue?: boolean; canPersist?: () => boolean }
+) {
   if (recoveredShare !== undefined) return createSignal(recoveredShare);
   return makePersistedState(createSignal(true), {
     storages: {
       restore: () => {
+        if (options?.initialValue !== undefined) return options.initialValue;
         const stored = localStorage.getItem('task-composer-share-with-team');
         return stored === 'true'
           ? true
@@ -30,8 +34,10 @@ export function createTaskComposerSharing(recoveredShare?: boolean) {
             ? false
             : undefined;
       },
-      write: (value) =>
-        localStorage.setItem('task-composer-share-with-team', String(value)),
+      write: (value) => {
+        if (options?.canPersist?.() === false) return;
+        localStorage.setItem('task-composer-share-with-team', String(value));
+      },
     },
   });
 }
@@ -70,6 +76,7 @@ export type TaskComposerDraftStorage = {
 
 export interface TaskComposerDraft {
   title: string;
+  shareWithTeam?: boolean;
   templateSelection?: TaskTemplateSelection;
   /** Template mode never overwrites the underlying task fields. */
   templateEditor?: TaskTemplateEditorDraft;

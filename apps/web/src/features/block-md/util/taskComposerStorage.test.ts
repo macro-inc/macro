@@ -776,3 +776,26 @@ it('confirms title replacement without marking field-only edits and treats omitt
     'Current task title'
   );
 });
+
+it('restores draft sharing without letting template edits change the global default', () => {
+  localStorage.setItem('task-composer-share-with-team', 'true');
+  saveTaskComposerDraft({ ...draft, shareWithTeam: false });
+  const restored = loadTaskComposerDraft();
+  expect(restored?.shareWithTeam).toBe(false);
+  createRoot((dispose) => {
+    const [editing, setEditing] = createSignal(false);
+    const [sharing, setSharing] = createTaskComposerSharing(undefined, {
+      initialValue: restored?.shareWithTeam,
+      canPersist: () => !editing(),
+    });
+    expect(sharing()).toBe(false);
+    setEditing(true);
+    setSharing(true);
+    setSharing(false);
+    expect(localStorage.getItem('task-composer-share-with-team')).toBe('true');
+    setEditing(false);
+    setSharing(false);
+    expect(localStorage.getItem('task-composer-share-with-team')).toBe('false');
+    dispose();
+  });
+});

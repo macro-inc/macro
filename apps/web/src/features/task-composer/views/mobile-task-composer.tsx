@@ -1,4 +1,7 @@
-import { TaskTemplateControls } from '@app/features/task-templates/task-template-controls';
+import {
+  TaskTemplateControls,
+  TaskTemplateNameStrip,
+} from '@app/features/task-templates/task-template-controls';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { Property } from '@property';
 import { InlineTagsSheetPill } from '@property/tags';
@@ -73,6 +76,7 @@ export function MobileTaskComposer(props: {
         onPointerDown={keepTypingFocus}
         onMouseDown={keepTypingFocus}
       >
+        <TaskTemplateNameStrip composer={props.composer} />
         <TaskComposer.Title />
         <TaskComposer.Body />
         <Show when={!props.composer.isTemplateMode()}>

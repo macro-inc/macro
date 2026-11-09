@@ -201,6 +201,7 @@ export function createTaskComposer(
       if (draft) {
         return {
           title: draft.title,
+          shareWithTeam: draft.shareWithTeam,
           templateSelection: draft.templateSelection,
           templateRequest: draft.templateRequest,
           templateEditor: draft.templateEditor,
@@ -217,6 +218,7 @@ export function createTaskComposer(
     }
     return {
       title: props.initialTitle ?? '',
+      shareWithTeam: undefined,
       templateSelection: undefined,
       templateRequest: undefined,
       templateEditor: undefined,
@@ -265,7 +267,11 @@ export function createTaskComposer(
   );
   const [createMore, setCreateMore] = createSignal(false);
   const [shareWithTeam, setShareWithTeam] = createTaskComposerSharing(
-    recovered?.shareWithTeam
+    recovered?.shareWithTeam,
+    {
+      initialValue: initialState.shareWithTeam,
+      canPersist: () => !['new', 'editing'].includes(templateSelection().kind),
+    }
   );
   const [linkInSourceEnabled, setLinkInSourceEnabled] =
     createTaskComposerLinkInSource();
@@ -385,6 +391,7 @@ export function createTaskComposer(
   );
   const liveDraftSnapshot = () => ({
     title: title(),
+    shareWithTeam: shareWithTeam(),
     templateSelection: structuredClone(templateSelection()),
     templateBaseline: templateBaseline() && structuredClone(templateBaseline()),
     content: content(),
@@ -801,6 +808,8 @@ export function createTaskComposer(
         editor
       );
     setTitle(draft.title);
+    if (draft.shareWithTeam !== undefined)
+      setShareWithTeam(draft.shareWithTeam);
     setContent(draft.content);
     setPropertyValues(reconcile(structuredClone(draft.propertyValues)));
     setVisiblePropertyIds(

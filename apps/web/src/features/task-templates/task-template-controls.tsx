@@ -1,19 +1,23 @@
-import { ViewBreadcrumbs } from '@app/components/view-shell/ViewBreadcrumbs';
 import { t } from '@app/lib/i18n';
-import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { onElementConnect } from '@core/util/onElementConnect';
 import { thrownResultErrorHasCode } from '@core/util/result';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import FileIcon from '@icon/system/regular/file.svg';
+import LockIcon from '@icon/system/regular/lock.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import type { TaskTemplate } from '@service-storage/generated/schemas/taskTemplate';
 import {
+  Avatar,
   Button,
   ConfirmDialog,
+  Dropdown,
+  InputGroup,
   type ManagedDialogProps,
   openDialog,
   Tooltip,
@@ -175,12 +179,6 @@ export function TaskTemplateControls(props: {
     if (selection.kind === 'new' || selection.kind === 'editing')
       return selection.name || t('create.taskTemplates');
     return selection.template.name;
-  };
-  const templateName = () => {
-    const selection = props.composer.templateSelection();
-    return selection.kind === 'new' || selection.kind === 'editing'
-      ? selection.name
-      : '';
   };
   const editableTemplate = (template: TaskTemplate) => ({
     id: template.id,
@@ -376,33 +374,18 @@ export function TaskTemplateControls(props: {
           </Show>
         }
       >
-        <div class="min-w-0 flex-1 flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            class="shrink-0 gap-1"
-            disabled={props.composer.isSavingTemplate()}
-            onClick={props.composer.cancelTemplateEdit}
-          >
-            <CaretLeftIcon class="size-4 shrink-0" />
-            {t('create.taskTemplates')}
-          </Button>
-          <ViewBreadcrumbs.Separator />
-          <Tooltip
-            class="min-w-0 flex-1"
-            label={templateName() || t('create.taskTemplateNamePlaceholder')}
-          >
-            <InlineTitleEditor
-              value={templateName()}
-              onValueChange={props.composer.setTemplateName}
-              placeholder={t('create.taskTemplateNamePlaceholder')}
-              ariaLabel={t('create.taskTemplateName')}
-              class="ph-no-capture w-full text-sm"
-              disabled={props.composer.isSavingTemplate()}
-              autofocus={props.composer.templateSelection().kind === 'new'}
-            />
-          </Tooltip>
-        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          class="shrink-0 gap-1"
+          disabled={props.composer.isSavingTemplate()}
+          onClick={props.composer.cancelTemplateEdit}
+        >
+          <CaretLeftIcon class="size-4 shrink-0" />
+          {props.composer.templateSelection().kind === 'new'
+            ? t('create.taskTemplateNew')
+            : t('create.taskTemplateEdit')}
+        </Button>
         <Show
           when={
             props.composer.templateSelection().kind === 'editing' &&
@@ -431,5 +414,133 @@ export function TaskTemplateControls(props: {
         </Show>
       </Show>
     </div>
+  );
+}
+
+/** Template identity and immutable ownership, separate from the task defaults. */
+export function TaskTemplateNameStrip(props: {
+  composer: TaskComposerController;
+}) {
+  const selection = () => props.composer.templateSelection();
+  const name = () => {
+    const current = selection();
+    return current.kind === 'new' || current.kind === 'editing'
+      ? current.name
+      : '';
+  };
+  const teamId = () => {
+    const current = selection();
+    if (current.kind === 'new') return current.teamId;
+    if (current.kind === 'editing') return current.template.teamId;
+    return null;
+  };
+  const teamName = () =>
+    props.composer.team()?.name ?? t('create.taskTemplateTeam');
+  const visibilityLabel = () =>
+    teamId() ? teamName() : t('create.taskTemplateOnlyMe');
+  const teamIdentity = () => (
+    <>
+      <Avatar size="sm" shape="square">
+        <Avatar.Fallback>
+          {teamName().slice(0, 1).toUpperCase()}
+        </Avatar.Fallback>
+      </Avatar>
+      <span class="min-w-0 truncate">{teamName()}</span>
+    </>
+  );
+  return (
+    <Show when={props.composer.isTemplateMode()}>
+      <InputGroup
+        size="xl"
+        class="mb-4 shrink-0 mobile:h-auto mobile:flex-wrap"
+      >
+        <InputGroup.Input
+          ref={(input) =>
+            onElementConnect(input, () => {
+              if (selection().kind === 'new') input.focus();
+            })
+          }
+          class="ph-no-capture truncate font-semibold mobile:py-3"
+          aria-label={t('create.taskTemplateName')}
+          placeholder={t('create.taskTemplateNamePlaceholder')}
+          autocomplete="off"
+          data-1p-ignore
+          value={name()}
+          disabled={props.composer.isSavingTemplate()}
+          onInput={(event) =>
+            props.composer.setTemplateName(event.currentTarget.value)
+          }
+        />
+        <InputGroup.Addon>
+          <CopyIcon class="size-4" />
+        </InputGroup.Addon>
+        <Show when={selection().kind === 'new' || teamId()}>
+          <InputGroup.Addon
+            align="inline-end"
+            class="min-w-0 max-w-1/2 mobile:max-w-full mobile:basis-full mobile:justify-start mobile:pb-3 mobile:ps-4"
+          >
+            <Show
+              when={selection().kind === 'new'}
+              fallback={
+                <Tooltip
+                  label={teamName()}
+                  class="min-w-0 flex items-center gap-2 text-xs"
+                >
+                  {teamIdentity()}
+                </Tooltip>
+              }
+            >
+              <Dropdown>
+                <Dropdown.Trigger
+                  variant="secondary"
+                  size="xs"
+                  class="min-w-0 max-w-full"
+                  disabled={props.composer.isSavingTemplate()}
+                  aria-label={t('create.taskTemplateVisibility')}
+                  tooltip={visibilityLabel()}
+                >
+                  <Show
+                    when={teamId()}
+                    fallback={
+                      <>
+                        <LockIcon class="size-4 shrink-0" />
+                        <span>{t('create.taskTemplateOnlyMe')}</span>
+                      </>
+                    }
+                  >
+                    {teamIdentity()}
+                  </Show>
+                  <CaretDownIcon class="size-4 shrink-0" />
+                </Dropdown.Trigger>
+                <Dropdown.Content>
+                  <Dropdown.Group>
+                    <Dropdown.RadioGroup
+                      value={teamId() ?? ''}
+                      onChange={(id) =>
+                        props.composer.setTemplateTeamId(id || null)
+                      }
+                    >
+                      <Dropdown.RadioItem value="">
+                        <LockIcon class="size-4 shrink-0" />
+                        <span>{t('create.taskTemplateOnlyMe')}</span>
+                        <Dropdown.ItemIndicator />
+                      </Dropdown.RadioItem>
+                      <Show when={props.composer.team()}>
+                        {(team) => (
+                          <Dropdown.RadioItem value={team().id}>
+                            {teamIdentity()}
+                            <Dropdown.ItemIndicator />
+                          </Dropdown.RadioItem>
+                        )}
+                      </Show>
+                    </Dropdown.RadioGroup>
+                  </Dropdown.Group>
+                </Dropdown.Content>
+              </Dropdown>
+            </Show>
+          </InputGroup.Addon>
+        </Show>
+      </InputGroup>
+    </Show>
   );
 }

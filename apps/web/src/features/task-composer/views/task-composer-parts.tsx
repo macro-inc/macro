@@ -375,60 +375,22 @@ function ErrorMessage() {
 
 function ShareToggle() {
   const composer = useTaskComposer();
-  const ownership = () => {
-    const selection = composer.templateSelection();
-    if (selection.kind !== 'editing' || !selection.template.teamId)
-      return undefined;
-    const team = composer.team();
-    return t('create.taskTemplateSharedWithTeam', {
-      name:
-        selection.template.teamId === team?.id
-          ? team.name
-          : t('create.taskTemplateTeam'),
-    });
-  };
-  const checked = () => {
-    const selection = composer.templateSelection();
-    return selection.kind === 'new'
-      ? Boolean(selection.teamId)
-      : composer.shareWithTeam();
-  };
   return (
-    <Show
-      when={composer.templateSelection().kind !== 'editing'}
-      fallback={
-        <Show when={ownership()}>
-          {(label) => (
-            <span class="min-w-0 truncate text-xs text-ink-muted">
-              {label()}
-            </span>
-          )}
-        </Show>
-      }
-    >
-      <Show when={composer.team()}>
-        {(team) => (
-          <Tooltip
-            label={composer.sharingHint()}
-            disabled={composer.isTemplateMode()}
-          >
-            <ToggleSwitch
-              class="shrink-0 ml-0.5"
-              checked={checked()}
-              onChange={(value) => {
-                if (composer.isTemplateMode())
-                  composer.setTemplateTeamId(value ? team().id : null);
-                else composer.setShareWithTeam(value);
-              }}
-              disabled={composer.isCreating()}
-              label={t('create.taskTemplateShareWithTeam', {
-                name: team().name,
-              })}
-              labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
-            />
-          </Tooltip>
-        )}
-      </Show>
+    <Show when={composer.team()}>
+      {(team) => (
+        <Tooltip label={composer.sharingHint()}>
+          <ToggleSwitch
+            class="shrink-0 ml-0.5"
+            checked={composer.shareWithTeam()}
+            onChange={composer.setShareWithTeam}
+            disabled={composer.isCreating()}
+            label={t('create.taskTemplateShareWithTeam', {
+              name: team().name,
+            })}
+            labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
+          />
+        </Tooltip>
+      )}
     </Show>
   );
 }

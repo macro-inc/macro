@@ -409,7 +409,7 @@ not to account-wide paired runtime count; a user can pair several computers.
 
 ### General
 
-- Reuse `InlineTitleEditor` for borderless names; use its controlled `onValueChange` mode for durable drafts and `onRename` for committed entity renames.
+- Reuse `InlineTitleEditor` for borderless entity renames; use `InputGroup` for durable draft names with inline visibility controls.
 - Keep contact removal and restoration beside Copy contact link in both record
   headers; keep company actions on Overview. Reuse the hidden mutations and
   confirm company contact/email-sync effects.

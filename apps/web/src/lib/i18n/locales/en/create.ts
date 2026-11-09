@@ -336,6 +336,9 @@ export default {
   taskTemplateUpdate: 'Update template',
   taskTemplateNone: 'No template',
   taskTemplateNew: 'New template',
+  taskTemplateEdit: 'Edit template',
+  taskTemplateOnlyMe: 'Only me',
+  taskTemplateVisibility: 'Template visibility',
   taskTemplateSelected: 'Template: {{name}}',
   taskTemplateSwitchTitle: 'Switch template?',
   taskTemplateSwitchBody:
@@ -361,7 +364,6 @@ export default {
   taskTemplateMarkdownHint:
     'Supports Markdown, including headings and checklists.',
   taskTemplateShareWithTeam: 'Share with {{name}}',
-  taskTemplateSharedWithTeam: 'Shared with {{name}}',
   taskTemplateNamePlaceholder: 'Template name',
   taskTemplateSave: 'Save template',
   taskTemplateSaving: 'Saving…',
