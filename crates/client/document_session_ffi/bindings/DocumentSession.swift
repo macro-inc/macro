@@ -4632,6 +4632,145 @@ public func FfiConverterTypeTimeouts_lower(_ value: Timeouts) -> RustBuffer {
 
 
 /**
+ * A native-first UTF-16 splice; full TextFromView remains explicit resynchronization.
+ */
+public struct ViewTextDelta: Equatable, Hashable {
+    /**
+     * Changed text node, including generation.
+     */
+    public var key: NodeKey
+    /**
+     * UTF-16 start position.
+     */
+    public var offset: Utf16Offset
+    /**
+     * UTF-16 code units to remove.
+     */
+    public var deleted: Utf16Offset
+    /**
+     * Inserted Unicode text.
+     */
+    public var inserted: String
+    /**
+     * Native anchor after the edit.
+     */
+    public var anchor: Utf16Offset?
+    /**
+     * Native focus after the edit.
+     */
+    public var focus: Utf16Offset?
+    /**
+     * Whether this finishes composition.
+     */
+    public var compositionEnd: Bool
+    /**
+     * Final composition data when supplied.
+     */
+    public var compositionData: String?
+    /**
+     * Host-resolved selection.
+     */
+    public var selection: ViewSelection
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Changed text node, including generation.
+         */key: NodeKey, 
+        /**
+         * UTF-16 start position.
+         */offset: Utf16Offset, 
+        /**
+         * UTF-16 code units to remove.
+         */deleted: Utf16Offset, 
+        /**
+         * Inserted Unicode text.
+         */inserted: String, 
+        /**
+         * Native anchor after the edit.
+         */anchor: Utf16Offset?, 
+        /**
+         * Native focus after the edit.
+         */focus: Utf16Offset?, 
+        /**
+         * Whether this finishes composition.
+         */compositionEnd: Bool, 
+        /**
+         * Final composition data when supplied.
+         */compositionData: String?, 
+        /**
+         * Host-resolved selection.
+         */selection: ViewSelection) {
+        self.key = key
+        self.offset = offset
+        self.deleted = deleted
+        self.inserted = inserted
+        self.anchor = anchor
+        self.focus = focus
+        self.compositionEnd = compositionEnd
+        self.compositionData = compositionData
+        self.selection = selection
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ViewTextDelta: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeViewTextDelta: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ViewTextDelta {
+        return
+            try ViewTextDelta(
+                key: FfiConverterTypeNodeKey.read(from: &buf), 
+                offset: FfiConverterTypeUtf16Offset.read(from: &buf), 
+                deleted: FfiConverterTypeUtf16Offset.read(from: &buf), 
+                inserted: FfiConverterString.read(from: &buf), 
+                anchor: FfiConverterOptionTypeUtf16Offset.read(from: &buf), 
+                focus: FfiConverterOptionTypeUtf16Offset.read(from: &buf), 
+                compositionEnd: FfiConverterBool.read(from: &buf), 
+                compositionData: FfiConverterOptionString.read(from: &buf), 
+                selection: FfiConverterTypeViewSelection.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ViewTextDelta, into buf: inout [UInt8]) {
+        FfiConverterTypeNodeKey.write(value.key, into: &buf)
+        FfiConverterTypeUtf16Offset.write(value.offset, into: &buf)
+        FfiConverterTypeUtf16Offset.write(value.deleted, into: &buf)
+        FfiConverterString.write(value.inserted, into: &buf)
+        FfiConverterOptionTypeUtf16Offset.write(value.anchor, into: &buf)
+        FfiConverterOptionTypeUtf16Offset.write(value.focus, into: &buf)
+        FfiConverterBool.write(value.compositionEnd, into: &buf)
+        FfiConverterOptionString.write(value.compositionData, into: &buf)
+        FfiConverterTypeViewSelection.write(value.selection, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeViewTextDelta_lift(_ buf: RustBuffer) throws -> ViewTextDelta {
+    return try FfiConverterTypeViewTextDelta.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeViewTextDelta_lower(_ value: ViewTextDelta) -> RustBuffer {
+    return FfiConverterTypeViewTextDelta.lower(value)
+}
+
+
+/**
  * Native WalPolicy; fields retain their domain meaning.
  */
 public struct WalPolicy: Equatable, Hashable {
@@ -6989,6 +7128,14 @@ public enum FfiInput: Equatable, Hashable {
          */root: SerializedNode
     )
     /**
+     * Native view already applied one UTF-16 text splice.
+     */
+    case textDeltaFromView(
+        /**
+         * Validated by the shared model before any selection write.
+         */delta: ViewTextDelta
+    )
+    /**
      * Native view already displays this text.
      */
     case textFromView(
@@ -7228,67 +7375,70 @@ public struct FfiConverterTypeFfiInput: FfiConverterRustBuffer {
         case 3: return .setState(root: try FfiConverterTypeSerializedNode.read(from: &buf)
         )
         
-        case 4: return .textFromView(key: try FfiConverterTypeNodeKey.read(from: &buf), text: try FfiConverterString.read(from: &buf), anchor: try FfiConverterOptionTypeUtf16Offset.read(from: &buf), focus: try FfiConverterOptionTypeUtf16Offset.read(from: &buf), compositionEnd: try FfiConverterBool.read(from: &buf), compositionData: try FfiConverterOptionString.read(from: &buf), selection: try FfiConverterTypeViewSelection.read(from: &buf)
+        case 4: return .textDeltaFromView(delta: try FfiConverterTypeViewTextDelta.read(from: &buf)
         )
         
-        case 5: return .selectionFromView(selection: try FfiConverterTypeViewSelection.read(from: &buf), change: try FfiConverterOptionTypeSelectionChangeContext.read(from: &buf)
+        case 5: return .textFromView(key: try FfiConverterTypeNodeKey.read(from: &buf), text: try FfiConverterString.read(from: &buf), anchor: try FfiConverterOptionTypeUtf16Offset.read(from: &buf), focus: try FfiConverterOptionTypeUtf16Offset.read(from: &buf), compositionEnd: try FfiConverterBool.read(from: &buf), compositionData: try FfiConverterOptionString.read(from: &buf), selection: try FfiConverterTypeViewSelection.read(from: &buf)
         )
         
-        case 6: return .command(command: try FfiConverterTypeFfiCommand.read(from: &buf), selection: try FfiConverterTypeViewSelection.read(from: &buf)
+        case 6: return .selectionFromView(selection: try FfiConverterTypeViewSelection.read(from: &buf), change: try FfiConverterOptionTypeSelectionChangeContext.read(from: &buf)
         )
         
-        case 7: return .composition(event: try FfiConverterTypeCompositionEvent.read(from: &buf), selection: try FfiConverterTypeViewSelection.read(from: &buf)
+        case 7: return .command(command: try FfiConverterTypeFfiCommand.read(from: &buf), selection: try FfiConverterTypeViewSelection.read(from: &buf)
         )
         
-        case 8: return .keyDown(event: try FfiConverterTypeKeyEvent.read(from: &buf), routed: try FfiConverterOptionTypeFfiCommand.read(from: &buf), preventDefault: try FfiConverterBool.read(from: &buf), selection: try FfiConverterTypeViewSelection.read(from: &buf)
+        case 8: return .composition(event: try FfiConverterTypeCompositionEvent.read(from: &buf), selection: try FfiConverterTypeViewSelection.read(from: &buf)
         )
         
-        case 9: return .paste(payload: try FfiConverterTypeFfiClipboardPayload.read(from: &buf), selection: try FfiConverterTypeViewSelection.read(from: &buf)
+        case 9: return .keyDown(event: try FfiConverterTypeKeyEvent.read(from: &buf), routed: try FfiConverterOptionTypeFfiCommand.read(from: &buf), preventDefault: try FfiConverterBool.read(from: &buf), selection: try FfiConverterTypeViewSelection.read(from: &buf)
         )
         
-        case 10: return .undo
-        
-        case 11: return .redo
-        
-        case 12: return .doc(operations: try FfiConverterSequenceTypeDocOp.read(from: &buf)
+        case 10: return .paste(payload: try FfiConverterTypeFfiClipboardPayload.read(from: &buf), selection: try FfiConverterTypeViewSelection.read(from: &buf)
         )
         
-        case 13: return .socket(conn: try FfiConverterTypeConnId.read(from: &buf), event: try FfiConverterTypeSocketEvent.read(from: &buf)
+        case 11: return .undo
+        
+        case 12: return .redo
+        
+        case 13: return .doc(operations: try FfiConverterSequenceTypeDocOp.read(from: &buf)
         )
         
-        case 14: return .token(attempt: try FfiConverterUInt32.read(from: &buf), token: try FfiConverterOptionString.read(from: &buf), access: try FfiConverterTypeWriteAccess.read(from: &buf)
+        case 14: return .socket(conn: try FfiConverterTypeConnId.read(from: &buf), event: try FfiConverterTypeSocketEvent.read(from: &buf)
         )
         
-        case 15: return .storage(op: try FfiConverterTypeStorageOpId.read(from: &buf), result: try FfiConverterTypeFfiStorageResult.read(from: &buf)
+        case 15: return .token(attempt: try FfiConverterUInt32.read(from: &buf), token: try FfiConverterOptionString.read(from: &buf), access: try FfiConverterTypeWriteAccess.read(from: &buf)
         )
         
-        case 16: return .host(signal: try FfiConverterTypeHostSignal.read(from: &buf)
+        case 16: return .storage(op: try FfiConverterTypeStorageOpId.read(from: &buf), result: try FfiConverterTypeFfiStorageResult.read(from: &buf)
         )
         
-        case 17: return .authorization(state: try FfiConverterTypeAuthorizationState.read(from: &buf)
+        case 17: return .host(signal: try FfiConverterTypeHostSignal.read(from: &buf)
         )
         
-        case 18: return .comment(mark: try FfiConverterTypeCommentMarkRequest.read(from: &buf)
+        case 18: return .authorization(state: try FfiConverterTypeAuthorizationState.read(from: &buf)
         )
         
-        case 19: return .flush(request: try FfiConverterTypeRequestId.read(from: &buf)
+        case 19: return .comment(mark: try FfiConverterTypeCommentMarkRequest.read(from: &buf)
         )
         
-        case 20: return .stop(request: try FfiConverterTypeRequestId.read(from: &buf)
+        case 20: return .flush(request: try FfiConverterTypeRequestId.read(from: &buf)
         )
         
-        case 21: return .reset
-        
-        case 22: return .requestSnapshot(request: try FfiConverterTypeRequestId.read(from: &buf)
+        case 21: return .stop(request: try FfiConverterTypeRequestId.read(from: &buf)
         )
         
-        case 23: return .focus(focused: try FfiConverterBool.read(from: &buf)
+        case 22: return .reset
+        
+        case 23: return .requestSnapshot(request: try FfiConverterTypeRequestId.read(from: &buf)
         )
         
-        case 24: return .addPeerIds(ids: try FfiConverterSequenceUInt64.read(from: &buf)
+        case 24: return .focus(focused: try FfiConverterBool.read(from: &buf)
         )
         
-        case 25: return .tick
+        case 25: return .addPeerIds(ids: try FfiConverterSequenceUInt64.read(from: &buf)
+        )
+        
+        case 26: return .tick
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -7313,8 +7463,13 @@ public struct FfiConverterTypeFfiInput: FfiConverterRustBuffer {
             FfiConverterTypeSerializedNode.write(root, into: &buf)
             
         
-        case let .textFromView(key,text,anchor,focus,compositionEnd,compositionData,selection):
+        case let .textDeltaFromView(delta):
             writeInt(&buf, Int32(4))
+            FfiConverterTypeViewTextDelta.write(delta, into: &buf)
+            
+        
+        case let .textFromView(key,text,anchor,focus,compositionEnd,compositionData,selection):
+            writeInt(&buf, Int32(5))
             FfiConverterTypeNodeKey.write(key, into: &buf)
             FfiConverterString.write(text, into: &buf)
             FfiConverterOptionTypeUtf16Offset.write(anchor, into: &buf)
@@ -7325,25 +7480,25 @@ public struct FfiConverterTypeFfiInput: FfiConverterRustBuffer {
             
         
         case let .selectionFromView(selection,change):
-            writeInt(&buf, Int32(5))
+            writeInt(&buf, Int32(6))
             FfiConverterTypeViewSelection.write(selection, into: &buf)
             FfiConverterOptionTypeSelectionChangeContext.write(change, into: &buf)
             
         
         case let .command(command,selection):
-            writeInt(&buf, Int32(6))
+            writeInt(&buf, Int32(7))
             FfiConverterTypeFfiCommand.write(command, into: &buf)
             FfiConverterTypeViewSelection.write(selection, into: &buf)
             
         
         case let .composition(event,selection):
-            writeInt(&buf, Int32(7))
+            writeInt(&buf, Int32(8))
             FfiConverterTypeCompositionEvent.write(event, into: &buf)
             FfiConverterTypeViewSelection.write(selection, into: &buf)
             
         
         case let .keyDown(event,routed,preventDefault,selection):
-            writeInt(&buf, Int32(8))
+            writeInt(&buf, Int32(9))
             FfiConverterTypeKeyEvent.write(event, into: &buf)
             FfiConverterOptionTypeFfiCommand.write(routed, into: &buf)
             FfiConverterBool.write(preventDefault, into: &buf)
@@ -7351,89 +7506,89 @@ public struct FfiConverterTypeFfiInput: FfiConverterRustBuffer {
             
         
         case let .paste(payload,selection):
-            writeInt(&buf, Int32(9))
+            writeInt(&buf, Int32(10))
             FfiConverterTypeFfiClipboardPayload.write(payload, into: &buf)
             FfiConverterTypeViewSelection.write(selection, into: &buf)
             
         
         case .undo:
-            writeInt(&buf, Int32(10))
-        
-        
-        case .redo:
             writeInt(&buf, Int32(11))
         
         
-        case let .doc(operations):
+        case .redo:
             writeInt(&buf, Int32(12))
+        
+        
+        case let .doc(operations):
+            writeInt(&buf, Int32(13))
             FfiConverterSequenceTypeDocOp.write(operations, into: &buf)
             
         
         case let .socket(conn,event):
-            writeInt(&buf, Int32(13))
+            writeInt(&buf, Int32(14))
             FfiConverterTypeConnId.write(conn, into: &buf)
             FfiConverterTypeSocketEvent.write(event, into: &buf)
             
         
         case let .token(attempt,token,access):
-            writeInt(&buf, Int32(14))
+            writeInt(&buf, Int32(15))
             FfiConverterUInt32.write(attempt, into: &buf)
             FfiConverterOptionString.write(token, into: &buf)
             FfiConverterTypeWriteAccess.write(access, into: &buf)
             
         
         case let .storage(op,result):
-            writeInt(&buf, Int32(15))
+            writeInt(&buf, Int32(16))
             FfiConverterTypeStorageOpId.write(op, into: &buf)
             FfiConverterTypeFfiStorageResult.write(result, into: &buf)
             
         
         case let .host(signal):
-            writeInt(&buf, Int32(16))
+            writeInt(&buf, Int32(17))
             FfiConverterTypeHostSignal.write(signal, into: &buf)
             
         
         case let .authorization(state):
-            writeInt(&buf, Int32(17))
+            writeInt(&buf, Int32(18))
             FfiConverterTypeAuthorizationState.write(state, into: &buf)
             
         
         case let .comment(mark):
-            writeInt(&buf, Int32(18))
+            writeInt(&buf, Int32(19))
             FfiConverterTypeCommentMarkRequest.write(mark, into: &buf)
             
         
         case let .flush(request):
-            writeInt(&buf, Int32(19))
-            FfiConverterTypeRequestId.write(request, into: &buf)
-            
-        
-        case let .stop(request):
             writeInt(&buf, Int32(20))
             FfiConverterTypeRequestId.write(request, into: &buf)
             
         
-        case .reset:
+        case let .stop(request):
             writeInt(&buf, Int32(21))
+            FfiConverterTypeRequestId.write(request, into: &buf)
+            
+        
+        case .reset:
+            writeInt(&buf, Int32(22))
         
         
         case let .requestSnapshot(request):
-            writeInt(&buf, Int32(22))
+            writeInt(&buf, Int32(23))
             FfiConverterTypeRequestId.write(request, into: &buf)
             
         
         case let .focus(focused):
-            writeInt(&buf, Int32(23))
+            writeInt(&buf, Int32(24))
             FfiConverterBool.write(focused, into: &buf)
             
         
         case let .addPeerIds(ids):
-            writeInt(&buf, Int32(24))
+            writeInt(&buf, Int32(25))
             FfiConverterSequenceUInt64.write(ids, into: &buf)
             
         
         case .tick:
-            writeInt(&buf, Int32(25))
+            writeInt(&buf, Int32(26))
         
         }
     }
@@ -9913,6 +10068,10 @@ public func FfiConverterTypeKeyCommand_lower(_ value: KeyCommand) -> RustBuffer 
 public enum ModifyTarget: Equatable, Hashable {
     
     /**
+     * A view exists but did not provide the required movement endpoints.
+     */
+    case requireView
+    /**
      * Layout is unavailable; only structural movement runs.
      */
     case noView
@@ -9954,9 +10113,11 @@ public struct FfiConverterTypeModifyTarget: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
         
-        case 1: return .noView
+        case 1: return .requireView
         
-        case 2: return .view(anchor: try FfiConverterTypePoint.read(from: &buf), focus: try FfiConverterTypePoint.read(from: &buf), resolutionDirty: try FfiConverterBool.read(from: &buf), isBackwardInDom: try FfiConverterBool.read(from: &buf)
+        case 2: return .noView
+        
+        case 3: return .view(anchor: try FfiConverterTypePoint.read(from: &buf), focus: try FfiConverterTypePoint.read(from: &buf), resolutionDirty: try FfiConverterBool.read(from: &buf), isBackwardInDom: try FfiConverterBool.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -9967,12 +10128,16 @@ public struct FfiConverterTypeModifyTarget: FfiConverterRustBuffer {
         switch value {
         
         
-        case .noView:
+        case .requireView:
             writeInt(&buf, Int32(1))
         
         
-        case let .view(anchor,focus,resolutionDirty,isBackwardInDom):
+        case .noView:
             writeInt(&buf, Int32(2))
+        
+        
+        case let .view(anchor,focus,resolutionDirty,isBackwardInDom):
+            writeInt(&buf, Int32(3))
             FfiConverterTypePoint.write(anchor, into: &buf)
             FfiConverterTypePoint.write(focus, into: &buf)
             FfiConverterBool.write(resolutionDirty, into: &buf)
