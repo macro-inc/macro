@@ -2,10 +2,12 @@
  * Copyright (c) Meta Platforms, Inc. and affiliates.
  * Licensed under the MIT license in the upstream Lexical source tree.
  */
+import { invokeDOMConversionWithNode } from '../compatibility-exceptions';
 import type {
   DOMConversion,
   DOMConversionFn,
   DOMConversionMap,
+  DOMConversionOutput,
   DOMConversionProp,
 } from '../nodes/dom-types';
 import type { NodeClass, RegisteredNodes } from '../nodes/replacement/types';
@@ -58,4 +60,29 @@ export function getHTMLElementConversionFunction(
     }
   }
   return current !== null ? current.conversion : null;
+}
+
+/** Internal Node invocation contract; public DOMConversionMap remains upstream. */
+export type DOMNodeConversionFn = (node: Node) => DOMConversionOutput | null;
+
+export function getDOMNodeConversionFunction(
+  domNode: Node,
+  cache: ReadonlyMap<string, readonly DOMConversionProp<HTMLElement>[]>
+): DOMNodeConversionFn | null {
+  const { nodeName } = domNode;
+  const conversions = cache.get(nodeName.toLowerCase());
+  let current: DOMConversion | null = null;
+  if (conversions !== undefined) {
+    for (const convert of conversions) {
+      const next = invokeDOMConversionWithNode(convert, domNode);
+      if (
+        next !== null &&
+        (current === null || (current.priority || 0) <= (next.priority || 0))
+      )
+        current = next;
+    }
+  }
+  if (current === null) return null;
+  const conversion = current.conversion;
+  return (node) => invokeDOMConversionWithNode(conversion, node);
 }
