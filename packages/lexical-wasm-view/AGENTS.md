@@ -39,7 +39,7 @@ Keep drag source validity tied to documentRevision; selection-only commits do no
 
 - `bun run check`, `bun run test`, `bun run test:browser`
 - `bun run test:browser group-b.browser.e2e.ts` checks native block moves, cross-editor copy, touch swipe, atomic drop paste, nested-editor ownership, one-snapshot table resize/restore and primary-touch long-press selection.
-- `heading-enter.browser.e2e.ts` compares literal heading-shortcut typing and Enter against upstream with the app native input configuration; assert model children and model/DOM caret paths, without installing extra key routes.
+- `heading-enter.browser.e2e.ts` compares literal heading-shortcut typing, Enter, and successive DOM-first characters against upstream with the app native input configuration; assert model children and model/DOM caret paths, without installing extra key routes.
 - Set LEXICAL_WASM_VIEW_TEST_PORT to reserve a private harness port on shared hosts.
 - Browser tests launch their own headless Chromium; never connect to a person's
   browser or the shared CDP instance. No existing-server reuse.
