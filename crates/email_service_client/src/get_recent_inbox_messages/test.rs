@@ -52,3 +52,35 @@ async fn an_error_status_fails_the_call() {
 
     assert!(result.is_err());
 }
+
+#[tokio::test]
+async fn asks_for_longer_snippets_and_reads_labels() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/internal/recent_messages/macro|owner@example.com"))
+        .and(query_param("limit", "100"))
+        .and(query_param("snippet_chars", "500"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"messages": [{
+                "inbox": "owner@example.com",
+                "from": null,
+                "to": [],
+                "cc": [],
+                "subject": "Invoice 42",
+                "snippet": "Your invoice is attached",
+                "received_at": null,
+                "labels": ["INBOX", "Billing"]
+            }]})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let client = EmailServiceClient::new("internal-key".to_owned(), server.uri());
+
+    let response = client
+        .get_recent_inbox_messages_with_snippets("macro|owner@example.com", 100, Some(500))
+        .await
+        .unwrap();
+
+    assert_eq!(response.messages[0].labels, ["INBOX", "Billing"]);
+}

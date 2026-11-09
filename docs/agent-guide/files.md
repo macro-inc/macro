@@ -15,7 +15,7 @@ viewer identity is available, document inserts into Shared are rejected.
 
 Files opens **Drive** using the same shell as Tasks, on desktop and touch
 devices alike.
-The top of Drive's My Files, Recent and Shared lists (not folders) holds the Drive `TutorialRow`, outside the virtualized rows, and the top of Drive's sidebar (the overlay sidebar on phones) holds the Docs `TutorialSidebarItem` (both from `features/video-tutorials`, each once its video is in the catalog).
+The top of Drive's My Files, Recent and Shared lists (not folders) holds the Drive `TutorialRow`, outside the virtualized rows, and the top of Drive's sidebar (the overlay sidebar on phones) holds the Docs `TutorialSidebarItem`, followed by Spreadsheets' under `enable-spreadsheets` and Databases' under `enable-databases` (all from `features/video-tutorials`, each once its video is in the catalog). While Drive's sidebar lists more than Docs, each item is labelled with its Block (**Macro Docs**, **Macro Spreadsheets**, **Macro Databases**) instead of **Watch tutorial**.
 
 The document header's **Copy Share Link** and the Share dialog's **Copy Link**
 copy a standalone link to the selected file, not the current browser URL.
@@ -72,7 +72,7 @@ strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with
 leading filter-drawer button, like Tasks. Opening Files from the mobile dock
 starts on **Recent**; explicit tab and folder links keep their destination. The
 first pill is Recent. The drawer holds Sort (hidden on Recent, where the viewer's own
-edit order applies) and, on tab locations only, the same filter groups as the
+edit order applies, and hidden on the touch folder tree) and, on tab locations only, the same filter groups as the
 desktop **Filter** menu; active selections show a count badge on the trigger
 and a `Clear all` action in the drawer. The single-row desktop list header orders the title, Filter, Sort, New, and an
 expandable Search icon. `Cmd/Ctrl+F` opens the search field. These list-header
@@ -80,7 +80,13 @@ controls are desktop-only — search on
 touch uses the global search overlay and creation uses the dock's New button.
 The **Folders** pill opens the folder overview and stays highlighted inside
 any folder; tapping it from inside a folder returns to the overview, and
-selecting another pill leaves the folder tree. The sidebar contains `New file or folder`, `My Files`, `Recent`,
+selecting another pill leaves the folder tree. On a touch device whose Drive
+sidebar is off screen, that overview is the nested folder tree — name order,
+with a folder search field — rather than a date-sorted list of every folder.
+Tap a folder name to open its contents; the expand control reveals child
+folders without leaving the overview. Inside a folder, a path under the pills
+lists Folders and each ancestor; choosing one opens it. A docked sidebar keeps
+the date-sorted folder list beside the tree. The sidebar contains `New file or folder`, `My Files`, `Recent`,
 `Shared with me`, collapsible Favorites, a collapsible Databases section
 listing every database the viewer owns or has been shared, by name (past ten,
 it scrolls within its own height; hidden when there are none or databases are

@@ -71,6 +71,7 @@ dependencies = [
  "agent_correlation",
  "ai_toolset",
  "async-trait",
+ "axum",
  "bot_id",
  "broadcast",
  "channel_sender",
@@ -78,6 +79,7 @@ dependencies = [
  "chrono-tz",
  "futures",
  "kafka_util",
+ "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
  "macro_event_topics",
@@ -92,6 +94,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "strum 0.27.2",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
  "tokio-util",
@@ -3862,6 +3865,7 @@ dependencies = [
  "email_utils",
  "email_validator",
  "futures",
+ "http-body-util",
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
@@ -3869,6 +3873,7 @@ dependencies = [
  "macro_user_id",
  "model-entity",
  "model_notifications",
+ "model_user",
  "models_pagination",
  "notification",
  "reqwest 0.13.4",
@@ -3881,6 +3886,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
+ "tower 0.5.3",
  "tracing",
  "urlencoding",
  "utoipa",
@@ -12956,6 +12962,7 @@ dependencies = [
  "macro_env_var",
  "macro_user_id",
  "macro_uuid",
+ "model_user",
  "prompt",
  "rootcause",
  "scheduled_action",
@@ -12967,6 +12974,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "workspace-hack",
@@ -17527,11 +17535,13 @@ name = "scheduled_action"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "agent_correlation",
  "agent_runtime_protocol",
  "agent_session",
  "ai_billing",
  "ai_usage",
  "anyhow",
+ "async-trait",
  "axum",
  "bot_id",
  "bots",
@@ -17555,6 +17565,7 @@ dependencies = [
  "glob",
  "jev",
  "kafka_util",
+ "lazy-regex",
  "lexical_client",
  "macro_authorization",
  "macro_db_migrator",
@@ -17709,6 +17720,7 @@ dependencies = [
  "doppler-config",
  "email",
  "email_db_client",
+ "encoding_rs",
  "ensure_exists",
  "entity_registry",
  "entity_registry_db_utils",
@@ -23266,15 +23278,6 @@ name = "xtask"
 version = "0.1.0"
 
 [[package]]
-name = "xtask_cache_wasm"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde_json",
- "xtask_paths",
-]
-
-[[package]]
 name = "xtask_deps"
 version = "0.1.0"
 dependencies = [
@@ -23359,13 +23362,15 @@ dependencies = [
  "macro_event_topics",
  "macro_queues",
  "rdkafka",
+ "regex",
  "serde",
  "serde_json",
  "serde_yaml",
  "sha2 0.10.9",
- "strum 0.27.2",
+ "tempfile",
  "tokio",
  "xtask_paths",
+ "xtask_ports",
 ]
 
 [[package]]
@@ -23386,6 +23391,19 @@ name = "xtask_paths"
 version = "0.1.0"
 dependencies = [
  "glob",
+]
+
+[[package]]
+name = "xtask_ports"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "macro_env_var",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "tempfile",
+ "thiserror 2.0.18",
 ]
 
 [[package]]

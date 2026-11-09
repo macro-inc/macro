@@ -8,6 +8,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { featuredTemplates } from '../core/routine-templates';
 import type { RoutineRow } from '../core/types';
+import { TEST_CATALOG } from '../tests/catalog';
 import { RoutinesList } from './routines-list';
 
 vi.mock('@service-connection/websocket', () => ({
@@ -162,7 +163,10 @@ describe('routines list', () => {
   });
   it('starts a routine from a template card above the list', () => {
     const onTemplate = vi.fn();
-    const props = setup({ templates: featuredTemplates(true), onTemplate });
+    const props = setup({
+      templates: featuredTemplates(TEST_CATALOG, true),
+      onTemplate,
+    });
     const strip = within(screen.getByRole('region', { name: 'Templates' }));
     expect(
       strip
@@ -175,7 +179,7 @@ describe('routines list', () => {
       'Start a routine from Share updates',
     ]);
     // Each card says what starts it and what it does.
-    expect(strip.getByText('New email')).toBeTruthy();
+    expect(strip.getByText('New email received')).toBeTruthy();
     expect(strip.getByText('Label with AI')).toBeTruthy();
     fireEvent.click(
       strip.getByRole('button', { name: 'Start a routine from Morning brief' })
