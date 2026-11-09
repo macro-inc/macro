@@ -1834,6 +1834,505 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatInstanceSeed<'raw> {
 impl<'raw> ::bebop::Record<'raw> for CompatInstanceSeed<'raw> {}
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum CompatSelectionValue {
+    /// An unknown type which is likely defined in a newer version of the schema.
+    Unknown,
+
+    /// Discriminator 1
+    CompatReferencedSelectionValue {
+        reference: ForeignSelectionRef,
+    },
+
+    /// Discriminator 2
+    CompatNewSelectionValue {
+        client_value_id: u32,
+    },
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatSelectionValue {
+    const MIN_SERIALIZED_SIZE: usize = ::bebop::LEN_SIZE + 1;
+
+    fn serialized_size(&self) -> usize {
+        ::bebop::LEN_SIZE + 1 +
+        match self {
+            CompatSelectionValue::Unknown => {
+                0
+            }
+            Self::CompatReferencedSelectionValue {
+                reference: ref _reference,
+            }
+            => {
+                _reference.serialized_size()
+            }
+            Self::CompatNewSelectionValue {
+                client_value_id: ref _client_value_id,
+            }
+            => {
+                _client_value_id.serialized_size()
+            }
+        }
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        let size = zelf.serialized_size();
+        ::bebop::write_len(dest, size - ::bebop::LEN_SIZE - 1)?;
+        match zelf {
+            Self::Unknown => {
+                return Err(::bebop::SerializeError::CannotSerializeUnknownUnion);
+            }
+            Self::CompatReferencedSelectionValue {
+                reference: ref _reference,
+            }
+            => {
+                1u8._serialize_chained(dest)?;
+                _reference._serialize_chained(dest)?;
+            }
+            Self::CompatNewSelectionValue {
+                client_value_id: ref _client_value_id,
+            }
+            => {
+                2u8._serialize_chained(dest)?;
+                _client_value_id._serialize_chained(dest)?;
+            }
+        }
+        Ok(size)
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let len = ::bebop::read_len(raw)? + ::bebop::LEN_SIZE + 1;
+        let mut i = ::bebop::LEN_SIZE + 1;
+        let de = match raw[::bebop::LEN_SIZE] {
+            1 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                CompatSelectionValue::CompatReferencedSelectionValue {
+                    reference: v0,
+                }
+            }
+            2 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                CompatSelectionValue::CompatNewSelectionValue {
+                    client_value_id: v0,
+                }
+            }
+            _ => {
+                i = len;
+                CompatSelectionValue::Unknown
+            }
+        };
+        if !cfg!(feature = "unchecked") && i != len {
+            debug_assert!(i > len);
+            Err(::bebop::DeserializeError::CorruptFrame)
+        }
+        else {
+            Ok((i, de))
+        }
+    }
+
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatSelectionValue {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CompatSelectionPointIntent {
+    pub node: CompatNodeOperand,
+    pub offset: u32,
+    pub kind: CompatPointKind,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatSelectionPointIntent {
+    const MIN_SERIALIZED_SIZE: usize =
+        <CompatNodeOperand>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE +
+        <CompatPointKind>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.node.serialized_size() +
+        self.offset.serialized_size() +
+        self.kind.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.node._serialize_chained(dest)? +
+            zelf.offset._serialize_chained(dest)? +
+            zelf.kind._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            node: v0,
+            offset: v1,
+            kind: v2,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatSelectionPointIntent {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CompatSelectionIntent<'raw> {
+    /// An unknown type which is likely defined in a newer version of the schema.
+    Unknown,
+
+    /// Discriminator 1
+    CompatNoSelectionIntent {
+    },
+
+    /// Discriminator 2
+    CompatRangeSelectionIntent {
+        value: CompatSelectionValue,
+        anchor: CompatSelectionPointIntent,
+        focus: CompatSelectionPointIntent,
+        format: u32,
+        style: ::bebop::SliceWrapper<'raw, u16>,
+        dirty: bool,
+        has_cached_backward: bool,
+        cached_backward: bool,
+        has_cached_nodes: bool,
+        cached_nodes: ::std::vec::Vec<CompatNodeOperand>,
+    },
+
+    /// Discriminator 3
+    CompatNodeSelectionIntent {
+        value: CompatSelectionValue,
+        nodes: ::std::vec::Vec<CompatNodeOperand>,
+        dirty: bool,
+        has_cached_nodes: bool,
+        cached_nodes: ::std::vec::Vec<CompatNodeOperand>,
+    },
+
+    /// Discriminator 4
+    CompatTableSelectionIntent {
+        value: CompatSelectionValue,
+        table: CompatNodeOperand,
+        anchor: CompatSelectionPointIntent,
+        focus: CompatSelectionPointIntent,
+        dirty: bool,
+        has_cached_nodes: bool,
+        cached_nodes: ::std::vec::Vec<CompatNodeOperand>,
+    },
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatSelectionIntent<'raw> {
+    const MIN_SERIALIZED_SIZE: usize = ::bebop::LEN_SIZE + 1;
+
+    fn serialized_size(&self) -> usize {
+        ::bebop::LEN_SIZE + 1 +
+        match self {
+            CompatSelectionIntent::Unknown => {
+                0
+            }
+            Self::CompatNoSelectionIntent {
+            }
+            => {
+                0
+            }
+            Self::CompatRangeSelectionIntent {
+                value: ref _value,
+                anchor: ref _anchor,
+                focus: ref _focus,
+                format: ref _format,
+                style: ref _style,
+                dirty: ref _dirty,
+                has_cached_backward: ref _has_cached_backward,
+                cached_backward: ref _cached_backward,
+                has_cached_nodes: ref _has_cached_nodes,
+                cached_nodes: ref _cached_nodes,
+            }
+            => {
+                _value.serialized_size() +
+                _anchor.serialized_size() +
+                _focus.serialized_size() +
+                _format.serialized_size() +
+                _style.serialized_size() +
+                _dirty.serialized_size() +
+                _has_cached_backward.serialized_size() +
+                _cached_backward.serialized_size() +
+                _has_cached_nodes.serialized_size() +
+                _cached_nodes.serialized_size()
+            }
+            Self::CompatNodeSelectionIntent {
+                value: ref _value,
+                nodes: ref _nodes,
+                dirty: ref _dirty,
+                has_cached_nodes: ref _has_cached_nodes,
+                cached_nodes: ref _cached_nodes,
+            }
+            => {
+                _value.serialized_size() +
+                _nodes.serialized_size() +
+                _dirty.serialized_size() +
+                _has_cached_nodes.serialized_size() +
+                _cached_nodes.serialized_size()
+            }
+            Self::CompatTableSelectionIntent {
+                value: ref _value,
+                table: ref _table,
+                anchor: ref _anchor,
+                focus: ref _focus,
+                dirty: ref _dirty,
+                has_cached_nodes: ref _has_cached_nodes,
+                cached_nodes: ref _cached_nodes,
+            }
+            => {
+                _value.serialized_size() +
+                _table.serialized_size() +
+                _anchor.serialized_size() +
+                _focus.serialized_size() +
+                _dirty.serialized_size() +
+                _has_cached_nodes.serialized_size() +
+                _cached_nodes.serialized_size()
+            }
+        }
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        let size = zelf.serialized_size();
+        ::bebop::write_len(dest, size - ::bebop::LEN_SIZE - 1)?;
+        match zelf {
+            Self::Unknown => {
+                return Err(::bebop::SerializeError::CannotSerializeUnknownUnion);
+            }
+            Self::CompatNoSelectionIntent {
+            }
+            => {
+                1u8._serialize_chained(dest)?;
+            }
+            Self::CompatRangeSelectionIntent {
+                value: ref _value,
+                anchor: ref _anchor,
+                focus: ref _focus,
+                format: ref _format,
+                style: ref _style,
+                dirty: ref _dirty,
+                has_cached_backward: ref _has_cached_backward,
+                cached_backward: ref _cached_backward,
+                has_cached_nodes: ref _has_cached_nodes,
+                cached_nodes: ref _cached_nodes,
+            }
+            => {
+                2u8._serialize_chained(dest)?;
+                _value._serialize_chained(dest)?;
+                _anchor._serialize_chained(dest)?;
+                _focus._serialize_chained(dest)?;
+                _format._serialize_chained(dest)?;
+                _style._serialize_chained(dest)?;
+                _dirty._serialize_chained(dest)?;
+                _has_cached_backward._serialize_chained(dest)?;
+                _cached_backward._serialize_chained(dest)?;
+                _has_cached_nodes._serialize_chained(dest)?;
+                _cached_nodes._serialize_chained(dest)?;
+            }
+            Self::CompatNodeSelectionIntent {
+                value: ref _value,
+                nodes: ref _nodes,
+                dirty: ref _dirty,
+                has_cached_nodes: ref _has_cached_nodes,
+                cached_nodes: ref _cached_nodes,
+            }
+            => {
+                3u8._serialize_chained(dest)?;
+                _value._serialize_chained(dest)?;
+                _nodes._serialize_chained(dest)?;
+                _dirty._serialize_chained(dest)?;
+                _has_cached_nodes._serialize_chained(dest)?;
+                _cached_nodes._serialize_chained(dest)?;
+            }
+            Self::CompatTableSelectionIntent {
+                value: ref _value,
+                table: ref _table,
+                anchor: ref _anchor,
+                focus: ref _focus,
+                dirty: ref _dirty,
+                has_cached_nodes: ref _has_cached_nodes,
+                cached_nodes: ref _cached_nodes,
+            }
+            => {
+                4u8._serialize_chained(dest)?;
+                _value._serialize_chained(dest)?;
+                _table._serialize_chained(dest)?;
+                _anchor._serialize_chained(dest)?;
+                _focus._serialize_chained(dest)?;
+                _dirty._serialize_chained(dest)?;
+                _has_cached_nodes._serialize_chained(dest)?;
+                _cached_nodes._serialize_chained(dest)?;
+            }
+        }
+        Ok(size)
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let len = ::bebop::read_len(raw)? + ::bebop::LEN_SIZE + 1;
+        let mut i = ::bebop::LEN_SIZE + 1;
+        let de = match raw[::bebop::LEN_SIZE] {
+            1 => {
+                CompatSelectionIntent::CompatNoSelectionIntent {}
+            }
+            2 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v7) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v8) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v9) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                CompatSelectionIntent::CompatRangeSelectionIntent {
+                    value: v0,
+                    anchor: v1,
+                    focus: v2,
+                    format: v3,
+                    style: v4,
+                    dirty: v5,
+                    has_cached_backward: v6,
+                    cached_backward: v7,
+                    has_cached_nodes: v8,
+                    cached_nodes: v9,
+                }
+            }
+            3 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                CompatSelectionIntent::CompatNodeSelectionIntent {
+                    value: v0,
+                    nodes: v1,
+                    dirty: v2,
+                    has_cached_nodes: v3,
+                    cached_nodes: v4,
+                }
+            }
+            4 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                CompatSelectionIntent::CompatTableSelectionIntent {
+                    value: v0,
+                    table: v1,
+                    anchor: v2,
+                    focus: v3,
+                    dirty: v4,
+                    has_cached_nodes: v5,
+                    cached_nodes: v6,
+                }
+            }
+            _ => {
+                i = len;
+                CompatSelectionIntent::Unknown
+            }
+        };
+        if !cfg!(feature = "unchecked") && i != len {
+            debug_assert!(i > len);
+            Err(::bebop::DeserializeError::CorruptFrame)
+        }
+        else {
+            Ok((i, de))
+        }
+    }
+
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatSelectionIntent<'raw> {}
+
+#[derive(Clone, Debug, PartialEq, Copy)]
+#[repr(packed)]
+pub struct CompatSelectionBinding {
+    pub client_value_id: u32,
+    pub reference: ForeignSelectionRef,
+}
+
+impl ::bebop::FixedSized for CompatSelectionBinding {}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatSelectionBinding {
+    const MIN_SERIALIZED_SIZE: usize = Self::SERIALIZED_SIZE;
+    const EXACT_SERIALIZED_SIZE: Option<usize> = Some(Self::SERIALIZED_SIZE);
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        Self::SERIALIZED_SIZE
+    }
+
+    ::bebop::define_serialize_chained!(*Self => |zelf, dest| {
+        Ok(
+            ::bebop::packed_read!(zelf.client_value_id)._serialize_chained(dest)? +
+            ::bebop::packed_read!(zelf.reference)._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            client_value_id: v0,
+            reference: v1,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatSelectionBinding {}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum CompatBatchArgument<'raw> {
     /// An unknown type which is likely defined in a newer version of the schema.
     Unknown,
@@ -1851,6 +2350,11 @@ pub enum CompatBatchArgument<'raw> {
     /// Discriminator 3
     CompatNodeArrayArgument {
         values: ::std::vec::Vec<CompatNodeOperand>,
+    },
+
+    /// Discriminator 4
+    CompatSelectionIntentArgument {
+        intent: CompatSelectionIntent<'raw>,
     },
 }
 
@@ -1880,6 +2384,12 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchArgument<'raw> {
             }
             => {
                 _values.serialized_size()
+            }
+            Self::CompatSelectionIntentArgument {
+                intent: ref _intent,
+            }
+            => {
+                _intent.serialized_size()
             }
         }
     }
@@ -1912,6 +2422,13 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchArgument<'raw> {
                 3u8._serialize_chained(dest)?;
                 _values._serialize_chained(dest)?;
             }
+            Self::CompatSelectionIntentArgument {
+                intent: ref _intent,
+            }
+            => {
+                4u8._serialize_chained(dest)?;
+                _intent._serialize_chained(dest)?;
+            }
         }
         Ok(size)
     });
@@ -1942,6 +2459,14 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchArgument<'raw> {
 
                 CompatBatchArgument::CompatNodeArrayArgument {
                     values: v0,
+                }
+            }
+            4 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                CompatBatchArgument::CompatSelectionIntentArgument {
+                    intent: v0,
                 }
             }
             _ => {
@@ -2507,6 +3032,7 @@ pub struct CompatBatchReply<'raw> {
     pub version: u64,
     pub mutation_epoch: u64,
     pub composition: ForeignOptionalKey,
+    pub selection_bindings: ::bebop::SliceWrapper<'raw, CompatSelectionBinding>,
     pub selection: CompatSelectionData<'raw>,
     pub selections: ::std::vec::Vec<CompatSelectionData<'raw>>,
     pub tags: ::std::vec::Vec<&'raw str>,
@@ -2529,6 +3055,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
         <u64>::MIN_SERIALIZED_SIZE +
         <u64>::MIN_SERIALIZED_SIZE +
         <ForeignOptionalKey>::MIN_SERIALIZED_SIZE +
+        <::bebop::SliceWrapper<'raw, CompatSelectionBinding>>::MIN_SERIALIZED_SIZE +
         <CompatSelectionData<'raw>>::MIN_SERIALIZED_SIZE +
         <::std::vec::Vec<CompatSelectionData<'raw>>>::MIN_SERIALIZED_SIZE +
         <::std::vec::Vec<&'raw str>>::MIN_SERIALIZED_SIZE +
@@ -2550,6 +3077,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
         self.version.serialized_size() +
         self.mutation_epoch.serialized_size() +
         self.composition.serialized_size() +
+        self.selection_bindings.serialized_size() +
         self.selection.serialized_size() +
         self.selections.serialized_size() +
         self.tags.serialized_size() +
@@ -2572,6 +3100,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
             zelf.version._serialize_chained(dest)? +
             zelf.mutation_epoch._serialize_chained(dest)? +
             zelf.composition._serialize_chained(dest)? +
+            zelf.selection_bindings._serialize_chained(dest)? +
             zelf.selection._serialize_chained(dest)? +
             zelf.selections._serialize_chained(dest)? +
             zelf.tags._serialize_chained(dest)? +
@@ -2627,6 +3156,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
         i += read;
         let (read, v17) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v18) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
             update_id: v0,
@@ -2638,15 +3169,16 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBatchReply<'raw> {
             version: v6,
             mutation_epoch: v7,
             composition: v8,
-            selection: v9,
-            selections: v10,
-            tags: v11,
-            dirty_leaves: v12,
-            dirty_elements: v13,
-            dirty_type: v14,
-            delta: v15,
-            results: v16,
-            outcome: v17,
+            selection_bindings: v9,
+            selection: v10,
+            selections: v11,
+            tags: v12,
+            dirty_leaves: v13,
+            dirty_elements: v14,
+            dirty_type: v15,
+            delta: v16,
+            results: v17,
+            outcome: v18,
         }))
     }
 }
@@ -3203,6 +3735,7 @@ pub struct CompatHostRequest<'raw> {
     pub dirty_elements: ::bebop::SliceWrapper<'raw, CompatDirtyElement>,
     pub dirty_type: u8,
     pub composition: ForeignOptionalKey,
+    pub selection_bindings: ::bebop::SliceWrapper<'raw, CompatSelectionBinding>,
     pub selection: CompatSelectionData<'raw>,
     pub selections: ::std::vec::Vec<CompatSelectionData<'raw>>,
     pub call: CompatHostCall<'raw>,
@@ -3216,6 +3749,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatHostRequest<'raw> {
         <::bebop::SliceWrapper<'raw, CompatDirtyElement>>::MIN_SERIALIZED_SIZE +
         <u8>::MIN_SERIALIZED_SIZE +
         <ForeignOptionalKey>::MIN_SERIALIZED_SIZE +
+        <::bebop::SliceWrapper<'raw, CompatSelectionBinding>>::MIN_SERIALIZED_SIZE +
         <CompatSelectionData<'raw>>::MIN_SERIALIZED_SIZE +
         <::std::vec::Vec<CompatSelectionData<'raw>>>::MIN_SERIALIZED_SIZE +
         <CompatHostCall<'raw>>::MIN_SERIALIZED_SIZE;
@@ -3228,6 +3762,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatHostRequest<'raw> {
         self.dirty_elements.serialized_size() +
         self.dirty_type.serialized_size() +
         self.composition.serialized_size() +
+        self.selection_bindings.serialized_size() +
         self.selection.serialized_size() +
         self.selections.serialized_size() +
         self.call.serialized_size()
@@ -3241,6 +3776,7 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatHostRequest<'raw> {
             zelf.dirty_elements._serialize_chained(dest)? +
             zelf.dirty_type._serialize_chained(dest)? +
             zelf.composition._serialize_chained(dest)? +
+            zelf.selection_bindings._serialize_chained(dest)? +
             zelf.selection._serialize_chained(dest)? +
             zelf.selections._serialize_chained(dest)? +
             zelf.call._serialize_chained(dest)?
@@ -3272,6 +3808,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatHostRequest<'raw> {
         i += read;
         let (read, v8) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v9) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
             context: v0,
@@ -3280,9 +3818,10 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatHostRequest<'raw> {
             dirty_elements: v3,
             dirty_type: v4,
             composition: v5,
-            selection: v6,
-            selections: v7,
-            call: v8,
+            selection_bindings: v6,
+            selection: v7,
+            selections: v8,
+            call: v9,
         }))
     }
 }
@@ -8843,6 +9382,388 @@ pub mod owned {
 
     impl<'raw> ::bebop::Record<'raw> for CompatInstanceSeed {}
 
+    pub use super::CompatSelectionValue;
+
+    pub use super::CompatSelectionPointIntent;
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub enum CompatSelectionIntent {
+        /// An unknown type which is likely defined in a newer version of the schema.
+        Unknown,
+
+        /// Discriminator 1
+        CompatNoSelectionIntent {
+        },
+
+        /// Discriminator 2
+        CompatRangeSelectionIntent {
+            value: CompatSelectionValue,
+            anchor: CompatSelectionPointIntent,
+            focus: CompatSelectionPointIntent,
+            format: u32,
+            style: ::std::vec::Vec<u16>,
+            dirty: bool,
+            has_cached_backward: bool,
+            cached_backward: bool,
+            has_cached_nodes: bool,
+            cached_nodes: ::std::vec::Vec<CompatNodeOperand>,
+        },
+
+        /// Discriminator 3
+        CompatNodeSelectionIntent {
+            value: CompatSelectionValue,
+            nodes: ::std::vec::Vec<CompatNodeOperand>,
+            dirty: bool,
+            has_cached_nodes: bool,
+            cached_nodes: ::std::vec::Vec<CompatNodeOperand>,
+        },
+
+        /// Discriminator 4
+        CompatTableSelectionIntent {
+            value: CompatSelectionValue,
+            table: CompatNodeOperand,
+            anchor: CompatSelectionPointIntent,
+            focus: CompatSelectionPointIntent,
+            dirty: bool,
+            has_cached_nodes: bool,
+            cached_nodes: ::std::vec::Vec<CompatNodeOperand>,
+        },
+    }
+
+    impl<'raw> ::core::convert::From<super::CompatSelectionIntent<'raw>> for CompatSelectionIntent {
+        fn from(value: super::CompatSelectionIntent) -> Self {
+            match value {
+                super::CompatSelectionIntent::Unknown => {
+                    Self::Unknown
+                }
+                super::CompatSelectionIntent::CompatNoSelectionIntent {
+                }
+                => {
+                    Self::CompatNoSelectionIntent {
+                    }
+                }
+                super::CompatSelectionIntent::CompatRangeSelectionIntent {
+                    value: _value,
+                    anchor: _anchor,
+                    focus: _focus,
+                    format: _format,
+                    style: _style,
+                    dirty: _dirty,
+                    has_cached_backward: _has_cached_backward,
+                    cached_backward: _cached_backward,
+                    has_cached_nodes: _has_cached_nodes,
+                    cached_nodes: _cached_nodes,
+                }
+                => {
+                    Self::CompatRangeSelectionIntent {
+                        value: _value,
+                        anchor: _anchor,
+                        focus: _focus,
+                        format: _format,
+                        style: _style.iter().map(|value| value).collect(),
+                        dirty: _dirty,
+                        has_cached_backward: _has_cached_backward,
+                        cached_backward: _cached_backward,
+                        has_cached_nodes: _has_cached_nodes,
+                        cached_nodes: _cached_nodes,
+                    }
+                }
+                super::CompatSelectionIntent::CompatNodeSelectionIntent {
+                    value: _value,
+                    nodes: _nodes,
+                    dirty: _dirty,
+                    has_cached_nodes: _has_cached_nodes,
+                    cached_nodes: _cached_nodes,
+                }
+                => {
+                    Self::CompatNodeSelectionIntent {
+                        value: _value,
+                        nodes: _nodes,
+                        dirty: _dirty,
+                        has_cached_nodes: _has_cached_nodes,
+                        cached_nodes: _cached_nodes,
+                    }
+                }
+                super::CompatSelectionIntent::CompatTableSelectionIntent {
+                    value: _value,
+                    table: _table,
+                    anchor: _anchor,
+                    focus: _focus,
+                    dirty: _dirty,
+                    has_cached_nodes: _has_cached_nodes,
+                    cached_nodes: _cached_nodes,
+                }
+                => {
+                    Self::CompatTableSelectionIntent {
+                        value: _value,
+                        table: _table,
+                        anchor: _anchor,
+                        focus: _focus,
+                        dirty: _dirty,
+                        has_cached_nodes: _has_cached_nodes,
+                        cached_nodes: _cached_nodes,
+                    }
+                }
+            }
+        }
+
+    }
+    impl<'raw> ::bebop::SubRecord<'raw> for CompatSelectionIntent {
+        const MIN_SERIALIZED_SIZE: usize = ::bebop::LEN_SIZE + 1;
+
+        fn serialized_size(&self) -> usize {
+            ::bebop::LEN_SIZE + 1 +
+            match self {
+                CompatSelectionIntent::Unknown => {
+                    0
+                }
+                Self::CompatNoSelectionIntent {
+                }
+                => {
+                    0
+                }
+                Self::CompatRangeSelectionIntent {
+                    value: ref _value,
+                    anchor: ref _anchor,
+                    focus: ref _focus,
+                    format: ref _format,
+                    style: ref _style,
+                    dirty: ref _dirty,
+                    has_cached_backward: ref _has_cached_backward,
+                    cached_backward: ref _cached_backward,
+                    has_cached_nodes: ref _has_cached_nodes,
+                    cached_nodes: ref _cached_nodes,
+                }
+                => {
+                    _value.serialized_size() +
+                    _anchor.serialized_size() +
+                    _focus.serialized_size() +
+                    _format.serialized_size() +
+                    _style.serialized_size() +
+                    _dirty.serialized_size() +
+                    _has_cached_backward.serialized_size() +
+                    _cached_backward.serialized_size() +
+                    _has_cached_nodes.serialized_size() +
+                    _cached_nodes.serialized_size()
+                }
+                Self::CompatNodeSelectionIntent {
+                    value: ref _value,
+                    nodes: ref _nodes,
+                    dirty: ref _dirty,
+                    has_cached_nodes: ref _has_cached_nodes,
+                    cached_nodes: ref _cached_nodes,
+                }
+                => {
+                    _value.serialized_size() +
+                    _nodes.serialized_size() +
+                    _dirty.serialized_size() +
+                    _has_cached_nodes.serialized_size() +
+                    _cached_nodes.serialized_size()
+                }
+                Self::CompatTableSelectionIntent {
+                    value: ref _value,
+                    table: ref _table,
+                    anchor: ref _anchor,
+                    focus: ref _focus,
+                    dirty: ref _dirty,
+                    has_cached_nodes: ref _has_cached_nodes,
+                    cached_nodes: ref _cached_nodes,
+                }
+                => {
+                    _value.serialized_size() +
+                    _table.serialized_size() +
+                    _anchor.serialized_size() +
+                    _focus.serialized_size() +
+                    _dirty.serialized_size() +
+                    _has_cached_nodes.serialized_size() +
+                    _cached_nodes.serialized_size()
+                }
+            }
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            let size = zelf.serialized_size();
+            ::bebop::write_len(dest, size - ::bebop::LEN_SIZE - 1)?;
+            match zelf {
+                Self::Unknown => {
+                    return Err(::bebop::SerializeError::CannotSerializeUnknownUnion);
+                }
+                Self::CompatNoSelectionIntent {
+                }
+                => {
+                    1u8._serialize_chained(dest)?;
+                }
+                Self::CompatRangeSelectionIntent {
+                    value: ref _value,
+                    anchor: ref _anchor,
+                    focus: ref _focus,
+                    format: ref _format,
+                    style: ref _style,
+                    dirty: ref _dirty,
+                    has_cached_backward: ref _has_cached_backward,
+                    cached_backward: ref _cached_backward,
+                    has_cached_nodes: ref _has_cached_nodes,
+                    cached_nodes: ref _cached_nodes,
+                }
+                => {
+                    2u8._serialize_chained(dest)?;
+                    _value._serialize_chained(dest)?;
+                    _anchor._serialize_chained(dest)?;
+                    _focus._serialize_chained(dest)?;
+                    _format._serialize_chained(dest)?;
+                    _style._serialize_chained(dest)?;
+                    _dirty._serialize_chained(dest)?;
+                    _has_cached_backward._serialize_chained(dest)?;
+                    _cached_backward._serialize_chained(dest)?;
+                    _has_cached_nodes._serialize_chained(dest)?;
+                    _cached_nodes._serialize_chained(dest)?;
+                }
+                Self::CompatNodeSelectionIntent {
+                    value: ref _value,
+                    nodes: ref _nodes,
+                    dirty: ref _dirty,
+                    has_cached_nodes: ref _has_cached_nodes,
+                    cached_nodes: ref _cached_nodes,
+                }
+                => {
+                    3u8._serialize_chained(dest)?;
+                    _value._serialize_chained(dest)?;
+                    _nodes._serialize_chained(dest)?;
+                    _dirty._serialize_chained(dest)?;
+                    _has_cached_nodes._serialize_chained(dest)?;
+                    _cached_nodes._serialize_chained(dest)?;
+                }
+                Self::CompatTableSelectionIntent {
+                    value: ref _value,
+                    table: ref _table,
+                    anchor: ref _anchor,
+                    focus: ref _focus,
+                    dirty: ref _dirty,
+                    has_cached_nodes: ref _has_cached_nodes,
+                    cached_nodes: ref _cached_nodes,
+                }
+                => {
+                    4u8._serialize_chained(dest)?;
+                    _value._serialize_chained(dest)?;
+                    _table._serialize_chained(dest)?;
+                    _anchor._serialize_chained(dest)?;
+                    _focus._serialize_chained(dest)?;
+                    _dirty._serialize_chained(dest)?;
+                    _has_cached_nodes._serialize_chained(dest)?;
+                    _cached_nodes._serialize_chained(dest)?;
+                }
+            }
+            Ok(size)
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let len = ::bebop::read_len(raw)? + ::bebop::LEN_SIZE + 1;
+            let mut i = ::bebop::LEN_SIZE + 1;
+            let de = match raw[::bebop::LEN_SIZE] {
+                1 => {
+                    CompatSelectionIntent::CompatNoSelectionIntent {}
+                }
+                2 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v7) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v8) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v9) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    CompatSelectionIntent::CompatRangeSelectionIntent {
+                        value: v0,
+                        anchor: v1,
+                        focus: v2,
+                        format: v3,
+                        style: v4,
+                        dirty: v5,
+                        has_cached_backward: v6,
+                        cached_backward: v7,
+                        has_cached_nodes: v8,
+                        cached_nodes: v9,
+                    }
+                }
+                3 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    CompatSelectionIntent::CompatNodeSelectionIntent {
+                        value: v0,
+                        nodes: v1,
+                        dirty: v2,
+                        has_cached_nodes: v3,
+                        cached_nodes: v4,
+                    }
+                }
+                4 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    CompatSelectionIntent::CompatTableSelectionIntent {
+                        value: v0,
+                        table: v1,
+                        anchor: v2,
+                        focus: v3,
+                        dirty: v4,
+                        has_cached_nodes: v5,
+                        cached_nodes: v6,
+                    }
+                }
+                _ => {
+                    i = len;
+                    CompatSelectionIntent::Unknown
+                }
+            };
+            if !cfg!(feature = "unchecked") && i != len {
+                debug_assert!(i > len);
+                Err(::bebop::DeserializeError::CorruptFrame)
+            }
+            else {
+                Ok((i, de))
+            }
+        }
+
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for CompatSelectionIntent {}
+
+    pub use super::CompatSelectionBinding;
+
     #[derive(Clone, Debug, PartialEq)]
     pub enum CompatBatchArgument {
         /// An unknown type which is likely defined in a newer version of the schema.
@@ -8861,6 +9782,11 @@ pub mod owned {
         /// Discriminator 3
         CompatNodeArrayArgument {
             values: ::std::vec::Vec<CompatNodeOperand>,
+        },
+
+        /// Discriminator 4
+        CompatSelectionIntentArgument {
+            intent: CompatSelectionIntent,
         },
     }
 
@@ -8894,6 +9820,14 @@ pub mod owned {
                         values: _values,
                     }
                 }
+                super::CompatBatchArgument::CompatSelectionIntentArgument {
+                    intent: _intent,
+                }
+                => {
+                    Self::CompatSelectionIntentArgument {
+                        intent: _intent.into(),
+                    }
+                }
             }
         }
 
@@ -8924,6 +9858,12 @@ pub mod owned {
                 }
                 => {
                     _values.serialized_size()
+                }
+                Self::CompatSelectionIntentArgument {
+                    intent: ref _intent,
+                }
+                => {
+                    _intent.serialized_size()
                 }
             }
         }
@@ -8956,6 +9896,13 @@ pub mod owned {
                     3u8._serialize_chained(dest)?;
                     _values._serialize_chained(dest)?;
                 }
+                Self::CompatSelectionIntentArgument {
+                    intent: ref _intent,
+                }
+                => {
+                    4u8._serialize_chained(dest)?;
+                    _intent._serialize_chained(dest)?;
+                }
             }
             Ok(size)
         });
@@ -8986,6 +9933,14 @@ pub mod owned {
 
                     CompatBatchArgument::CompatNodeArrayArgument {
                         values: v0,
+                    }
+                }
+                4 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    CompatBatchArgument::CompatSelectionIntentArgument {
+                        intent: v0,
                     }
                 }
                 _ => {
@@ -9560,6 +10515,7 @@ pub mod owned {
         pub version: u64,
         pub mutation_epoch: u64,
         pub composition: ForeignOptionalKey,
+        pub selection_bindings: ::std::vec::Vec<CompatSelectionBinding>,
         pub selection: CompatSelectionData,
         pub selections: ::std::vec::Vec<CompatSelectionData>,
         pub tags: ::std::vec::Vec<String>,
@@ -9583,6 +10539,7 @@ pub mod owned {
                 version: value.version,
                 mutation_epoch: value.mutation_epoch,
                 composition: value.composition,
+                selection_bindings: value.selection_bindings.iter().map(|value| value).collect(),
                 selection: value.selection.into(),
                 selections: value.selections.into_iter().map(|value| value.into()).collect(),
                 tags: value.tags.into_iter().map(|value| value.into()).collect(),
@@ -9607,6 +10564,7 @@ pub mod owned {
             <u64>::MIN_SERIALIZED_SIZE +
             <u64>::MIN_SERIALIZED_SIZE +
             <ForeignOptionalKey>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<CompatSelectionBinding>>::MIN_SERIALIZED_SIZE +
             <CompatSelectionData>::MIN_SERIALIZED_SIZE +
             <::std::vec::Vec<CompatSelectionData>>::MIN_SERIALIZED_SIZE +
             <::std::vec::Vec<String>>::MIN_SERIALIZED_SIZE +
@@ -9628,6 +10586,7 @@ pub mod owned {
             self.version.serialized_size() +
             self.mutation_epoch.serialized_size() +
             self.composition.serialized_size() +
+            self.selection_bindings.serialized_size() +
             self.selection.serialized_size() +
             self.selections.serialized_size() +
             self.tags.serialized_size() +
@@ -9650,6 +10609,7 @@ pub mod owned {
                 zelf.version._serialize_chained(dest)? +
                 zelf.mutation_epoch._serialize_chained(dest)? +
                 zelf.composition._serialize_chained(dest)? +
+                zelf.selection_bindings._serialize_chained(dest)? +
                 zelf.selection._serialize_chained(dest)? +
                 zelf.selections._serialize_chained(dest)? +
                 zelf.tags._serialize_chained(dest)? +
@@ -9705,6 +10665,8 @@ pub mod owned {
             i += read;
             let (read, v17) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v18) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
                 update_id: v0,
@@ -9716,15 +10678,16 @@ pub mod owned {
                 version: v6,
                 mutation_epoch: v7,
                 composition: v8,
-                selection: v9,
-                selections: v10,
-                tags: v11,
-                dirty_leaves: v12,
-                dirty_elements: v13,
-                dirty_type: v14,
-                delta: v15,
-                results: v16,
-                outcome: v17,
+                selection_bindings: v9,
+                selection: v10,
+                selections: v11,
+                tags: v12,
+                dirty_leaves: v13,
+                dirty_elements: v14,
+                dirty_type: v15,
+                delta: v16,
+                results: v17,
+                outcome: v18,
             }))
         }
     }
@@ -10196,6 +11159,7 @@ pub mod owned {
         pub dirty_elements: ::std::vec::Vec<CompatDirtyElement>,
         pub dirty_type: u8,
         pub composition: ForeignOptionalKey,
+        pub selection_bindings: ::std::vec::Vec<CompatSelectionBinding>,
         pub selection: CompatSelectionData,
         pub selections: ::std::vec::Vec<CompatSelectionData>,
         pub call: CompatHostCall,
@@ -10210,6 +11174,7 @@ pub mod owned {
                 dirty_elements: value.dirty_elements.iter().map(|value| value).collect(),
                 dirty_type: value.dirty_type,
                 composition: value.composition,
+                selection_bindings: value.selection_bindings.iter().map(|value| value).collect(),
                 selection: value.selection.into(),
                 selections: value.selections.into_iter().map(|value| value.into()).collect(),
                 call: value.call.into(),
@@ -10225,6 +11190,7 @@ pub mod owned {
             <::std::vec::Vec<CompatDirtyElement>>::MIN_SERIALIZED_SIZE +
             <u8>::MIN_SERIALIZED_SIZE +
             <ForeignOptionalKey>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<CompatSelectionBinding>>::MIN_SERIALIZED_SIZE +
             <CompatSelectionData>::MIN_SERIALIZED_SIZE +
             <::std::vec::Vec<CompatSelectionData>>::MIN_SERIALIZED_SIZE +
             <CompatHostCall>::MIN_SERIALIZED_SIZE;
@@ -10237,6 +11203,7 @@ pub mod owned {
             self.dirty_elements.serialized_size() +
             self.dirty_type.serialized_size() +
             self.composition.serialized_size() +
+            self.selection_bindings.serialized_size() +
             self.selection.serialized_size() +
             self.selections.serialized_size() +
             self.call.serialized_size()
@@ -10250,6 +11217,7 @@ pub mod owned {
                 zelf.dirty_elements._serialize_chained(dest)? +
                 zelf.dirty_type._serialize_chained(dest)? +
                 zelf.composition._serialize_chained(dest)? +
+                zelf.selection_bindings._serialize_chained(dest)? +
                 zelf.selection._serialize_chained(dest)? +
                 zelf.selections._serialize_chained(dest)? +
                 zelf.call._serialize_chained(dest)?
@@ -10281,6 +11249,8 @@ pub mod owned {
             i += read;
             let (read, v8) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v9) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
                 context: v0,
@@ -10289,9 +11259,10 @@ pub mod owned {
                 dirty_elements: v3,
                 dirty_type: v4,
                 composition: v5,
-                selection: v6,
-                selections: v7,
-                call: v8,
+                selection_bindings: v6,
+                selection: v7,
+                selections: v8,
+                call: v9,
             }))
         }
     }
@@ -13911,4 +14882,4 @@ pub mod owned {
     pub use super::CompatNativePrototype;}
 
 /// Exact source schema fingerprint for the paired compatibility adapter.
-pub const COMPATIBILITY_SCHEMA_HASH: &str = "52e36902086d5bb9dd3a14607ce2cfad85e91bd89bdf546f42f35102003bb483";
+pub const COMPATIBILITY_SCHEMA_HASH: &str = "a50c0035bf330d2aed44186a4dac6c8e0a9da893c51999b306988b64e6c5a79e";

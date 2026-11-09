@@ -140,10 +140,42 @@ union CompatInstanceSeed {
     ForeignOpaqueValue ownFields;
   }
 }
+// Client value IDs correlate actual JS objects; they are never native authority.
+// A frozen captured value uses ForeignSelectionArgument instead of a patch intent.
+union CompatSelectionValue {
+  1 -> struct CompatReferencedSelectionValue { ForeignSelectionRef reference; }
+  2 -> struct CompatNewSelectionValue { uint32 clientValueId; }
+}
+struct CompatSelectionPointIntent {
+  CompatNodeOperand node; uint32 offset; CompatPointKind kind;
+}
+union CompatSelectionIntent {
+  1 -> struct CompatNoSelectionIntent { }
+  2 -> struct CompatRangeSelectionIntent {
+    CompatSelectionValue value;
+    CompatSelectionPointIntent anchor; CompatSelectionPointIntent focus;
+    uint32 format; uint16[] style; bool dirty;
+    bool hasCachedBackward; bool cachedBackward;
+    bool hasCachedNodes; CompatNodeOperand[] cachedNodes;
+  }
+  3 -> struct CompatNodeSelectionIntent {
+    CompatSelectionValue value; CompatNodeOperand[] nodes; bool dirty;
+    bool hasCachedNodes; CompatNodeOperand[] cachedNodes;
+  }
+  4 -> struct CompatTableSelectionIntent {
+    CompatSelectionValue value; CompatNodeOperand table;
+    CompatSelectionPointIntent anchor; CompatSelectionPointIntent focus;
+    bool dirty; bool hasCachedNodes; CompatNodeOperand[] cachedNodes;
+  }
+}
+struct CompatSelectionBinding {
+  uint32 clientValueId; ForeignSelectionRef reference;
+}
 union CompatBatchArgument {
   1 -> struct CompatValueArgument { ForeignCallbackValue value; }
   2 -> struct CompatNodeArgument { CompatNodeOperand value; }
   3 -> struct CompatNodeArrayArgument { CompatNodeOperand[] values; }
+  4 -> struct CompatSelectionIntentArgument { CompatSelectionIntent intent; }
 }
 struct CompatBatchOperation {
   CompatOperation operation; CompatNodeOperand receiver;
@@ -184,6 +216,8 @@ struct CompatBatchReply {
   uint32 updateId; CompatKeyReservation[] reservations;
   uint32 flags; bool published; bool changed; bool noop;
   uint64 version; uint64 mutationEpoch; ForeignOptionalKey composition;
+  // Bind original JS values before decoding active/detached snapshots, including failures.
+  CompatSelectionBinding[] selectionBindings;
   CompatSelectionData selection; CompatSelectionData[] selections; string[] tags;
   ForeignKey[] dirtyLeaves; CompatDirtyElement[] dirtyElements; byte dirtyType;
   CompatRecordDelta delta; CompatBatchResult[] results;
@@ -232,6 +266,8 @@ struct CompatHostRequest {
   // Intentional flags and composition are native facts, not inferred from delta.
   ForeignKey[] dirtyLeaves; CompatDirtyElement[] dirtyElements;
   byte dirtyType; ForeignOptionalKey composition;
+  // A callback can precede the outer batch reply which first allocates the value.
+  CompatSelectionBinding[] selectionBindings;
   // Active identity and changed detached values precede JS callback execution.
   CompatSelectionData selection; CompatSelectionData[] selections;
   CompatHostCall call;
