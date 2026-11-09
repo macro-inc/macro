@@ -4,6 +4,7 @@ import { relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
 import { z } from 'zod';
 import { sourceFiles } from './inventory';
+import { verifyWildcardTypes, wildcardAliases } from './wildcard-types';
 
 const manifestSchema = z.object({
   source: z.string(),
@@ -16,6 +17,13 @@ const manifestSchema = z.object({
       reexports: z.array(z.string()).default([]),
     })
   ),
+  typeOnlyException: z.object({
+    kind: z.literal('public extension wildcard types (type-only)'),
+    assertions: z.literal(0),
+    anyKeywords: z.literal(9),
+    aliases: z.record(z.string(), z.string()),
+    references: z.array(z.string()),
+  }),
   runtimeGuards: z
     .array(
       z.object({
@@ -178,6 +186,14 @@ export function verifyExceptions(compatRoot: string, input: unknown) {
     throw new Error(
       'Exactly the eight approved exception helpers are required'
     );
+  if (
+    JSON.stringify(
+      Object.entries(manifest.typeOnlyException.aliases).sort()
+    ) !== JSON.stringify(Object.entries(wildcardAliases).sort())
+  )
+    throw new Error(
+      'The type-only wildcard manifest must retain exactly four approved aliases'
+    );
   const domInvocation = manifest.exceptions.find(
     (entry) => entry.helper === 'invokeDOMConversionWithNode'
   );
@@ -223,6 +239,12 @@ export function verifyExceptions(compatRoot: string, input: unknown) {
   if (!centralFile) throw new Error('Central exception source was not loaded');
   if (createHash('sha256').update(centralFile.text).digest('hex') !== hash)
     throw new Error('Exception source changed during validation');
+  const typeOnlyException = verifyWildcardTypes(
+    program,
+    centralFile,
+    sourceRoot,
+    manifest.typeOnlyException.references
+  );
   const declarations = centralFile.statements.filter(ts.isFunctionDeclaration);
   if (
     declarations
@@ -425,6 +447,7 @@ export function verifyExceptions(compatRoot: string, input: unknown) {
     throw new Error('DOM invocation call forms differ from manifest');
   return {
     sha256: hash,
+    typeOnlyException,
     calls: Object.fromEntries(calls),
     reexports: Object.fromEntries(reexports),
     assertions: Object.fromEntries(assertions),
