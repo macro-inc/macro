@@ -1,4 +1,3 @@
-import { ErrorBoundary } from 'solid-js';
 import { render } from 'solid-js/web';
 import {
   EditorEngineBoundary,
@@ -20,11 +19,17 @@ render(
   () => (
     <EditorEngineProvider>
       <div>Application shell ready</div>
-      <ErrorBoundary fallback={<div>Editor engine failed</div>}>
-        <EditorEngineBoundary fallback={<div>Loading editor engine</div>}>
-          <EditorSubtree />
-        </EditorEngineBoundary>
-      </ErrorBoundary>
+      <EditorEngineBoundary
+        fallback={<div>Loading editor engine</div>}
+        failure={(retry) => (
+          <div>
+            <span>Editor engine failed</span>
+            <button onClick={retry}>Retry</button>
+          </div>
+        )}
+      >
+        <EditorSubtree />
+      </EditorEngineBoundary>
     </EditorEngineProvider>
   ),
   root

@@ -39,9 +39,11 @@ test('flag off constructs the existing subtree without requesting native WASM', 
   expect(binaries).toEqual([]);
 });
 
-test('a failed native load preserves the shell and reaches the error boundary', async ({
+test('a failed native load preserves the shell and retries the shared engine', async ({
   page,
 }) => {
+  const failures: string[] = [];
+  page.on('pageerror', (error) => failures.push(error.message));
   await page.route('**/document_session_wasm_bg.wasm', (route) =>
     route.abort()
   );
@@ -49,4 +51,9 @@ test('a failed native load preserves the shell and reaches the error boundary', 
   await expect(page.getByText('Editor engine failed')).toBeVisible();
   await expect(page.getByText('Application shell ready')).toBeVisible();
   await expect(page.getByText('Editor subtree ready')).toHaveCount(0);
+  await page.unroute('**/document_session_wasm_bg.wasm');
+  await page.getByRole('button', { name: 'Retry' }).click();
+  await expect(page.getByText('Editor subtree ready')).toBeVisible();
+  await expect(page.getByText('Application shell ready')).toBeVisible();
+  expect(failures).toEqual([]);
 });

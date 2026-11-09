@@ -9,7 +9,8 @@ Off uses the existing LexicalMarkdown collaboration path and makes no native
 module request. On preloads the session WASM through the app-wide readiness
 resource while the shell paints, then connects EditorView to SessionPort.
 Only editor-building subtrees wait at EditorEngineBoundary. A native load failure
-reaches the content error boundary while the shell stays mounted. The isolated
+shows the content retry action while the shell stays mounted and overlay groups
+remain held. Retry initializes the shared engine without changing models. The isolated
 readiness checks are documented in `apps/web/src/lib/core/document-session/README.md`.
 Both engines use the same Notebook layout, title, document properties, discussion
 and body loading/placeholder chrome. Copy as markdown and downloads use the

@@ -16,6 +16,9 @@ Failed loading clears the shared initialization promise so a later open can retr
 
 Place `EditorEngineBoundary` inside the shell above subtrees that construct
 editors. It observes this same resource, leaving shell chrome outside the gate.
+Primary shell content supplies the boundary's failure slot with the shared
+load-error view and retry action. Overlay groups stay held on failure. Retrying
+reloads the same app-wide resource without switching to the other engine.
 After readiness, `useEditorEngine().module()` returns the initialized module
 synchronously. Never return a deferred stand-in for an editor handle or add a
 separate readiness resource per editor host.
@@ -50,4 +53,5 @@ Checks: `bunx vitest run --project core src/lib/core/document-session/editor-eng
 and `bunx playwright test --config src/lib/core/document-session/browser-test/playwright.config.ts`
 from `apps/web`. The browser fixture uses the real production WASM and readiness
 provider with a deterministic flag source. It checks shell visibility during a
-held binary fetch, flag-off network behavior and load failure isolation.
+held binary fetch, flag-off network behavior and failed-load retry without a
+fixture-only error boundary.

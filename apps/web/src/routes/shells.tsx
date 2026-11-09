@@ -2,13 +2,12 @@ import { CreateContextProvider } from '@app/features/command/context/create-cont
 import { SplitRouter } from '@app/lib/split-router';
 import { AppProviders } from '@components/app/AppProviders';
 import { dismissBootShell } from '@components/app/boot-shell';
-import { AppChrome, PageContent } from '@components/app/Layout';
+import { AppChrome, EditorContent, PageContent } from '@components/app/Layout';
 import {
   SplitLayout,
   SplitLayoutProvider,
 } from '@components/app/split-layout/SplitLayout';
 import { useIsAuthenticated } from '@core/auth';
-import { EditorEngineBoundary } from '@core/document-session/editor-engine';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { releaseNotificationCover } from '@macro/tauri/push-api';
 import { ImperativeDialogHost } from '@ui';
@@ -30,9 +29,7 @@ export function AuthShell(): JSX.Element {
   return (
     <PageContent>
       <ImperativeDialogHost />
-      <EditorEngineBoundary>
-        <SplitRouter.Outlet />
-      </EditorEngineBoundary>
+      <SplitRouter.Outlet />
     </PageContent>
   );
 }
@@ -42,7 +39,7 @@ function FocusedPage(props: ParentProps) {
   return (
     <div class="min-h-0 flex-1 overflow-y-auto bg-page text-ink">
       <ImperativeDialogHost />
-      <EditorEngineBoundary>{props.children}</EditorEngineBoundary>
+      <EditorContent>{props.children}</EditorContent>
     </div>
   );
 }
@@ -53,9 +50,9 @@ export function FocusedShell(): JSX.Element {
   return (
     <PublicBookingShell>
       <ImperativeDialogHost />
-      <EditorEngineBoundary>
+      <EditorContent>
         <SplitRouter.Outlet />
-      </EditorEngineBoundary>
+      </EditorContent>
     </PublicBookingShell>
   );
 }
@@ -96,9 +93,9 @@ export function withMeetingShell(Page: () => JSX.Element) {
     return (
       <PageContent>
         <ImperativeDialogHost />
-        <EditorEngineBoundary>
+        <EditorContent>
           <Page />
-        </EditorEngineBoundary>
+        </EditorContent>
       </PageContent>
     );
   };

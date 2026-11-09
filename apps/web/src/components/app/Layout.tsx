@@ -52,6 +52,7 @@ import {
 import { usePaywallState } from '@core/constant/PaywallState';
 import { EditorEngineBoundary } from '@core/document-session/editor-engine';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
+import { MessageLoadError } from '@core/messages/MessageLoadError';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -222,6 +223,21 @@ export function PageContent(props: ParentProps) {
   );
 }
 
+/** Keep preload failures local to content, with one retry for the shared resource. */
+export function EditorContent(props: ParentProps) {
+  return (
+    <EditorEngineBoundary
+      failure={(retry) => (
+        <MessageLoadError onRetry={retry}>
+          Could not open this content.
+        </MessageLoadError>
+      )}
+    >
+      {props.children}
+    </EditorEngineBoundary>
+  );
+}
+
 /**
  * Sends first-time desktop users into the onboarding flow at /onboarding, and
  * new agents on any platform to their setup page.
@@ -288,47 +304,49 @@ export function AppChrome(props: ParentProps) {
       </Show>
       <Suspense>
         <Show when={isAuthenticated()}>
-          <EditorEngineBoundary>
-            <GithubReauthenticationPrompt />
-            <GmailReauthenticationPrompt />
-            <CalendarPermissionPrompt />
-            <ShowFeatureFlag flag={enableWhatsappLinked}>
-              <Suspense>
-                <WhatsAppHistoryImportPrompt />
-              </Suspense>
-            </ShowFeatureFlag>
-            <GlobalShortcuts />
-            <Show when={!isTouchDevice()}>
-              <GoToHotkeys />
-              <Suspense>
+          <GithubReauthenticationPrompt />
+          <GmailReauthenticationPrompt />
+          <CalendarPermissionPrompt />
+          <ShowFeatureFlag flag={enableWhatsappLinked}>
+            <Suspense>
+              <WhatsAppHistoryImportPrompt />
+            </Suspense>
+          </ShowFeatureFlag>
+          <GlobalShortcuts />
+          <Show when={!isTouchDevice()}>
+            <GoToHotkeys />
+            <Suspense>
+              <EditorEngineBoundary>
                 <FavoritesCommands />
                 <CommandMenu />
-              </Suspense>
-            </Show>
-            <Suspense>
-              <PropertyEditorModal />
+              </EditorEngineBoundary>
             </Suspense>
-            <GlobalBulkEditEntityModal />
-            <Show when={isDesktopPlatform()}>
-              <LocalRuntimeHost />
-            </Show>
+          </Show>
+          <Suspense>
+            <PropertyEditorModal />
+          </Suspense>
+          <GlobalBulkEditEntityModal />
+          <Show when={isDesktopPlatform()}>
+            <LocalRuntimeHost />
+          </Show>
+          <EditorEngineBoundary>
             <NativeShareSheet />
-            <MacroMcpSetupModal />
-            <CreateChannelModal />
-            <Show when={companyDialogUsed()}>
-              <Suspense>
-                <CreateCompanyModal />
-              </Suspense>
-            </Show>
-            <Show when={contactDialogUsed()}>
-              <Suspense>
-                <CreateContactModal />
-              </Suspense>
-            </Show>
-            <Show when={isAddInboxDialogOpen()}>
-              <AddInboxDialog />
-            </Show>
           </EditorEngineBoundary>
+          <MacroMcpSetupModal />
+          <CreateChannelModal />
+          <Show when={companyDialogUsed()}>
+            <Suspense>
+              <CreateCompanyModal />
+            </Suspense>
+          </Show>
+          <Show when={contactDialogUsed()}>
+            <Suspense>
+              <CreateContactModal />
+            </Suspense>
+          </Show>
+          <Show when={isAddInboxDialogOpen()}>
+            <AddInboxDialog />
+          </Show>
         </Show>
         <Show when={isAuthenticated() === false}>
           <Show when={hasLoginCookie()} fallback={<Banner />}>
@@ -355,7 +373,7 @@ export function AppChrome(props: ParentProps) {
                 {/* Route loading must not detach the chrome or mobile
                     navigation; the route draws its own loading state. */}
                 <Suspense>
-                  <EditorEngineBoundary>{props.children}</EditorEngineBoundary>
+                  <EditorContent>{props.children}</EditorContent>
                 </Suspense>
               </PageContent>
             </ViewSwitcherContext.Provider>

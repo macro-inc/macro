@@ -66,3 +66,24 @@ test('a late initialization cannot expose the native module after disabling the 
     scope.dispose();
   }
 });
+
+test('failed initialization holds editors without throwing and retries the shared resource', async () => {
+  const load = vi.fn(async () => 'initialized module');
+  load.mockRejectedValueOnce(new Error('fetch failed'));
+  const scope = createRoot((dispose) => ({
+    dispose,
+    engine: createEditorEngineState(() => true, load),
+  }));
+  try {
+    await expect(load.mock.results[0].value).rejects.toThrow('fetch failed');
+    expect(scope.engine.ready()).toBe(false);
+    expect(scope.engine.failed()).toBe(true);
+    await scope.engine.retry();
+    expect(scope.engine.failed()).toBe(false);
+    expect(scope.engine.ready()).toBe(true);
+    expect(scope.engine.module()).toBe('initialized module');
+    expect(load).toHaveBeenCalledTimes(2);
+  } finally {
+    scope.dispose();
+  }
+});
