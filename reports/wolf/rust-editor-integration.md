@@ -48,26 +48,40 @@ same-session WASM bootstrap `189c995d94`. Exact schema076 hashes match the
 supplied immutable source: TS
 `e5d9997b378d23c8f20c2431e8cf987e01c5544a5567f6364a66d8caa1025a73`, BOP
 `070be58ecfd9ff40f9827c76dd19c35c3415c510f600a917c3d64fcaf572f7da`.
-Own selection constructor tests 7/7, DOM units 59/59, DOM type checking and
-paired adapter browser cases 15/15 pass. The separate upstream focused unit
-rerun passes 56/56. These DOM cases use the upstream model.
-Native WASM unit tests pass 23/23 and model all-feature tests pass 455/455.
-Scoped `just check`, dependency validation, strict all-target/all-feature
-model/WASM clippy, and the WASM all-feature portability check pass.
-`just check` reports complexity warnings only. Generator freshness currently fails with
-reordered compiler output, and the full shim check initially lacked source-matched conformance artifacts.
-The fresh optimized conformance build now passes and shim TypeScript checking
-passes; its subsequent hook-inventory check fails with `stale generated hook
-inventory`. Diagnostic regeneration isolates one metadata line:
-`selectionTransform` caller line 2986 -> 2991, with the same 41 hooks from 489
-source files. The full shim check passes on that diagnostic generated file;
-the owner then authorized committing this actual generator output. The
-integration inventory is refreshed from the generated file, with no manual
-field edit and no names/order/masks change. The full shim check passes on
-this source-matched output. Compatibility schema freshness remains unresolved
-pending the ordered-input generator checkpoint; no bootstrap gate is waived. New WASM
-exports have not been promoted into live glue/declarations or activated.
+Before the Table schema addition, own selection constructor tests 7/7, DOM
+units 59/59, DOM type checking and paired adapter browser cases 15/15 passed.
+The separate upstream focused unit rerun passed 56/56. These DOM cases use the
+upstream model. Native WASM tests pass 23/23 and model all-feature tests pass
+455/455. Scoped root checks, dependency validation, strict all-target/all-feature
+model/WASM clippy and WASM all-feature portability passed at that checkpoint.
+
+The fresh optimized conformance build resolved the missing artifacts. Actual
+`derive-hooks` output refreshed only the `selectionTransform` caller line from
+2986 to 2991 (`1016951d5f`), retaining the same 41 hooks from 489 source files,
+with no manual field edit or names/order/masks change. The full shim check
+passed before the Table addition. The ordered-input generator checkpoint
+`54bb4e63a7`, integrated as `2aede2daf9`, resolves schema freshness; the current
+Table codec type failure is recorded below. New WASM exports have not been
+promoted into live glue/declarations or activated. No bootstrap gate is waived.
 Audit: `audit-compat-selection-checkpoint.md`; current logs use `compat-` prefix.
+
+The deterministic generator compiles one ordered combined schema and compares
+private temporary outputs. Own first/repeat/reversed-file-creation checks pass;
+a deliberately stale TS output is rejected without rewriting it. Output bytes
+and mtimes remain unchanged in all check cases. The new exact source hash is
+`6fa1a5da990a2c205e8f3469ae21405fc223b24692d364389c45fe309048db09`.
+Generated Rust SHA is
+`eaed6cc88e5426aa8f1c442dbdb935f5c0f9040fa76762bf2daef0a4f62c0016`,
+TS SHA is `71b6df5564991bf2f3c3865b654fa7092c4314e2d9d88e2f6fc9bb992bbf4667`.
+The schema adds TableSelection discriminator 4, SetCompositionKey=55 and
+CreateTableSelection=56. WASM tests remain 23/23 and scoped `just check`
+passes (pre-existing shear warnings retained). Full shim type checking now
+fails at `selection/codec.ts:216`: its NodeSelection branch assumes `keys`,
+which is absent on TableSelection. The typed Table codec owner is implementing
+that addition; no fallback, suppression or full-check waiver was added.
+Evidence: `compat-table-schema-reproduction.json`,
+`compat-table-schema-wasm-tests.log`, `compat-table-schema-shim-check.log`.
+
 
 A frozen flag-OFF build with real timing marks is served at local port 39870,
 source `751b62fbb1531d81a0cb4ac840c1346efb5648b3`; empty dirty-diff SHA is
