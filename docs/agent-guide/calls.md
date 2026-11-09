@@ -65,7 +65,8 @@ the card without changing its scroll position or follow state. There is no separ
 Transcript header button. The card fades and slides into wide layouts while the
 player settles over 240ms; reduced motion disables both entry animations.
 Transcript rows show speaker identity with recording time and waveform in a fixed
-right-aligned slot; click a row to seek.
+right-aligned slot; long speaker names truncate and reveal the full name in a
+tooltip on hover or row focus. Click or press Enter on a row to seek.
 The active line's waveform animates only while playback runs and stays still
 when paused or reduced motion is enabled. Playback follows the transcript until the user
 scrolls away; Sync to video sits on an opaque floating pill above pinned or phone

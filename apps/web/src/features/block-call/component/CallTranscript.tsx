@@ -2,6 +2,7 @@ import './call-transcript.css';
 import { t } from '@app/lib/i18n';
 import { guestDisplayName, isCallGuestId } from '@channel/Call/call-identity';
 import { Message } from '@channel/Message';
+import { SenderName } from '@channel/Message/SenderName';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import type { MessageData } from '@core/messages/types';
@@ -11,7 +12,7 @@ import CrosshairIcon from '@icon/system/regular/crosshair.svg';
 import WaveformIcon from '@icon/system/regular/waveform.svg';
 import { senderFromStorageId } from '@queries/messages/message-sender';
 import type { CallRecordTranscriptSegment } from '@service-storage/generated/schemas/callRecordTranscriptSegment';
-import { Avatar, Button } from '@ui';
+import { Avatar, Button, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -318,58 +319,73 @@ export function CallTranscript(props: {
                       class="rounded-xl"
                       classList={{ 'bg-hover': active() }}
                     >
-                      <button
-                        type="button"
-                        class="grid w-full grid-cols-[24px_minmax(0,1fr)] gap-x-3 gap-y-1 rounded-xl px-3 py-3 text-left"
-                        onClick={() => {
-                          if (item.seconds !== null)
-                            props.onSeekToSeconds?.(item.seconds);
-                        }}
-                      >
-                        <span class="row-span-2">
-                          <Show
-                            when={!guest()}
-                            fallback={
-                              <Avatar size="sm">
-                                <Avatar.Fallback>
-                                  {name().charAt(0)}
-                                </Avatar.Fallback>
-                              </Avatar>
-                            }
-                          >
-                            <Message.SenderIcon />
-                          </Show>
-                        </span>
-                        <span class="flex min-w-0 items-center justify-between gap-2 text-xs">
-                          <Show
-                            when={!guest()}
-                            fallback={<span class="font-medium">{name()}</span>}
-                          >
-                            <Message.SenderName />
-                          </Show>
-                          <span class="flex w-24 shrink-0 items-center justify-end gap-2">
-                            <Show when={item.seconds !== null}>
-                              <span class="tabular-nums text-ink-muted">
-                                {formatVideoTimestamp(item.seconds ?? 0)}
-                              </span>
+                      <Tooltip.Root>
+                        <Tooltip.Trigger
+                          as="button"
+                          type="button"
+                          class="grid w-full grid-cols-[24px_minmax(0,1fr)] gap-x-3 gap-y-1 rounded-xl px-3 py-3 text-left"
+                          onClick={() => {
+                            if (item.seconds !== null)
+                              props.onSeekToSeconds?.(item.seconds);
+                          }}
+                        >
+                          <span class="row-span-2">
+                            <Show
+                              when={!guest()}
+                              fallback={
+                                <Avatar size="sm">
+                                  <Avatar.Fallback>
+                                    {name().charAt(0)}
+                                  </Avatar.Fallback>
+                                </Avatar>
+                              }
+                            >
+                              <Message.SenderIcon />
                             </Show>
-                            <span class="grid size-3 shrink-0 place-items-center">
-                              <Show when={active()}>
-                                <WaveformIcon
-                                  class="size-3 shrink-0 text-accent"
-                                  classList={{
-                                    'recording-speaking-waveform':
-                                      props.playing,
-                                  }}
-                                />
+                          </span>
+                          <span class="flex min-w-0 items-center justify-between gap-2 text-xs">
+                            <span class="min-w-0 flex-1 truncate text-sm font-medium">
+                              <Show
+                                when={guest()}
+                                fallback={<SenderName message={message()} />}
+                              >
+                                {name()}
                               </Show>
                             </span>
+                            <span class="flex w-24 shrink-0 items-center justify-end gap-2">
+                              <Show when={item.seconds !== null}>
+                                <span class="tabular-nums text-ink-muted">
+                                  {formatVideoTimestamp(item.seconds ?? 0)}
+                                </span>
+                              </Show>
+                              <span class="grid size-3 shrink-0 place-items-center">
+                                <Show when={active()}>
+                                  <WaveformIcon
+                                    class="size-3 shrink-0 text-accent"
+                                    classList={{
+                                      'recording-speaking-waveform':
+                                        props.playing,
+                                    }}
+                                  />
+                                </Show>
+                              </span>
+                            </span>
                           </span>
-                        </span>
-                        <span class="whitespace-pre-wrap wrap-break-word text-sm leading-5 text-ink-muted">
-                          {segment().content}
-                        </span>
-                      </button>
+                          <span class="whitespace-pre-wrap wrap-break-word text-sm leading-5 text-ink-muted">
+                            {segment().content}
+                          </span>
+                        </Tooltip.Trigger>
+                        <Tooltip.Portal>
+                          <Tooltip.Content>
+                            <Show
+                              when={guest()}
+                              fallback={<SenderName message={message()} />}
+                            >
+                              {name()}
+                            </Show>
+                          </Tooltip.Content>
+                        </Tooltip.Portal>
+                      </Tooltip.Root>
                     </Message.Root>
                   </div>
                 );

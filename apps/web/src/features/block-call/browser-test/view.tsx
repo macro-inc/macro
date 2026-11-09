@@ -41,7 +41,9 @@ const RECORD: CallRecord = {
     {
       id: 'fixture-guest',
       joinedAt: '2026-01-01T00:00:00Z',
-      displayName: 'Another guest',
+      displayName: new URLSearchParams(location.search).has('long-name')
+        ? 'A very long guest display name that must truncate without shifting transcript timestamps'
+        : 'Another guest',
     },
   ],
   discussion: { kind: 'call_chat', call_id: 'fixture-call' },

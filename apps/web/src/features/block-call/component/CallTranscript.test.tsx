@@ -13,6 +13,9 @@ vi.mock('@channel/Message', () => ({
     Attachments: () => null,
   },
 }));
+vi.mock('@channel/Message/SenderName', () => ({
+  SenderName: () => <>Speaker</>,
+}));
 vi.mock('@core/component/CustomScrollbar', () => ({
   CustomScrollbar: () => null,
 }));
@@ -26,6 +29,14 @@ vi.mock('@queries/messages/message-sender', () => ({
   senderFromStorageId: () => ({ type: 'user', user_id: 'speaker' }),
 }));
 vi.mock('@ui', () => ({
+  Tooltip: {
+    Root: (props: { children: JSX.Element }) => props.children,
+    Trigger: (props: { children: JSX.Element; onClick: () => void }) => (
+      <button onClick={props.onClick}>{props.children}</button>
+    ),
+    Portal: () => null,
+    Content: () => null,
+  },
   Button: (props: { children: JSX.Element; onClick: () => void }) => (
     <button onClick={props.onClick}>{props.children}</button>
   ),

@@ -21,6 +21,52 @@ for (const theme of ['light', 'dark']) {
         path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d55-${theme}.png`,
       });
   });
+  test(`long speaker names truncate with a full tooltip (${theme})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await page.goto(`${fixture}?theme=${theme}&long-name`);
+    const name = page
+      .locator('[data-call-transcript-row]')
+      .nth(1)
+      .locator('.truncate');
+    const geometry = await name.evaluate((element) => ({
+      overflowing: element.scrollWidth > element.clientWidth,
+      ellipsis: getComputedStyle(element).textOverflow,
+      whiteSpace: getComputedStyle(element).whiteSpace,
+    }));
+    expect(geometry).toEqual({
+      overflowing: true,
+      ellipsis: 'ellipsis',
+      whiteSpace: 'nowrap',
+    });
+    await name.hover();
+    await expect(page.getByRole('tooltip')).toHaveText(
+      'A very long guest display name that must truncate without shifting transcript timestamps'
+    );
+    await page.mouse.move(0, 0);
+    await expect(page.getByRole('tooltip')).toHaveCount(0);
+    const row = page
+      .locator('[data-call-transcript-row]')
+      .nth(1)
+      .getByRole('button');
+    await row.focus();
+    await expect(page.getByRole('tooltip')).toHaveText(
+      'A very long guest display name that must truncate without shifting transcript timestamps'
+    );
+    if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d59-${theme}.png`,
+      });
+    await row.press('Enter');
+    await expect
+      .poll(() =>
+        page
+          .locator('video')
+          .evaluate((element: HTMLVideoElement) => element.currentTime)
+      )
+      .toBeCloseTo(1.1);
+  });
   test(`timestamps keep a fixed right slot (${theme})`, async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 900 });
     await page.goto(`${fixture}?theme=${theme}`);

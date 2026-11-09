@@ -19,6 +19,7 @@ export const CallRecordingMobileActions = () => null;
 export const CallRecordingMobilePlayback = () => null;
 export const CallRecordingChat = () => null;
 export const CustomScrollbar = () => null;
+export const SenderName = () => <>Guest</>;
 export const getDisplayName = () => 'Guest';
 export const tryMacroId = () => undefined;
 export const useMaybeBlockAliasedName = () => undefined;

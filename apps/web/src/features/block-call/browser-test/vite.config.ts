@@ -39,6 +39,7 @@ export default defineConfig({
             '@core/component/CustomScrollbar',
             '@channel/Call/chat/CallChatHistory',
             '@channel/Message',
+            '@channel/Message/SenderName',
             '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
             './CallRecordingChat',
             './CallRecordingMobileActions',
