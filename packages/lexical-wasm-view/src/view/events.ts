@@ -11,7 +11,12 @@ import {
 import { textLeaf } from './dom';
 import { DragAccess } from './drag';
 import type { EditorView } from './editor-view';
-import { readSelection, resolvePoint, sameSelection } from './selection';
+import {
+  isSelectionWithinEditor,
+  readSelection,
+  resolvePoint,
+  sameSelection,
+} from './selection';
 import { selectionMessage } from './session-port';
 import type { ViewSelection } from './types';
 
@@ -246,7 +251,11 @@ export function registerEvents(view: EditorView): {
     command: number,
     text = '',
     a = 0,
-    clearComposition = false
+    clearComposition = false,
+    completion?: {
+      selection: ViewSelection;
+      after: (handled: boolean) => void;
+    }
   ): void {
     const point = { key: 0, offset: 0, type: 0 };
     const target = {
@@ -262,10 +271,13 @@ export function registerEvents(view: EditorView): {
         a,
         b: Number(clearComposition),
         text,
-        selection: selectionMessage(readSelection(view)),
+        selection: selectionMessage(
+          completion?.selection ?? readSelection(view)
+        ),
         target,
         characterTarget: target,
-      })
+      }),
+      completion?.after
     );
   }
   listen('keydown', (event) => {
@@ -671,8 +683,16 @@ export function registerEvents(view: EditorView): {
   });
   const selectionChange = () => {
     if (!doc.activeElement || !view.ownsSelection(doc.activeElement)) return;
-    const selection = readSelection(view);
     const dom = doc.getSelection();
+    if (
+      !isSelectionWithinEditor(
+        view,
+        dom?.anchorNode ?? null,
+        dom?.focusNode ?? null
+      )
+    )
+      return;
+    const selection = readSelection(view);
     const marked = view.recentSelectionMark();
     const markedRange =
       marked?.selection.kind === 'range' ? marked.selection : null;
@@ -757,17 +777,36 @@ export function registerEvents(view: EditorView): {
       .catch(view.options.onError);
   });
   listen('click', (event) => {
-    if (view.runViewCommand('Click', event, 'before')) return;
-    if (event.detail === 3)
-      view.port.selectionFromView(readSelection(view), { tripleClick: true });
-    const key =
-      event.target instanceof Node ? view.keyFromDOM(event.target) : null;
-    if (key !== null && view.node(key)?.kind === 'decorator') {
-      const node = view.node(key);
-      if (node && view.flags(node)?.isKeyboardSelectable !== false)
-        view.port.selectionFromView({ kind: 'node', keys: [key] });
+    const cached = view.selection().selection;
+    const dom = doc.getSelection();
+    const pointerRange =
+      cached.kind !== 'range' &&
+      (event.pointerType === 'touch' || event.pointerType === 'pen');
+    if (
+      (cached.kind === 'none' || pointerRange) &&
+      isSelectionWithinEditor(
+        view,
+        dom?.anchorNode ?? null,
+        dom?.focusNode ?? null
+      )
+    ) {
+      const selection = readSelection(view);
+      if (selection.kind === 'range') {
+        view.port.selectionFromView(selection);
+        rememberSelection();
+      }
     }
-    view.runViewCommand('Click', event, 'after');
+    if (view.runViewCommand('Click', event, 'before')) return;
+    if (event.detail === 3) {
+      view.port.selectionFromView(readSelection(view), { tripleClick: true });
+      rememberSelection();
+    }
+    command(CommandCode.Click, '', 0, false, {
+      selection: { kind: 'keep' },
+      after: (handled) => {
+        if (!handled) view.runViewCommand('Click', event, 'after');
+      },
+    });
   });
   listen('pointerdown', (event) => {
     view.runViewCommand('PointerDown', event, 'before');

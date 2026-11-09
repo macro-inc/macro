@@ -20,6 +20,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 - Cache authoritative selection feedback while honoring skip-dom-selection commit tags before DOM writes.
 - Debug builds compare mirror text with Rust node text after every TextFromView.
 - Keep Android timing/native deletion in events.ts and composition clearing in Rust.
+- Admit an actual first DOM range before Click listeners, route Click through Rust with KeepModel, and let Image/HR components select their nodes instead of selecting every decorator.
 - Carry ephemeral clipboard host facts through registerFacts; release them after native admission or cancellation, and deliver typed plugin host requests through onPluginEvent after Diff.
 - Route application special keys with registerKeyRoute and one EditorApplication input; preserve Rust KeyDown/Key command priorities and ordinary view listener tie checks. Set preventDefault=false for layout-dependent routes that leave unhandled movement to the browser, and consume native prevention plus short-circuiting after-listeners.
 - Complete cold input callbacks after Diff/IO consumption so unhandled keys reach

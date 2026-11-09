@@ -31,7 +31,7 @@ export function initializeNativeSurfaceTests() {
   });
 }
 /** A real Macro session with synchronous execution and a mounted Diff-driven view. */
-export function nativeSurface() {
+export function nativeSurface(access = Access.Edit) {
   const session = EditorSession.createMacroWithNamespace(
     ABI_MAJOR,
     SessionConfigMsg.encode({
@@ -39,7 +39,7 @@ export function nativeSurface() {
       session: '00000000-0000-0000-0000-000000000001',
       user: 'fixture-user',
       peers: [7n, 8n, 9n],
-      access: Access.Edit,
+      access,
       transport: Transport.None,
       durable: false,
       chatter: false,
@@ -87,7 +87,7 @@ export function nativeSurface() {
     {
       namespace: 'group-b-view',
       theme: {},
-      editable: true,
+      editable: access === Access.Edit,
       preset: 'rich',
       onError(error) {
         throw error;
