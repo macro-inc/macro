@@ -48,8 +48,11 @@ use super::ports::GenerationRepo;
 #[cfg(test)]
 mod test;
 
-/// The longest a routines session runs.
-pub const ROUTINES_SESSION_TIMEOUT: Duration = Duration::from_secs(240);
+/// The longest an onboarding routines session runs: the person is waiting.
+pub const ONBOARDING_ROUTINES_TIMEOUT: Duration = Duration::from_secs(240);
+/// The longest a nightly routines session runs: it reviews what it suggested
+/// before, too.
+pub const NIGHTLY_ROUTINES_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 /// The longest an onboarding ideas session runs: the person is waiting.
 pub const ONBOARDING_IDEAS_TIMEOUT: Duration = Duration::from_secs(240);
 /// The longest a nightly ideas session runs: it researches the whole
@@ -524,7 +527,10 @@ where
                 SessionKind::Routines,
                 &names,
                 brief,
-                ROUTINES_SESSION_TIMEOUT,
+                match run.trigger {
+                    GenerationTrigger::Onboarding => ONBOARDING_ROUTINES_TIMEOUT,
+                    GenerationTrigger::Nightly => NIGHTLY_ROUTINES_TIMEOUT,
+                },
                 attempt,
                 shutdown,
             )

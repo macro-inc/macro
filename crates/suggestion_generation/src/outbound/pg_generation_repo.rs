@@ -82,8 +82,7 @@ impl GenerationRepo for PgGenerationRepo {
                SELECT $1, $2, $3, 'generating', $4
                WHERE NOT EXISTS (
                    SELECT 1 FROM suggestion_generation
-                   WHERE user_id = $2 AND trigger = 'nightly' AND $3 = 'nightly'
-                     AND started_at > $5)
+                   WHERE user_id = $2 AND $3 = 'nightly' AND started_at > $5)
                ON CONFLICT DO NOTHING"#,
             id,
             user.as_ref(),
@@ -217,7 +216,7 @@ impl GenerationRepo for PgGenerationRepo {
                  AND NOT EXISTS (
                      SELECT 1 FROM suggestion_generation g
                      WHERE g.user_id = a.user_id
-                       AND (g.status = 'generating' OR (g.trigger = 'nightly' AND g.started_at > $3)))
+                       AND (g.status = 'generating' OR g.started_at > $3))
                ORDER BY a.seen_at
                LIMIT $6"#,
             now,
