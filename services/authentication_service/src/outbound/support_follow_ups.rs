@@ -110,20 +110,6 @@ impl PgSupportFollowUps {
         .await
     }
 
-    /// Keep a claimed follow-up out of polls until `until`, for one that has to
-    /// wait before its message is known.
-    #[tracing::instrument(skip(self), err)]
-    pub async fn snooze(&self, channel_id: Uuid, until: DateTime<Utc>) -> sqlx::Result<()> {
-        sqlx::query!(
-            "UPDATE support_follow_ups SET claimed_until = $2 WHERE channel_id = $1",
-            channel_id,
-            until,
-        )
-        .execute(&self.db)
-        .await?;
-        Ok(())
-    }
-
     /// Remove a follow-up once it has been sent or skipped.
     #[tracing::instrument(skip(self), err)]
     pub async fn finish(&self, channel_id: Uuid) -> sqlx::Result<()> {

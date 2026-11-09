@@ -1,22 +1,17 @@
 //! One follow-up in each new user's support channel, after the welcome.
 //!
-//! A support team member sends one message chosen from what the user did
-//! while signing up: paid, got stuck connecting email or deciding on a plan,
-//! signed up on the phone, brought a team, connected tools, or set up alone.
-//! It goes out 30 seconds after the user finishes setup. Someone who hasn't
-//! finished gets one only when the reason they are stuck is known, and nothing
-//! if they never finish within the hour. It never goes out once anyone has
-//! posted in the channel. The PostHog flag `support-channel-follow-up` assigns
-//! each new user to `control` or `test`; only `test` gets the message.
+//! A support team member sends one message chosen from what the user did at
+//! signup. It goes out 30 seconds after setup finishes; someone still in setup
+//! at five minutes only gets one when the reason they are stuck is known, and
+//! nothing if they don't finish within the hour. It never goes out once anyone
+//! has posted. The PostHog flag `support-channel-follow-up` splits new users
+//! into `control` and `test`; only `test` gets the message.
 
-use std::{future::Future, sync::Arc, time::Duration};
+use std::{sync::Arc, time::Duration};
 
 use analytics_client::AnalyticsClient;
 use chrono::{DateTime, TimeDelta, Utc};
-use entity_access::domain::{
-    models::{AdminTeamRole, EntityType, MemberTeamRole},
-    ports::EntityAccessService,
-};
+use entity_access::domain::{models::EntityType, ports::EntityAccessService};
 use feature_flags::{FeatureFlags, outbound::posthog::PostHogFeatureFlags};
 use futures::{StreamExt, stream};
 use generic_email_domains::is_generic_email_domain;
@@ -39,67 +34,36 @@ use rootcause::{
     prelude::{IntoRootcause, ResultExt},
 };
 use sqlx::PgPool;
-use teams::domain::team_repo::TeamService;
+use teams::domain::team_repo::TeamRepository;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::outbound::support_follow_ups::{PendingFollowUp, PgSupportFollowUps};
+use crate::{
+    api::context::GtmInviteServiceType,
+    outbound::{
+        mail_exchanges::DnsMailExchanges,
+        subscription_checkout::{Billing, StripeCheckoutGateway},
+        support_follow_ups::{PendingFollowUp, PgSupportFollowUps},
+    },
+};
 
 #[cfg(test)]
 mod test;
 
 const FLAG: &str = "support-channel-follow-up";
-/// The experiment variant that gets the follow-up; `control` does not.
 const SEND_VARIANT: &str = "test";
 const SENDER_EMAIL: &str = "chaitanya@macro.com";
 
-/// Gives a user who just finished setup time to land in the app.
 const AFTER_SETUP: TimeDelta = TimeDelta::seconds(30);
-/// When to look for a known reason someone hasn't finished setup.
 const STUCK_CHECK: TimeDelta = TimeDelta::minutes(5);
-/// How long to wait before looking again at someone still in setup. Short, so
-/// someone who then finishes isn't kept waiting.
-const RECHECK: TimeDelta = TimeDelta::minutes(1);
-/// A follow-up still queued this long after the welcome is dropped.
 const EXPIRY: TimeDelta = TimeDelta::hours(1);
 
 const POLL_INTERVAL: Duration = Duration::from_secs(10);
 const DELIVERY_TIMEOUT: Duration = Duration::from_secs(30);
 const CONCURRENT_DELIVERIES: usize = 4;
-/// Longest team or tool name worth putting in a sentence.
 const MAX_NAME_CHARS: usize = 40;
-/// Most tools one message names.
-const MAX_NAMED_TOOLS: usize = 2;
-/// Connected apps the setup tools step doesn't offer, so they aren't tools
-/// the user chose to bring in.
-const NOT_SETUP_TOOLS: [&str; 2] = ["gmail", "google_calendar"];
 
-/// Whether a user has paid, or opened a checkout without paying.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
-#[strum(serialize_all = "snake_case")]
-pub(crate) enum Billing {
-    None,
-    OpenedCheckout,
-    Subscribed,
-}
-
-/// The user's Stripe state, read without creating anything.
-pub(crate) trait FollowUpBilling: Send + Sync {
-    type Err: std::error::Error + Send + Sync + 'static;
-
-    fn billing(
-        &self,
-        user: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Billing, Self::Err>> + Send;
-}
-
-/// Mail server host names for an email domain; empty when none are found.
-pub(crate) trait MailExchanges: Send + Sync {
-    fn exchanges(&self, domain: &str) -> impl Future<Output = Vec<String>> + Send;
-}
-
-/// Assigns new users to the follow-up experiment and queues the message for
-/// the `test` group.
+/// Assigns new users to the experiment and queues the message for `test`.
 #[derive(Clone)]
 pub(crate) struct SupportFollowUpScheduler {
     queue: PgSupportFollowUps,
@@ -144,68 +108,58 @@ impl SupportFollowUpScheduler {
         };
         tracing::Span::current().record("variant", variant);
 
-        // Server-side flag reads record no exposure, so the experiment's
-        // exposure event is sent here, for both groups. The client logs a
-        // failed capture.
+        // Server-side flag reads record no exposure, so it is sent here for
+        // both groups. The client logs a failed capture.
         let _ = self
             .analytics
             .track_posthog(
                 user.as_ref(),
                 "$feature_flag_called",
-                serde_json::json!({
-                    "$feature_flag": FLAG,
-                    "$feature_flag_response": variant,
-                }),
+                serde_json::json!({ "$feature_flag": FLAG, "$feature_flag_response": variant }),
             )
             .await;
 
-        if variant != SEND_VARIANT {
-            return Ok(());
+        if variant == SEND_VARIANT {
+            self.queue
+                .schedule(channel_id, user, macro_uuid::generate_uuid_v7())
+                .await
+                .context("failed to queue support follow-up")?;
         }
-        self.queue
-            .schedule(channel_id, user, macro_uuid::generate_uuid_v7())
-            .await
-            .context("failed to queue support follow-up")?;
         Ok(())
     }
 
-    /// Call when the user starts connecting a Gmail inbox. The queue logs a
-    /// failure, which only costs this user the Gmail message.
+    /// Call when the user starts connecting Gmail. The queue logs a failure.
     pub(crate) async fn note_gmail_attempt(&self, user: &MacroUserIdStr<'_>) {
         let _ = self.queue.note_gmail_attempt(user).await;
     }
 }
 
-/// Sends queued follow-ups when they come due. Every replica runs one; a row
-/// claim keeps two from sending the same follow-up.
-pub(crate) struct SupportFollowUpWorker<A, T, O, C, G, B, M> {
+/// Sends queued follow-ups when they come due. Every replica runs one; a
+/// one-minute row claim keeps two from sending the same follow-up.
+pub(crate) struct SupportFollowUpWorker<A, T, O, C, G> {
     pub(crate) queue: PgSupportFollowUps,
-    /// Reads the user's inbox and phone app devices.
     pub(crate) db: PgPool,
     pub(crate) messages: Arc<dyn MessageServiceApi>,
     pub(crate) access: Arc<A>,
-    pub(crate) teams: Arc<T>,
+    pub(crate) teams: T,
     pub(crate) onboarding: O,
     pub(crate) connections: C,
     pub(crate) github: Arc<G>,
-    pub(crate) billing: B,
-    pub(crate) mail: M,
+    pub(crate) billing: StripeCheckoutGateway<GtmInviteServiceType>,
+    pub(crate) mail: DnsMailExchanges,
     pub(crate) analytics: Arc<AnalyticsClient>,
 }
 
-impl<A, T, O, C, G, B, M> SupportFollowUpWorker<A, T, O, C, G, B, M>
+impl<A, T, O, C, G> SupportFollowUpWorker<A, T, O, C, G>
 where
     A: EntityAccessService,
-    T: TeamService,
+    T: TeamRepository,
     O: OnboardingRepo,
     C: ConnectionStore<Err = anyhow::Error> + Sync,
     G: GithubLinkService,
-    B: FollowUpBilling,
-    M: MailExchanges,
 {
-    /// Poll the queue until `stop` is cancelled. Stopping mid-batch is safe:
-    /// an interrupted delivery is retried, with the same message id, once its
-    /// claim lapses.
+    /// Poll until `stop` is cancelled. An interrupted delivery is retried,
+    /// with the same message id, once its claim lapses.
     pub(crate) async fn run(self, stop: CancellationToken) {
         let mut interval = tokio::time::interval(POLL_INTERVAL);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -228,8 +182,7 @@ where
         };
         stream::iter(pending)
             .for_each_concurrent(CONCURRENT_DELIVERIES, |pending| async move {
-                let delivery = self.deliver_if_due(pending, Utc::now());
-                if tokio::time::timeout(DELIVERY_TIMEOUT, delivery)
+                if tokio::time::timeout(DELIVERY_TIMEOUT, self.deliver_if_due(pending))
                     .await
                     .is_err()
                 {
@@ -239,18 +192,19 @@ where
             .await;
     }
 
-    async fn deliver_if_due(&self, pending: PendingFollowUp, now: DateTime<Utc>) {
+    async fn deliver_if_due(&self, pending: PendingFollowUp) {
         // The repository logs a failed read; the next poll tries again.
         let Ok(onboarding) = self.onboarding.get_row(&pending.user_id).await else {
             return;
         };
         let finished_setup_at = onboarding.and_then(|row| row.completed_at);
-
-        let Some(trigger) = due(pending.scheduled_at, finished_setup_at, now) else {
-            return;
-        };
-        // A failure is logged by `deliver` and retried once the claim lapses.
-        let _ = self.deliver(pending, trigger, now).await;
+        let now = Utc::now();
+        if due(pending.scheduled_at, finished_setup_at, now) {
+            // `deliver` logs a failure; it is retried once the claim lapses.
+            let _ = self
+                .deliver(pending, finished_setup_at.is_some(), now)
+                .await;
+        }
     }
 
     #[tracing::instrument(
@@ -258,7 +212,7 @@ where
         skip_all,
         fields(
             channel_id = %pending.channel_id,
-            trigger = <&str>::from(trigger),
+            finished_setup,
             outcome = tracing::field::Empty,
             path = tracing::field::Empty,
         ),
@@ -267,7 +221,7 @@ where
     async fn deliver(
         &self,
         pending: PendingFollowUp,
-        trigger: Trigger,
+        finished_setup: bool,
         now: DateTime<Utc>,
     ) -> Result<(), Report> {
         let span = tracing::Span::current();
@@ -281,13 +235,8 @@ where
             span.record("outcome", "claimed_elsewhere");
             return Ok(());
         };
-
         if now >= pending.scheduled_at + EXPIRY {
-            let reason = match trigger {
-                Trigger::FinishedSetup => "expired",
-                Trigger::StillInSetup => "setup_unfinished",
-            };
-            return self.skip(&pending, reason).await;
+            return self.skip(&pending, "expired").await;
         }
 
         let sender = MacroUserIdStr::try_from_email(SENDER_EMAIL)
@@ -319,20 +268,15 @@ where
             return self.skip(&pending, "conversation_started").await;
         }
 
-        let signals = self
-            .signals(&pending, trigger == Trigger::FinishedSetup)
-            .await?;
+        let signals = self.signals(&pending, finished_setup).await?;
         let Some(path) = choose(&signals) else {
-            // Still in setup with no known reason: look again later, and drop
-            // it at expiry if they never finish.
-            self.queue
-                .snooze(pending.channel_id, now + RECHECK)
-                .await
-                .context("failed to snooze support follow-up")?;
+            // Still in setup with no known reason; the claim lapses in a
+            // minute and it is looked at again.
             span.record("outcome", "waiting");
             return Ok(());
         };
-        span.record("path", path.name());
+        let path_name: &'static str = (&path).into();
+        span.record("path", path_name);
         let mention = user_mention(user).context("failed to mention the user")?;
 
         let write = self
@@ -374,8 +318,7 @@ where
             user,
             "support_follow_up_sent",
             serde_json::json!({
-                "path": path.name(),
-                "trigger": <&str>::from(trigger),
+                "path": path_name,
                 "seconds_after_welcome": (now - pending.scheduled_at).num_seconds(),
             }),
         )
@@ -398,9 +341,8 @@ where
         Ok(())
     }
 
-    /// What the user did while signing up. Setup results (mail provider, team,
-    /// tools) are only read once setup is finished, since only then can they
-    /// pick the message.
+    /// What the user did at signup. The mail provider, team and tools only
+    /// pick a message once setup is finished, so they are read only then.
     #[tracing::instrument(name = "support_follow_up.signals", skip_all, err)]
     async fn signals(
         &self,
@@ -409,31 +351,29 @@ where
     ) -> Result<Signals, Report> {
         let user = &pending.user_id;
         let domain = user.0.email_part().domain_part().to_ascii_lowercase();
-
-        let inbox = async {
-            email_db_client::links::get::fetch_link_by_macro_id(&self.db, user.as_ref())
-                .await
-                .into_rootcause()
-                .context("failed to read the user's inbox")
-        };
-        let billing = async {
-            self.billing
-                .billing(user)
-                .await
-                .context("failed to read the user's billing")
-        };
-        let phone = async {
-            notification_db_client::device::get_user_device_endpoints(&self.db, user.as_ref())
-                .await
-                .into_rootcause()
-                .context("failed to read the user's phone app devices")
-        };
-        let (inbox, billing, devices) = tokio::try_join!(inbox, billing, phone)?;
-
+        let (inbox, billing, devices) = tokio::try_join!(
+            async {
+                email_db_client::links::get::fetch_link_by_macro_id(&self.db, user.as_ref())
+                    .await
+                    .into_rootcause()
+                    .context("failed to read the user's inbox")
+            },
+            async {
+                self.billing
+                    .follow_up_billing(user)
+                    .await
+                    .context("failed to read the user's billing")
+            },
+            async {
+                notification_db_client::device::get_user_device_endpoints(&self.db, user.as_ref())
+                    .await
+                    .into_rootcause()
+                    .context("failed to read the user's phone app devices")
+            },
+        )?;
         let mut signals = Signals {
             finished_setup,
-            paid: billing == Billing::Subscribed,
-            opened_checkout: billing == Billing::OpenedCheckout,
+            billing,
             on_phone: !devices.is_empty(),
             gmail_attempted: pending.gmail_attempted,
             inbox_connected: inbox.is_some(),
@@ -443,109 +383,69 @@ where
             team: None,
             tools: Vec::new(),
         };
-        if !finished_setup {
-            return Ok(signals);
+        if finished_setup {
+            let (mail_provider, team, tools) = tokio::join!(
+                async {
+                    if signals.inbox_connected {
+                        MailProvider::Other
+                    } else {
+                        MailProvider::from_exchanges(&self.mail.exchanges(&signals.domain).await)
+                    }
+                },
+                self.team(user),
+                self.tools(user),
+            );
+            signals.mail_provider = mail_provider;
+            signals.team = team?;
+            signals.tools = tools?;
         }
-
-        let provider = async {
-            if signals.inbox_connected {
-                MailProvider::Other
-            } else {
-                MailProvider::from_exchanges(&self.mail.exchanges(&signals.domain).await)
-            }
-        };
-        let (mail_provider, team, tools) =
-            tokio::join!(provider, self.team(user), self.tools(user));
-        signals.mail_provider = mail_provider;
-        signals.team = team?;
-        signals.tools = tools?;
         Ok(signals)
     }
 
-    /// A team the user created and brought people into, by member or invite.
-    async fn team(&self, user: &MacroUserIdStr<'static>) -> Result<Option<TeamSignal>, Report> {
+    /// The name of a team the user created and brought people into.
+    async fn team(&self, user: &MacroUserIdStr<'static>) -> Result<Option<String>, Report> {
         let teams = self
             .teams
             .get_user_teams(user)
             .await
             .context("failed to read the user's teams")?;
         for team in teams.iter().filter(|team| team.owner_id() == user.as_ref()) {
-            let team_id = team.id().to_string();
-            let member = self
-                .access
-                .generate_entity_access_receipt::<MemberTeamRole>(
-                    user,
-                    None,
-                    &team_id,
-                    EntityType::Team,
-                )
-                .await
-                .context("the team's owner must be able to read it")?;
-            let members = self
-                .teams
-                .get_team(member)
-                .await
-                .context("failed to read the team's members")?
-                .members;
-            let admin = self
-                .access
-                .generate_entity_access_receipt::<AdminTeamRole>(
-                    user,
-                    None,
-                    &team_id,
-                    EntityType::Team,
-                )
-                .await
-                .context("the team's owner must be able to read its invites")?;
-            let invites = self
-                .teams
-                .get_team_invites(admin)
-                .await
-                .context("failed to read the team's invites")?;
+            let (members, invites) = tokio::try_join!(
+                self.teams.get_team_members(team.id()),
+                self.teams.get_team_invites(team.id()),
+            )
+            .context("failed to read the user's team")?;
             if members.len() > 1 || !invites.is_empty() {
-                return Ok(Some(TeamSignal {
-                    name: plain_name(team.name()).map(str::to_owned),
-                }));
+                let name = plain_name(team.name()).unwrap_or("your team");
+                return Ok(Some(name.to_owned()));
             }
         }
         Ok(None)
     }
 
-    /// Connected tools, plus GitHub, which Macro links itself. A GitHub check
-    /// that fails counts as not linked, since it only changes which tool the
-    /// message names.
+    /// Connected apps, plus GitHub, which Macro links itself. A failed GitHub
+    /// check counts as not linked: it only changes which tool is named.
     async fn tools(&self, user: &MacroUserIdStr<'static>) -> Result<Vec<Tool>, Report> {
-        let connections = async {
-            self.connections
-                .list(user)
-                .await
-                .into_rootcause()
-                .context("failed to read the user's connected tools")
-        };
-        let github = async {
-            match self.github.get_user_link_status(&user.0).await {
-                Ok(GithubLinkStatus::Linked(_) | GithubLinkStatus::ReauthenticationRequired) => {
-                    true
-                }
-                Ok(GithubLinkStatus::NotLinked) => false,
-                Err(error) => {
-                    tracing::warn!(?error, "failed to read the user's GitHub link");
-                    false
-                }
-            }
-        };
-        let (connections, github) = tokio::join!(connections, github);
-        let mut tools: Vec<Tool> = connections?
+        let (connections, github) = tokio::join!(
+            self.connections.list(user),
+            self.github.get_user_link_status(&user.0),
+        );
+        let mut tools: Vec<Tool> = connections
+            .into_rootcause()
+            .context("failed to read the user's connected tools")?
             .into_iter()
-            .filter(|tool| tool.enabled && !NOT_SETUP_TOOLS.contains(&tool.app_slug.as_str()))
+            .filter(|tool| tool.enabled)
             .map(|tool| Tool {
                 slug: tool.app_slug.to_ascii_lowercase(),
                 name: tool.server_name,
             })
             .collect();
-        if github {
+        if matches!(
+            github,
+            Ok(GithubLinkStatus::Linked(_) | GithubLinkStatus::ReauthenticationRequired)
+        ) {
             tools.push(Tool {
-                slug: GITHUB.to_owned(),
+                slug: "github".to_owned(),
                 name: "GitHub".to_owned(),
             });
         }
@@ -566,25 +466,16 @@ where
     }
 }
 
-/// What made a follow-up worth looking at.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
-#[strum(serialize_all = "snake_case")]
-enum Trigger {
-    /// The user finished setup.
-    FinishedSetup,
-    /// Five minutes passed and the user is still in setup.
-    StillInSetup,
-}
-
-/// Why the follow-up should be looked at `now`, or `None` while it should wait.
+/// Whether to look at a follow-up: 30 seconds after setup finishes, or five
+/// minutes after the welcome while the user is still in setup.
 fn due(
     scheduled_at: DateTime<Utc>,
     finished_setup_at: Option<DateTime<Utc>>,
     now: DateTime<Utc>,
-) -> Option<Trigger> {
+) -> bool {
     match finished_setup_at {
-        Some(finished) => (now >= finished + AFTER_SETUP).then_some(Trigger::FinishedSetup),
-        None => (now >= scheduled_at + STUCK_CHECK).then_some(Trigger::StillInSetup),
+        Some(finished) => now >= finished + AFTER_SETUP,
+        None => now >= scheduled_at + STUCK_CHECK,
     }
 }
 
@@ -605,18 +496,16 @@ enum MailProvider {
 }
 
 impl MailProvider {
-    fn from_exchanges(exchanges: &[String]) -> Self {
-        let hosted_by = |suffixes: &[&str]| {
-            exchanges.iter().any(|host| {
+    fn from_exchanges(hosts: &[String]) -> Self {
+        let hosted_by = |domain: &str| {
+            hosts.iter().any(|host| {
                 let host = host.trim_end_matches('.').to_ascii_lowercase();
-                suffixes
-                    .iter()
-                    .any(|suffix| host == *suffix || host.ends_with(&format!(".{suffix}")))
+                host == domain || host.ends_with(&format!(".{domain}"))
             })
         };
-        if hosted_by(&["google.com", "googlemail.com"]) {
+        if hosted_by("google.com") || hosted_by("googlemail.com") {
             Self::Google
-        } else if hosted_by(&["outlook.com"]) {
+        } else if hosted_by("outlook.com") {
             Self::Microsoft
         } else {
             Self::Other
@@ -624,43 +513,29 @@ impl MailProvider {
     }
 }
 
-/// A team the user brought people into. `name` is `None` when the team's name
-/// can't go in a sentence.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct TeamSignal {
-    name: Option<String>,
-}
-
-/// A connected tool: its app slug, lowercase, and its display name.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// A connected tool's app slug, lowercase, and display name.
+#[derive(Debug, Clone)]
 struct Tool {
     slug: String,
     name: String,
 }
 
-const GITHUB: &str = "github";
-
-/// What the user did while signing up.
 #[derive(Debug, Clone)]
 struct Signals {
     finished_setup: bool,
-    paid: bool,
-    opened_checkout: bool,
-    /// The phone app registered this user's device.
+    billing: Billing,
     on_phone: bool,
     gmail_attempted: bool,
     inbox_connected: bool,
-    /// The signup email's domain, lowercase.
     domain: String,
     work_domain: bool,
-    /// Only looked up once setup is finished and no inbox is connected.
     mail_provider: MailProvider,
-    team: Option<TeamSignal>,
+    team: Option<String>,
     tools: Vec<Tool>,
 }
 
-/// Which message to send.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
 enum Path<'a> {
     Pro,
     GmailTrouble,
@@ -668,7 +543,7 @@ enum Path<'a> {
     GoogleWorkInbox(&'a str),
     Pricing,
     Phone,
-    Team(Option<&'a str>),
+    Team(&'a str),
     Notion,
     Linear,
     Slack,
@@ -678,85 +553,59 @@ enum Path<'a> {
     Personal,
 }
 
-impl Path<'_> {
-    fn name(&self) -> &'static str {
-        match self {
-            Self::Pro => "pro",
-            Self::GmailTrouble => "gmail_trouble",
-            Self::Outlook => "outlook",
-            Self::GoogleWorkInbox(_) => "google_work_inbox",
-            Self::Pricing => "pricing",
-            Self::Phone => "phone",
-            Self::Team(_) => "team",
-            Self::Notion => "notion",
-            Self::Linear => "linear",
-            Self::Slack => "slack",
-            Self::Github => "github",
-            Self::OtherTools(_) => "other_tools",
-            Self::SoloWork => "solo_work",
-            Self::Personal => "personal",
-        }
-    }
-}
-
 /// The first message that fits, or `None` while the user is still in setup
-/// with no known reason. Someone still in setup only gets a message about
-/// what is holding them: paying, Gmail, pricing, or being on the phone.
-fn choose(signals: &Signals) -> Option<Path<'_>> {
-    let no_inbox = !signals.inbox_connected;
-    if signals.paid {
+/// for no known reason. Someone in setup only hears about what is holding
+/// them: paying, Gmail, pricing, or being on the phone.
+fn choose(s: &Signals) -> Option<Path<'_>> {
+    if s.billing == Billing::Subscribed {
         return Some(Path::Pro);
     }
-    if signals.gmail_attempted && no_inbox {
+    if s.gmail_attempted && !s.inbox_connected {
         return Some(Path::GmailTrouble);
     }
-    if signals.finished_setup && no_inbox {
-        match signals.mail_provider {
+    if s.finished_setup && !s.inbox_connected {
+        match s.mail_provider {
             MailProvider::Microsoft => return Some(Path::Outlook),
-            MailProvider::Google if signals.work_domain => {
-                return Some(Path::GoogleWorkInbox(&signals.domain));
-            }
+            MailProvider::Google if s.work_domain => return Some(Path::GoogleWorkInbox(&s.domain)),
             MailProvider::Google | MailProvider::Other => {}
         }
     }
-    if signals.opened_checkout {
+    if s.billing == Billing::OpenedCheckout {
         return Some(Path::Pricing);
     }
-    if !signals.finished_setup {
-        return signals.on_phone.then_some(Path::Phone);
+    if !s.finished_setup {
+        return s.on_phone.then_some(Path::Phone);
     }
-    if let Some(team) = &signals.team {
-        return Some(Path::Team(team.name.as_deref()));
+    if let Some(team) = &s.team {
+        return Some(Path::Team(team));
     }
-    if let Some(path) = tool_path(&signals.tools) {
+    if let Some(path) = tool_path(&s.tools) {
         return Some(path);
     }
-    Some(if signals.work_domain {
+    Some(if s.work_domain {
         Path::SoloWork
     } else {
         Path::Personal
     })
 }
 
-/// Tools Macro can import come first, then GitHub, then any others by name.
+/// Tools Macro can import first, then GitHub, then up to two others by name.
 fn tool_path(tools: &[Tool]) -> Option<Path<'_>> {
     let has = |slug: &str| tools.iter().any(|tool| tool.slug == slug);
-    if has("notion") {
-        return Some(Path::Notion);
-    }
-    if has("linear") {
-        return Some(Path::Linear);
-    }
-    if has("slack") {
-        return Some(Path::Slack);
-    }
-    if has(GITHUB) {
-        return Some(Path::Github);
+    for (slug, path) in [
+        ("notion", Path::Notion),
+        ("linear", Path::Linear),
+        ("slack", Path::Slack),
+        ("github", Path::Github),
+    ] {
+        if has(slug) {
+            return Some(path);
+        }
     }
     let names: Vec<&str> = tools
         .iter()
         .filter_map(|tool| plain_name(&tool.name))
-        .take(MAX_NAMED_TOOLS)
+        .take(2)
         .collect();
     (!names.is_empty()).then_some(Path::OtherTools(names))
 }
@@ -764,14 +613,16 @@ fn tool_path(tools: &[Tool]) -> Option<Path<'_>> {
 /// The follow-up text. `user` is the mention that opens it.
 fn message(user: &str, path: &Path<'_>) -> String {
     let body = match path {
-        Path::Pro => "Excited to have you on Pro. If you need any help getting set up \
-             I'm happy to hop on a call with you."
-            .to_owned(),
+        Path::Pro => {
+            "Excited to have you on Pro. If you need any help getting set up I'm happy to \
+             hop on a call with you."
+                .to_owned()
+        }
         Path::GmailTrouble => "Did connecting Gmail give you any trouble? If it was the \
              permissions screen, I can tell you exactly what Macro does with your email."
             .to_owned(),
-        Path::Outlook => "Macro works with Outlook, it's just not in setup yet. You can add \
-             it from Settings → Email → Connect an Outlook account."
+        Path::Outlook => "Macro works with Outlook, it's just not in setup yet. You can add it \
+             from Settings → Email → Connect an Outlook account."
             .to_owned(),
         Path::GoogleWorkInbox(domain) => format!(
             "Your {domain} email isn't in Macro yet. You can add it from Settings → Email → \
@@ -783,10 +634,9 @@ fn message(user: &str, path: &Path<'_>) -> String {
         Path::Phone => {
             "Are you going to use Macro mostly on your phone, or on your computer too?".to_owned()
         }
-        Path::Team(name) => format!(
-            "Excited to have {} on Macro! Want to do a quick call to help get the rest of the \
-             team on board?",
-            name.unwrap_or("your team")
+        Path::Team(team) => format!(
+            "Excited to have {team} on Macro. Want to do a quick call to help get the rest of the \
+             team on board?"
         ),
         Path::Notion => "I saw you connected Notion. Are you moving off it or keeping both? If \
              you're moving, Macro can bring your Notion pages over."
@@ -800,15 +650,13 @@ fn message(user: &str, path: &Path<'_>) -> String {
         Path::Github => {
             "I saw you connected GitHub. What do you want Macro doing with your repos?".to_owned()
         }
-        Path::OtherTools(names) => match names.as_slice() {
-            [one] => {
-                format!("I saw you connected {one}. What do you want Macro's AI doing with it?")
-            }
-            names => format!(
-                "I saw you connected {}. What do you want Macro's AI doing with them?",
+        Path::OtherTools(names) => {
+            let it = if names.len() == 1 { "it" } else { "them" };
+            format!(
+                "I saw you connected {}. What do you want Macro's AI doing with {it}?",
                 names.join(" and ")
-            ),
-        },
+            )
+        }
         Path::SoloWork => {
             "Are you trying Macro just for yourself, or for the rest of your team too?".to_owned()
         }
@@ -816,11 +664,11 @@ fn message(user: &str, path: &Path<'_>) -> String {
              your own life?"
             .to_owned(),
     };
-    format!("Hey {user}, Chaitanya here, also on the Macro team. {body}")
+    format!("Hey {user}! Chaitanya here, also on the Macro team. {body}")
 }
 
-/// A team or tool name that can go in a sentence as is: short, with no
-/// Markdown or mention markup. Anything else is left out of the message.
+/// A team or tool name short and plain enough to put in a sentence; markup
+/// and mention syntax are left out.
 fn plain_name(name: &str) -> Option<&str> {
     let name = name.trim();
     let plain = !name.is_empty()

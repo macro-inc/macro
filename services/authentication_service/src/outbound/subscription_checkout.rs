@@ -10,11 +10,8 @@ use teams::domain::model::{CustomerError, SeatPlan, SeatPrices};
 use thiserror::Error;
 use tracing::Instrument;
 
-use crate::service::{
-    subscription_checkout::{
-        CheckoutGateway, CheckoutRequest, CheckoutTerms, ONBOARDING_TRIAL_DAYS, SubscriptionHistory,
-    },
-    user::support_channel_follow_up::{Billing, FollowUpBilling},
+use crate::service::subscription_checkout::{
+    CheckoutGateway, CheckoutRequest, CheckoutTerms, ONBOARDING_TRIAL_DAYS, SubscriptionHistory,
 };
 
 const TRIAL_SESSION_MARKER: &str = "onboarding_trial";
@@ -395,13 +392,23 @@ async fn subscription_history(
     Ok(history)
 }
 
-impl<I: GtmInviteService> FollowUpBilling for StripeCheckoutGateway<I> {
-    type Err = StripeCheckoutError;
+/// Whether a user has paid, or opened a checkout without paying.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum Billing {
+    None,
+    OpenedCheckout,
+    Subscribed,
+}
 
-    /// Reads only: a user without a stored Stripe customer has never opened a
-    /// checkout, so no customer is created here.
+impl<I: GtmInviteService> StripeCheckoutGateway<I> {
+    /// Billing state for the support follow-up. Reads only: it never creates
+    /// a Stripe customer.
     #[tracing::instrument(name = "support_follow_up.billing", skip_all, fields(outcome = tracing::field::Empty), err)]
-    async fn billing(&self, user: &MacroUserIdStr<'_>) -> Result<Billing, Self::Err> {
+    pub async fn follow_up_billing(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> Result<Billing, StripeCheckoutError> {
         let billing =
             match self.customer(user).await? {
                 None => Billing::None,

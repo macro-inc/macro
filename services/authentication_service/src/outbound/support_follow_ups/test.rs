@@ -30,7 +30,7 @@ async fn support_channel(db: &PgPool) -> Uuid {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn one_replica_holds_a_follow_up_until_its_claim_expires(db: PgPool) {
+async fn a_follow_up_is_held_by_one_replica_until_its_claim_expires(db: PgPool) {
     let queue = PgSupportFollowUps::new(db.clone());
     let channel_id = support_channel(&db).await;
     let user = MacroUserIdStr::try_from_email("new.user@example.com").unwrap();
@@ -42,10 +42,12 @@ async fn one_replica_holds_a_follow_up_until_its_claim_expires(db: PgPool) {
         .await
         .unwrap();
 
+    queue.note_gmail_attempt(&user).await.unwrap();
     let pending = queue.unclaimed().await.unwrap();
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].channel_id, channel_id);
     assert_eq!(pending[0].user_id, user);
+    assert!(pending[0].gmail_attempted);
 
     assert_eq!(queue.claim(channel_id).await.unwrap(), Some(message_id));
     assert_eq!(queue.claim(channel_id).await.unwrap(), None);
@@ -60,34 +62,4 @@ async fn one_replica_holds_a_follow_up_until_its_claim_expires(db: PgPool) {
     queue.finish(channel_id).await.unwrap();
     assert!(queue.unclaimed().await.unwrap().is_empty());
     assert_eq!(queue.claim(channel_id).await.unwrap(), None);
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_snoozed_follow_up_waits_and_keeps_a_gmail_attempt(db: PgPool) {
-    let queue = PgSupportFollowUps::new(db.clone());
-    let channel_id = support_channel(&db).await;
-    let user = MacroUserIdStr::try_from_email("new.user@example.com").unwrap();
-    let other = MacroUserIdStr::try_from_email("someone.else@example.com").unwrap();
-
-    queue
-        .schedule(channel_id, &user, macro_uuid::generate_uuid_v7())
-        .await
-        .unwrap();
-    queue.note_gmail_attempt(&other).await.unwrap();
-    assert!(!queue.unclaimed().await.unwrap()[0].gmail_attempted);
-    queue.note_gmail_attempt(&user).await.unwrap();
-    assert!(queue.unclaimed().await.unwrap()[0].gmail_attempted);
-
-    queue.claim(channel_id).await.unwrap().unwrap();
-    queue
-        .snooze(channel_id, Utc::now() + chrono::TimeDelta::minutes(5))
-        .await
-        .unwrap();
-    sqlx::query!(
-        "UPDATE support_follow_ups SET claimed_until = claimed_until - INTERVAL '1 minute'"
-    )
-    .execute(&db)
-    .await
-    .unwrap();
-    assert!(queue.unclaimed().await.unwrap().is_empty());
 }

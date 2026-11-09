@@ -4,8 +4,6 @@ use std::time::Duration;
 
 use hickory_resolver::{TokioResolver, proto::rr::RData};
 
-use crate::service::user::support_channel_follow_up::MailExchanges;
-
 /// How long one lookup may take before the domain counts as unknown.
 const LOOKUP_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -33,9 +31,10 @@ impl Default for DnsMailExchanges {
     }
 }
 
-impl MailExchanges for DnsMailExchanges {
+impl DnsMailExchanges {
+    /// Mail server host names for `domain`; empty when none are found.
     #[tracing::instrument(name = "support_follow_up.mail_exchanges", skip(self))]
-    async fn exchanges(&self, domain: &str) -> Vec<String> {
+    pub async fn exchanges(&self, domain: &str) -> Vec<String> {
         let Some(resolver) = &self.resolver else {
             return Vec::new();
         };

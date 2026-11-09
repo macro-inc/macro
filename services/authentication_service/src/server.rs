@@ -729,7 +729,7 @@ async fn run_server() -> anyhow::Result<()> {
             db: db.clone(),
             messages: channel_messages.clone(),
             access: entity_access_service_impl.clone(),
-            teams: teams_service.clone(),
+            teams: teams_repo_impl.clone(),
             onboarding: onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(db.clone()),
             connections: pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(
                 db.clone(),
