@@ -12,6 +12,7 @@ chrono = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 entity_registry = { path = "../entity_registry/entity_registry", features = ["axum"] }
 feature_flags = { path = "../feature_flags" }
+futures = { workspace = true }
 macro_authorization = { path = "../macro_authorization", features = ["postgres"] }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
@@ -31,4 +32,3 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
-futures = { workspace = true }

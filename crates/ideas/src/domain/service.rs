@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use feature_flags::FeatureFlags;
+use futures::{StreamExt as _, TryStreamExt as _};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_owner::CreationPrincipal;
@@ -32,6 +33,9 @@ pub const IDEAS_FLAG: &str = "enable-ideas";
 pub const OPEN_LIMIT: u32 = 30;
 /// Most ideas one generation may add or bring back.
 pub const NEW_PER_GENERATION: u32 = 10;
+
+/// Ideas whose items the feed checks at once.
+const ACCESS_CHECKS_AT_ONCE: usize = 8;
 
 const LIMITS: Limits = Limits {
     open: OPEN_LIMIT,
@@ -210,7 +214,7 @@ where
     ), err)]
     async fn feed(&self, user: &MacroUserIdStr<'static>) -> Result<Ideas, IdeaError> {
         self.require_flag(user).await?;
-        let mut open: Vec<Idea> = self
+        let open: Vec<Idea> = self
             .repo
             .ideas(user)
             .await
@@ -219,12 +223,15 @@ where
             .filter(|idea| idea.state.is_open())
             .collect();
         let before = open.len();
-        let mut ideas = Vec::with_capacity(open.len());
-        for idea in open.drain(..) {
-            if self.viewable(user, &idea).await? {
-                ideas.push(idea);
-            }
-        }
+        // Up to 30 ideas of up to 5 items each: check a few at a time.
+        let mut ideas: Vec<Idea> = futures::stream::iter(open)
+            .map(|idea| async move {
+                Ok::<_, IdeaError>(self.viewable(user, &idea).await?.then_some(idea))
+            })
+            .buffer_unordered(ACCESS_CHECKS_AT_ONCE)
+            .try_filter_map(|idea| async move { Ok(idea) })
+            .try_collect()
+            .await?;
         ideas.sort_by(|a, b| {
             b.importance
                 .cmp(&a.importance)
