@@ -5,6 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
+macro_document_model = { workspace = true, optional = true }
+rand_chacha = { workspace = true, optional = true }
 doc_sync_core.workspace = true
 lexical_model.workspace = true
 lexical_html.workspace = true
@@ -27,6 +29,7 @@ serde.workspace = true
 proptest.workspace = true
 
 [features]
+application = ["dep:macro_document_model", "macro_document_model/html", "dep:rand_chacha"]
 compatibility = ["lexical_model/foreign-nodes"]
 conformance = []
 # Simulation-only malformed projection producer; never ship enabled.

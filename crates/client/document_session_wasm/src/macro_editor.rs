@@ -1,61 +1,13 @@
-//! Application registry composition; clocks and entropy enter through session inputs.
-use document_session::{with_session_plugins, EditorConfig};
-use macro_document_model::{NodeClock, NodeHost, NodeRandom};
-use rand_chacha::{
-    rand_core::{RngCore, SeedableRng},
-    ChaCha20Rng,
-};
-use std::sync::{
-    atomic::{AtomicI64, Ordering},
-    Arc, Mutex,
-};
+//! WASM composition delegates to the same application registry used by native hosts.
+use document_session::EditorConfig;
+use std::sync::{atomic::AtomicI64, Arc};
 
-pub(crate) fn config(mut config: EditorConfig, clock: Arc<AtomicI64>) -> EditorConfig {
-    config.policy = &macro_document_model::sync::MACRO_SYNC_POLICY;
-    config.comment_node = |tx, ids| {
-        Ok(macro_document_model::nodes::create_comment_node(
-            tx,
-            ids,
-            Default::default(),
-            Some(false),
-        )?
-        .key())
-    };
-    // Rebuilds and cold repaint editors must not restart a live peer's ID stream.
-    let streams = Mutex::new(std::collections::BTreeMap::new());
-    config.builder = Arc::new(move |mode, peer| {
-        let random = streams
-            .lock()
-            .unwrap_or_else(|poison| poison.into_inner())
-            .entry(peer)
-            .or_insert_with(|| {
-                let mut seed = [0; 32];
-                for chunk in seed.chunks_exact_mut(8) {
-                    chunk.copy_from_slice(&peer.to_le_bytes());
-                }
-                Arc::new(Mutex::new(ChaCha20Rng::from_seed(seed)))
-            })
-            .clone();
-        let clock = clock.clone();
-        let builder = macro_document_model::surface::preset_builder_with_mode(
-            macro_document_model::EditorType::MarkdownSync,
-            mode,
-        )
-        .extension_state(NodeClock(Arc::new(move || {
-            u64::try_from(clock.load(Ordering::Relaxed)).unwrap_or(0)
-        })))
-        .extension_state(NodeRandom(Arc::new(move |length| {
-            let mut bytes = vec![0; length];
-            random
-                .lock()
-                .unwrap_or_else(|poison| poison.into_inner())
-                .fill_bytes(&mut bytes);
-            bytes
-        })))
-        .extension_state(NodeHost::default());
-        with_session_plugins(builder, peer)
-    });
-    config
+pub(crate) fn config(config: EditorConfig, clock: Arc<AtomicI64>) -> EditorConfig {
+    document_session::application_editor_config(
+        config,
+        clock,
+        macro_document_model::EditorType::MarkdownSync,
+    )
 }
 
 #[cfg(test)]
@@ -63,6 +15,7 @@ mod tests {
     use super::*;
     use lexical_model::*;
     use macro_document_model::nodes::{create_await_node, AwaitNode};
+    use std::sync::atomic::Ordering;
 
     #[test]
     fn same_peer_rebuild_keeps_constructor_entropy_and_observes_current_clock() {

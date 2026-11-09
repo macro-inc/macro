@@ -11,6 +11,10 @@ pub enum MarkdownFlavor {
 /// A portable export failed.
 #[derive(Debug, thiserror::Error)]
 pub enum QueryError {
+    /// Application transformer or export failure.
+    #[cfg(feature = "application")]
+    #[error(transparent)]
+    Application(#[from] macro_document_model::Error),
     /// Native HTML export failure.
     #[error(transparent)]
     Html(#[from] lexical_html::Error),

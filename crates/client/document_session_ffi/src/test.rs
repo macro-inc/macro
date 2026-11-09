@@ -36,6 +36,7 @@ fn literal_native_editor_uses_structured_diff_and_one_dom_first_call_without_io(
             peer_range: PeerRange::User,
             os: ViewOs::Ios,
             headless: false,
+            application: None,
             observed: vec![],
         },
         None,
@@ -166,7 +167,7 @@ fn literal_native_editor_uses_structured_diff_and_one_dom_first_call_without_io(
         assert_eq!(session.text_content().unwrap(), expected);
     }
     // Reattaching a native surface must keep the live node identities and text.
-    let FfiQueryReply::ViewDiff { diff } = session.query(FfiQuery::ViewDiff).unwrap() else {
+    let FfiQueryReply::ViewDiff { diff, .. } = session.query(FfiQuery::ViewDiff).unwrap() else {
         panic!("cold repaint")
     };
     assert!(diff.full_reconcile);
@@ -288,6 +289,7 @@ fn native_generic_storage_completion_gates_stop_and_batches_are_atomic() {
             peer_range: PeerRange::User,
             os: ViewOs::Android,
             headless: true,
+            application: None,
             observed: vec![ContainerPath {
                 root: "fixture".into(),
                 steps: vec![],
@@ -551,3 +553,5 @@ fn native_selection_context_and_ordered_maps_cross_the_typed_boundary() {
         vec!["a", "z"]
     );
 }
+
+mod application;

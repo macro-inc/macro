@@ -4,6 +4,7 @@ use doc_sync_core::*;
 use document_session::*;
 use lexical_model::*;
 use std::collections::{BTreeMap, HashMap};
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 mod model_types;
 mod query;

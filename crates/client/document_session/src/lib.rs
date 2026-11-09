@@ -29,3 +29,8 @@ pub use observation::UndoObservation;
 
 mod query;
 pub use query::*;
+
+#[cfg(feature = "application")]
+mod application;
+#[cfg(feature = "application")]
+pub use application::*;

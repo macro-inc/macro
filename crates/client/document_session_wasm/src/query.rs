@@ -20,35 +20,19 @@ pub(crate) fn markdown_for_session(
     if matches!(export_flavor(session), ExportFlavor::Upstream) {
         return markdown(session.surface().state(), flavor, selected);
     }
-    let list = match flavor {
-        0 => "internal",
-        1 => "external",
+    let external = match flavor {
+        0 => false,
+        1 => true,
         _ => return Err(BoundaryError::Invalid("markdown flavor")),
     };
-    let callbacks = macro_document_model::transformers::transformers(
-        list,
-        &macro_document_model::transformers::MacroMarkdownOptions {
-            app_hostname: session.hostname.as_deref().map(Into::into),
-        },
-    )?;
-    let state = session.surface().state();
-    let options = lexical_markdown::MarkdownOptions {
-        list_indent: 2,
-        ..Default::default()
-    };
-    if selected {
-        Ok(lexical_markdown::convert_selection_to_markdown_string(
-            state,
-            &callbacks,
-            state.selection(),
-            &options,
-        )?)
-    } else {
-        Ok(lexical_markdown::convert_to_markdown_string(
-            state, &callbacks, None, &options,
-        )?)
-    }
+    Ok(document_session::export_application_markdown(
+        session.surface().state(),
+        external,
+        selected,
+        session.hostname.as_deref(),
+    )?)
 }
+
 pub(crate) fn saved_state(session: &crate::EditorSession) -> Result<String, BoundaryError> {
     let state = session.surface().state();
     if matches!(export_flavor(session), ExportFlavor::Macro) {
@@ -89,12 +73,11 @@ fn html_for_selection(
     flavor: ExportFlavor,
 ) -> Result<String, BoundaryError> {
     if matches!(flavor, ExportFlavor::Macro) {
-        return Ok(lexical_html::HtmlExporter::new(
-            macro_document_model::html::macro_export_registry(),
-            lexical_html::EditorTheme::default(),
-        )
-        .generate_html_from_nodes(state, selection)?);
+        return Ok(document_session::export_application_html_for_selection(
+            state, selection,
+        )?);
     }
+
     Ok(document_session::export_html_for_selection(
         state, selection,
     )?)

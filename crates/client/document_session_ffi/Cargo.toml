@@ -12,7 +12,8 @@ bindgen = ["uniffi/cli"]
 conformance = ["dep:lexical_conformance"]
 
 [dependencies]
-document_session.workspace = true
+document_session = { workspace = true, features = ["application"] }
+macro_document_model = { workspace = true, features = ["html"] }
 doc_sync_core.workspace = true
 lexical_model.workspace = true
 lexical_loro.workspace = true
