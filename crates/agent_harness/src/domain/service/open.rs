@@ -110,7 +110,7 @@ where
             .inner
             .sessions
             .create_session(CreateAgentSessionParams {
-                metering: Default::default(),
+                billing: Default::default(),
                 purpose: agent_session::domain::model::SessionPurpose::Standalone,
                 repo_branch: None,
                 id: request.id.unwrap_or_else(AgentSessionId::new),
@@ -488,7 +488,7 @@ where
         let session = self
             .sessions
             .create_session(CreateAgentSessionParams {
-                metering: Default::default(),
+                billing: Default::default(),
                 purpose: if announcement.reply_placement == ReplyPlacement::Timeline {
                     agent_session::domain::model::SessionPurpose::AgentDm
                 } else {

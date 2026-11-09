@@ -183,9 +183,9 @@ where
                 && matches!(mcp_servers, AgentMcpServers::OwnerConnections)
                 && request.repo_url.is_none()
                 && request.source == SessionSource::User
-                // A warm row is metered as an agent session; a session metered
-                // otherwise opens its own row.
-                && request.metering.is_agent_session();
+                // A warm row is billable; a non-billable session opens its own
+                // row.
+                && request.billing.is_billable();
             let claim = match &self.warm_lifecycle {
                 Some(lifecycle) if eligible => Some(
                     lifecycle
@@ -301,7 +301,7 @@ where
                 mcp_servers,
                 egress_token_hash: Some(egress.session_token_hash),
                 origin: request.origin,
-                metering: request.metering,
+                billing: request.billing,
             })
             .instrument(tracing::info_span!("agent.init.persist", agent.session.id = %session_id))
             .await?;
@@ -460,7 +460,7 @@ where
             reservations.insert(id, (owner.clone(), Instant::now()));
         }
         let request = OpenManagedSession {
-            metering: Default::default(),
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(id),
             owner,

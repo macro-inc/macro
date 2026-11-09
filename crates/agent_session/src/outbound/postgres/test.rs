@@ -97,7 +97,7 @@ pub(super) fn new_session(
     originating_message_id: Option<Uuid>,
 ) -> CreateAgentSessionParams {
     CreateAgentSessionParams {
-        metering: Default::default(),
+        billing: Default::default(),
         origin: trigger_context::TriggerOrigin::Unknown,
         purpose: crate::domain::model::SessionPurpose::Standalone,
         repo_branch: None,

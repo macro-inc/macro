@@ -18,7 +18,7 @@ const FEATURES: [(AiFeature, bool); 18] = [
     (AiFeature::ImageGeneration, true),
     (AiFeature::EmailFocus, false),
     (AiFeature::WebSearch, true),
-    (AiFeature::RoutineSuggestions, false),
+    (AiFeature::NonBillableAgentSession, false),
 ];
 
 #[test]

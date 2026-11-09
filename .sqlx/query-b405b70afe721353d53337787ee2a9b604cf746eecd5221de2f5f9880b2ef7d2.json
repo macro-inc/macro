@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT metering FROM agent_session WHERE id = $1",
+  "query": "SELECT billing FROM agent_session WHERE id = $1",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "metering",
+        "name": "billing",
         "type_info": "Text"
       }
     ],
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "6ef0db2948b759d08970c0d9e27dbf53655b01b4e9a284057b1493a18fb3ea6b"
+  "hash": "b405b70afe721353d53337787ee2a9b604cf746eecd5221de2f5f9880b2ef7d2"
 }

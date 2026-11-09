@@ -450,7 +450,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> RoutineDrafts<Code, Sessions>
     ) -> Result<Ending, RoutineSessionError> {
         self.sessions
             .prepare(PrepareRoutineSession {
-                metering: Default::default(),
+                billing: Default::default(),
                 selection: ValidateRoutineSession {
                     owner: action.owner.clone(),
                     bot_id: action.bot_id,
