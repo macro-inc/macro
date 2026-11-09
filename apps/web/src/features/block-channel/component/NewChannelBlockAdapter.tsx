@@ -63,6 +63,7 @@ import {
   PendingDirectMessage,
   PendingDirectMessageTitle,
 } from '@channel/views/pending-direct-message';
+import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
@@ -75,7 +76,6 @@ import {
   useCanAutofocusSplitContent,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
-import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
