@@ -31,7 +31,13 @@ vi.mock('../CallOverlay', () => ({
     </button>
   ),
 }));
-vi.mock('@queries/call/call', () => ({}));
+vi.mock('@queries/call/call', () => ({
+  useLiveCallRecordQuery: () => ({ isSuccess: false, isError: false }),
+}));
+vi.mock('@core/context/channels', () => ({
+  useChannel: () => () => undefined,
+}));
+vi.mock('@channel/Call/discussion/CallDiscussionContent', () => ({}));
 vi.mock('@core/component/UserGroup', () => ({}));
 vi.mock('@core/user', () => ({}));
 

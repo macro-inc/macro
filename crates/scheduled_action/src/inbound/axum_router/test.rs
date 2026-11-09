@@ -406,7 +406,11 @@ async fn cron_create_update_return_compatibility_fields() {
     let url = format!("/scheduled-actions/{}", created["id"].as_str().unwrap());
     let (status, updated) = request(&app, "PUT", &url, "owner", cron_action()).await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(updated["configuration_revision"], 2);
+    // The same configuration again replaces nothing.
+    assert_eq!(
+        updated["configuration_revision"],
+        created["configuration_revision"]
+    );
     assert_eq!(updated["created_at"], created["created_at"]);
 }
 
@@ -552,6 +556,7 @@ async fn foreign_owner_can_read_but_not_manage_and_list_is_empty() {
         ("DELETE", url.clone(), Value::Null),
         ("POST", format!("{url}/execute"), Value::Null),
         ("GET", format!("{url}/history"), Value::Null),
+        ("GET", format!("{url}/code-upgrades"), Value::Null),
     ] {
         assert_eq!(
             request(&app, method, &path, "other", body).await.0,
@@ -1034,4 +1039,78 @@ async fn list_as_grantee_excludes_another_owners_routine() {
     )
     .await;
     assert_eq!(list, json!([]));
+}
+
+#[tokio::test]
+async fn code_steps_need_a_checker_and_the_owner_reads_their_upgrades() {
+    let app = router(true);
+    let mut routine = serde_json::to_value(configuration(true)).unwrap();
+    routine["task"] = json!({ "steps": [{
+        "type": "code",
+        "title": "Label invoices",
+        "source": "export async function main({ macro }: StepContext) { return 1; }",
+    }] });
+    let (status, body) = request(&app, "POST", "/scheduled-actions", "owner", routine).await;
+    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
+    assert!(
+        body.as_str()
+            .unwrap()
+            .contains("no code executor is configured")
+    );
+
+    let (_, created) = request(
+        &app,
+        "POST",
+        "/scheduled-actions",
+        "owner",
+        serde_json::to_value(configuration(true)).unwrap(),
+    )
+    .await;
+    let url = format!(
+        "/scheduled-actions/{}/code-upgrades",
+        created["id"].as_str().unwrap()
+    );
+    assert_eq!(
+        request(&app, "GET", &url, "owner", Value::Null).await,
+        (StatusCode::OK, json!([]))
+    );
+}
+
+#[tokio::test]
+async fn the_catalog_is_served_in_the_zone_asked_for() {
+    let app = router(false);
+    let (status, catalog) = request(
+        &app,
+        "GET",
+        "/scheduled-actions/catalog?timezone=Asia/Tokyo",
+        "owner",
+        Value::Null,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let brief = catalog
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["key"] == "brief")
+        .unwrap();
+    assert_eq!(brief["trigger"]["timezone"], "Asia/Tokyo");
+    // No code executor here, so every routine starts as Ask AI.
+    assert!(
+        catalog
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|entry| entry["code"].is_null())
+    );
+
+    let (status, _) = request(
+        &app,
+        "GET",
+        "/scheduled-actions/catalog?timezone=Mars/Olympus",
+        "owner",
+        Value::Null,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 }

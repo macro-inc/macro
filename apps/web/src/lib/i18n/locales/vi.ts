@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Dự án',
     newProject: 'Dự án mới',
     contentAlreadyOpen: 'Nội dung đã được mở',
-    unableToOpenConversation: 'Không thể mở cuộc trò chuyện. Vui lòng thử lại.',
     mobileSearchPlaceholder: 'Tìm kiếm…',
     closeSearch: 'Đóng tìm kiếm',
     searchFullTextFor: 'Tìm toàn văn “{{query}}”',

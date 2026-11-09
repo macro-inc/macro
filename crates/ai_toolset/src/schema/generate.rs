@@ -10,7 +10,9 @@ mod test;
 
 use crate::schema::error::ValidationError;
 use crate::schema::frontend_typegen::FrontendSchemasBuilder;
-use crate::schema::transform::{NormaliseRefSiblings, OneOfToAnyOf, StripUnsupported};
+use crate::schema::transform::{
+    FlattenNestedAnyOf, NormaliseRefSiblings, OneOfToAnyOf, StripUnsupported,
+};
 use crate::schema::validate::validate_tool_schema;
 use schemars::Schema;
 use schemars::generate::SchemaSettings;
@@ -35,12 +37,17 @@ pub struct ValidatedSchema {
 /// 1. subschemas inlined — providers get one self-contained schema
 /// 2. [`OneOfToAnyOf`] — `oneOf` is unsupported by both providers; nested
 ///    `anyOf` is supported by both
-/// 3. [`StripUnsupported`] — numeric/string/array constraints and
+/// 3. [`FlattenNestedAnyOf`] — an `anyOf` directly inside an `anyOf` (an
+///    inlined optional union) is lifted into its parent, keeping its
+///    description, so the schema nests less deeply for Gemini
+/// 4. [`StripUnsupported`] — numeric/string/array constraints and
 ///    non-whitelisted `format`s are removed and recorded in `description`
 ///
 /// Validation then rejects missing title/description, a non-object root,
-/// root-level `oneOf`/`anyOf`/`allOf`, residual `oneOf`, and a `$ref` loop
-/// made only of required fields (Gemini rejects it). Never panics —
+/// root-level `oneOf`/`anyOf`/`allOf`, residual `oneOf`, a `$ref` loop
+/// made only of required fields, and nesting deeper than
+/// [`GEMINI_MAX_SCHEMA_DEPTH`](crate::schema::GEMINI_MAX_SCHEMA_DEPTH)
+/// (Gemini rejects both). Never panics —
 /// failures are returned as [`ValidationError`]s.
 pub fn generate_validated_input_schema<T: schemars::JsonSchema>()
 -> Result<ValidatedSchema, ValidationError> {
@@ -50,6 +57,7 @@ pub fn generate_validated_input_schema<T: schemars::JsonSchema>()
             s.inline_subschemas = true;
         })
         .with_transform(RecursiveTransform(OneOfToAnyOf))
+        .with_transform(RecursiveTransform(FlattenNestedAnyOf))
         .with_transform(RecursiveTransform(StripUnsupported))
         .into_generator()
         .into_root_schema_for::<T>();

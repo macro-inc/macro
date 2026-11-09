@@ -29,4 +29,6 @@ export const AiFeature = {
   dictation: 'dictation',
   image_generation: 'image_generation',
   email_focus: 'email_focus',
+  web_search: 'web_search',
+  non_billable_agent_session: 'non_billable_agent_session',
 } as const;

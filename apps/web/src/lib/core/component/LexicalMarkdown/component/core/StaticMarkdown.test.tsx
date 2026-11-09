@@ -324,4 +324,18 @@ describe('static markdown ordered lists', () => {
     expect(list?.style.counterReset).toBe('static-md-counter-1 5');
     rendered.unmount();
   });
+
+  it('previews an account manager card as text in a single line', () => {
+    const rendered = render(() => (
+      <StaticMarkdownContext>
+        <StaticMarkdown
+          markdown='<m-account-manager-request>{"id":"019a4f2e-7c1b-7d3a-9e2f-3b1c8d5a6f70"}</m-account-manager-request>'
+          singleLine
+        />
+      </StaticMarkdownContext>
+    ));
+
+    expect(rendered.container.textContent).toBe('Account manager request');
+    expect(rendered.queryByRole('button')).toBeNull();
+  });
 });

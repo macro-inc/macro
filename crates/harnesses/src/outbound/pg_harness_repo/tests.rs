@@ -43,13 +43,11 @@ async fn insert_user(pool: &PgPool, user_id: &str) {
 
 fn new_pairing(code: &str, secret: &str) -> NewPairing {
     NewPairing {
-        requested_allow_permission_bypass: None,
         id: Uuid::new_v4(),
         code: code.to_owned(),
         device_secret_hash: harness_token::hash_token(secret),
         requested_name: "erics-macbook".to_owned(),
         host: Some("eric@macbook / darwin".to_owned()),
-        requested_scope: Some(RequestedHarnessScope::Team),
         expires_at: Utc::now() + Duration::minutes(15),
     }
 }
@@ -77,10 +75,6 @@ async fn pairing_walks_create_approve_claim_exactly_once(pool: PgPool) {
     let row = repo.get_pairing("KX7M-4QHD").await.unwrap().unwrap();
     assert_eq!(row.status, PairingStatus::Pending);
     assert_eq!(row.details.requested_name, "erics-macbook");
-    assert_eq!(
-        row.details.requested_scope,
-        Some(RequestedHarnessScope::Team)
-    );
     let harness = repo
         .approve_pairing("KX7M-4QHD", new_harness())
         .await
@@ -287,7 +281,7 @@ async fn deletion_soft_deletes_and_revokes_tokens(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn connected_state_follows_the_presence_timestamps(pool: PgPool) {
+async fn connected_state_falls_back_to_timestamps_without_connection_rows(pool: PgPool) {
     let repo = PgHarnessRepo::new(pool.clone());
     let harness_id = Uuid::new_v4();
     sqlx::query!(
@@ -312,6 +306,62 @@ async fn connected_state_follows_the_presence_timestamps(pool: PgPool) {
         .unwrap();
     let harness = repo.get_harness(harness_id).await.unwrap().unwrap();
     assert!(!harness.connected);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn connected_state_follows_connection_leases_over_timestamps(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    let harness_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO harnesses (id, name, owner_user_id, created_by, last_connected_at, last_disconnected_at)
+        VALUES ($1, 'mine', $2, $2, now(), now() + interval '1 hour')
+        "#,
+        harness_id,
+        OWNER_ID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let connection_id = Uuid::new_v4();
+    sqlx::query!(
+        r#"
+        INSERT INTO harness_runtime_connection (harness_id, id, replica_id, lease_expires_at)
+        VALUES ($1, $2, $3, now() + interval '30 seconds')
+        "#,
+        harness_id,
+        connection_id,
+        Uuid::new_v4(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let harness_id = HarnessId::new_from_uuid(harness_id);
+
+    // A live lease wins over a later disconnect stamp.
+    let harness = repo.get_harness(harness_id).await.unwrap().unwrap();
+    assert!(harness.connected);
+
+    sqlx::query!(
+        r#"
+        UPDATE harnesses SET last_disconnected_at = NULL;
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"UPDATE harness_runtime_connection SET lease_expires_at = now() - interval '1 second'"#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // A crashed replica writes no disconnect; the lapsed lease is what ends it.
+    let harness = repo.get_harness(harness_id).await.unwrap().unwrap();
+    assert!(!harness.connected);
+    let listed = repo.list_visible_harnesses(caller()).await.unwrap();
+    assert!(!listed.iter().any(|harness| harness.connected));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -541,17 +591,55 @@ async fn permission_bypass_survives_registration_and_listing(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn pairing_permission_ceiling_roundtrips(pool: PgPool) {
-    let repo = PgHarnessRepo::new(pool);
-    for (code, allowed) in [
-        ("AAAA-AAAA", None),
-        ("BBBB-BBBB", Some(false)),
-        ("CCCC-CCCC", Some(true)),
-    ] {
-        let mut pairing = new_pairing(code, "device-secret");
-        pairing.requested_allow_permission_bypass = allowed;
-        assert!(repo.insert_pairing(pairing).await.unwrap());
-        let stored = repo.get_pairing(code).await.unwrap().unwrap();
-        assert_eq!(stored.details.requested_allow_permission_bypass, allowed);
-    }
+async fn update_harness_changes_only_the_named_columns(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool.clone());
+    insert_user(&pool, OWNER_ID).await;
+    repo.insert_pairing(new_pairing("AAAA-BBBB", "secret"))
+        .await
+        .unwrap();
+    let harness = repo
+        .approve_pairing("AAAA-BBBB", new_harness())
+        .await
+        .unwrap()
+        .unwrap();
+
+    let bypassed = repo
+        .update_harness(
+            harness.id,
+            HarnessChanges {
+                name: None,
+                allow_permission_bypass: Some(true),
+            },
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(bypassed.allow_permission_bypass);
+    assert_eq!(bypassed.name, harness.name);
+
+    let renamed = repo
+        .update_harness(
+            harness.id,
+            HarnessChanges {
+                name: Some("studio".to_owned()),
+                allow_permission_bypass: None,
+            },
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(renamed.name, "studio");
+    assert!(renamed.allow_permission_bypass);
+    assert_eq!(
+        repo.get_harness(harness.id).await.unwrap().unwrap().name,
+        "studio"
+    );
+
+    assert!(repo.delete_harness(harness.id).await.unwrap());
+    assert!(
+        repo.update_harness(harness.id, HarnessChanges::default())
+            .await
+            .unwrap()
+            .is_none()
+    );
 }

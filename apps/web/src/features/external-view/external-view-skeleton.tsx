@@ -6,7 +6,10 @@ export function ExternalViewSkeleton() {
   return (
     <ViewSkeleton.Root
       asidePreferenceKey="external"
-      aside={isTouchDevice() ? false : undefined}
+      // The loaded view keeps the shell's default sizing; match it so a saved
+      // sidebar width does not shift when the view replaces the skeleton.
+      aside={isTouchDevice() ? false : {}}
+      main={{}}
     >
       <ViewSkeleton.Sidebar title="External" />
       <ViewSkeleton.Main title="WhatsApp" />

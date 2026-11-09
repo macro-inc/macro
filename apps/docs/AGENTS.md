@@ -22,7 +22,7 @@ expose.
 ## Terminology
 
 - Call a form’s conditional answer check a **gate** in UI copy, AI tools, and docs.
-- A **block** is the core unit in Macro (doc, email, channel, task, call, canvas, etc.). Use "block", not "module" or "app"
+- **Block** is a proper noun for a core unit in Macro (a doc, email, channel, task, call, canvas, and so on). Capitalize it every time: "the Agents Block", "Block types". Use "Block", not "module" or "app". Leave ordinary English alone: code block, blockquote, and **Block Sender**
 - Use **@mention** (not "at-mention" or "tag") for references created with `@`
 - Use **channel** (not "chat room"), **agent** (not "bot"), and **workspace** for a user's whole Macro environment
 - Use **personal memory** and **team memory** for the two memory levels
@@ -36,8 +36,9 @@ expose.
 - Use sentence case for headings
 - Bold for UI elements: Click **Settings**
 - Code formatting for file names, commands, paths, and code references
-- Keyboard shortcuts use `<kbd>` tags, e.g. press <kbd>c</kbd> + <kbd>t</kbd>
-- Screenshots live in `images/` and need descriptive alt text — never the filename
+- Keyboard shortcuts use `<kbd>` tags, e.g. press <kbd>g</kbd> + <kbd>h</kbd>
+- Block tutorial videos embed from `https://macro.com/video/tutorials/<id>.mp4` (with `<id>-poster.jpg`), the copy the website publishes from `apps/marketing/public/video/tutorials/`; don't commit them here
+- Product UI in the guides uses the same light cards as Unified Tagging (`.search-preview` and `.tag-mock` in `style.css`). Diagrams and brand graphics stay in `images/` and need descriptive alt text — never the filename
 
 ## Content boundaries
 

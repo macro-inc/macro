@@ -5,8 +5,12 @@ import type {
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { PropertiedEntity } from '../entity';
-import { entitySearch } from '../search';
+import { entitySearch } from '../search/options';
 import { EntityAccess } from '../sharing/access';
+import {
+  type SharePermissionOptions,
+  sharePermissionBody,
+} from '../sharing/permissions';
 
 type ProjectDetail = GetProjectHandlerResponses[200]['data']['projectMetadata'];
 
@@ -20,6 +24,20 @@ export class Project extends PropertiedEntity<ProjectDetail> {
     return unwrap(
       await this.client.storage.getProjectPermissionsV2({
         path: { id: this.id },
+      }),
+    );
+  }
+
+  /**
+   * Change who can open the project and its contents: the link share and its
+   * access level, the owner's team, and channel grants. Omitted fields are
+   * left as they are.
+   */
+  async updateSharePermissions(options: SharePermissionOptions): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.editProjectV2({
+        path: { id: this.id },
+        body: { sharePermission: sharePermissionBody(options) },
       }),
     );
   }
@@ -93,7 +111,11 @@ export class Project extends PropertiedEntity<ProjectDetail> {
   /** When the project was created (RFC 3339 timestamp). */
   readonly createdAt = this.field('createdAt');
 
-  /** The items (documents, chats, subprojects) directly inside this project. */
+  /**
+   * The items (documents, chats, subprojects) directly inside this project.
+   * Agent sessions are never project items; link one from a document in the
+   * project instead (see `ProjectNamespace`).
+   */
   async items(): Promise<ProjectItem[]> {
     const { data } = unwrap(
       await this.client.storage.getProjectContentHandler({
