@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -38,16 +38,48 @@ vi.mock('./TeamInviteLinkSection', () => ({
   ),
 }));
 
+vi.mock('./components/invite-agent-dialog', () => ({
+  InviteAgentDialog: (props: {
+    teamId: string;
+    open: boolean;
+    onClose(): void;
+  }) => (
+    <Show when={props.open}>
+      <div role="dialog" aria-label={`Invite agent to ${props.teamId}`}>
+        <button type="button" onClick={() => props.onClose()}>
+          Cancel agent invite
+        </button>
+      </div>
+    </Show>
+  ),
+}));
+
 import { InviteToTeamDialog } from './Team';
 
 const [flag, setFlag] = createSignal({ enabled: true, loading: false });
+let animationStyle: HTMLStyleElement;
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
 beforeEach(() => {
+  // The scrolling dialog body measures itself.
+  vi.stubGlobal('ResizeObserver', ResizeObserverStub);
   setFlag({ enabled: true, loading: false });
   mocks.flag = flag;
+  // jsdom reports an empty animation name instead of "none", which keeps
+  // Presence waiting forever for an animationend, so a closing dialog never
+  // reaches its close-focus handoff.
+  animationStyle = document.createElement('style');
+  animationStyle.textContent = '* { animation-name: none !important; }';
+  document.head.append(animationStyle);
 });
 
 afterEach(() => {
+  animationStyle.remove();
   cleanup();
+  vi.unstubAllGlobals();
   mocks.mutate.mockReset();
 });
 
@@ -148,5 +180,66 @@ describe('InviteToTeamDialog', () => {
     expect(mocks.mutate.mock.calls[0]?.[0].request.harness_ids).toEqual([
       'mine',
     ]);
+  });
+
+  function renderForAgents(canInviteAgents: boolean, onClose = () => {}) {
+    render(() => (
+      <InviteToTeamDialog
+        teamId="team-1"
+        canManageLink={canInviteAgents}
+        canInviteAgents={canInviteAgents}
+        open
+        onClose={onClose}
+      />
+    ));
+  }
+
+  it.each([
+    { enabled: false, loading: true },
+    { enabled: false, loading: false },
+  ])('hides the agent entry while team agents are unavailable: %s', (state) => {
+    setFlag(state);
+    renderForAgents(true);
+    expect(screen.queryByRole('button', { name: 'Invite agent' })).toBeNull();
+  });
+
+  it('hides the agent entry from members who are not admins', () => {
+    renderForAgents(false);
+    expect(screen.queryByRole('button', { name: 'Invite agent' })).toBeNull();
+  });
+
+  it('swaps to the agent invite dialog and ends the flow when it closes', async () => {
+    const onClose = vi.fn();
+    renderForAgents(true, onClose);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Invite agent' }));
+
+    expect(
+      await screen.findByRole('dialog', { name: 'Invite agent to team-1' })
+    ).toBeTruthy();
+    expect(screen.queryByText('Invite by email')).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Cancel agent invite' })
+    );
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(
+      screen.queryByRole('dialog', { name: 'Invite agent to team-1' })
+    ).toBeNull();
+  });
+
+  it('closes the agent invite dialog when the rollout switches off', async () => {
+    const onClose = vi.fn();
+    renderForAgents(true, onClose);
+    fireEvent.click(screen.getByRole('button', { name: 'Invite agent' }));
+    await screen.findByRole('dialog', { name: 'Invite agent to team-1' });
+
+    setFlag({ enabled: false, loading: false });
+
+    expect(
+      screen.queryByRole('dialog', { name: 'Invite agent to team-1' })
+    ).toBeNull();
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

@@ -78,6 +78,7 @@ function InviteToTeamAction(props: { teamId: string }) {
       <InviteToTeamDialog
         teamId={props.teamId}
         canManageLink={isTeamAdminOrOwner(role())}
+        canInviteAgents={isTeamAdminOrOwner(role())}
         open={open()}
         onClose={() => setOpen(false)}
       />
