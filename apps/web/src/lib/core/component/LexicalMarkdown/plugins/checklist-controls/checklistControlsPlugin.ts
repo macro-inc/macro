@@ -4,9 +4,9 @@
  * thin-line group headers, and a progress readout. The view settings persist
  * on the list node itself (see TaskListNode) so they travel with the document.
  *
- * The TaskListNode carries two non-lexical mount elements inside its `<ul>`;
- * this plugin tracks them (and the collected metadata) in stores, and the
- * TaskListControlsRenderer portals the actual UI into the mounts from inside
+ * The TaskListNode carries one non-lexical mount element inside its `<ul>`;
+ * this plugin tracks it (and the collected metadata) in stores, and the
+ * TaskListControlsRenderer portals the actual UI into the mount from inside
  * the app tree, keeping query and user context available.
  */
 import { ListNode } from '@lexical/list';
