@@ -14,6 +14,14 @@ fn formatted_numbers_normalize_to_one_form() {
 }
 
 #[test]
+fn a_trunk_zero_in_parentheses_is_dropped() {
+    assert_eq!(
+        PhoneNumber::parse("+44 (0)20 123").map(|n| n.as_str().to_owned()),
+        Some("+4420123".to_owned())
+    );
+}
+
+#[test]
 fn numbers_without_a_country_code_are_rejected() {
     for text in [
         "(555) 010",
