@@ -65,3 +65,24 @@ for (const theme of ['Macro Light', 'Paper', 'Macro Dark']) {
       });
   });
 }
+
+for (const theme of ['light', 'dark']) {
+  test(`waveform precedes the flush-right timestamp (${theme})`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1800, height: 900 });
+    await page.goto(`${fixture}?theme=${theme}`);
+    await expect(page.locator('video')).toHaveCSS('opacity', '1');
+    const row = page.locator('[data-call-transcript-row]').first();
+    await row.getByRole('button').click();
+    const waveform = row.locator('[data-macro-icon="waveform"]');
+    await expect(waveform).toBeVisible();
+    const time = await row.locator('.tabular-nums').boundingBox();
+    const wave = await waveform.boundingBox();
+    expect(wave!.x + wave!.width + 8).toBe(time!.x);
+    if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
+      await page.screenshot({
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d67-${theme}.png`,
+      });
+  });
+}

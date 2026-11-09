@@ -34,7 +34,7 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - Use the standard SidePanel drawer for phone details, with the same content as desktop.
 - Keep one mounted transcript and video across the responsive threshold; retain the reading-tab selection, playback position and transcript follow state.
 - Animate only the active transcript waveform during native playback; keep it still on pause and under reduced motion.
-- Keep transcript names truncated with full-name tooltips beside a fixed 96px right timing slot.
+- Keep transcript names truncated with full-name tooltips; put the active waveform before the flush-right timestamp without reserving waveform space on inactive rows.
 - Align identity to the centered group's left edge above both columns; let the left column and transcript scroll independently, with the card aligned to the video and filling the remaining pane height.
 - Use Layer offset={1} and bg-surface for the wide transcript card, rounded like the player with a light-only inset edge-frame ring and shadow-md; keep Details floating over it without resetting transcript state.
 

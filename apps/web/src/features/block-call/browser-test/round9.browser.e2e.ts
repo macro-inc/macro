@@ -195,7 +195,8 @@ for (const theme of ['light', 'dark']) {
       );
     expect(new Set(slots.map((slot) => slot.right)).size).toBe(1);
     expect(new Set(slots.map((slot) => slot.timeRight)).size).toBe(1);
-    expect(slots.every((slot) => slot.width === 96)).toBe(true);
+    expect(slots[0].width).toBe(slots[1].width + 20);
+    expect(slots.every((slot) => slot.right === slot.timeRight)).toBe(true);
     if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
       await page.screenshot({
         path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d58-${theme}.png`,

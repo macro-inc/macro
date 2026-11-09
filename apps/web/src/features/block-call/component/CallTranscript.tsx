@@ -355,23 +355,21 @@ export function CallTranscript(props: {
                                 {name()}
                               </Show>
                             </span>
-                            <span class="flex w-24 shrink-0 items-center justify-end gap-2">
+                            <span class="flex shrink-0 items-center justify-end gap-2">
+                              <Show when={active()}>
+                                <WaveformIcon
+                                  class="size-3 shrink-0 text-accent"
+                                  classList={{
+                                    'recording-speaking-waveform':
+                                      props.playing,
+                                  }}
+                                />
+                              </Show>
                               <Show when={item.seconds !== null}>
                                 <span class="tabular-nums text-ink-muted">
                                   {formatVideoTimestamp(item.seconds ?? 0)}
                                 </span>
                               </Show>
-                              <span class="grid size-3 shrink-0 place-items-center">
-                                <Show when={active()}>
-                                  <WaveformIcon
-                                    class="size-3 shrink-0 text-accent"
-                                    classList={{
-                                      'recording-speaking-waveform':
-                                        props.playing,
-                                    }}
-                                  />
-                                </Show>
-                              </span>
                             </span>
                           </span>
                           <span class="whitespace-pre-wrap wrap-break-word text-sm leading-5 text-ink-muted">

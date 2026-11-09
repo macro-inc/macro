@@ -64,8 +64,7 @@ a light-theme inset edge and shadow (dark stays unchanged), and an inset Sync su
 the card without changing its scroll position or follow state. There is no separate
 Transcript header button. The card fades and slides into wide layouts while the
 player settles over 240ms; reduced motion disables both entry animations.
-Transcript rows show speaker identity with recording time and waveform in a fixed
-right-aligned slot; long speaker names truncate and reveal the full name in a
+Transcript rows show a flush-right recording time, with the active waveform to its left; long speaker names truncate and reveal the full name in a
 tooltip on hover or row focus. Click or press Enter on a row to seek.
 The active line's waveform animates only while playback runs and stays still
 when paused or reduced motion is enabled. Playback follows the transcript until the user
