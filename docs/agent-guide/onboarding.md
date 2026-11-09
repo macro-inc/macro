@@ -45,23 +45,26 @@ As soon as an inbox is connected during onboarding, AI starts suggesting
 routines (`POST /scheduled-actions/suggestions/generate?timezone=<zone>`,
 once per person).
 
-- AI's suggestions show as they arrive (the list is polled every 2 s while
-  its status is `generating`), under **Studying your workspace…** and then
-  **Finding more routines for you…**. After about 30 s, or once AI is done,
-  the list settles on whatever is there, filled with Macro's templates; with
-  none from AI, templates only. With no inbox, templates show at once.
+- The server fills every area to three with Macro's templates (drafted
+  routines, then catalog picks, then templates). While its status is
+  `generating` (polled every 2 s), only AI's suggestions show, as they land,
+  under **Studying your workspace…** and then **Finding more routines for
+  you…**. After about 30 s, areas AI left empty fill with their templates
+  and stay filled. Once AI is done (`ready` or `failed`), every area tops up
+  to the server's list. With no inbox (`none`), templates show at once.
 - Rows are grouped by area: area icon, name, what it does, when it runs, and
   a byline, **For you · <reason>** for AI's or **Template from Macro**, with a
   switch. Opening a row lets the person rename it and choose **Show each run
   in Home** before it is created.
-- Switched on to start: only catalog picks the scheduler marks on by default,
-  at most two. Routines AI drafted always start off.
+- Switched on to start: only catalog picks the scheduler marks on by default
+  (never one that affects other people), at most two. Routines AI drafted
+  always start off.
 - **Turn on N routines** creates the ones left on, each recorded as saved
   from its suggestion (`suggestion_id`); a tagging routine first provisions
   the personal tag set. One that fails stays with an error and the button
   retries only it. **Continue to workspace** (nothing on) or **Skip** leaves
   without creating any. Back is gone here: the plan is settled.
-- Analytics: `onboarding_v4_routines_shown` when the list settles (time to
+- Analytics: `onboarding_v4_routines_shown` when templates first fill in (time to
   AI's first suggestion, counts, fallback) and `onboarding_v4_routines` on
   leaving. The step's wait is traced as the `onboarding.routines` flow.
 - Backend-free check: `bunx playwright test --config

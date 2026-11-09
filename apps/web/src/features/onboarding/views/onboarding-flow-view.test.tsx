@@ -1,4 +1,7 @@
-import type { RoutineSuggestion } from '@service-scheduled-action/generated/schemas';
+import type {
+  RoutineSuggestion,
+  Surface,
+} from '@service-scheduled-action/generated/schemas';
 import { cleanup, fireEvent, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CheckoutReturn } from '../core/checkout';
@@ -27,6 +30,7 @@ function catalogSuggestion(
     onByDefault?: boolean;
     from?: 'for_you' | 'macro';
     reason?: string;
+    surface?: Surface;
   } = {}
 ): RoutineSuggestion {
   const from = options.from ?? 'for_you';
@@ -36,7 +40,7 @@ function catalogSuggestion(
     key,
     knobs: {},
     from,
-    surfaces: ['email'],
+    surfaces: [options.surface ?? 'email'],
     reason: from === 'for_you' ? (options.reason ?? null) : null,
     keepProbability: from === 'for_you' ? 0.9 : null,
     onByDefault: options.onByDefault ?? false,
@@ -854,64 +858,122 @@ describe('onboarding flow', () => {
     });
   });
 
-  it('shows AI’s suggestions as they arrive, then falls back to Macro’s templates after the wait', async () => {
+  it('streams AI’s suggestions in, fills only surfaces still empty after the wait, and tops up once AI is done', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
-      const template = catalogSuggestion('updates', 'updates', {
+      // The server always fills each surface with Macro's templates.
+      const emailTemplate = catalogSuggestion('updates', 'updates', {
         from: 'macro',
+        surface: 'email',
       });
+      const tasksTemplate = catalogSuggestion('triage', 'triage', {
+        from: 'macro',
+        surface: 'tasks',
+      });
+      const sort = catalogSuggestion('sort', 'inbox', {
+        reason: 'Busy inbox.',
+        surface: 'email',
+      });
+      const stuck = catalogSuggestion('stuck', 'stuck', {
+        reason: 'Tasks pile up.',
+        surface: 'tasks',
+      });
+      const answer =
+        (status: 'generating' | 'ready', ...suggestions: RoutineSuggestion[]) =>
+        (draft: FakeOnboardingWorld) => {
+          draft.routineSuggestions = { status, suggestions };
+        };
       const { fake } = setup({
         resume: 'routines',
         world: {
           routineSuggestionsEnabled: true,
-          routineSuggestions: { status: 'generating', suggestions: [template] },
+          routineSuggestions: {
+            status: 'generating',
+            suggestions: [emailTemplate, tasksTemplate],
+          },
         },
       });
       await heading('Put your busywork on autopilot.');
       // Templates wait while AI is suggesting.
       expect(screen.queryByText('Share updates')).toBeNull();
+      expect(screen.queryByText('Triage new tasks')).toBeNull();
       expect(
         screen.getByText(/Studying your workspace to suggest routines/)
       ).toBeTruthy();
-      fake.update((draft) => {
-        draft.routineSuggestions = {
-          status: 'generating',
-          suggestions: [
-            catalogSuggestion('sort', 'inbox', { reason: 'Busy inbox.' }),
-            template,
-          ],
-        };
-      });
+
+      fake.update(answer('generating', sort, emailTemplate, tasksTemplate));
       await screen.findByText('Sort my inbox');
       expect(screen.getByText('Finding more routines for you…')).toBeTruthy();
-      fake.update((draft) => {
-        draft.routineSuggestions = {
-          status: 'generating',
-          suggestions: [
-            catalogSuggestion('sort', 'inbox', { reason: 'Busy inbox.' }),
-            catalogSuggestion('stuck', 'stuck', { reason: 'Tasks pile up.' }),
-            template,
-          ],
-        };
-      });
-      await screen.findByText('Chase stuck tasks');
       expect(screen.queryByText('Share updates')).toBeNull();
+
+      // The wait runs out: only Tasks, still empty, fills with templates.
       await vi.advanceTimersByTimeAsync(30_000);
-      await screen.findByText('Share updates');
-      expect(screen.queryByText('Finding more routines for you…')).toBeNull();
+      await screen.findByText('Triage new tasks');
+      expect(screen.queryByText('Share updates')).toBeNull();
+      expect(screen.getByText('Finding more routines for you…')).toBeTruthy();
       expect(fake.events()).toContainEqual({
         event: 'onboarding_v4_routines_shown',
         data: expect.objectContaining({
-          shown: 3,
-          for_you: 2,
+          shown: 2,
+          for_you: 1,
           fallback: false,
           waited_out: true,
           status: 'generating',
         }),
       });
+
+      // AI keeps landing; the filled templates stay.
+      fake.update(
+        answer('generating', sort, emailTemplate, stuck, tasksTemplate)
+      );
+      await screen.findByText('Chase stuck tasks');
+      expect(screen.getByText('Triage new tasks')).toBeTruthy();
+      expect(screen.queryByText('Share updates')).toBeNull();
+
+      // AI is done: every surface tops up with its templates.
+      fake.update(answer('ready', sort, emailTemplate, stuck, tasksTemplate));
+      await screen.findByText('Share updates');
+      expect(screen.queryByText('Finding more routines for you…')).toBeNull();
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('tops up with templates as soon as AI finishes, before the wait is over', async () => {
+    const { fake } = setup({
+      resume: 'routines',
+      world: {
+        routineSuggestionsEnabled: true,
+        routineSuggestions: {
+          status: 'generating',
+          suggestions: [
+            catalogSuggestion('updates', 'updates', { from: 'macro' }),
+          ],
+        },
+      },
+    });
+    await heading('Put your busywork on autopilot.');
+    expect(screen.queryByText('Share updates')).toBeNull();
+    fake.update((draft) => {
+      draft.routineSuggestions = {
+        status: 'ready',
+        suggestions: [
+          catalogSuggestion('sort', 'inbox', { reason: 'Busy inbox.' }),
+          catalogSuggestion('updates', 'updates', { from: 'macro' }),
+        ],
+      };
+    });
+    await screen.findByText('Share updates');
+    expect(screen.getByText('Sort my inbox')).toBeTruthy();
+    expect(fake.events()).toContainEqual({
+      event: 'onboarding_v4_routines_shown',
+      data: expect.objectContaining({
+        shown: 2,
+        for_you: 1,
+        waited_out: false,
+        status: 'ready',
+      }),
+    });
   });
 
   it('falls back to Macro’s templates when AI gave none in time', async () => {
@@ -925,6 +987,10 @@ describe('onboarding flow', () => {
             status: 'generating',
             suggestions: [
               catalogSuggestion('updates', 'updates', { from: 'macro' }),
+              catalogSuggestion('triage', 'triage', {
+                from: 'macro',
+                surface: 'tasks',
+              }),
             ],
           },
         },
@@ -933,6 +999,7 @@ describe('onboarding flow', () => {
       expect(screen.queryByText('Share updates')).toBeNull();
       await vi.advanceTimersByTimeAsync(30_000);
       await screen.findByText('Share updates');
+      expect(screen.getByText('Triage new tasks')).toBeTruthy();
       expect(fake.events()).toContainEqual({
         event: 'onboarding_v4_routines_shown',
         data: expect.objectContaining({

@@ -82,28 +82,63 @@ export function initiallyOn(
 }
 
 /** What the last step shows, from the scheduler's answer and the wait. */
-export type SuggestionsView =
-  /**
-   * AI is still suggesting and the wait isn't over: only AI's suggestions so
-   * far show, and more may arrive.
-   */
-  | { kind: 'arriving'; suggestions: RoutineSuggestion[] }
-  /** Final: AI's and Macro's templates, or templates only. */
-  | { kind: 'settled'; suggestions: RoutineSuggestion[]; fallback: boolean };
+export type SuggestionsView = {
+  /** In the server's order: per surface, drafted, catalog picks, templates. */
+  suggestions: RoutineSuggestion[];
+  /** AI is still suggesting: more may land. */
+  arriving: boolean;
+  /** The wait ran out or AI finished: templates fill in. */
+  settled: boolean;
+  /** No suggestion from AI shows, only Macro's templates. */
+  fallback: boolean;
+};
 
+/** The surfaces none of AI's suggestions belong to yet. */
+export function emptySurfaces(
+  suggestions: readonly RoutineSuggestion[]
+): Surface[] {
+  const covered = new Set(
+    suggestions
+      .filter((suggestion) => suggestion.from === 'for_you')
+      .flatMap((suggestion) => suggestion.surfaces)
+  );
+  return SURFACE_GROUPS.map((group) => group.surface).filter(
+    (surface) => !covered.has(surface)
+  );
+}
+
+/**
+ * The server fills every surface to three with Macro's templates. While AI
+ * is suggesting, only its suggestions show, as they land. Once the wait
+ * runs out, `filled` names the surfaces that were still empty then, and
+ * their templates show. Once AI is done (or never ran), the list shows as
+ * the server sends it, every surface topped up.
+ */
 export function suggestionsView(input: {
   answer: { status: GenerationStatus; suggestions: RoutineSuggestion[] };
-  /** The wait for AI is over. */
-  waitedOut: boolean;
+  /** Surfaces still empty when the wait ran out; undefined before then. */
+  filled: readonly Surface[] | undefined;
 }): SuggestionsView {
   const { status, suggestions } = input.answer;
-  const forYou = suggestions.filter(
+  const fallback = !suggestions.some(
     (suggestion) => suggestion.from === 'for_you'
   );
-  if (status === 'generating' && !input.waitedOut) {
-    return { kind: 'arriving', suggestions: forYou };
+  if (status !== 'generating') {
+    return { suggestions, arriving: false, settled: true, fallback };
   }
-  return { kind: 'settled', suggestions, fallback: forYou.length === 0 };
+  const filled = input.filled;
+  const shown = suggestions.filter(
+    (suggestion) =>
+      suggestion.from === 'for_you' ||
+      (filled !== undefined &&
+        suggestion.surfaces.some((surface) => filled.includes(surface)))
+  );
+  return {
+    suggestions: shown,
+    arriving: true,
+    settled: filled !== undefined,
+    fallback,
+  };
 }
 
 /** The order groups show in, and what heads each. */

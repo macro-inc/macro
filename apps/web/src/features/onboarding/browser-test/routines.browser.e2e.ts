@@ -1,7 +1,13 @@
 import { expect, type Page, test } from '@playwright/test';
 import type { RoutineSuggestion } from '@service-scheduled-action/generated/schemas';
 import type { FakeOnboardingWorld } from '../tests/fake-onboarding-context';
-import { expectLanded, fakeEvents, heading, openFixture } from './fixture-page';
+import {
+  expectLanded,
+  fakeEvents,
+  fakeWorld,
+  heading,
+  openFixture,
+} from './fixture-page';
 
 // Screenshots for the change's proof page, when PROOF_DIR is set.
 const PROOF_DIR = process.env.PROOF_DIR;
@@ -45,7 +51,7 @@ async function snap(page: Page, name: string) {
 const stream = (page: Page, patch: Partial<FakeOnboardingWorld>) =>
   page.evaluate((patch) => window.onboardingFixture.update(patch), patch);
 
-test('the last step shows AI’s suggestions as they arrive, then Macro’s templates after the wait', async ({
+test('the last step streams AI’s suggestions in, fills empty surfaces after the wait, and tops up once AI is done', async ({
   page,
 }) => {
   await page.clock.install();
@@ -75,7 +81,19 @@ test('the last step shows AI’s suggestions as they arrive, then Macro’s temp
     page.getByRole('switch', { name: 'Turn on Sort my inbox' })
   ).toBeChecked();
   await expect(page.getByText('Finding more routines for you…')).toBeVisible();
+  await expect(page.getByText('Share updates', { exact: true })).toHaveCount(0);
+  await snap(page, 'routines-2-arriving');
 
+  // The wait runs out before AI is done: only Tasks, still empty, fills.
+  await page.clock.fastForward(30_000);
+  await expect(
+    page.getByText('Triage new tasks', { exact: true })
+  ).toBeVisible();
+  await expect(page.getByText('Share updates', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Finding more routines for you…')).toBeVisible();
+  await snap(page, 'routines-3-filled');
+
+  // AI keeps landing, then finishes: every surface tops up.
   await stream(page, {
     routineSuggestions: {
       status: 'generating',
@@ -85,15 +103,15 @@ test('the last step shows AI’s suggestions as they arrive, then Macro’s temp
   await expect(
     page.getByText('Chase stuck tasks', { exact: true })
   ).toBeVisible();
-  await expect(page.getByText('Share updates', { exact: true })).toHaveCount(0);
-  await snap(page, 'routines-2-arriving');
-
-  // The wait runs out before AI is done: everything there shows.
-  await page.clock.fastForward(30_000);
+  await stream(page, {
+    routineSuggestions: {
+      status: 'ready',
+      suggestions: [SORT, STUCK, ...TEMPLATES],
+    },
+  });
   await expect(page.getByText('Share updates', { exact: true })).toBeVisible();
-  await expect(page.getByText('Template from Macro').first()).toBeVisible();
   await expect(page.getByText('Finding more routines for you…')).toHaveCount(0);
-  await snap(page, 'routines-3-settled');
+  await snap(page, 'routines-4-topped-up');
 
   // Switch inputs are visually hidden behind their track: use the keyboard.
   const stuck = page.getByRole('switch', { name: 'Turn on Chase stuck tasks' });
@@ -101,13 +119,14 @@ test('the last step shows AI’s suggestions as they arrive, then Macro’s temp
   await stuck.press('Space');
   await page.getByRole('button', { name: 'Turn on 2 routines' }).click();
   await expectLanded(page, 'Entered Macro at /home');
+  expect((await fakeWorld(page)).routinesCreated).toEqual(['sort', 'stuck']);
   const events = await fakeEvents(page);
   expect(events).toContainEqual(
     expect.objectContaining({
       event: 'onboarding_v4_routines_shown',
       data: expect.objectContaining({
-        shown: 4,
-        for_you: 2,
+        shown: 2,
+        for_you: 1,
         fallback: false,
         waited_out: true,
       }),
@@ -127,7 +146,7 @@ test('without an inbox the last step shows Macro’s templates at once', async (
   // A row opens to rename the routine before it is created.
   await page.getByRole('button', { name: /Share updates/ }).click();
   await expect(page.getByRole('textbox', { name: 'Name' })).toBeVisible();
-  await snap(page, 'routines-4-templates-dark');
+  await snap(page, 'routines-5-templates-dark');
 });
 
 test('the last step fits a phone', async ({ page }) => {
@@ -144,5 +163,5 @@ test('the last step fits a phone', async ({ page }) => {
     () => document.documentElement.scrollWidth - window.innerWidth
   );
   expect(overflow).toBeLessThanOrEqual(0);
-  await snap(page, 'routines-5-phone');
+  await snap(page, 'routines-6-phone');
 });

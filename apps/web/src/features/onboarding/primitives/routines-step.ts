@@ -1,5 +1,8 @@
 import { Telemetry } from '@macro-inc/observability';
-import type { RoutineSuggestion } from '@service-scheduled-action/generated/schemas';
+import type {
+  RoutineSuggestion,
+  Surface,
+} from '@service-scheduled-action/generated/schemas';
 import {
   createEffect,
   createMemo,
@@ -10,6 +13,7 @@ import {
 } from 'solid-js';
 import type { OnboardingContext } from '../context/onboarding-context';
 import {
+  emptySurfaces,
   initiallyOn,
   SUGGESTION_WAIT_MS,
   type SuggestionEdits,
@@ -39,12 +43,13 @@ export type RoutinesStepView =
 export type SuggestionStatus = 'idle' | 'enabling' | 'enabled' | 'failed';
 
 /**
- * The last step. AI's suggestions show as they arrive; after
- * {@link SUGGESTION_WAIT_MS}, or once AI is done, the list settles on
- * whatever is there, Macro's templates when AI gave none. Each has a
- * switch, off unless the scheduler marks it on by default. Finishing
- * creates the switched-on ones; those that fail stay on their rows and
- * finishing again retries only them, so nothing is created twice.
+ * The last step. While AI is suggesting, only its suggestions show, as they
+ * land. After {@link SUGGESTION_WAIT_MS}, surfaces it left empty fill with
+ * Macro's templates; once AI is done, every surface is topped up to the
+ * server's three. Each has a switch, off unless the scheduler marks it on by
+ * default. Finishing creates the switched-on ones; those that fail stay on
+ * their rows and finishing again retries only them, so nothing is created
+ * twice.
  */
 export function createRoutinesStep(
   context: RoutinesStepCapabilities,
@@ -53,13 +58,18 @@ export function createRoutinesStep(
   const now = options.now ?? (() => performance.now());
   const step = context.createRoutinesStep();
   const startedAt = now();
-  const [waitedOut, setWaitedOut] = createSignal(false);
-  const timer = setTimeout(() => setWaitedOut(true), SUGGESTION_WAIT_MS);
+  // When the wait runs out, the surfaces AI left empty fill with Macro's
+  // templates. They stay filled: rows don't vanish as AI catches up.
+  const [filled, setFilled] = createSignal<readonly Surface[]>();
+  const timer = setTimeout(
+    () => setFilled(emptySurfaces(untrack(step.answer)?.suggestions ?? [])),
+    SUGGESTION_WAIT_MS
+  );
   onCleanup(() => clearTimeout(timer));
 
   const decided = createMemo(() => {
     const answer = step.answer();
-    return answer && suggestionsView({ answer, waitedOut: waitedOut() });
+    return answer && suggestionsView({ answer, filled: filled() });
   });
   const items = createMemo((): ShownSuggestion[] => {
     const current = decided();
@@ -96,13 +106,13 @@ export function createRoutinesStep(
     const shown = items();
     // Rows wait on the catalog, and AI's first suggestion may still come.
     if (shown.length === 0)
-      return current.kind === 'arriving' || current.suggestions.length > 0
+      return current.arriving || current.suggestions.length > 0
         ? { kind: 'loading' }
         : { kind: 'empty' };
     return {
       kind: 'items',
       items: shown,
-      arriving: current.kind === 'arriving',
+      arriving: current.arriving,
     };
   });
 
@@ -117,7 +127,7 @@ export function createRoutinesStep(
       ).length;
       if (firstShownMs === undefined && forYou > 0)
         firstShownMs = Math.round(now() - startedAt);
-      if (current.kind !== 'settled' || settledReported) return;
+      if (!current.settled || settledReported) return;
       // Rows wait on the catalog; report the list once it reads.
       if (shown.length === 0 && current.suggestions.length > 0) return;
       settledReported = true;
@@ -126,7 +136,7 @@ export function createRoutinesStep(
         for_you: forYou,
         on_by_default: untrack(defaults).length,
         fallback: current.fallback,
-        waited_out: untrack(waitedOut),
+        waited_out: untrack(filled) !== undefined,
         status: untrack(step.answer)?.status ?? 'none',
         first_suggestion_ms: firstShownMs ?? null,
       });
@@ -171,7 +181,7 @@ export function createRoutinesStep(
   return {
     view,
     /** AI is still suggesting and the wait isn't over. */
-    waiting: () => decided()?.kind !== 'settled' && !step.failed(),
+    waiting: () => !decided()?.settled && !step.failed(),
     refresh: step.refresh,
     isOn,
     setOn(id: string, on: boolean) {
