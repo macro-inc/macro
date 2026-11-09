@@ -152,15 +152,28 @@ disposable tree without changing compiler options. The independent source audit
 the archived WASM/DTS hashes. The advisory ceiling overage is435,592 bytes;
 initializer, native oracle, positive cache/crossing and parity gates remain open.
 
-The OFF inventory continuation through `62601ac3c6` is integrated, including code,
-table picker, checkbox/task conversion and link fixtures. Owner browser evidence
+The OFF inventory continuation through `65fa6cf3b0` is integrated, including code,
+table picker, checkbox/task conversion, link and mounted TaskList fixtures. Owner browser evidence
 is 114/114 code, 132/132 table and 153/153 link OFF cases, each across three
 viewport profiles; these are not native mobile/virtual-keyboard proofs. The exact
-ledger has 679 selectors across three explicit reports (full web22,440, media36,
-conversion11); it is not a summed full-suite run, deduplicated behavior count or
-ON acceptance. No duplicate broad OFF run was launched here. Mounted TaskList
-continuation `16d9f311d3` is queued separately. Production declaration-oracle hooks
-and the resolver remain held.
+ledger has 698 selectors across four explicit reports (full web22,440, media36,
+conversion11, TaskList19), including 448 new editor units; it is not a summed
+full-suite run, deduplicated behavior count or ON acceptance. The 19-case TaskList
+report replaces the earlier 12-case report. No duplicate broad OFF run was
+launched here. TaskList commits `16d9f311d3` / `65fa6cf3b0` are integrated as
+`09635f91a7` / `23aab1afdc`; the independent disposable checkout passes all
+19 focused tests, and scoped `just check` passes. Mounted inherited ListNode
+hooks cover kind transitions and ordered-start identity, not native/custom-class
+hosting or the actual controls UI. Production declaration-oracle hooks and the
+resolver remain held.
+
+The three reported package formatting locations also pass read-only Biome checks
+from their package directories: two collaboration files and the view clipboard
+host test. The initial repository-root invocation failed nested configuration
+resolution and is retained as a diagnostic, not a formatting result. No edits to
+those files were needed. Evidence: `tasklist-dom-independent-tests.log`,
+`tasklist-dom-source-check.log`, `reported-collaboration-format-check.log` and
+`reported-view-format-check.log` under the acceptance directory.
 
 ## Earlier checkpoint: held ABI3 validation
 
