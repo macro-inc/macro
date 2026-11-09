@@ -138,6 +138,9 @@ impl ReadFrame<'_, '_, '_> {
     }
 }
 impl Dispatch for ReadFrame<'_, '_, '_> {
+    fn update_facts(&self) -> Result<Arc<lexical_model::ForeignUpdateFacts>, JsValue> {
+        self.with_peer(|peer| peer.update_facts())
+    }
     fn read_state(&self, version: u64, callback: &js_sys::Function) -> Result<JsValue, JsValue> {
         self.with_peer(|peer| {
             peer.with_state_read(version, |nested| {

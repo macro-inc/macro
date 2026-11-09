@@ -6,7 +6,8 @@ import type {
 import * as wasm from '../../../lexical-conformance/pkg/web/lexical_conformance_wasm';
 import { foreignHooks } from '../hooks.generated';
 import { bindBackendFactory } from './factory';
-import type { ShimBackend } from './index';
+import type { ShimBackend, UpdateMetadata } from './index';
+import { isHostUpdateMetadata } from './update-metadata';
 
 let initialized = false;
 let api: ReadonlyMap<string, number>;
@@ -148,10 +149,26 @@ function isNodeMutation(
 /** The shim has one model backend, with no production-session fallback. */
 export class ConformanceBackend implements ShimBackend {
   readonly initialVersion = 0;
-  getUpdateMetadata(): never {
-    throw new Error(
-      'Development backend does not expose native update metadata'
-    );
+  private metadataObserved = false;
+  private updateMetadata = {
+    dirtyLeaves: new Set<string>(),
+    dirtyElements: new Map<string, boolean>(),
+    dirtyType: 0,
+  };
+  getUpdateMetadata(): UpdateMetadata {
+    this.metadataObserved = true;
+    if (!this.pending) return this.updateMetadata;
+    const facts: unknown = this.enter((handle) => handle.update_metadata());
+    if (!isHostUpdateMetadata(facts))
+      throw new Error('Invalid native update metadata');
+    this.updateMetadata.dirtyLeaves.clear();
+    this.updateMetadata.dirtyElements.clear();
+    for (const key of facts.dirty_leaves)
+      this.updateMetadata.dirtyLeaves.add(key);
+    for (const [key, intentional] of facts.dirty_elements)
+      this.updateMetadata.dirtyElements.set(key, intentional);
+    this.updateMetadata.dirtyType = facts.dirty_type;
+    return this.updateMetadata;
   }
   private readonly handle: wasm.EditorHandle;
   private readonly callbacks = new Map<number, Callback>();
@@ -191,6 +208,13 @@ export class ConformanceBackend implements ShimBackend {
       active.pop();
     }
   }
+  private execute<T>(body: (handle: wasm.EditorHandle) => T): T {
+    try {
+      return this.enter(body);
+    } finally {
+      if (this.pending && this.metadataObserved) this.getUpdateMetadata();
+    }
+  }
   installForeign(
     type: string,
     dispatch: (message: HostNodeMutation<unknown, unknown>) => unknown
@@ -213,7 +237,7 @@ export class ConformanceBackend implements ShimBackend {
   call(name: string, args: readonly unknown[], receiver?: unknown): unknown {
     const id = api.get(name);
     if (id === undefined) throw new Error(`unknown Lexical API: ${name}`);
-    return this.enter((handle) =>
+    return this.execute((handle) =>
       handle.call(
         id,
         receiver === undefined ? { args } : { args, this: receiver }
@@ -228,7 +252,7 @@ export class ConformanceBackend implements ShimBackend {
   ): unknown {
     const id = api.get(name);
     if (id === undefined) throw new Error(`unknown Lexical API: ${name}`);
-    return this.enter((handle) =>
+    return this.execute((handle) =>
       handle.call_native(id, { args, this: receiver })
     );
   }
@@ -242,6 +266,7 @@ export class ConformanceBackend implements ShimBackend {
     const finished = this.enter((handle) => handle.finish_noop());
     if (finished) {
       this.pending = false;
+      this.resetUpdateMetadata();
       this.collect();
     }
     return finished;
@@ -254,13 +279,23 @@ export class ConformanceBackend implements ShimBackend {
       return decodeHostPacket(this.enter((handle) => handle.commit()));
     } finally {
       this.pending = false;
+      this.resetUpdateMetadata();
       this.collect();
     }
   }
   discard(): void {
     this.enter((handle) => handle.discard_update());
     this.pending = false;
+    this.resetUpdateMetadata();
     this.collect();
+  }
+  private resetUpdateMetadata(): void {
+    this.metadataObserved = false;
+    this.updateMetadata = {
+      dirtyLeaves: new Set(),
+      dirtyElements: new Map(),
+      dirtyType: 0,
+    };
   }
   readField(handle: number, field: string): unknown {
     return this.enter((editor) => editor.read_field(handle, field));

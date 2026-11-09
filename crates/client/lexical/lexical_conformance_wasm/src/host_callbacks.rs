@@ -80,6 +80,7 @@ impl Errors {
 compile_error!("the development JS host requires single-threaded WASM");
 
 trait Dispatch {
+    fn update_facts(&self) -> Result<Arc<lexical_model::ForeignUpdateFacts>, JsValue>;
     fn listen(
         &self,
         registration: lexical_model::CommandRegistration,
@@ -140,6 +141,9 @@ impl Frame<'_, '_> {
     }
 }
 impl Dispatch for Frame<'_, '_> {
+    fn update_facts(&self) -> Result<Arc<lexical_model::ForeignUpdateFacts>, JsValue> {
+        self.with_tx(|tx| Ok(tx.view().foreign_update_facts()))
+    }
     fn read_state(&self, version: u64, callback: &js_sys::Function) -> Result<JsValue, JsValue> {
         self.with_tx(|tx| {
             self.context.with_state_read(tx, version, |peer| {
@@ -228,6 +232,12 @@ pub(super) fn call_native(
 }
 pub(super) fn read_field(owner: &Arc<()>, handle: u32, field: &str) -> Result<Value, JsValue> {
     current(owner, |frame| frame.read_field(handle, field))
+}
+
+pub(super) fn update_facts(
+    owner: &Arc<()>,
+) -> Result<Arc<lexical_model::ForeignUpdateFacts>, JsValue> {
+    current(owner, |frame| frame.update_facts())
 }
 
 pub(super) fn read_state(

@@ -8,6 +8,52 @@ use std::collections::BTreeSet;
 #[cfg(test)]
 mod test;
 
+/// Exact native facts used by development editor metadata accessors.
+#[derive(Serialize, Deserialize, Type)]
+pub struct HostUpdateMetadata {
+    /// Pinned values: clean=0, dirty nodes=1, full reconciliation=2.
+    pub dirty_type: u8,
+    /// Dirty leaf keys, preserving native processing order.
+    pub dirty_leaves: Vec<String>,
+    /// Dirty element keys and intentional flags in native processing order.
+    pub dirty_elements: Vec<(String, bool)>,
+}
+
+impl HostUpdateMetadata {
+    pub(crate) fn from_update_facts(facts: &ForeignUpdateFacts) -> Self {
+        Self {
+            dirty_type: match facts.dirty_type {
+                ForeignDirtyType::Clean => 0,
+                ForeignDirtyType::Nodes => 1,
+                ForeignDirtyType::FullReconcile => 2,
+            },
+            dirty_leaves: facts
+                .dirty_leaves
+                .iter()
+                .map(|key| {
+                    if *key == NodeKey::ROOT {
+                        "root".to_owned()
+                    } else {
+                        key.to_string()
+                    }
+                })
+                .collect(),
+            dirty_elements: facts
+                .dirty_elements
+                .iter()
+                .map(|(key, intent)| {
+                    let key = if *key == NodeKey::ROOT {
+                        "root".to_owned()
+                    } else {
+                        key.to_string()
+                    };
+                    (key, *intent == DirtyIntent::Intentional)
+                })
+                .collect(),
+        }
+    }
+}
+
 /// Postcard envelope containing the existing flat model diff and host metadata.
 #[derive(Serialize, Deserialize, Type)]
 pub struct HostCommitPacket {

@@ -154,3 +154,5 @@ Use hosting-scalars.test.ts for owned-peer getIndent/getTextContent reads and ex
 afterCloneFrom receives a generated $clone staging descriptor and original node handle over an owned read peer; it returns initialized own fields before record installation. Never treat staging metadata as a live writable handle. Clone errors use the active fallible failure barrier.
 
 All 41 derived hooks have runtime adapters. extractWithChild uses original indexed arguments or encodes native child/selection/destination values through the owned peer; retain argument identity and opaque failure barriers. Full facade and ordinary inherited selection synchronization remain separate requirements.
+
+Expose development update_metadata through generated HostUpdateMetadata using owned exact native update facts; release callback/session guards before serializing and preserve historical read provenance. This diagnostic endpoint does not satisfy production zero-crossing reads.
