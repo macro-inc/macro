@@ -466,7 +466,8 @@ impl SequenceStepStore for PgSequenceSteps {
         conn: &mut PgConnection,
         search: ReplySearch<'_>,
     ) -> Result<Vec<InboundMessage>, EmailErr> {
-        // Bounded: the first answer stops the enrollment.
+        // Bounded: the first answer stops the enrollment. Newest first, so a
+        // recent answer isn't lost behind an inbox's older bounces.
         const MAX_CANDIDATES: i64 = 200;
         // One indexed branch per way a message can answer the steps: from the
         // contact, from the mail system (a bounce in a thread of its own), a
@@ -496,7 +497,7 @@ impl SequenceStepStore for PgSequenceSteps {
                FROM candidates JOIN email_messages m ON m.id = candidates.id
                LEFT JOIN email_contacts c ON c.id = m.from_contact_id
                WHERE NOT m.is_sent AND NOT m.is_draft
-               ORDER BY m.internal_date_ts
+               ORDER BY m.internal_date_ts DESC
                LIMIT $5"#,
             search.link_id,
             search.email,

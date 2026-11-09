@@ -205,8 +205,16 @@ where
                     self.needs_attention(&mut tx, &mut row).await?;
                 }
             }
-            // The owner cancelled or trashed it in Mail.
-            StepState::Unscheduled => self.needs_attention(&mut tx, &mut row).await?,
+            // The owner cancelled or trashed it in Mail. Once the enrollment has
+            // ended, the step is forgotten and the draft left to them.
+            StepState::Unscheduled => match row.status {
+                EnrollmentStatus::Stopped | EnrollmentStatus::Completed => self
+                    .repo
+                    .delete_step(&mut tx, row.id, step.step_id)
+                    .await
+                    .map_err(internal)?,
+                _ => self.needs_attention(&mut tx, &mut row).await?,
+            },
             // Its inbox or message was deleted; it may have gone out, so it is
             // never sent again.
             StepState::Gone => {

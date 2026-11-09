@@ -21,30 +21,41 @@ describe('enrollmentActions', () => {
       EnrollmentReason | null,
       SequenceStatus,
       EnrollmentAction[],
+      string | null,
     ]
   >([
-    ['active', null, 'active', ['pause', 'stop', 'unsubscribe']],
-    ['paused', null, 'active', ['resume', 'stop', 'unsubscribe']],
+    ['active', null, 'active', ['pause', 'stop', 'unsubscribe'], 'person'],
+    ['paused', null, 'active', ['resume', 'stop', 'unsubscribe'], 'person'],
     [
       'needs_attention',
       null,
       'active',
       ['resume', 'pause', 'stop', 'unsubscribe'],
+      'person',
     ],
-    ['stopped', 'replied', 'active', ['resume', 'unsubscribe']],
-    ['stopped', 'bounced', 'active', ['resume', 'unsubscribe']],
-    ['stopped', 'contact_removed', 'active', ['resume', 'unsubscribe']],
-    ['stopped', 'manual', 'active', ['unsubscribe']],
-    ['stopped', 'unsubscribed', 'active', []],
-    ['completed', null, 'active', ['unsubscribe']],
-    ['active', null, 'paused', ['stop', 'unsubscribe']],
-    ['needs_attention', null, 'paused', ['stop', 'unsubscribe']],
-    ['paused', null, 'draft', ['stop', 'unsubscribe']],
-    ['stopped', 'replied', 'paused', ['unsubscribe']],
+    ['stopped', 'replied', 'active', ['resume', 'unsubscribe'], 'person'],
+    ['stopped', 'bounced', 'active', ['resume', 'unsubscribe'], 'person'],
+    [
+      'stopped',
+      'contact_removed',
+      'active',
+      ['resume', 'unsubscribe'],
+      'person',
+    ],
+    ['stopped', 'contact_removed', 'active', ['unsubscribe'], null],
+    ['stopped', 'manual', 'active', ['unsubscribe'], 'person'],
+    ['stopped', 'unsubscribed', 'active', [], 'person'],
+    ['completed', null, 'active', ['unsubscribe'], 'person'],
+    ['active', null, 'paused', ['stop', 'unsubscribe'], 'person'],
+    ['needs_attention', null, 'paused', ['stop', 'unsubscribe'], 'person'],
+    ['paused', null, 'draft', ['stop', 'unsubscribe'], 'person'],
+    ['stopped', 'replied', 'paused', ['unsubscribe'], 'person'],
   ])(
-    '%s (%s) in a %s sequence offers %j',
-    (status, reason, sequence, expected) => {
-      expect(enrollmentActions({ status, reason }, sequence)).toEqual(expected);
+    '%s (%s) in a %s sequence offers %j (CRM person %s)',
+    (status, reason, sequence, expected, crmContactId) => {
+      expect(
+        enrollmentActions({ status, reason, crmContactId }, sequence)
+      ).toEqual(expected);
     }
   );
 });

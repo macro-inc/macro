@@ -807,6 +807,8 @@ impl SequenceRepo for PgSequenceRepo {
                  AND ($1::timestamptz IS NULL OR (e.due_at, e.id) > ($1, $2))
                  AND NOT EXISTS (SELECT 1 FROM email_sequence_steps h
                                  WHERE h.enrollment_id = e.id AND h.status = 'scheduled')
+                 -- No inbox at all: it waits until the sequence gets one.
+                 AND COALESCE(e.link_id, s.link_id) IS NOT NULL
                  AND COALESCE(e.link_id, s.link_id) <> ALL($4)
                ORDER BY e.due_at, e.id
                LIMIT $3"#,

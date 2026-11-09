@@ -427,6 +427,20 @@ async fn i2_every_check_stops_or_waits_instead_of_sending(pool: PgPool) {
     access.bob_in_crm.store(true, Ordering::SeqCst);
     svc.act(OWNER, bob, EnrollmentAction::Resume).await.unwrap();
     assert_eq!(status(&pool, bob).await, waiting);
+    // One deleted from the CRM has no record to come back to.
+    let other = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    let deleted = enroll(&svc, OWNER, other, ADA).await;
+    sqlx::query!(
+        "UPDATE email_sequence_enrollments SET status = 'stopped', reason = 'contact_removed', due_at = NULL, crm_contact_id = NULL WHERE id = $1",
+        deleted
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert!(matches!(
+        svc.act(OWNER, deleted, EnrollmentAction::Resume).await,
+        Err(SequenceError::ActionUnavailable)
+    ));
 
     // An unsubscribed address gets nothing more from any sequence.
     sqlx::query!(
@@ -583,14 +597,21 @@ async fn i4_stop_withdraws_a_new_step_and_records_one_already_sending(pool: PgPo
     .execute(&pool)
     .await
     .unwrap();
-    svc.act(OWNER, theirs, EnrollmentAction::Stop).await.unwrap();
+    svc.act(OWNER, theirs, EnrollmentAction::Stop)
+        .await
+        .unwrap();
     assert!(message_exists(&pool, rescheduled).await);
-    deliver(&pool, rescheduled).await;
+    // When they cancel it too, the step is forgotten and the draft stays theirs.
+    sqlx::query!(
+        "DELETE FROM email_scheduled_messages WHERE message_id = $1",
+        rescheduled
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     svc.sweep(Utc::now()).await;
-    assert_eq!(
-        status(&pool, theirs).await,
-        ("stopped".into(), Some("manual".into()), 1)
-    );
+    assert_eq!(in_flight(&pool, theirs).await, None);
+    assert!(message_exists(&pool, rescheduled).await);
 }
 
 #[sqlx::test(
@@ -984,4 +1005,37 @@ async fn edits_reach_every_email_not_yet_created(pool: PgPool) {
         .await,
         Err(SequenceError::Invalid(_))
     ));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sequences"))
+)]
+async fn an_enrollment_with_no_inbox_holds_back_only_itself(pool: PgPool) {
+    let (svc, _) = service(&pool);
+    // The sequence's inbox was deleted before anyone was emailed.
+    let orphaned = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    let stranded = enroll(&svc, OWNER, orphaned, ADA).await;
+    sqlx::query!(
+        "UPDATE email_sequences SET link_id = NULL WHERE id = $1",
+        orphaned
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE email_sequence_enrollments SET due_at = now() - interval '1 hour' WHERE id = $1",
+        stranded
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let other = active_sequence(&svc, MATE, MATE_LINK, two_steps()).await;
+    let bob = enroll(&svc, MATE, other, BOB).await;
+    make_due(&pool, bob).await;
+
+    svc.sweep(Utc::now()).await;
+    assert!(in_flight(&pool, bob).await.is_some());
+    assert_eq!(in_flight(&pool, stranded).await, None);
+    assert_eq!(status(&pool, stranded).await.0, "active");
 }
