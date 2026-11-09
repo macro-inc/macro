@@ -305,9 +305,12 @@ function MountedChannelMessages(props: ChannelMessagesProps) {
     }
   });
 
+  // Compared by value: a host's prop getter can track more than the request
+  // (Home's reads the arrival, which follows every hotkey).
+  const composerFocusRequest = createMemo(() => props.composerFocusRequest);
   createEffect(
     on(
-      () => props.composerFocusRequest,
+      composerFocusRequest,
       (request) => {
         if (request) handle()?.focusInput();
       },
