@@ -28,6 +28,477 @@
         }
       }
     },
+    "/ideas": {
+      "get": {
+        "tags": ["ideas"],
+        "summary": "The caller's feed.",
+        "operationId": "list_ideas",
+        "responses": {
+          "200": {
+            "description": "The caller's open ideas they can open every item of, best first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ideas"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ideas are off for the caller",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["ideas"],
+        "summary": "Add an idea from an ideas generation session, or a new version of the\none with its dedup key.",
+        "operationId": "suggest_idea",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestIdea"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the idea was added or updated, and what to fix when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeaWriteOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an ideas generation session may suggest",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ideas are off for the user",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ideas/review": {
+      "get": {
+        "tags": ["ideas"],
+        "summary": "What an ideas generation session reads before managing ideas.",
+        "operationId": "review_ideas",
+        "responses": {
+          "200": {
+            "description": "Every idea of the user's, open first, and how many more this generation may add",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeaReview"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an ideas generation session may review",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Ideas are off for the user",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ideas/{id}": {
+      "patch": {
+        "tags": ["ideas"],
+        "summary": "Change an open idea from an ideas generation session.",
+        "operationId": "rewrite_idea",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the idea",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RewriteIdea"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the idea was rewritten, and what to fix when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeaWriteOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an ideas generation session may rewrite",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such idea for the user, or ideas are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ideas/{id}/accept": {
+      "post": {
+        "tags": ["ideas"],
+        "summary": "The caller acts on a proposed idea.",
+        "operationId": "accept_idea",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the idea",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Accepted"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No proposed idea with this id for the caller, or ideas are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ideas/{id}/dismiss": {
+      "post": {
+        "tags": ["ideas"],
+        "summary": "The caller isn't interested in an open idea.",
+        "operationId": "dismiss_idea",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the idea",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Dismissed; generation sessions see when"
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No open idea with this id for the caller, or ideas are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ideas/{id}/retire": {
+      "post": {
+        "tags": ["ideas"],
+        "summary": "Retire an open idea from an ideas generation session.",
+        "operationId": "retire_idea",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the idea",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetireIdea"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the idea was retired, and why not when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdeaWriteOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an ideas generation session may retire",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such idea for the user, or ideas are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions": {
       "get": {
         "tags": ["scheduled actions"],
@@ -1787,6 +2258,11 @@
           }
         }
       },
+      "Category": {
+        "type": "string",
+        "description": "A filter on the feed. Not kinds: an idea may have several.",
+        "enum": ["important", "revisit", "save_money", "make_money"]
+      },
       "CheckRoutineRequest": {
         "type": "object",
         "description": "A routine to check, as the create body takes it.",
@@ -2302,6 +2778,41 @@
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
       },
+      "EntityAction": {
+        "type": "string",
+        "description": "What an entity idea suggests doing about its items.",
+        "enum": ["reply", "review", "follow_up"]
+      },
+      "EntityType": {
+        "type": "string",
+        "description": "The type of an entity in Macro",
+        "enum": [
+          "user",
+          "chat",
+          "channel",
+          "channel_message",
+          "document",
+          "project",
+          "email_thread",
+          "calendar_event",
+          "team",
+          "call",
+          "foreign_entity",
+          "static_file",
+          "crm_company",
+          "crm_contact",
+          "crm_pipeline",
+          "reminder",
+          "skill",
+          "agent_session",
+          "scheduled_action",
+          "initiative",
+          "database",
+          "database_row",
+          "form",
+          "external_chat"
+        ]
+      },
       "EventFilter": {
         "type": "object",
         "description": "An event name AND an entity ID must match within the same filter. A\ncondition further requires the event's content to answer it with yes.\n\n`github` comes from outside Macro and carries its payload: it stands\nalone in its filter, takes no ids, and may require\nexact payload values with `match`. A `github` filter narrows deliveries\nwith its `github` selector.",
@@ -2498,6 +3009,254 @@
         },
         "additionalProperties": false
       },
+      "Idea": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/IdeaKind",
+            "description": "Its kind, with that kind's data."
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "dedupKey",
+              "title",
+              "summary",
+              "importance",
+              "categories",
+              "state",
+              "about",
+              "produced",
+              "createdAt",
+              "updatedAt",
+              "stateChangedAt"
+            ],
+            "properties": {
+              "about": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Target"
+                },
+                "description": "The items it is about."
+              },
+              "categories": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Category"
+                },
+                "description": "The feed's filters it shows under."
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it was first proposed."
+              },
+              "dedupKey": {
+                "type": "string",
+                "description": "Names the idea across nights: proposing the same key again changes\nthis idea instead of adding one."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The idea's id."
+              },
+              "importance": {
+                "type": "integer",
+                "format": "int32",
+                "description": "0 to 100, for ordering.",
+                "minimum": 0
+              },
+              "produced": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Target"
+                },
+                "description": "What acting on it produced."
+              },
+              "state": {
+                "$ref": "#/components/schemas/IdeaState",
+                "description": "Where it is for the person."
+              },
+              "stateChangedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When its state last changed, such as when it was dismissed."
+              },
+              "stateReason": {
+                "type": ["string", "null"],
+                "description": "Why it was resolved; only on resolved ideas."
+              },
+              "summary": {
+                "type": "string",
+                "description": "Why, in a line or two."
+              },
+              "title": {
+                "type": "string",
+                "description": "What to do, in a few words."
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it last changed."
+              }
+            }
+          }
+        ],
+        "description": "One proactive suggestion for one person."
+      },
+      "IdeaKind": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A prompt for an agent: opened in the composer, or run in the\nbackground.",
+            "required": ["prompt", "runMode", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["prompt"]
+              },
+              "prompt": {
+                "type": "string",
+                "description": "What the agent is asked to do."
+              },
+              "runMode": {
+                "$ref": "#/components/schemas/RunMode",
+                "description": "How it runs."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A note about specific items, with what to do about them.",
+            "required": ["action", "kind"],
+            "properties": {
+              "action": {
+                "$ref": "#/components/schemas/EntityAction",
+                "description": "What to do about the items."
+              },
+              "draft": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Target",
+                    "description": "The draft made for it, once made."
+                  }
+                ]
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["entity"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A routine suggestion, shown among ideas.",
+            "required": ["routineSuggestionId", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["routine"]
+              },
+              "routineSuggestionId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The suggestion it shows."
+              }
+            }
+          }
+        ],
+        "description": "What kind of idea it is, with that kind's data. A kind never changes."
+      },
+      "IdeaReview": {
+        "type": "object",
+        "description": "What a generation session reads before managing the person's ideas:\nevery idea they have, open or not, and how many more it may add.",
+        "required": ["ideas", "open", "openLimit", "newLeft"],
+        "properties": {
+          "ideas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Idea"
+            },
+            "description": "Open ideas first, best first, then closed ones newest first. A\ndismissed idea's `stateChangedAt` is when the person dismissed it."
+          },
+          "newLeft": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Ideas this generation may still add or bring back.",
+            "minimum": 0
+          },
+          "open": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Open ideas the person has, and the most they may have.",
+            "minimum": 0
+          },
+          "openLimit": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The most open ideas a person may have.",
+            "minimum": 0
+          }
+        }
+      },
+      "IdeaState": {
+        "type": "string",
+        "description": "Where an idea is for the person.",
+        "enum": [
+          "proposed",
+          "accepted",
+          "done",
+          "dismissed",
+          "resolved",
+          "retired"
+        ]
+      },
+      "IdeaWriteOutcome": {
+        "type": "object",
+        "description": "What became of a session's write.",
+        "required": ["ok", "problems"],
+        "properties": {
+          "idea": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/Idea",
+                "description": "The idea as it now is."
+              }
+            ]
+          },
+          "ok": {
+            "type": "boolean",
+            "description": "Whether it was applied."
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Why it wasn't, to fix and try again."
+          }
+        }
+      },
+      "Ideas": {
+        "type": "object",
+        "description": "A person's open ideas, best first.",
+        "required": ["ideas"],
+        "properties": {
+          "ideas": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Idea"
+            },
+            "description": "The ideas."
+          }
+        }
+      },
       "InProgressExecution": {
         "type": "object",
         "required": ["action_id"],
@@ -2521,6 +3280,11 @@
             ]
           }
         }
+      },
+      "KindName": {
+        "type": "string",
+        "description": "An idea's kind, without its data.",
+        "enum": ["prompt", "entity", "routine"]
       },
       "KnobName": {
         "type": "string",
@@ -2613,6 +3377,62 @@
               "type": "string"
             },
             "description": "Select option ids or referenced entity ids, one of which the change must\nadd. Any change to the property matches when empty."
+          }
+        },
+        "additionalProperties": false
+      },
+      "RetireIdea": {
+        "type": "object",
+        "description": "Retiring an open idea that no longer matters.",
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Why, for the change log."
+          }
+        },
+        "additionalProperties": false
+      },
+      "RewriteIdea": {
+        "type": "object",
+        "description": "Changes to an open idea; fields left out stay.",
+        "required": ["reason"],
+        "properties": {
+          "about": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/Target"
+            },
+            "description": "New items it is about."
+          },
+          "categories": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            },
+            "description": "New categories."
+          },
+          "importance": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "A new importance.",
+            "minimum": 0
+          },
+          "prompt": {
+            "type": ["string", "null"],
+            "description": "Only on prompt ideas."
+          },
+          "reason": {
+            "type": "string",
+            "description": "Why, for the change log."
+          },
+          "summary": {
+            "type": ["string", "null"],
+            "description": "A new summary."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "A new title."
           }
         },
         "additionalProperties": false
@@ -3111,6 +3931,11 @@
           }
         }
       },
+      "RunMode": {
+        "type": "string",
+        "description": "How a prompt idea runs.",
+        "enum": ["composer", "background"]
+      },
       "RunStart": {
         "oneOf": [
           {
@@ -3423,6 +4248,80 @@
           }
         }
       },
+      "SuggestIdea": {
+        "type": "object",
+        "description": "A new idea, or a new version of one with the same `dedupKey`, as a\ngeneration session hands it back through `macro.ideas.suggest`.",
+        "required": ["kind", "dedupKey", "title", "summary", "importance"],
+        "properties": {
+          "about": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Target"
+            },
+            "description": "The items it is about."
+          },
+          "action": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAction",
+                "description": "An entity idea's action."
+              }
+            ]
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            },
+            "description": "The feed's filters it shows under."
+          },
+          "dedupKey": {
+            "type": "string",
+            "description": "Names the idea across nights; the same key updates the same idea."
+          },
+          "importance": {
+            "type": "integer",
+            "format": "int32",
+            "description": "0 to 100.",
+            "minimum": 0
+          },
+          "kind": {
+            "$ref": "#/components/schemas/KindName",
+            "description": "`prompt` or `entity`; routine ideas come from `macro.routines.suggest`."
+          },
+          "prompt": {
+            "type": ["string", "null"],
+            "description": "A prompt idea's prompt."
+          },
+          "reason": {
+            "type": ["string", "null"],
+            "description": "Why, for the change log; required to bring back an idea the person\ndismissed."
+          },
+          "runMode": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RunMode",
+                "description": "A prompt idea's run mode."
+              }
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "description": "Why, in a line or two."
+          },
+          "title": {
+            "type": "string",
+            "description": "What to do, in a few words."
+          }
+        },
+        "additionalProperties": false
+      },
       "SuggestOutcome": {
         "type": "object",
         "description": "What became of a suggestion handed back.",
@@ -3596,6 +4495,26 @@
           "agents"
         ]
       },
+      "Target": {
+        "type": "object",
+        "description": "An item, or a part of one such as a message in a thread.",
+        "required": ["entityType", "entityId"],
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "The item's id."
+          },
+          "entityType": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "The item's type."
+          },
+          "partId": {
+            "type": ["string", "null"],
+            "description": "A part of it, such as one message in a channel."
+          }
+        },
+        "additionalProperties": false
+      },
       "TemplateVariable": {
         "oneOf": [
           {
@@ -3678,6 +4597,10 @@
     {
       "name": "scheduled actions",
       "description": "Scheduled action service"
+    },
+    {
+      "name": "ideas",
+      "description": "Each person's ideas, and the tools generation sessions manage them with"
     }
   ]
 }

@@ -284,8 +284,11 @@ export const scheduledActionExcluded = [
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
-export const scheduledActionBacklog =
-  [] as const satisfies readonly (keyof ScheduledActionSdk)[];
+export const scheduledActionBacklog = [
+  'listIdeas', // The ideas feed; the user's own agent reads it in a follow-up.
+  'acceptIdea', // Likewise.
+  'dismissIdea', // Likewise.
+] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
 export const searchExcluded = [
   'simpleUnifiedSearch',

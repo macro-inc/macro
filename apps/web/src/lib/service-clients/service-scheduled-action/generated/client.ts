@@ -18,9 +18,14 @@ import type {
   DraftRoutineRequest,
   EmptyResponse,
   GenerateRoutineSuggestionsParams,
+  IdeaReview,
+  Ideas,
+  IdeaWriteOutcome,
   InProgressExecution,
   ListRoutineSuggestionsParams,
   ListScheduledActionsParams,
+  RetireIdea,
+  RewriteIdea,
   RoutineCatalogParams,
   RoutineCheck,
   RoutineSuggestions,
@@ -28,6 +33,7 @@ import type {
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
+  SuggestIdea,
   SuggestOutcome,
   SuggestRequest,
 } from './schemas';
@@ -67,6 +73,482 @@ export const scheduledActionHealth = async (
     status: res.status,
     headers: res.headers,
   } as scheduledActionHealthResponse;
+};
+
+/**
+ * @summary The caller's feed.
+ */
+export type listIdeasResponse200 = {
+  data: Ideas;
+  status: 200;
+};
+
+export type listIdeasResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listIdeasResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type listIdeasResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listIdeasResponseSuccess = listIdeasResponse200 & {
+  headers: Headers;
+};
+export type listIdeasResponseError = (
+  | listIdeasResponse401
+  | listIdeasResponse404
+  | listIdeasResponse500
+) & {
+  headers: Headers;
+};
+
+export type listIdeasResponse =
+  | listIdeasResponseSuccess
+  | listIdeasResponseError;
+
+export const getListIdeasUrl = () => {
+  return `/ideas`;
+};
+
+export const listIdeas = async (
+  options?: RequestInit
+): Promise<listIdeasResponse> => {
+  const res = await fetch(getListIdeasUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listIdeasResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listIdeasResponse;
+};
+
+/**
+ * @summary Add an idea from an ideas generation session, or a new version of the
+one with its dedup key.
+ */
+export type suggestIdeaResponse200 = {
+  data: IdeaWriteOutcome;
+  status: 200;
+};
+
+export type suggestIdeaResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type suggestIdeaResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type suggestIdeaResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type suggestIdeaResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type suggestIdeaResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type suggestIdeaResponseSuccess = suggestIdeaResponse200 & {
+  headers: Headers;
+};
+export type suggestIdeaResponseError = (
+  | suggestIdeaResponse400
+  | suggestIdeaResponse401
+  | suggestIdeaResponse403
+  | suggestIdeaResponse404
+  | suggestIdeaResponse500
+) & {
+  headers: Headers;
+};
+
+export type suggestIdeaResponse =
+  | suggestIdeaResponseSuccess
+  | suggestIdeaResponseError;
+
+export const getSuggestIdeaUrl = () => {
+  return `/ideas`;
+};
+
+export const suggestIdea = async (
+  suggestIdea: SuggestIdea,
+  options?: RequestInit
+): Promise<suggestIdeaResponse> => {
+  const res = await fetch(getSuggestIdeaUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(suggestIdea),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: suggestIdeaResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as suggestIdeaResponse;
+};
+
+/**
+ * @summary What an ideas generation session reads before managing ideas.
+ */
+export type reviewIdeasResponse200 = {
+  data: IdeaReview;
+  status: 200;
+};
+
+export type reviewIdeasResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type reviewIdeasResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type reviewIdeasResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type reviewIdeasResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type reviewIdeasResponseSuccess = reviewIdeasResponse200 & {
+  headers: Headers;
+};
+export type reviewIdeasResponseError = (
+  | reviewIdeasResponse401
+  | reviewIdeasResponse403
+  | reviewIdeasResponse404
+  | reviewIdeasResponse500
+) & {
+  headers: Headers;
+};
+
+export type reviewIdeasResponse =
+  | reviewIdeasResponseSuccess
+  | reviewIdeasResponseError;
+
+export const getReviewIdeasUrl = () => {
+  return `/ideas/review`;
+};
+
+export const reviewIdeas = async (
+  options?: RequestInit
+): Promise<reviewIdeasResponse> => {
+  const res = await fetch(getReviewIdeasUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reviewIdeasResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as reviewIdeasResponse;
+};
+
+/**
+ * @summary Change an open idea from an ideas generation session.
+ */
+export type rewriteIdeaResponse200 = {
+  data: IdeaWriteOutcome;
+  status: 200;
+};
+
+export type rewriteIdeaResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type rewriteIdeaResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type rewriteIdeaResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type rewriteIdeaResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type rewriteIdeaResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type rewriteIdeaResponseSuccess = rewriteIdeaResponse200 & {
+  headers: Headers;
+};
+export type rewriteIdeaResponseError = (
+  | rewriteIdeaResponse400
+  | rewriteIdeaResponse401
+  | rewriteIdeaResponse403
+  | rewriteIdeaResponse404
+  | rewriteIdeaResponse500
+) & {
+  headers: Headers;
+};
+
+export type rewriteIdeaResponse =
+  | rewriteIdeaResponseSuccess
+  | rewriteIdeaResponseError;
+
+export const getRewriteIdeaUrl = (id: string) => {
+  return `/ideas/${id}`;
+};
+
+export const rewriteIdea = async (
+  id: string,
+  rewriteIdea: RewriteIdea,
+  options?: RequestInit
+): Promise<rewriteIdeaResponse> => {
+  const res = await fetch(getRewriteIdeaUrl(id), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(rewriteIdea),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: rewriteIdeaResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as rewriteIdeaResponse;
+};
+
+/**
+ * @summary The caller acts on a proposed idea.
+ */
+export type acceptIdeaResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type acceptIdeaResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type acceptIdeaResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type acceptIdeaResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type acceptIdeaResponseSuccess = acceptIdeaResponse204 & {
+  headers: Headers;
+};
+export type acceptIdeaResponseError = (
+  | acceptIdeaResponse401
+  | acceptIdeaResponse404
+  | acceptIdeaResponse500
+) & {
+  headers: Headers;
+};
+
+export type acceptIdeaResponse =
+  | acceptIdeaResponseSuccess
+  | acceptIdeaResponseError;
+
+export const getAcceptIdeaUrl = (id: string) => {
+  return `/ideas/${id}/accept`;
+};
+
+export const acceptIdea = async (
+  id: string,
+  options?: RequestInit
+): Promise<acceptIdeaResponse> => {
+  const res = await fetch(getAcceptIdeaUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: acceptIdeaResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as acceptIdeaResponse;
+};
+
+/**
+ * @summary The caller isn't interested in an open idea.
+ */
+export type dismissIdeaResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type dismissIdeaResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type dismissIdeaResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type dismissIdeaResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type dismissIdeaResponseSuccess = dismissIdeaResponse204 & {
+  headers: Headers;
+};
+export type dismissIdeaResponseError = (
+  | dismissIdeaResponse401
+  | dismissIdeaResponse404
+  | dismissIdeaResponse500
+) & {
+  headers: Headers;
+};
+
+export type dismissIdeaResponse =
+  | dismissIdeaResponseSuccess
+  | dismissIdeaResponseError;
+
+export const getDismissIdeaUrl = (id: string) => {
+  return `/ideas/${id}/dismiss`;
+};
+
+export const dismissIdea = async (
+  id: string,
+  options?: RequestInit
+): Promise<dismissIdeaResponse> => {
+  const res = await fetch(getDismissIdeaUrl(id), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: dismissIdeaResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as dismissIdeaResponse;
+};
+
+/**
+ * @summary Retire an open idea from an ideas generation session.
+ */
+export type retireIdeaResponse200 = {
+  data: IdeaWriteOutcome;
+  status: 200;
+};
+
+export type retireIdeaResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type retireIdeaResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type retireIdeaResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type retireIdeaResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type retireIdeaResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type retireIdeaResponseSuccess = retireIdeaResponse200 & {
+  headers: Headers;
+};
+export type retireIdeaResponseError = (
+  | retireIdeaResponse400
+  | retireIdeaResponse401
+  | retireIdeaResponse403
+  | retireIdeaResponse404
+  | retireIdeaResponse500
+) & {
+  headers: Headers;
+};
+
+export type retireIdeaResponse =
+  | retireIdeaResponseSuccess
+  | retireIdeaResponseError;
+
+export const getRetireIdeaUrl = (id: string) => {
+  return `/ideas/${id}/retire`;
+};
+
+export const retireIdea = async (
+  id: string,
+  retireIdea: RetireIdea,
+  options?: RequestInit
+): Promise<retireIdeaResponse> => {
+  const res = await fetch(getRetireIdeaUrl(id), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(retireIdea),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: retireIdeaResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as retireIdeaResponse;
 };
 
 export type listScheduledActionsResponse200 = {
