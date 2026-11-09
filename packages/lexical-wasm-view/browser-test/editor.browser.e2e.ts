@@ -188,7 +188,19 @@ test('lists, tables, links, stored code highlights and marks render from real WA
   await expect(page.locator('#editor td')).toHaveText('A');
   await expect(page.locator('#editor th')).toHaveText('B');
   await expect(page.locator('#editor col')).toHaveCount(2);
-  await expect(page.locator('#editor col').first()).toHaveCSS('width', '120px');
+  expect(
+    await page
+      .locator('#editor col')
+      .evaluateAll((columns) => columns.map((column) => column.style.width))
+  ).toEqual(['120px', '180px']);
+  // WebKit does not expose a rendered box for col elements; cells carry column geometry.
+  expect(
+    await page
+      .locator('#editor td, #editor th')
+      .evaluateAll((cells) =>
+        cells.map((cell) => cell.getBoundingClientRect().width)
+      )
+  ).toEqual([120, 180]);
   await expect(page.locator('#editor a')).toHaveAttribute(
     'href',
     'https://example.com'
