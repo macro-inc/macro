@@ -23,6 +23,9 @@ pub enum Granularity {
 pub enum ModifyTarget {
     /// Layout is unavailable; only structural movement runs.
     NoView,
+    /// The host has a view but supplied no required layout target. Structural
+    /// movement remains available; ordinary text movement reports LayoutRequired.
+    RequireView,
     /// Points returned by the view.
     View {
         /// Host anchor.
@@ -73,6 +76,7 @@ impl Transaction<'_> {
         }
         match target {
             ModifyTarget::NoView => Ok(()),
+            ModifyTarget::RequireView => Err(Error::LayoutRequired),
             ModifyTarget::View {
                 anchor,
                 focus,
