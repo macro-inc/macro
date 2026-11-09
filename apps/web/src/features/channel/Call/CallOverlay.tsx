@@ -36,6 +36,7 @@ import {
   lazy,
   Match,
   on,
+  onCleanup,
   Show,
   Suspense,
   Switch,
@@ -126,6 +127,15 @@ export function CallOverlay(props: {
   const [selectedTab, setSelectedTab] = createSignal<CallPanelTab>('chat');
   const [focusChatOnOpen, setFocusChatOnOpen] = createSignal(true);
   const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
+  const [entranceReady, setEntranceReady] = createSignal(false);
+  createEffect(() => {
+    const width = resizeContext()?.size() ?? 0;
+    if (width <= 0 || entranceReady()) return;
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => setEntranceReady(true));
+    });
+    onCleanup(() => cancelAnimationFrame(frame));
+  });
   const [panelWidth, setPanelWidth] = createSignal(DEFAULT_SIDE_PANEL_WIDTH);
   const [sidebarMount, setSidebarMount] = createSignal<HTMLDivElement>();
   const [overlayMount, setOverlayMount] = createSignal<HTMLDivElement>();
@@ -481,7 +491,9 @@ export function CallOverlay(props: {
         ref={setCallRoot}
         class={cn(
           'portal-scope relative flex h-full min-h-0 flex-col @container/call touch:pt-[var(--mobile-content-inset-top,0px)] touch:pb-(--mobile-content-inset-bottom) mobile:pb-0',
-          fullscreen.active() && 'h-dvh w-dvw bg-surface'
+          fullscreen.active() && 'h-dvh w-dvw bg-surface',
+          'transition-opacity duration-150 motion-reduce:transition-none',
+          !entranceReady() && 'opacity-0'
         )}
         data-call-layout={layout()}
         data-call-fullscreen={isMobile() ? '' : undefined}
@@ -525,7 +537,8 @@ export function CallOverlay(props: {
               // Hidden resize panels reset their left offset; keep chat at the right edge.
               '[&>[data-resize-panel]:has(>[data-call-sidebar])]:left-auto! [&>[data-resize-panel]:has(>[data-call-sidebar])]:right-0',
               !isMobile() &&
-                panelMounted() && [
+                panelMounted() &&
+                entranceReady() && [
                   '[&>[data-resize-panel]]:transition-[width] [&>[data-resize-panel]]:duration-200 [&>[data-resize-panel]]:ease-out [&>[data-resize-panel]]:motion-reduce:transition-none',
                   '[&>[role=separator]]:transition-[left] [&>[role=separator]]:duration-200 [&>[role=separator]]:ease-out [&>[role=separator]]:motion-reduce:transition-none',
                   '[&:has(>[role=separator]:active)>*]:transition-none',
@@ -985,6 +998,7 @@ export function CallOverlay(props: {
           </Resize.Zone>
           <Show when={panelMounted()}>
             <CallChatPanel
+              animateEntrance={entranceReady()}
               id={panelId}
               open={panelOpen()}
               onClose={closePanel}

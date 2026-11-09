@@ -18,6 +18,7 @@ export type CallPanelTab = 'chat' | 'participants' | 'work';
 /** Keep the desktop panel attached while its reserved column changes size. */
 export function CallChatPanel(props: {
   id: string;
+  animateEntrance?: boolean;
   open: boolean;
   onClose: () => void;
   activeTab: CallPanelTab;
@@ -81,7 +82,7 @@ export function CallChatPanel(props: {
         aria-label={t('calls.panel')}
         hidden={isMobile() || !props.open}
         inert={isMobile() || !props.open}
-        class="absolute inset-3 z-30 w-auto min-h-0 flex-col overflow-hidden rounded-2xl bg-surface-2 shadow-xl @min-[800px]/call:shadow-none light-mode:@min-[800px]/call:shadow-lg transition-[opacity,translate,display] transition-discrete duration-200 ease-out starting:opacity-0 starting:translate-x-3 motion-reduce:transition-none"
+        class="absolute inset-3 z-30 w-auto min-h-0 flex-col overflow-hidden rounded-2xl bg-surface-2 shadow-xl @min-[800px]/call:shadow-none light-mode:@min-[800px]/call:shadow-lg transition-[opacity,translate,display] transition-discrete duration-200 ease-out motion-reduce:transition-none"
         style={
           props.sidebarMount
             ? {
@@ -96,6 +97,8 @@ export function CallChatPanel(props: {
         classList={{
           flex: !isMobile() && props.open,
           'opacity-0 translate-x-3 pointer-events-none': !props.open,
+          'starting:opacity-0 starting:translate-x-3':
+            props.animateEntrance !== false,
         }}
       >
         <div ref={setSidebarBody} class="flex min-h-0 flex-1 flex-col" />
