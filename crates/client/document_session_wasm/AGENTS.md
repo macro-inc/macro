@@ -66,9 +66,9 @@ Reserve a fresh pending publication version at compatBegin, publish that version
 
 ## Checks
 
-- `cargo test -p document_session_wasm -j4`
-- `cargo check -p document_session_wasm --target wasm32-unknown-unknown -j4`
-- `cargo clippy -p document_session_wasm --all-targets -j4 -- -D warnings`
+- `cargo test -p document_session_wasm -j2`
+- `cargo check -p document_session_wasm --target wasm32-unknown-unknown -j2`
+- `cargo clippy -p document_session_wasm --all-targets -j2 -- -D warnings`
 - `just -f apps/web/justfile build-document-session-wasm`
 - `bun packages/collaboration/scripts/generate-session-schema.ts --check`
 - `cargo x deps --check`, `cargo shear`, `just check`, `just pr-privacy`
@@ -78,3 +78,5 @@ preload rules and size checks aligned with nix/tauri-desktop.nix and apps/web/ju
 Treat 1.6 MB Brotli as a soft ceiling: retain measured speed gains, preload without blocking paint, and gate startup/composer readiness against the upstream engine.
 
 Generate compatibility_generated.rs and collaboration/session/compatibility.generated.ts from abi/compatibility.bop plus the shared foreign-host schemas using generate-compatibility-schema.ts. Compatibility requests use exact captured record references and separate typed render metadata; preserve the session and flat Diff ABIs. These envelopes do not themselves provide a working production initializer.
+
+Use editor/update-bound native key reservations for compact buffered writes; never invent keys or reuse discarded reservations. Batch capture retains before releases, preserve leased frozen records, and invalidate root text caches in incremental deltas instead of retransmitting document text.

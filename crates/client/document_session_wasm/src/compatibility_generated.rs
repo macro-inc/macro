@@ -1187,6 +1187,401 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatSelectionPatch<'raw> {
 
 impl<'raw> ::bebop::Record<'raw> for CompatSelectionPatch<'raw> {}
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct CompatKeyReservation<'raw> {
+    pub editor_id: u32,
+    pub reservation_id: u64,
+    pub keys: ::bebop::SliceWrapper<'raw, ForeignKey>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatKeyReservation<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <u32>::MIN_SERIALIZED_SIZE +
+        <u64>::MIN_SERIALIZED_SIZE +
+        <::bebop::SliceWrapper<'raw, ForeignKey>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.editor_id.serialized_size() +
+        self.reservation_id.serialized_size() +
+        self.keys.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.editor_id._serialize_chained(dest)? +
+            zelf.reservation_id._serialize_chained(dest)? +
+            zelf.keys._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            editor_id: v0,
+            reservation_id: v1,
+            keys: v2,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatKeyReservation<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CompatBeginRequest<'raw> {
+    pub tags: ::std::vec::Vec<&'raw str>,
+    pub reserve_keys: u32,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatBeginRequest<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <::std::vec::Vec<&'raw str>>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.tags.serialized_size() +
+        self.reserve_keys.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.tags._serialize_chained(dest)? +
+            zelf.reserve_keys._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            tags: v0,
+            reserve_keys: v1,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatBeginRequest<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CompatBeginReply<'raw> {
+    pub version: u64,
+    pub update_id: u32,
+    pub mutation_epoch: u64,
+    pub composition: ForeignOptionalKey,
+    pub reservation: CompatKeyReservation<'raw>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatBeginReply<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <u64>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE +
+        <u64>::MIN_SERIALIZED_SIZE +
+        <ForeignOptionalKey>::MIN_SERIALIZED_SIZE +
+        <CompatKeyReservation<'raw>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.version.serialized_size() +
+        self.update_id.serialized_size() +
+        self.mutation_epoch.serialized_size() +
+        self.composition.serialized_size() +
+        self.reservation.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.version._serialize_chained(dest)? +
+            zelf.update_id._serialize_chained(dest)? +
+            zelf.mutation_epoch._serialize_chained(dest)? +
+            zelf.composition._serialize_chained(dest)? +
+            zelf.reservation._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            version: v0,
+            update_id: v1,
+            mutation_epoch: v2,
+            composition: v3,
+            reservation: v4,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatBeginReply<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CompatNodeOperand {
+    /// An unknown type which is likely defined in a newer version of the schema.
+    Unknown,
+
+    /// Discriminator 1
+    CompatNoNode {
+    },
+
+    /// Discriminator 2
+    CompatCapturedNode {
+        record: ForeignRecordRef,
+    },
+
+    /// Discriminator 3
+    CompatReservedNode {
+        reservation_id: u64,
+        key: ForeignKey,
+    },
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatNodeOperand {
+    const MIN_SERIALIZED_SIZE: usize = ::bebop::LEN_SIZE + 1;
+
+    fn serialized_size(&self) -> usize {
+        ::bebop::LEN_SIZE + 1 +
+        match self {
+            CompatNodeOperand::Unknown => {
+                0
+            }
+            Self::CompatNoNode {
+            }
+            => {
+                0
+            }
+            Self::CompatCapturedNode {
+                record: ref _record,
+            }
+            => {
+                _record.serialized_size()
+            }
+            Self::CompatReservedNode {
+                reservation_id: ref _reservation_id,
+                key: ref _key,
+            }
+            => {
+                _reservation_id.serialized_size() +
+                _key.serialized_size()
+            }
+        }
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        let size = zelf.serialized_size();
+        ::bebop::write_len(dest, size - ::bebop::LEN_SIZE - 1)?;
+        match zelf {
+            Self::Unknown => {
+                return Err(::bebop::SerializeError::CannotSerializeUnknownUnion);
+            }
+            Self::CompatNoNode {
+            }
+            => {
+                1u8._serialize_chained(dest)?;
+            }
+            Self::CompatCapturedNode {
+                record: ref _record,
+            }
+            => {
+                2u8._serialize_chained(dest)?;
+                _record._serialize_chained(dest)?;
+            }
+            Self::CompatReservedNode {
+                reservation_id: ref _reservation_id,
+                key: ref _key,
+            }
+            => {
+                3u8._serialize_chained(dest)?;
+                _reservation_id._serialize_chained(dest)?;
+                _key._serialize_chained(dest)?;
+            }
+        }
+        Ok(size)
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let len = ::bebop::read_len(raw)? + ::bebop::LEN_SIZE + 1;
+        let mut i = ::bebop::LEN_SIZE + 1;
+        let de = match raw[::bebop::LEN_SIZE] {
+            1 => {
+                CompatNodeOperand::CompatNoNode {}
+            }
+            2 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                CompatNodeOperand::CompatCapturedNode {
+                    record: v0,
+                }
+            }
+            3 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                CompatNodeOperand::CompatReservedNode {
+                    reservation_id: v0,
+                    key: v1,
+                }
+            }
+            _ => {
+                i = len;
+                CompatNodeOperand::Unknown
+            }
+        };
+        if !cfg!(feature = "unchecked") && i != len {
+            debug_assert!(i > len);
+            Err(::bebop::DeserializeError::CorruptFrame)
+        }
+        else {
+            Ok((i, de))
+        }
+    }
+
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatNodeOperand {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CompatCaptureLeases<'raw> {
+    pub editor_id: u32,
+    pub retain: ::bebop::SliceWrapper<'raw, u64>,
+    pub release: ::bebop::SliceWrapper<'raw, u64>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatCaptureLeases<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <u32>::MIN_SERIALIZED_SIZE +
+        <::bebop::SliceWrapper<'raw, u64>>::MIN_SERIALIZED_SIZE +
+        <::bebop::SliceWrapper<'raw, u64>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.editor_id.serialized_size() +
+        self.retain.serialized_size() +
+        self.release.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.editor_id._serialize_chained(dest)? +
+            zelf.retain._serialize_chained(dest)? +
+            zelf.release._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            editor_id: v0,
+            retain: v1,
+            release: v2,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatCaptureLeases<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CompatRecordDelta<'raw> {
+    pub records: ::std::vec::Vec<ForeignRenderRecord<'raw>>,
+    pub removed_keys: ::bebop::SliceWrapper<'raw, ForeignKey>,
+    pub invalidate_root_text: bool,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatRecordDelta<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <::std::vec::Vec<ForeignRenderRecord<'raw>>>::MIN_SERIALIZED_SIZE +
+        <::bebop::SliceWrapper<'raw, ForeignKey>>::MIN_SERIALIZED_SIZE +
+        <bool>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.records.serialized_size() +
+        self.removed_keys.serialized_size() +
+        self.invalidate_root_text.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.records._serialize_chained(dest)? +
+            zelf.removed_keys._serialize_chained(dest)? +
+            zelf.invalidate_root_text._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            records: v0,
+            removed_keys: v1,
+            invalidate_root_text: v2,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatRecordDelta<'raw> {}
+
 pub const FOREIGN_HOST_PROTOCOL_MAJOR: u32 = 1;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -5194,6 +5589,326 @@ pub mod owned {
 
     impl<'raw> ::bebop::Record<'raw> for CompatSelectionPatch {}
 
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct CompatKeyReservation {
+        pub editor_id: u32,
+        pub reservation_id: u64,
+        pub keys: ::std::vec::Vec<ForeignKey>,
+    }
+
+    impl<'raw> ::core::convert::From<super::CompatKeyReservation<'raw>> for CompatKeyReservation {
+        fn from(value: super::CompatKeyReservation) -> Self {
+            Self {
+                editor_id: value.editor_id,
+                reservation_id: value.reservation_id,
+                keys: value.keys.iter().map(|value| value).collect(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for CompatKeyReservation {
+        const MIN_SERIALIZED_SIZE: usize =
+            <u32>::MIN_SERIALIZED_SIZE +
+            <u64>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<ForeignKey>>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.editor_id.serialized_size() +
+            self.reservation_id.serialized_size() +
+            self.keys.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.editor_id._serialize_chained(dest)? +
+                zelf.reservation_id._serialize_chained(dest)? +
+                zelf.keys._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                editor_id: v0,
+                reservation_id: v1,
+                keys: v2,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for CompatKeyReservation {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct CompatBeginRequest {
+        pub tags: ::std::vec::Vec<String>,
+        pub reserve_keys: u32,
+    }
+
+    impl<'raw> ::core::convert::From<super::CompatBeginRequest<'raw>> for CompatBeginRequest {
+        fn from(value: super::CompatBeginRequest) -> Self {
+            Self {
+                tags: value.tags.into_iter().map(|value| value.into()).collect(),
+                reserve_keys: value.reserve_keys,
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for CompatBeginRequest {
+        const MIN_SERIALIZED_SIZE: usize =
+            <::std::vec::Vec<String>>::MIN_SERIALIZED_SIZE +
+            <u32>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.tags.serialized_size() +
+            self.reserve_keys.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.tags._serialize_chained(dest)? +
+                zelf.reserve_keys._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                tags: v0,
+                reserve_keys: v1,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for CompatBeginRequest {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct CompatBeginReply {
+        pub version: u64,
+        pub update_id: u32,
+        pub mutation_epoch: u64,
+        pub composition: ForeignOptionalKey,
+        pub reservation: CompatKeyReservation,
+    }
+
+    impl<'raw> ::core::convert::From<super::CompatBeginReply<'raw>> for CompatBeginReply {
+        fn from(value: super::CompatBeginReply) -> Self {
+            Self {
+                version: value.version,
+                update_id: value.update_id,
+                mutation_epoch: value.mutation_epoch,
+                composition: value.composition,
+                reservation: value.reservation.into(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for CompatBeginReply {
+        const MIN_SERIALIZED_SIZE: usize =
+            <u64>::MIN_SERIALIZED_SIZE +
+            <u32>::MIN_SERIALIZED_SIZE +
+            <u64>::MIN_SERIALIZED_SIZE +
+            <ForeignOptionalKey>::MIN_SERIALIZED_SIZE +
+            <CompatKeyReservation>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.version.serialized_size() +
+            self.update_id.serialized_size() +
+            self.mutation_epoch.serialized_size() +
+            self.composition.serialized_size() +
+            self.reservation.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.version._serialize_chained(dest)? +
+                zelf.update_id._serialize_chained(dest)? +
+                zelf.mutation_epoch._serialize_chained(dest)? +
+                zelf.composition._serialize_chained(dest)? +
+                zelf.reservation._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                version: v0,
+                update_id: v1,
+                mutation_epoch: v2,
+                composition: v3,
+                reservation: v4,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for CompatBeginReply {}
+
+    pub use super::CompatNodeOperand;
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct CompatCaptureLeases {
+        pub editor_id: u32,
+        pub retain: ::std::vec::Vec<u64>,
+        pub release: ::std::vec::Vec<u64>,
+    }
+
+    impl<'raw> ::core::convert::From<super::CompatCaptureLeases<'raw>> for CompatCaptureLeases {
+        fn from(value: super::CompatCaptureLeases) -> Self {
+            Self {
+                editor_id: value.editor_id,
+                retain: value.retain.iter().map(|value| value).collect(),
+                release: value.release.iter().map(|value| value).collect(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for CompatCaptureLeases {
+        const MIN_SERIALIZED_SIZE: usize =
+            <u32>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<u64>>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<u64>>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.editor_id.serialized_size() +
+            self.retain.serialized_size() +
+            self.release.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.editor_id._serialize_chained(dest)? +
+                zelf.retain._serialize_chained(dest)? +
+                zelf.release._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                editor_id: v0,
+                retain: v1,
+                release: v2,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for CompatCaptureLeases {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct CompatRecordDelta {
+        pub records: ::std::vec::Vec<ForeignRenderRecord>,
+        pub removed_keys: ::std::vec::Vec<ForeignKey>,
+        pub invalidate_root_text: bool,
+    }
+
+    impl<'raw> ::core::convert::From<super::CompatRecordDelta<'raw>> for CompatRecordDelta {
+        fn from(value: super::CompatRecordDelta) -> Self {
+            Self {
+                records: value.records.into_iter().map(|value| value.into()).collect(),
+                removed_keys: value.removed_keys.iter().map(|value| value).collect(),
+                invalidate_root_text: value.invalidate_root_text,
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for CompatRecordDelta {
+        const MIN_SERIALIZED_SIZE: usize =
+            <::std::vec::Vec<ForeignRenderRecord>>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<ForeignKey>>::MIN_SERIALIZED_SIZE +
+            <bool>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.records.serialized_size() +
+            self.removed_keys.serialized_size() +
+            self.invalidate_root_text.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.records._serialize_chained(dest)? +
+                zelf.removed_keys._serialize_chained(dest)? +
+                zelf.invalidate_root_text._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                records: v0,
+                removed_keys: v1,
+                invalidate_root_text: v2,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for CompatRecordDelta {}
+
     pub use super::FOREIGN_HOST_PROTOCOL_MAJOR;
 
     pub use super::ForeignOpaqueValue;
@@ -7714,4 +8429,4 @@ pub mod owned {
     pub use super::ForeignNativeField;}
 
 /// Exact source schema fingerprint for the paired compatibility adapter.
-pub const COMPATIBILITY_SCHEMA_HASH: &str = "f54016202934ac63303df846dbcb5abdc26e3cb57aa3797a74c238ce417af999";
+pub const COMPATIBILITY_SCHEMA_HASH: &str = "51304e5fdc885d3d80f50d777da8fe8a3f05ed1e39a1f740f2296b9cb58cce94";
