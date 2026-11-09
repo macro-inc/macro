@@ -1,0 +1,64 @@
+// Editor-local IDs never contain JavaScript objects or JSON-coerced JS values.
+// Opaque IDs reserve zero; node index zero remains the root. The host checks lifetimes/versions.
+const uint32 FOREIGN_HOST_PROTOCOL_MAJOR = 1;
+
+union ForeignOpaqueValue {
+  1 -> struct ForeignMissing { }
+  2 -> struct ForeignUndefined { }
+  3 -> struct ForeignNull { }
+  4 -> struct ForeignSlot { uint32 slotId; }
+}
+
+enum ForeignNodeKind : byte { Unknown = 0; Element = 1; Text = 2; Decorator = 3; LineBreak = 4; }
+enum ForeignAccess : byte { Unknown = 0; Read = 1; Frozen = 2; Writable = 3; Stage = 4; }
+struct ForeignKey { uint32 index; uint32 generation; }
+struct ForeignOptionalKey { bool present; ForeignKey key; }
+struct ForeignEditorRef { uint32 editorId; }
+struct ForeignStateRef { uint32 editorId; uint64 version; }
+struct ForeignNodeRef { uint32 editorId; uint64 version; ForeignKey key; uint32 classId; uint32 instanceId; }
+struct ForeignSelectionRef { uint32 editorId; uint64 version; uint32 selectionId; }
+struct ForeignRecordRef { ForeignNodeRef node; uint32 updateId; ForeignAccess access; }
+
+// Derived hook bit order comes from lexical_model::ForeignHook, not a parallel enum.
+struct ForeignClassRegistration { uint32 classId; string typeName; string className; ForeignNodeKind kind; uint32[] ancestry; string nativeType; uint64 hooks; }
+
+// Base patches carry only scalar base fields; no tree edge is ever patched here.
+message ForeignTextBase { 1 -> uint16[] text; 2 -> uint32 format; 3 -> uint32 detail; 4 -> byte mode; 5 -> string style; }
+message ForeignElementBase { 1 -> uint32 format; 2 -> uint32 indent; 3 -> byte direction; 4 -> uint32 textFormat; 5 -> string textStyle; 6 -> string style; }
+message ForeignBasePatch { 1 -> ForeignTextBase text; 2 -> ForeignElementBase element; }
+struct ForeignTreeLinks { ForeignOptionalKey parent; ForeignOptionalKey previous; ForeignOptionalKey next; ForeignOptionalKey first; ForeignOptionalKey last; uint32 size; }
+
+// ctorKey is the key observed by static clone's constructor. The framework then
+// assigns destination.key before afterCloneFrom; a copy can have a fresh key.
+struct ForeignCloneStage { uint32 stageId; uint32 editorId; uint32 updateId; uint64 version; ForeignNodeRef source; ForeignKey ctorKey; ForeignNodeRef destination; ForeignBasePatch base; ForeignOpaqueValue ownFields; ForeignTreeLinks requiredLinks; }
+// observedLinks are checked against requiredLinks; they never rewrite the graph.
+struct ForeignCloneAck { uint32 stageId; uint32 classId; uint32 instanceId; ForeignKey ctorKey; ForeignKey destinationKey; ForeignBasePatch basePatch; ForeignOpaqueValue ownFields; ForeignTreeLinks observedLinks; }
+
+// The explicit prototype class makes TextNode.prototype calls on a Tab instance
+// bypass Tab's override without changing the receiver's concrete identity.
+struct ForeignFieldRead { ForeignRecordRef record; uint32 prototypeClassId; string field; }
+struct ForeignFieldWrite { ForeignRecordRef record; uint32 prototypeClassId; string field; ForeignOpaqueValue value; }
+struct ForeignStateConfig { uint32 configId; string key; bool flat; }
+enum ForeignStateOperation : byte { Unknown = 0; Parse = 1; Unparse = 2; IsEqual = 3; IsDefault = 4; }
+struct ForeignStateCall { uint32 configId; ForeignStateOperation operation; ForeignOpaqueValue left; ForeignOpaqueValue right; }
+
+// Node/selection/state references are typed even when other callback values are
+// opaque slots; a slot must never stand in for one of these native references.
+union ForeignCallbackValue {
+  1 -> struct ForeignOpaqueArgument { ForeignOpaqueValue value; }
+  2 -> struct ForeignNodeArgument { ForeignNodeRef value; }
+  3 -> struct ForeignSelectionArgument { ForeignSelectionRef value; }
+  4 -> struct ForeignStateArgument { ForeignStateRef value; }
+  5 -> struct ForeignRecordArgument { ForeignRecordRef value; }
+  6 -> struct ForeignEditorArgument { ForeignEditorRef value; }
+  7 -> struct ForeignNodeArrayArgument { ForeignNodeRef[] values; }
+}
+struct ForeignHookCall { uint32 callbackId; byte hook; ForeignRecordRef receiver; uint32 prototypeClassId; ForeignCallbackValue[] args; }
+
+// Fallback is never conflated with undefined/null. Errors retain the thrown JS
+// value in an opaque slot, including when the thrown value itself is undefined.
+union ForeignHookResult {
+  1 -> struct ForeignReturned { ForeignCallbackValue value; }
+  2 -> struct ForeignInherited { }
+  3 -> struct ForeignThrown { ForeignOpaqueValue error; }
+}
