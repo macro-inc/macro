@@ -231,6 +231,26 @@ domain. Both should appear in the team's member list and configured auto-join
 channels without an upgrade prompt. Repeat with auto-join disabled to verify a
 same-domain signup is not added automatically.
 
+### Team subscription breakdown
+
+On the existing **Billing** page, billing admins with an active provider
+subscription see **Subscription breakdown** below their plan. It shows actual
+paid **Human seats**, each mapped computer's size, status,
+and current subscription price, and any other provider subscription items.
+Each computer appears once, with recorded specifications when available; there is
+no duplicate Computers subtotal. Included rows say **Included**, with an
+**Included for Macro** note. If today’s catalog price differs from an existing
+charge, the row keeps the actual subscribed amount and explains the new-computer price.
+
+**Total per month/year** uses the current subscription interval and currency.
+Amounts use that currency's minor-unit precision, including zero-decimal currencies.
+**Next invoice** uses the provider's upcoming amount due and invoice date;
+proration or credits can make it differ from the subscription total. There
+are no estimated taxes or invented add-ons. Without an active subscription,
+or without billing access, the existing plan UI remains; no invoice or
+currency amount is fabricated. On a phone the rows wrap within the existing
+Settings card, and the page scrolls vertically.
+
 ### Navigation
 
 On phones, **More views → Settings** opens an inset glass sheet over the current
@@ -752,7 +772,7 @@ New macrod sessions use the agent's saved model before sending the first prompt.
 Changing that default applies to new sessions; existing sessions keep their selected model.
 If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
-Under its title and description, the `Runtimes` section shows the MacroD `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog, on every platform. The `Runtimes` section shows built-in Macro, Cursor, and Codex configuration, followed by paired macrod runtimes. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and a larger Full access choice labeled Suggested (unchecked until explicitly selected). `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this runtime) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. Before this computer is paired, a dismissible “Run agents on this computer” invitation also appears above the Home input and the Agents new-conversation and active-session inputs; its `Set up` runs the same flow in a dialog in place, and dismissal applies only to this user on this computer. The Runtimes settings tab stays available in the desktop app even if the newer Agents view is disabled. A running runtime with no agent bound to it offers `Create agent`. The daemon runs with the user's interactive login-shell environment (variables exported from `.zshrc` and the like), so agents authenticate as they do in a terminal. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped runtime offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission bypass, then Approve and Done. Each row under Connected runtimes shows its name, `Team machine`/`Private`, connection, an `Allow bypassing permission requests` switch (confirmation on enable; applies from each session's next turn) and the owner's `Share` / `Rename` actions. A runtime's name and bypass are set only here, and its sharing through Share; macrod.toml holds only machine-local config, and macrod refuses a file that still sets `[identity]` or a credentials `scope`. Desktop setup's Full access choice turns on that switch for the new runtime. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. Every paired runtime has one person as its owner; its `Team machine` or `Private` label says whether every teammate is a user of it. Everyone else on the team can see it and holds a role: No Access, Read (sees what is on it but cannot run agents), or User (can run agents); non-coding agents bound to it are Residents. Its owner's `Share` button, which counts waiting access requests, opens the runtime Share menu: the `Team machine` switch, the owner, residents, people with a `Read` or `User` role picker, access requests with `Approve` and `Deny`, and a filterable list of teammates to `Add` as users. It has no link, channel or outside sharing. Removing or lowering access a resident depends on first warns that it shuts the agent down. `Remove` shows only for the owner and, on a team machine, the team's owner. The user card lists a person's runtimes and the viewer's role, with `Request access` for those the viewer cannot run agents on; agent cards and the agent session pane show the runtime an agent runs on, with the same action. Opening an access-request notification lands on this section. The team `Invite to Team` dialog offers `Share your runtimes`, making the invitee a user of each one chosen, when the inviter owns any. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
+Under its title and description, the `Runtimes` section shows the MacroD `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog, on every platform. The `Runtimes` section shows built-in Macro, Cursor, and Codex configuration, followed by paired macrod runtimes. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in runtimes: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and a larger Full access choice labeled Suggested (unchecked until explicitly selected). `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this runtime) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. Before this computer is paired, a dismissible “Run agents on this computer” invitation also appears above the Home input and the Agents new-conversation and active-session inputs; its `Set up` runs the same flow in a dialog in place, and dismissal applies only to this user on this computer. The Runtimes settings tab stays available in the desktop app even if the newer Agents view is disabled. A running runtime with no agent bound to it offers `Create agent`. The daemon runs with the user's interactive login-shell environment (variables exported from `.zshrc` and the like), so agents authenticate as they do in a terminal. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped runtime offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Runtimes navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New runtime` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission bypass, then Approve and Done. Each row under Connected runtimes shows its name, Private/Team, connection, an `Allow bypassing permission requests` switch (confirmation on enable; applies from each session's next turn) and `Rename` / `Remove` actions. Macro computers show their badge and use the computer release action instead of `Remove`. A runtime's name and bypass are set only here, and sharing can also be changed through Share; macrod.toml holds only machine-local config, and macrod refuses a file that still sets `[identity]` or a credentials `scope`. Desktop setup's Full access choice turns on that switch for the new runtime. Back/Cancel returns to the runtime list. Destructive removal still requires confirmation. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported. Every paired runtime has one person as its owner; its `Team machine` or `Private` label says whether every teammate is a user of it. Everyone else on the team can see it and holds a role: No Access, Read (sees what is on it but cannot run agents), or User (can run agents); non-coding agents bound to it are Residents. Its owner's `Share` button, which counts waiting access requests, opens the runtime Share menu: the `Team machine` switch, the owner, residents, people with a `Read` or `User` role picker, access requests with `Approve` and `Deny`, and a filterable list of teammates to `Add` as users. It has no link, channel or outside sharing. Removing or lowering access a resident depends on first warns that it shuts the agent down. `Remove` shows only for the owner and, on a team machine, the team's owner. The user card lists a person's runtimes and the viewer's role, with `Request access` for those the viewer cannot run agents on; agent cards and the agent session pane show the runtime an agent runs on, with the same action. Opening an access-request notification lands on this section. The team `Invite to Team` dialog offers `Share your runtimes`, making the invitee a user of each one chosen, when the inviter owns any. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported.
 Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action. Beside it,
 the composer's speedometer effort control (the bottom sheet on touch) offers the
@@ -783,6 +803,98 @@ OAuth token.
 The Codex section and its auth/config requests were exercised in Chromium with
 mocked backend responses on 2026-09-15. Provider login and a full deployed Macro
 session were not exercised by that UI check.
+
+### Macro computers
+
+Macro computers are hosted machines a team buys for its agents, billed on
+the team subscription. They sit in `Runtimes`, behind the
+`enable-macro-computers` flag for purchases and Claude account controls, and
+need a team: without one the page shows nothing about them. The flag follows
+PostHog in every environment unless explicitly overridden locally. With the
+flag off, existing computers stay listed in Runtimes and team Billing, and
+management actions including Cancel and Release stay available. Team purchase,
+quote and offers return 403 when the rollout is off, missing or unavailable.
+Every team member sees the **Macro computers**
+list; only team admins and owners see the buying card and the row controls.
+
+If the environment has no computer prices configured, offers, quotes, and
+purchases answer 503 with `computers are not available in this environment`.
+Partial price configuration prevents the authentication service from starting.
+Runtimes rows and the team Billing computers list show the recorded resources
+(vCPU, GiB memory and GiB disk), even when the purchase catalog changes.
+
+To buy one as a team admin:
+
+1. Open `/app/settings/runtimes` (mobile: Settings sheet → Runtimes).
+2. Under **Get a Macro computer**, pick a size radio (**Standard**, **Large**,
+   **XL**); each shows vCPU, memory and disk in GiB, and its price per interval. A
+   sold-out size is disabled and offers **Notify me**, which turns into
+   "We'll let you know".
+3. Press **Continue**. The dialog (a drawer on phones) titled
+   **Buy a <size> Macro computer?** sizes to its content and shows the shared
+   item/specifications/amount breakdown, total and proration note. **Name
+   (optional)** names the computer.
+4. Press **Buy · <price>/month** (or the quoted year interval). A zero-price
+   offer keeps the breakdown with Included amounts and a plain **Buy** action. Failures stay in the dialog: sold out (409),
+   payment declined (402), or a subscription that can't add computers (422).
+   On success the dialog closes with "Computer purchased. Setting it up now."
+
+The new row reads **Setting up** with its step (creating, starting up,
+connecting, ready; "step N of 4"). Payment recovery also reports creating;
+no payment stage is shown. A computer blocked by awake host capacity instead
+shows **Waiting for space on the host**, with "Turn off or release another
+computer on this host to make room". It has no setup step; admins can turn it
+off or release it. This applies both before and after first enrollment, on
+desktop and mobile. The list polls every 3 seconds
+while any computer is setting up, waiting for capacity, waking or stopping. Once ready a row shows
+its size, the vCPU/memory/disk resources recorded at purchase, status (**Ready**, **Asleep**, **Waking**, **Stopping**,
+**Stopped**, **Failed**), its Claude access mode, and the runtime it
+registered as with a connection dot; that runtime's row under **Connected
+runtimes** carries a **Macro computer** badge and no Remove. Admin controls
+on each row:
+
+- **Power** switch: on/off, available when Ready, Asleep, Stopped or waiting for capacity.
+- **Cancel at period end**: billing stops at the period end, shown as
+  "Cancels <date>"; **Keep computer** undoes it until then. After the period
+  a canceled computer shows "Disk deleted <date>".
+- **Release now**: a content-sized dialog explains the computer and its disk are destroyed
+  now with no refund; **Release now** stays disabled until the computer's
+  exact name is typed.
+
+When a computer first becomes ready, the team gets **Claude Code · <name>**
+(`@claude-code-<name>`, with `-2`, `-3`… when that handle is taken): a team
+coding agent on the computer, created by the buyer, on Claude Code's default
+model, all channels and the runner's connected apps. It is created only on the
+first connection, so deleting or moving it never brings it back; if creating it
+fails, setup still finishes and anyone can create one under **Agents**. Each
+computer row lists the agents bound to its runtime after **Agents**, by name and
+`@handle`. Any teammate can pick the computer under **Where it runs**
+(`<name> · Team machine`) for a private or team agent.
+
+**Sign in with Claude** opens Claude's OAuth page. Paste the code or localhost
+callback URL back into the form and press **Complete sign-in**. **Cancel**
+kills the pending sign-in on the computer and closes the paste form, including
+while a code is being submitted. **Sign in with Claude** stays disabled while
+starting, while the paste form is open, and while its result is pending. Leaving
+the controls aborts the request and cancels the pending sign-in. These controls
+behave the same way on desktop and mobile. A rejected code
+shows “That code didn't work — sign in again to get a new one”; start again to
+obtain a fresh code. A 409 shows “Another sign-in is in progress on this computer
+— try again shortly”. New sessions then use that Claude account. **Use Macro
+credits** signs out on the computer.
+
+Team **Billing** lists the same computers under **Macro computers** with size,
+status, cancel date and price per interval.
+
+Each enrolled computer shows **Claude: Macro credits** or **Claude: your account**.
+Harness managers can press **Sign in with Claude**, which opens Claude in a new
+tab. Finish signing in there, then paste the code or callback URL into **Paste
+the code or the URL you were sent to** and press **Complete sign-in**. The input
+accepts surrounding whitespace. If the new tab was blocked, use **Open Claude
+sign-in** beside the field. Successful sign-in switches the label to your account;
+**Use Macro credits** signs the computer out and restores Macro credits. Request
+failures appear inline. Members without management rights see the mode without
+account controls. This account is used by Claude on the shared computer.
 
 ### GitHub reconnect recovery
 

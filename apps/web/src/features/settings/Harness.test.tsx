@@ -2,6 +2,9 @@ const codexAccess = vi.hoisted(() => ({ enabled: true }));
 vi.mock('@core/codex/flag', () => ({
   useCodexAgentsAccess: () => () => codexAccess.enabled,
 }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false, loading: false }),
+}));
 
 /**
  * @vitest-environment jsdom
@@ -33,6 +36,18 @@ vi.mock('@ui', async (importOriginal) => ({
 
 vi.mock('./codex/views/CodexHarness', () => ({
   CodexHarness: () => <div data-testid="codex-harness" />,
+}));
+
+vi.mock('./computers/views/MacroComputers', () => ({
+  MacroComputers: () => null,
+}));
+
+vi.mock('./computers/primitives/team-computers', () => ({
+  useTeamComputers: () => ({
+    enabled: () => false,
+    computers: () => [],
+    failed: () => false,
+  }),
 }));
 
 const mocks = vi.hoisted(() => ({

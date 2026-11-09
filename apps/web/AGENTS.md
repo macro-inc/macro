@@ -518,6 +518,14 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Settings → Integrations: one searchable list row per integration, styled like
   the Drive/Tasks lists, custom MCP servers then connected ones first,
   described by what each does in Macro; preserve `agent-connections` and `team-connections` as aliases for existing links.
+- Keep Macro computers (`features/settings/computers`) team-only. Gate purchase
+  and Claude account surfaces with `enableMacroComputers`
+  (`enable-macro-computers`); keep existing lists in Runtimes and Billing and
+  management actions available with rollout off. `useTeamComputers` loads by
+  team membership and exposes `canPurchase` separately. Members read; admins
+  buy and manage. Show the exact price before buying, and release only after
+  the computer's name is typed. See the
+  [Macro computers walkthrough](../../docs/agent-guide/settings.md#macro-computers).
 - Keep bot setup focused on the token-and-SDK workflow; Agent and Ownership
   controls live under collapsed Advanced settings. See the
   [Bots walkthrough](../../docs/agent-guide/settings.md#bots).
@@ -1102,178 +1110,28 @@ Reuse the responsive import review for Notion, Linear and Jira; scope report
 queries and cancellation to the saved draft source. Issue tracker handoffs
 call the reviewed workspace tools, and show separate task/project totals.
 
-### Agent backend hosting
+### Computer Claude access
 
-Cognition, routines, preview control, and MCP share `agent_harness_service`.
-Agent replies can use the existing `m-document-mention` format with
-`blockName: "routine"`; the `@` menu offers routines only to their owner in
-channel composers, where picking one shares it as a template.
-Direct local hosts use port 8101 with the existing feature prefixes; the
-instance proxy retains `/cognition`, `/scheduled-action`, and `/preview`.
+Settings computer rows compose `ComputerClaudeAccess`; managers fetch
+`claude-mode`, while other members read the harness list's `claude_mode`.
+The backend also requires management rights for Claude account changes.
+Focused tests: `bun run test src/features/settings/computers`.
 
-## File downloads
+Use the existing Billing route's `SubscriptionStatus.billing` for actual seat,
+computer, total and next-invoice amounts; never calculate a bill from catalog
+quotes. Format provider minor units using currency precision and Stripe's
+ISK/UGX wire-format exceptions.
+`TeamBillingBreakdown` renders provider lines behind `enableMacroComputers`; a
+null breakdown or the flag off keeps the existing plan and computers UI.
 
-Channel videos, linked video previews, and Drive video/image/code/canvas/unknown previews share
-`createFileDownload` and `FileDownloadButton`. Keep menu and visible controls
-bound to the same controller. Call recording menus and the list-row Download
-(`makeDownloadAction`) use the same controller; the list action runs it under
-its own root, because choosing a context-menu item disposes the menu's owner.
-Download hands off directly to browser downloads
-or the native save picker. Show channel Download on hover or keyboard focus,
-always on touch, without a footer. Keep system Share inside the touch Download
-menu; desktop Share belongs to Macro permissions. Do not add a custom
-confirmation sheet. Snapshot file/version before loading, cancel on disposal or
-selection change, and preserve original filenames from static-file metadata.
-Native Android and iOS use bounded byte exports. Older iOS binaries use Web
-Share until the optional file-export bridge ships. If browser activation expires
-while preparing a share, retain the bytes and let the same action's next tap
-open the system sheet synchronously. Browser success means handoff, not confirmed
-disk completion. See the native bridge's `tauri/file_export_plugin/AGENTS.md`.
-Keep download confirmations title-only and lightbox Download controls icon-only.
-Keep the expanded video first in the dialog's tab order so initial Space presses
-control native playback; restore focus to its opener on close.
+Reuse `PriceBreakdown` for Macro computer purchase and
+subscription billing: item/spec subline/amount, divider, total and billing note.
+Keep included rows visible, use GiB throughout, and size confirmation/release
+dialogs to content. Billing renders each computer once and uses provider amounts;
+show a differing catalog price as context without replacing a subscribed charge.
 
-The backend-free browser regression downloads real fixture bytes from channel
-cards, the expanded viewer, and the shared Drive/standalone header on desktop,
-phone, and tablet, and checks Space playback on opening and reopening the viewer:
-`bunx playwright test --config src/lib/core/component/FileDownload/browser-test/playwright.config.ts`.
-See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files).
+### Computer capacity
 
-## Interface icons
-- Task rows, property values, document mention pills, and @mention menu rows use `TaskStatusIcon` with the current status property; use the task subtype completion flag only when a recognized status is unavailable. Task lists edit status and priority through leading `TaskPropertyControl` icons before the title, not duplicate columns or trailing pills. Mention pills show status only in that leading icon, not again among the trailing task badges. Keep generic navigation and creation on the custom checked-square task icon, independent of task state.
-- Read [the icon system rules](src/components/icon/system/README.md) before adding or changing interface icons or icon motion. Reuse the original Macro SVG family via individual `@icon/system/...` imports; do not introduce another icon set.
-- If a glyph is missing, author original SVG geometry on the 24-unit grid with round caps/joins, restrained detail, `currentColor`, and the documented theme-aware weight. Never trace or import proprietary symbol paths. Match active/bold variants and review 14/16/20/24 px in light and dark mode.
-- Interactive glyphs use the shared `installIconMotion` behavior; do not add per-button bounce/spin effects. Keep state indicators static, preserve accessible control names, and honor reduced motion. See the icon README for wrapper and opt-out attributes.
-
-### Creation choices and notifications
-
-- Reuse `CreateMenuItem` for explanatory New menu entries (`CreateMenuRadioItem` when a create dialog picks a type in a `Dropdown.RadioGroup`): original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
-- Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
-- Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. Quiet hours on the same page silence those sounds and skip desktop alerts on a per-device weekly schedule; incoming calls still ring. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
-
-### Agent result task lists
-
-Agent result task titles wrap above live metadata; nested horizontal groups
-stack below 672px of container width. The backend-free browser regression is
-`bunx playwright test --config src/features/dynamic-ui/browser-test/playwright.config.ts`.
-It covers desktop and touch layouts, narrow containers inside a wide viewport,
-unbroken titles, and keyboard opening.
-
-### Inline property values
-
-Inline property fields stay `readOnly`, never `disabled`, while they save: a
-browser moves focus off a disabled field, so a failed save would strand it. Enter
-and Escape return focus to the value through `Property.Root`; tabbing or clicking
-away leaves focus where the user put it. The backend-free regression is
-`bunx playwright test --config src/features/property/editors/inline/browser-test/playwright.config.ts`.
-
-### Assignee people scope
-
-Use only the current team roster and available agents for new Assignee selections.
-Keep existing selected outsiders visible and removable, without contact discovery.
-Reuse the existing selected-first ordering at opening and keep row positions
-stable while selecting. Keep the generic roster hook in `src/lib/queries/team/members.ts`.
-Preserve each picker’s existing placeholder, sizing, and row styling.
-Preserve filter-only Me/Unassigned choices, company-owner scope, and unrelated
-people/contact fields.
-Keep the shared filter Assignee picker in `src/features/soup/assignee-picker.tsx`;
-import it directly from Tasks and legacy `next-soup` consumers.
-
-### Sidebar tag dragging
-
-Email and Calls sidebar tags can be dragged onto taggable desktop list rows.
-Keep existing tags and apply to the selected rows when the drop row is selected.
-Use the shared scoped drag helpers and overlayIcon for the tag chip.
-The backend-free browser regression is
-`bunx playwright test --config src/features/property/tags/browser-test/playwright.config.ts`.
-
-### Senders in email rows
-
-Sender names in Mail rows and collapsed thread messages keep their person card
-on hover; clicking the name or anywhere else on the row opens the email.
-`HoverCard` keeps the portal's placeholder inside its own `display: contents`
-wrapper: opening or closing the card otherwise changes the trigger's siblings,
-Solid can then detach and reinsert the trigger, and a press that closes the
-card loses its click. Cards opened from a row use `isolateClicks`, because
-Solid delivers portaled events through the component tree and a click on the
-card would also open the row. On touch, a collapsed message's picture lets the
-tap through to the row. The backend-free desktop/phone regression, over rows
-with two senders, is
-`bunx playwright test --config src/features/entity/browser-test/playwright.config.ts`.
-
-### Enter on a property pill
-
-A document control owns Enter unless a press focused it, including one given
-focus back when a mouse dismisses its picker. Tab reaches an editable pill
-directly; its hover card keeps a stop only on read-only values. Real focus
-heuristics decide this, so jsdom can't cover it. The backend-free browser
-regression is
-`bunx playwright test --config src/features/property/browser-test/playwright.config.ts`.
-
-Use `features/channel/channel-icon.tsx` for conversation identity in rows,
-favorites, and headers: channel pictures or hashtags, human/self-DM avatars,
-and bot personas share one renderer; keep surface sizing in the caller.
-
-- Advertise Mail v5 capsules only for the current browser engine or a verified supported installed native build; OTA bundle version alone cannot establish native capability.
-- Bound native Mail capability discovery to 1.5 seconds and cache the legacy profile on failure or timeout so stalled IPC cannot block GraphQL transport; record the selected profile and bounded outcome in HTTP and WebSocket setup spans without error text.
-
-### Inline comment drafts
-
-Use `MessageLoadError` for compact discussion/thread failures; missing resources
-show an unavailable state without a retry action or composer.
-
-Keep collaborative drafts as cursor-based overlays outside the shared editor tree.
-Flush pending text, catch up missing server history before publication, then
-publish the mark from an isolated peer with `PeerCommentUpdate`,
-and post the message only after acknowledgement. Refused operations never enter
-the editor's WAL, so a session without edit access writes nothing to Loro, not
-even state its editor derives; only editors remove a deleted comment's mark.
-Preserve input on failure. Cancelled publications retry mark
-cleanup from the user/document-scoped IndexedDB queue; preserve marks when a
-message request's outcome is uncertain. Keep failed cleanup entries queued without
-blocking later entries. Overlapping comments must retain each
-saved range through cancel, save, and collaboration updates.
-Comment controls preserve editor focus on both pointerdown and mousedown.
-The backend-free browser regression is
-`bunx playwright test --config src/features/block-md/comments/browser-test/playwright.config.ts`.
-It exercises selection, press, cancel, retry, and repeated posting in editor and
-commenter modes. The collaboration fixture includes concurrent remote edits,
-rejected updates, and a server that refuses a commenter's non-comment updates; provider tests cover message metadata arriving on either side
-of posting, multi-paragraph anchors, saved ranges, and cancellation during posting.
-
-## Performance
-
-### Tracing
-
-- Instrument loading with the flow API in the `instrumentation` skill; read the
-  traces with the [observability guide](../../docs/agent-guide/observability.md#web-performance-traces).
-  Tracing observes readiness; never drive app behavior from trace callbacks.
-- Keep document load, snapshot and editor phases under the routed view flow and
-  pass its span explicitly to sync/AI clients; never store spans by document id
-  or end caller-owned spans in collaboration code. Acquire agent sessions in the
-  active view span.
-- Put flows at the shared owner so every host inherits them: Soup status in
-  `SoupViewListContent`; channel tabs in `ChannelTabProvider`, with each host's
-  `channel.*.view` inside the panel's Suspense and the routed detail observing
-  `detail.view().status` as `channel.detail`; form tabs and panels in
-  `FormPageView` (keep its builder/layout session alive across tabs); form
-  responding (`view.form-respond`, `form.submit`) keyed on form and preview
-  mode; CRM detail in the shared company/contact views keyed by record and
-  section; Command-K input through `beginInteraction` and a query-keyed results
-  flow with debounce/source `usePending` phases, no manual per-input signals
-  (the universal-input browser suite checks the exported traces).
-- Cancel the form-submit measurement on teardown but let its in-flight save
-  finish; late completion must not scroll or measure another view.
-- Runtime resource samples and typing bursts use the `perf` class decision
-  (`Telemetry.config.sampled('perf')`) and the shared UI-operation observer: no
-  second observer, no per-key frame sampling, no listeners for unsampled users. Typing surfaces come from
-  static `data-input-surface` categories on editor/field owners, never caller
-  labels.
-- Keep record names, addresses, answers and query text out of attributes.
-
-### Entity rows
-
-- Keep `ListEntity` layout fields independently reactive (getters, not a
-  dynamic object spread); a spread makes a selection change revisit every
-  unrelated layout input. Profile with the
-  [entity collection fixture](src/features/entity/browser-test/README.md).
+Computer offers expose `soldOut` availability. Use generated auth types. Show `waiting_for_capacity`
+as a capacity wait with its translated hint in Runtimes and Billing, including
+on mobile; retain power controls and polling while waiting.

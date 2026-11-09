@@ -9,6 +9,7 @@ import channelSections from './en/channel-sections';
 import commandMenu from './en/command-menu';
 import commands from './en/commands';
 import common from './en/common';
+import computers from './en/computers';
 import create from './en/create';
 import crm from './en/crm';
 import entityActions from './en/entity-actions';
@@ -17,6 +18,7 @@ import mobile from './en/mobile';
 import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
 import runtimeSharing from './en/runtime-sharing';
+import settingsBilling from './en/settings-billing';
 import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
@@ -41,6 +43,7 @@ export default {
   commandMenu,
   commands,
   common,
+  computers,
   create,
   crm,
   entityActions,
@@ -48,6 +51,7 @@ export default {
   mobile,
   nav,
   notificationsInbox,
+  settingsBilling,
   runtimeSharing,
   settingsLanguage,
   settingsMobileApp,

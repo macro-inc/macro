@@ -46,12 +46,15 @@ vi.mock('@queries/auth', () => ({
   useSubscriptionStatusQuery: () => ({ isPending: true }),
   useTrialEligibilityQuery: () => mocks.eligibility,
   useChangePlanMutation: () => ({ isPending: false }),
+  useCreateBillingPortalMutation: () => ({ mutateAsync: vi.fn() }),
   useCreateCheckoutSessionMutation: () => ({
     isPending: false,
     mutateAsync: mocks.checkout,
   }),
 }));
-vi.mock('@service-stripe/client', () => ({ stripeServiceClient: {} }));
+vi.mock('./computers/views/BillingComputers', () => ({
+  BillingComputers: () => null,
+}));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 
 beforeEach(() => {

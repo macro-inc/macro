@@ -76,6 +76,8 @@ function lastConnectedText(harness: RegisteredHarness): string {
  */
 export function ConnectedRuntimesSection(props: {
   harnesses: readonly RegisteredHarness[];
+  /** Runtimes that are the team's Macro computers; release them, not remove. */
+  computerHarnessIds: ReadonlySet<string>;
   /** The runtimes could not be loaded; say so rather than show an empty page. */
   error: boolean;
   onRename: (harness: RegisteredHarness) => void;
@@ -103,6 +105,7 @@ export function ConnectedRuntimesSection(props: {
             {(harness) => (
               <PairedRuntimeRow
                 harness={harness}
+                isComputer={props.computerHarnessIds.has(harness.id)}
                 canRemoveShared={props.canRemoveShared}
                 onRename={() => props.onRename(harness)}
                 onRemove={() => props.onRemove(harness)}
@@ -126,6 +129,7 @@ export function ConnectedRuntimesSection(props: {
  */
 function PairedRuntimeRow(props: {
   harness: RegisteredHarness;
+  isComputer: boolean;
   canRemoveShared: boolean;
   onRename: () => void;
   onRemove: () => void;
@@ -163,10 +167,15 @@ function PairedRuntimeRow(props: {
               {props.harness.name}
             </p>
             <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md border border-edge-muted px-2 text-xxs/none font-medium uppercase text-ink-extra-muted">
-              {props.harness.shared_team_ids.length > 0
+              {(props.harness.shared_team_ids?.length ?? 0) > 0
                 ? 'Team machine'
                 : 'Private'}
             </span>
+            <Show when={props.isComputer}>
+              <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md bg-accent-bg px-2 text-[11px]/none font-medium text-accent">
+                Macro computer
+              </span>
+            </Show>
             <StatusDot
               state={props.harness.connected ? 'connected' : 'disconnected'}
               label={props.harness.connected ? 'Connected' : 'Offline'}
@@ -187,9 +196,10 @@ function PairedRuntimeRow(props: {
           </Show>
           <Show
             when={
-              props.harness.access === 'owner' ||
-              (props.canRemoveShared &&
-                props.harness.shared_team_ids.length > 0)
+              !props.isComputer &&
+              (props.harness.access === 'owner' ||
+                (props.canRemoveShared &&
+                  (props.harness.shared_team_ids?.length ?? 0) > 0))
             }
           >
             <ConnectAction
