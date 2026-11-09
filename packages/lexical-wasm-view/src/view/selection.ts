@@ -115,7 +115,11 @@ export function domPoint(
   if (!slot) return null;
   const nextKey = record.children[point.offset];
   const next =
-    nextKey === undefined ? slot.before : view.getElementByKey(nextKey);
+    nextKey === undefined
+      ? (slot.element.querySelector(
+          ':scope > br[data-lexical-managed-linebreak]'
+        ) ?? slot.before)
+      : view.getElementByKey(nextKey);
   if (next)
     return {
       node: slot.element,

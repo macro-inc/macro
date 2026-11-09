@@ -152,7 +152,7 @@ fn enter_splits_heading_into_a_paragraph_and_preserves_the_suffix() -> Result<()
             Point::text(text, Utf16Offset(6)),
         ))))
     })?;
-    let (handled, _) = editor.dispatch(&Command::Key {
+    let (handled, commit) = editor.dispatch(&Command::Key {
         command: KeyCommand::Enter,
         event: Some(KeyEvent {
             key: "Enter".into(),
@@ -160,6 +160,7 @@ fn enter_splits_heading_into_a_paragraph_and_preserves_the_suffix() -> Result<()
         }),
     })?;
     assert_eq!(handled, Handled::Yes);
+    assert!(commit.default_prevented);
     let state = editor.state().view();
     let blocks = state.children_keys(NodeKey::ROOT)?;
     assert_eq!(blocks.len(), 2);
