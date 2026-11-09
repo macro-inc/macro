@@ -818,3 +818,38 @@ fn a_layout_has_at_most_three_sessions_and_every_surface_once() {
     assert!(SuggestionLayout::new(SuggestionLayout::default().sessions().to_vec()).is_ok());
     assert_eq!(SuggestionLayout::single().sessions().len(), 1);
 }
+
+#[tokio::test]
+async fn a_saved_routine_names_the_suggestion_it_came_from() {
+    let me = user();
+    let ai = Uuid::now_v7();
+    let repo = Arc::new(FakeRepo::default());
+    repo.suggestions.lock().unwrap().push(StoredSuggestion {
+        id: ai,
+        surfaces: vec![Surface::Calendar, Surface::Email],
+        reason: "fits".to_owned(),
+        keep_probability: 0.9,
+        pick: StoredPick::Catalog {
+            key: "inbox".to_owned(),
+            knobs: Map::new(),
+        },
+        dismissed: false,
+        created_at: Utc::now(),
+    });
+    let origins = StoredSuggestionOrigins(repo);
+    assert_eq!(
+        origins.origin(&me, ai).await.unwrap(),
+        Some(SuggestionOrigin {
+            from: "for_you",
+            kind: "catalog",
+            surface: Some("calendar"),
+        })
+    );
+    let template = origins
+        .origin(&me, template_id(&me, "inbox"))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!((template.from, template.kind), ("macro", "catalog"));
+    assert_eq!(origins.origin(&me, Uuid::now_v7()).await.unwrap(), None);
+}
