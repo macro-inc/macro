@@ -91,6 +91,13 @@ otherwise); its backend-free regression opens it, scrolls to the last group,
 searches, and picks by keyboard:
 `bunx playwright test --config src/lib/core/component/Emoji/browser-test/playwright.config.ts`.
 
+The email reminder menu reads typed times through the real natural-time wasm
+package; its backend-free desktop/phone regression, at a fixed New York clock,
+checks both readings of a guessed hour, saving either, the reasons shown for
+unreadable, passed and daylight-saving-skipped times, and the presets:
+`bunx playwright test --config src/features/reminders/browser-test/playwright.config.ts`.
+Run `just ensure-natural-time-wasm` first.
+
 Focus rows have a backend-free browser regression over the real row and mapping
 at wide, one-line, stacked, phone, and tablet widths: one reason per row, no
 extra height or lost subject, touch rows of at least 44px, and the importance
