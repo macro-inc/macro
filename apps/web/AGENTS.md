@@ -113,6 +113,7 @@ bounds, mounted tracks, reactive video fit, solo self-view placement, and the re
 floating-player/popover controls with synthetic media.
 Verify call-panel changes in the full call host and browser-test harnesses with
 screenshots; list signed-in call checks separately instead of blocking on authentication.
+Keep the call chat card opaque on `surface-2`; omit docked borders/shadows and retain the narrow-pane shadow and phone sheet surface.
 Initialize browser fixtures with the app's `data-touch-device` root attribute and
 `applyTheme`; setting `data-theme-light` alone does not apply the theme tokens.
 On a machine with many network interfaces, run it under `bwrap --dev-bind / / --unshare-net`:
