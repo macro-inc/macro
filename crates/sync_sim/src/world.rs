@@ -291,6 +291,10 @@ impl Sim {
             mono: doc_sync_core::Millis(self.clock.now),
             wall: doc_sync_core::UnixMillis(self.clock.wall(client.skew)),
         };
+        let adoption = match &input {
+            SyncInput::Storage(doc_sync_core::StorageEvent::Adopted { id, .. }) => Some(*id),
+            _ => None,
+        };
         let (out, facts) = client.handle(input, now);
         self.stats.wal_max_depth = self
             .stats
@@ -299,6 +303,13 @@ impl Sim {
         let failures = std::mem::take(&mut client.failures);
         let generation = client.generation;
         self.stats.handles = self.stats.handles.saturating_add(1);
+        if let Some(id) = adoption {
+            self.emit(Fact::WalAdoptionCompleted {
+                client: name.clone(),
+                session,
+                id: id.0,
+            });
+        }
         for fact in facts {
             self.emit(fact);
         }

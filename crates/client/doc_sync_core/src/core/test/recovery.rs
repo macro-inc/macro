@@ -613,7 +613,32 @@ fn corrupt_local_seed_releases_waiting_remote_even_with_orphans() {
             assist: vec![],
         }),
     }));
+    assert!(!h.core.seeded);
+    let adopt = h
+        .out
+        .io
+        .iter()
+        .find_map(|effect| match effect {
+            IoEffect::Storage {
+                id,
+                op: StorageOp::WalAdopt { .. },
+            } => Some(*id),
+            _ => None,
+        })
+        .unwrap();
+    h.send(SyncInput::Storage(StorageEvent::Adopted {
+        id: adopt,
+        result: Ok(1),
+    }));
     assert!(h.core.seeded);
+    assert!(h.out.events.iter().any(|event| matches!(
+        event,
+        SyncEvent::Seeded {
+            kind: SeedKind::Remote,
+            replayed_wal: 1
+        }
+    )));
+    assert_eq!(h.doc.loro.get_text("text").to_string(), "foreign");
 }
 #[test]
 fn comment_fork_uses_reserved_peer_and_registers_it() {

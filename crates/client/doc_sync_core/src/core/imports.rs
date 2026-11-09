@@ -233,8 +233,8 @@ impl SyncCore {
             );
             return;
         }
-        if kind == SeedKind::Remote && self.local_loading {
-            self.deferred_seed = Some(snapshot);
+        if self.seed_blocked() {
+            self.defer_seed(kind, snapshot);
             self.seed_wait_deadline
                 .get_or_insert(now.mono.after(self.config.timeouts.storage));
             return;
@@ -243,7 +243,7 @@ impl SyncCore {
             Ok(()) => {
                 self.seeded = true;
                 self.seed_wait_deadline = None;
-                self.deferred_seed = None;
+                self.deferred_seeds.clear();
                 self.confirmed_base = doc.oplog_frontiers();
                 self.wal.logged_vv = doc.oplog_vv();
                 self.snapshot_vv = doc.oplog_vv();
@@ -278,6 +278,54 @@ impl SyncCore {
                     );
                 }
             }
+        }
+    }
+
+    pub(super) fn defer_seed(&mut self, kind: SeedKind, snapshot: Vec<u8>) {
+        if let Some((_, bytes)) = self
+            .deferred_seeds
+            .iter_mut()
+            .find(|(source, _)| *source == kind)
+        {
+            // A rejected adoption reloads the snapshot and its cover. Refresh
+            // that selection without changing its arbitration position.
+            if kind == SeedKind::Local {
+                *bytes = snapshot;
+            }
+            return;
+        }
+        // Remote already waited for local loading before this barrier existed.
+        // Preserve a cached/optimistic winner offered before the local result;
+        // otherwise local wins, retaining remote as a corrupt-cache fallback.
+        let index = if kind == SeedKind::Remote {
+            self.deferred_seeds.len()
+        } else {
+            self.deferred_seeds
+                .iter()
+                .position(|(source, _)| *source == SeedKind::Remote)
+                .unwrap_or(self.deferred_seeds.len())
+        };
+        self.deferred_seeds.insert(index, (kind, snapshot));
+    }
+
+    fn seed_blocked(&self) -> bool {
+        self.local_loading
+            || self.load_retry.is_some()
+            || self
+                .storage
+                .values()
+                .any(|pending| matches!(pending.completion, StorageCompletion::Adopt { .. }))
+    }
+
+    pub(super) fn resume_seed(&mut self, now: Now, doc: &mut impl SyncDoc, out: &mut SyncOutput) {
+        if self.seed_blocked() {
+            return;
+        }
+        while !self.seeded {
+            let Some((kind, bytes)) = self.deferred_seeds.pop_front() else {
+                break;
+            };
+            self.seed(kind, bytes, now, doc, out);
         }
     }
 

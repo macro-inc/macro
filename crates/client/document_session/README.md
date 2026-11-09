@@ -7,7 +7,11 @@ its ordered view and I/O effects before the next call.
 
 Construct `DocumentSession<EditorSurface>` with `SurfaceConfig::Editor`, or
 `DocumentSession<GenericSurface>` with `SurfaceConfig::Generic`. Deliver
-`Sync(Start)` and then the winning optimistic seed or durable load completion.
+`Sync(Start)` and then offer the optimistic seed and deliver durable load completions.
+Every seed waits for startup WAL adoption; the first initialized surface includes
+the recovered rows. Earlier cached/optimistic offers retain their arbitration
+position; a local snapshot has priority over Remote, and a corrupt local
+snapshot can fall back to a queued remote seed after adoption.
 Initialization drains editor hook output, projects it before accepting edits,
 and rebuilds bindings and undo after a reset. Empty read/comment-only documents
 render without creating native operations. The default editor factory includes

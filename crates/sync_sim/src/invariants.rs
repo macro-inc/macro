@@ -29,6 +29,7 @@ pub type Invariant = fn(&Outcome) -> Result<(), Failure>;
 /// S8's hostile-network subset; liveness and quietness are intentionally not asserted.
 pub const HOSTILE_SAFETY_INVARIANTS: &[&str] = &[
     "every_close_terminates",
+    "no_seed_over_unadopted_wal",
     "no_acked_edit_lost",
     "no_persisted_edit_lost",
     "all_docs_equal",
@@ -40,6 +41,7 @@ pub const HOSTILE_SAFETY_INVARIANTS: &[&str] = &[
 pub const ALL_INVARIANTS: &[(&str, Invariant)] = &[
     ("settled", settled),
     ("every_close_terminates", every_close_terminates),
+    ("no_seed_over_unadopted_wal", no_seed_over_unadopted_wal),
     ("all_docs_equal", all_docs_equal),
     ("editor_states_equal", editor_states_equal),
     ("projection_consistent", projection_consistent),

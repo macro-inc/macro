@@ -172,6 +172,24 @@ pub enum Fact {
         /// Lifecycle.
         kind: ClientKind,
     },
+    /// A real adoption effect reserved durable rows; callback not yet consumed.
+    WalAdoptionIssued {
+        /// Client.
+        client: ClientName,
+        /// Target session.
+        session: SessionId,
+        /// Correlated storage operation.
+        id: u32,
+    },
+    /// A real adoption callback reached the exact live, unfrozen session.
+    WalAdoptionCompleted {
+        /// Client.
+        client: ClientName,
+        /// Target session.
+        session: SessionId,
+        /// Correlated storage operation.
+        id: u32,
+    },
     /// The real core selected exactly this source to initialize its host surface.
     Seeded {
         /// Client.

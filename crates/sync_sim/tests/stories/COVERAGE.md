@@ -201,6 +201,8 @@ native error, source verdict and source parse-error messages. Source-error
 observation is a separate generated sidecar; original oracle rows stay byte-identical.
 Comment command producers remain a separate pending item.
 
+The seed17 workload in `editor_replay_fixup.rs` waits for initialized editors before its list commands, then covers startup WAL adoption before model attachment and complete cold-server coverage of both dependent typed characters. This ordering prevents the former extra startup repair operation. Every settlement, quiet, loss and projection query and exact replay remains enabled.
+
 `close_termination` covers native Close for Generic/editor, tab/AI, all access
 levels, Loading/Running and automatic account revocation. Missing actual replies,
 wrong request correlation and absent teardown fail every_close_terminates.
@@ -208,3 +210,9 @@ wrong request correlation and absent teardown fail every_close_terminates.
 `close_before_start` uses Step::Create with both real surfaces, both client kinds
 and all access levels; actual reply/teardown must occur without a token or WAL append.
 
+Startup recovery also has a real editor WAL-only literal, an all-source core matrix
+and256 shrinking startup cases in `src/test/startup_adoption.rs` (owner count,
+callback order, source, before/after Load and delayed callbacks).
+`no_seed_over_unadopted_wal` observes exact client/session/storage correlations in
+every ordinary and hostile outcome; missing/wrong callbacks and same-output
+early initialization are negative controls.

@@ -136,6 +136,7 @@ impl SyncCore {
                     if self.seeded && self.phase != Phase::Stopped {
                         self.replay(now, doc, out);
                     }
+                    self.resume_seed(now, doc, out);
                 }
             }
             StorageEvent::Done { result: Ok(()), .. } => match pending.completion {
@@ -210,10 +211,7 @@ impl SyncCore {
                 if matches!(pending.completion, StorageCompletion::Load) {
                     self.local_loading = false;
                     self.load_retry = Some(now.mono.after(self.config.converge.retry_delay));
-                    if let Some(bytes) = self.deferred_seed.take() {
-                        self.seed_wait_deadline = None;
-                        self.seed(SeedKind::Remote, bytes, now, doc, out);
-                    }
+                    self.resume_seed(now, doc, out);
                 }
                 if matches!(
                     pending.completion,
@@ -290,17 +288,6 @@ impl SyncCore {
         out: &mut SyncOutput,
     ) {
         let snapshot = local.snapshot.take().filter(|s| !s.bytes.is_empty());
-        if !self.seeded {
-            if let Some(snapshot) = &snapshot {
-                self.seed(SeedKind::Local, snapshot.bytes.clone(), now, doc, out);
-            }
-            if !self.seeded
-                && let Some(bytes) = self.deferred_seed.take()
-            {
-                self.seed_wait_deadline = None;
-                self.seed(SeedKind::Remote, bytes, now, doc, out);
-            }
-        }
         let before = UnixMillis(
             now.wall
                 .0
@@ -394,6 +381,14 @@ impl SyncCore {
             }
         }
         self.seen_foreign |= !self.assist.is_empty();
+        // Reserve every adoption before selecting a seed. The host initializes
+        // its surface on Seeded, so replay must precede that notification.
+        if !self.seeded {
+            if let Some(snapshot) = snapshot {
+                self.defer_seed(SeedKind::Local, snapshot.bytes);
+            }
+            self.resume_seed(now, doc, out);
+        }
     }
 
     pub(super) fn expire_storage(

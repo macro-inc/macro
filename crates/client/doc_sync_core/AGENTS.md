@@ -124,3 +124,5 @@ diagnostics. Regrant resumes the same retained bytes through the ordinary push.
 A Stop after automatic terminal revocation joins the existing terminal WAL barrier.
 Reply to every distinct pending request after that barrier, including Close before
 Start; repeated completed Stop remains idempotent and never restarts the core.
+
+Defer every seed source until local load and every in-flight WAL adoption finish; preserve earlier cached/optimistic offers, local-snapshot priority over Remote and remote fallback, and replay retained rows before emitting Seeded. Adoption timeouts never release initialization; rejected adoption reloads the durable selection first.

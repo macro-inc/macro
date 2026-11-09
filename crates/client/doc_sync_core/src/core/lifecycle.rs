@@ -53,9 +53,7 @@ impl SyncCore {
         }
         if self.seed_wait_deadline.is_some_and(|at| at <= now.mono) {
             self.seed_wait_deadline = None;
-            if let Some(bytes) = self.deferred_seed.take() {
-                self.seed(SeedKind::Remote, bytes, now, doc, out);
-            }
+            self.resume_seed(now, doc, out);
         }
         if let Some((attempt, at)) = self.convergence_retry
             && at <= now.mono
