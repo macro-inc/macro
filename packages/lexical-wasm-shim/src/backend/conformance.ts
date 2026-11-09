@@ -148,6 +148,11 @@ function isNodeMutation(
 /** The shim has one model backend, with no production-session fallback. */
 export class ConformanceBackend implements ShimBackend {
   readonly initialVersion = 0;
+  getUpdateMetadata(): never {
+    throw new Error(
+      'Development backend does not expose native update metadata'
+    );
+  }
   private readonly handle: wasm.EditorHandle;
   private readonly callbacks = new Map<number, Callback>();
   private readonly foreignCallbacks = new Map<string, Callback>();

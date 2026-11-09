@@ -104,3 +104,5 @@ Capture NativeNodeCatalog metadata without consulting an engine; validate the ge
 Keep app declarations upstream; validate independent classes through their observable instance members, constructor/static shape and documented used internals, including callback self-references, rather than bypassing upstream nominal private declarations with casts.
 
 Keep CreateEditorArgs distinct from the full normalized EditorConfig; retain theme and configured hook identities and restore readonly mode across historical reads, nested updates and throws. Forward the normalized config to backend construction without rereading user getters.
+
+Read editor dirty sets/type through backend.getUpdateMetadata; reject unavailable metadata instead of guessing from rendered records or returning empty sets. The development adapter rejects this capability until its real native export is wired.
