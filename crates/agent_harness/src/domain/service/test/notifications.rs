@@ -7,10 +7,10 @@ use macro_uuid::Uuid;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 #[derive(Default)]
-struct Outbox {
-    pending: Mutex<Vec<PendingNotification>>,
-    claimed: Mutex<Option<NotificationBatch>>,
-    completed: Mutex<Vec<NotificationOutcome>>,
+pub(super) struct Outbox {
+    pub(super) pending: Mutex<Vec<PendingNotification>>,
+    pub(super) claimed: Mutex<Option<NotificationBatch>>,
+    pub(super) completed: Mutex<Vec<NotificationOutcome>>,
     fail_ack: AtomicBool,
     fail_renew: AtomicBool,
     renewals: Mutex<Vec<Uuid>>,
@@ -160,7 +160,7 @@ fn harness_with_outbox(outbox: Arc<Outbox>) -> (TestBench, TurnSignals) {
         Some(outbox),
     )
 }
-async fn event(outbox: &Outbox, session: AgentSessionId, subject: &str, wake: bool) {
+pub(super) async fn event(outbox: &Outbox, session: AgentSessionId, subject: &str, wake: bool) {
     outbox
         .enqueue(
             PendingNotification::new(ProduceNotification {

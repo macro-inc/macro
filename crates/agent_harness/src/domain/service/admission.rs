@@ -114,6 +114,7 @@ where
         let HarnessError::Admission(failure @ AiAdmissionError::Denied(_)) = error else {
             return Ok(());
         };
+        self.park_denied_notifications(session_id, error).await?;
         let waiting = self.queues.snapshot(session_id);
         if waiting.is_empty() {
             return Ok(());
@@ -169,6 +170,34 @@ where
                 *failure,
             )
             .await;
+        }
+        Ok(())
+    }
+
+    /// Hand a refused batch's events to the owner's next admitted prompt.
+    /// Released instead, they would wake the session on every recovery sweep
+    /// until the owner adds credits. The running turn's batch is left alone.
+    pub(super) async fn park_denied_notifications(
+        &self,
+        session_id: AgentSessionId,
+        error: &HarnessError,
+    ) -> Result<()> {
+        let HarnessError::Admission(AiAdmissionError::Denied(_)) = error else {
+            return Ok(());
+        };
+        let Some(store) = &self.notification_store else {
+            return Ok(());
+        };
+        let running = self.busy.turn(session_id).map(|turn| turn.action_id);
+        let Some((_, batch)) = self
+            .notification_batches
+            .remove_if(&session_id, |_, batch| Some(batch.action_id) != running)
+        else {
+            return Ok(());
+        };
+        if let Err(error) = store.defer_until_prompt(batch.lease_id).await {
+            self.notification_batches.insert(session_id, batch);
+            return Err(error.into());
         }
         Ok(())
     }

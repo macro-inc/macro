@@ -799,6 +799,124 @@ async fn rejection_persistence_failure_keeps_work_and_defers_reply_resolution() 
     }
 }
 
+fn bench_with_outbox(
+    failure: Option<AiAdmissionError>,
+) -> (
+    TestHarness,
+    InMemoryAgentSessionRepo,
+    Arc<AdmissionMock>,
+    Arc<super::notifications::Outbox>,
+) {
+    let outbox = Arc::new(super::notifications::Outbox::default());
+    let (service, repo, admission) = bench(failure);
+    (
+        service.with_notifications(outbox.clone()),
+        repo,
+        admission,
+        outbox,
+    )
+}
+
+#[tokio::test]
+async fn a_denied_system_event_is_rejected_once_and_parked_instead_of_redelivered() {
+    use agent_session::domain::notifications::NotificationStore as _;
+
+    let (service, repo, admission, outbox) = bench_with_outbox(Some(denied()));
+    let id = session(&repo, BotId::TEST_A, "in-memory", Owner::User(sender())).await;
+    super::notifications::event(&outbox, id, "connected", true).await;
+    // A refusal the owner has to act on is the command's answer, not a
+    // failure for the forwarding consumer to report.
+    assert_eq!(
+        service
+            .execute_here(id, HarnessCommand::DrainNotifications)
+            .await
+            .unwrap(),
+        CommandOutcome::Completed
+    );
+    for _ in 0..5 {
+        service.recover_notifications().await.unwrap();
+    }
+    assert_eq!(admission.calls.lock().unwrap().len(), 1);
+    assert_eq!(rejected_ids(&service).len(), 1);
+    assert!(outbox.claimed.lock().unwrap().is_none());
+    {
+        let parked = outbox.pending.lock().unwrap();
+        assert_eq!(parked.len(), 1);
+        assert!(!parked[0].wake);
+    }
+    assert!(outbox.pending_sessions(None).await.unwrap().is_empty());
+    assert!(service.inner.queues.list(id).is_empty());
+    assert!(repo.list_queued_actions(id).await.unwrap().is_empty());
+    assert!(!service.inner.busy.is_pending(id));
+    assert_no_provisioning(&service);
+}
+
+#[tokio::test]
+async fn a_billing_outage_keeps_system_events_waking_for_the_next_sweep() {
+    use agent_session::domain::notifications::NotificationStore as _;
+
+    let (service, repo, admission, outbox) =
+        bench_with_outbox(Some(AiAdmissionError::Unavailable));
+    let id = session(&repo, BotId::TEST_A, "in-memory", Owner::User(sender())).await;
+    super::notifications::event(&outbox, id, "connected", true).await;
+    assert!(matches!(
+        service
+            .execute_here(id, HarnessCommand::DrainNotifications)
+            .await,
+        Err(HarnessError::Admission(AiAdmissionError::Unavailable))
+    ));
+    for _ in 0..3 {
+        let calls = admission.calls.lock().unwrap().len();
+        service.recover_notifications().await.unwrap();
+        assert!(admission.calls.lock().unwrap().len() > calls);
+    }
+    assert!(rejected_ids(&service).is_empty());
+    assert!(outbox.completed.lock().unwrap().is_empty());
+    *admission.failure.lock().unwrap() = Some(denied());
+    service.recover_notifications().await.unwrap();
+    assert_eq!(rejected_ids(&service).len(), 1);
+    assert!(outbox.pending_sessions(None).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn parked_system_events_ride_the_first_prompt_after_credits_return() {
+    use agent_runtime_protocol::domain::notification::input_from_runtime;
+
+    let (service, repo, admission, outbox) = bench_with_outbox(Some(denied()));
+    let id = disconnected_session(&repo, &service.inner.containers).await;
+    super::notifications::event(&outbox, id, "connected", true).await;
+    service.recover_notifications().await.unwrap();
+    assert_eq!(rejected_ids(&service).len(), 1);
+    assert_eq!(service.inner.containers.resumed(), 0);
+
+    *admission.failure.lock().unwrap() = None;
+    let dispatch = service.execute_here(id, HarnessCommand::Deliver(forward_message("continue")));
+    let resume = async {
+        while service.inner.containers.resumed() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = service.inner.containers.container(id).unwrap();
+        complete_resume(&container).await;
+        container.agent().wait_for_requests(3).await;
+        container
+    };
+    let (result, container) = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        tokio::join!(dispatch, resume)
+    })
+    .await
+    .unwrap();
+    result.unwrap();
+    let input = container
+        .agent()
+        .received_frames()
+        .iter()
+        .find_map(|frame| input_from_runtime(&ToRuntimeMessage::Acp(AcpMessage(frame.clone()))))
+        .unwrap();
+    assert!(!input.system_turn);
+    assert_eq!(input.notifications.len(), 1);
+    assert!(outbox.pending.lock().unwrap().is_empty());
+}
+
 #[test]
 fn admission_errors_keep_the_session_error_classification() {
     for failure in [denied(), AiAdmissionError::Unavailable] {

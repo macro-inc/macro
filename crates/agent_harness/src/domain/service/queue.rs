@@ -510,7 +510,14 @@ where
                 }
                 self.restore_queue(session_id).await?;
                 if !self.busy.is_pending(session_id) {
-                    self.dispatch_next(session_id).await?;
+                    match self.dispatch_next(session_id).await {
+                        // Rejected and parked: only the owner can lift it, and
+                        // the sweep has nothing to retry.
+                        Err(HarnessError::Admission(ai_billing::AiAdmissionError::Denied(_))) => {}
+                        result => {
+                            result?;
+                        }
+                    }
                 }
                 Ok(CommandOutcome::Completed)
             }
@@ -1492,6 +1499,7 @@ where
             }
 
             if let Err(error) = self.admit_session_id(session_id).await {
+                self.park_denied_notifications(session_id, &error).await?;
                 self.requeue_claimed(session_id, entry).await?;
                 self.reject_waiting_on_denial(session_id, &error).await?;
                 return Err(error);
@@ -1704,6 +1712,7 @@ where
                         self.resolve_reply(session_id, Some(&flight), ReplyOutcome::Failed)
                             .await;
                     }
+                    self.park_denied_notifications(session_id, &error).await?;
                     self.requeue_claimed(session_id, entry).await?;
                     self.reject_waiting_on_denial(session_id, &error).await?;
                     Err(error)
