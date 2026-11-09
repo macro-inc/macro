@@ -125,6 +125,7 @@ macro_cache_client = { path = "../../crates/macro_cache_client", default-feature
 ] }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_config = { path = "../../crates/macro_config" }
+macro_db_pool = { path = "../../crates/macro_db_pool" }
 macro_db_client = { path = "../../crates/macro_db_client", default-features = false, features = [
   "account_merge_request",
   "team",

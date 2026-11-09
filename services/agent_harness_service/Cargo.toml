@@ -118,6 +118,7 @@ macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization", features = ["axum", "outbound", "postgres"] }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3"] }
 macro_config = { path = "../../crates/macro_config" }
+macro_db_pool = { path = "../../crates/macro_db_pool" }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_db_client = { path = "../../crates/macro_db_client" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }

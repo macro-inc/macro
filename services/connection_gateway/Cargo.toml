@@ -58,6 +58,7 @@ macro_authorization = { path = "../../crates/macro_authorization", features = [
 macro_user_id = { path = "../../crates/macro_user_id" }
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_config = { path = "../../crates/macro_config" }
+macro_db_pool = { path = "../../crates/macro_db_pool" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }

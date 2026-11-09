@@ -109,7 +109,9 @@ async fn main() -> Result<()> {
     let pgpool = PgPoolOptions::new()
         .min_connections(3)
         .max_connections(20)
-        .connect(config.macro_db_url.as_ref())
+        .connect_with(macro_db_pool::with_request_timeouts(
+            config.macro_db_url.as_ref().parse()?,
+        ))
         .await?;
 
     let stream_service = RedisPostgresStreamRepo::new((*redis_client).clone(), pgpool.clone());

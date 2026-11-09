@@ -35,7 +35,7 @@ async fn connect_to_database(config: &Config) -> anyhow::Result<sqlx::PgPool> {
     let db = PgPoolOptions::new()
         .min_connections(min_connections)
         .max_connections(max_connections)
-        .connect(database_url)
+        .connect_with(macro_db_pool::with_request_timeouts(database_url.parse()?))
         .await
         .context("could not connect to db")?;
     Ok(db)
