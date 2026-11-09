@@ -282,9 +282,9 @@ where
         Ok(session)
     }
 
-    /// Let the person, or an agent of theirs, at their feed, refusing a
-    /// generation session: those are hidden, and only manage the feed
-    /// through their own tools. Records the caller's kind on the span.
+    /// Admit the person, or an agent acting for them, to their feed. A
+    /// generation session is refused: it is hidden, and manages the feed
+    /// only through its own tools. Records the caller's kind on the span.
     async fn admit(&self, caller: IdeaCaller) -> Result<(), IdeaError> {
         tracing::Span::current().record("ideas.caller", caller.as_ref());
         let IdeaCaller::Agent {
