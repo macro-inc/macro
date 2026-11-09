@@ -19,6 +19,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/transaction.rs` owns writes; never mutate a committed snapshot.
 - `src/pipeline/` implements flush order, normalization, GC and view-attached caches; its non-converging transform regression pins the upstream invariant text. `pipeline/continuation.rs` shares this engine between ordinary unboxed flush and owned sliced work; budgets count node work rather than elapsed time. Move its optional state unchanged through suspend/resume/adoption, reject intervening writes, and retain failed continuations until cancellation.
 - `src/commit.rs` computes mutations before cache writes and atomically publishes snapshots.
+- `src/foreign/publication.rs` notifies optional foreign adapters immediately after real publication and at existing speculative rollback boundaries; retain actual receipt identities and revoke rolled-back follow-ups before external delivery, without model, host or I/O work in the observer.
 - `src/plugin.rs`, `command.rs` and `extension.rs` own dispatch, follow-up rounds and transactional extension state.
 - `src/history.rs` owns undo/redo stacks and the standalone merge tracker.
 - `src/diff/` owns the versioned flat ABI; keep all 12 opcodes in sync with the independent TS decoder test. Native decorator signature sidecars are resolved by the consuming view, never serialized as state or observed by Commit.diff.

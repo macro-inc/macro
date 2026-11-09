@@ -156,17 +156,31 @@ impl Transaction<'_> {
     }
     /// Flush pending writes and publish atomically; any error leaves the editor unchanged.
     pub fn commit(self) -> Result<Commit, Error> {
-        self.commit_with_caches(CacheReconciliation::Writable)
+        self.commit_with_metadata(|_| {})
     }
-    pub(crate) fn commit_imported_state(self) -> Result<Commit, Error> {
-        self.commit_with_caches(CacheReconciliation::Imported)
+    pub(crate) fn commit_imported_state(
+        self,
+        normalize: impl FnOnce(&mut Commit),
+    ) -> Result<Commit, Error> {
+        self.commit_with_caches(CacheReconciliation::Imported, normalize)
     }
-    fn commit_with_caches(mut self, caches: CacheReconciliation) -> Result<Commit, Error> {
+    /// Normalize an initialization receipt before publication to metadata observers.
+    pub(crate) fn commit_with_metadata(
+        self,
+        normalize: impl FnOnce(&mut Commit),
+    ) -> Result<Commit, Error> {
+        self.commit_with_caches(CacheReconciliation::Writable, normalize)
+    }
+    fn commit_with_caches(
+        mut self,
+        caches: CacheReconciliation,
+        normalize: impl FnOnce(&mut Commit),
+    ) -> Result<Commit, Error> {
         self.guard_staged_publication()?;
         if self.dirty_since_flush {
             self.flush()?;
         }
-        self.commit_phase_prepared_with_caches(|_| Ok(()), caches)
+        self.commit_phase_prepared_normalized(|_| Ok(()), normalize, caches)
             .map(|(commit, ())| commit)
     }
     pub(crate) fn commit_phase(&mut self) -> Result<Commit, Error> {
@@ -193,11 +207,13 @@ impl Transaction<'_> {
         &mut self,
         prepare: impl FnOnce(&Commit) -> Result<T, E>,
     ) -> Result<(Commit, T), E> {
-        self.commit_phase_prepared_with_caches(prepare, CacheReconciliation::Writable)
+        self.commit_phase_prepared_normalized(prepare, |_| {}, CacheReconciliation::Writable)
     }
-    fn commit_phase_prepared_with_caches<T, E: From<Error>>(
+
+    fn commit_phase_prepared_normalized<T, E: From<Error>>(
         &mut self,
         prepare: impl FnOnce(&Commit) -> Result<T, E>,
+        normalize: impl FnOnce(&mut Commit),
         caches: CacheReconciliation,
     ) -> Result<(Commit, T), E> {
         self.guard_staged_publication()?;
@@ -281,7 +297,7 @@ impl Transaction<'_> {
         } else {
             prev.clone()
         };
-        let commit = Commit {
+        let mut commit = Commit {
             #[cfg(feature = "foreign-nodes")]
             foreign_update: Some(self.foreign_update_identity()),
             default_prevented: self.default_prevented,
@@ -302,6 +318,7 @@ impl Transaction<'_> {
             #[cfg(feature = "bench-counters")]
             work: std::mem::take(&mut self.work),
         };
+        normalize(&mut commit);
         let artifact = prepare(&commit)?;
         #[cfg(feature = "foreign-nodes")]
         ForeignReadOperation::check()?;
@@ -316,6 +333,10 @@ impl Transaction<'_> {
         self.editor.composition_key = self.composition_key;
         self.editor.extensions = self.extensions.clone();
         self.editor.suspend_version = next_id;
+        #[cfg(feature = "foreign-nodes")]
+        if let Some(observer) = &self.editor.foreign_publication_observer {
+            observer.published(&commit);
+        }
         Ok((commit, artifact))
     }
 }

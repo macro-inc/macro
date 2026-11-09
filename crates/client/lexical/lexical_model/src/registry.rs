@@ -212,6 +212,8 @@ type TransformRegistrations = Vec<(TransformTarget, RegisteredTransform)>;
 /// Configuration builder; the six built-in types are always registered first.
 pub struct EditorBuilder {
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_publication_observer: Option<Arc<dyn ForeignPublicationObserver>>,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) native_overlays: Vec<(String, Arc<dyn ForeignHooks>)>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_states: Vec<ForeignStateConfig>,
@@ -237,6 +239,8 @@ impl EditorBuilder {
     /// Build with an explicit headless or view-attached mode.
     pub fn new(mode: EditorMode) -> Self {
         Self {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_publication_observer: None,
             #[cfg(feature = "foreign-nodes")]
             foreign_states: vec![],
             #[cfg(feature = "foreign-nodes")]
@@ -605,6 +609,10 @@ impl EditorBuilder {
         let mut editor = Editor::new(registry, self.mode, self.keys, self.view_host)
             .map_err(|e| BuildError::InitialState(Box::new(e)))?;
         #[cfg(feature = "foreign-nodes")]
+        {
+            editor.foreign_publication_observer = self.foreign_publication_observer;
+        }
+        #[cfg(feature = "foreign-nodes")]
         if let Some(hooks) = self.foreign_instance_hooks {
             editor
                 .install_foreign_instance_hooks(hooks)
@@ -621,18 +629,19 @@ impl EditorBuilder {
             editor.state = parsed.clone();
             let mut tx = editor.transaction();
             tx.request_full_reconcile();
-            let mut initial = tx
-                .commit_imported_state()
+            let initial = tx
+                .commit_imported_state(|initial| {
+                    initial.prev = prev;
+                    initial
+                        .changes
+                        .dirty_elements
+                        .insert(NodeKey::ROOT, DirtyIntent::Intentional);
+                    initial.changes.mutations = std::iter::once(NodeKey::ROOT)
+                        .chain(parsed.view().descendants(NodeKey::ROOT).map(|(k, _)| k))
+                        .map(|k| (k, Mutation::Created))
+                        .collect();
+                })
                 .map_err(|e| BuildError::InitialState(Box::new(e)))?;
-            initial.prev = prev;
-            initial
-                .changes
-                .dirty_elements
-                .insert(NodeKey::ROOT, DirtyIntent::Intentional);
-            initial.changes.mutations = std::iter::once(NodeKey::ROOT)
-                .chain(parsed.view().descendants(NodeKey::ROOT).map(|(k, _)| k))
-                .map(|k| (k, Mutation::Created))
-                .collect();
             let mut initial = editor.run_after_commit(initial);
             if let Some(failure) = initial.follow_up_error {
                 return Err(BuildError::InitialState(Box::new(
