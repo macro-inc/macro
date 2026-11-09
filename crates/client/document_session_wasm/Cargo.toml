@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 [features]
 default = ["bebop-owned-all", "compatibility"]
 bebop-owned-all = []
-compatibility = ["document_session/compatibility"]
+compatibility = ["document_session/compatibility", "dep:scoped-tls-hkt"]
 
 [dependencies]
 document_session = { workspace = true, features = ["application"] }
@@ -24,6 +24,7 @@ lexical_loro.workspace = true
 loro.workspace = true
 wasm-bindgen.workspace = true
 js-sys.workspace = true
+scoped-tls-hkt = { workspace = true, optional = true }
 bebop.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
