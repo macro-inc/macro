@@ -65,15 +65,16 @@ export class ParagraphNode extends ElementNode {
   }
   exportJSON(): SerializedParagraphNode {
     const json = super.exportJSON();
-    const firstText = this.getChildren().find(
-      (node) => node instanceof TextNode
-    );
-    return {
-      ...json,
-      textFormat:
-        json.textFormat ?? firstText?.getFormat() ?? this.getTextFormat(),
-      textStyle: json.textStyle ?? firstText?.getStyle() ?? this.getTextStyle(),
-    };
+    let textFormat = json.textFormat;
+    let textStyle = json.textStyle;
+    if (textFormat === undefined || textStyle === undefined) {
+      const firstText = this.getChildren().find(
+        (node) => node instanceof TextNode
+      );
+      textFormat = firstText ? firstText.getFormat() : this.getTextFormat();
+      textStyle = firstText ? firstText.getStyle() : this.getTextStyle();
+    }
+    return { ...json, textFormat, textStyle };
   }
   insertNewAfter(
     selection: RangeSelection,
