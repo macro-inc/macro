@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import type {} from './fixture';
 
 const owner = '00000000-0000-0000-0000-000000000001';
