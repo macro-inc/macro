@@ -171,18 +171,66 @@ fn failed_clone(
 }
 
 impl StateRef<'_> {
-    /// Check deferred errors from infallible record-clone hooks before publication.
+    /// Check all deferred payload errors, including unchanged records in imported states.
     pub fn check_foreign_payloads(self) -> Result<(), Error> {
+        self.check_foreign_payload_keys(self.state.nodes.keys().copied())?;
+        Ok(())
+    }
+
+    fn check_foreign_payload_keys(self, keys: impl Iterator<Item = NodeKey>) -> Result<u64, Error> {
         if let Some(frame) = self.native_projection {
             frame.check_error()?;
         }
-        for slot in self.state.nodes.values() {
+        if !self.state.registry.has_foreign_payloads {
+            return Ok(0);
+        }
+        let mut checked = 0;
+        for key in keys {
+            let Some(slot) = self.state.nodes.get(&key) else {
+                continue;
+            };
+            if self
+                .state
+                .registry
+                .registered(slot.type_index)
+                .foreign
+                .is_none()
+            {
+                continue;
+            }
+            checked += 1;
             if let Some(payload) = slot.data.as_any().downcast_ref::<ForeignPayload>()
                 && let Some(error) = &payload.invalid
             {
                 return Err(Error::invariant(error.to_string()));
             }
         }
+        Ok(checked)
+    }
+}
+
+impl Transaction<'_> {
+    pub(crate) fn check_pending_foreign_payloads(&mut self) -> Result<(), Error> {
+        let view = self.view();
+        let checked = if self.full_reconcile {
+            view.check_foreign_payload_keys(self.pending.nodes.keys().copied())?
+        } else {
+            view.check_foreign_payload_keys(
+                self.dirty_leaves
+                    .iter()
+                    .chain(self.dirty_elements.keys())
+                    .copied(),
+            )?
+        };
+        #[cfg(feature = "bench-counters")]
+        {
+            self.work.foreign_payloads_checked += checked;
+        }
+        #[cfg(not(feature = "bench-counters"))]
+        let _ = checked;
         Ok(())
     }
 }
+
+#[cfg(all(test, feature = "bench-counters"))]
+mod test;
