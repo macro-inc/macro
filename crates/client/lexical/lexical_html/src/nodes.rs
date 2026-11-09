@@ -30,7 +30,7 @@ pub fn element_export_dom(
 /// Alignment name, absent for the unformatted default.
 pub fn element_format_str(format: ElementFormat) -> Option<&'static str> {
     match format {
-        ElementFormat::Unset => None,
+        ElementFormat::Unset | ElementFormat::Raw(_) => None,
         ElementFormat::Left => Some("left"),
         ElementFormat::Start => Some("start"),
         ElementFormat::Center => Some("center"),

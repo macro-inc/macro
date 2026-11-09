@@ -152,18 +152,16 @@ pub enum TextDetailType {
     /// Unmergeable.
     Unmergeable,
 }
-/// Upstream ElementFormat values.
-#[derive(
-    Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize, EnumString, Display, Default,
-)]
-#[serde(rename_all = "lowercase")]
-#[strum(serialize_all = "lowercase")]
+/// A numeric alignment outside the named upstream values.
+/// Created only by ElementFormat::from_bits so named values stay canonical.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct RawElementFormat(u32);
+/// Upstream element alignment, including raw numeric assignments.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 /// s2: EL-02
 pub enum ElementFormat {
     /// Unset.
     #[default]
-    #[serde(rename = "")]
-    #[strum(serialize = "")]
     Unset,
     /// Left.
     Left,
@@ -177,6 +175,48 @@ pub enum ElementFormat {
     End,
     /// Justify.
     Justify,
+    /// Preserve a raw number while getFormatType/export returns the empty name.
+    Raw(RawElementFormat),
+}
+impl std::str::FromStr for ElementFormat {
+    type Err = strum::ParseError;
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "" => Ok(Self::Unset),
+            "left" => Ok(Self::Left),
+            "start" => Ok(Self::Start),
+            "center" => Ok(Self::Center),
+            "right" => Ok(Self::Right),
+            "end" => Ok(Self::End),
+            "justify" => Ok(Self::Justify),
+            _ => Err(strum::ParseError::VariantNotFound),
+        }
+    }
+}
+impl std::fmt::Display for ElementFormat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+impl Serialize for ElementFormat {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+impl<'de> Deserialize<'de> for ElementFormat {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+        impl serde::de::Visitor<'_> for Visitor {
+            type Value = ElementFormat;
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("an element alignment")
+            }
+            fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
+                value.parse().map_err(E::custom)
+            }
+        }
+        deserializer.deserialize_str(Visitor)
+    }
 }
 /// Upstream TextDirection values.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize, EnumString, Display)]
@@ -199,6 +239,32 @@ impl ElementFormat {
             Self::Justify => 4,
             Self::Start => 5,
             Self::End => 6,
+            Self::Raw(value) => value.0,
+        }
+    }
+    /// Preserve raw numeric assignments without normalizing unknown values.
+    pub fn from_bits(value: u32) -> Self {
+        match value {
+            0 => Self::Unset,
+            1 => Self::Left,
+            2 => Self::Center,
+            3 => Self::Right,
+            4 => Self::Justify,
+            5 => Self::Start,
+            6 => Self::End,
+            value => Self::Raw(RawElementFormat(value)),
+        }
+    }
+    /// The public alignment name; unknown raw values use upstream's empty fallback.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Unset | Self::Raw(_) => "",
+            Self::Left => "left",
+            Self::Start => "start",
+            Self::Center => "center",
+            Self::Right => "right",
+            Self::End => "end",
+            Self::Justify => "justify",
         }
     }
     /// Preserve upstream's bitwise comparison of alignment values.
