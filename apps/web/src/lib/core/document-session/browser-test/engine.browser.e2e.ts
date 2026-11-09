@@ -73,3 +73,53 @@ test('a failed native load preserves the shell and retries the shared engine', a
   await expect(page.getByText('Application shell ready')).toBeVisible();
   expect(failures).toEqual([]);
 });
+
+test('session-only attachment defers start until registration without a mounted view', async ({
+  page,
+}) => {
+  const failures: string[] = [];
+  page.on('pageerror', (error) => failures.push(error.message));
+  await page.goto(fixture);
+  await expect(page.getByText('Editor subtree ready')).toBeVisible();
+  await page
+    .getByRole('button', { name: 'Attach session without DOM' })
+    .click();
+  await expect(page.getByText('Session-only attachment closed')).toBeVisible();
+  expect(failures).toEqual([]);
+});
+
+test('synchronous authorization revocation waits for registration and is retained', async ({
+  page,
+}) => {
+  const failures: string[] = [];
+  page.on('pageerror', (error) => failures.push(error.message));
+  await page.goto(fixture);
+  await expect(page.getByText('Editor subtree ready')).toBeVisible();
+  await page.getByRole('button', { name: 'Attach revoked session' }).click();
+  await expect(page.getByText('Revoked attachment closed')).toBeVisible();
+  expect(failures).toEqual([]);
+});
+
+test('factory cancellation closes the real session before Start', async ({
+  page,
+}) => {
+  const failures: string[] = [];
+  page.on('pageerror', (error) => failures.push(error.message));
+  await page.goto(fixture);
+  await expect(page.getByText('Editor subtree ready')).toBeVisible();
+  await page.getByRole('button', { name: 'Close unstarted session' }).click();
+  await expect(page.getByText('Unstarted attachment closed')).toBeVisible();
+  expect(failures).toEqual([]);
+});
+
+test('terminal output can reenter close without creating another close operation', async ({
+  page,
+}) => {
+  const failures: string[] = [];
+  page.on('pageerror', (error) => failures.push(error.message));
+  await page.goto(fixture);
+  await expect(page.getByText('Editor subtree ready')).toBeVisible();
+  await page.getByRole('button', { name: 'Close session reentrantly' }).click();
+  await expect(page.getByText('Reentrant attachment closed')).toBeVisible();
+  expect(failures).toEqual([]);
+});
