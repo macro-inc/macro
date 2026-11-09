@@ -855,8 +855,7 @@ async fn a_denied_system_event_is_rejected_once_and_parked_instead_of_redelivere
 async fn a_billing_outage_keeps_system_events_waking_for_the_next_sweep() {
     use agent_session::domain::notifications::NotificationStore as _;
 
-    let (service, repo, admission, outbox) =
-        bench_with_outbox(Some(AiAdmissionError::Unavailable));
+    let (service, repo, admission, outbox) = bench_with_outbox(Some(AiAdmissionError::Unavailable));
     let id = session(&repo, BotId::TEST_A, "in-memory", Owner::User(sender())).await;
     super::notifications::event(&outbox, id, "connected", true).await;
     assert!(matches!(
