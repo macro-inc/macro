@@ -23,6 +23,18 @@ The view itself does not execute storage or
 network requests. Render failures cannot discard I/O effects. `EditorMount` handles viewport placement and clipping; its owner
 must drain Stop before destroying the session.
 
+`NativeSessionStorage` executes the typed storage operations in private SQLite
+with full synchronization, idempotent WAL keys and atomic adoption/pruning.
+Hold its OS owner lease until pending storage work has drained. Run it on a
+storage worker; its successful result follows transaction completion. Live
+foreign owners are read-only assist sources, and adoption validates the loaded
+rows and current snapshot coverage before changing anything. Its database is
+separate from the WebView stores; application adoption still needs explicit
+old-draft handoff.
+Wait for initial durable loading before offering an empty optimistic seed, so
+first-wins initialization can prefer the local snapshot. Snapshot scheduling
+continues to use the shared session policy and supplied clock.
+
 Application adoption requires native menu/search adapters, complete decorators
 and block interactions, durable sync and old-draft handoff, and parity across all
 existing surfaces. Keep the application feature-flag admission unchanged until
