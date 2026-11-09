@@ -870,17 +870,18 @@ fn interact(
                 let _ = term.clear_last_lines(1);
                 // run_step renders ✗ + the captured build error on failure; keep
                 // the loop alive so the user can fix and press `r` again.
-                let _ = telemetry::RunTelemetry::action(instance, telemetry::RunKind::Rebuild, || {
-                    rebuild_and_reload(
-                        stage,
-                        mode,
-                        instance,
-                        env,
-                        target,
-                        build_aux_services,
-                        None,
-                    )
-                });
+                let _ =
+                    telemetry::RunTelemetry::action(instance, telemetry::RunKind::Rebuild, || {
+                        rebuild_and_reload(
+                            stage,
+                            mode,
+                            instance,
+                            env,
+                            target,
+                            build_aux_services,
+                            None,
+                        )
+                    });
                 print_hotkeys(stage);
             }
             Ok(Key::Char('f' | 'F')) => {
