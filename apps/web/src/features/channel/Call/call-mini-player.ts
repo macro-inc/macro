@@ -49,7 +49,7 @@ export function constrainCallPlayerPosition(
   };
 }
 
-/** Corner magnets engage only within 64px of the resting position. */
+/** Engage only when both player edges are within 24px of a window corner. */
 export function getCallPlayerSnapTarget(
   x: number,
   y: number,
@@ -74,7 +74,11 @@ export function getCallPlayerSnapTarget(
     viewportWidth,
     viewportHeight
   );
-  if (Math.hypot(x - target.x, y - target.y) > 64) return undefined;
+  const horizontalGap = corner.endsWith('left') ? x : viewportWidth - x - width;
+  const verticalGap = corner.startsWith('top')
+    ? y
+    : viewportHeight - y - height;
+  if (horizontalGap > 24 || verticalGap > 24) return undefined;
   return { ...target, width, height, corner };
 }
 

@@ -46,6 +46,10 @@ export function CallMiniPlayer(props: {
   const [snapTarget, setSnapTarget] =
     createSignal<ReturnType<typeof getCallPlayerSnapTarget>>();
   const [snapping, setSnapping] = createSignal(false);
+  const visibleSnapTarget = createMemo(
+    (previous: ReturnType<typeof getCallPlayerSnapTarget>) =>
+      snapTarget() ?? previous
+  );
   const [storedWidth, setWidth] = usePreference(
     'macro:pref:call:mini-player-width',
     { default: 336 }
@@ -213,19 +217,40 @@ export function CallMiniPlayer(props: {
   };
   return (
     <Portal>
-      <Show when={snapTarget()}>
+      <Show when={visibleSnapTarget()}>
         {(target) => (
           <div
             aria-hidden="true"
             data-call-snap-target
-            class="pointer-events-none fixed z-modal rounded-2xl border-2 border-success bg-success/10"
+            class="pointer-events-none fixed z-modal transition-[opacity,visibility] duration-150 motion-reduce:transition-none starting:opacity-0"
+            classList={{ 'invisible opacity-0': !snapTarget() }}
             style={{
-              left: `${target().x}px`,
-              top: `${target().y}px`,
-              width: `${target().width}px`,
-              height: `${target().height}px`,
+              left: target().corner.endsWith('left') ? '0px' : 'auto',
+              right: target().corner.endsWith('right') ? '0px' : 'auto',
+              top: target().corner.startsWith('top') ? '0px' : 'auto',
+              bottom: target().corner.startsWith('bottom') ? '0px' : 'auto',
+              width: `${target().width + 80}px`,
+              height: `${target().height + 80}px`,
+              background: `radial-gradient(ellipse at ${target().corner.endsWith('left') ? 'left' : 'right'} ${target().corner.startsWith('top') ? 'top' : 'bottom'}, color-mix(in oklch, var(--color-success) 18%, transparent), transparent 75%)`,
             }}
-          />
+          >
+            <div
+              class="absolute inset-x-0 h-0.5"
+              style={{
+                top: target().corner.startsWith('top') ? '0px' : 'auto',
+                bottom: target().corner.startsWith('bottom') ? '0px' : 'auto',
+                background: `linear-gradient(to ${target().corner.endsWith('left') ? 'right' : 'left'}, var(--color-success), transparent)`,
+              }}
+            />
+            <div
+              class="absolute inset-y-0 w-0.5"
+              style={{
+                left: target().corner.endsWith('left') ? '0px' : 'auto',
+                right: target().corner.endsWith('right') ? '0px' : 'auto',
+                background: `linear-gradient(to ${target().corner.startsWith('top') ? 'bottom' : 'top'}, var(--color-success), transparent)`,
+              }}
+            />
+          </div>
         )}
       </Show>
       <div

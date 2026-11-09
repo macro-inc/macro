@@ -163,13 +163,22 @@ describe('call mini player', () => {
     expect(
       getCallPlayerSnapTarget(20, 300, 336, 240, 1440, 900)
     ).toBeUndefined();
-    expect(getCallPlayerSnapTarget(84, 20, 336, 240, 1440, 900)?.corner).toBe(
+    expect(getCallPlayerSnapTarget(24, 24, 336, 240, 1440, 900)?.corner).toBe(
       'top-left'
     );
     expect(
-      getCallPlayerSnapTarget(85, 20, 336, 240, 1440, 900)
+      getCallPlayerSnapTarget(25, 20, 336, 240, 1440, 900)
     ).toBeUndefined();
-    expect(getCallPlayerSnapTarget(1070, 630, 336, 240, 1440, 900)).toEqual({
+    expect(
+      getCallPlayerSnapTarget(84, 20, 336, 240, 1440, 900)
+    ).toBeUndefined();
+    expect(
+      getCallPlayerSnapTarget(20, 25, 336, 240, 1440, 900)
+    ).toBeUndefined();
+    expect(getCallPlayerSnapTarget(12, 12, 336, 240, 1440, 900)?.corner).toBe(
+      'top-left'
+    );
+    expect(getCallPlayerSnapTarget(1080, 636, 336, 240, 1440, 900)).toEqual({
       x: 1084,
       y: 640,
       width: 336,
