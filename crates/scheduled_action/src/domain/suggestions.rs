@@ -540,7 +540,7 @@ where
                     self.repo.suggestions(user),
                     self.repo.dismissed_templates(user),
                 )?;
-                let taken = dismissed.iter().any(|dismissed| *dismissed == key)
+                let taken = dismissed.contains(&key)
                     || stored.iter().any(|suggestion| {
                         matches!(&suggestion.pick, StoredPick::Catalog { key: taken, .. } if *taken == key)
                     });
