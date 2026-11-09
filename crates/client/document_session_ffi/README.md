@@ -23,6 +23,12 @@ editors always use `ViewEngine::Native`; routed transport and chatter are reject
 Query `FfiQuery::ViewDiff` for a full repaint when attaching a new native view;
 it preserves live model keys, history and synchronization.
 
+`FfiQuery::Decorators` reads model text and instance inline/keyboard-selection
+facts for current decorator keys in one call. It rejects detached, stale or
+non-decorator keys without changing the document. Native hosts cache these
+facts alongside the structured view patch; application label lookups and native
+presentation remain host responsibilities.
+
 All inputs, structured Diff operations, selection context, queries, storage
 metadata and telemetry use typed UniFFI records/enums. Container snapshots, sync
 frames and Loro cursors retain their native opaque byte formats. Bebop/postcard
