@@ -42,6 +42,9 @@ method signature or hint tag changes the snapshots: review the diff, then
 
 ## Gotchas
 
+- Keep URL enrichment optional: a failed `webUrl()` lookup must not replace
+  a completed operation's result with an error; direct `webUrl` operations
+  still report their own failures.
 - Synchronous methods that only build a handle (`thread.channel()`) and
   `byId`/`toJSON` are not operations; argument-free calls returning a
   sub-object (`document.canvas()`) and readonly sub-object properties

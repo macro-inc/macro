@@ -732,7 +732,6 @@
             "AgentSession.archive",
             "AgentSession.linkPullRequest",
             "AgentSession.linkTask",
-            "AgentSession.prompt",
             "AgentSession.refreshChanges",
             "AgentSession.registerAsWork",
             "AgentSession.rename",
@@ -860,33 +859,6 @@
             "op",
             "agentSession",
             "task"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "title": "AgentSession.prompt",
-          "properties": {
-            "op": {
-              "const": "AgentSession.prompt"
-            },
-            "agentSession": {
-              "type": "string"
-            },
-            "text": {
-              "type": "string"
-            },
-            "attachments": {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/PromptAttachment"
-              }
-            }
-          },
-          "required": [
-            "op",
-            "agentSession",
-            "text"
           ],
           "additionalProperties": false
         },
@@ -1259,42 +1231,6 @@
           },
           "additionalProperties": false
         },
-        "PromptAttachment": {
-          "type": "object",
-          "properties": {
-            "mimeType": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "string"
-                }
-              ]
-            },
-            "name": {
-              "type": "string"
-            },
-            "size": {
-              "anyOf": [
-                {
-                  "type": "null"
-                },
-                {
-                  "type": "number"
-                }
-              ]
-            },
-            "uri": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "name",
-            "uri"
-          ],
-          "additionalProperties": false
-        },
         "SandboxSize": {
           "enum": [
             "small",
@@ -1424,6 +1360,7 @@
             "AgentSession.access.remove",
             "AgentSession.control",
             "AgentSession.delete",
+            "AgentSession.prompt",
             "SessionReview.dismissAll",
             "SessionReview.submitAll"
           ]
@@ -1539,6 +1476,33 @@
           "required": [
             "op",
             "agentSession"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "title": "AgentSession.prompt",
+          "properties": {
+            "op": {
+              "const": "AgentSession.prompt"
+            },
+            "agentSession": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "attachments": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PromptAttachment"
+              }
+            }
+          },
+          "required": [
+            "op",
+            "agentSession",
+            "text"
           ],
           "additionalProperties": false
         },

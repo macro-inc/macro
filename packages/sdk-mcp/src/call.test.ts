@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
+import type { BookingLinkDraft } from '../../sdk/generated/calendar/types.gen';
 import { Macro } from '../../sdk/src/macro';
 import { runOperation } from './call';
 import { catalog, handleClasses } from './generated/catalog';
@@ -30,7 +31,10 @@ function macroAnswering(respond: (request: Recorded) => Response) {
   const macro = new Macro({
     token: 'test-token',
     env: 'dev',
-    hosts: { storage: 'https://storage.test' },
+    hosts: {
+      storage: 'https://storage.test',
+      calendar: 'https://calendar.test',
+    },
     webAppUrl: 'https://app.test',
   });
   return { macro, requests };
@@ -41,6 +45,121 @@ afterEach(() => {
 });
 
 describe('runOperation', () => {
+  test.each([
+    'initiative-1',
+    'https://macro.com/app/initiative/initiative-1',
+    'https://macro.com/app/projects/initiative-1/overview/?tab=tasks',
+  ])('task creation accepts initiative reference %s', async (initiative) => {
+    const { macro, requests } = macroAnswering(() =>
+      Response.json({ documentId: 'task-1' })
+    );
+
+    const result = await runOperation({
+      operation: operation('tasks.create'),
+      input: { opts: { name: 'Follow up', initiative, assignees: [] } },
+      macro,
+      catalog,
+      classes: handleClasses,
+      validators,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(requests).toHaveLength(1);
+    expect(JSON.parse(requests[0]?.body ?? '')).toMatchObject({
+      propertyValues: expect.arrayContaining([
+        expect.objectContaining({
+          value: {
+            type: 'entity_reference',
+            reference: { entity_id: 'initiative-1', entity_type: 'INITIATIVE' },
+          },
+        }),
+      ]),
+    });
+  });
+
+  test('a failed URL reload preserves a successful booking link edit', async () => {
+    const draft: BookingLinkDraft = {
+      event: {
+        title: 'Intro',
+        slug: 'intro',
+        description: '',
+        durationMinutes: 30,
+        location: '',
+        googleMeet: false,
+        enabled: true,
+        mode: 'individual',
+        hosts: ['macro|owner@example.com'],
+        beforeMinutes: 0,
+        afterMinutes: 0,
+        noticeMinutes: 60,
+        horizonDays: 30,
+        intervalMinutes: 30,
+        requiresConfirmation: false,
+        questions: [],
+      },
+      schedule: {
+        name: 'Working hours',
+        timeZone: 'UTC',
+        weekly: [],
+        overrides: [],
+      },
+    };
+    const saved = {
+      profileId: 'profile-1',
+      eventTypeId: 'link-1',
+      revision: 4,
+      draft,
+    };
+    let reads = 0;
+    const { macro, requests } = macroAnswering((request) => {
+      if (request.method === 'PUT') return Response.json(saved);
+      reads++;
+      if (reads === 1)
+        return Response.json({ links: [{ ...saved, revision: 3 }] });
+      return Response.json({ message: 'link unavailable' }, { status: 404 });
+    });
+
+    const result = await runOperation({
+      operation: operation('BookingLink.edit'),
+      input: {
+        bookingLink: { id: 'link-1' },
+        draft,
+        options: { userConfirmation: 'Yes, save it.' },
+      },
+      macro,
+      catalog,
+      classes: handleClasses,
+      validators,
+    });
+
+    expect(requests.map((request) => request.method)).toEqual([
+      'GET',
+      'PUT',
+      'GET',
+    ]);
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({
+      result: {
+        id: 'link-1',
+        detail: saved,
+        url: 'https://app.test/app/book/profile-1/intro',
+      },
+    });
+
+    const failedRead = await runOperation({
+      operation: operation('BookingLink.webUrl'),
+      input: { bookingLink: { id: 'link-1' } },
+      macro,
+      catalog,
+      classes: handleClasses,
+      validators,
+    });
+    expect(failedRead.isError).toBe(true);
+    expect(failedRead.structuredContent).toMatchObject({
+      error: { code: 'not_found' },
+    });
+  });
+
   test('a Macro URL addresses the handle its last path segment names', async () => {
     const { macro, requests } = macroAnswering(() =>
       Response.json({ permission: 'edit' })

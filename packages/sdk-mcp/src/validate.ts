@@ -14,11 +14,13 @@ export class HandleInput {
   ) {}
 }
 
-/** The id a reference names: the id itself, or the last segment of a Macro URL. */
+/** The id a reference names, including initiative links ending in `/projects/<id>/overview`. */
 export function idFromReference(reference: string): string {
   const trimmed = reference.trim();
   if (!URL.canParse(trimmed)) return trimmed;
   const segments = new URL(trimmed).pathname.split('/').filter(Boolean);
+  if (segments.at(-3) === 'projects' && segments.at(-1) === 'overview')
+    return segments.at(-2) ?? trimmed;
   return segments.at(-1) ?? trimmed;
 }
 

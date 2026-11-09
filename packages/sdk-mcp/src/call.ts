@@ -149,13 +149,17 @@ export function toJsonSafe(value: unknown, depth = 0): unknown {
   return Object.fromEntries(entries);
 }
 
-/** The entity's web app URL, when the handle has one. */
+/** Optional URL enrichment must not turn a completed operation into an error. */
 async function webUrl(value: unknown): Promise<string | undefined> {
   if (typeof value !== 'object' || value === null) return undefined;
-  const method: unknown = Reflect.get(value, 'webUrl');
-  if (typeof method !== 'function') return undefined;
-  const url: unknown = await Reflect.apply(method, value, []);
-  return typeof url === 'string' ? url : undefined;
+  try {
+    const method: unknown = Reflect.get(value, 'webUrl');
+    if (typeof method !== 'function') return undefined;
+    const url: unknown = await Reflect.apply(method, value, []);
+    return typeof url === 'string' ? url : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function summary(

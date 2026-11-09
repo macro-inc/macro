@@ -800,7 +800,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    * can fetch (a static file service URL in practice); they reach the agent
    * as ACP `resource_link` blocks after the text.
    *
-   * @write
+   * @destructive
    * @openworld
    */
   prompt(

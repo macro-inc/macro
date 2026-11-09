@@ -1641,7 +1641,7 @@
     "annotations": {
       "title": "AgentSession.prompt",
       "readOnlyHint": false,
-      "destructiveHint": false,
+      "destructiveHint": true,
       "idempotentHint": false,
       "openWorldHint": true
     },

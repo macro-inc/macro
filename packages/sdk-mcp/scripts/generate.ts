@@ -663,13 +663,13 @@ function addOperations(
       .map(({ step }) => step.name)
   );
   for (const method of methodsOf(declaration)) {
+    if (excludedReason(method)) continue;
     const methodName = method.name.getText();
     const name = `${prefix}.${methodName}`;
     const owner = method.parent;
     const where = `${ts.isClassDeclaration(owner) ? className(owner) : prefix}.${methodName}`;
     const hints = hintsOf(where, method);
-    if (excludedReason(method) || navigation.has(methodName) || !hints)
-      continue;
+    if (navigation.has(methodName) || !hints) continue;
 
     // A synchronous call returning a handle only builds it (`thread.channel()`);
     // MCP callers address that handle directly.
