@@ -41,7 +41,10 @@ async fn two_macrods_running_one_executable_update_it_at_the_same_time() {
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
     let archive = archive_with("macrod", b"#!/bin/sh\necho 'macrod v2026.10.27.2'\n");
     let checksum = checksum_file(&archive, "macrod.tar.gz");
-    // Both stage, then both swap, at once.
+    // Both stage, then both swap, at once. No smoke test: a file this
+    // process just wrote can fail to run (`Text file busy`) while a spawn
+    // elsewhere in it still holds a copy of the writer. The swap's version
+    // check tolerates that by installing its own copy.
     let together = std::sync::Arc::new(tokio::sync::Barrier::new(2));
     let update = |process| {
         let installation = Installation::at(executable.clone(), process);
@@ -51,7 +54,6 @@ async fn two_macrods_running_one_executable_update_it_at_the_same_time() {
             let staged = installation
                 .stage(&archive, &checksum, "v2026.10.27.2")
                 .unwrap();
-            run_version(&staged).await.unwrap();
             together.wait().await;
             StagedUpdate {
                 tag: "v2026.10.27.2".to_owned(),
@@ -73,8 +75,8 @@ async fn two_macrods_running_one_executable_update_it_at_the_same_time() {
         assert_eq!(installed.tag, "v2026.10.27.2");
     }
     assert_eq!(
-        run_version(&executable).await.unwrap(),
-        "macrod v2026.10.27.2\n"
+        std::fs::read(&executable).unwrap(),
+        b"#!/bin/sh\necho 'macrod v2026.10.27.2'\n"
     );
     let mut left = std::fs::read_dir(directory.path())
         .unwrap()
@@ -94,8 +96,17 @@ async fn a_macrod_with_an_older_release_staged_restarts_into_the_newer_one_insta
     let directory = tempfile::tempdir().unwrap();
     let executable = directory.path().join("macrod");
     // Another macrod installed v2026.10.27.3 while this one waited to swap.
-    std::fs::write(&executable, b"#!/bin/sh\necho 'macrod v2026.10.27.3'\n").unwrap();
-    std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
+    // `cp` writes it, so no spawn in this process holds a copy of the writer
+    // when the swap runs it (`Text file busy`).
+    let release = directory.path().join("v2026.10.27.3");
+    std::fs::write(&release, b"#!/bin/sh\necho 'macrod v2026.10.27.3'\n").unwrap();
+    std::fs::set_permissions(&release, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let copied = std::process::Command::new("cp")
+        .arg(&release)
+        .arg(&executable)
+        .status()
+        .unwrap();
+    assert!(copied.success());
     let installation = Installation::at(executable.clone(), 1001);
     let archive = archive_with("macrod", b"#!/bin/sh\necho 'macrod v2026.10.27.2'\n");
     let staged = installation
@@ -119,8 +130,8 @@ async fn a_macrod_with_an_older_release_staged_restarts_into_the_newer_one_insta
     assert_eq!(installed.tag, "v2026.10.27.3");
     assert!(!staged.exists());
     assert_eq!(
-        run_version(&executable).await.unwrap(),
-        "macrod v2026.10.27.3\n"
+        std::fs::read(&executable).unwrap(),
+        b"#!/bin/sh\necho 'macrod v2026.10.27.3'\n"
     );
 }
 
@@ -159,7 +170,7 @@ async fn a_macrod_starting_up_keeps_the_update_another_is_waiting_to_swap_in() {
 
     assert_eq!(installed.tag, "v2026.10.27.2");
     assert_eq!(
-        run_version(&executable).await.unwrap(),
-        "macrod v2026.10.27.2\n"
+        std::fs::read(&executable).unwrap(),
+        b"#!/bin/sh\necho 'macrod v2026.10.27.2'\n"
     );
 }
