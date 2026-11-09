@@ -134,8 +134,10 @@ impl UserExecutionCredentials for UserRunCredentials {
 }
 
 /// Document programs roll out per user through
-/// [`agent_code_mode::domain::DOCUMENT_PROGRAMS_FLAG`]. Without a flag provider
-/// (no PostHog key) they run only locally; a flag read that fails is off.
+/// [`agent_code_mode::domain::DOCUMENT_PROGRAMS_FLAG`]. A local stack always
+/// runs them, matching the web flag's dev default: its PostHog key is often a
+/// placeholder that PostHog refuses. Elsewhere they need the flag, and without
+/// a flag provider (no PostHog key) or a flag read that fails they are off.
 pub struct FlaggedDocumentPrograms {
     pub flags: Option<feature_flags::outbound::posthog::PostHogFeatureFlags>,
     pub local: bool,
@@ -145,8 +147,11 @@ pub struct FlaggedDocumentPrograms {
 impl DocumentProgramGate for FlaggedDocumentPrograms {
     async fn allows(&self, user: &MacroUserIdStr<'static>) -> bool {
         use feature_flags::FeatureFlags;
+        if self.local {
+            return true;
+        }
         let Some(flags) = &self.flags else {
-            return self.local;
+            return false;
         };
         match flags.load(user).await {
             Ok(snapshot) => snapshot.is_enabled(agent_code_mode::domain::DOCUMENT_PROGRAMS_FLAG),
