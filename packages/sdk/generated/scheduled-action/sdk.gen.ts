@@ -62,7 +62,7 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * The caller's feed.
+     * The caller's feed, for them or their own agent.
      */
     public listIdeas<ThrowOnError extends boolean = false>(options?: Options<ListIdeasData, ThrowOnError>): RequestResult<ListIdeasResponses, ListIdeasErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<ListIdeasResponses, ListIdeasErrors, ThrowOnError>({ url: '/ideas', ...options });
@@ -105,14 +105,14 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * The caller acts on a proposed idea.
+     * The caller, or their own agent, acts on a proposed idea.
      */
     public acceptIdea<ThrowOnError extends boolean = false>(options: Options<AcceptIdeaData, ThrowOnError>): RequestResult<AcceptIdeaResponses, AcceptIdeaErrors, ThrowOnError> {
         return (options.client ?? this.client).post<AcceptIdeaResponses, AcceptIdeaErrors, ThrowOnError>({ url: '/ideas/{id}/accept', ...options });
     }
 
     /**
-     * The caller isn't interested in an open idea.
+     * The caller, or their own agent, isn't interested in an open idea.
      */
     public dismissIdea<ThrowOnError extends boolean = false>(options: Options<DismissIdeaData, ThrowOnError>): RequestResult<DismissIdeaResponses, DismissIdeaErrors, ThrowOnError> {
         return (options.client ?? this.client).post<DismissIdeaResponses, DismissIdeaErrors, ThrowOnError>({ url: '/ideas/{id}/dismiss', ...options });

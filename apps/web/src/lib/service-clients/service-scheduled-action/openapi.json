@@ -31,7 +31,7 @@
     "/ideas": {
       "get": {
         "tags": ["ideas"],
-        "summary": "The caller's feed.",
+        "summary": "The caller's feed, for them or their own agent.",
         "operationId": "list_ideas",
         "parameters": [
           {
@@ -57,6 +57,16 @@
           },
           "401": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A generation session may not read the feed",
             "content": {
               "text/plain": {
                 "schema": {
@@ -317,7 +327,7 @@
     "/ideas/{id}/accept": {
       "post": {
         "tags": ["ideas"],
-        "summary": "The caller acts on a proposed idea.",
+        "summary": "The caller, or their own agent, acts on a proposed idea.",
         "operationId": "accept_idea",
         "parameters": [
           {
@@ -336,6 +346,16 @@
           },
           "401": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A generation session may not accept",
             "content": {
               "text/plain": {
                 "schema": {
@@ -370,7 +390,7 @@
     "/ideas/{id}/dismiss": {
       "post": {
         "tags": ["ideas"],
-        "summary": "The caller isn't interested in an open idea.",
+        "summary": "The caller, or their own agent, isn't interested in an open idea.",
         "operationId": "dismiss_idea",
         "parameters": [
           {
@@ -389,6 +409,16 @@
           },
           "401": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A generation session may not dismiss",
             "content": {
               "text/plain": {
                 "schema": {

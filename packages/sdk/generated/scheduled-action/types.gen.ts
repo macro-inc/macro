@@ -1671,6 +1671,10 @@ export type ListIdeasData = {
 export type ListIdeasErrors = {
     401: string;
     /**
+     * A generation session may not read the feed
+     */
+    403: string;
+    /**
      * Ideas are off for the caller
      */
     404: string;
@@ -1803,6 +1807,10 @@ export type AcceptIdeaData = {
 export type AcceptIdeaErrors = {
     401: string;
     /**
+     * A generation session may not accept
+     */
+    403: string;
+    /**
      * No proposed idea with this id for the caller, or ideas are off
      */
     404: string;
@@ -1834,6 +1842,10 @@ export type DismissIdeaData = {
 
 export type DismissIdeaErrors = {
     401: string;
+    /**
+     * A generation session may not dismiss
+     */
+    403: string;
     /**
      * No open idea with this id for the caller, or ideas are off
      */
