@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE idea\n               SET state = $4, state_reason = NULL, updated_at = $5, state_changed_at = $5,\n                   session_id = COALESCE($6, session_id)\n               WHERE user_id = $1 AND id = $2 AND state = ANY($3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "TextArray",
+        "Text",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9930c7167cffb89a83f85a9e2423065231475fd17f7eae964eeb202c37a8f5af"
+}

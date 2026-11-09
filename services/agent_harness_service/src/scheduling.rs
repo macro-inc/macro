@@ -63,6 +63,10 @@ use scheduled_action::outbound::pg_polling_dispatcher::{
 use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo;
+use ideas::domain::service::IdeaService;
+use ideas::inbound::router::{IdeaRouterState, idea_router};
+use ideas::outbound::idea_access::EntityIdeaAccess;
+use ideas::outbound::pg_idea_repo::PgIdeaRepo;
 use scheduled_action::swagger::ApiDoc;
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use utoipa::OpenApi;
@@ -133,6 +137,18 @@ impl RequestSessions for CorrelationSessions {
             .await
             .map_err(|error| anyhow::anyhow!("could not read a code-mode invocation: {error}"))?
             .map(|correlation| correlation.session_id))
+    }
+}
+
+#[async_trait::async_trait]
+impl ideas::domain::ports::RequestSessions for CorrelationSessions {
+    async fn session_of(
+        &self,
+        correlation: uuid::Uuid,
+    ) -> Result<Option<uuid::Uuid>, rootcause::Report> {
+        RequestSessions::session_of(self, correlation)
+            .await
+            .map_err(|error| rootcause::report!("{error:?}"))
     }
 }
 
@@ -406,9 +422,10 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let suggestion_code = Arc::clone(&code);
     // Which agent session a code-mode request came from, for drafts' checks
     // and suggestion sessions' suggestions.
-    let request_sessions: Arc<dyn RequestSessions> = Arc::new(CorrelationSessions(
+    let correlation_sessions = Arc::new(CorrelationSessions(
         agent_correlation::outbound::PgCorrelationRepository(db.clone()),
     ));
+    let request_sessions: Arc<dyn RequestSessions> = correlation_sessions.clone();
     let suggestion_repo = Arc::new(PgSuggestionRepo::new(db.clone()));
     let service = Arc::new(
         ScheduledActionServiceImpl::new(
@@ -494,6 +511,19 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         service: suggestions,
         authorization_state: authorization_state.clone(),
     };
+    // Ideas: written and managed by hidden generation sessions through
+    // `macro.ideas.*`, read and acted on by the person. Served here, under
+    // the scheduler's prefix, next to the routine suggestions they share
+    // generation with.
+    let idea_state = IdeaRouterState {
+        service: Arc::new(IdeaService::new(
+            Arc::new(PgIdeaRepo::new(db.clone())),
+            Arc::new(EntityIdeaAccess(access.as_ref().clone())),
+            correlation_sessions,
+            template_flags.clone(),
+        )),
+        authorization_state: authorization_state.clone(),
+    };
     let template_state = RoutineTemplateRouterState {
         service: Arc::new(RoutineTemplateServiceImpl::new(
             Arc::clone(&service),
@@ -515,7 +545,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let authed_routes = scheduled_action_router::<_, _, _, ()>(state)
         .merge(routine_template_router::<_, _, _, ()>(template_state))
         .merge(routine_draft_router::<_, _, ()>(draft_state))
-        .merge(routine_suggestion_router::<_, _, ()>(suggestion_state));
+        .merge(routine_suggestion_router::<_, _, ()>(suggestion_state))
+        .merge(idea_router::<_, _, ()>(idea_state));
 
     let router = mount_router(authed_routes)
         .layer(macro_cors::cors_layer())
@@ -529,8 +560,16 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
 fn mount_router(routes: Router) -> Router {
     Router::new().nest(GATEWAY_PATH_PREFIX, routes).merge(
         SwaggerUi::new("/scheduled-action/docs")
-            .url("/scheduled-action/api-doc/openapi.json", ApiDoc::openapi()),
+            .url("/scheduled-action/api-doc/openapi.json", openapi()),
     )
+}
+
+/// The scheduler's OpenAPI, with the ideas routes it also serves, as
+/// `scheduling_openapi` prints it.
+fn openapi() -> utoipa::openapi::OpenApi {
+    let mut openapi = ApiDoc::openapi();
+    openapi.merge(ideas::swagger::IdeasApiDoc::openapi());
+    openapi
 }
 
 /// Read-only views of the domains whose events can trigger a routine, for

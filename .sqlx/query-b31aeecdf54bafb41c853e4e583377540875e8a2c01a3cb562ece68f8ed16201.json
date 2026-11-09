@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM idea_target WHERE idea_id = $1 AND role = 'about'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b31aeecdf54bafb41c853e4e583377540875e8a2c01a3cb562ece68f8ed16201"
+}

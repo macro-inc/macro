@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT idea_id, role, entity_type, entity_id, part_id\n               FROM idea_target\n               WHERE idea_id = ANY($1)\n               ORDER BY idea_id, role, position",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "idea_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "entity_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "entity_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "part_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "f8e41194f66d90d0b9e9f8d711667cbad9517e7c31cf0f6a005260ed6d6ece4a"
+}
