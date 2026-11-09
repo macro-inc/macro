@@ -376,6 +376,12 @@ sanitization/color helpers delegate to the package through `@core/email`.
 8. Renderer resources follow their Solid owner. Source changes or disposal release
    image blob URLs, resize observers and image listeners, and abort pending adapter
    work.
+9. A reopened reply draft seeds its composer through
+   `email-compose/core/draft-editor-html.ts`. A draft another client wrote
+   carries that client's quoted thread as plain markup; it seeds from the
+   server's replyless body, so the composer's own appended quote is the only one
+   sent. Bodies with a `.macro_quote` or only editor (`md-quote`) quotes seed
+   unchanged.
 
 ## Shared UI and explicit exceptions
 
