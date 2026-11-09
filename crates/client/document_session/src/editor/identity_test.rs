@@ -49,7 +49,7 @@ impl Plugin for DuplicateLiveLeaf {
         };
         let paragraph = tx.create(Paragraph::default())?;
         let leaf = tx.create_text("other")?;
-        tx.set_state(leaf, &builder::ID, id.clone())?;
+        tx.set_state(leaf, &builder::ID, Some(id.clone()))?;
         tx.append(paragraph, &[leaf.key()])?;
         tx.append(NodeKey::ROOT, &[paragraph.key()])?;
         Ok(Handled::Yes)

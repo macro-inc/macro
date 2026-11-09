@@ -13,6 +13,7 @@ pub fn default_editor_builder(mode: EditorMode, peer: u64) -> EditorBuilder {
         table::register_table(builder, &table::TableConfig::default()),
         peer,
     )
+
 }
 
 /// Install editing commands without registering nodes or allocating node identities.
@@ -20,23 +21,33 @@ pub fn register_editor_commands(builder: EditorBuilder) -> EditorBuilder {
     crate::staging::register_staged_updates(builder).plugin(RichCommands)
 }
 
-/// Install session commands and durable identity tracking over a supplied registry.
+/// Install session commands and standalone durable identity tracking.
 pub fn with_session_plugins(builder: EditorBuilder, peer: u64) -> EditorBuilder {
-    register_editor_commands(builder.extension_state(NodeIdIndex::default())).plugin(NodeIds(peer))
+    with_session_plugins_with_id_state(builder, peer, &ID)
 }
 
-pub(super) static ID: StateKey<String> = StateKey::new("id", |value| {
-    value
-        .and_then(serde_json::Value::as_str)
-        .unwrap_or_default()
-        .to_owned()
+/// Install session tracking with the same identity state key as the node importers.
+pub fn with_session_plugins_with_id_state(
+    builder: EditorBuilder,
+    peer: u64,
+    id_state: &'static StateKey<Option<String>>,
+) -> EditorBuilder {
+    register_editor_commands(builder.extension_state(NodeIdIndex::default()))
+        .plugin(NodeIds { peer, id_state })
+}
+
+pub(super) static ID: StateKey<Option<String>> = StateKey::new("id", |value| {
+    value.and_then(serde_json::Value::as_str).map(str::to_owned)
 });
 #[derive(Clone, Default)]
 struct NodeIdIndex {
     ids: imbl::GenericOrdMap<String, NodeKey, imbl::shared_ptr::ArcK>,
     keys: imbl::GenericOrdMap<NodeKey, String, imbl::shared_ptr::ArcK>,
 }
-struct NodeIds(u64);
+struct NodeIds {
+    peer: u64,
+    id_state: &'static StateKey<Option<String>>,
+}
 impl Plugin for NodeIds {
     fn name(&self) -> &'static str {
         "session-node-id"
@@ -53,7 +64,7 @@ impl Plugin for NodeIds {
             let mut id = if *mutation == Mutation::Destroyed || !tx.is_attached(*key) {
                 None
             } else {
-                Some(tx.get_state(*key, &ID)?)
+                Some(tx.get_state(*key, self.id_state)?.unwrap_or_default())
             };
             // Subtree removal can leave stale descendant index entries. Only
             // an attached owner can conflict with a restored durable identity.
@@ -65,14 +76,14 @@ impl Plugin for NodeIds {
                         .get(value)
                         .is_some_and(|owner| owner != key && tx.is_attached(*owner)))
             {
-                let base = format!("session-{}-{key}", self.0);
+                let base = format!("session-{}-{key}", self.peer);
                 *value = base.clone();
                 let mut suffix = 0_u64;
                 while tx.extension::<NodeIdIndex>()?.ids.contains_key(value) {
                     suffix += 1;
                     *value = format!("{base}-{suffix}");
                 }
-                tx.set_state(*key, &ID, value.clone())?;
+                tx.set_state(*key, self.id_state, Some(value.clone()))?;
             }
             if old != id {
                 let index = tx.extension_mut::<NodeIdIndex>()?;
