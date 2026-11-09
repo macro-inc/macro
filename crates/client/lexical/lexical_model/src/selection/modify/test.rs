@@ -641,3 +641,90 @@ fn raw_splice_relocation_skips_a_predecessor_moved_into_the_range() -> Result<()
     assert_eq!(tx.focus()?, Point::text(c, Utf16Offset(0)));
     Ok(())
 }
+
+#[test]
+fn ordinary_text_deletion_without_view_targets_requires_layout() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let text = tx.create_text("abcd")?;
+        tx.append(p, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        tx.replace_selection(Some(Selection::Range(RangeSelection::collapsed(
+            Point::text(text, Utf16Offset(2)),
+        ))))?;
+        Ok(())
+    })?;
+    for granularity in [
+        Granularity::Character,
+        Granularity::Word,
+        Granularity::LineBoundary,
+    ] {
+        let mut tx = editor.transaction();
+        let before = tx.selection().cloned();
+        let result = match granularity {
+            Granularity::Character => tx.delete_character_at(
+                SelectionSlot::Active,
+                EditDirection::Backward,
+                ModifyTarget::RequireView,
+            ),
+            Granularity::Word => tx.delete_word_at(
+                SelectionSlot::Active,
+                EditDirection::Backward,
+                ModifyTarget::RequireView,
+                ModifyTarget::RequireView,
+            ),
+            Granularity::LineBoundary => tx.delete_line_at(
+                SelectionSlot::Active,
+                EditDirection::Backward,
+                ModifyTarget::RequireView,
+                ModifyTarget::RequireView,
+            ),
+        };
+        assert!(matches!(result, Err(Error::LayoutRequired)));
+        assert_eq!(tx.text_content(NodeKey::ROOT), "abcd");
+        assert_eq!(tx.selection(), before.as_ref());
+    }
+    Ok(())
+}
+
+#[test]
+fn unresolved_leaf_and_element_boundaries_require_view_targets() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let ((p, a, b), _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let a = tx.create_text("a")?;
+        let b = tx.create_text("b")?;
+        tx.text(b)?.set_format(TextFormat::BOLD)?;
+        tx.append(p, &[a.key(), b.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok((p.key(), a.key(), b.key()))
+    })?;
+    for (point, direction) in [
+        (Point::text(a, Utf16Offset(1)), EditDirection::Forward),
+        (Point::text(b, Utf16Offset(0)), EditDirection::Backward),
+        (Point::element(p, ChildIndex(0)), EditDirection::Forward),
+    ] {
+        let mut tx = editor.transaction();
+        tx.replace_selection(Some(Selection::Range(RangeSelection::collapsed(point))))?;
+        let before = tx.selection().cloned();
+        assert!(matches!(
+            tx.modify_selection(
+                Alter::Extend,
+                direction,
+                Granularity::Character,
+                ModifyTarget::RequireView
+            ),
+            Err(Error::LayoutRequired)
+        ));
+        assert_eq!(tx.selection(), before.as_ref());
+        tx.modify_selection(
+            Alter::Extend,
+            direction,
+            Granularity::Character,
+            ModifyTarget::NoView,
+        )?;
+        assert_eq!(tx.selection(), before.as_ref());
+    }
+    Ok(())
+}
