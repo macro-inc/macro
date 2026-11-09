@@ -4314,6 +4314,10 @@
       "crates/work_feed",
       "crates/workspace-hack"
     ],
+    "computer_id": [
+      "crates/computer_id",
+      "crates/workspace-hack"
+    ],
     "connect_client": [
       "crates/connect_client",
       "crates/macro_tower_layers",
@@ -9805,6 +9809,10 @@
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
+    "incus_client": [
+      "crates/incus_client",
+      "crates/workspace-hack"
+    ],
     "initiative": [
       "crates/activity",
       "crates/agent",
@@ -11862,6 +11870,10 @@
       "crates/sqs_client",
       "crates/workspace-hack",
       "services/organization_retention_trigger"
+    ],
+    "pairing_id": [
+      "crates/pairing_id",
+      "crates/workspace-hack"
     ],
     "pipedream_mcp": [
       "crates/ai_toolset",
@@ -14159,6 +14171,10 @@
       "crates/cowlike",
       "crates/model-entity",
       "crates/stream",
+      "crates/workspace-hack"
+    ],
+    "stripe_price_id": [
+      "crates/stripe_price_id",
       "crates/workspace-hack"
     ],
     "sync_router": [
