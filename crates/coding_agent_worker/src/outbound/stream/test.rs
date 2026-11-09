@@ -80,11 +80,11 @@ async fn connect_yields_typed_envelopes_and_skips_keep_alives_and_junk() {
         .await
         .expect("open the stream");
 
-    let first = stream.next_event().await.expect("read").expect("first");
-    assert_eq!(first, Envelope { n: 1 });
-    let second = stream.next_event().await.expect("read").expect("second");
-    assert_eq!(second, Envelope { n: 2 });
-    assert!(stream.next_event().await.expect("closed").is_none());
+    let first = stream.next_event().await.expect("read");
+    assert_eq!(first, Next::Event(Envelope { n: 1 }));
+    let second = stream.next_event().await.expect("read");
+    assert_eq!(second, Next::Event(Envelope { n: 2 }));
+    assert_eq!(stream.next_event().await.expect("closed"), Next::Closed);
 
     // The owner comes from the server, so the stream is scoped to the team.
     let requests = requests.lock().unwrap();
@@ -96,6 +96,50 @@ async fn connect_yields_typed_envelopes_and_skips_keep_alives_and_junk() {
         requests[1].starts_with("GET /webhook/events/stream?scope=team&"),
         "{requests:?}"
     );
+}
+
+/// An SSE body that sends `chunks`, each after its delay, then holds the
+/// connection open without sending anything.
+fn body(
+    chunks: Vec<(Duration, &'static str)>,
+) -> impl Stream<Item = Result<&'static str, reqwest::Error>> + Send + 'static {
+    futures::stream::iter(chunks)
+        .then(|(delay, chunk)| async move {
+            tokio::time::sleep(delay).await;
+            Ok(chunk)
+        })
+        .chain(futures::stream::pending())
+}
+
+#[tokio::test(start_paused = true)]
+async fn keep_alives_hold_a_stream_open_past_the_silence_limit() {
+    let keep_alive = (Duration::from_secs(20), ": keep-alive\n\n");
+    let mut stream = EventStream::<Envelope>::new(body(vec![
+        keep_alive,
+        keep_alive,
+        keep_alive,
+        keep_alive,
+        (Duration::from_secs(20), "data: {\"n\":1}\n\n"),
+    ]));
+    let opened = Instant::now();
+
+    assert_eq!(
+        stream.next_event().await.expect("read"),
+        Next::Event(Envelope { n: 1 })
+    );
+    assert_eq!(opened.elapsed(), Duration::from_secs(100));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_stream_that_stops_sending_ends_silent_a_limit_after_the_last_keep_alive() {
+    let mut stream =
+        EventStream::<Envelope>::new(body(vec![(Duration::from_secs(20), ": keep-alive\n\n")]));
+    let opened = Instant::now();
+    let heard = stream.heard();
+
+    assert_eq!(stream.next_event().await.expect("read"), Next::Silent);
+    assert_eq!(*heard.borrow(), opened + Duration::from_secs(20));
+    assert_eq!(opened.elapsed(), Duration::from_secs(20) + SILENCE_LIMIT);
 }
 
 #[tokio::test]
