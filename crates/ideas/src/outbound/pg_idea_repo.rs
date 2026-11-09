@@ -168,7 +168,6 @@ impl PgIdeaRepo {
     }
 }
 
-#[expect(clippy::too_many_arguments, reason = "one row, all of its columns")]
 fn run(
     session: Uuid,
     idea: Uuid,
