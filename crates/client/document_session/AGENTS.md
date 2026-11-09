@@ -53,6 +53,7 @@ successful binding. Validate complete generic batches before changing the live d
 - `src/session.rs`: shared lifecycle, SyncDoc lending adapter and ordered output drain.
 - `src/editor.rs`: initialization, remote repair and deterministic Loro grouping.
 - `src/editor/builder.rs`: default registry, command handlers and persistent node-id index.
+- `src/editor/identity_test.rs`: complete subtree-history JSON, durable identities, caret restoration and typed root metadata regressions.
 - `src/generic/validate.rs`: semantic shadow validation before any native operation.
 - `src/generic/surface.rs`: native event collection and observed-path replacement handling.
 - `src/comments.rs`: fresh-peer mark staging and idempotent publication retries.

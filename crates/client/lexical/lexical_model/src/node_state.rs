@@ -74,6 +74,29 @@ fn json_equal(left: &Arc<Value>, right: &Arc<Value>) -> bool {
             (a, b) => a == b,
         }
 }
+fn serialized_equal(left: &Value, right: &Value) -> bool {
+    match (left, right) {
+        (Value::Number(left), Value::Number(right)) => {
+            left == right && left.as_f64().map(f64::to_bits) == right.as_f64().map(f64::to_bits)
+        }
+        (Value::Array(left), Value::Array(right)) => {
+            left.len() == right.len()
+                && left
+                    .iter()
+                    .zip(right)
+                    .all(|(left, right)| serialized_equal(left, right))
+        }
+        (Value::Object(left), Value::Object(right)) => {
+            left.len() == right.len()
+                && left.iter().all(|(key, value)| {
+                    right
+                        .get(key)
+                        .is_some_and(|right| serialized_equal(value, right))
+                })
+        }
+        _ => left == right,
+    }
+}
 /// A static state configuration; identity is its address.
 /// s2: NS-01, NS-02
 pub struct StateKey<ValueType: StateValue> {
@@ -405,6 +428,7 @@ impl NodeState {
         layout: &StateLayout,
         previous: Option<&NodeState>,
         shared: Option<&IndexMap<&'static str, &'static dyn AnyStateKey>>,
+        preserve_unchanged: bool,
     ) -> Option<Self> {
         let nested = json.get("$").and_then(Value::as_object);
         if previous.is_none()
@@ -429,15 +453,34 @@ impl NodeState {
             }
         }
         let mut known = vec![];
+        let parse = |key: &'static dyn AnyStateKey, value: Option<Arc<Value>>| {
+            if preserve_unchanged
+                && let Some((_, stored)) = previous
+                    .into_iter()
+                    .flat_map(|state| &state.known)
+                    .find(|(existing, _)| existing.identity() == key.identity())
+                && match &value {
+                    Some(value) => {
+                        !key.equal_any(stored.as_ref(), key.default_any().as_ref())
+                            && key
+                                .json_any(stored.as_ref())
+                                .is_some_and(|stored| serialized_equal(&stored, value))
+                    }
+                    None => key.equal_any(stored.as_ref(), key.default_any().as_ref()),
+                }
+            {
+                // Remote updates carry the whole node, including unchanged state.
+                // Reparsing an unchanged typed value can alter its serialized shape.
+                return stored.clone();
+            }
+            value.map_or_else(|| key.default_any(), |value| key.parse_any(Some(&value)))
+        };
         for entry in &layout.entries {
             let Some(key) = entry.key.native() else {
                 continue;
             };
             let value = unknown.shift_remove(key.name());
-            known.push((
-                key,
-                value.map_or_else(|| key.default_any(), |value| key.parse_any(Some(&value))),
-            ));
+            known.push((key, parse(key, value)));
         }
         if let Some(previous) = previous {
             for (key, _) in &previous.known {
@@ -448,10 +491,7 @@ impl NodeState {
                     continue;
                 }
                 let value = unknown.shift_remove(key.name());
-                known.push((
-                    *key,
-                    value.map_or_else(|| key.default_any(), |value| key.parse_any(Some(&value))),
-                ));
+                known.push((*key, parse(*key, value)));
             }
         }
         let learned: Vec<_> = unknown
@@ -464,7 +504,7 @@ impl NodeState {
                 .iter()
                 .any(|(existing, _)| existing.identity() == key.identity())
             {
-                known.push((key, key.parse_any(value.as_deref())));
+                known.push((key, parse(key, value)));
             }
         }
         Some(Self {
