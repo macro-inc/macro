@@ -72,4 +72,38 @@ describe('sdk entry', () => {
       )
     ).toEqual(ids);
   });
+
+  it('rolls back an update that throws before the error reaches the caller', () => {
+    const editor = createDocumentEditor();
+    expect(() =>
+      editor.update(
+        () => {
+          $getRoot().append(
+            $createParagraphNode().append($createTextNode('half done'))
+          );
+          throw new Error('program failed');
+        },
+        { discrete: true }
+      )
+    ).toThrow('program failed');
+
+    editor.update(() => {}, { discrete: true });
+    expect(editor.read(() => $getRoot().getTextContent())).toBe('');
+  });
+
+  it('rejects state with a node type it does not register, naming it', () => {
+    const editor = createDocumentEditor();
+    expect(() =>
+      editor.parseEditorState({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [{ type: 'not-a-macro-node', version: 1 }],
+          direction: null,
+          format: '',
+          indent: 0,
+        },
+      })
+    ).toThrow('not-a-macro-node');
+  });
 });
