@@ -718,6 +718,16 @@ export function registerEvents(view: EditorView): {
   for (const name of ['copy', 'cut'] as const)
     listen(name, (event) => {
       if (!event.clipboardData) return;
+      const selected = readSelection(view);
+      const current = view.selection().selection;
+      if (
+        selected.kind === 'range' &&
+        current.kind !== 'node' &&
+        current.kind !== 'table' &&
+        !sameSelection(selected, current)
+      ) {
+        view.port.selectionFromView(selected);
+      }
       const data = view.clipboard.formats(name === 'cut' ? 1 : 0);
       event.clipboardData.setData('text/html', data.html);
       event.clipboardData.setData('text/plain', data.plain);
