@@ -7,7 +7,7 @@ use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRef, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use entity_registry::{CreationPrincipalExtractor, NonUserOwners};
 use macro_authorization::{
@@ -18,9 +18,13 @@ use serde::Deserialize;
 use utoipa::IntoParams;
 
 use crate::domain::model::{
-    IdeaError, IdeaReview, IdeaWriteOutcome, Ideas, RetireIdea, RewriteIdea, SuggestIdea,
+    AttachDraft, IdeaError, IdeaReview, IdeaWriteOutcome, Ideas, RetireIdea, RewriteIdea,
+    SuggestIdea,
 };
 use crate::domain::ports::IdeaApi;
+
+#[cfg(test)]
+mod test;
 
 /// What the ideas routes share.
 pub struct IdeaRouterState<S, Auth> {
@@ -68,6 +72,7 @@ where
         .route("/ideas/review", get(review_ideas::<S, Auth>))
         .route("/ideas/{id}", axum::routing::patch(rewrite_idea::<S, Auth>))
         .route("/ideas/{id}/retire", post(retire_idea::<S, Auth>))
+        .route("/ideas/{id}/draft", put(attach_idea_draft::<S, Auth>))
         .route("/ideas/{id}/accept", post(accept_idea::<S, Auth>))
         .route("/ideas/{id}/dismiss", post(dismiss_idea::<S, Auth>))
         .with_state(state)
@@ -344,6 +349,44 @@ where
         state
             .service
             .retire(&principal, correlation, id, request)
+            .await?,
+    ))
+}
+
+#[utoipa::path(
+    put,
+    path = "/ideas/{id}/draft",
+    tag = "ideas",
+    operation_id = "attach_idea_draft",
+    params(("id" = String, Path, description = "ID of the idea")),
+    request_body = AttachDraft,
+    responses(
+        (status = 200, body = IdeaWriteOutcome, description = "Whether the draft is now the idea's, replacing its old one, and what to fix when it isn't"),
+        (status = 400, body = String),
+        (status = 401, body = String),
+        (status = 403, body = String, description = "Only an ideas generation session may attach a draft"),
+        (status = 404, body = String, description = "No such idea for the user, or ideas are off"),
+        (status = 500, body = String),
+    )
+)]
+/// Make a reply draft an ideas generation session wrote the draft of an
+/// open reply idea. Nothing is sent.
+pub async fn attach_idea_draft<S, Auth>(
+    State(state): State<IdeaRouterState<S, Auth>>,
+    CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    Path(id): Path<Uuid>,
+    body: Result<Json<AttachDraft>, JsonRejection>,
+) -> Result<Json<IdeaWriteOutcome>, IdeaApiError>
+where
+    S: IdeaApi,
+    Auth: MacroAuthorizationService,
+{
+    let Json(request) = body.map_err(IdeaApiError::InvalidRequest)?;
+    let correlation = agent_correlation::context::current();
+    Ok(Json(
+        state
+            .service
+            .attach_draft(&principal, correlation, id, request)
             .await?,
     ))
 }

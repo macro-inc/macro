@@ -8,7 +8,8 @@ use chrono::DateTime;
 use feature_flags::outbound::fake::FakeFeatureFlags;
 use feature_flags::{FlagSnapshot, FlagValue};
 use ideas::domain::model::{
-    IdeaError, IdeaReview, IdeaWriteOutcome, Ideas, RetireIdea, RewriteIdea, SuggestIdea,
+    AttachDraft, IdeaError, IdeaReview, IdeaWriteOutcome, Ideas, RetireIdea, RewriteIdea,
+    SuggestIdea,
 };
 use model_owner::CreationPrincipal;
 use scheduled_action::domain::suggestions::model::{
@@ -243,6 +244,16 @@ impl IdeaApi for FakeIdeas {
         _: Option<Uuid>,
         _: Uuid,
         _: RetireIdea,
+    ) -> Result<IdeaWriteOutcome, IdeaError> {
+        unreachable!()
+    }
+
+    async fn attach_draft(
+        &self,
+        _: &CreationPrincipal,
+        _: Option<Uuid>,
+        _: Uuid,
+        _: AttachDraft,
     ) -> Result<IdeaWriteOutcome, IdeaError> {
         unreachable!()
     }

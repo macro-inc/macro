@@ -187,7 +187,8 @@ pub enum IdeaKind {
     Entity {
         /// What to do about the items.
         action: EntityAction,
-        /// The draft made for it, once made.
+        /// A reply idea's draft, once a session wrote one: the email thread
+        /// it is in, with the draft as the part.
         draft: Option<Target>,
     },
     /// A routine suggestion, shown among ideas.
@@ -469,6 +470,20 @@ pub struct RewriteIdea {
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RetireIdea {
+    /// Why, for the change log.
+    pub reason: String,
+}
+
+/// A reply draft a session wrote for an open reply idea, as the user,
+/// through `macro.email.createDraft`. It replaces the idea's draft, if any;
+/// nothing is ever sent.
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AttachDraft {
+    /// The email draft: an unsent draft in one of the user's own inboxes, in
+    /// the thread the idea is about.
+    #[schema(value_type = String, format = Uuid)]
+    pub email_draft_id: Uuid,
     /// Why, for the change log.
     pub reason: String,
 }

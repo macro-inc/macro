@@ -9,8 +9,8 @@ use model_entity::EntityType;
 use model_owner::CreationPrincipal;
 
 use super::model::{
-    Change, GenerationSession, GenerationTrigger, Idea, IdeaContent, IdeaError, IdeaReview,
-    IdeaState, IdeaWriteOutcome, Ideas, NewKind, OpenTarget, ResolveReason, RetireIdea,
+    AttachDraft, Change, GenerationSession, GenerationTrigger, Idea, IdeaContent, IdeaError,
+    IdeaReview, IdeaState, IdeaWriteOutcome, Ideas, NewKind, OpenTarget, ResolveReason, RetireIdea,
     RewriteIdea, RunSettled, RunStartError, SessionReadError, SessionState, StoredRun, SuggestIdea,
     Target,
 };
@@ -146,6 +146,16 @@ pub trait IdeaRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
+    /// Make `draft` the draft of the person's idea `id` while it is open,
+    /// replacing any draft it had, logging `change`; whether it was open.
+    fn set_draft(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        draft: &Target,
+        change: &Change,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Every open idea about the item, once per target naming it.
     fn open_about(
         &self,
@@ -175,6 +185,20 @@ pub trait IdeaAccess: Send + Sync + 'static {
         user: &MacroUserIdStr<'_>,
         target: &Target,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+}
+
+/// The person's drafts, as the domain that keeps them sees them.
+pub trait IdeaDrafts: Send + Sync + 'static {
+    /// The error type returned by draft reads.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// The thread of email draft `draft` when it is an unsent draft in one
+    /// of the person's own inboxes; `None` for anything else.
+    fn email_draft_thread(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        draft: Uuid,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
 }
 
 /// The agent session behind a code-mode request. Object-safe, so one
@@ -311,6 +335,16 @@ pub trait IdeaApi: Send + Sync + 'static {
         correlation: Option<Uuid>,
         id: Uuid,
         request: RetireIdea,
+    ) -> impl Future<Output = Result<IdeaWriteOutcome, IdeaError>> + Send;
+
+    /// Make a reply draft the session wrote the draft of an open reply idea,
+    /// replacing the one it had.
+    fn attach_draft(
+        &self,
+        principal: &CreationPrincipal,
+        correlation: Option<Uuid>,
+        id: Uuid,
+        request: AttachDraft,
     ) -> impl Future<Output = Result<IdeaWriteOutcome, IdeaError>> + Send;
 }
 

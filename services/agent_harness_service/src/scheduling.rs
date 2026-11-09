@@ -25,6 +25,7 @@ use ideas::domain::resolution::IdeaResolution;
 use ideas::domain::service::IdeaService;
 use ideas::inbound::kafka_consumer::run_idea_resolution_consumer;
 use ideas::inbound::router::{IdeaRouterState, idea_router};
+use ideas::outbound::email_drafts::EmailIdeaDrafts;
 use ideas::outbound::idea_access::EntityIdeaAccess;
 use ideas::outbound::pg_idea_repo::PgIdeaRepo;
 use scheduled_action::domain::code_upgrade;
@@ -706,10 +707,15 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     ));
     let idea_repo = Arc::new(PgIdeaRepo::new(db.clone()));
     let idea_access = Arc::new(EntityIdeaAccess(access.as_ref().clone()));
+    // Reply ideas' drafts are the person's own unsent email drafts, as the
+    // email domain's repository keeps them.
     let ideas = Arc::new(
         IdeaService::new(
             Arc::clone(&idea_repo),
             Arc::clone(&idea_access),
+            Arc::new(EmailIdeaDrafts(email::outbound::EmailPgRepo::new(
+                db.clone(),
+            ))),
             correlation_sessions,
             generations.clone(),
             generations.clone(),

@@ -14,23 +14,24 @@ use feature_flags::FeatureFlags;
 use futures::{StreamExt as _, TryStreamExt as _};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_entity::EntityType;
 use model_owner::CreationPrincipal;
 
 use super::check;
 use super::model::{
-    Change, ChangeAction, GenerationSession, GenerationTrigger, Idea, IdeaContent, IdeaError,
-    IdeaKind, IdeaReview, IdeaRun, IdeaState, IdeaWriteOutcome, Ideas, KindName, RetireIdea,
-    RewriteIdea, RunMode, RunProgress, RunSettled, RunStartError, SessionKind, SessionReadError,
-    SessionState, StoredRun, SuggestIdea, Target,
+    AttachDraft, Change, ChangeAction, EntityAction, GenerationSession, GenerationTrigger, Idea,
+    IdeaContent, IdeaError, IdeaKind, IdeaReview, IdeaRun, IdeaState, IdeaWriteOutcome, Ideas,
+    KindName, RetireIdea, RewriteIdea, RunMode, RunProgress, RunSettled, RunStartError,
+    SessionKind, SessionReadError, SessionState, StoredRun, SuggestIdea, Target,
 };
 use super::ports::{
-    GenerationSessions, IdeaAccess, IdeaApi, IdeaRepo, Limits, RequestSessions,
+    GenerationSessions, IdeaAccess, IdeaApi, IdeaDrafts, IdeaRepo, Limits, RequestSessions,
     RoutineSuggestionDismissal, RunSessions, SuggestionAudience, Written,
 };
 use super::prompt;
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 /// The PostHog flag that turns ideas on for a person.
 pub const IDEAS_FLAG: &str = "enable-ideas";
@@ -50,10 +51,12 @@ const LIMITS: Limits = Limits {
     new_per_generation: NEW_PER_GENERATION,
 };
 
-/// Serves ideas from `Repo`, checking items with `Access`.
-pub struct IdeaService<Repo, Access, Flags> {
+/// Serves ideas from `Repo`, checking items with `Access` and drafts with
+/// `Drafts`.
+pub struct IdeaService<Repo, Access, Drafts, Flags> {
     repo: Arc<Repo>,
     access: Arc<Access>,
+    drafts: Arc<Drafts>,
     request_sessions: Arc<dyn RequestSessions>,
     generation_sessions: Arc<dyn GenerationSessions>,
     audience: Arc<dyn SuggestionAudience>,
@@ -77,16 +80,19 @@ const SETTLE_BATCH: u16 = 50;
 /// session that is missing or still waiting for its prompt never started.
 const START_WINDOW: chrono::Duration = chrono::Duration::minutes(10);
 
-impl<Repo, Access, Flags> IdeaService<Repo, Access, Flags>
+impl<Repo, Access, Drafts, Flags> IdeaService<Repo, Access, Drafts, Flags>
 where
     Repo: IdeaRepo,
     Access: IdeaAccess,
+    Drafts: IdeaDrafts,
     Flags: FeatureFlags + 'static,
 {
     /// Without `flags`, ideas are off for everyone.
+    #[expect(clippy::too_many_arguments, reason = "each port is its own adapter")]
     pub fn new(
         repo: Arc<Repo>,
         access: Arc<Access>,
+        drafts: Arc<Drafts>,
         request_sessions: Arc<dyn RequestSessions>,
         generation_sessions: Arc<dyn GenerationSessions>,
         audience: Arc<dyn SuggestionAudience>,
@@ -96,6 +102,7 @@ where
         Self {
             repo,
             access,
+            drafts,
             request_sessions,
             generation_sessions,
             audience,
@@ -353,10 +360,18 @@ fn snapshot(content: &IdeaContent) -> Option<serde_json::Value> {
     serde_json::to_value(content).ok()
 }
 
-impl<Repo, Access, Flags> IdeaApi for IdeaService<Repo, Access, Flags>
+/// An idea's draft, as the change log keeps it: `{"draft": target or null}`.
+fn draft_snapshot(draft: Option<&Target>) -> Option<serde_json::Value> {
+    let mut value = serde_json::Map::new();
+    value.insert("draft".to_owned(), serde_json::to_value(draft).ok()?);
+    Some(serde_json::Value::Object(value))
+}
+
+impl<Repo, Access, Drafts, Flags> IdeaApi for IdeaService<Repo, Access, Drafts, Flags>
 where
     Repo: IdeaRepo,
     Access: IdeaAccess,
+    Drafts: IdeaDrafts,
     Flags: FeatureFlags + 'static,
 {
     #[tracing::instrument(name = "ideas.feed", skip_all, fields(
@@ -783,6 +798,10 @@ where
                 )],
             ));
         }
+        check::keeps_draft(&existing.kind, &content.about, &mut problems);
+        if !problems.is_empty() {
+            return Ok(rejected(&span, problems));
+        }
         let (action, to) = match existing.state {
             IdeaState::Proposed | IdeaState::Accepted => (ChangeAction::Rewritten, existing.state),
             IdeaState::Dismissed => {
@@ -916,6 +935,7 @@ where
             }
             if let Some(about) = check::targets(about, &mut problems) {
                 self.inaccessible(&user, &about, &mut problems).await?;
+                check::keeps_draft(&existing.kind, &about, &mut problems);
                 content.about = about;
             }
         }
@@ -1036,6 +1056,115 @@ where
             ));
         }
         span.record("idea.outcome", "retired");
+        self.reread(&user, id).await
+    }
+
+    #[tracing::instrument(name = "ideas.attach_draft", skip_all, fields(
+        agent.session.id = tracing::field::Empty,
+        suggestion.generation.id = tracing::field::Empty,
+        idea.id = %id,
+        email.draft.id = %request.email_draft_id,
+        idea.outcome = tracing::field::Empty,
+        idea.problems = tracing::field::Empty,
+    ), err)]
+    async fn attach_draft(
+        &self,
+        principal: &CreationPrincipal,
+        correlation: Option<Uuid>,
+        id: Uuid,
+        request: AttachDraft,
+    ) -> Result<IdeaWriteOutcome, IdeaError> {
+        let session = self.session(principal, correlation).await?;
+        let span = tracing::Span::current();
+        let user = session.user.clone();
+        let Some(existing) = self
+            .repo
+            .idea(&user, id)
+            .await
+            .map_err(IdeaError::internal)?
+        else {
+            return Err(IdeaError::NotFound);
+        };
+        let mut problems = Vec::new();
+        let reason = check::text(
+            &request.reason,
+            "`reason`",
+            check::MAX_REASON_CHARS,
+            &mut problems,
+        );
+        if !existing.state.is_open() {
+            problems.push(format!(
+                "this idea is {}; a draft is only attached to an open idea",
+                existing.state.as_ref()
+            ));
+        }
+        let IdeaKind::Entity {
+            action: EntityAction::Reply,
+            draft: old,
+        } = &existing.kind
+        else {
+            problems.push("a draft is only for an entity idea with action `reply`".to_owned());
+            return Ok(rejected(&span, problems));
+        };
+        let thread = self
+            .drafts
+            .email_draft_thread(&user, request.email_draft_id)
+            .await
+            .map_err(IdeaError::internal)?;
+        let draft = thread.map(|thread| Target {
+            entity_type: EntityType::EmailThread,
+            entity_id: thread.to_string(),
+            part_id: Some(request.email_draft_id.to_string()),
+        });
+        match &draft {
+            None => problems.push(
+                "`emailDraftId` names no unsent draft in the user's own inboxes; write the reply \
+                 with `macro.email.createDraft` first, and never send it"
+                    .to_owned(),
+            ),
+            Some(draft) if !check::draft_is_about(draft, &existing.about) => problems.push(
+                "the draft is in another thread than the one this idea is about; write it in that \
+                 thread, from its inbox: `macro.email.createDraft({thread, replyingTo, ...}, \
+                 await thread.link())`"
+                    .to_owned(),
+            ),
+            Some(_) => {}
+        }
+        let Some(draft) = draft.filter(|_| problems.is_empty()) else {
+            return Ok(rejected(&span, problems));
+        };
+        if old.as_ref() == Some(&draft) {
+            span.record("idea.outcome", "unchanged");
+            return Ok(IdeaWriteOutcome::applied(existing));
+        }
+        let change = Change {
+            session: session.session,
+            generation: session.generation,
+            action: ChangeAction::Rewritten,
+            old: draft_snapshot(old.as_ref()),
+            new: draft_snapshot(Some(&draft)),
+            reason,
+            at: Utc::now(),
+        };
+        let attached = self
+            .repo
+            .set_draft(&user, id, &draft, &change)
+            .await
+            .map_err(IdeaError::internal)?;
+        if !attached {
+            return Ok(rejected(
+                &span,
+                written_problem(Written::Conflict).into_iter().collect(),
+            ));
+        }
+        span.record(
+            "idea.outcome",
+            if old.is_some() {
+                "draft_replaced"
+            } else {
+                "draft_attached"
+            },
+        );
         self.reread(&user, id).await
     }
 }
