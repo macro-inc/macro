@@ -577,3 +577,113 @@ fn write_barrier_clears_only_matching_active_cache_without_changing_points(
     assert_eq!(ledger.get(detached)?.origin, Origin::Detached { update: 4 });
     Ok(())
 }
+
+#[test]
+fn replaced_active_value_remains_mutable_after_final_active_value_publishes(
+) -> Result<(), BoundaryError> {
+    let mut ledger = SelectionValues::new(7);
+    let a = ledger.allocate(Selection::Range(RangeSelection::at_root()), 1, 4)?;
+    let b = ledger.allocate(Selection::Range(RangeSelection::at_root()), 1, 4)?;
+    ledger.retain(a)?;
+    ledger.retain(b)?;
+    ledger.patch(
+        a,
+        ledger.get(a)?.encoded(),
+        Scope {
+            historical: false,
+            state_version: 1,
+            update: 4,
+            activate: true,
+        },
+    )?;
+    ledger.patch(
+        b,
+        ledger.get(b)?.encoded(),
+        Scope {
+            historical: false,
+            state_version: 1,
+            update: 4,
+            activate: true,
+        },
+    )?;
+    let current = ledger.get(b)?.identity;
+    ledger.reconcile_active(Some(&current), 4);
+    assert_eq!(ledger.get(a)?.origin, Origin::Detached { update: 4 });
+    assert_eq!(ledger.get(b)?.origin, Origin::Active { update: 4 });
+    ledger.finish_update(4, true);
+    assert_eq!(ledger.get(b)?.origin, Origin::Frozen);
+    ledger.release_graph(1);
+    let mut data = ledger.get(a)?.encoded();
+    if let compat::CompatSelectionData::CompatRangeSelection { style, .. } = &mut data {
+        *style = "color: red".encode_utf16().collect();
+    }
+    let patched = ledger.patch(
+        a,
+        data,
+        Scope {
+            historical: true,
+            state_version: 2,
+            update: 5,
+            activate: false,
+        },
+    )?;
+    assert_eq!(&*patched.value.as_range().unwrap().style, "color: red");
+    assert!(ledger
+        .patch(
+            b,
+            ledger.get(b)?.encoded(),
+            Scope {
+                historical: false,
+                state_version: 2,
+                update: 5,
+                activate: false
+            }
+        )
+        .is_err());
+    Ok(())
+}
+
+#[test]
+fn clearing_native_selection_demotes_only_active_values_in_the_matching_update(
+) -> Result<(), BoundaryError> {
+    let mut ledger = SelectionValues::new(7);
+    let value = Selection::Range(RangeSelection::at_root());
+    let cleared = ledger.capture(
+        &value,
+        ForeignSelectionIdentity::default(),
+        1,
+        Origin::Active { update: 4 },
+    )?;
+    let other_update = ledger.capture(
+        &value,
+        ForeignSelectionIdentity::default(),
+        1,
+        Origin::Active { update: 5 },
+    )?;
+    let frozen = ledger.capture(
+        &value,
+        ForeignSelectionIdentity::default(),
+        1,
+        Origin::Frozen,
+    )?;
+    let detached = ledger.allocate(raw_copy(&value), 1, 4)?;
+    let (_, _, cleared) = decode(cleared)?;
+    let (_, _, other_update) = decode(other_update)?;
+    let (_, _, frozen) = decode(frozen)?;
+    ledger.reconcile_active(None, 4);
+    assert_eq!(ledger.get(cleared)?.origin, Origin::Detached { update: 4 });
+    assert_eq!(
+        ledger.get(other_update)?.origin,
+        Origin::Active { update: 5 }
+    );
+    assert_eq!(ledger.get(frozen)?.origin, Origin::Frozen);
+    assert_eq!(ledger.get(detached)?.origin, Origin::Detached { update: 4 });
+    ledger.finish_update(4, true);
+    assert_eq!(ledger.get(cleared)?.origin, Origin::Detached { update: 4 });
+    assert_eq!(
+        ledger.get(other_update)?.origin,
+        Origin::Active { update: 5 }
+    );
+    assert_eq!(ledger.get(detached)?.origin, Origin::Detached { update: 4 });
+    Ok(())
+}
