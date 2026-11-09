@@ -6,6 +6,8 @@ import type { SerializedLexicalNode } from 'lexical';
 import type { DOMConversionMap } from './dom-types';
 import type { LexicalNode } from './index';
 
+export type { StaticNodeConfigRecord } from 'lexical';
+
 export interface StaticNodeConfigValue<
   T extends LexicalNode,
   Type extends string,
@@ -24,8 +26,3 @@ export interface StaticNodeConfigValue<
 export type BaseStaticNodeConfig = {
   readonly [K in string]?: StaticNodeConfigValue<LexicalNode, string>;
 };
-
-export type StaticNodeConfigRecord<
-  Type extends string,
-  Config,
-> = BaseStaticNodeConfig & { readonly [K in Type]?: Config };

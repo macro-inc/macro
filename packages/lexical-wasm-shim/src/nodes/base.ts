@@ -14,11 +14,7 @@ import type { LexicalEditor } from '../editor';
 import type { BaseSelection } from '../selection';
 import { $getSelection, $isRangeSelection } from '../selection/helpers';
 import type { RangeSelection } from '../selection/range';
-import type {
-  BaseStaticNodeConfig,
-  StaticNodeConfigRecord,
-  StaticNodeConfigValue,
-} from './config';
+import type { BaseStaticNodeConfig, StaticNodeConfigValue } from './config';
 import type { DOMConversionMap } from './dom-types';
 import type { EditorConfig } from './editor-config';
 import {
@@ -79,7 +75,7 @@ export class LexicalNode {
   config<Type extends string, Config extends StaticNodeConfigValue<this, Type>>(
     type: Type,
     config: Config
-  ): StaticNodeConfigRecord<Type, Config> {
+  ): BaseStaticNodeConfig & { readonly [K in Type]?: Config } {
     const parent: unknown =
       config.extends || Object.getPrototypeOf(this.constructor);
     Object.assign(config, { extends: parent, type });
