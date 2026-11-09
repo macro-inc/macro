@@ -103,6 +103,8 @@ class RegistryState {
   readonly records = new Map<NodeClass, Registration>();
   started = false;
   disposed = false;
+  dirty = true;
+  revision = 0;
 
   prepare(): readonly (readonly [Registration, bigint])[] {
     const pending: [Registration, bigint][] = [];
@@ -143,7 +145,13 @@ class RegistryState {
   }
 
   refresh(): void {
-    for (const [record, mask] of this.prepare()) record.overrides = mask;
+    if (this.dirty) this.apply(this.prepare());
+  }
+
+  apply(pending: readonly (readonly [Registration, bigint])[]): void {
+    for (const [record, mask] of pending) record.overrides = mask;
+    this.dirty = false;
+    this.revision++;
   }
 }
 
@@ -169,7 +177,11 @@ function watch(owner: object, name: string, registry: RegistryState): void {
   const existing = methods?.get(name);
   // A descriptor replacement (including vi.spyOn) may have removed our trap.
   const descriptor = Object.getOwnPropertyDescriptor(owner, name);
-  if (existing !== undefined && descriptor?.set === setters.get(existing)) {
+  if (
+    existing !== undefined &&
+    descriptor?.set === setters.get(existing) &&
+    descriptor?.get === getters.get(existing)
+  ) {
     for (const reference of existing.owners) {
       const state = reference.deref();
       if (state === registry) return;
@@ -208,34 +220,35 @@ function watch(owner: object, name: string, registry: RegistryState): void {
     const oldWritten = written;
     value = next;
     written = true;
-    const pending: (readonly (readonly [Registration, bigint])[])[] = [];
+    const pending: (readonly [
+      RegistryState,
+      readonly (readonly [Registration, bigint])[],
+    ])[] = [];
     try {
       for (const reference of slot.owners) {
         const state = reference.deref();
         if (state === undefined || state.disposed)
           slot.owners.delete(reference);
-        else pending.push(state.prepare());
+        else pending.push([state, state.prepare()]);
       }
     } catch (error) {
       value = oldValue;
       written = oldWritten;
       throw error;
     }
-    for (const records of pending) {
-      for (const [record, mask] of records) record.overrides = mask;
-    }
+    for (const [state, records] of pending) state.apply(records);
   };
   setters.set(slot, setter);
+  const getter = function (this: object): unknown {
+    if (written) return value;
+    const inherited: object | null = Object.getPrototypeOf(owner);
+    return inherited === null ? undefined : Reflect.get(inherited, name, this);
+  };
+  getters.set(slot, getter);
   Object.defineProperty(owner, name, {
     configurable: true,
     enumerable: descriptor?.enumerable ?? false,
-    get(this: object): unknown {
-      if (written) return value;
-      const inherited: object | null = Object.getPrototypeOf(owner);
-      return inherited === null
-        ? undefined
-        : Reflect.get(inherited, name, this);
-    },
+    get: getter,
     set: setter,
   });
   if (methods === undefined) {
@@ -245,10 +258,35 @@ function watch(owner: object, name: string, registry: RegistryState): void {
   methods.set(name, slot);
 }
 const setters = new WeakMap<HookSlot, (this: object, value: unknown) => void>();
+const getters = new WeakMap<HookSlot, (this: object) => unknown>();
+
+interface WatchedMethod {
+  readonly owner: object;
+  readonly name: string;
+  descriptor: PropertyDescriptor | undefined;
+}
+
+function sameDescriptor(
+  a: PropertyDescriptor | undefined,
+  b: PropertyDescriptor | undefined
+): boolean {
+  return (
+    a?.get === b?.get &&
+    a?.set === b?.set &&
+    a?.value === b?.value &&
+    a?.writable === b?.writable &&
+    a?.configurable === b?.configurable &&
+    a?.enumerable === b?.enumerable
+  );
+}
 
 /** Metadata for one editor; the host consumes rows before opening each update. */
 export class ForeignClassRegistry {
   private readonly state = new RegistryState();
+  private readonly watched: WatchedMethod[] = [];
+  private readonly prototypes = new Map<object, object | null>();
+  private cachedRows: readonly NodeRegistration[] = [];
+  private cachedRevision = -1;
 
   constructor(catalog: NativeNodeCatalog, classes: readonly NodeClass[]) {
     const byType = new Map<string, NodeClass>();
@@ -286,24 +324,100 @@ export class ForeignClassRegistry {
       });
     }
     this.state.refresh();
-    this.watch();
+    // Walk ancestry once. Descriptor checks preserve defineProperty/spyOn and
+    // user-accessor semantics without rewalking every class and hook per update.
+    this.rebuildWatchlist();
+  }
+
+  private rebuildWatchlist(): void {
+    this.watched.length = 0;
+    this.prototypes.clear();
+    const seen = new WeakMap<object, Set<string>>();
+    for (const record of this.state.records.values()) {
+      let klass: NodeClass | null = record.klass;
+      while (klass !== null) {
+        for (const hook of foreignHooks) {
+          let owner: object | null = target(klass, hook.static);
+          while (owner !== null) {
+            let names = seen.get(owner);
+            if (names === undefined) {
+              names = new Set();
+              seen.set(owner, names);
+            }
+            if (!names.has(hook.name)) {
+              names.add(hook.name);
+              if (owner !== Object.prototype && owner !== Function.prototype)
+                watch(owner, hook.name, this.state);
+              this.prototypes.set(owner, Object.getPrototypeOf(owner));
+              this.watched.push({
+                owner,
+                name: hook.name,
+                descriptor: Object.getOwnPropertyDescriptor(owner, hook.name),
+              });
+            }
+            owner = Object.getPrototypeOf(owner);
+          }
+        }
+        klass = parent(klass);
+      }
+    }
   }
 
   rows(): readonly NodeRegistration[] {
     this.assertLive();
+    const changed: WatchedMethod[] = [];
+    let changedChain = false;
+    for (const [owner, prototype] of this.prototypes) {
+      if (Object.getPrototypeOf(owner) !== prototype) {
+        this.state.dirty = true;
+        changedChain = true;
+      }
+    }
+    for (const entry of this.watched) {
+      const descriptor = Object.getOwnPropertyDescriptor(
+        entry.owner,
+        entry.name
+      );
+      if (!sameDescriptor(entry.descriptor, descriptor)) {
+        this.state.dirty = true;
+        changed.push(entry);
+      }
+      const slot = slots.get(entry.owner)?.get(entry.name);
+      if (
+        descriptor?.get !== undefined &&
+        (slot === undefined || descriptor.get !== getters.get(slot))
+      ) {
+        // A user getter may change its returned method without a property write.
+        this.state.dirty = true;
+      }
+    }
     this.state.refresh();
-    return Object.freeze(
-      [...this.state.records.values()].map(({ baseline: _, ...record }) =>
-        Object.freeze(record)
-      )
-    );
+    if (changedChain) this.rebuildWatchlist();
+    else
+      for (const entry of changed) {
+        if (
+          entry.owner !== Object.prototype &&
+          entry.owner !== Function.prototype
+        )
+          watch(entry.owner, entry.name, this.state);
+        entry.descriptor = Object.getOwnPropertyDescriptor(
+          entry.owner,
+          entry.name
+        );
+      }
+    if (this.cachedRevision !== this.state.revision) {
+      this.cachedRows = Object.freeze(
+        [...this.state.records.values()].map(({ baseline: _, ...record }) =>
+          Object.freeze(record)
+        )
+      );
+      this.cachedRevision = this.state.revision;
+    }
+    return this.cachedRows;
   }
 
   beforeUpdate(): readonly NodeRegistration[] {
     const rows = this.rows();
-    // Reinstall data-slot traps that spyOn/defineProperty replaced. The original
-    // native implementation remains in the catalog, never the patched prototype.
-    this.watch();
     this.state.started = true;
     return rows;
   }
@@ -311,20 +425,12 @@ export class ForeignClassRegistry {
   dispose(): void {
     this.state.disposed = true;
     this.state.records.clear();
+    this.watched.length = 0;
+    this.prototypes.clear();
+    this.cachedRows = [];
   }
 
   private assertLive(): void {
     if (this.state.disposed) throw new Error('node registry is disposed');
-  }
-
-  private watch(): void {
-    for (const record of this.state.records.values()) {
-      let klass: NodeClass | null = record.klass;
-      while (klass !== null) {
-        for (const hook of foreignHooks)
-          watch(target(klass, hook.static), hook.name, this.state);
-        klass = parent(klass);
-      }
-    }
   }
 }
