@@ -19,36 +19,36 @@
     font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
   button { font: inherit; color: inherit; cursor: pointer; }
   .wrap { max-width: 760px; margin: 0 auto; padding: 16px; }
-  header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-  h1 { font-size: 17px; margin: 0 auto 0 0; }
-  .tabs button { border: 1px solid var(--line); background: var(--panel); border-radius: 8px;
-    padding: 5px 10px; }
-  .tabs button[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+  header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px; }
+  h1 { font-size: 17px; margin: 0; }
+  #count { color: var(--muted); }
   ul { list-style: none; margin: 0; padding: 0; background: var(--panel);
     border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-  li { display: grid; grid-template-columns: 10px 1fr auto; gap: 12px; align-items: center;
+  li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 12px; align-items: center;
     padding: 12px 14px; border-bottom: 1px solid var(--line); }
   li:last-child { border-bottom: 0; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
   .seen .dot { background: transparent; }
-  .kind { font-size: 12px; color: var(--muted); }
+  .kind { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
   .title { font-weight: 550; word-break: break-word; }
-  .snippet { color: var(--muted); overflow: hidden; text-overflow: ellipsis;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .snippet { color: var(--muted); overflow: hidden; display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
   .done { border: 0; background: var(--chip); border-radius: 8px; padding: 6px 10px; }
+  .toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+    background: var(--text); color: var(--bg); border-radius: 10px; padding: 8px 8px 8px 14px;
+    display: flex; gap: 12px; align-items: center; }
+  .toast[hidden] { display: none; }
+  .toast button { border: 0; background: transparent; color: inherit; font-weight: 600; padding: 4px 8px; }
   .empty { padding: 40px 16px; text-align: center; color: var(--muted); }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>Inbox</h1>
-    <div class="tabs">
-      <button id="show-open" aria-pressed="true">Open</button>
-      <button id="show-done" aria-pressed="false">Done</button>
-    </div>
-  </header>
+  <header><h1>Inbox</h1><span id="count"></span></header>
   <div id="list"><p class="empty">Loading…</p></div>
+</div>
+<div class="toast" id="toast" role="status" hidden>
+  <span id="toast-text"></span><button id="undo">Undo</button>
 </div>
 
 <script type="text/macro" id="feed" lang="ts">
@@ -63,52 +63,63 @@
     return null;
   }
 
-  export default async function ({ done }: { done: boolean }, { macro }: ProgramContext) {
-    const rows = [];
-    for await (const notification of macro.notifications.list({ pageSize: 40 })) {
-      if ((await notification.done()) === done) {
-        const metadata = await notification.metadata();
-        const sender = await notification.sender();
-        rows.push({
-          id: notification.id,
-          kind: metadata.tag.replaceAll('_', ' '),
-          title: pick(metadata.content, [
-            'documentName', 'entityName', 'taskName', 'channelName', 'subject', 'title', 'name',
-          ]) ?? metadata.tag.replaceAll('_', ' '),
-          snippet: pick(metadata.content, ['messageContent', 'snippet', 'body', 'message', 'content']),
-          from: sender ? ((await sender.name()) ?? null) : null,
-          at: await notification.createdAt(),
-          seen: await notification.seen(),
-        });
+  /** Message text with mention markup shown as @name. */
+  function plain(text: string | null): string | null {
+    if (!text) return text;
+    return text.replace(/<m-user-mention>(.*?)<\/m-user-mention>/g, (_match, json: string) => {
+      try {
+        const mention = JSON.parse(json) as { email?: string };
+        return `@${mention.email?.split('@')[0] ?? 'someone'}`;
+      } catch {
+        return '@someone';
       }
+    }).replace(/<[^>]+>/g, '');
+  }
+
+  export default async function (_args: {}, { macro }: ProgramContext) {
+    // The feed holds unseen and seen notifications; done ones are left out.
+    const rows = [];
+    for await (const notification of macro.notifications.list({ pageSize: 30 })) {
+      const metadata = await notification.metadata();
+      const sender = await notification.sender();
+      const kind = metadata.tag.replaceAll('_', ' ');
+      rows.push({
+        id: notification.id,
+        kind,
+        title: pick(metadata.content, [
+          'documentName', 'entityName', 'taskName', 'channelName', 'subject', 'title', 'name',
+        ]) ?? kind.replace(/^./, (first) => first.toUpperCase()),
+        snippet: plain(pick(metadata.content, ['messageContent', 'snippet', 'body', 'message', 'content'])),
+        // A sender without a Macro profile, such as an outside contact, has no name to load.
+        from: sender ? ((await sender.name().catch(() => undefined)) ?? sender.email() ?? null) : null,
+        at: await notification.createdAt(),
+        seen: await notification.seen(),
+      });
       if (rows.length === 30) break;
     }
     return rows;
   }
 </script>
 
-<script type="text/macro" id="markDone" lang="ts">
-  export default async function (
-    { ids, done }: { ids: string[]; done: boolean },
-    { macro }: ProgramContext,
-  ) {
-    if (done) {
-      await macro.notifications.markDone(ids);
-    } else {
-      await Promise.all(ids.map((id) => macro.notifications.byId(id).markUndone()));
-    }
-    return { count: ids.length };
+<script type="text/macro" id="setDone" lang="ts">
+  export default async function ({ id, done }: { id: string; done: boolean }, { macro }: ProgramContext) {
+    const notification = macro.notifications.byId(id);
+    if (done) await notification.markDone();
+    else await notification.markUndone();
+    return { done };
   }
 </script>
 
 <script type="module" lang="ts">
   import { on } from 'macro:client';
-  import { feed, markDone } from 'macro:programs';
+  import { feed, setDone } from 'macro:programs';
 
   const list = document.getElementById('list')!;
-  const openTab = document.getElementById('show-open')!;
-  const doneTab = document.getElementById('show-done')!;
-  let showingDone = false;
+  const count = document.getElementById('count')!;
+  const toast = document.getElementById('toast')!;
+  const toastText = document.getElementById('toast-text')!;
+  const undo = document.getElementById('undo') as HTMLButtonElement;
+  let lastDone: string | null = null;
 
   function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
     const node = document.createElement(tag);
@@ -142,11 +153,10 @@
   }
 
   async function load() {
-    const wanted = showingDone;
-    const rows = await feed({ done: wanted });
-    if (wanted !== showingDone) return;
+    const rows = await feed();
+    count.textContent = rows.length ? String(rows.length) : '';
     if (rows.length === 0) {
-      list.replaceChildren(el('p', 'empty', wanted ? 'Nothing marked done yet.' : "You're all caught up."));
+      list.replaceChildren(el('p', 'empty', "You're all caught up."));
       return;
     }
     const ul = el('ul');
@@ -156,11 +166,15 @@
       const kind = [row.kind, row.from, relative(row.at)].filter(Boolean).join(' · ');
       text.append(el('div', 'kind', kind), el('div', 'title', row.title));
       if (row.snippet) text.append(el('div', 'snippet', row.snippet));
-      const button = el('button', 'done', wanted ? 'Reopen' : 'Done');
+      const button = el('button', 'done', 'Done');
+      button.setAttribute('aria-label', `Mark “${row.title}” done`);
       button.addEventListener('click', async () => {
         button.disabled = true;
         li.style.opacity = '.4';
-        await markDone({ ids: [row.id], done: !wanted });
+        await setDone({ id: row.id, done: true });
+        lastDone = row.id;
+        toastText.textContent = 'Marked done';
+        toast.hidden = false;
         await reload();
       });
       li.append(el('span', 'dot'), text, button);
@@ -169,17 +183,17 @@
     list.replaceChildren(ul);
   }
 
-  function show(done: boolean) {
-    showingDone = done;
-    openTab.setAttribute('aria-pressed', String(!done));
-    doneTab.setAttribute('aria-pressed', String(done));
-    reload();
-  }
-
-  openTab.addEventListener('click', () => show(false));
-  doneTab.addEventListener('click', () => show(true));
-  // Notifications have no live event of their own; a mention or message
-  // usually arrives with one.
+  undo.addEventListener('click', async () => {
+    if (!lastDone) return;
+    undo.disabled = true;
+    await setDone({ id: lastDone, done: false });
+    lastDone = null;
+    toast.hidden = true;
+    undo.disabled = false;
+    await reload();
+  });
+  // Notifications have no live event of their own; a mention, message or
+  // shared document usually arrives with one.
   on(['message.posted', 'message.mentioned', 'document.created'], reload);
   await reload();
 </script>

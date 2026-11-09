@@ -126,7 +126,13 @@
 
   async function load() {
     const wanted = archived;
-    const rows = await sessions({ archived: wanted });
+    let rows: Awaited<ReturnType<typeof sessions>>;
+    try {
+      rows = await sessions({ archived: wanted });
+    } catch (error) {
+      list.replaceChildren(el('p', 'empty', `Couldn't list agent sessions: ${String(error)}`));
+      return;
+    }
     if (wanted !== archived) return;
     if (rows.length === 0) {
       list.replaceChildren(el('p', 'empty', wanted ? 'No archived sessions.' : 'No active agent sessions.'));

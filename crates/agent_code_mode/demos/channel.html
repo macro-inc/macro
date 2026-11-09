@@ -73,6 +73,18 @@
 </script>
 
 <script type="text/macro" id="messages" lang="ts">
+  /** Message text with mention markup shown as @name. */
+  function plain(text: string): string {
+    return text.replace(/<m-user-mention>(.*?)<\/m-user-mention>/g, (_match, json: string) => {
+      try {
+        const mention = JSON.parse(json) as { email?: string };
+        return `@${mention.email?.split('@')[0] ?? 'someone'}`;
+      } catch {
+        return '@someone';
+      }
+    }).replace(/<[^>]+>/g, '');
+  }
+
   export default async function ({ channelId }: { channelId: string }, { macro }: ProgramContext) {
     const channel = macro.channels.byId(channelId);
     const recent = [];
@@ -87,12 +99,12 @@
       if (!names.has(author.id)) {
         // People without a profile name show their email's local part.
         const fallback = author.email()?.split('@')[0] ?? 'Someone';
-        names.set(author.id, author.name().then((name) => name ?? fallback));
+        names.set(author.id, author.name().then((name) => name ?? fallback, () => fallback));
       }
       return {
         id: message.id,
         author: await names.get(author.id)!,
-        content: await message.content(),
+        content: plain(await message.content()),
         createdAt: await message.createdAt(),
       };
     }));

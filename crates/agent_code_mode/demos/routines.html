@@ -150,7 +150,7 @@
       const runs = el('div', 'runs');
       if (row.runs.length === 0) runs.append('No runs yet');
       else {
-        runs.append(`Last ${row.runs.length} runs `);
+        runs.append('Recent runs ');
         for (const past of row.runs) {
           const dot = el('span', past.ok ? 'run' : 'run failed');
           dot.title = `${past.ok ? 'Succeeded' : 'Failed'} ${format(past.at)}`;
