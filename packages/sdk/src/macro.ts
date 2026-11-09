@@ -11,6 +11,7 @@ import { CallRecordNamespace } from './entities/calls/namespace';
 import { ChannelNamespace } from './entities/channels/namespace';
 import { ChatNamespace } from './entities/chats/namespace';
 import { ConnectedAppNamespace } from './entities/connected-apps/namespace';
+import { UiNamespace } from './entities/ui/namespace';
 import { CrmNamespace } from './entities/crm/namespace';
 import { DatabaseNamespace } from './entities/databases/namespace';
 import { DocumentNamespace } from './entities/documents/namespace';
@@ -75,6 +76,13 @@ export {
 } from './entities/connected-apps/connected-app';
 export { Connector } from './entities/connected-apps/connector';
 export { ConnectedAppNamespace } from './entities/connected-apps/namespace';
+export {
+  AppLink,
+  UiNamespace,
+  type UiOpenOptions,
+  type UiOpenResult,
+  type UiTarget,
+} from './entities/ui/namespace';
 export {
   type AddColumnOptions,
   type ApplyOpsOptions,
@@ -187,6 +195,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /** Call the user's connected apps and MCP servers from a code execution. */
   readonly connectedApps: ConnectedAppNamespace;
 
+  /** Open items in the Macro app tab the user prompted from. */
+  readonly ui: UiNamespace;
+
   readonly favorites: FavoritesNamespace;
 
   readonly foreignEntities: ForeignEntityNamespace;
@@ -271,6 +282,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.documents = new DocumentNamespace(client);
     this.email = new EmailNamespace(client);
     this.connectedApps = new ConnectedAppNamespace(client);
+    this.ui = new UiNamespace(client);
     this.favorites = new FavoritesNamespace(client);
     this.foreignEntities = new ForeignEntityNamespace(client);
     this.forms = new FormNamespace(client);
