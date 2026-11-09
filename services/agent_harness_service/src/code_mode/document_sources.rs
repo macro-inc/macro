@@ -1,27 +1,29 @@
-//! Reads a stored HTML document for its build, through document storage.
+//! Reads a stored HTML document for its build, through the documents domain.
 use agent_code_mode::domain::{DocumentSourceError, DocumentSources};
 use async_trait::async_trait;
-use document_storage_service_client::DocumentStorageServiceClient;
+use documents::domain::{
+    models::LocationQueryParams, ports::DocumentService, response::LocationResponseV3,
+};
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
-use model::document::{FileType, response::LocationResponseV3};
-use std::{str::FromStr, time::Duration};
+use model::document::FileType;
+use std::{sync::Arc, time::Duration};
 
 /// Largest HTML file a build reads.
 const MAX_HTML_BYTES: usize = 2 * 1024 * 1024;
 /// Longest a download of the stored file may take.
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(15);
 
-/// The document's current stored file, located through document storage's
-/// internal API and downloaded from its presigned URL. View access was
-/// already established by the receipt.
-pub struct StoredDocumentSources {
-    documents: DocumentStorageServiceClient,
+/// The document's current stored file: located by the same documents service
+/// Macro's own tools use, under the viewer's receipt, and downloaded from its
+/// presigned URL.
+pub struct StoredDocumentSources<D> {
+    documents: Arc<D>,
     downloads: reqwest::Client,
 }
 
-impl StoredDocumentSources {
-    /// Bind the storage client and build the download client.
-    pub fn new(documents: DocumentStorageServiceClient) -> Result<Self, rootcause::Report> {
+impl<D> StoredDocumentSources<D> {
+    /// Bind the documents service and build the download client.
+    pub fn new(documents: Arc<D>) -> Result<Self, rootcause::Report> {
         let downloads = reqwest::Client::builder()
             .timeout(DOWNLOAD_TIMEOUT)
             .build()?;
@@ -33,7 +35,7 @@ impl StoredDocumentSources {
 }
 
 #[async_trait]
-impl DocumentSources for StoredDocumentSources {
+impl<D: DocumentService> DocumentSources for StoredDocumentSources<D> {
     #[tracing::instrument(
         name = "document_programs.read_source",
         skip_all,
@@ -44,38 +46,38 @@ impl DocumentSources for StoredDocumentSources {
         &self,
         document: &EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<String, DocumentSourceError> {
-        let location = self
+        // The receipt already proves view access; this is the metadata the
+        // location lookup needs.
+        let basic = self
             .documents
-            .get_recent_document_location_v3(&document.entity().entity_id)
+            .internal_get_basic_document(&document.entity().entity_id)
             .await
-            .map_err(|error| {
-                let missing = error
-                    .downcast_ref::<reqwest::Error>()
-                    .and_then(reqwest::Error::status)
-                    .is_some_and(|status| status == reqwest::StatusCode::NOT_FOUND);
-                if missing {
-                    DocumentSourceError::NotFound
-                } else {
-                    DocumentSourceError::Internal(rootcause::report!("{error:#}"))
-                }
-            })?;
-        let LocationResponseV3::PresignedUrl {
-            presigned_url,
-            metadata,
-        } = location
-        else {
-            return Err(DocumentSourceError::NotHtml);
-        };
-        if metadata.deleted_at.is_some() {
+            .map_err(|_| DocumentSourceError::NotFound)?;
+        if basic.deleted_at.is_some() {
             return Err(DocumentSourceError::NotFound);
         }
-        let file_type = metadata
-            .file_type
-            .as_deref()
-            .and_then(|file_type| FileType::from_str(file_type).ok());
-        if !matches!(file_type, Some(FileType::Html | FileType::Htm)) {
+        if !matches!(basic.try_file_type(), Some(FileType::Html | FileType::Htm)) {
             return Err(DocumentSourceError::NotHtml);
         }
+
+        let location = self
+            .documents
+            .get_document_location(
+                &basic,
+                document.clone(),
+                LocationQueryParams {
+                    document_version_id: None,
+                    get_converted_docx_url: None,
+                },
+            )
+            .await
+            .map_err(|error| DocumentSourceError::Internal(rootcause::report!("{error}")))?;
+        let LocationResponseV3::PresignedUrl { presigned_url, .. } = location else {
+            return Err(DocumentSourceError::NotHtml);
+        };
+        // The URL is browser-facing; a server-side fetch on the local stack
+        // must reach LocalStack directly (a no-op elsewhere).
+        let presigned_url = macro_aws_config::transform_aws_url_for_internal_fetch(&presigned_url);
 
         let internal = |error: reqwest::Error| {
             DocumentSourceError::Internal(rootcause::report!("{}", error.without_url()))

@@ -222,6 +222,55 @@ mod with_deno {
 
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
+    async fn a_program_whose_arguments_an_empty_object_satisfies_is_called_without_them() {
+        let (_root, deno) = deno().await;
+        let html = r#"<script type="text/macro" id="recent" lang="ts">
+  export default async function (_args: {}, { macro }: ProgramContext) {
+    return typeof macro.documents;
+  }
+</script>
+<script type="text/macro" id="clock" lang="ts">
+  export default async function () {
+    return 1;
+  }
+</script>
+<script type="module" lang="ts">
+  import { clock, recent } from 'macro:programs';
+  const kind: string = await recent();
+  const tick: number = await clock();
+  document.title = `${kind} ${tick}`;
+</script>"#;
+
+        let outcome = build(html, &deno, &deno).await.unwrap();
+
+        assert!(matches!(outcome, BuildOutcome::Built { .. }), "{outcome:?}");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn a_required_argument_cannot_be_left_out() {
+        let (_root, deno) = deno().await;
+        let html = format!(
+            r#"{PROGRAM}<script type="module" lang="ts">
+  import {{ tasks }} from 'macro:programs';
+  await tasks();
+</script>"#
+        );
+
+        let BuildOutcome::Failed(problems) = build(&html, &deno, &deno).await.unwrap() else {
+            panic!("a missing required argument must fail the build");
+        };
+
+        assert_eq!(
+            problems[0].file.as_deref(),
+            Some("client script"),
+            "{problems:?}"
+        );
+        assert!(problems[0].message.contains("TS2554"), "{problems:?}");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
     async fn reports_a_program_error_by_its_id() {
         let (_root, deno) = deno().await;
         let html = r#"<script type="text/macro" id="broken" lang="ts">

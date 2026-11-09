@@ -132,7 +132,9 @@ if the run is cancelled.
   stale hash), and the two routes in `inbound/document_router.rs`, which mint
   a view receipt in the handler.
 - `agent_harness_service`: `code_mode/document_sources.rs` reads the stored
-  file through document storage (at most 2 MiB); the build uses the routine
+  file (at most 2 MiB) through the in-process documents service Macro's tools
+  use, under the viewer's receipt; storage's internal routes don't accept an
+  internal principal for document content. The build uses the routine
   checker, runs use public MCP's executor.
 - Web: `HtmlPreview` renders the build or its problems; `code-mode/` carries
   `run` by program id and `on`. Spans: `document_programs.build`,

@@ -1814,14 +1814,12 @@ async fn run() -> anyhow::Result<()> {
     // the viewer through the user-scoped runner.
     let document_programs = match (&user_code_mode, &code_runner) {
         (Some(runner), Some((_, _, _, toolchain))) => {
-            let documents = document_storage_service_client::DocumentStorageServiceClient::new(
-                config.document_storage_service_auth_key.clone(),
-                macro_service_urls::DocumentStorageServiceUrl::new()?.to_string(),
-            );
             let service = agent_code_mode::domain::DocumentPrograms::new(
                 Arc::new(
-                    code_mode::document_sources::StoredDocumentSources::new(documents)
-                        .map_err(|error| anyhow::anyhow!("invalid document reader: {error}"))?,
+                    code_mode::document_sources::StoredDocumentSources::new(
+                        tool_context.document_tool_context.service.clone(),
+                    )
+                    .map_err(|error| anyhow::anyhow!("invalid document reader: {error}"))?,
                 ),
                 Arc::clone(toolchain) as Arc<dyn code_execution::domain::ProgramChecker>,
                 Arc::clone(toolchain) as Arc<dyn code_execution::domain::ProgramBundler>,

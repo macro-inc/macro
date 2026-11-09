@@ -36,7 +36,8 @@ Pulumi stacks; they do not host extra agent processes.
   `src/code_mode/connected_apps.rs` serves a running execution's
   `macro.connectedApps` through the in-process egress service.
   `src/code_mode/document_sources.rs` reads a stored HTML document (at most
-  2 MiB) for `agent_code_mode`'s document builds, which run on the same Deno
+  2 MiB) for `agent_code_mode`'s document builds through the documents
+  service the tools share, which run on the same Deno
   checker as routine steps and run programs on public MCP's executor.
   Code execution's destination list in `src/code_mode.rs` also includes the
   configured editing worker, whose comment-mark endpoint requires a scoped

@@ -367,15 +367,22 @@ fn assemble(
 }
 
 /// `macro:programs`: each program as a typed function that runs it by id.
+/// The argument may be left out when an empty object would satisfy it.
 fn programs_module(ids: &[ProgramId]) -> String {
-    let mut module = String::from("import { run } from 'macro:client';\n");
+    let mut module = String::from(
+        "import { run } from 'macro:client';\n\
+         type ArgsOf<P extends (...args: never[]) => unknown> = Parameters<P> extends []\n  \
+           ? []\n  \
+           : {} extends Parameters<P>[0]\n    \
+             ? [args?: Parameters<P>[0]]\n    \
+             : [args: Parameters<P>[0]];\n",
+    );
     for (index, id) in ids.iter().enumerate() {
         let file = program_file(index);
         module.push_str(&format!(
             "type Program{index} = typeof import('./{file}').default;\n\
-             export const {id} = (\n  \
-               ...args: Parameters<Program{index}> extends [unknown, ...unknown[]] ? [args: Parameters<Program{index}>[0]] : []\n\
-             ): Promise<Awaited<ReturnType<Program{index}>>> => run('{id}', args[0] ?? {{}});\n"
+             export const {id} = (...args: ArgsOf<Program{index}>): Promise<Awaited<ReturnType<Program{index}>>> =>\n  \
+               run('{id}', args.at(0) ?? {{}});\n"
         ));
     }
     module
@@ -418,6 +425,7 @@ fn named(diagnostics: Vec<Diagnostic>, ids: &[ProgramId]) -> Vec<Diagnostic> {
                     .map(|(_, id)| format!("program {id}"))
                     .unwrap_or_else(|| match file.as_str() {
                         CLIENT_FILE => "client script".to_owned(),
+                        PROGRAMS_FILE => "macro:programs".to_owned(),
                         _ => file,
                     })
             });
