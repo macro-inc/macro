@@ -2,9 +2,8 @@
 
 Status: on `dev/html-code-mode`. The server builds stored HTML documents
 and runs their programs by id, with live events, and the built page runs
-under a strict CSP. Consent, a separate execution pool and publishing are not
-built. The agent
-guide's "Program blocks in HTML previews" describes what ships.
+under a strict CSP. A separate execution pool and publishing are not built.
+The agent guide's "Program blocks in HTML previews" describes what ships.
 
 ## Goal
 
@@ -37,8 +36,8 @@ program up and get the outcome back.
   base-uri 'none'`. A page that runs programs as the viewer can then run only
   its own inline code and show only inline media, so fetch, beacons, remote
   scripts, stylesheets and image URLs can't carry what it read out. CSP does
-  not stop the frame navigating itself (`location = …?leak`), so consent still
-  covers reads. The plain fallback frame runs no programs and gets no policy.
+  not stop the frame navigating itself (`location = …?leak`); see Consent.
+  The plain fallback frame runs no programs and gets no policy.
 - **How a file calls it.** Only by program id. The client imports its
   programs from `macro:programs` and calls them as typed functions. The
   build compiles those calls into the host transport. `window.macro` and its
@@ -53,12 +52,18 @@ program up and get the outcome back.
   bundle stored under that program id in its build of it. A build is named by
   the hash of its source, so no storage version field is needed; a stale
   hash gets `409`.
-- **Consent.** From the manifest, not a dry run. The server knows each
-  program's SDK operations before anything runs. Opening a file whose author
-  is someone else, or whose programs write, shows one prompt per file listing
-  what it can do. The approval is keyed by the document and the manifest's
-  operation set: an edit that keeps the same operations doesn't ask again.
-  The runtime refuses any operation outside the program's manifest entry.
+- **Consent.** None, matching routine code steps: programs run with the
+  viewer's full access, with no prompt and no write scopes. Routines dropped
+  per-step write scopes (`refactor(routines)!: drop write scopes`) because a
+  guard in the same Deno process as the code can be bypassed by patching the
+  built-ins it uses or reading the token from the SDK, and a prompt or a
+  declared scope enforced there would be the same unkeepable promise. Real
+  enforcement would need the credential kept out of the sandbox behind a
+  proxy that checks each request, as `agent_egress` does for coding
+  sandboxes; that is not built. The accepted risk: a page someone else wrote
+  can read the viewer's data and write it where its author can see it (a
+  message, a document), or navigate the frame to carry it out. CSP closes the
+  other network paths.
 - **Limits.** Enforced only on the server: a per-viewer queue in front of a
   document-run pool, 2 running per viewer, 30 s each. The page waits in the
   queue instead of failing.
@@ -85,12 +90,11 @@ program up and get the outcome back.
   every page's code in the document, at the cost of libraries and JSX
   frameworks; pages use TypeScript and the DOM. The backend extracts the blocks into virtual files,
   runs `deno check` against the SDK declarations, and runs `deno bundle` for
-  the client and for each program. It hashes each bundled program and records
-  the SDK operations it calls. The server computes this manifest, so it is
-  trusted, not declared by the author. The build runs in `code_execution`'s
+  the client and for each program, and keeps each program's bundle under its
+  id for runs of that build. The build runs in `code_execution`'s
   Deno sandbox with no network. If packages are added later, they come
-  through a caching registry proxy, at exact versions whose integrity hashes
-  join the manifest. The stored document stays the source that agents and
+  through a caching registry proxy, at exact versions with recorded
+  integrity hashes. The stored document stays the source that agents and
   people edit. The built HTML is derived content keyed by the source's hash,
   and the preview loads it. Solid, Svelte, Tailwind and HMR would need Vite
   and are out. The archived plugin
@@ -154,12 +158,9 @@ if the run is cancelled.
 
 ## Left to build
 
-1. The record of SDK operations each program calls, for consent and the gate.
-2. Manifest consent: the per-file prompt, the saved approval, and the
-   runtime gate on manifest operations.
-3. The publish SDK method, which returns diagnostics and replaces an existing
+1. The publish SDK method, which returns diagnostics and replaces an existing
    document in place.
-4. A `Limits` profile with a per-viewer queue, instead of the shared public
+2. A `Limits` profile with a per-viewer queue, instead of the shared public
    MCP slots and the frame's cap.
-5. Optional: `program.live(args, render)`, which re-runs a program when an
-   event touches an entity type its operations read.
+3. Optional: `program.live(args, render)`, which re-runs a program when a
+   live event arrives for what it reads.

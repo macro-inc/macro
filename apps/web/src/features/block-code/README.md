@@ -32,6 +32,6 @@ A block for editing code files with syntax highlighting and formatting.
   first in the built page's head, before the helper: inline scripts and
   styles, `data:`/`blob:` media, and no network, forms or `<base>`, so a page
   that runs programs as the viewer can't send what it read anywhere. CSP does
-  not block the frame navigating itself; manifest consent is what covers
-  that. The plain fallback frame runs no programs and gets no policy. See the agent
+  not block the frame navigating itself, and programs run with the
+  viewer's full access with no consent prompt (see the design doc). The plain fallback frame runs no programs and gets no policy. See the agent
   guide's "Program blocks in HTML previews" for the authoring contract.
