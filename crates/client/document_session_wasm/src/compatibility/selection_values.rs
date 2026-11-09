@@ -263,6 +263,15 @@ impl SelectionValues {
         self.prune();
     }
 
+    /// Drop write-context caches at an explicit native write barrier.
+    pub fn invalidate_active_cache(&mut self, update: u32) {
+        for entry in self.entries.values_mut() {
+            if entry.value.origin == (Origin::Active { update }) {
+                entry.value.cached_nodes = None;
+            }
+        }
+    }
+
     pub fn finish_update(&mut self, update: u32, published: bool) {
         for entry in self.entries.values_mut() {
             if entry.value.origin == (Origin::Active { update }) {
