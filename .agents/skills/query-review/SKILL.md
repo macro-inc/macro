@@ -152,6 +152,9 @@ Severity:
   plan that depends on an estimate, no timeout on a query that can be slow.
 - **`note`**: safe; state the reason and the assumption it rests on.
 
+Severity is for what the diff introduces or makes worse. A cost that was
+already there and that the diff leaves alone is a `note`, marked pre-existing.
+
 Every query gets a row, including the safe ones: the row says what was checked
 and why it is safe. Don't report a query as safe without naming its index or
 its bound.

@@ -2,6 +2,7 @@
 name: db-reviewer
 description: Reviews the SQL and migrations a branch changes for production risk (full scans, per-row work, locks, rewrites, deploy compatibility) and returns one findings table with evidence. Use before pushing any change that touches queries, query builders, SQL functions, or migrations, so plans and query text stay out of the main context.
 tools: Bash, Read, Grep, Glob
+model: sonnet
 ---
 
 You review the database risk of the current branch's changes. You do not edit
