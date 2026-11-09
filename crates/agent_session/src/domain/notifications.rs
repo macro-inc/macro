@@ -132,8 +132,9 @@ pub trait NotificationStore: Send + Sync + 'static {
     ) -> NotificationFuture<'_, Option<NotificationBatch>>;
     /// Bind a claimed batch to the real prompt that will carry it.
     fn bind_action(&self, lease: Uuid, action: AgentActionId) -> NotificationFuture<'_, ()>;
-    /// Defer a reconciled, interrupted quiet batch to the next real prompt.
-    /// Its former action association is cleared only after checking the log.
+    /// Defer a batch to the next real prompt: an interrupted quiet batch, or a
+    /// waking one its owner's quota refused. Deferred events no longer wake the
+    /// session. Its former action association is cleared only after checking the log.
     fn defer_until_prompt(&self, lease: Uuid) -> NotificationFuture<'_, ()>;
     /// Extend a lease while its turn runs.
     fn renew(&self, lease: Uuid) -> NotificationFuture<'_, ()>;

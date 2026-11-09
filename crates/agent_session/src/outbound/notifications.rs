@@ -207,7 +207,7 @@ impl NotificationStore for PgNotificationStore {
     }
     fn defer_until_prompt(&self, lease: Uuid) -> NotificationFuture<'_, ()> {
         Box::pin(async move {
-            sqlx::query!("UPDATE agent_session_notification SET lease_id = NULL, lease_until = NULL, action_id = NULL WHERE lease_id = $1 AND delivered_at IS NULL", lease)
+            sqlx::query!("UPDATE agent_session_notification SET lease_id = NULL, lease_until = NULL, action_id = NULL, wake = false WHERE lease_id = $1 AND delivered_at IS NULL", lease)
                 .execute(&self.0).await.map_err(storage)?;
             Ok(())
         })

@@ -154,6 +154,38 @@ async fn waking_turn_leaves_quiet_events_for_a_real_prompt(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_deferred_waking_batch_leaves_discovery_and_waits_for_a_real_prompt(pool: PgPool) {
+    sqlx::raw_sql("INSERT INTO agent_session (id, owner_id, bot_id, model, harness, workspace) VALUES ('00000000-0000-0000-0000-000000000001','macro|owner@example.com','00000000-0000-0000-0000-00000000a9e7','test','macrod','/workspace')").execute(&pool).await.unwrap();
+    let session = AgentSessionId::new_from_uuid(Uuid::from_u128(1));
+    let store = PgNotificationStore(pool);
+    store
+        .enqueue(
+            PendingNotification::new(ProduceNotification {
+                session_id: session,
+                subject_id: "wake".into(),
+                event: NotificationEvent::AppConnected {
+                    app: "Calendar".into(),
+                },
+                dedupe_key: None,
+                wake: true,
+            })
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(store.pending_sessions(None).await.unwrap(), [session]);
+    let refused = store.claim(session, false).await.unwrap().unwrap();
+    store.defer_until_prompt(refused.lease_id).await.unwrap();
+    assert!(store.pending_sessions(None).await.unwrap().is_empty());
+    assert!(store.claim(session, false).await.unwrap().is_none());
+    let carried = store.claim(session, true).await.unwrap().unwrap();
+    assert_eq!(carried.notifications.len(), 1);
+    assert_eq!(carried.notifications[0].subject_id, "wake");
+    assert_ne!(carried.action_id, refused.action_id);
+    assert!(!carried.wake);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn legacy_review_writes_during_rollout_enter_the_typed_outbox_once(pool: PgPool) {
     sqlx::raw_sql("INSERT INTO agent_session (id, owner_id, bot_id, model, harness, workspace) VALUES ('00000000-0000-0000-0000-000000000001','macro|owner@example.com','00000000-0000-0000-0000-00000000a9e7','test','macrod','/workspace')").execute(&pool).await.unwrap();
     let session = AgentSessionId::new_from_uuid(Uuid::from_u128(1));
