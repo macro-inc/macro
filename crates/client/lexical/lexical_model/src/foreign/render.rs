@@ -79,6 +79,21 @@ impl ForeignRenderRecord {
         self.record.as_ref().get::<Node>()
     }
 }
+impl<'state> NodeRef<'state> {
+    /// Existing materialized cache on this exact root record, including retired
+    /// captures. This never resolves latest, looks up the graph or computes text.
+    pub fn foreign_raw_root_cached_text(self) -> Option<&'state str> {
+        if self.key() != NodeKey::ROOT {
+            return None;
+        }
+        self.slot
+            .foreign_root_cache
+            .as_ref()?
+            .value
+            .get()
+            .map(AsRef::as_ref)
+    }
+}
 impl ForeignReadSnapshot {
     /// Capture an ordered set of records for a separate typed host render batch.
     /// Missing keys reject; removed keys belong in the batch's separate removal list.
