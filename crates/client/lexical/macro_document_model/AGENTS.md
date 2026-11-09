@@ -56,8 +56,9 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Supply external document-link hostnames through MacroMarkdownOptions and retain typed package errors.
 - Keep this client crate excluded from workspace-hack.
 
-Canonicalize only top-level null unset table options, tablecell width and listitem
-checked in the sync policy, matching source exportJSON. Preserve backgroundColor:null,
+Canonicalize only top-level null unset table options, tablecell width, listitem
+checked, code/custom-code language and theme, and code-highlight highlightType
+in the sync policy, matching source exportJSON. Preserve backgroundColor:null,
 nested array nulls, unknown nulls and every nonnull value; never erase the underlying
 Loro fields.
 
@@ -85,4 +86,3 @@ Loro fields.
 
 Stage table key layout facts only around the nested native Key dispatch; restore the previous facts before returning, including error paths.
 
-Canonicalize only the explicit null/unset aliases for code theme and token highlightType, alongside existing table/list aliases; retain unknown nulls, non-null values and every underlying Loro field/vector.

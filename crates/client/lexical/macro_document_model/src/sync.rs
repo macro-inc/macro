@@ -20,7 +20,7 @@ impl SyncPolicy for MacroSyncPolicy {
                 "rowStriping",
             ],
             Some("tablecell") => &["width"],
-            Some("code" | "custom-code") => &["theme"],
+            Some("code" | "custom-code") => &["language", "theme"],
             Some("code-highlight") => &["highlightType"],
             Some("listitem") => &["checked"],
             _ => &[],
