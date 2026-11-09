@@ -1,3 +1,4 @@
+import type { TableSelection } from '@lexical/table';
 import type {
   CompatOperation,
   CompatSelectionPatch,
@@ -17,6 +18,8 @@ import type {
 } from 'lexical';
 
 export interface SelectionRuntime {
+  createTableSelection(): TableSelection;
+  isTableSelection(selection: unknown): selection is TableSelection;
   caret: Pick<
     typeof import('lexical'),
     | '$getSiblingCaret'

@@ -1,3 +1,11 @@
+export type {
+  BaseSelection,
+  ElementPoint,
+  ElementPoint as ElementPointType,
+  PointType,
+  TextPoint,
+  TextPoint as TextPointType,
+} from 'lexical';
 export {
   bindSelectionReference,
   captureReplySelections,
