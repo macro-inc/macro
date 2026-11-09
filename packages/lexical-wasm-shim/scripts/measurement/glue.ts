@@ -14,6 +14,14 @@ interface Edit {
   readonly text: string;
 }
 const fixed = new Set(['compatFlush', 'compatCommit']);
+const inboundPayloadHelpers = new Set([
+  'passArray8ToWasm0',
+  'passStringToWasm0',
+]);
+const outboundPayloadHelpers = new Set([
+  'decodeText',
+  'getArrayJsValueFromWasm0',
+]);
 function physical(
   name: string,
   direction: string,
@@ -57,6 +65,7 @@ export function instrumentGlue(
   const imports = new Map(abi.imports.map((entry) => [entry.name, entry]));
   if (imports.size !== abi.imports.length)
     throw new Error('Ambiguous WASM import names');
+  let byteCopies = 0;
   let finalizers = 0;
   let importReturns = 0;
   const tableBindings = new Map<ts.Node, Map<string, string | null>>();
@@ -200,10 +209,7 @@ export function instrumentGlue(
           insert(statement.getStart(file), assignments.join('\n'));
           importReturns++;
         }
-      } else if (
-        method === 'passArray8ToWasm0' ||
-        method === 'passStringToWasm0'
-      ) {
+      } else if (inboundPayloadHelpers.has(method)) {
         payloadHelpers.push(method);
         function returns(child: ts.Node): void {
           if (ts.isReturnStatement(child)) {
@@ -216,10 +222,7 @@ export function instrumentGlue(
           ts.forEachChild(child, returns);
         }
         returns(node.body);
-      } else if (
-        method === 'decodeText' ||
-        method === 'getArrayJsValueFromWasm0'
-      ) {
+      } else if (outboundPayloadHelpers.has(method)) {
         payloadHelpers.push(method);
         insert(
           node.body.getStart(file) + 1,
@@ -379,6 +382,203 @@ export function instrumentGlue(
       apiMethods.push(method);
     }
   }
+  let byteCopyChecker: ts.TypeChecker | undefined;
+  function validateByteCopy(
+    node: ts.CallExpression,
+    copy: ts.NewExpression
+  ): void {
+    if (byteCopyChecker === undefined) {
+      const options: ts.CompilerOptions = {
+        allowJs: true,
+        noLib: true,
+        noResolve: true,
+      };
+      const host = ts.createCompilerHost(options);
+      host.getSourceFile = (name) =>
+        name === file.fileName ? file : undefined;
+      const program = ts.createProgram([file.fileName], options, host);
+      if (program.getSourceFile(file.fileName) !== file)
+        throw new Error('Byte-copy binding source was not resolved');
+      byteCopyChecker = program.getTypeChecker();
+    }
+    const checker = byteCopyChecker;
+    function symbol(node: ts.Node): ts.Symbol {
+      const found = checker.getSymbolAtLocation(node);
+      if (found === undefined) throw new Error('Unresolved byte-copy binding');
+      return found;
+    }
+
+    function declaration(name: string): ts.FunctionDeclaration {
+      const found = file.statements.filter(
+        (statement): statement is ts.FunctionDeclaration =>
+          ts.isFunctionDeclaration(statement) && statement.name?.text === name
+      );
+      if (found.length !== 1 || found[0].body === undefined)
+        throw new Error(`Unreviewed byte-copy helper binding: ${name}`);
+      return found[0];
+    }
+    function shape(source: string): string {
+      const parsed = ts.createSourceFile(
+        'byte-helper.js',
+        source,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.JS
+      );
+      type Shape = readonly [number, string | readonly Shape[]];
+      function visit(node: ts.Node): Shape {
+        const children: Shape[] = [];
+        ts.forEachChild(node, (child) => {
+          children.push(visit(child));
+        });
+        return [
+          node.kind,
+          children.length === 0 ? node.getText(parsed) : children,
+        ];
+      }
+      return JSON.stringify(visit(parsed));
+    }
+    function validateHelpers(): void {
+      const view = declaration('getArrayU8FromWasm0');
+      const memory = declaration('getUint8ArrayMemory0');
+      if (view.name === undefined || memory.name === undefined)
+        throw new Error('Missing byte-copy helper names');
+      if (
+        shape(view.getText(file)) !==
+          shape(
+            'function getArrayU8FromWasm0(ptr, len) { ptr = ptr >>> 0; return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len); }'
+          ) ||
+        shape(memory.getText(file)) !==
+          shape(
+            'function getUint8ArrayMemory0() { if (cachedUint8ArrayMemory0 === null || cachedUint8ArrayMemory0.byteLength === 0) { cachedUint8ArrayMemory0 = new Uint8Array(wasm.memory.buffer); } return cachedUint8ArrayMemory0; }'
+          ) ||
+        symbol(node.expression) !== symbol(view.name)
+      )
+        throw new Error(
+          'Unreviewed byte-copy memory helper or shadowed binding'
+        );
+      function requireBinding(
+        root: ts.Node,
+        name: string,
+        expected?: ts.Symbol
+      ): void {
+        function visit(child: ts.Node): void {
+          if (
+            ts.isIdentifier(child) &&
+            child.text === name &&
+            checker.getSymbolAtLocation(child) !== expected
+          )
+            throw new Error(`Shadowed byte-copy binding: ${name}`);
+          ts.forEachChild(child, visit);
+        }
+        visit(root);
+      }
+      const memorySymbol = symbol(memory.name);
+      requireBinding(view, 'getUint8ArrayMemory0', memorySymbol);
+      requireBinding(copy, 'Uint8Array');
+      requireBinding(memory, 'Uint8Array');
+      for (const name of ['wasm', 'cachedUint8ArrayMemory0']) {
+        const declarations = file.statements
+          .flatMap((statement) =>
+            ts.isVariableStatement(statement)
+              ? [...statement.declarationList.declarations]
+              : []
+          )
+          .filter(
+            (item) => ts.isIdentifier(item.name) && item.name.text === name
+          );
+        if (declarations.length !== 1)
+          throw new Error(`Missing exact byte-copy memory binding: ${name}`);
+        const initial = declarations[0].initializer;
+        if (
+          name === 'cachedUint8ArrayMemory0'
+            ? initial?.kind !== ts.SyntaxKind.NullKeyword
+            : initial !== undefined
+        )
+          throw new Error(`Unreviewed byte-copy memory initializer: ${name}`);
+        requireBinding(memory, name, symbol(declarations[0].name));
+      }
+    }
+    validateHelpers();
+    const owner = scope(node);
+    if (
+      !ts.isFunctionExpression(owner) ||
+      owner.parameters.length !== 2 ||
+      owner.asteriskToken !== undefined ||
+      owner.modifiers?.length
+    )
+      throw new Error('Unsupported byte-copy import function');
+    validateImport(owner);
+    function validateImport(owner: ts.FunctionExpression): void {
+      const property = owner.parent;
+      if (
+        !ts.isPropertyAssignment(property) ||
+        (!ts.isIdentifier(property.name) && !ts.isStringLiteral(property.name))
+      )
+        throw new Error('Missing byte-copy import property');
+      const abiImport = imports.get(property.name.text);
+      const binding = property.parent.parent;
+      const factory = scope(binding);
+      if (
+        !abiImport ||
+        abiImport.parameters.join(',') !== 'i32,i32' ||
+        abiImport.results.join(',') !== 'externref' ||
+        !ts.isVariableDeclaration(binding) ||
+        binding.initializer !== property.parent ||
+        !ts.isIdentifier(binding.name) ||
+        !ts.isFunctionDeclaration(factory) ||
+        factory.name?.text !== '__wbg_get_imports' ||
+        factory.body === undefined
+      )
+        throw new Error(
+          'Byte-copy direction is not an exact WASM-to-JS ABI import'
+        );
+      const moduleMatches = factory.body.statements.some(
+        (statement) =>
+          ts.isReturnStatement(statement) &&
+          statement.expression !== undefined &&
+          ts.isObjectLiteralExpression(statement.expression) &&
+          statement.expression.properties.some(
+            (entry) =>
+              ts.isPropertyAssignment(entry) &&
+              ts.isStringLiteral(entry.name) &&
+              entry.name.text === abiImport.module &&
+              ts.isIdentifier(entry.initializer) &&
+              symbol(entry.initializer) === symbol(binding.name)
+          )
+      );
+      if (!moduleMatches)
+        throw new Error('Byte-copy module does not match binary ABI');
+      validateArguments();
+      function validateArguments(): void {
+        for (let index = 0; index < 2; index++) {
+          const parameter = owner.parameters[index];
+          const argument = node.arguments[index];
+          if (
+            !ts.isIdentifier(parameter.name) ||
+            parameter.initializer ||
+            parameter.dotDotDotToken ||
+            !argument ||
+            !ts.isIdentifier(argument) ||
+            symbol(argument) !== symbol(parameter.name)
+          )
+            throw new Error('Unsupported byte-copy pointer/length bindings');
+        }
+      }
+    }
+  }
+  function isByteCopy(
+    node: ts.CallExpression,
+    parent: ts.Node
+  ): parent is ts.NewExpression {
+    return (
+      ts.isNewExpression(parent) &&
+      ts.isIdentifier(parent.expression) &&
+      parent.expression.text === 'Uint8Array' &&
+      parent.arguments?.length === 1 &&
+      parent.arguments[0] === node
+    );
+  }
   function instrumentByteView(node: ts.Node): void {
     if (
       ts.isCallExpression(node) &&
@@ -394,7 +594,17 @@ export function instrumentGlue(
       )
         throw new Error('Unsupported byte view helper');
       const parent = node.parent;
-      if (
+      if (isByteCopy(node, parent)) {
+        validateByteCopy(node, parent);
+        byteCopies++;
+        if (!payloadHelpers.includes('getArrayU8FromWasm0.copy'))
+          payloadHelpers.push('getArrayU8FromWasm0.copy');
+        insert(
+          parent.getStart(file),
+          "((__auditCopy) => { __audit.measureBuffer('wasm-to-js', 'getArrayU8FromWasm0.copy', Reflect.apply(__auditByteLength, __auditCopy, [])); return __auditCopy; })("
+        );
+        insert(parent.end, ')');
+      } else if (
         ts.isPropertyAccessExpression(parent) &&
         parent.name.text === 'slice'
       ) {
@@ -431,6 +641,13 @@ export function instrumentGlue(
     }
   }
   function scan(node: ts.Node): void {
+    if (ts.isIdentifier(node) && node.text === 'getArrayU8FromWasm0') {
+      const parent = node.parent;
+      const declared = ts.isFunctionDeclaration(parent) && parent.name === node;
+      const called = ts.isCallExpression(parent) && parent.expression === node;
+      if (!declared && !called)
+        throw new Error('Unaccounted byte view helper reference or alias');
+    }
     if (table(node) !== undefined) {
       const parent = node.parent;
       const declaration =
@@ -482,7 +699,14 @@ export function instrumentGlue(
     result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
     previous = edit.start;
   }
-  result = `import * as __audit from ${JSON.stringify(runtimeImport)};\n${result}`;
+  const byteLength =
+    byteCopies === 0
+      ? ''
+      : `
+const __auditByteLength = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype), 'byteLength')?.get;
+if (typeof __auditByteLength !== 'function') throw new Error('Missing intrinsic typed-array byte length');
+`;
+  result = `import * as __audit from ${JSON.stringify(runtimeImport)};\n${byteLength}${result}`;
   return {
     source: result,
     apiMethods,

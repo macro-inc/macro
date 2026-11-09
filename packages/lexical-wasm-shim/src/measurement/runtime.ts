@@ -98,9 +98,41 @@ export function measureTableReference<T>(
 
 export function measureApi<T>(
   method: string,
+  direction: Direction,
   category: CallCategory,
   body: () => T
+): T;
+export function measureApi<T>(
+  method: string,
+  category: CallCategory,
+  body: () => T
+): T;
+export function measureApi<T>(
+  method: string,
+  directionOrCategory: Direction | CallCategory,
+  categoryOrBody: CallCategory | (() => T),
+  explicitBody?: () => T
 ): T {
+  let direction: Direction;
+  let category: CallCategory;
+  let body: () => T;
+  if (typeof categoryOrBody === 'function') {
+    if (directionOrCategory !== 'fixed' && directionOrCategory !== 'operation')
+      throw new Error('Invalid legacy API measurement category');
+    direction = 'js-to-wasm';
+    category = directionOrCategory;
+    body = categoryOrBody;
+  } else {
+    if (
+      (directionOrCategory !== 'js-to-wasm' &&
+        directionOrCategory !== 'wasm-to-js') ||
+      explicitBody === undefined
+    )
+      throw new Error('Invalid directional API measurement arguments');
+    direction = directionOrCategory;
+    category = categoryOrBody;
+    body = explicitBody;
+  }
   const owner = currentAuditRecorder();
   const purpose =
     category === 'operation'
@@ -108,7 +140,7 @@ export function measureApi<T>(
       : method.endsWith('.compatCommit')
         ? 'admission'
         : 'flush';
-  const id = owner.enter('api', 'js-to-wasm', method, category, 0, 0, purpose);
+  const id = owner.enter('api', direction, method, category, 0, 0, purpose);
   let completed = false;
   try {
     const value = body();
