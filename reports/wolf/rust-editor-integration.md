@@ -61,7 +61,7 @@ The fresh optimized conformance build resolved the missing artifacts. Actual
 with no manual field edit or names/order/masks change. The full shim check
 passed before the Table addition. The ordered-input generator checkpoint
 `54bb4e63a7`, integrated as `2aede2daf9`, resolves schema freshness; the current
-Table codec type failure is recorded below. New WASM exports have not been
+typed Table codec validation is recorded below. New WASM exports have not been
 promoted into live glue/declarations or activated. No bootstrap gate is waived.
 Audit: `audit-compat-selection-checkpoint.md`; current logs use `compat-` prefix.
 
@@ -75,12 +75,32 @@ Generated Rust SHA is
 TS SHA is `71b6df5564991bf2f3c3865b654fa7092c4314e2d9d88e2f6fc9bb992bbf4667`.
 The schema adds TableSelection discriminator 4, SetCompositionKey=55 and
 CreateTableSelection=56. WASM tests remain 23/23 and scoped `just check`
-passes (pre-existing shear warnings retained). Full shim type checking now
-fails at `selection/codec.ts:216`: its NodeSelection branch assumes `keys`,
-which is absent on TableSelection. The typed Table codec owner is implementing
-that addition; no fallback, suppression or full-check waiver was added.
-Evidence: `compat-table-schema-reproduction.json`,
-`compat-table-schema-wasm-tests.log`, `compat-table-schema-shim-check.log`.
+passes (pre-existing shear warnings retained).
+
+The typed Table factory/guard dependency `f8edc9ae2b` and codec `785399b54e`
+are integrated as `e78e411499` and `1a61e7dd4b`. Explicit discriminator 3
+handles NodeSelection keys, while discriminator 4 uses the unchanged injected
+TableSelection factory and guard. No runtime table import, cast or fallback was
+added. The full shim/hook check, focused `.mts` TypeScript check, seven
+constructor tests, and scoped root check pass. Audit found no fallback or
+ownership defect. Native Table snapshot roundtrip, cache/frozen/read-clone and
+actual bridge behavior remain unproven and are prerequisites to activation.
+
+The four original immutable selection suites pass **65/65** (53 + 3 + 6 + 3)
+in a fully owned source/dependency copy, with all four spec hashes retained.
+Its original Vitest config/setup and test tsconfig also match pinned upstream
+`0cfcc169296723e07de2396cd42ea3434b5b79ed` Git objects byte-for-byte.
+Provenance is `portDOM+upstreammodel`, with `nativeAcceptance:false`.
+An explicit actual-native run without its mapper fails before collection,
+records zero cases and never falls back to the source model. This is a
+fail-closed control, not native acceptance. Evidence under the acceptance
+directory: `compat-table-schema-reproduction.json`,
+`compat-table-schema-wasm-tests.log`, `compat-table-codec-shim-check.log`,
+`compat-table-codec-mts-check.log`, `compat-table-codec-constructors.log`,
+`compat-table-codec-root-check.log`, `compat-table-codec-oracle.log`,
+`compat-table-oracle-results/{vitest,provenance}.json`,
+`compat-table-oracle-config-integrity.json`, and
+`compat-table-codec-native-blocked.log`.
 
 
 A frozen flag-OFF build with real timing marks is served at local port 39870,
