@@ -12,7 +12,11 @@ export function ExternalViewSkeleton() {
       main={{}}
     >
       <ViewSkeleton.Sidebar title="External" />
-      <ViewSkeleton.Main title="WhatsApp" />
+      <ViewSkeleton.Main title="WhatsApp">
+        <div class="touch:pt-(--mobile-content-inset-top)">
+          <ViewSkeleton.Rows label="Loading WhatsApp" class="px-2" />
+        </div>
+      </ViewSkeleton.Main>
     </ViewSkeleton.Root>
   );
 }
