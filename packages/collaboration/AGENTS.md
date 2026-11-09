@@ -68,3 +68,5 @@ Use CompatInstanceBind for exact-capture JS instance hydration; validate nonzero
 Deliver external native commits through CompatPublications with their actual dirty sets and tags; current-version queries must not discard undelivered publication metadata.
 
 Compact compatibility replies carry mutation epochs and sparse record deltas; retain/release exact capture leases in batches and distinguish native key reservations from captured records.
+
+Batch creation binds the already-constructed JS instance; COW uses clone acknowledgements. Preserve successful-prefix results and partial failure deltas, report an explicit operation or finalization failure, and never admit a failed batch.
