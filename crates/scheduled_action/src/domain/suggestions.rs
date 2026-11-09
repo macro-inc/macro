@@ -57,7 +57,9 @@ use self::model::{
 };
 use self::ports::{QuickPicks, SuggestionRepo, SuggestionSession, SuggestionSources};
 use super::models::ActionPolicyError;
-use super::ports::{RequestSessions, RoutineCode, ScheduledActionService};
+use super::ports::{
+    RequestSessions, RoutineCode, ScheduledActionService, SuggestionOrigin, SuggestionOrigins,
+};
 
 #[cfg(test)]
 mod test;
@@ -402,17 +404,12 @@ where
         if self.inner.repo.dismiss(user, id).await? {
             span.record("routine.suggestion.from", SuggestionFrom::ForYou.as_ref());
             let stored = self.inner.repo.suggestions(user).await.unwrap_or_default();
-            let dismissed = stored.iter().find(|suggestion| suggestion.id == id);
+            let origin = origin_of(&stored, user, id);
             tracing::info!(
                 event = "routine_suggestions.dismissed",
                 from = "for_you",
-                kind = dismissed.map_or("unknown", |s| match s.pick {
-                    StoredPick::Catalog { .. } => "catalog",
-                    StoredPick::Routine { .. } => "routine",
-                }),
-                surface = dismissed
-                    .and_then(|s| s.surfaces.first())
-                    .map(|surface| surface_name(*surface)),
+                kind = origin.map_or("unknown", |origin| origin.kind),
+                surface = origin.and_then(|origin| origin.surface),
             );
             return Ok(());
         }
@@ -424,14 +421,12 @@ where
         };
         self.inner.repo.dismiss_template(user, routine.key).await?;
         span.record("routine.suggestion.from", SuggestionFrom::Macro.as_ref());
+        let origin = template_origin(routine.surfaces);
         tracing::info!(
             event = "routine_suggestions.dismissed",
-            from = "macro",
-            kind = "catalog",
-            surface = routine
-                .surfaces
-                .first()
-                .map(|surface| surface_name(*surface)),
+            from = origin.from,
+            kind = origin.kind,
+            surface = origin.surface,
         );
         Ok(())
     }
@@ -682,10 +677,22 @@ where
         // Surfaces AI filled with at least one suggestion; Macro's templates
         // fill the rest.
         let stored = self.repo.suggestions(&user).await.unwrap_or_default();
-        let filled = ALL_SURFACES
-            .iter()
-            .filter(|surface| stored.iter().any(|s| s.surfaces.contains(surface)))
-            .count();
+        let mut filled = 0;
+        for surface in &ALL_SURFACES {
+            let suggestions = stored
+                .iter()
+                .filter(|s| s.surfaces.contains(surface))
+                .count();
+            filled += usize::from(suggestions > 0);
+            // One per surface per generation, for per-surface fill rates.
+            tracing::info!(
+                event = "routine_suggestions.surface",
+                outcome = outcome.as_ref(),
+                surface = surface_name(*surface),
+                filled = suggestions > 0,
+                suggestions,
+            );
+        }
         tracing::info!(
             event = "routine_suggestions.generated",
             outcome = outcome.as_ref(),
@@ -971,6 +978,55 @@ where
         if let Err(error) = self.repo.close_session(action.session_id.as_uuid()).await {
             tracing::warn!(error = ?error, "could not close a routine suggestion session");
         }
+    }
+}
+
+/// What suggestion `id`, made to `user`, was: one of AI's in `stored`, or
+/// one of Macro's templates.
+fn origin_of(
+    stored: &[StoredSuggestion],
+    user: &MacroUserIdStr<'_>,
+    id: Uuid,
+) -> Option<SuggestionOrigin> {
+    if let Some(suggestion) = stored.iter().find(|suggestion| suggestion.id == id) {
+        return Some(SuggestionOrigin {
+            from: SuggestionFrom::ForYou.as_ref(),
+            kind: match suggestion.pick {
+                StoredPick::Catalog { .. } => "catalog",
+                StoredPick::Routine { .. } => "routine",
+            },
+            surface: suggestion
+                .surfaces
+                .first()
+                .map(|surface| surface_name(*surface)),
+        });
+    }
+    CATALOG
+        .iter()
+        .find(|routine| template_id(user, routine.key) == id)
+        .map(|routine| template_origin(routine.surfaces))
+}
+
+fn template_origin(surfaces: &[Surface]) -> SuggestionOrigin {
+    SuggestionOrigin {
+        from: SuggestionFrom::Macro.as_ref(),
+        kind: "catalog",
+        surface: surfaces.first().map(|surface| surface_name(*surface)),
+    }
+}
+
+/// [`SuggestionOrigins`] from the stored suggestions and Macro's catalog.
+pub struct StoredSuggestionOrigins<Repo>(pub Arc<Repo>);
+
+#[async_trait::async_trait]
+impl<Repo: SuggestionRepo> SuggestionOrigins for StoredSuggestionOrigins<Repo> {
+    async fn origin(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        suggestion: Uuid,
+    ) -> Result<Option<SuggestionOrigin>> {
+        let stored = self.0.suggestions(owner).await?;
+        Ok(origin_of(&stored, owner, suggestion))
     }
 }
 

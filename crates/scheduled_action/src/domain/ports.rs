@@ -258,6 +258,29 @@ pub trait RoutineDraftService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<super::drafts::Draft>> + Send;
 }
 
+/// What a routine suggestion was, for the log of a routine saved from it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SuggestionOrigin {
+    /// `for_you` (AI's) or `macro` (a template).
+    pub from: &'static str,
+    /// `catalog` or `routine`.
+    pub kind: &'static str,
+    /// The surface it belongs to most.
+    pub surface: Option<&'static str>,
+}
+
+/// Finds what a suggestion was. Object-safe, so the scheduled action service
+/// need not know the suggestion store's type.
+#[async_trait::async_trait]
+pub trait SuggestionOrigins: Send + Sync + 'static {
+    /// What suggestion `suggestion`, made to `owner`, was, if it is one.
+    async fn origin(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        suggestion: Uuid,
+    ) -> Result<Option<SuggestionOrigin>>;
+}
+
 /// Where a draft's session hands its routine back: one row per draft,
 /// keyed by the draft session's id, so the drafter reads what the session
 /// checked whichever replicas each ran on. Object-safe: the drafter and the

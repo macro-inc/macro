@@ -33,7 +33,9 @@ use scheduled_action::domain::ports::{
 };
 use scheduled_action::domain::program_runner::ProgramRunner;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
-use scheduled_action::domain::suggestions::{RoutineSuggestionService, SuggestionAgent};
+use scheduled_action::domain::suggestions::{
+    RoutineSuggestionService, StoredSuggestionOrigins, SuggestionAgent,
+};
 use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
 use scheduled_action::domain::templates::RoutineTemplateServiceImpl;
@@ -408,6 +410,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let request_sessions: Arc<dyn RequestSessions> = Arc::new(CorrelationSessions(
         agent_correlation::outbound::PgCorrelationRepository(db.clone()),
     ));
+    let suggestion_repo = Arc::new(PgSuggestionRepo::new(db.clone()));
     let service = Arc::new(
         ScheduledActionServiceImpl::new(
             Arc::clone(&repo),
@@ -419,6 +422,9 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         .with_conditions_enabled(conditions_enabled)
         .with_target_validation(TargetValidation::new(Arc::clone(&sessions)))
         .with_draft_hand_backs(hand_backs, Arc::clone(&request_sessions))
+        .with_suggestion_origins(Arc::new(StoredSuggestionOrigins(Arc::clone(
+            &suggestion_repo,
+        ))))
         .with_github_links(PgGithubInstallationClaims::new(db.clone()))
         .with_code(code, upgrades),
     );
@@ -446,7 +452,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let suggestions = Arc::new(
         RoutineSuggestionService::new(
             Arc::clone(&service),
-            Arc::new(PgSuggestionRepo::new(db.clone())),
+            suggestion_repo,
             Arc::new(routine_suggestions::HarnessSuggestionSources {
                 email: Arc::new(EmailServiceClient::new(
                     config.internal_api_key.to_string(),
