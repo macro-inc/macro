@@ -818,6 +818,16 @@ public func FfiConverterTypeNativeDocSession_lower(_ value: NativeDocSession) ->
 public protocol NativeEditorSessionProtocol: AnyObject, Sendable {
     
     /**
+     * Admit a command from the shared application command catalog.
+     */
+    func applicationCommand(now: FfiNow, name: String, payload: JsonValue, generation: UInt32, selection: ViewSelection) throws  -> FfiOutput
+    
+    /**
+     * Query the shared application catalog without changing model state.
+     */
+    func applicationQuery(name: String, payload: JsonValue, generation: UInt32) throws  -> JsonValue
+    
+    /**
      * Admit exactly one input and return every owned host effect. Never performs I/O.
      */
     func handle(now: FfiNow, input: FfiInput) throws  -> FfiOutput
@@ -907,6 +917,38 @@ public convenience init(configValue: FfiSessionConfig, storePath: String?, now: 
 
     
 
+    
+    /**
+     * Admit a command from the shared application command catalog.
+     */
+open func applicationCommand(now: FfiNow, name: String, payload: JsonValue, generation: UInt32, selection: ViewSelection)throws  -> FfiOutput  {
+    return try  FfiConverterTypeFfiOutput_lift(try rustCallWithError(FfiConverterTypeFfiSessionError_lift) {
+        uniffiCallStatus in
+    uniffi_document_session_ffi_fn_method_nativeeditorsession_application_command(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeFfiNow_lower(now),
+        FfiConverterString.lower(name),
+        FfiConverterTypeJsonValue_lower(payload),
+        FfiConverterUInt32.lower(generation),
+        FfiConverterTypeViewSelection_lower(selection),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Query the shared application catalog without changing model state.
+     */
+open func applicationQuery(name: String, payload: JsonValue, generation: UInt32)throws  -> JsonValue  {
+    return try  FfiConverterTypeJsonValue_lift(try rustCallWithError(FfiConverterTypeFfiSessionError_lift) {
+        uniffiCallStatus in
+    uniffi_document_session_ffi_fn_method_nativeeditorsession_application_query(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(name),
+        FfiConverterTypeJsonValue_lower(payload),
+        FfiConverterUInt32.lower(generation),uniffiCallStatus
+    )
+})
+}
     
     /**
      * Admit exactly one input and return every owned host effect. Never performs I/O.
@@ -1469,6 +1511,75 @@ public func FfiConverterTypeDiff_lift(_ buf: RustBuffer) throws -> Diff {
 #endif
 public func FfiConverterTypeDiff_lower(_ value: Diff) -> RustBuffer {
     return FfiConverterTypeDiff.lower(value)
+}
+
+
+/**
+ * Application policy selected by the actual editing surface.
+ */
+public struct FfiApplicationConfig: Equatable, Hashable {
+    /**
+     * Registry and behavior preset; shared with browser surfaces.
+     */
+    public var editorType: FfiEditorType
+    /**
+     * Optional app hostname for external document-link exports.
+     */
+    public var hostname: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Registry and behavior preset; shared with browser surfaces.
+         */editorType: FfiEditorType, 
+        /**
+         * Optional app hostname for external document-link exports.
+         */hostname: String?) {
+        self.editorType = editorType
+        self.hostname = hostname
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension FfiApplicationConfig: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFfiApplicationConfig: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiApplicationConfig {
+        return
+            try FfiApplicationConfig(
+                editorType: FfiConverterTypeFfiEditorType.read(from: &buf), 
+                hostname: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: FfiApplicationConfig, into buf: inout [UInt8]) {
+        FfiConverterTypeFfiEditorType.write(value.editorType, into: &buf)
+        FfiConverterOptionString.write(value.hostname, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiApplicationConfig_lift(_ buf: RustBuffer) throws -> FfiApplicationConfig {
+    return try FfiConverterTypeFfiApplicationConfig.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiApplicationConfig_lower(_ value: FfiApplicationConfig) -> RustBuffer {
+    return FfiConverterTypeFfiApplicationConfig.lower(value)
 }
 
 
@@ -2712,6 +2823,10 @@ public struct FfiSessionConfig: Equatable, Hashable {
      */
     public var headless: Bool
     /**
+     * Application surface registry; absent selects portable core and rich nodes.
+     */
+    public var application: FfiApplicationConfig?
+    /**
      * Generic containers whose changes the host observes.
      */
     public var observed: [ContainerPath]
@@ -2735,6 +2850,9 @@ public struct FfiSessionConfig: Equatable, Hashable {
          * Headless editor mode for non-view native integrations.
          */headless: Bool, 
         /**
+         * Application surface registry; absent selects portable core and rich nodes.
+         */application: FfiApplicationConfig?, 
+        /**
          * Generic containers whose changes the host observes.
          */observed: [ContainerPath]) {
         self.sync = sync
@@ -2742,6 +2860,7 @@ public struct FfiSessionConfig: Equatable, Hashable {
         self.peerRange = peerRange
         self.os = os
         self.headless = headless
+        self.application = application
         self.observed = observed
     }
 
@@ -2766,6 +2885,7 @@ public struct FfiConverterTypeFfiSessionConfig: FfiConverterRustBuffer {
                 peerRange: FfiConverterTypePeerRange.read(from: &buf), 
                 os: FfiConverterTypeViewOs.read(from: &buf), 
                 headless: FfiConverterBool.read(from: &buf), 
+                application: FfiConverterOptionTypeFfiApplicationConfig.read(from: &buf), 
                 observed: FfiConverterSequenceTypeContainerPath.read(from: &buf)
         )
     }
@@ -2776,6 +2896,7 @@ public struct FfiConverterTypeFfiSessionConfig: FfiConverterRustBuffer {
         FfiConverterTypePeerRange.write(value.peerRange, into: &buf)
         FfiConverterTypeViewOs.write(value.os, into: &buf)
         FfiConverterBool.write(value.headless, into: &buf)
+        FfiConverterOptionTypeFfiApplicationConfig.write(value.application, into: &buf)
         FfiConverterSequenceTypeContainerPath.write(value.observed, into: &buf)
     }
 }
@@ -7098,6 +7219,100 @@ public func FfiConverterTypeFfiDocEvent_lower(_ value: FfiDocEvent) -> RustBuffe
 
 
 
+
+public enum FfiEditorType: Equatable, Hashable {
+    
+    case plainText
+    case title
+    case markdown
+    case markdownSync
+    case chat
+    case calendar
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension FfiEditorType: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFfiEditorType: FfiConverterRustBuffer {
+    typealias SwiftType = FfiEditorType
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiEditorType {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .plainText
+        
+        case 2: return .title
+        
+        case 3: return .markdown
+        
+        case 4: return .markdownSync
+        
+        case 5: return .chat
+        
+        case 6: return .calendar
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: FfiEditorType, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .plainText:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .title:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .markdown:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .markdownSync:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .chat:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .calendar:
+            writeInt(&buf, Int32(6))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiEditorType_lift(_ buf: RustBuffer) throws -> FfiEditorType {
+    return try FfiConverterTypeFfiEditorType.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiEditorType_lower(_ value: FfiEditorType) -> RustBuffer {
+    return FfiConverterTypeFfiEditorType.lower(value)
+}
+
+
+
 /**
  * One admitted view, document or host input.
  */
@@ -7994,6 +8209,14 @@ public enum FfiQuery: Equatable, Hashable {
      */
     case viewDiff
     /**
+     * Whether native insertion must use a model command rather than a text splice.
+     */
+    case shouldInsertText(
+        /**
+         * Proposed inserted text at the current model selection.
+         */text: String
+    )
+    /**
      * Read one node's serialized properties.
      */
     case node(
@@ -8005,6 +8228,10 @@ public enum FfiQuery: Equatable, Hashable {
      * Read the editor's complete serialized root.
      */
     case state
+    /**
+     * Download projection with regenerated search text and transient nodes removed.
+     */
+    case savedState
     /**
      * Export HTML for the whole document or selection.
      */
@@ -8091,35 +8318,40 @@ public struct FfiConverterTypeFfiQuery: FfiConverterRustBuffer {
         
         case 1: return .viewDiff
         
-        case 2: return .node(key: try FfiConverterTypeNodeKey.read(from: &buf)
+        case 2: return .shouldInsertText(text: try FfiConverterString.read(from: &buf)
         )
         
-        case 3: return .state
-        
-        case 4: return .html(selected: try FfiConverterBool.read(from: &buf)
+        case 3: return .node(key: try FfiConverterTypeNodeKey.read(from: &buf)
         )
         
-        case 5: return .selectedMarkdown(flavor: try FfiConverterTypeFfiMarkdownFlavor.read(from: &buf)
+        case 4: return .state
+        
+        case 5: return .savedState
+        
+        case 6: return .html(selected: try FfiConverterBool.read(from: &buf)
         )
         
-        case 6: return .clipboard
-        
-        case 7: return .find(pattern: try FfiConverterString.read(from: &buf), ignoreCase: try FfiConverterBool.read(from: &buf)
+        case 7: return .selectedMarkdown(flavor: try FfiConverterTypeFfiMarkdownFlavor.read(from: &buf)
         )
         
-        case 8: return .wordCount
+        case 8: return .clipboard
         
-        case 9: return .nodesOfType(name: try FfiConverterString.read(from: &buf)
+        case 9: return .find(pattern: try FfiConverterString.read(from: &buf), ignoreCase: try FfiConverterBool.read(from: &buf)
         )
         
-        case 10: return .nodeById(id: try FfiConverterString.read(from: &buf)
+        case 10: return .wordCount
+        
+        case 11: return .nodesOfType(name: try FfiConverterString.read(from: &buf)
         )
         
-        case 11: return .typeTable
+        case 12: return .nodeById(id: try FfiConverterString.read(from: &buf)
+        )
         
-        case 12: return .listenerTable
+        case 13: return .typeTable
         
-        case 13: return .selectionCursors
+        case 14: return .listenerTable
+        
+        case 15: return .selectionCursors
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -8133,59 +8365,68 @@ public struct FfiConverterTypeFfiQuery: FfiConverterRustBuffer {
             writeInt(&buf, Int32(1))
         
         
-        case let .node(key):
+        case let .shouldInsertText(text):
             writeInt(&buf, Int32(2))
+            FfiConverterString.write(text, into: &buf)
+            
+        
+        case let .node(key):
+            writeInt(&buf, Int32(3))
             FfiConverterTypeNodeKey.write(key, into: &buf)
             
         
         case .state:
-            writeInt(&buf, Int32(3))
+            writeInt(&buf, Int32(4))
+        
+        
+        case .savedState:
+            writeInt(&buf, Int32(5))
         
         
         case let .html(selected):
-            writeInt(&buf, Int32(4))
+            writeInt(&buf, Int32(6))
             FfiConverterBool.write(selected, into: &buf)
             
         
         case let .selectedMarkdown(flavor):
-            writeInt(&buf, Int32(5))
+            writeInt(&buf, Int32(7))
             FfiConverterTypeFfiMarkdownFlavor.write(flavor, into: &buf)
             
         
         case .clipboard:
-            writeInt(&buf, Int32(6))
+            writeInt(&buf, Int32(8))
         
         
         case let .find(pattern,ignoreCase):
-            writeInt(&buf, Int32(7))
+            writeInt(&buf, Int32(9))
             FfiConverterString.write(pattern, into: &buf)
             FfiConverterBool.write(ignoreCase, into: &buf)
             
         
         case .wordCount:
-            writeInt(&buf, Int32(8))
+            writeInt(&buf, Int32(10))
         
         
         case let .nodesOfType(name):
-            writeInt(&buf, Int32(9))
+            writeInt(&buf, Int32(11))
             FfiConverterString.write(name, into: &buf)
             
         
         case let .nodeById(id):
-            writeInt(&buf, Int32(10))
+            writeInt(&buf, Int32(12))
             FfiConverterString.write(id, into: &buf)
             
         
         case .typeTable:
-            writeInt(&buf, Int32(11))
+            writeInt(&buf, Int32(13))
         
         
         case .listenerTable:
-            writeInt(&buf, Int32(12))
+            writeInt(&buf, Int32(14))
         
         
         case .selectionCursors:
-            writeInt(&buf, Int32(13))
+            writeInt(&buf, Int32(15))
         
         }
     }
@@ -8215,12 +8456,31 @@ public func FfiConverterTypeFfiQuery_lower(_ value: FfiQuery) -> RustBuffer {
 public enum FfiQueryReply: Equatable, Hashable {
     
     /**
+     * Model insertion policy decision.
+     */
+    case boolean(
+        /**
+         * Whether the host must admit an insertion command.
+         */value: Bool
+    )
+    /**
+     * Application projection as typed JSON values.
+     */
+    case value(
+        /**
+         * Projected data.
+         */value: JsonValue
+    )
+    /**
      * Full keyed view patch from an empty renderer.
      */
     case viewDiff(
         /**
          * Structured native patch.
-         */diff: Diff
+         */diff: Diff, 
+        /**
+         * Current selection for a newly attached native view.
+         */selection: ViewSelection
     )
     /**
      * UTF-8 text export.
@@ -8321,34 +8581,40 @@ public struct FfiConverterTypeFfiQueryReply: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
         
-        case 1: return .viewDiff(diff: try FfiConverterTypeDiff.read(from: &buf)
+        case 1: return .boolean(value: try FfiConverterBool.read(from: &buf)
         )
         
-        case 2: return .text(text: try FfiConverterString.read(from: &buf)
+        case 2: return .value(value: try FfiConverterTypeJsonValue.read(from: &buf)
         )
         
-        case 3: return .nodes(keys: try FfiConverterSequenceTypeNodeKey.read(from: &buf), nodes: try FfiConverterSequenceTypeSerializedNode.read(from: &buf)
+        case 3: return .viewDiff(diff: try FfiConverterTypeDiff.read(from: &buf), selection: try FfiConverterTypeViewSelection.read(from: &buf)
         )
         
-        case 4: return .state(root: try FfiConverterTypeSerializedNode.read(from: &buf)
+        case 4: return .text(text: try FfiConverterString.read(from: &buf)
         )
         
-        case 5: return .count(count: try FfiConverterUInt64.read(from: &buf)
+        case 5: return .nodes(keys: try FfiConverterSequenceTypeNodeKey.read(from: &buf), nodes: try FfiConverterSequenceTypeSerializedNode.read(from: &buf)
         )
         
-        case 6: return .matches(points: try FfiConverterSequenceTypePoint.read(from: &buf)
+        case 6: return .state(root: try FfiConverterTypeSerializedNode.read(from: &buf)
         )
         
-        case 7: return .clipboard(entries: try FfiConverterSequenceTypeFfiClipboardEntry.read(from: &buf)
+        case 7: return .count(count: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 8: return .types(rows: try FfiConverterSequenceTypeFfiTypeRow.read(from: &buf)
+        case 8: return .matches(points: try FfiConverterSequenceTypePoint.read(from: &buf)
         )
         
-        case 9: return .listeners(rows: try FfiConverterSequenceTypeFfiListenerRow.read(from: &buf)
+        case 9: return .clipboard(entries: try FfiConverterSequenceTypeFfiClipboardEntry.read(from: &buf)
         )
         
-        case 10: return .cursors(anchor: try FfiConverterOptionTypeNativeCursor.read(from: &buf), focus: try FfiConverterOptionTypeNativeCursor.read(from: &buf)
+        case 10: return .types(rows: try FfiConverterSequenceTypeFfiTypeRow.read(from: &buf)
+        )
+        
+        case 11: return .listeners(rows: try FfiConverterSequenceTypeFfiListenerRow.read(from: &buf)
+        )
+        
+        case 12: return .cursors(anchor: try FfiConverterOptionTypeNativeCursor.read(from: &buf), focus: try FfiConverterOptionTypeNativeCursor.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -8359,54 +8625,65 @@ public struct FfiConverterTypeFfiQueryReply: FfiConverterRustBuffer {
         switch value {
         
         
-        case let .viewDiff(diff):
+        case let .boolean(value):
             writeInt(&buf, Int32(1))
+            FfiConverterBool.write(value, into: &buf)
+            
+        
+        case let .value(value):
+            writeInt(&buf, Int32(2))
+            FfiConverterTypeJsonValue.write(value, into: &buf)
+            
+        
+        case let .viewDiff(diff,selection):
+            writeInt(&buf, Int32(3))
             FfiConverterTypeDiff.write(diff, into: &buf)
+            FfiConverterTypeViewSelection.write(selection, into: &buf)
             
         
         case let .text(text):
-            writeInt(&buf, Int32(2))
+            writeInt(&buf, Int32(4))
             FfiConverterString.write(text, into: &buf)
             
         
         case let .nodes(keys,nodes):
-            writeInt(&buf, Int32(3))
+            writeInt(&buf, Int32(5))
             FfiConverterSequenceTypeNodeKey.write(keys, into: &buf)
             FfiConverterSequenceTypeSerializedNode.write(nodes, into: &buf)
             
         
         case let .state(root):
-            writeInt(&buf, Int32(4))
+            writeInt(&buf, Int32(6))
             FfiConverterTypeSerializedNode.write(root, into: &buf)
             
         
         case let .count(count):
-            writeInt(&buf, Int32(5))
+            writeInt(&buf, Int32(7))
             FfiConverterUInt64.write(count, into: &buf)
             
         
         case let .matches(points):
-            writeInt(&buf, Int32(6))
+            writeInt(&buf, Int32(8))
             FfiConverterSequenceTypePoint.write(points, into: &buf)
             
         
         case let .clipboard(entries):
-            writeInt(&buf, Int32(7))
+            writeInt(&buf, Int32(9))
             FfiConverterSequenceTypeFfiClipboardEntry.write(entries, into: &buf)
             
         
         case let .types(rows):
-            writeInt(&buf, Int32(8))
+            writeInt(&buf, Int32(10))
             FfiConverterSequenceTypeFfiTypeRow.write(rows, into: &buf)
             
         
         case let .listeners(rows):
-            writeInt(&buf, Int32(9))
+            writeInt(&buf, Int32(11))
             FfiConverterSequenceTypeFfiListenerRow.write(rows, into: &buf)
             
         
         case let .cursors(anchor,focus):
-            writeInt(&buf, Int32(10))
+            writeInt(&buf, Int32(12))
             FfiConverterOptionTypeNativeCursor.write(anchor, into: &buf)
             FfiConverterOptionTypeNativeCursor.write(focus, into: &buf)
             
@@ -9366,7 +9643,10 @@ public enum FfiViewEffect: Equatable, Hashable {
     case pluginEvent(
         /**
          * Stable event name.
-         */name: String
+         */name: String, 
+        /**
+         * Typed application payload for host-owned menus, media and interactions.
+         */payload: JsonValue?
     )
     /**
      * A follow-up failed after earlier commits already published.
@@ -9504,7 +9784,7 @@ public struct FfiConverterTypeFfiViewEffect: FfiConverterRustBuffer {
         case 11: return .scheduleRemoveEmptyText(key: try FfiConverterTypeNodeKey.read(from: &buf), delayMs: try FfiConverterUInt32.read(from: &buf)
         )
         
-        case 12: return .pluginEvent(name: try FfiConverterString.read(from: &buf)
+        case 12: return .pluginEvent(name: try FfiConverterString.read(from: &buf), payload: try FfiConverterOptionTypeJsonValue.read(from: &buf)
         )
         
         case 13: return .followUpFailed(plugin: try FfiConverterString.read(from: &buf), kind: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
@@ -9600,9 +9880,10 @@ public struct FfiConverterTypeFfiViewEffect: FfiConverterRustBuffer {
             FfiConverterUInt32.write(delayMs, into: &buf)
             
         
-        case let .pluginEvent(name):
+        case let .pluginEvent(name,payload):
             writeInt(&buf, Int32(12))
             FfiConverterString.write(name, into: &buf)
+            FfiConverterOptionTypeJsonValue.write(payload, into: &buf)
             
         
         case let .followUpFailed(plugin,kind,message):
@@ -12613,6 +12894,30 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeFfiApplicationConfig: FfiConverterRustBuffer {
+    typealias SwiftType = FfiApplicationConfig?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeFfiApplicationConfig.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeFfiApplicationConfig.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeFfiTypeFlags: FfiConverterRustBuffer {
     typealias SwiftType = FfiTypeFlags?
 
@@ -12797,6 +13102,30 @@ fileprivate struct FfiConverterOptionTypeDocValue: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeDocValue.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeJsonValue: FfiConverterRustBuffer {
+    typealias SwiftType = JsonValue?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeJsonValue.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeJsonValue.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -14987,6 +15316,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_document_session_ffi_checksum_method_nativedocsession_read() != 25813) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_document_session_ffi_checksum_method_nativeeditorsession_application_command() != 52225) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_document_session_ffi_checksum_method_nativeeditorsession_application_query() != 8084) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_document_session_ffi_checksum_method_nativeeditorsession_handle() != 52845) {

@@ -679,6 +679,10 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_document_session_ffi_checksum_method_nativedocsession_read(
     ): Int
+    external fun uniffi_document_session_ffi_checksum_method_nativeeditorsession_application_command(
+    ): Int
+    external fun uniffi_document_session_ffi_checksum_method_nativeeditorsession_application_query(
+    ): Int
     external fun uniffi_document_session_ffi_checksum_method_nativeeditorsession_handle(
     ): Int
     external fun uniffi_document_session_ffi_checksum_method_nativeeditorsession_markdown(
@@ -727,6 +731,10 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_document_session_ffi_fn_constructor_nativeeditorsession_new(`configValue`: RustBuffer.ByValue,`storePath`: RustBuffer.ByValue,`now`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
+    external fun uniffi_document_session_ffi_fn_method_nativeeditorsession_application_command(`ptr`: Long,`now`: RustBuffer.ByValue,`name`: RustBuffer.ByValue,`payload`: RustBuffer.ByValue,`generation`: Int,`selection`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_document_session_ffi_fn_method_nativeeditorsession_application_query(`ptr`: Long,`name`: RustBuffer.ByValue,`payload`: RustBuffer.ByValue,`generation`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_document_session_ffi_fn_method_nativeeditorsession_handle(`ptr`: Long,`now`: RustBuffer.ByValue,`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_document_session_ffi_fn_method_nativeeditorsession_markdown(`ptr`: Long,`flavor`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -858,6 +866,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_document_session_ffi_checksum_method_nativedocsession_read() and 0xFFFF) != 25813) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_document_session_ffi_checksum_method_nativeeditorsession_application_command() and 0xFFFF) != 52225) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_document_session_ffi_checksum_method_nativeeditorsession_application_query() and 0xFFFF) != 8084) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_document_session_ffi_checksum_method_nativeeditorsession_handle() and 0xFFFF) != 52845) {
@@ -1689,6 +1703,16 @@ public object FfiConverterTypeNativeDocSession: FfiConverter<NativeDocSession, L
 public interface NativeEditorSessionInterface {
     
     /**
+     * Admit a command from the shared application command catalog.
+     */
+    fun `applicationCommand`(`now`: FfiNow, `name`: kotlin.String, `payload`: JsonValue, `generation`: kotlin.UInt, `selection`: ViewSelection): FfiOutput
+    
+    /**
+     * Query the shared application catalog without changing model state.
+     */
+    fun `applicationQuery`(`name`: kotlin.String, `payload`: JsonValue, `generation`: kotlin.UInt): JsonValue
+    
+    /**
      * Admit exactly one input and return every owned host effect. Never performs I/O.
      */
     fun `handle`(`now`: FfiNow, `input`: FfiInput): FfiOutput
@@ -1828,6 +1852,48 @@ open class NativeEditorSession: Disposable, AutoCloseable, NativeEditorSessionIn
             UniffiLib.uniffi_document_session_ffi_fn_clone_nativeeditorsession(handle, status)
         }
     }
+
+    
+    /**
+     * Admit a command from the shared application command catalog.
+     */
+    @Throws(FfiSessionException::class)override fun `applicationCommand`(`now`: FfiNow, `name`: kotlin.String, `payload`: JsonValue, `generation`: kotlin.UInt, `selection`: ViewSelection): FfiOutput {
+            return FfiConverterTypeFfiOutput.lift(
+    callWithHandle {
+    uniffiRustCallWithError(FfiSessionException) { _status ->
+    UniffiLib.uniffi_document_session_ffi_fn_method_nativeeditorsession_application_command(
+        it,
+        
+        FfiConverterTypeFfiNow.lower(`now`),
+        FfiConverterString.lower(`name`),
+        FfiConverterTypeJsonValue.lower(`payload`),
+        FfiConverterUInt.lower(`generation`),
+        FfiConverterTypeViewSelection.lower(`selection`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Query the shared application catalog without changing model state.
+     */
+    @Throws(FfiSessionException::class)override fun `applicationQuery`(`name`: kotlin.String, `payload`: JsonValue, `generation`: kotlin.UInt): JsonValue {
+            return FfiConverterTypeJsonValue.lift(
+    callWithHandle {
+    uniffiRustCallWithError(FfiSessionException) { _status ->
+    UniffiLib.uniffi_document_session_ffi_fn_method_nativeeditorsession_application_query(
+        it,
+        
+        FfiConverterString.lower(`name`),
+        FfiConverterTypeJsonValue.lower(`payload`),
+        FfiConverterUInt.lower(`generation`),_status)
+}
+    }
+    )
+    }
+    
 
     
     /**
@@ -2258,6 +2324,53 @@ public object FfiConverterTypeDiff: FfiConverterRustBuffer<Diff> {
             FfiConverterBoolean.write(value.`fullReconcile`, buf)
             FfiConverterOptionalTypeNodeKey.write(value.`viewTextMatches`, buf)
             FfiConverterSequenceTypeDiffOp.write(value.`ops`, buf)
+    }
+}
+
+
+
+/**
+ * Application policy selected by the actual editing surface.
+ */
+data class FfiApplicationConfig (
+    /**
+     * Registry and behavior preset; shared with browser surfaces.
+     */
+    var `editorType`: FfiEditorType
+    , 
+    /**
+     * Optional app hostname for external document-link exports.
+     */
+    var `hostname`: kotlin.String?
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiApplicationConfig: FfiConverterRustBuffer<FfiApplicationConfig> {
+    override fun read(buf: ByteBuffer): FfiApplicationConfig {
+        return FfiApplicationConfig(
+            FfiConverterTypeFfiEditorType.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiApplicationConfig) = (
+            FfiConverterTypeFfiEditorType.allocationSize(value.`editorType`) +
+            FfiConverterOptionalString.allocationSize(value.`hostname`)
+    )
+
+    override fun write(value: FfiApplicationConfig, buf: ByteBuffer) {
+            FfiConverterTypeFfiEditorType.write(value.`editorType`, buf)
+            FfiConverterOptionalString.write(value.`hostname`, buf)
     }
 }
 
@@ -3142,6 +3255,11 @@ data class FfiSessionConfig (
     var `headless`: kotlin.Boolean
     , 
     /**
+     * Application surface registry; absent selects portable core and rich nodes.
+     */
+    var `application`: FfiApplicationConfig?
+    , 
+    /**
      * Generic containers whose changes the host observes.
      */
     var `observed`: List<ContainerPath>
@@ -3166,6 +3284,7 @@ public object FfiConverterTypeFfiSessionConfig: FfiConverterRustBuffer<FfiSessio
             FfiConverterTypePeerRange.read(buf),
             FfiConverterTypeViewOs.read(buf),
             FfiConverterBoolean.read(buf),
+            FfiConverterOptionalTypeFfiApplicationConfig.read(buf),
             FfiConverterSequenceTypeContainerPath.read(buf),
         )
     }
@@ -3176,6 +3295,7 @@ public object FfiConverterTypeFfiSessionConfig: FfiConverterRustBuffer<FfiSessio
             FfiConverterTypePeerRange.allocationSize(value.`peerRange`) +
             FfiConverterTypeViewOs.allocationSize(value.`os`) +
             FfiConverterBoolean.allocationSize(value.`headless`) +
+            FfiConverterOptionalTypeFfiApplicationConfig.allocationSize(value.`application`) +
             FfiConverterSequenceTypeContainerPath.allocationSize(value.`observed`)
     )
 
@@ -3185,6 +3305,7 @@ public object FfiConverterTypeFfiSessionConfig: FfiConverterRustBuffer<FfiSessio
             FfiConverterTypePeerRange.write(value.`peerRange`, buf)
             FfiConverterTypeViewOs.write(value.`os`, buf)
             FfiConverterBoolean.write(value.`headless`, buf)
+            FfiConverterOptionalTypeFfiApplicationConfig.write(value.`application`, buf)
             FfiConverterSequenceTypeContainerPath.write(value.`observed`, buf)
     }
 }
@@ -7150,6 +7271,44 @@ public object FfiConverterTypeFfiDocEvent : FfiConverterRustBuffer<FfiDocEvent>{
 
 
 
+
+enum class FfiEditorType {
+    
+    PLAIN_TEXT,
+    TITLE,
+    MARKDOWN,
+    MARKDOWN_SYNC,
+    CHAT,
+    CALENDAR;
+
+    
+
+
+    companion object
+}
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiEditorType: FfiConverterRustBuffer<FfiEditorType> {
+    override fun read(buf: ByteBuffer) = try {
+        FfiEditorType.values()[buf.getInt() - 1]
+    } catch (e: IndexOutOfBoundsException) {
+        throw RuntimeException("invalid enum value, something is very wrong!!", e)
+    }
+
+    override fun allocationSize(value: FfiEditorType) = 4UL
+
+    override fun write(value: FfiEditorType, buf: ByteBuffer) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+
+
+
+
 /**
  * One admitted view, document or host input.
  */
@@ -8514,6 +8673,21 @@ sealed class FfiQuery {
     
     
     /**
+     * Whether native insertion must use a model command rather than a text splice.
+     */
+    data class ShouldInsertText(
+        /**
+         * Proposed inserted text at the current model selection.
+         */
+        val `text`: kotlin.String) : FfiQuery()
+        
+    {
+        
+
+        companion object
+    }
+    
+    /**
      * Read one node's serialized properties.
      */
     data class Node(
@@ -8532,6 +8706,12 @@ sealed class FfiQuery {
      * Read the editor's complete serialized root.
      */
     object State : FfiQuery()
+    
+    
+    /**
+     * Download projection with regenerated search text and transient nodes removed.
+     */
+    object SavedState : FfiQuery()
     
     
     /**
@@ -8660,31 +8840,35 @@ public object FfiConverterTypeFfiQuery : FfiConverterRustBuffer<FfiQuery>{
     override fun read(buf: ByteBuffer): FfiQuery {
         return when(buf.getInt()) {
             1 -> FfiQuery.ViewDiff
-            2 -> FfiQuery.Node(
+            2 -> FfiQuery.ShouldInsertText(
+                FfiConverterString.read(buf),
+                )
+            3 -> FfiQuery.Node(
                 FfiConverterTypeNodeKey.read(buf),
                 )
-            3 -> FfiQuery.State
-            4 -> FfiQuery.Html(
+            4 -> FfiQuery.State
+            5 -> FfiQuery.SavedState
+            6 -> FfiQuery.Html(
                 FfiConverterBoolean.read(buf),
                 )
-            5 -> FfiQuery.SelectedMarkdown(
+            7 -> FfiQuery.SelectedMarkdown(
                 FfiConverterTypeFfiMarkdownFlavor.read(buf),
                 )
-            6 -> FfiQuery.Clipboard
-            7 -> FfiQuery.Find(
+            8 -> FfiQuery.Clipboard
+            9 -> FfiQuery.Find(
                 FfiConverterString.read(buf),
                 FfiConverterBoolean.read(buf),
                 )
-            8 -> FfiQuery.WordCount
-            9 -> FfiQuery.NodesOfType(
+            10 -> FfiQuery.WordCount
+            11 -> FfiQuery.NodesOfType(
                 FfiConverterString.read(buf),
                 )
-            10 -> FfiQuery.NodeById(
+            12 -> FfiQuery.NodeById(
                 FfiConverterString.read(buf),
                 )
-            11 -> FfiQuery.TypeTable
-            12 -> FfiQuery.ListenerTable
-            13 -> FfiQuery.SelectionCursors
+            13 -> FfiQuery.TypeTable
+            14 -> FfiQuery.ListenerTable
+            15 -> FfiQuery.SelectionCursors
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
     }
@@ -8696,6 +8880,13 @@ public object FfiConverterTypeFfiQuery : FfiConverterRustBuffer<FfiQuery>{
                 4UL
             )
         }
+        is FfiQuery.ShouldInsertText -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterString.allocationSize(value.`text`)
+            )
+        }
         is FfiQuery.Node -> {
             // Add the size for the Int that specifies the variant plus the size needed for all fields
             (
@@ -8704,6 +8895,12 @@ public object FfiConverterTypeFfiQuery : FfiConverterRustBuffer<FfiQuery>{
             )
         }
         is FfiQuery.State -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+            )
+        }
+        is FfiQuery.SavedState -> {
             // Add the size for the Int that specifies the variant plus the size needed for all fields
             (
                 4UL
@@ -8783,59 +8980,68 @@ public object FfiConverterTypeFfiQuery : FfiConverterRustBuffer<FfiQuery>{
                 buf.putInt(1)
                 Unit
             }
-            is FfiQuery.Node -> {
+            is FfiQuery.ShouldInsertText -> {
                 buf.putInt(2)
+                FfiConverterString.write(value.`text`, buf)
+                Unit
+            }
+            is FfiQuery.Node -> {
+                buf.putInt(3)
                 FfiConverterTypeNodeKey.write(value.`key`, buf)
                 Unit
             }
             is FfiQuery.State -> {
-                buf.putInt(3)
+                buf.putInt(4)
+                Unit
+            }
+            is FfiQuery.SavedState -> {
+                buf.putInt(5)
                 Unit
             }
             is FfiQuery.Html -> {
-                buf.putInt(4)
+                buf.putInt(6)
                 FfiConverterBoolean.write(value.`selected`, buf)
                 Unit
             }
             is FfiQuery.SelectedMarkdown -> {
-                buf.putInt(5)
+                buf.putInt(7)
                 FfiConverterTypeFfiMarkdownFlavor.write(value.`flavor`, buf)
                 Unit
             }
             is FfiQuery.Clipboard -> {
-                buf.putInt(6)
+                buf.putInt(8)
                 Unit
             }
             is FfiQuery.Find -> {
-                buf.putInt(7)
+                buf.putInt(9)
                 FfiConverterString.write(value.`pattern`, buf)
                 FfiConverterBoolean.write(value.`ignoreCase`, buf)
                 Unit
             }
             is FfiQuery.WordCount -> {
-                buf.putInt(8)
+                buf.putInt(10)
                 Unit
             }
             is FfiQuery.NodesOfType -> {
-                buf.putInt(9)
+                buf.putInt(11)
                 FfiConverterString.write(value.`name`, buf)
                 Unit
             }
             is FfiQuery.NodeById -> {
-                buf.putInt(10)
+                buf.putInt(12)
                 FfiConverterString.write(value.`id`, buf)
                 Unit
             }
             is FfiQuery.TypeTable -> {
-                buf.putInt(11)
+                buf.putInt(13)
                 Unit
             }
             is FfiQuery.ListenerTable -> {
-                buf.putInt(12)
+                buf.putInt(14)
                 Unit
             }
             is FfiQuery.SelectionCursors -> {
-                buf.putInt(13)
+                buf.putInt(15)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
@@ -8852,13 +9058,47 @@ public object FfiConverterTypeFfiQuery : FfiConverterRustBuffer<FfiQuery>{
 sealed class FfiQueryReply {
     
     /**
+     * Model insertion policy decision.
+     */
+    data class Boolean(
+        /**
+         * Whether the host must admit an insertion command.
+         */
+        val `value`: kotlin.Boolean) : FfiQueryReply()
+        
+    {
+        
+
+        companion object
+    }
+    
+    /**
+     * Application projection as typed JSON values.
+     */
+    data class Value(
+        /**
+         * Projected data.
+         */
+        val `value`: com.macro.documentsession.JsonValue) : FfiQueryReply()
+        
+    {
+        
+
+        companion object
+    }
+    
+    /**
      * Full keyed view patch from an empty renderer.
      */
     data class ViewDiff(
         /**
          * Structured native patch.
          */
-        val `diff`: com.macro.documentsession.Diff) : FfiQueryReply()
+        val `diff`: com.macro.documentsession.Diff, 
+        /**
+         * Current selection for a newly attached native view.
+         */
+        val `selection`: com.macro.documentsession.ViewSelection) : FfiQueryReply()
         
     {
         
@@ -9025,35 +9265,42 @@ sealed class FfiQueryReply {
 public object FfiConverterTypeFfiQueryReply : FfiConverterRustBuffer<FfiQueryReply>{
     override fun read(buf: ByteBuffer): FfiQueryReply {
         return when(buf.getInt()) {
-            1 -> FfiQueryReply.ViewDiff(
-                FfiConverterTypeDiff.read(buf),
+            1 -> FfiQueryReply.Boolean(
+                FfiConverterBoolean.read(buf),
                 )
-            2 -> FfiQueryReply.Text(
+            2 -> FfiQueryReply.Value(
+                FfiConverterTypeJsonValue.read(buf),
+                )
+            3 -> FfiQueryReply.ViewDiff(
+                FfiConverterTypeDiff.read(buf),
+                FfiConverterTypeViewSelection.read(buf),
+                )
+            4 -> FfiQueryReply.Text(
                 FfiConverterString.read(buf),
                 )
-            3 -> FfiQueryReply.Nodes(
+            5 -> FfiQueryReply.Nodes(
                 FfiConverterSequenceTypeNodeKey.read(buf),
                 FfiConverterSequenceTypeSerializedNode.read(buf),
                 )
-            4 -> FfiQueryReply.State(
+            6 -> FfiQueryReply.State(
                 FfiConverterTypeSerializedNode.read(buf),
                 )
-            5 -> FfiQueryReply.Count(
+            7 -> FfiQueryReply.Count(
                 FfiConverterULong.read(buf),
                 )
-            6 -> FfiQueryReply.Matches(
+            8 -> FfiQueryReply.Matches(
                 FfiConverterSequenceTypePoint.read(buf),
                 )
-            7 -> FfiQueryReply.Clipboard(
+            9 -> FfiQueryReply.Clipboard(
                 FfiConverterSequenceTypeFfiClipboardEntry.read(buf),
                 )
-            8 -> FfiQueryReply.Types(
+            10 -> FfiQueryReply.Types(
                 FfiConverterSequenceTypeFfiTypeRow.read(buf),
                 )
-            9 -> FfiQueryReply.Listeners(
+            11 -> FfiQueryReply.Listeners(
                 FfiConverterSequenceTypeFfiListenerRow.read(buf),
                 )
-            10 -> FfiQueryReply.Cursors(
+            12 -> FfiQueryReply.Cursors(
                 FfiConverterOptionalTypeNativeCursor.read(buf),
                 FfiConverterOptionalTypeNativeCursor.read(buf),
                 )
@@ -9062,11 +9309,26 @@ public object FfiConverterTypeFfiQueryReply : FfiConverterRustBuffer<FfiQueryRep
     }
 
     override fun allocationSize(value: FfiQueryReply): ULong = when(value) {
+        is FfiQueryReply.Boolean -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterBoolean.allocationSize(value.`value`)
+            )
+        }
+        is FfiQueryReply.Value -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeJsonValue.allocationSize(value.`value`)
+            )
+        }
         is FfiQueryReply.ViewDiff -> {
             // Add the size for the Int that specifies the variant plus the size needed for all fields
             (
                 4UL
                 + FfiConverterTypeDiff.allocationSize(value.`diff`)
+                + FfiConverterTypeViewSelection.allocationSize(value.`selection`)
             )
         }
         is FfiQueryReply.Text -> {
@@ -9138,54 +9400,65 @@ public object FfiConverterTypeFfiQueryReply : FfiConverterRustBuffer<FfiQueryRep
 
     override fun write(value: FfiQueryReply, buf: ByteBuffer) {
         when(value) {
-            is FfiQueryReply.ViewDiff -> {
+            is FfiQueryReply.Boolean -> {
                 buf.putInt(1)
+                FfiConverterBoolean.write(value.`value`, buf)
+                Unit
+            }
+            is FfiQueryReply.Value -> {
+                buf.putInt(2)
+                FfiConverterTypeJsonValue.write(value.`value`, buf)
+                Unit
+            }
+            is FfiQueryReply.ViewDiff -> {
+                buf.putInt(3)
                 FfiConverterTypeDiff.write(value.`diff`, buf)
+                FfiConverterTypeViewSelection.write(value.`selection`, buf)
                 Unit
             }
             is FfiQueryReply.Text -> {
-                buf.putInt(2)
+                buf.putInt(4)
                 FfiConverterString.write(value.`text`, buf)
                 Unit
             }
             is FfiQueryReply.Nodes -> {
-                buf.putInt(3)
+                buf.putInt(5)
                 FfiConverterSequenceTypeNodeKey.write(value.`keys`, buf)
                 FfiConverterSequenceTypeSerializedNode.write(value.`nodes`, buf)
                 Unit
             }
             is FfiQueryReply.State -> {
-                buf.putInt(4)
+                buf.putInt(6)
                 FfiConverterTypeSerializedNode.write(value.`root`, buf)
                 Unit
             }
             is FfiQueryReply.Count -> {
-                buf.putInt(5)
+                buf.putInt(7)
                 FfiConverterULong.write(value.`count`, buf)
                 Unit
             }
             is FfiQueryReply.Matches -> {
-                buf.putInt(6)
+                buf.putInt(8)
                 FfiConverterSequenceTypePoint.write(value.`points`, buf)
                 Unit
             }
             is FfiQueryReply.Clipboard -> {
-                buf.putInt(7)
+                buf.putInt(9)
                 FfiConverterSequenceTypeFfiClipboardEntry.write(value.`entries`, buf)
                 Unit
             }
             is FfiQueryReply.Types -> {
-                buf.putInt(8)
+                buf.putInt(10)
                 FfiConverterSequenceTypeFfiTypeRow.write(value.`rows`, buf)
                 Unit
             }
             is FfiQueryReply.Listeners -> {
-                buf.putInt(9)
+                buf.putInt(11)
                 FfiConverterSequenceTypeFfiListenerRow.write(value.`rows`, buf)
                 Unit
             }
             is FfiQueryReply.Cursors -> {
-                buf.putInt(10)
+                buf.putInt(12)
                 FfiConverterOptionalTypeNativeCursor.write(value.`anchor`, buf)
                 FfiConverterOptionalTypeNativeCursor.write(value.`focus`, buf)
                 Unit
@@ -10513,7 +10786,11 @@ sealed class FfiViewEffect {
         /**
          * Stable event name.
          */
-        val `name`: kotlin.String) : FfiViewEffect()
+        val `name`: kotlin.String, 
+        /**
+         * Typed application payload for host-owned menus, media and interactions.
+         */
+        val `payload`: com.macro.documentsession.JsonValue?) : FfiViewEffect()
         
     {
         
@@ -10723,6 +11000,7 @@ public object FfiConverterTypeFfiViewEffect : FfiConverterRustBuffer<FfiViewEffe
                 )
             12 -> FfiViewEffect.PluginEvent(
                 FfiConverterString.read(buf),
+                FfiConverterOptionalTypeJsonValue.read(buf),
                 )
             13 -> FfiViewEffect.FollowUpFailed(
                 FfiConverterString.read(buf),
@@ -10843,6 +11121,7 @@ public object FfiConverterTypeFfiViewEffect : FfiConverterRustBuffer<FfiViewEffe
             (
                 4UL
                 + FfiConverterString.allocationSize(value.`name`)
+                + FfiConverterOptionalTypeJsonValue.allocationSize(value.`payload`)
             )
         }
         is FfiViewEffect.FollowUpFailed -> {
@@ -10980,6 +11259,7 @@ public object FfiConverterTypeFfiViewEffect : FfiConverterRustBuffer<FfiViewEffe
             is FfiViewEffect.PluginEvent -> {
                 buf.putInt(12)
                 FfiConverterString.write(value.`name`, buf)
+                FfiConverterOptionalTypeJsonValue.write(value.`payload`, buf)
                 Unit
             }
             is FfiViewEffect.FollowUpFailed -> {
@@ -13570,6 +13850,38 @@ public object FfiConverterOptionalString: FfiConverterRustBuffer<kotlin.String?>
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeFfiApplicationConfig: FfiConverterRustBuffer<FfiApplicationConfig?> {
+    override fun read(buf: ByteBuffer): FfiApplicationConfig? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeFfiApplicationConfig.read(buf)
+    }
+
+    override fun allocationSize(value: FfiApplicationConfig?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeFfiApplicationConfig.allocationSize(value)
+        }
+    }
+
+    override fun write(value: FfiApplicationConfig?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeFfiApplicationConfig.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeFfiTypeFlags: FfiConverterRustBuffer<FfiTypeFlags?> {
     override fun read(buf: ByteBuffer): FfiTypeFlags? {
         if (buf.get().toInt() == 0) {
@@ -13816,6 +14128,38 @@ public object FfiConverterOptionalTypeDocValue: FfiConverterRustBuffer<DocValue?
         } else {
             buf.put(1)
             FfiConverterTypeDocValue.write(value, buf)
+        }
+    }
+}
+
+
+
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeJsonValue: FfiConverterRustBuffer<JsonValue?> {
+    override fun read(buf: ByteBuffer): JsonValue? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeJsonValue.read(buf)
+    }
+
+    override fun allocationSize(value: JsonValue?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeJsonValue.allocationSize(value)
+        }
+    }
+
+    override fun write(value: JsonValue?, buf: ByteBuffer) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeJsonValue.write(value, buf)
         }
     }
 }
