@@ -640,6 +640,7 @@ export class EditorView implements ViewSink {
     const last = this.node(node.children[node.children.length - 1]);
     const needsBreak =
       node.kind !== 'root' &&
+      !this.flags(node)?.isInline &&
       node.type !== 'table' &&
       node.type !== 'tablerow' &&
       (!last || last.kind === 'linebreak');
