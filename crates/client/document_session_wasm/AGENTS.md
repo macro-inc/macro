@@ -162,3 +162,11 @@ web artifact; it includes owned wire types and the compatibility runtime. Keep
 native and compat glue, wasm and generated declarations together in distinct
 outputs; a native declaration must not grow optional compatibility stubs.
 
+The first compact batch consumer synchronously flushes a single pending update,
+validates Begin/Continue authority, and acknowledges successful prefix plus caught
+failure effects before allowing a retry. It does not yet implement compact
+admission, reserved construction or capture leases; reject those envelopes before
+execution. Keep noop false while the pending update remains open. Normalize under
+a scoped metadata frame so clone callbacks can inspect owned source facts without
+a mutable Host borrow. Derive removed keys from actual record retirements, including
+collected descendants, rather than treating missing dirty keys as a complete log.

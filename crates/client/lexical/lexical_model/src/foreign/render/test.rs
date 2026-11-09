@@ -361,3 +361,31 @@ fn weak_owner_hash_keys_keep_identity_after_expiry_without_retaining_editors() {
     assert_eq!(owners.len(), 1);
     assert!(owners.contains(&other));
 }
+
+#[test]
+fn removal_facts_include_collected_descendants_across_suspension() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let ((paragraph, text), _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph {})?;
+        let text = tx.create_text("removed")?;
+        let survivor = tx.create(Paragraph {})?;
+        tx.append(paragraph, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key(), survivor.key()])?;
+        Ok((paragraph.key(), text.key()))
+    })?;
+    let mut tx = editor.transaction();
+    tx.remove(paragraph, false)?;
+    tx.flush()?;
+    let mut removed: Vec<_> = tx.foreign_removed_keys().collect();
+    removed.sort_unstable();
+    let mut expected = vec![paragraph, text];
+    expected.sort_unstable();
+    assert_eq!(removed, expected);
+    let pending = tx.suspend();
+    let tx = editor.resume(pending)?;
+    assert_eq!(tx.foreign_removed_keys().count(), 2);
+    assert!(!tx.foreign_removed_keys().any(|key| key == NodeKey::ROOT));
+    Ok(())
+}

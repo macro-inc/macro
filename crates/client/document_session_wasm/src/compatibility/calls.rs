@@ -3,12 +3,12 @@ use super::*;
 use compat::{CompatOperation as Op, ForeignCallbackValue as Value};
 use lexical_model::*;
 
-struct ReplyScope<'a> {
-    version: u64,
-    update: u32,
-    dirty: &'a [NodeKey],
-    writable: &'a [NodeKey],
-    receiver: Option<NodeKey>,
+pub(super) struct ReplyScope<'a> {
+    pub version: u64,
+    pub update: u32,
+    pub dirty: &'a [NodeKey],
+    pub writable: &'a [NodeKey],
+    pub receiver: Option<NodeKey>,
 }
 pub(super) enum ResultValue {
     WithSelection(Box<ResultValue>, compat::CompatSelectionData),
@@ -96,7 +96,7 @@ impl Host {
         }))
     }
 
-    fn validate_record(
+    pub(super) fn validate_record(
         &self,
         reference: compat::ForeignRecordRef,
     ) -> Result<NodeKey, BoundaryError> {
@@ -270,7 +270,7 @@ impl Host {
             nodes,
         })
     }
-    fn reply(
+    pub(super) fn reply(
         &mut self,
         source: Arc<ForeignReadSnapshot>,
         result: ResultValue,

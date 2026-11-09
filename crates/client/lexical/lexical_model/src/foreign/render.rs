@@ -184,6 +184,14 @@ impl StateRef<'_> {
 }
 
 impl Transaction<'_> {
+    /// Records actually retired by this update, excluding keys currently live.
+    /// Visits only the update's retirement log, including collected descendants.
+    pub fn foreign_removed_keys(&self) -> impl Iterator<Item = NodeKey> + '_ {
+        self.foreign_retired_records
+            .keys()
+            .copied()
+            .filter(|key| !self.pending.nodes.contains_key(key))
+    }
     /// Dirty records in the current update without scanning the document map.
     pub fn foreign_dirty_keys(&self) -> impl Iterator<Item = NodeKey> + '_ {
         self.dirty_leaves
