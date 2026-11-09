@@ -26,16 +26,12 @@ static PROTOCOL: LazyLock<LinkifyIt> = LazyLock::new(|| {
 });
 static FUZZY: LazyLock<LinkifyIt> = LazyLock::new(LinkifyIt::default);
 static COMMON: LazyLock<LinkifyIt> = LazyLock::new(|| {
-    let mut linkifier = LinkifyIt::default();
     let tlds = [
         "app", "biz", "ca", "co", "com", "dev", "edu", "gov", "info", "io", "me", "net", "org",
         "shop", "site", "store", "tv", "uk", "us", "xyz",
     ]
     .map(str::to_owned);
-    linkifier
-        .tlds(&tlds, false)
-        .expect("source common suffix patterns");
-    linkifier
+    LinkifyIt::with_replaced_tlds(Options::default(), &tlds).expect("source common suffix patterns")
 });
 fn encode_uri_segment(segment: &str) -> String {
     let mut encoded = urlencoding::encode(segment).into_owned();
