@@ -45,9 +45,9 @@ On an existing table:
 
 | Statement | What it does | Safe form |
 | --- | --- | --- |
-| `CREATE INDEX` without `CONCURRENTLY` | Blocks writes for the whole build | `CREATE INDEX CONCURRENTLY IF NOT EXISTS` as the only statement of a `-- no-transaction` file |
-| `CREATE UNIQUE INDEX`, `ADD PRIMARY KEY`, `ADD UNIQUE` | Builds an index under an exclusive lock | Build the unique index concurrently, then `ADD CONSTRAINT ... USING INDEX` in a later file |
-| `ADD CONSTRAINT ... CHECK` or `FOREIGN KEY` without `NOT VALID` | Scans the table under the lock; a foreign key locks both tables | Add it `NOT VALID`, then `VALIDATE CONSTRAINT` in a separate file |
+| `CREATE INDEX` without `CONCURRENTLY` | Blocks writes for the whole build | `CREATE INDEX CONCURRENTLY` as the only statement of a `-- no-transaction` file. With `IF NOT EXISTS`, an interrupted build leaves an `INVALID` index that a retry keeps: the file's comment must say to drop it and re-run |
+| `CREATE UNIQUE INDEX`, `ADD PRIMARY KEY`, `ADD UNIQUE` | Builds an index under an exclusive lock | Build the unique index concurrently, then `ADD CONSTRAINT ... USING INDEX` in a later file. A primary key's columns must already be `NOT NULL`, or it scans under the lock |
+| `ADD CONSTRAINT ... CHECK` or `FOREIGN KEY` without `NOT VALID` | Scans the table under the lock; a foreign key blocks writes to both tables | Add it `NOT VALID`, then `VALIDATE CONSTRAINT` in a separate file |
 | `VALIDATE CONSTRAINT` in the same file as the `ALTER TABLE` that added it | The scan runs while the `ALTER`'s exclusive lock is still held | Its own file |
 | `ALTER COLUMN ... SET NOT NULL` | Scans the table under an exclusive lock | Add `CHECK (col IS NOT NULL) NOT VALID`, validate it in a later file, then `SET NOT NULL` |
 | `ADD COLUMN ... NOT NULL` without a default | Fails on a non-empty table, and deployed writers don't set it | Add a default, or add it nullable |
@@ -68,7 +68,10 @@ For the whole file:
   holds exactly one statement, because SQLx sends it as one batch.
 - A new index on a large table also costs every write. Check it isn't already
   covered by an existing index's leading columns (CS-06).
-- A statement on a table this PR creates is fine without any of the above.
+- A statement confined to a table this PR creates is fine without any of the
+  above. A foreign key from a new table still locks the existing table it
+  references against writes until the file ends: keep that file short and give
+  it a `lock_timeout`.
 
 ## 3. Check it against the deployed code
 
@@ -88,9 +91,9 @@ schema back. With the migration applied and the old code still running:
 
 ## 4. Get evidence
 
-- Apply the migration to a local database (`just crates/macro_db_client/migrate_db`,
-  or a scratch database as in `query-review`). It must apply on the production
-  engine version, not only the local one.
+- Apply the migration to a scratch database on the local server, created as in
+  `query-review`, not to the database the app or tests use. It must apply on
+  the production engine version, not only the local one.
 - To see the locks a transactional file takes, run it by hand and look before
   rolling back:
 
@@ -98,12 +101,15 @@ schema back. With the migration applied and the old code still running:
   BEGIN;
   \i crates/macro_db_client/migrations/<file>.sql
   SELECT relation::regclass, mode FROM pg_locks
-  WHERE pid = pg_backend_pid() AND locktype = 'relation' AND mode LIKE '%Exclusive%';
+  WHERE pid = pg_backend_pid() AND locktype = 'relation'
+    AND mode NOT IN ('AccessShareLock', 'RowShareLock', 'RowExclusiveLock');
   ROLLBACK;
   ```
 
-  `AccessExclusiveLock` or `ShareLock` on a large existing table needs one of
-  the safe forms above.
+  `ShareLock`, `ShareRowExclusiveLock`, or `AccessExclusiveLock` on a large
+  existing table blocks its writers (the last one its readers too) and needs
+  one of the safe forms above. `ShareUpdateExclusiveLock` (a concurrent index
+  build, `VALIDATE CONSTRAINT`) does not block reads or writes.
 - Time on an empty local table says nothing about a rewrite or scan. Reason
   from the table's size, or seed it and time the statement.
 
@@ -119,8 +125,8 @@ row for compatibility:
 
 Severity:
 
-- **`block`**: a rewrite, scan, or non-concurrent index build under a lock on
-  a large or unlisted existing table; a backfill of a large table inside the
+- **`block`**: a rewrite, scan, or index build that holds a lock blocking
+  reads or writes on a large or unlisted existing table; a backfill of a large table inside the
   migration; an edited or deleted deployed migration; a change the deployed
   code fails on.
 - **`fix`**: the same on a table known to be small; DDL on an existing table

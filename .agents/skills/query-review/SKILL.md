@@ -58,10 +58,12 @@ the calling query.
    column, a leading-wildcard `LIKE`, an `OR` across columns, a type mismatch.
 4. **What runs once per row?** Every function call, correlated subquery,
    `EXISTS`, and `LATERAL` in `WHERE`, `JOIN`, or the select list. Open each
-   one, estimate one call's cost, and multiply by the rows it runs on. The
-   planner cannot see inside a function: it assumes a fixed small cost and is
-   free to evaluate it before a selective join has removed anything. A check
-   that costs 10 ms is fine on 100 rows and an outage on 40,000.
+   one, estimate one call's cost, and multiply by the rows it runs on. Unless
+   Postgres inlines the function (a single plain `SELECT` expression with no
+   subquery) the planner cannot see inside it: it uses the declared `COST`,
+   small by default, and is free to evaluate it before a selective join has
+   removed anything. A check that costs 10 ms is fine on 100 rows and an
+   outage on 40,000.
 5. **Where is the bound?** A `LIMIT` bounds the result, not the work, when a
    sort, `DISTINCT ON`, `GROUP BY`, or window function has to see every
    candidate first. Say which step bounds the rows processed. An unbounded
