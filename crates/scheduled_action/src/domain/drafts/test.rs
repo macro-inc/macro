@@ -384,8 +384,13 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
         panic!("one session per draft");
     };
     assert_eq!(prepared.visibility, SessionVisibility::Hidden);
-    // The person's own session, never a routine's run.
+    // The person's own session, never a routine's run, billed as their
+    // agent session usage.
     assert_eq!(prepared.source, SessionSource::User);
+    assert_eq!(
+        prepared.metering,
+        agent_session::domain::model::SessionMetering::AgentSession
+    );
     assert_eq!(
         prepared.origin,
         trigger_context::TriggerOrigin::Requested { by: owner() }
@@ -752,6 +757,25 @@ async fn without_code_the_brief_has_no_code_examples() {
     let prompt = sessions.prompts.lock().unwrap()[0].clone();
     assert!(prompt.contains("Code steps can't be used"), "{prompt}");
     assert!(!prompt.contains("<example>"), "{prompt}");
+}
+
+#[tokio::test]
+async fn without_conditions_no_example_trigger_asks_one() {
+    for (conditions, asked) in [(false, false), (true, true)] {
+        let rows = Arc::new(Rows::default());
+        let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
+        let context = DraftContext {
+            conditions,
+            ..context()
+        };
+        drafts(&rows, &sessions)
+            .draft(owner(), routine("every morning sort my inbox"), context)
+            .await
+            .unwrap();
+        let prompt = sessions.prompts.lock().unwrap()[0].clone();
+        assert!(prompt.contains("<example>"), "{prompt}");
+        assert_eq!(prompt.contains("\"condition\":"), asked, "{prompt}");
+    }
 }
 
 #[tokio::test]

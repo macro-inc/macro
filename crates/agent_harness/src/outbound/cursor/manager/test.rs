@@ -81,6 +81,13 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("the manager never previews sessions")
     }
 
+    async fn metering(
+        &self,
+        _id: AgentSessionId,
+    ) -> SessionResult<agent_session::domain::model::SessionMetering> {
+        Ok(agent_session::domain::model::SessionMetering::default())
+    }
+
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {
         Ok(AgentSession {
             origin: Default::default(),

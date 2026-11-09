@@ -19,6 +19,7 @@ pub mod arch;
 pub mod build;
 pub mod cf_tunnel;
 pub mod cli;
+pub mod content_key;
 pub mod db;
 pub mod docker;
 pub mod doctor;
@@ -45,11 +46,15 @@ pub mod seed_env;
 pub mod snapshot;
 pub mod stack;
 pub mod stage;
+pub mod staleness;
 pub mod status;
 pub mod summary;
 pub mod supervisor;
 pub mod tls;
 pub mod validate;
+
+#[cfg(test)]
+mod test_support;
 
 #[cfg(test)]
 mod test;
@@ -257,6 +262,30 @@ pub(crate) fn bring_up(
         }
     }
 
+    // The frontend lane starts first, in the background: wasm packages and the
+    // static bundle are host-side work that needs nothing from the service
+    // build, so on a cold checkout they overlap cargo instead of following it.
+    // The static bundle is joined just before `bring_up_app` creates the proxy
+    // container that mounts it; Vite's dependencies before this returns. The
+    // bundle is a snapshot: rebuilding service binaries leaves it alone, and
+    // live frontend edits show on the dev server, not on it. Dry run:
+    // synchronously, so the command preview prints in order.
+    if plan.static_bundle && stage.is_dry_run() {
+        frontend::build_static(stage, instance, mode)?;
+    }
+    let frontend_lane = (!stage.is_dry_run() && (plan.static_bundle || plan.vite)).then(|| {
+        let instance = instance.clone();
+        let stage = stage.background();
+        let static_bundle = plan.static_bundle;
+        std::thread::spawn(move || {
+            if static_bundle {
+                frontend::build_static(&stage, &instance, mode)
+            } else {
+                frontend::prepare(&stage)
+            }
+        })
+    });
+
     // Run the teardown in the BACKGROUND: tearing the old stack down is
     // independent of the host-side build, so the two overlap instead of summing
     // (stopping ~20 containers is otherwise the slow part of a re-run).
@@ -375,20 +404,6 @@ pub(crate) fn bring_up(
         pinned_base,
     )?;
 
-    // Build + stage the bundle in the background (pure host-side work), joined
-    // just before `bring_up_app` creates the proxy container that mounts the
-    // staged dir. The bundle is a snapshot: rebuilding service binaries leaves
-    // it alone, and live frontend edits show on the dev server, not on it. Dry
-    // run: synchronously, so the command preview prints in order.
-    if plan.static_bundle && stage.is_dry_run() {
-        frontend::build_static(stage, instance, mode)?;
-    }
-    let fe_build = (plan.static_bundle && !stage.is_dry_run()).then(|| {
-        let instance = instance.clone();
-        let stage = stage.background();
-        std::thread::spawn(move || frontend::build_static(&stage, &instance, mode))
-    });
-
     // The init snapshot decision: hash the init-defining inputs — possible only
     // after `prepare` wrote the kickstart — and check for a stored snapshot. A hit
     // skips migrate + Kafka topics + the ~1min FusionAuth kickstart + index
@@ -429,13 +444,20 @@ pub(crate) fn bring_up(
         }
         None => bring_up_infra(stage, mode, instance, &env, InfraInit::Full)?,
     }
-    if let Some(handle) = fe_build {
-        stage.run_step("Building frontend (static bundle)", move || {
+    let join_frontend = |label: &str, handle: std::thread::JoinHandle<Result<()>>| {
+        stage.run_step(label, move || {
             handle
                 .join()
                 .map_err(|_| anyhow::anyhow!("frontend build panicked"))?
-        })?;
-    }
+        })
+    };
+    let frontend_lane = match frontend_lane {
+        Some(handle) if plan.static_bundle => {
+            join_frontend("Building frontend (static bundle)", handle)?;
+            None
+        }
+        other => other,
+    };
 
     let shared_app_url = app_tunnel
         .as_ref()
@@ -476,6 +498,8 @@ pub(crate) fn bring_up(
     // Containers on a fresh start are new, so they start on the binaries built
     // above. (Reloading binaries into a running stack is `reload_services`' job.)
     bring_up_app(stage, mode, instance, &env)?;
+    // The new containers hold today's images now, so older tags can go.
+    gen_compose::prune_content_tagged_images();
     // A resumed stack's containers can predate the binaries this run just built.
     // A prebuilt `--binaries-dir` is adopted through the compose mount instead.
     if plan.start == Start::Resume && args.build.binaries_dir.is_none() && !stage.is_dry_run() {
@@ -489,6 +513,9 @@ pub(crate) fn bring_up(
     // an agent) acts on the URL the moment this returns.
     if mode.spec().wait_backend_before_frontend {
         frontend::wait_backend_ready(stage, instance)?;
+    }
+    if let Some(handle) = frontend_lane {
+        join_frontend("Preparing frontend dependencies (background)", handle)?;
     }
 
     if !stage.is_dry_run() {
@@ -654,12 +681,13 @@ fn rebuild_and_reload(
     env: &env_layer::ResolvedEnv,
     target: arch::Target,
     build_aux_services: bool,
+    only: Option<&[&'static inventory::RustService]>,
 ) -> Result<Vec<String>> {
     if stage.is_verbose() {
         // Run each step on the parent stage so the build (per group) and the
         // reload each show their own `Done <elapsed>` — the build-vs-reload
         // split — rather than folding into one line.
-        run_rebuild(stage, mode, instance, env, target, build_aux_services)
+        run_rebuild(stage, mode, instance, env, target, build_aux_services, only)
     } else {
         let mut reloaded = Vec::new();
         stage.run_step("Rebuilding & reloading services", || {
@@ -670,6 +698,7 @@ fn rebuild_and_reload(
                 env,
                 target,
                 build_aux_services,
+                only,
             )?;
             Ok(())
         })?;
@@ -680,6 +709,9 @@ fn rebuild_and_reload(
 /// Rebuild, then restart only the services running an older binary than the one
 /// on disk. Runs on a quiet sub-stage when folded, or the parent stage under
 /// `--verbose` so each step times itself. Returns the reloaded service names.
+///
+/// `only` rebuilds just those services; the others keep their binaries, and
+/// [`staleness`] records which of them now run older code than the tree.
 fn run_rebuild(
     stage: &Stage,
     mode: Mode,
@@ -687,19 +719,17 @@ fn run_rebuild(
     env: &env_layer::ResolvedEnv,
     target: arch::Target,
     build_aux_services: bool,
+    only: Option<&[&'static inventory::RustService]>,
 ) -> Result<Vec<String>> {
+    let mark = staleness::BuildMark::now(&repo_root());
+    let options = build::BuildOptions {
+        no_build: false,
+        binaries_dir: None,
+        only: only.map(<[_]>::to_vec),
+    };
     if build_aux_services {
         std::thread::scope(|scope| {
-            let rust_build = scope.spawn(|| {
-                build::resolve(
-                    stage,
-                    target,
-                    &build::BuildOptions {
-                        no_build: false,
-                        binaries_dir: None,
-                    },
-                )
-            });
+            let rust_build = scope.spawn(|| build::resolve(stage, target, &options));
             let aux_build = scope.spawn(|| build_aux_service_images(stage, instance, env));
             let binaries = rust_build
                 .join()
@@ -711,19 +741,40 @@ fn run_rebuild(
             aux
         })?;
     } else {
-        build::resolve(
-            stage,
-            target,
-            &build::BuildOptions {
-                no_build: false,
-                binaries_dir: None,
-            },
-        )?;
+        build::resolve(stage, target, &options)?;
     }
     if build_aux_services {
         recreate_aux_service_containers(stage, instance, env)?;
     }
-    reload_changed_services(stage, mode, instance, env, target)
+    let reloaded = reload_changed_services(stage, mode, instance, env, target)?;
+    record_builds(stage, instance, mode, mark, only);
+    Ok(reloaded)
+}
+
+/// Record what each service was just built from, for [`staleness`]. A failure
+/// only loses the stale list, so it is reported, not raised. A dry run built
+/// nothing, so it records nothing.
+fn record_builds(
+    stage: &Stage,
+    instance: &Instance,
+    mode: Mode,
+    mark: Result<staleness::BuildMark>,
+    only: Option<&[&'static inventory::RustService]>,
+) {
+    if stage.is_dry_run() {
+        return;
+    }
+    let all: Vec<&inventory::RustService> = inventory::services_for_mode(mode).collect();
+    let recorded = mark.and_then(|mark| match only {
+        None => staleness::record_full(instance, &mark, all.iter().copied()),
+        Some(built) => {
+            staleness::record_partial(instance, &repo_root(), &mark, built, &all).map(|_| ())
+        }
+    });
+    if let Err(error) = recorded {
+        staleness::clear(instance);
+        eprintln!("could not record which services are on older code: {error:#}");
+    }
 }
 
 /// Recreate each service whose binary is newer than its container, and return
@@ -815,7 +866,15 @@ fn interact(
                 let _ = term.clear_last_lines(1);
                 // run_step renders ✗ + the captured build error on failure; keep
                 // the loop alive so the user can fix and press `r` again.
-                let _ = rebuild_and_reload(stage, mode, instance, env, target, build_aux_services);
+                let _ = rebuild_and_reload(
+                    stage,
+                    mode,
+                    instance,
+                    env,
+                    target,
+                    build_aux_services,
+                    None,
+                );
                 print_hotkeys(stage);
             }
             Ok(Key::Char('f' | 'F')) => {
@@ -887,14 +946,23 @@ fn prepare(
         // those services. Bake runs this in parallel with the service build.
         build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()))
     } else {
-        build::resolve(
+        let mark = staleness::BuildMark::now(&repo_root());
+        let binaries = build::resolve(
             stage,
             target,
             &build::BuildOptions {
                 no_build: args.build.no_build,
                 binaries_dir: args.build.binaries_dir.clone(),
+                only: None,
             },
-        )?
+        )?;
+        if args.build.no_build || args.build.binaries_dir.is_some() {
+            // Not built here, so nothing to compare a later partial rebuild to.
+            staleness::clear(instance);
+        } else {
+            record_builds(stage, instance, mode, mark, None);
+        }
+        binaries
     };
 
     // Generate the override + the Caddyfile (the frontend reaches the services
@@ -1050,19 +1118,51 @@ fn bring_up_infra(
     } else {
         &["redis", "kafka", "localstack"]
     };
+    // FusionAuth needs only its own database, so it boots alongside the rest
+    // of the infra instead of after it: its JVM start is the longest wait here.
+    let fusionauth_start = spec.runs_local_infra.then(|| {
+        let mut fa = compose_cmd(instance, env);
+        fa.arg("up").arg("-d").arg("fusionauth");
+        let stage = stage.background();
+        std::thread::spawn(move || stage.run("Starting FusionAuth", &mut fa))
+    });
+    // LocalStack is ready within seconds, long before OpenSearch: poll its API
+    // and provision S3/SQS/DynamoDB while compose waits on the rest. Compose
+    // also waits for LocalStack's healthcheck, so once it returns the lane
+    // takes one last look instead of polling on (a cold machine may spend
+    // minutes pulling images before the container exists).
+    let (infra_done, infra_done_rx) = std::sync::mpsc::channel::<()>();
+    let localstack_lane = {
+        let instance = instance.clone();
+        let stage = stage.background();
+        std::thread::spawn(move || {
+            let health = format!(
+                "http://localhost:{}/_localstack/health",
+                instance.port(Port::LocalStack)
+            );
+            stage.run_step("Waiting for LocalStack", || {
+                wait_localstack(&health, &infra_done_rx)
+            })?;
+            stage.run_step("Provisioning LocalStack", || {
+                localstack::provision(&instance)
+            })
+        })
+    };
     let mut up = compose_cmd(instance, env);
     up.arg("up").arg("-d").arg("--wait").args(waited);
-    stage.run("Starting infra (docker compose up -d --wait)", &mut up)?;
-
-    // LocalStack has no healthcheck: poll its API, then provision S3/SQS/DynamoDB.
-    let localstack_health = format!(
-        "http://localhost:{}/_localstack/health",
-        instance.port(Port::LocalStack)
-    );
-    wait_http(stage, "Waiting for LocalStack", &localstack_health)?;
-    stage.run_step("Provisioning LocalStack", || {
-        localstack::provision(instance)
-    })?;
+    let infra = stage.run("Starting infra (docker compose up -d --wait)", &mut up);
+    let _ = infra_done.send(());
+    let fusionauth_started = fusionauth_start.map(|handle| {
+        handle
+            .join()
+            .map_err(|_| anyhow::anyhow!("starting FusionAuth panicked"))?
+    });
+    let localstack_ready = localstack_lane
+        .join()
+        .map_err(|_| anyhow::anyhow!("provisioning LocalStack panicked"))?;
+    infra?;
+    fusionauth_started.transpose()?;
+    localstack_ready?;
 
     if spec.migrates_db && init == InfraInit::Full {
         // Postgres is ready (`--wait`); create + migrate the freshly-wiped DB.
@@ -1080,14 +1180,12 @@ fn bring_up_infra(
             stage.run_step("Creating Kafka topics", || kafka::provision(instance))?;
         }
 
-        // Start FusionAuth on its own (impatient healthcheck → no `--wait`) and
-        // poll it patiently until it's up. On a full init that wait covers the
-        // ~minute kickstart; on a snapshot restore the kickstart is already in
-        // the restored volumes, so this is just JVM boot.
-        let mut fa = compose_cmd(instance, env);
-        fa.arg("up").arg("-d").arg("fusionauth");
-        stage.run("Starting FusionAuth", &mut fa)?;
+        // FusionAuth was started above without `--wait` (its healthcheck is
+        // impatient); poll it patiently until it's up. On a full init that wait
+        // covers the ~minute kickstart; on a snapshot restore the kickstart is
+        // already in the restored volumes, so this is just JVM boot.
         fusionauth::wait_ready(stage, instance)?;
+        fusionauth::apply_redirect_urls(stage, instance)?;
 
         // OpenSearch is up (`--wait`) but empty. Create the search indices +
         // aliases (idempotent) so the unified search path works out of the box
@@ -1512,19 +1610,29 @@ fn ensure_external_resources(stage: &Stage, instance: &Instance) -> Result<()> {
     })
 }
 
-fn wait_http(stage: &Stage, label: &str, url: &str) -> Result<()> {
-    let ca = proxy::curl_ca_args(url);
-    let ca_flags = ca
-        .iter()
-        .map(|arg| format!("'{arg}'"))
-        .collect::<Vec<_>>()
-        .join(" ");
-    let script = format!(
-        "for i in $(seq 1 600); do curl -fsS {ca_flags} --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'not ready: {url}'; exit 1"
-    );
-    let mut cmd = Command::new("bash");
-    cmd.arg("-lc").arg(script);
-    stage.run(label, &mut cmd)
+/// Poll LocalStack until it answers, or until `compose_done` says compose's
+/// own wait has finished and one last look still finds it down.
+fn wait_localstack(url: &str, compose_done: &std::sync::mpsc::Receiver<()>) -> Result<()> {
+    let answers = || {
+        Command::new("curl")
+            .args(["-fsS", "--max-time", "3", "-o", "/dev/null"])
+            .arg(url)
+            .stderr(std::process::Stdio::null())
+            .status()
+            .is_ok_and(|status| status.success())
+    };
+    loop {
+        if answers() {
+            return Ok(());
+        }
+        match compose_done.recv_timeout(std::time::Duration::from_millis(200)) {
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {}
+            Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                anyhow::ensure!(answers(), "LocalStack is not answering at {url}");
+                return Ok(());
+            }
+        }
+    }
 }
 
 /// `cargo x build-services`.
@@ -1537,6 +1645,7 @@ pub fn build_services_only() -> Result<()> {
         &build::BuildOptions {
             no_build: false,
             binaries_dir: None,
+            only: None,
         },
     )?;
     stage.note(&format!("binaries at {}", binaries.host_dir().display()));

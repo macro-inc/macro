@@ -186,6 +186,7 @@ where
                         source: command.source,
                         visibility: command.visibility,
                         origin: command.origin,
+                        metering: command.metering,
                     })
                     .await
             }

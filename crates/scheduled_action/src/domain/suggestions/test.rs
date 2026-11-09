@@ -396,6 +396,11 @@ async fn a_generation_runs_hidden_sessions_once_and_their_suggestions_come_first
     for session in &prepared {
         assert_eq!(session.visibility, SessionVisibility::Hidden);
         assert_eq!(session.source, SessionSource::User);
+        // Metered as the non-billable routine suggestions, unlike a draft.
+        assert_eq!(
+            session.metering,
+            agent_session::domain::model::SessionMetering::RoutineSuggestions
+        );
         assert_eq!(session.selection.owner, user());
         assert_eq!(session.selection.model.as_deref(), Some("test-model"));
     }
@@ -879,4 +884,39 @@ async fn the_first_wave_keeps_only_catalog_picks_that_pass_the_boundary() {
     );
     // The sessions found nothing, but the first wave did.
     assert_eq!(h.read(None).await.status, GenerationStatus::Ready);
+}
+
+#[tokio::test]
+async fn a_saved_routine_names_the_suggestion_it_came_from() {
+    let me = user();
+    let ai = Uuid::now_v7();
+    let repo = Arc::new(FakeRepo::default());
+    repo.suggestions.lock().unwrap().push(StoredSuggestion {
+        id: ai,
+        surfaces: vec![Surface::Calendar, Surface::Email],
+        reason: "fits".to_owned(),
+        keep_probability: 0.9,
+        pick: StoredPick::Catalog {
+            key: "inbox".to_owned(),
+            knobs: Map::new(),
+        },
+        dismissed: false,
+        created_at: Utc::now(),
+    });
+    let origins = StoredSuggestionOrigins(repo);
+    assert_eq!(
+        origins.origin(&me, ai).await.unwrap(),
+        Some(SuggestionOrigin {
+            from: "for_you",
+            kind: "catalog",
+            surface: Some("calendar"),
+        })
+    );
+    let template = origins
+        .origin(&me, template_id(&me, "inbox"))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!((template.from, template.kind), ("macro", "catalog"));
+    assert_eq!(origins.origin(&me, Uuid::now_v7()).await.unwrap(), None);
 }

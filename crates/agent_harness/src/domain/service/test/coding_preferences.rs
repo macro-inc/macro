@@ -186,6 +186,7 @@ async fn a_managed_open_ends_with_both_workflows() {
 
     service
         .open_managed_session(OpenManagedSession {
+            metering: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(id),
             repo_url: None,

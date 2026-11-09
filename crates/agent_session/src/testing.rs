@@ -95,6 +95,8 @@ pub struct InMemoryAgentSessionRepo {
     conversation_sessions: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
     /// Sessions whose name was generated, mirroring `name_is_generated`.
     generated_names: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
+    /// Session -> how it is metered, mirroring `agent_session.metering`.
+    meterings: Arc<Mutex<HashMap<AgentSessionId, crate::domain::model::SessionMetering>>>,
 }
 
 impl InMemoryAgentSessionRepo {
@@ -232,6 +234,10 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             source: params.purpose.source(),
             visibility: params.purpose.visibility(params.thread_id, false),
         };
+        self.meterings
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .insert(session.id, params.metering);
         if let Some(hash) = params.egress_token_hash {
             self.egress_token_hashes
                 .lock()
@@ -294,6 +300,26 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.find(id).await?.ok_or(AgentSessionError::NotFound(id))
+    }
+
+    async fn metering(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionMetering> {
+        if !self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .contains_key(&id)
+        {
+            return Err(AgentSessionError::NotFound(id));
+        }
+        // A session inserted directly, not through `create`, is metered as
+        // the column defaults.
+        Ok(self
+            .meterings
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .get(&id)
+            .copied()
+            .unwrap_or_default())
     }
 
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {

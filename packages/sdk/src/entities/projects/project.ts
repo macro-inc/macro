@@ -111,7 +111,11 @@ export class Project extends PropertiedEntity<ProjectDetail> {
   /** When the project was created (RFC 3339 timestamp). */
   readonly createdAt = this.field('createdAt');
 
-  /** The items (documents, chats, subprojects) directly inside this project. */
+  /**
+   * The items (documents, chats, subprojects) directly inside this project.
+   * Agent sessions are never project items; link one from a document in the
+   * project instead (see `ProjectNamespace`).
+   */
   async items(): Promise<ProjectItem[]> {
     const { data } = unwrap(
       await this.client.storage.getProjectContentHandler({
