@@ -1,4 +1,5 @@
 import { useFlow } from '@app/observability/flow';
+import { allocateEditorNamespace } from '@core/component/LexicalMarkdown/context/editor-namespace';
 import { theme } from '@core/component/LexicalMarkdown/theme';
 import { loadDocumentSession } from '@core/document-session/load';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -42,6 +43,7 @@ export default function RustMarkdownEditor(props: {
   onEmptyChange?: (empty: boolean) => void;
   onError?: (error: Error) => void;
 }) {
+  const namespace = allocateEditorNamespace('block-md-main');
   const flow = useFlow();
   const owner = getOwner() ?? undefined;
   const { documentId, permissions, state } = useMarkdownDocument();
@@ -93,7 +95,7 @@ export default function RustMarkdownEditor(props: {
               root: element,
               registry: registerMacroElementViews(createBuiltinRegistry()),
               view: {
-                namespace: 'block-md-main',
+                namespace,
                 owner,
                 parentSpan: flow.span,
                 editable: permissions.canEdit(),

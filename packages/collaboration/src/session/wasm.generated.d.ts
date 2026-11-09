@@ -122,6 +122,10 @@ export class EditorSession {
      */
     static createMacro(abi_major: number, config: Uint8Array, now: number, wall: number, hostname?: string | null): EditorSession;
     /**
+     * Construct the application editor with the host's actual instance namespace.
+     */
+    static createMacroWithNamespace(abi_major: number, config: Uint8Array, now: number, wall: number, namespace: string, hostname?: string | null): EditorSession;
+    /**
      * Full development insertion predicate using the host's resolved selection.
      */
     debugInsertion(selection: Uint8Array, format: number, style: string, text: string, facts: number): boolean;
@@ -340,6 +344,7 @@ export interface InitOutput {
     readonly editorsession_compositionStart: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly editorsession_create: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly editorsession_createMacro: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+    readonly editorsession_createMacroWithNamespace: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
     readonly editorsession_debugInsertion: (a: number, b: number, c: number, d: number, e: number, f: number, g: any, h: number) => [number, number, number];
     readonly editorsession_debugShouldPreventDefault: (a: number, b: number, c: number, d: any) => [number, number, number];
     readonly editorsession_debugViewChecksum: (a: number) => [number, number, number];
