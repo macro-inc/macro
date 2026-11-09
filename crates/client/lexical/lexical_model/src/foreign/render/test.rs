@@ -282,3 +282,58 @@ fn captures_expose_exact_current_and_previous_selection_identities() -> Result<(
     );
     Ok(())
 }
+
+#[test]
+fn raw_root_cache_reads_exact_captures_without_materializing_lazy_text() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::ViewAttached)
+        .build()
+        .expect("editor");
+    let (key, _) = editor.update(|tx| {
+        let p = tx.create(Paragraph::default())?;
+        let t = tx.create_text("before")?;
+        tx.append(p, &[t.key()])?;
+        tx.append(NodeKey::ROOT, &[p.key()])?;
+        Ok(t.key())
+    })?;
+    let old_root = editor
+        .state()
+        .view()
+        .node_or_err(NodeKey::ROOT)?
+        .capture_for_foreign_read();
+    assert_eq!(
+        old_root.as_ref().foreign_raw_root_cached_text(),
+        Some("before")
+    );
+    editor.update(|tx| tx.text(key)?.set_text_content("after").map(|_| ()))?;
+    let current_root = editor
+        .state()
+        .view()
+        .node_or_err(NodeKey::ROOT)?
+        .capture_for_foreign_read();
+    assert_eq!(current_root.as_ref().foreign_raw_root_cached_text(), None);
+    assert_eq!(
+        editor
+            .state()
+            .view()
+            .node_or_err(key)?
+            .foreign_raw_root_cached_text(),
+        None
+    );
+    assert_eq!(
+        old_root.as_ref().foreign_raw_root_cached_text(),
+        Some("before")
+    );
+    assert_eq!(
+        editor.state().view().foreign_root_cached_text()?.as_deref(),
+        Some("after")
+    );
+    assert_eq!(
+        current_root.as_ref().foreign_raw_root_cached_text(),
+        Some("after")
+    );
+    assert_eq!(
+        old_root.as_ref().foreign_raw_root_cached_text(),
+        Some("before")
+    );
+    Ok(())
+}
