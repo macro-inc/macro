@@ -1,8 +1,11 @@
-import type { EditorConfig } from '../editor';
+import type { CreateEditorArgs, EditorConfig } from '../editor';
 import { foreignHooks } from '../hooks.generated';
 import type { ShimBackend } from './index';
 
-export type BackendFactory = (config: EditorConfig) => ShimBackend;
+export type BackendFactory = (
+  config: CreateEditorArgs,
+  normalized: EditorConfig
+) => ShimBackend;
 let factory: BackendFactory | undefined;
 let hookIndex: readonly string[] | undefined;
 
@@ -23,10 +26,13 @@ export function bindBackendFactory(
   hookIndex = Object.freeze([...hooks]);
 }
 
-export function createBackend(config: EditorConfig): ShimBackend {
+export function createBackend(
+  config: CreateEditorArgs,
+  normalized: EditorConfig
+): ShimBackend {
   if (factory === undefined)
     throw new Error('Lexical engine has not been initialized');
-  return factory(config);
+  return factory(config, normalized);
 }
 
 export function foreignHookIndex(): readonly string[] {

@@ -8,6 +8,7 @@ use the real development conformance host.
 
 ## Start here
 
+- `src/editor-dom-config.ts`: full public default render hooks and exact actual-editor config; keep the view's smaller injected hook contract separate.
 - `src/index.ts`, `src/editor.ts` and `src/nodes/`: native facade foundation over the backend; foreign construction and the complete export surface remain unfinished.
 - `src/backend/factory.ts`: typed editor configuration and validated hook-order binding selected after initialization; root module evaluation never loads WASM.
 - `src/backend/conformance.ts`: development backend and its runtime WASM import.
@@ -101,3 +102,5 @@ Keep native node graph methods on the active runtime; captured raw fields and is
 Capture NativeNodeCatalog metadata without consulting an engine; validate the generated hook order when binding the backend, and construct the initial EditorState from that backend's published initialVersion.
 
 Keep app declarations upstream; validate independent classes through their observable instance members, constructor/static shape and documented used internals, including callback self-references, rather than bypassing upstream nominal private declarations with casts.
+
+Keep CreateEditorArgs distinct from the full normalized EditorConfig; retain theme and configured hook identities and restore readonly mode across historical reads, nested updates and throws. Forward the normalized config to backend construction without rereading user getters.
