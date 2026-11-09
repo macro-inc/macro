@@ -36,10 +36,7 @@ type TemplateWorkflowOptions = {
   contents(): TaskTemplateContents;
   replaceContents(contents: TaskTemplateContents): void;
   stripAttachments(): void;
-  applyTemplate(
-    template: SavedTaskTemplate,
-    preserveDescription?: boolean
-  ): void;
+  applyTemplate(template: SavedTaskTemplate, preserveTaskText?: boolean): void;
   persist(): boolean;
   setError(message: string): void;
   createTemplate: TaskComposerHost['createTemplate'];
@@ -178,7 +175,7 @@ export function createTemplateWorkflow(options: TemplateWorkflowOptions) {
         setTaskDraft(undefined);
         request = undefined;
         setPending(false);
-        // Saving defaults must not discard task-specific prose or attachments.
+        // Saving defaults must not discard task-specific text or attachments.
         options.applyTemplate(saved, true);
       });
       options.persist();
@@ -210,6 +207,7 @@ export function createTemplateWorkflow(options: TemplateWorkflowOptions) {
     const contents = captureTaskTemplate(
       {
         ...current,
+        title: selection.template.contents.title,
         descriptionMarkdown: selection.template.contents.descriptionMarkdown,
       },
       new Set(definitions.map((definition) => definition.id)),
@@ -238,6 +236,7 @@ export function createTemplateWorkflow(options: TemplateWorkflowOptions) {
         options.setSelection({ kind: 'saved', template: saved });
         options.setBaseline({
           ...current,
+          title: baseline?.title ?? selection.template.contents.title,
           descriptionMarkdown:
             baseline?.descriptionMarkdown ??
             selection.template.contents.descriptionMarkdown,

@@ -323,6 +323,7 @@ export function createTaskComposer(
     allDefinitions: true,
   });
   const originalTemplateContents: TaskTemplateContents = {
+    title: props.initialTitle ?? '',
     propertyIds:
       props.composerContext?.visiblePropertyIds ??
       DEFAULT_TASK_COMPOSER_PROPERTY_IDS,
@@ -331,6 +332,7 @@ export function createTaskComposer(
   };
   const contextualPropertyIds = templateContextualIds(props);
   const currentTemplateState = (): TaskTemplateContents => ({
+    title: title(),
     propertyIds: [...visiblePropertyIds()],
     propertyDefaults: structuredClone(unwrap(propertyValues)),
     descriptionMarkdown: content(),
@@ -459,7 +461,7 @@ export function createTaskComposer(
     const selected = templateSelection();
     if (selected.kind === 'saved') {
       const fresh = freshTaskFromTemplate(
-        { ...originalTemplateContents, descriptionMarkdown: '' },
+        { ...originalTemplateContents, title: '', descriptionMarkdown: '' },
         selected.template.contents,
         new Set(available.map((definition) => definition.id)),
         contextualPropertyIds
@@ -691,6 +693,7 @@ export function createTaskComposer(
         ? template
         : applyTemplateToEditor(template, bodyEditor());
     batch(() => {
+      setTitle(next.title ?? '');
       setVisiblePropertyIds([...next.propertyIds]);
       setPropertyValues(reconcile(structuredClone(next.propertyDefaults)));
       setContent(next.descriptionMarkdown);
@@ -748,22 +751,24 @@ export function createTaskComposer(
   };
   const selectTemplate = (
     template: SavedTaskTemplate,
-    preserveDescription = false
+    preserveTaskText = false
   ) => {
     if (!canChangeTemplate() || !definitionsReady()) return;
     const next = freshTaskFromTemplate(
-      { ...originalTemplateContents, descriptionMarkdown: '' },
+      { ...originalTemplateContents, title: '', descriptionMarkdown: '' },
       template.contents,
       new Set(templateProperties().map((definition) => definition.id)),
       contextualPropertyIds,
       unwrap(propertyValues)
     );
-    if (preserveDescription && content().trim())
+    if (preserveTaskText && title().trim()) next.title = title();
+    if (preserveTaskText && content().trim())
       next.descriptionMarkdown = content();
     replaceTemplateState(next);
-    if (preserveDescription && content().trim()) {
+    if (preserveTaskText) {
       setTemplateBaseline({
         ...currentTemplateState(),
+        title: template.contents.title,
         descriptionMarkdown: template.contents.descriptionMarkdown,
       });
     }

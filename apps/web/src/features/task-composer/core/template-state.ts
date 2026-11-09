@@ -6,7 +6,7 @@ import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { TaskTemplateSelection } from './template-selection';
 import type { ComposeTaskProps } from './types';
 
-/** Template edits include metadata and baseline differences, but never the task title. */
+/** Switching templates confirms changed task text, fields, or template metadata. */
 export function isTemplateStateDirty(
   current: TaskTemplateContents,
   baseline: TaskTemplateContents | undefined,
@@ -22,10 +22,11 @@ export function isTemplateStateDirty(
   // Existing task text is not disposable template content, even when prefilled.
   if (
     (selection?.kind === 'none' || selection?.kind === 'new') &&
-    current.descriptionMarkdown.trim()
+    (current.title?.trim() || current.descriptionMarkdown.trim())
   )
     return true;
   if (!baseline) return true;
+  if ((current.title ?? '') !== (baseline.title ?? '')) return true;
   if (
     JSON.stringify(current.propertyIds) !== JSON.stringify(baseline.propertyIds)
   )
@@ -53,6 +54,7 @@ export function areTemplateFieldsDirty(
   return isTemplateStateDirty(
     {
       ...captureTaskTemplate(current, available, excluded),
+      title: '',
       propertyIds: current.propertyIds.filter(
         (id) => id !== SYSTEM_PROPERTY_IDS.SOURCE
       ),
@@ -60,6 +62,7 @@ export function areTemplateFieldsDirty(
     },
     {
       ...captureTaskTemplate(baseline, available, excluded),
+      title: '',
       propertyIds: baseline.propertyIds.filter(
         (id) => id !== SYSTEM_PROPERTY_IDS.SOURCE
       ),
@@ -67,7 +70,7 @@ export function areTemplateFieldsDirty(
     }
   );
 }
-/** Reset reusable fields without discarding contextual Source or task prose. */
+/** Reset reusable fields without discarding contextual Source or task text. */
 export function restoreTemplateFields(
   current: TaskTemplateContents,
   baseline: TaskTemplateContents

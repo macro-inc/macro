@@ -2,7 +2,7 @@ import type { MacroClient } from '../../utils/client';
 import type { Team } from '../teams/team';
 import { type CreateTaskTemplateOptions, TaskTemplate } from './task-template';
 
-/** Personal and team task templates: reusable selected fields, defaults, and description Markdown. */
+/** Personal and team task templates: reusable fields, task title, and description Markdown. */
 export class TaskTemplateNamespace {
   constructor(private readonly client: MacroClient) {}
 

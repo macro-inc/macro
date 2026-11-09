@@ -24,6 +24,8 @@ export interface CreateTaskTemplateOptions {
   idempotencyKey?: string;
   /** Template name. */
   name: string;
+  /** Default task title, separate from the template name. */
+  title?: string;
   /** Description Markdown inserted into a blank task description. */
   descriptionMarkdown?: string;
   /** Selected fields and optional default values. */
@@ -36,6 +38,8 @@ export interface CreateTaskTemplateOptions {
 export interface UpdateTaskTemplateOptions {
   /** Replacement template name. */
   name?: string;
+  /** Replacement default task title; an empty string clears the default. */
+  title?: string;
   /** Replacement description Markdown. */
   descriptionMarkdown?: string;
   /** Replacement selected fields and defaults; an empty array removes all fields. */
@@ -45,8 +49,10 @@ export interface UpdateTaskTemplateOptions {
 function configuration(
   fields: readonly TaskTemplateProperty[],
   descriptionMarkdown: string,
+  title?: string,
 ): TaskTemplateConfiguration {
   return {
+    title,
     propertyIds: fields.map((field) => field.property.id),
     defaults: fields.flatMap((field) =>
       field.defaultValue === undefined
@@ -97,6 +103,7 @@ export class TaskTemplate extends MacroEntity<TaskTemplateRecord> {
           configuration: configuration(
             opts.properties ?? [],
             opts.descriptionMarkdown ?? '',
+            opts.title,
           ),
         },
       }),
@@ -106,6 +113,12 @@ export class TaskTemplate extends MacroEntity<TaskTemplateRecord> {
 
   /** The template's name. */
   readonly name = this.field('name');
+
+  /** Default task title, separate from the template name; absent when not configured. */
+  readonly title = this.mappedField(
+    'configuration',
+    (value) => value.title ?? undefined,
+  );
 
   /** Whether the current actor can update or delete this template. */
   readonly canManage = this.field('canManage');
@@ -159,6 +172,7 @@ export class TaskTemplate extends MacroEntity<TaskTemplateRecord> {
             opts.properties === undefined
               ? {
                   ...current.configuration,
+                  title: opts.title ?? current.configuration.title,
                   descriptionMarkdown:
                     opts.descriptionMarkdown ??
                     current.configuration.descriptionMarkdown,
@@ -167,6 +181,7 @@ export class TaskTemplate extends MacroEntity<TaskTemplateRecord> {
                   opts.properties,
                   opts.descriptionMarkdown ??
                     current.configuration.descriptionMarkdown,
+                  opts.title ?? current.configuration.title ?? undefined,
                 ),
         },
       }),

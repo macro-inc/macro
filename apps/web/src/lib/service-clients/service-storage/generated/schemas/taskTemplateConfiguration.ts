@@ -5,9 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PropertyDefault } from './propertyDefault';
+import type { TaskTemplateConfigurationTitle } from './taskTemplateConfigurationTitle';
 
 /**
- * Selected fields, optional default values, and description Markdown.
+ * Selected fields, optional task title and default values, and description Markdown.
  */
 export interface TaskTemplateConfiguration {
   /** Defaults for selected fields only. */
@@ -16,4 +17,6 @@ export interface TaskTemplateConfiguration {
   descriptionMarkdown: string;
   /** Visible definition IDs, including fields without a default value. */
   propertyIds: string[];
+  /** Default task title, separate from the template name; absence leaves the task untitled. */
+  title?: TaskTemplateConfigurationTitle;
 }

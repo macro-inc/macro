@@ -19292,7 +19292,7 @@ export type TaskTemplate = {
 };
 
 /**
- * Selected fields, optional default values, and description Markdown.
+ * Selected fields, optional task title and default values, and description Markdown.
  */
 export type TaskTemplateConfiguration = {
     /**
@@ -19307,6 +19307,10 @@ export type TaskTemplateConfiguration = {
      * Visible definition IDs, including fields without a default value.
      */
     propertyIds: Array<string>;
+    /**
+     * Default task title, separate from the template name; absence leaves the task untitled.
+     */
+    title?: string | null;
 };
 
 /**

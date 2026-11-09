@@ -41,7 +41,7 @@ enforced by the ordinary backend APIs.
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
   included) that the `ListCodingAgents` tool serves.
 - `src/entities/task-templates/`: personal/team template handles, replay-safe
-  creation keys, selected fields with optional defaults, and revision-guarded
+  creation keys, optional default task titles, selected fields with optional defaults, and revision-guarded
   writes. Team membership and creator/admin management stay server-authorized.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty

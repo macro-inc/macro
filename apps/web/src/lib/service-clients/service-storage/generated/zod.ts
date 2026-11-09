@@ -73633,9 +73633,15 @@ export const listTaskTemplatesResponseItem = zod
           .describe(
             'Visible definition IDs, including fields without a default value.'
           ),
+        title: zod
+          .string()
+          .nullish()
+          .describe(
+            'Default task title, separate from the template name; absence leaves the task untitled.'
+          ),
       })
       .describe(
-        'Selected fields, optional default values, and description Markdown.'
+        'Selected fields, optional task title and default values, and description Markdown.'
       ),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     creatorId: zod
@@ -73849,9 +73855,15 @@ export const createTaskTemplateBody = zod
           .describe(
             'Visible definition IDs, including fields without a default value.'
           ),
+        title: zod
+          .string()
+          .nullish()
+          .describe(
+            'Default task title, separate from the template name; absence leaves the task untitled.'
+          ),
       })
       .describe(
-        'Selected fields, optional default values, and description Markdown.'
+        'Selected fields, optional task title and default values, and description Markdown.'
       ),
     id: zod
       .uuid()
@@ -74061,9 +74073,15 @@ export const getTaskTemplateResponse = zod
           .describe(
             'Visible definition IDs, including fields without a default value.'
           ),
+        title: zod
+          .string()
+          .nullish()
+          .describe(
+            'Default task title, separate from the template name; absence leaves the task untitled.'
+          ),
       })
       .describe(
-        'Selected fields, optional default values, and description Markdown.'
+        'Selected fields, optional task title and default values, and description Markdown.'
       ),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     creatorId: zod
@@ -74278,9 +74296,15 @@ export const updateTaskTemplateBody = zod
           .describe(
             'Visible definition IDs, including fields without a default value.'
           ),
+        title: zod
+          .string()
+          .nullish()
+          .describe(
+            'Default task title, separate from the template name; absence leaves the task untitled.'
+          ),
       })
       .describe(
-        'Selected fields, optional default values, and description Markdown.'
+        'Selected fields, optional task title and default values, and description Markdown.'
       ),
     name: zod.string().describe('Replacement name.'),
     revision: zod.number().describe('Revision observed when editing began.'),
@@ -74477,9 +74501,15 @@ export const updateTaskTemplateResponse = zod
           .describe(
             'Visible definition IDs, including fields without a default value.'
           ),
+        title: zod
+          .string()
+          .nullish()
+          .describe(
+            'Default task title, separate from the template name; absence leaves the task untitled.'
+          ),
       })
       .describe(
-        'Selected fields, optional default values, and description Markdown.'
+        'Selected fields, optional task title and default values, and description Markdown.'
       ),
     createdAt: zod.iso.datetime({}).describe('Creation time.'),
     creatorId: zod

@@ -3,7 +3,7 @@
 ## What it is
 
 Personal and team task templates for the existing task composer. Templates store
-selected property definitions, optional default values, and description Markdown.
+selected property definitions, optional default values and task title, and description Markdown.
 Task creation also preserves the composer's selected fields as per-task pins.
 
 ## Start here
@@ -15,9 +15,9 @@ Task creation also preserves the composer's selected fields as per-task pins.
 
 ## Scope
 
-- Keep task titles, sharing mode, and attachments outside template content.
-- Replace untouched template fields directly; confirm before switching away from edited fields or task description.
-- Preserve task titles, contextual Source values, and explicit launch presets across template replacement.
+- Store the optional default task title separately from the template name; keep sharing mode and attachments outside template content.
+- Replace untouched template fields and task text directly; confirm before replacing edited fields, title, or description.
+- Preserve contextual Source values and explicit launch property presets across template replacement.
 - Detach a deleted selected template without resetting the current draft.
 - Treat zero and false as populated values; treat empty lists and text as blank.
 - Retain blank selected fields so creation can pin them below the task title.
@@ -30,8 +30,9 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Reapply saved defaults to fresh tasks while preserving launch-context property presets, not task-specific edits.
 - Open New template and Edit as a separate template editing session; keep the underlying task draft unchanged until saving.
 - Return to the unchanged task draft on Back or Cancel; save only the template, then return with it applied.
-- Preserve existing task prose and attachments when applying a saved editing session; fill description only when the task is blank.
-- Use the task title editor for the template name without a leading icon; hide attachments and Create More.
+- Preserve existing task title, prose, and attachments after saving a template; fill title and description only when blank.
+- Retain template mode's existing name editor without a leading icon; keep default title data separate until the title/name layout changes.
+- Keep attachments and Create More hidden in template mode.
 - Keep new-template ownership on the footer's team switch.
 - Show Shared with the owning team when editing team templates; show no ownership label for personal templates.
 
@@ -54,12 +55,13 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Use a secondary trigger showing No template with the menu's blank-page icon when no template is applied.
 - Retain the compact touch trigger's accessible label and the existing touch picker sheet; keep empty states brief.
 - Show an accent dot for changed template fields, not task title or description changes; keep property pills unchanged.
-- Follow saved-view actions with Reset and Update template for managers; reset or save fields without changing description text.
+- Follow saved-view actions with Reset and Update template for managers; reset or save fields without changing task title or description.
 
 ## Checks
 
 - `bun run test src/features/task-templates src/features/task-composer` from `apps/web`.
 - `bun run check` from `apps/web`, then `just check` from the repository root.
+- Check default task-title capture, application, draft recovery, and repeated creation.
 - Check application against existing draft text, contextual Source/Project values,
   empty custom fields, deleted definitions, and Create More.
 - Check personal isolation, team member use, creator/admin management, and former-member denial.

@@ -224,7 +224,10 @@ const props = await doc.properties();
 ### Task templates
 
 `macro.taskTemplates` manages personal and team templates. Selected fields can
-stay blank or carry a default; description Markdown fills a blank task body.
+stay blank or carry a default. An optional `title` is the default task title,
+separate from the template's `name`; description Markdown fills a blank task body.
+Read the default with `template.title()`. Omitted update fields stay unchanged;
+pass `title: ''` to clear the default.
 
 Pass a client-generated UUID as `idempotencyKey` and retain it with the same input
 when retrying creation. The server returns the same template rather than creating
@@ -234,6 +237,7 @@ a duplicate; changed content or ownership conflicts.
 const effort = macro.properties.definition('00000001-0000-0000-0000-000000000008');
 const template = await macro.taskTemplates.create({
   name: 'Bug report',
+  title: 'Investigate issue',
   team: await macro.teams.current(), // omit for a personal template
   properties: [{ property: effort, defaultValue: { type: 'number', value: 0 } }],
   descriptionMarkdown: '## Details\n\n- [ ] Describe the task',

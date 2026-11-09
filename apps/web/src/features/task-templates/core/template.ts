@@ -2,6 +2,7 @@ import type { PropertyApiValues } from '../../property/types';
 
 /** Editable template content, separate from persistence and ownership metadata. */
 export type TaskTemplateContents = {
+  title?: string;
   propertyIds: string[];
   propertyDefaults: Record<string, PropertyApiValues>;
   descriptionMarkdown: string;
@@ -42,6 +43,7 @@ export function fillTaskTemplate(
     }
   }
   return {
+    title: current.title?.trim() ? current.title : template.title,
     propertyIds: [...new Set([...current.propertyIds, ...propertyIds])],
     propertyDefaults,
     descriptionMarkdown: current.descriptionMarkdown.trim()
@@ -67,6 +69,7 @@ export function captureTaskTemplate(
     }
   }
   return {
+    title: current.title,
     propertyIds,
     propertyDefaults,
     descriptionMarkdown: current.descriptionMarkdown,

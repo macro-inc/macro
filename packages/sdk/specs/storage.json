@@ -54230,7 +54230,7 @@
       },
       "TaskTemplateConfiguration": {
         "type": "object",
-        "description": "Selected fields, optional default values, and description Markdown.",
+        "description": "Selected fields, optional task title and default values, and description Markdown.",
         "required": ["propertyIds", "descriptionMarkdown"],
         "properties": {
           "defaults": {
@@ -54251,6 +54251,10 @@
               "format": "uuid"
             },
             "description": "Visible definition IDs, including fields without a default value."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "Default task title, separate from the template name; absence leaves the task untitled."
           }
         },
         "additionalProperties": false

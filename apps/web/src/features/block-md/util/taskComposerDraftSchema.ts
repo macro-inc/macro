@@ -52,6 +52,7 @@ const editorState = z.object({
 });
 
 const templateContents = z.object({
+  title: z.string().optional(),
   propertyIds: z.array(z.string()),
   propertyDefaults: z.record(z.string(), propertyValue),
   descriptionMarkdown: z.string(),

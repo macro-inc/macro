@@ -6,6 +6,7 @@ import type {
   SavedTaskTemplate,
   TaskTemplateSelection,
 } from '@app/features/task-composer/core/template-selection';
+import { freshTaskFromTemplate } from '@app/features/task-composer/core/template-selection';
 import {
   areTemplateFieldsDirty,
   isTemplateStateDirty,
@@ -13,7 +14,11 @@ import {
 } from '@app/features/task-composer/core/template-state';
 import type { TaskComposerHost } from '@app/features/task-composer/primitives/task-composer';
 import { createTemplateWorkflow } from '@app/features/task-composer/primitives/template-workflow';
-import type { TaskTemplateContents } from '@app/features/task-templates/core/template';
+import {
+  captureTaskTemplate,
+  fillTaskTemplate,
+  type TaskTemplateContents,
+} from '@app/features/task-templates/core/template';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -305,6 +310,7 @@ function createTemplateSession() {
       kind: 'none',
     });
     const [contents, setContents] = createSignal<TaskTemplateContents>({
+      title: 'Keep this task title',
       propertyIds: ['priority'],
       propertyDefaults: { priority: { valueType: 'STRING', value: 'High' } },
       descriptionMarkdown: 'Task-specific prose',
@@ -333,6 +339,7 @@ function createTemplateSession() {
     const restore = vi.fn((draft: Omit<TaskComposerDraft, 'timestamp'>) => {
       setSelection(draft.templateSelection ?? { kind: 'none' });
       setContents({
+        title: draft.title,
         propertyIds: draft.visiblePropertyIds ?? [],
         propertyDefaults: draft.propertyValues,
         descriptionMarkdown: draft.content,
@@ -470,6 +477,8 @@ it('saves only the template and restores the task before applying the saved sele
   );
   await session.workflow.saveTemplate();
   expect(session.create).toHaveBeenCalledTimes(1);
+  expect(session.create.mock.calls[0][1].name).toBe('Reusable');
+  expect(session.create.mock.calls[0][2].title).toBe('Keep this task title');
   expect(session.restore).toHaveBeenCalledWith(original);
   expect(session.apply).toHaveBeenCalledWith(
     expect.objectContaining({ id: '0195dbd0-7b5d-7000-8000-000000000002' }),
@@ -499,6 +508,9 @@ it('restores and reuses the admitted creation identity after a lost response', a
   expect(stored?.templateEditor?.request?.creationId).toBe(
     '0195dbd0-7b5d-7000-8000-000000000002'
   );
+  expect(stored?.templateEditor?.request?.contents.title).toBe(
+    'Keep this task title'
+  );
   session.dispose();
   const restored = createTemplateSession();
   if (!stored?.templateEditor)
@@ -511,7 +523,7 @@ it('restores and reuses the admitted creation identity after a lost response', a
   restored.dispose();
 });
 
-it('updates field defaults without copying task-specific description text', async () => {
+it('updates field defaults without copying task-specific title or description', async () => {
   const session = createTemplateSession();
   session.setSelection({
     kind: 'saved',
@@ -522,15 +534,18 @@ it('updates field defaults without copying task-specific description text', asyn
       revision: 2,
       contents: {
         ...session.contents(),
+        title: 'Saved title',
         descriptionMarkdown: 'Saved description',
       },
     },
   });
   session.setContents({
     ...session.contents(),
+    title: 'Task-specific title',
     propertyDefaults: { priority: { valueType: 'STRING', value: 'Low' } },
   });
   await session.workflow.updateTemplateFields();
+  expect(session.update.mock.calls[0][2].title).toBe('Saved title');
   expect(session.update.mock.calls[0][2].descriptionMarkdown).toBe(
     'Saved description'
   );
@@ -539,6 +554,8 @@ it('updates field defaults without copying task-specific description text', asyn
     value: 'Low',
   });
   expect(session.contents().descriptionMarkdown).toBe('Task-specific prose');
+  expect(session.contents().title).toBe('Task-specific title');
+  expect(session.baseline().title).toBe('Keep this task title');
   expect(session.baseline().descriptionMarkdown).toBe('Task-specific prose');
   session.dispose();
 });
@@ -574,6 +591,7 @@ it('does not restore a template save after the acting account changes', async ()
 it('marks only changed fields, not task description edits or equivalent blank values', () => {
   const baseline: TaskTemplateContents = {
     propertyIds: ['flag', 'empty'],
+    title: 'Saved title',
     propertyDefaults: { flag: { valueType: 'BOOLEAN', value: false } },
     descriptionMarkdown: 'Saved description',
   };
@@ -581,6 +599,7 @@ it('marks only changed fields, not task description edits or equivalent blank va
     areTemplateFieldsDirty(
       {
         ...baseline,
+        title: 'Task-specific title',
         descriptionMarkdown: 'Task prose',
         propertyDefaults: {
           ...baseline.propertyDefaults,
@@ -665,4 +684,95 @@ it('resets edited defaults while retaining a Source field added after template a
   );
   expect(reset.descriptionMarkdown).toBe('Task-specific prose');
   expect(areTemplateFieldsDirty(reset, baseline)).toBe(false);
+});
+
+it('captures the draft task title and applies saved text to fresh repeated tasks', () => {
+  const initial: TaskTemplateContents = {
+    title: '',
+    propertyIds: [],
+    propertyDefaults: {},
+    descriptionMarkdown: '',
+  };
+  const captured = captureTaskTemplate(
+    {
+      ...initial,
+      title: 'Review request',
+      descriptionMarkdown: 'Review steps',
+    },
+    new Set(),
+    new Set()
+  );
+  const fresh = freshTaskFromTemplate(initial, captured, new Set(), new Set());
+  expect(fresh.title).toBe('Review request');
+  expect(fresh.descriptionMarkdown).toBe('Review steps');
+  expect(
+    fillTaskTemplate(
+      {
+        ...initial,
+        title: 'Existing task',
+        descriptionMarkdown: 'Existing prose',
+      },
+      captured,
+      new Set()
+    )
+  ).toMatchObject({
+    title: 'Existing task',
+    descriptionMarkdown: 'Existing prose',
+  });
+});
+
+it('persists default titles in selected templates and the separate editing buffer', () => {
+  const contents: TaskTemplateContents = {
+    title: 'Default task title',
+    propertyIds: [],
+    propertyDefaults: {},
+    descriptionMarkdown: '',
+  };
+  saveTaskComposerDraft({
+    ...draft,
+    templateSelection: {
+      kind: 'saved',
+      template: {
+        id: 'saved',
+        name: 'Reusable',
+        teamId: null,
+        revision: 1,
+        contents,
+      },
+    },
+    templateBaseline: contents,
+    templateEditor: {
+      selection: {
+        kind: 'new',
+        name: 'Another name',
+        teamId: null,
+        creationId: '0195dbd0-7b5d-7000-8000-000000000002',
+      },
+      contents,
+    },
+  });
+  const restored = loadTaskComposerDraft();
+  expect(restored?.templateBaseline?.title).toBe('Default task title');
+  expect(restored?.templateEditor?.contents.title).toBe('Default task title');
+  expect(restored?.templateSelection).toMatchObject({
+    kind: 'saved',
+    template: { name: 'Reusable', contents: { title: 'Default task title' } },
+  });
+});
+
+it('confirms title replacement without marking field-only edits and treats omitted titles as empty', () => {
+  const baseline: TaskTemplateContents = {
+    propertyIds: [],
+    propertyDefaults: {},
+    descriptionMarkdown: '',
+  };
+  expect(isTemplateStateDirty({ ...baseline, title: '' }, baseline)).toBe(
+    false
+  );
+  const changed = { ...baseline, title: 'Current task title' };
+  expect(isTemplateStateDirty(changed, baseline)).toBe(true);
+  expect(areTemplateFieldsDirty(changed, baseline)).toBe(false);
+  expect(restoreTemplateFields(changed, baseline).title).toBe(
+    'Current task title'
+  );
 });

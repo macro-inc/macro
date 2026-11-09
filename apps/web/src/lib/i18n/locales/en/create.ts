@@ -339,7 +339,7 @@ export default {
   taskTemplateSelected: 'Template: {{name}}',
   taskTemplateSwitchTitle: 'Switch template?',
   taskTemplateSwitchBody:
-    'Replace the current fields and description? Your task title and launch context will stay.',
+    'Replace the current fields, task title, and description? Your launch context will stay.',
   taskTemplateSwitch: 'Switch template',
   taskTemplateEdit: 'Edit template',
   taskCreate: 'Create task',

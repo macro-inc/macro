@@ -61,6 +61,7 @@ export function taskTemplateContents(
     if (value) propertyDefaults[item.propertyId] = value;
   }
   return {
+    title: configuration.title ?? undefined,
     propertyIds: [...configuration.propertyIds],
     propertyDefaults,
     descriptionMarkdown: configuration.descriptionMarkdown,
@@ -81,6 +82,7 @@ export function taskTemplateConfiguration(
   );
   const retained = new Set(retainedIds);
   return {
+    title: contents.title,
     propertyIds: [...new Set([...contents.propertyIds, ...retainedIds])],
     defaults: [
       ...contents.propertyIds.flatMap((id) => {
@@ -119,6 +121,7 @@ export function isConfirmedTemplateUpdate(
 
   const normalize = (configuration: TaskTemplateConfiguration) =>
     JSON.stringify({
+      title: configuration.title ?? '',
       propertyIds: configuration.propertyIds,
       descriptionMarkdown: configuration.descriptionMarkdown,
       defaults: (configuration.defaults ?? [])

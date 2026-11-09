@@ -831,10 +831,11 @@ state. ArrowDown from search enters the menu; Escape dismisses it. On touch,
 keep the existing picker sheet.
 
 Browse saved templates without edits: each selection replaces the previous
-fields, defaults, and description instead of combining templates. No template
-restores the starting fields and defaults. Task titles, contextual Source values,
-and explicit launch presets stay intact. After editing properties or description,
-switching asks for confirmation; Cancel preserves the current draft. Existing
+fields, defaults, default task title, and description instead of combining
+templates. No template restores the starting fields and task text. Contextual
+Source values and explicit launch property presets stay intact. After editing
+properties, title, or description, switching asks for confirmation; Cancel
+preserves the current draft. Existing
 prefilled task text also requires confirmation before a template replaces it;
 No template restores that text. Clearing a field or removing a property also
 counts as an edit. Reopening a saved draft preserves this distinction. The
@@ -844,14 +845,17 @@ New template opens template mode over the preserved task draft, without a
 replacement confirmation. Its whole Back button, including the New template
 label, returns to that unchanged draft. The template name replaces the task
 title on the same line, without a leading icon. Draft fields and description
-become initial defaults, without the task title or attachments. The footer's
+become initial defaults along with the draft's task title, but not attachments.
+The default task title is stored separately from the template name; keep the
+existing template-mode name layout until the title/name controls change. The footer's
 Share with team switch controls new
 template ownership. Edit opens the same mode with the saved name and defaults;
 team ownership reads Shared with the owning team, while personal templates have
 no ownership label. Both hide Attach and Create More. Save template
 saves only the template, then returns with its fields applied. Existing task
-prose and attachments stay intact; a blank task description takes the saved
-description. Later template switches still confirm before replacing that prose.
+title, prose, and attachments stay intact; blank title or description takes
+the corresponding saved default. Later template switches still confirm before
+replacing that text.
 Cancel restores the task draft, including rich text and attachments. Closing
 and reopening must not replace the task draft with template edits. Source links
 are never reusable defaults.
@@ -860,16 +864,18 @@ Changing an applied template's fields adds an accent dot to its button and
 selected picker row. Task title and description changes alone do not add the
 dot. Keep the existing property pills without per-field dots. Managers get Reset
 and Update template at the bottom of the picker, following saved-view actions.
-Reset restores fields without replacing task description text. Update template
-saves fields immediately but keeps the template's saved description. Conflicts
-leave the current task draft available. Delete template appears as a small
+Reset restores fields without replacing the task title or description. Update
+template saves fields immediately but keeps the template's saved title and
+description. Conflicts leave the current task draft available. Delete template
+appears as a small
 secondary text action beside Close in template mode. Its existing confirmation
 must leave existing tasks and the preserved draft unchanged; deleting the
 selected template only detaches its selection.
 
-Create More uses Create another and reapplies the selected saved defaults
-to each fresh task, discarding task-specific edits while retaining launch
-presets. Verify personal/team creation, draft preservation, field-only update
+Create More uses Create another and reapplies the selected saved defaults,
+including task title and description, to each fresh task, discarding task-specific
+edits while retaining launch presets. Verify personal/team creation, draft
+preservation, field-only update
 and reset, no-template selection, repeated Create More, editing, cancellation,
 conflicts, and deletion. Touch retains the tall composer, with Save in its
 reachable header and Cancel in the footer; name focus requires an explicit tap.
