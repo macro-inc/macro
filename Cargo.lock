@@ -728,6 +728,7 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "trigger_context",
  "unfurl_service",
  "universal_input",
  "url",
