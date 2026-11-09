@@ -52,6 +52,8 @@ crate; Android host integration lives in `apps/web/tauri/native_editor_plugin`.
 
 Query `ShouldInsertText` before native insertion: a true result requires the
 model insertion command, including changed typing attributes and token boundaries.
+`sync_defaults()` supplies the current core timeout, heartbeat, retry, WAL and
+recovery records; hosts supply their surface's presence and snapshot settings.
 Other native typing uses `FfiInput::TextDeltaFromView(ViewTextDelta)` with UTF-16
 start/deletion lengths and only the inserted text. Full `TextFromView` is explicit
 resynchronization. Use `ModifyTarget::RequireView` when layout endpoints are

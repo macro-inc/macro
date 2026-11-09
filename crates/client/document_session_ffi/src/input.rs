@@ -1,5 +1,35 @@
 //! Explicit native inputs; policy remains inside DocumentSession.
 use crate::*;
+/// Shared policy defaults for native host configuration, without copied constants.
+#[derive(uniffi::Record)]
+pub struct FfiSyncDefaults {
+    /// Shared operation deadlines.
+    pub timeouts: Timeouts,
+    /// Shared connection heartbeat policy.
+    pub heartbeat: HeartbeatPolicy,
+    /// Shared reconnect policy.
+    pub backoff: BackoffPolicy,
+    /// Shared convergence policy.
+    pub converge: ConvergePolicy,
+    /// Shared WAL scheduling and retention policy.
+    pub wal: WalPolicy,
+    /// Shared recovery budget.
+    pub reset_budget: ResetBudget,
+}
+
+/// Read policy defaults from the shared core before supplying surface-specific settings.
+#[uniffi::export]
+pub fn sync_defaults() -> FfiSyncDefaults {
+    FfiSyncDefaults {
+        timeouts: Timeouts::default(),
+        heartbeat: HeartbeatPolicy::default(),
+        backoff: BackoffPolicy::default(),
+        converge: ConvergePolicy::default(),
+        wal: WalPolicy::default(),
+        reset_budget: ResetBudget::default(),
+    }
+}
+
 /// Host configuration; all sync policy fields are inherited from SyncConfig.
 #[derive(Clone, Debug, uniffi::Record)]
 pub struct FfiSessionConfig {

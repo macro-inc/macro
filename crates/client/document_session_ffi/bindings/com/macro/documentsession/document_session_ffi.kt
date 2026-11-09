@@ -675,6 +675,8 @@ internal object IntegrityCheckingUniffiLib {
     }
 
     internal fun ensureInitialized() = Unit
+    external fun uniffi_document_session_ffi_checksum_func_sync_defaults(
+    ): Int
     external fun uniffi_document_session_ffi_checksum_method_nativedocsession_handle(
     ): Int
     external fun uniffi_document_session_ffi_checksum_method_nativedocsession_read(
@@ -742,6 +744,8 @@ internal object UniffiLib {
     external fun uniffi_document_session_ffi_fn_method_nativeeditorsession_query(`ptr`: Long,`request`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_document_session_ffi_fn_method_nativeeditorsession_text_content(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_document_session_ffi_fn_func_sync_defaults(uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun ffi_document_session_ffi_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -862,6 +866,9 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
+    if ((lib.uniffi_document_session_ffi_checksum_func_sync_defaults() and 0xFFFF) != 56654) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_document_session_ffi_checksum_method_nativedocsession_handle() and 0xFFFF) != 23845) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3307,6 +3314,85 @@ public object FfiConverterTypeFfiSessionConfig: FfiConverterRustBuffer<FfiSessio
             FfiConverterBoolean.write(value.`headless`, buf)
             FfiConverterOptionalTypeFfiApplicationConfig.write(value.`application`, buf)
             FfiConverterSequenceTypeContainerPath.write(value.`observed`, buf)
+    }
+}
+
+
+
+/**
+ * Shared policy defaults for native host configuration, without copied constants.
+ */
+data class FfiSyncDefaults (
+    /**
+     * Shared operation deadlines.
+     */
+    var `timeouts`: Timeouts
+    , 
+    /**
+     * Shared connection heartbeat policy.
+     */
+    var `heartbeat`: HeartbeatPolicy
+    , 
+    /**
+     * Shared reconnect policy.
+     */
+    var `backoff`: BackoffPolicy
+    , 
+    /**
+     * Shared convergence policy.
+     */
+    var `converge`: ConvergePolicy
+    , 
+    /**
+     * Shared WAL scheduling and retention policy.
+     */
+    var `wal`: WalPolicy
+    , 
+    /**
+     * Shared recovery budget.
+     */
+    var `resetBudget`: ResetBudget
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiSyncDefaults: FfiConverterRustBuffer<FfiSyncDefaults> {
+    override fun read(buf: ByteBuffer): FfiSyncDefaults {
+        return FfiSyncDefaults(
+            FfiConverterTypeTimeouts.read(buf),
+            FfiConverterTypeHeartbeatPolicy.read(buf),
+            FfiConverterTypeBackoffPolicy.read(buf),
+            FfiConverterTypeConvergePolicy.read(buf),
+            FfiConverterTypeWalPolicy.read(buf),
+            FfiConverterTypeResetBudget.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiSyncDefaults) = (
+            FfiConverterTypeTimeouts.allocationSize(value.`timeouts`) +
+            FfiConverterTypeHeartbeatPolicy.allocationSize(value.`heartbeat`) +
+            FfiConverterTypeBackoffPolicy.allocationSize(value.`backoff`) +
+            FfiConverterTypeConvergePolicy.allocationSize(value.`converge`) +
+            FfiConverterTypeWalPolicy.allocationSize(value.`wal`) +
+            FfiConverterTypeResetBudget.allocationSize(value.`resetBudget`)
+    )
+
+    override fun write(value: FfiSyncDefaults, buf: ByteBuffer) {
+            FfiConverterTypeTimeouts.write(value.`timeouts`, buf)
+            FfiConverterTypeHeartbeatPolicy.write(value.`heartbeat`, buf)
+            FfiConverterTypeBackoffPolicy.write(value.`backoff`, buf)
+            FfiConverterTypeConvergePolicy.write(value.`converge`, buf)
+            FfiConverterTypeWalPolicy.write(value.`wal`, buf)
+            FfiConverterTypeResetBudget.write(value.`resetBudget`, buf)
     }
 }
 
@@ -15456,4 +15542,17 @@ public typealias FfiConverterTypeWalSeq = FfiConverterULong
 
 public typealias WallDuration = kotlin.Long
 public typealias FfiConverterTypeWallDuration = FfiConverterLong
+        /**
+         * Read policy defaults from the shared core before supplying surface-specific settings.
+         */ fun `syncDefaults`(): FfiSyncDefaults {
+            return FfiConverterTypeFfiSyncDefaults.lift(
+    uniffiRustCall() { _status ->
+    UniffiLib.uniffi_document_session_ffi_fn_func_sync_defaults(
+    
+        _status)
+}
+    )
+    }
+    
+
 

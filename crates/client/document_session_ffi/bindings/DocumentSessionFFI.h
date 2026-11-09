@@ -313,6 +313,12 @@ RustBuffer uniffi_document_session_ffi_fn_method_nativeeditorsession_query(uint6
 RustBuffer uniffi_document_session_ffi_fn_method_nativeeditorsession_text_content(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DOCUMENT_SESSION_FFI_FN_FUNC_SYNC_DEFAULTS
+#define UNIFFI_FFIDEF_UNIFFI_DOCUMENT_SESSION_FFI_FN_FUNC_SYNC_DEFAULTS
+RustBuffer uniffi_document_session_ffi_fn_func_sync_defaults(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_FFI_DOCUMENT_SESSION_FFI_RUSTBUFFER_ALLOC
 #define UNIFFI_FFIDEF_FFI_DOCUMENT_SESSION_FFI_RUSTBUFFER_ALLOC
 RustBuffer ffi_document_session_ffi_rustbuffer_alloc(uint64_t size, RustCallStatus *_Nonnull out_status
@@ -571,6 +577,12 @@ void ffi_document_session_ffi_rust_future_free_void(uint64_t handle
 #ifndef UNIFFI_FFIDEF_FFI_DOCUMENT_SESSION_FFI_RUST_FUTURE_COMPLETE_VOID
 #define UNIFFI_FFIDEF_FFI_DOCUMENT_SESSION_FFI_RUST_FUTURE_COMPLETE_VOID
 void ffi_document_session_ffi_rust_future_complete_void(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_DOCUMENT_SESSION_FFI_CHECKSUM_FUNC_SYNC_DEFAULTS
+#define UNIFFI_FFIDEF_UNIFFI_DOCUMENT_SESSION_FFI_CHECKSUM_FUNC_SYNC_DEFAULTS
+uint16_t uniffi_document_session_ffi_checksum_func_sync_defaults(void
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_DOCUMENT_SESSION_FFI_CHECKSUM_METHOD_NATIVEDOCSESSION_HANDLE
