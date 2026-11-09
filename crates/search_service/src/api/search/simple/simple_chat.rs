@@ -157,3 +157,6 @@ pub(in crate::api::search::simple) async fn search_names<'a>(
         (hits, response.cursor)
     })
 }
+
+#[cfg(test)]
+mod test;

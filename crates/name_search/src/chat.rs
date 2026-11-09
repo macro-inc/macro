@@ -26,7 +26,7 @@ async fn ids_search(
     cursor: Option<SearchMethodCursor>,
 ) -> Result<PaginatedResult<NameSearchResult>, NameSearchError> {
     if chat_ids.is_empty() {
-        return Err(NameSearchError::EmptyIdsWithIdsOnly);
+        return Ok(SearchCursorOption::paginate(Vec::new(), limit as usize));
     }
 
     let (cursor_updated_at, cursor_entity_id) = cursor
@@ -212,7 +212,9 @@ async fn owner_search<'a>(
     Ok(SearchCursorOption::paginate(results, limit as usize))
 }
 
-/// Searches over the user's chats by name. A non-empty `tag_option_ids`
+/// Searches over the user's chats by name: their own chats plus `chat_ids`,
+/// or only `chat_ids` when `ids_only` is set, so an empty `chat_ids` then
+/// matches nothing. A non-empty `tag_option_ids`
 /// restricts results to chats holding any of those property option ids, or
 /// every one of them when `match_all_tags` is set.
 #[tracing::instrument(skip(db), err)]

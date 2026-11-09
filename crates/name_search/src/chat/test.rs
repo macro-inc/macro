@@ -45,11 +45,13 @@ async fn test_search_chat_names_empty_term(pool: Pool<Postgres>) -> anyhow::Resu
 async fn test_search_chat_names_ids_only_with_empty_ids(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
+    // user1 owns chats matching "project", which an ids-only search over no
+    // ids must still leave out.
     let user_id = MacroUserId::parse_from_str("macro|user1@test.com")
         .map(|l| l.lowercase())
         .unwrap();
 
-    let result = search_chat_names(
+    let response = search_chat_names(
         &pool,
         &user_id,
         &[],
@@ -60,13 +62,10 @@ async fn test_search_chat_names_ids_only_with_empty_ids(
         10,
         None,
     )
-    .await;
+    .await?;
 
-    assert!(result.is_err());
-    assert!(matches!(
-        result.unwrap_err(),
-        NameSearchError::EmptyIdsWithIdsOnly
-    ));
+    assert!(response.items.is_empty());
+    assert!(response.cursor.is_done());
 
     Ok(())
 }
