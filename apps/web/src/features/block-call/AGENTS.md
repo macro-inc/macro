@@ -28,7 +28,7 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - Keep metadata and entity sections on SidePanel's standard floating detail rows and dividers; keep the team-sharing card always visible below metadata, outside collapsible sections.
 - Show read-only team visibility and the starter's resolved display name when sharing is not editable; use the generic starter reason instead of an email fallback, and reserve a disabled switch for pending writes.
 - Put the existing fetched entity-tag pill below title metadata; keep its property reads inside a local Suspense boundary.
-- Center the player and Transcript as one group at call-column widths of 1028px or more (520–720px player, 400px card, 28px gap, 80px insets, 1228px group cap); preserve the original 800px content wrapper and reading tabs below that threshold.
+- Center the player and Transcript as one group at call-column widths of 1108px or more (520–720px player, 480px card, 28px gap, 80px insets, 1308px group cap); preserve the original 800px content wrapper and reading tabs below that threshold.
 - Use FloatRegion ownership for phone playback instead of changing global dock state.
 - Use the standard SidePanel drawer for phone details, with the same content as desktop.
 - Keep one mounted transcript and video across the responsive threshold; retain the reading-tab selection, playback position and transcript follow state.

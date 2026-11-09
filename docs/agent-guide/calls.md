@@ -52,9 +52,9 @@ stored Markdown, not generated client-side sections.
 The full-width top bar stays above the content, with the standard details toggle.
 Details opens in the existing floating popover below the header, without
 Transcript/Details tabs. On touch it uses the standard details drawer.
-At call-column widths of 1028px or more, a 400px Transcript card sits beside
+At call-column widths of 1108px or more, a 480px Transcript card sits beside
 an at-most-720px player, with the existing 28px section gap. The centered group
-caps at 1228px including 80px of page insets, preserving the original 800px
+caps at 1308px including 80px of page insets, preserving the original 800px
 content wrapper's player width. The threshold leaves at least 520px for the
 player; split panes switch independently of the window. Identity spans the
 group, aligned to the video's left edge. The left column scrolls through
@@ -118,7 +118,7 @@ call controls. `call_transcript_id=<segmentId>` seeks the matching segment;
 `call_message_id=<messageId>` opens the phone Chat tab and highlights the message.
 
 Check a saved call with recording, transcript, summary, chat and attachments at
-1920x1080, 1440x900, 1280x800 and 1024x768, in splits on both sides of the 1028px
+1920x1080, 1440x900, 1280x800 and 1024x768, in splits on both sides of the 1108px
 call-column threshold, in 680px and 480px splits, and at 390x844 with touch emulation. Cover
 Details over the Transcript card, both themes, independent scrolling, retained tab
 and playback state after resizing, pause/seek/skip/speed/fullscreen, scroll-follow

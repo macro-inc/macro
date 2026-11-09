@@ -1,5 +1,5 @@
 @media (prefers-reduced-motion: no-preference) {
-  @container call-column (min-width: 1028px) {
+  @container call-column (min-width: 1108px) {
     .recording-transcript-card {
       animation: recording-transcript-enter 240ms cubic-bezier(0.2, 0, 0, 1);
     }

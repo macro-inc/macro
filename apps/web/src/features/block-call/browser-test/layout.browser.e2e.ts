@@ -11,6 +11,7 @@ for (const theme of ['light', 'dark']) {
     const card = page.getByRole('complementary', { name: 'Transcript' });
     const content = page.locator('[data-recording-scroll="content"]');
     const transcriptScroll = card.locator('.overflow-y-auto');
+    await expect(card).toHaveCSS('opacity', '1');
     const before = await card.boundingBox();
     await content.hover();
     await page.mouse.wheel(0, 650);
@@ -25,7 +26,7 @@ for (const theme of ['light', 'dark']) {
     ).toBeVisible();
     if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
       await page.screenshot({
-        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d54-${theme}-left-scrolled.png`,
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/${process.env.CALL_PLAYBACK_SCREENSHOT_PREFIX ?? 'call-layout'}-${theme}-left-scrolled.png`,
       });
     await page.getByRole('button', { name: 'Show video', exact: true }).click();
     await expect
@@ -37,11 +38,12 @@ for (const theme of ['light', 'dark']) {
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`${FIXTURE}?theme=${theme}&pane=1028`);
+    await page.goto(`${FIXTURE}?theme=${theme}&pane=1108`);
     const card = page.getByRole('complementary', { name: 'Transcript' });
     await expect(card).toBeVisible();
+    await expect(card).toHaveCSS('opacity', '1');
     await page.locator('#fixture-pane').evaluate((element: HTMLElement) => {
-      element.style.maxWidth = '1027px';
+      element.style.maxWidth = '1107px';
     });
     await expect(
       page.getByRole('radio', { name: 'Summary', exact: true })
@@ -84,7 +86,7 @@ for (const width of [390, 480, 680]) {
         .toBeCloseTo(1);
       if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
         await page.screenshot({
-          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d54-inline-${width}.png`,
+          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/${process.env.CALL_PLAYBACK_SCREENSHOT_PREFIX ?? 'call-layout'}-inline-${width}.png`,
         });
     } finally {
       await context.close();

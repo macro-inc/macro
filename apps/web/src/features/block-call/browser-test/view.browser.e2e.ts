@@ -27,8 +27,9 @@ for (const theme of ['light', 'dark']) {
         page.getByText('Playback has one transcript line.')
       ).toHaveCount(1);
       await expect(page.getByText('Conversation recap')).toBeVisible();
-      if (columnWidth >= 1028) {
+      if (columnWidth >= 1108) {
         await expect(card).toBeVisible();
+        await expect(card).toHaveCSS('opacity', '1');
         await expect(tabs).toBeHidden();
         const geometry = await card.evaluate((element) => {
           const rect = element.getBoundingClientRect();
@@ -59,7 +60,7 @@ for (const theme of ['light', 'dark']) {
             titleRight: title.right - rect.right,
           };
         });
-        expect(geometry.width).toBe(400);
+        expect(geometry.width).toBe(480);
         expect(geometry.topDifference).toBeLessThan(3);
         expect(geometry.gap).toBe(28);
         expect(geometry.leftPadding).toBe(geometry.rightPadding);
@@ -74,7 +75,7 @@ for (const theme of ['light', 'dark']) {
         expect(geometry.playerWidth).toBeGreaterThanOrEqual(520);
         // The original 800px content wrapper includes two 40px page insets.
         expect(geometry.playerWidth).toBeLessThanOrEqual(720);
-        expect(geometry.playerWidth).toBe(Math.min(720, columnWidth - 508));
+        expect(geometry.playerWidth).toBe(Math.min(720, columnWidth - 588));
         const utterance = card.getByText(
           'We can follow up on those changes tomorrow.'
         );
@@ -97,24 +98,26 @@ for (const theme of ['light', 'dark']) {
           .click();
         await expect(tabs).toBeChecked();
         await expect(card).toBeVisible();
+        await expect(card).toHaveCSS('opacity', '1');
       }
       if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
         await page.screenshot({
-          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d54-${theme}-${width}.png`,
+          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/${process.env.CALL_PLAYBACK_SCREENSHOT_PREFIX ?? 'call-layout'}-${theme}-${width}.png`,
         });
     });
   }
 
-  test(`split pane switches at 1028px without remounting playback or losing the selected tab (${theme})`, async ({
+  test(`split pane switches at 1108px without remounting playback or losing the selected tab (${theme})`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`${fixture}?theme=${theme}&pane=1028`);
+    await page.goto(`${fixture}?theme=${theme}&pane=1108`);
     const pane = page.locator('#fixture-pane');
     const video = page.locator('video');
     const card = page.getByRole('complementary', { name: 'Transcript' });
     const transcript = page.getByRole('radio', { name: 'Transcript' });
     await expect(card).toBeVisible();
+    await expect(card).toHaveCSS('opacity', '1');
     await expect(video).toHaveJSProperty('readyState', 4);
     await card
       .getByRole('button', { name: /Playback has one transcript line/ })
@@ -139,7 +142,7 @@ for (const theme of ['light', 'dark']) {
         element.setAttribute('data-mount', 'original');
       });
     await pane.evaluate((element: HTMLElement) => {
-      element.style.maxWidth = '1027px';
+      element.style.maxWidth = '1107px';
     });
     await expect(transcript).toBeVisible();
     await expect(card).toBeHidden();
@@ -165,13 +168,14 @@ for (const theme of ['light', 'dark']) {
       .toBeGreaterThanOrEqual(1);
     if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
       await page.screenshot({
-        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d54-${theme}-pane-1027.png`,
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/${process.env.CALL_PLAYBACK_SCREENSHOT_PREFIX ?? 'call-layout'}-${theme}-pane-1107.png`,
       });
     await pane.evaluate((element: HTMLElement) => {
-      element.style.maxWidth = '1028px';
+      element.style.maxWidth = '1108px';
     });
     await expect(transcript).toBeHidden();
     await expect(card).toBeVisible();
+    await expect(card).toHaveCSS('opacity', '1');
     expect(
       await video.evaluate((element) => element.getBoundingClientRect().width)
     ).toBe(520);
@@ -191,10 +195,10 @@ for (const theme of ['light', 'dark']) {
       .toBeGreaterThanOrEqual(1);
     if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
       await page.screenshot({
-        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d54-${theme}-pane-1028.png`,
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/${process.env.CALL_PLAYBACK_SCREENSHOT_PREFIX ?? 'call-layout'}-${theme}-pane-1108.png`,
       });
     await pane.evaluate((element: HTMLElement) => {
-      element.style.maxWidth = '1027px';
+      element.style.maxWidth = '1107px';
     });
     await expect(transcript).toBeChecked();
     await expect(video).toHaveCount(1);
@@ -231,6 +235,7 @@ for (const theme of ['light', 'dark']) {
     await expect(details).toBeVisible();
     await expect(details).toHaveCSS('opacity', '1');
     await expect(card).toBeVisible();
+    await expect(card).toHaveCSS('opacity', '1');
     const overlap = await details.evaluate((element) => {
       const rect = element.getBoundingClientRect();
       const transcript = document
@@ -251,7 +256,7 @@ for (const theme of ['light', 'dark']) {
     expect(overlap).toBe(true);
     if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
       await page.screenshot({
-        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d54-${theme}-details.png`,
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/${process.env.CALL_PLAYBACK_SCREENSHOT_PREFIX ?? 'call-layout'}-${theme}-details.png`,
       });
     await page.getByRole('button', { name: 'Hide details' }).click();
     await expect(details).toHaveCount(0);
@@ -281,7 +286,7 @@ for (const theme of ['light', 'dark']) {
     await expect(card).toBeInViewport();
     if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
       await page.screenshot({
-        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d54-${theme}-left-scrolled.png`,
+        path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/${process.env.CALL_PLAYBACK_SCREENSHOT_PREFIX ?? 'call-layout'}-${theme}-left-scrolled.png`,
       });
   });
 }
