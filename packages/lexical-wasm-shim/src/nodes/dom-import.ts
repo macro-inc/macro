@@ -4,7 +4,6 @@
  */
 import type { TextFormatType } from 'lexical';
 import type { DOMConversionMap, DOMConversionOutput } from './dom-types';
-import { elementFormats } from './format';
 import {
   type LexicalNode,
   LineBreakNode,
@@ -314,30 +313,25 @@ export function textImportDOM(): DOMConversionMap {
   return map;
 }
 
+function setParagraphFormat(node: ParagraphNode, format: string | null): void {
+  switch (format) {
+    case 'left':
+    case 'center':
+    case 'right':
+    case 'justify':
+    case 'start':
+    case 'end':
+      node.setFormat(format);
+  }
+}
+
 export function paragraphImportDOM(): DOMConversionMap {
   return {
     p: () => ({
       priority: 0,
       conversion: (element) => {
         const node = new ParagraphNode();
-        const cssAlign = element.style.textAlign;
-        const align =
-          Object.hasOwn(elementFormats, cssAlign) && cssAlign !== ''
-            ? cssAlign
-            : element.getAttribute('align') || '';
-        for (const format of Object.keys(elementFormats)) {
-          if (
-            format === align &&
-            (format === '' ||
-              format === 'left' ||
-              format === 'center' ||
-              format === 'right' ||
-              format === 'justify' ||
-              format === 'start' ||
-              format === 'end')
-          )
-            node.setFormat(format);
-        }
+        setParagraphFormat(node, element.style.textAlign);
         const indent = element.getAttribute('data-lexical-indent');
         const parsed =
           indent === null ? Number.NaN : Number.parseInt(indent, 10);
@@ -349,6 +343,9 @@ export function paragraphImportDOM(): DOMConversionMap {
                   40
               )
         );
+        if (node.getFormatType() === '') {
+          setParagraphFormat(node, element.getAttribute('align'));
+        }
         const direction = element.getAttribute('dir');
         if (direction === 'ltr' || direction === 'rtl')
           node.setDirection(direction);
