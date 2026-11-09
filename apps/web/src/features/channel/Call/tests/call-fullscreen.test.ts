@@ -89,3 +89,30 @@ it('remembers its fullscreen element when the render ref is cleared before clean
   state.dispose();
   expect(doc.exit).toHaveBeenCalledOnce();
 });
+
+it('requests entry synchronously and cancels a late entry after session exit', async () => {
+  const doc = fullscreenDocument();
+  const root = document.createElement('div');
+  let finish!: () => void;
+  root.requestFullscreen = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = () => {
+          doc.change(root);
+          resolve();
+        };
+      })
+  );
+  const state = createRoot((dispose) => ({
+    ...createCallFullscreen(() => root),
+    dispose,
+  }));
+  const request = state.enter();
+  expect(root.requestFullscreen).toHaveBeenCalledOnce();
+  await state.exit();
+  finish();
+  await request;
+  expect(doc.exit).toHaveBeenCalledOnce();
+  expect(state.active()).toBe(false);
+  state.dispose();
+});

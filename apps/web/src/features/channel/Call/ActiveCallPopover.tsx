@@ -1,12 +1,15 @@
 import { t } from '@app/lib/i18n';
+import { IS_MAC } from '@core/constant/isMac';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import CornersIn from '@icon/system/regular/corners-in.svg';
+import CornersOut from '@icon/system/regular/corners-out.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import Hash from '@icon/system/regular/hash.svg';
 import PictureInPicture from '@icon/system/regular/picture-in-picture.svg';
 import { Popover } from '@kobalte/core/popover';
 import { useLiveCallRecordQuery } from '@queries/call/call';
-import { Button, Dropdown } from '@ui';
+import { Button, Dropdown, Hotkey } from '@ui';
 import { Show } from 'solid-js';
 import { useQuickCallsFlag } from '../../meetings/use-quick-calls-flag';
 import { ActiveCallLink } from './ActiveCallLink';
@@ -14,6 +17,7 @@ import { useCallContext } from './CallContext';
 import { CallLiveChip } from './CallLiveChip';
 import { CallParticipantsList } from './CallParticipantsList';
 import { CallQuickControls } from './CallQuickControls';
+import { useCallFullscreenOptional } from './call-fullscreen-host';
 import { createCallReactions } from './call-reactions';
 
 export function ActiveCallPopover(props: {
@@ -23,6 +27,7 @@ export function ActiveCallPopover(props: {
   const call = useCallContext();
   const reactions = createCallReactions(call.room);
   const quickCalls = useQuickCallsFlag();
+  const fullscreen = useCallFullscreenOptional()?.fullscreen;
   const record = useLiveCallRecordQuery(() => call.activeCallId() ?? '');
   return (
     <Popover.Content class="menu-surface z-modal w-75 max-w-[calc(100vw-1rem)] overflow-hidden outline-none animate-menu-open">
@@ -42,6 +47,7 @@ export function ActiveCallPopover(props: {
         </div>
         <Show
           when={
+            fullscreen?.available() ||
             props.onShowPlayer ||
             (!quickCalls().loading && quickCalls().enabled)
           }
@@ -64,6 +70,38 @@ export function ActiveCallPopover(props: {
                   </Dropdown.Item>
                 </Show>
                 <ActiveCallLink menuItem />
+                <Show when={fullscreen}>
+                  {(control) => (
+                    <Dropdown.Item
+                      disabled={!control().available()}
+                      onSelect={() => {
+                        if (control().active())
+                          fireAndForget(control().exit(), 'call-fullscreen');
+                        else {
+                          const entering = control().enter();
+                          props.onOpenCall();
+                          fireAndForget(entering, 'call-fullscreen');
+                        }
+                      }}
+                    >
+                      <Show
+                        when={control().active()}
+                        fallback={<CornersOut class="size-4" />}
+                      >
+                        <CornersIn class="size-4" />
+                      </Show>
+                      <span class="flex-1">
+                        {control().active()
+                          ? t('calls.exitFullscreen')
+                          : t('calls.fullscreen')}
+                      </span>
+                      <Hotkey
+                        shortcut={IS_MAC ? 'ctrl+cmd+f' : 'f11'}
+                        theme="subtle"
+                      />
+                    </Dropdown.Item>
+                  )}
+                </Show>
               </Dropdown.Group>
             </Dropdown.Content>
           </Dropdown>

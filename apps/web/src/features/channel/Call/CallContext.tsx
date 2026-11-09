@@ -41,6 +41,7 @@ import {
   createCallSessionController,
   stopPrejoinTracks,
 } from './CallSessionController';
+import { CallFullscreenProvider } from './call-fullscreen-host';
 import { type CallLifecycleState, createCallLifecycle } from './call-lifecycle';
 import { createCallMediaPermissions } from './call-media-permissions';
 import { traceCallMedia } from './call-media-telemetry';
@@ -1910,7 +1911,9 @@ export function CallProvider(props: ParentProps) {
 
   return (
     <CallContext.Provider value={state}>
-      {props.children}
+      <CallFullscreenProvider callId={state.activeCallId}>
+        {props.children}
+      </CallFullscreenProvider>
       <CallAudioSink />
     </CallContext.Provider>
   );

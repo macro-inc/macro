@@ -71,7 +71,7 @@ It shows the call title and duration, current attendees and compact media contro
 The popup and floating player reuse the full call's microphone, camera/background
 and screen-audio caret menus, without the full toolbar container.
 Open call returns to the existing meeting/channel route. More offers
-**Show floating player**, followed by **Copy meeting link**. Copy creates the link
+**Show floating player**, **Copy meeting link**, and **Full screen**. Copy creates the link
 only after explicit selection and reports success or failure. More stays available
 when copying is its only action. The grouped dropdown opens below More and aligns
 to its right edge. Away from the channel's Call tab, the desktop player
@@ -412,7 +412,9 @@ quick repeats start at slightly different horizontal positions. When the
 sender's tile is off screen it appears at the stage's bottom-left. Reduced motion
 fades in, holds, then fades out without movement or scale. Reactions have no sound and disappear when leaving.
 
-Desktop **More → Full screen** expands only the call area. The same item becomes
+Desktop **More → Full screen**, including the rail popover, expands only the call area.
+The call provider owns a persistent fullscreen target so a popover action enters
+fullscreen during its click before the call route loads. The same item becomes
 **Exit full screen**; browser Escape also exits. Call menus and tooltips remain
 inside the fullscreen surface. Unsupported webviews disable the action.
 

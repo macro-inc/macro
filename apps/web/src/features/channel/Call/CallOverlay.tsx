@@ -56,6 +56,10 @@ import {
 import { CallReactionLayer } from './CallReactionLayer';
 import { CallWaveform } from './CallWaveform';
 import { createCallFullscreen } from './call-fullscreen';
+import {
+  CallFullscreenPortal,
+  useCallFullscreenOptional,
+} from './call-fullscreen-host';
 import { createCallHotkeys } from './call-hotkeys';
 import {
   activeCallPin,
@@ -106,7 +110,8 @@ export function CallOverlay(props: {
 }) {
   const callCtx = useCallContext();
   const [callRoot, setCallRoot] = createSignal<HTMLDivElement>();
-  const fullscreen = createCallFullscreen(callRoot);
+  const fullscreen =
+    useCallFullscreenOptional()?.fullscreen ?? createCallFullscreen(callRoot);
   createCallHotkeys(callCtx, fullscreen);
   const reactions = createCallReactions(callCtx.room);
   const [reactionRoot, setReactionRoot] = createSignal<HTMLDivElement>();
@@ -471,138 +476,112 @@ export function CallOverlay(props: {
   };
 
   return (
-    <div
-      ref={setCallRoot}
-      class={cn(
-        'portal-scope relative flex h-full min-h-0 flex-col @container/call touch:pt-[var(--mobile-content-inset-top,0px)] touch:pb-(--mobile-content-inset-bottom) mobile:pb-0',
-        fullscreen.active() && 'h-dvh w-dvw bg-surface'
-      )}
-      data-call-layout={layout()}
-      data-call-fullscreen={isMobile() ? '' : undefined}
-      onPointerDown={() => {
-        setKeyboardFocus(false);
-        controls.reveal();
-      }}
-      onKeyDown={() => {
-        setKeyboardFocus(true);
-        controls.reveal();
-      }}
-      onFocusIn={(event) => {
-        if (
-          event.target instanceof HTMLElement &&
-          event.target.matches(':focus-visible')
-        ) {
-          setKeyboardFocus(true);
-        }
-      }}
-      onFocusOut={(event) => {
-        if (
-          !(event.relatedTarget instanceof Node) ||
-          !event.currentTarget.contains(event.relatedTarget)
-        )
-          setKeyboardFocus(false);
-      }}
-    >
-      {/* The call owns its controls instead of the mobile New action. */}
-      <FloatRegion region="accessory" />
-      <FloatRegion region="dock" priority={100} active={isMobile} />
+    <CallFullscreenPortal>
       <div
-        ref={setOverlayMount}
-        class="relative min-h-0 flex-1 overflow-hidden"
+        ref={setCallRoot}
+        class={cn(
+          'portal-scope relative flex h-full min-h-0 flex-col @container/call touch:pt-[var(--mobile-content-inset-top,0px)] touch:pb-(--mobile-content-inset-bottom) mobile:pb-0',
+          fullscreen.active() && 'h-dvh w-dvw bg-surface'
+        )}
+        data-call-layout={layout()}
+        data-call-fullscreen={isMobile() ? '' : undefined}
+        onPointerDown={() => {
+          setKeyboardFocus(false);
+          controls.reveal();
+        }}
+        onKeyDown={() => {
+          setKeyboardFocus(true);
+          controls.reveal();
+        }}
+        onFocusIn={(event) => {
+          if (
+            event.target instanceof HTMLElement &&
+            event.target.matches(':focus-visible')
+          ) {
+            setKeyboardFocus(true);
+          }
+        }}
+        onFocusOut={(event) => {
+          if (
+            !(event.relatedTarget instanceof Node) ||
+            !event.currentTarget.contains(event.relatedTarget)
+          )
+            setKeyboardFocus(false);
+        }}
       >
-        <Resize.Zone
-          direction="horizontal"
-          gutter={12}
-          showDividers={false}
-          captureResizeCtx={setResizeContext}
-          class={cn(
-            // Hidden resize panels reset their left offset; keep chat at the right edge.
-            '[&>[data-resize-panel]:has(>[data-call-sidebar])]:left-auto! [&>[data-resize-panel]:has(>[data-call-sidebar])]:right-0',
-            !isMobile() &&
-              panelMounted() && [
-                '[&>[data-resize-panel]]:transition-[width] [&>[data-resize-panel]]:duration-200 [&>[data-resize-panel]]:ease-out [&>[data-resize-panel]]:motion-reduce:transition-none',
-                '[&>[role=separator]]:transition-[left] [&>[role=separator]]:duration-200 [&>[role=separator]]:ease-out [&>[role=separator]]:motion-reduce:transition-none',
-                '[&:has(>[role=separator]:active)>*]:transition-none',
-              ]
-          )}
+        {/* The call owns its controls instead of the mobile New action. */}
+        <FloatRegion region="accessory" />
+        <FloatRegion region="dock" priority={100} active={isMobile} />
+        <div
+          ref={setOverlayMount}
+          class="relative min-h-0 flex-1 overflow-hidden"
         >
-          <Resize.Panel id="call-stage" minSize={widePanel() ? 320 : 0}>
-            <div class="relative flex h-full min-h-0 min-w-0 flex-col @container/call-stage">
-              <div
-                ref={setReactionRoot}
-                data-call-participant-stage
-                class={cn(
-                  'relative flex min-h-0 flex-1',
-                  staged()
-                    ? 'grid justify-center gap-2'
-                    : sideStrip()
-                      ? 'flex-row gap-2'
-                      : 'flex-col',
-                  sideStrip() && staged() && 'overflow-hidden'
-                )}
-                style={
-                  staged()
-                    ? callStageGridStyle(
-                        stripTargets().length,
-                        sideStrip(),
-                        hideParticipants()
-                      )
-                    : undefined
-                }
-              >
-                {/* Screen share area */}
-                <Show when={hasAnyScreenShare()}>
-                  <div
-                    class={cn('flex-1 min-h-0', staged() ? 'contents' : 'pt-2')}
-                    classList={{ hidden: !showScreenShare() && !staged() }}
-                  >
+          <Resize.Zone
+            direction="horizontal"
+            gutter={12}
+            showDividers={false}
+            captureResizeCtx={setResizeContext}
+            class={cn(
+              // Hidden resize panels reset their left offset; keep chat at the right edge.
+              '[&>[data-resize-panel]:has(>[data-call-sidebar])]:left-auto! [&>[data-resize-panel]:has(>[data-call-sidebar])]:right-0',
+              !isMobile() &&
+                panelMounted() && [
+                  '[&>[data-resize-panel]]:transition-[width] [&>[data-resize-panel]]:duration-200 [&>[data-resize-panel]]:ease-out [&>[data-resize-panel]]:motion-reduce:transition-none',
+                  '[&>[role=separator]]:transition-[left] [&>[role=separator]]:duration-200 [&>[role=separator]]:ease-out [&>[role=separator]]:motion-reduce:transition-none',
+                  '[&:has(>[role=separator]:active)>*]:transition-none',
+                ]
+            )}
+          >
+            <Resize.Panel id="call-stage" minSize={widePanel() ? 320 : 0}>
+              <div class="relative flex h-full min-h-0 min-w-0 flex-col @container/call-stage">
+                <div
+                  ref={setReactionRoot}
+                  data-call-participant-stage
+                  class={cn(
+                    'relative flex min-h-0 flex-1',
+                    staged()
+                      ? 'grid justify-center gap-2'
+                      : sideStrip()
+                        ? 'flex-row gap-2'
+                        : 'flex-col',
+                    sideStrip() && staged() && 'overflow-hidden'
+                  )}
+                  style={
+                    staged()
+                      ? callStageGridStyle(
+                          stripTargets().length,
+                          sideStrip(),
+                          hideParticipants()
+                        )
+                      : undefined
+                  }
+                >
+                  {/* Screen share area */}
+                  <Show when={hasAnyScreenShare()}>
                     <div
                       class={cn(
-                        'group/share relative h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center',
-                        staged() && 'contents'
+                        'flex-1 min-h-0',
+                        staged() ? 'contents' : 'pt-2'
                       )}
+                      classList={{ hidden: !showScreenShare() && !staged() }}
                     >
-                      <Show when={callCtx.isScreenSharing()}>
-                        <div
-                          hidden={
-                            staged() &&
-                            hideParticipants() &&
-                            !isStage('local-share')
-                          }
-                          class={cn(
-                            'min-h-0 min-w-0 size-full',
-                            staged() &&
-                              (activePin() === 'local-share'
-                                ? sideStrip()
-                                  ? 'col-start-1 row-start-1'
-                                  : 'col-span-full row-start-1'
-                                : sideStrip()
-                                  ? 'col-start-2'
-                                  : 'row-start-2')
-                          )}
-                          style={tilePosition('local-share')}
-                        >
-                          <LocalScreenShareTile
-                            isPinned={activePin() === 'local-share'}
-                            inStrip={staged() && !isStage('local-share')}
-                            pinEnabled
-                            onTogglePin={() => togglePin('local-share')}
-                          />
-                        </div>
-                      </Show>
-                      <For each={remoteScreenShares()}>
-                        {(participant) => (
+                      <div
+                        class={cn(
+                          'group/share relative h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center',
+                          staged() && 'contents'
+                        )}
+                      >
+                        <Show when={callCtx.isScreenSharing()}>
                           <div
                             hidden={
                               staged() &&
                               hideParticipants() &&
-                              !isStage({ share: participant })
+                              !isStage('local-share')
                             }
                             class={cn(
-                              'min-w-0 min-h-0',
-                              !staged() && 'flex-1',
+                              'min-h-0 min-w-0 size-full',
                               staged() &&
-                                (pinnedShare() === participant
+                                (activePin() === 'local-share'
                                   ? sideStrip()
                                     ? 'col-start-1 row-start-1'
                                     : 'col-span-full row-start-1'
@@ -610,420 +589,466 @@ export function CallOverlay(props: {
                                     ? 'col-start-2'
                                     : 'row-start-2')
                             )}
-                            style={tilePosition({ share: participant })}
+                            style={tilePosition('local-share')}
                           >
-                            <ScreenShareTile
-                              participant={participant}
-                              isPinned={pinnedShare() === participant}
-                              inStrip={
-                                staged() && !isStage({ share: participant })
-                              }
+                            <LocalScreenShareTile
+                              isPinned={activePin() === 'local-share'}
+                              inStrip={staged() && !isStage('local-share')}
                               pinEnabled
-                              onTogglePin={() =>
-                                togglePin({ share: participant })
-                              }
+                              onTogglePin={() => togglePin('local-share')}
                             />
                           </div>
-                        )}
-                      </For>
-                      <Show when={hideParticipants() && talking()}>
-                        <div
-                          data-call-stage-chip="speaker"
-                          class="absolute bottom-2 right-2 z-10 flex items-center gap-2 rounded-full bg-surface/90 px-2 py-1 text-sm"
-                        >
-                          <CallWaveform class="size-4 shrink-0" />
-                          <span class="size-6 shrink-0 rounded-full outline-2 -outline-offset-2 outline-success">
-                            <Show
-                              when={talkingId()}
-                              fallback={
-                                <Avatar size="fill">
-                                  <Avatar.Fallback>
-                                    {talkingName().charAt(0)}
-                                  </Avatar.Fallback>
-                                </Avatar>
+                        </Show>
+                        <For each={remoteScreenShares()}>
+                          {(participant) => (
+                            <div
+                              hidden={
+                                staged() &&
+                                hideParticipants() &&
+                                !isStage({ share: participant })
                               }
-                            >
-                              {(id) => (
-                                <UserIcon id={id()} size="fill" suppressClick />
+                              class={cn(
+                                'min-w-0 min-h-0',
+                                !staged() && 'flex-1',
+                                staged() &&
+                                  (pinnedShare() === participant
+                                    ? sideStrip()
+                                      ? 'col-start-1 row-start-1'
+                                      : 'col-span-full row-start-1'
+                                    : sideStrip()
+                                      ? 'col-start-2'
+                                      : 'row-start-2')
                               )}
-                            </Show>
-                          </span>
-                          <span>{talkingName()}</span>
-                        </div>
-                      </Show>
-                      <Show
-                        when={
-                          !isMobile() && layout() !== 'grid' && !activePin()
-                        }
-                      >
-                        <Button
-                          appearance="bare"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={
-                            hideParticipants()
-                              ? t('calls.showParticipants')
-                              : t('calls.hideParticipants')
-                          }
-                          aria-expanded={!hideParticipants()}
-                          tooltip={{
-                            content: hideParticipants()
-                              ? t('calls.showParticipants')
-                              : t('calls.hideParticipants'),
-                            placement: layout() === 'sidebar' ? 'left' : 'top',
-                          }}
-                          style={
-                            hideParticipants()
-                              ? undefined
-                              : sideStrip()
-                                ? { right: 'calc(9rem + 1rem)' }
-                                : { bottom: 'calc(6rem + 1rem)' }
-                          }
-                          class={cn(
-                            'absolute z-20 rounded-full border border-edge-muted bg-surface/70 text-ink opacity-0 pointer-events-none group-hover/share:opacity-100 group-hover/share:pointer-events-auto group-focus-within/share:opacity-100 group-focus-within/share:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto',
-                            layout() === 'sidebar'
-                              ? 'right-2 top-1/2 -translate-y-1/2 h-11 w-6'
-                              : 'bottom-2 left-1/2 -translate-x-1/2 h-6 w-11'
+                              style={tilePosition({ share: participant })}
+                            >
+                              <ScreenShareTile
+                                participant={participant}
+                                isPinned={pinnedShare() === participant}
+                                inStrip={
+                                  staged() && !isStage({ share: participant })
+                                }
+                                pinEnabled
+                                onTogglePin={() =>
+                                  togglePin({ share: participant })
+                                }
+                              />
+                            </div>
                           )}
-                          onClick={() =>
-                            changeParticipantVisibility(!hideParticipants())
+                        </For>
+                        <Show when={hideParticipants() && talking()}>
+                          <div
+                            data-call-stage-chip="speaker"
+                            class="absolute bottom-2 right-2 z-10 flex items-center gap-2 rounded-full bg-surface/90 px-2 py-1 text-sm"
+                          >
+                            <CallWaveform class="size-4 shrink-0" />
+                            <span class="size-6 shrink-0 rounded-full outline-2 -outline-offset-2 outline-success">
+                              <Show
+                                when={talkingId()}
+                                fallback={
+                                  <Avatar size="fill">
+                                    <Avatar.Fallback>
+                                      {talkingName().charAt(0)}
+                                    </Avatar.Fallback>
+                                  </Avatar>
+                                }
+                              >
+                                {(id) => (
+                                  <UserIcon
+                                    id={id()}
+                                    size="fill"
+                                    suppressClick
+                                  />
+                                )}
+                              </Show>
+                            </span>
+                            <span>{talkingName()}</span>
+                          </div>
+                        </Show>
+                        <Show
+                          when={
+                            !isMobile() && layout() !== 'grid' && !activePin()
                           }
                         >
-                          <Dynamic
-                            component={
-                              layout() === 'sidebar'
-                                ? hideParticipants()
-                                  ? CaretLeft
-                                  : CaretRight
-                                : hideParticipants()
-                                  ? CaretUp
-                                  : CaretDown
+                          <Button
+                            appearance="bare"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={
+                              hideParticipants()
+                                ? t('calls.showParticipants')
+                                : t('calls.hideParticipants')
                             }
-                            class="size-4"
-                          />
-                        </Button>
-                      </Show>
-                    </div>
-                  </div>
-                </Show>
-                {/* Participants area; stays mounted while the screen share is maximized. */}
-                <div
-                  hidden={
-                    (showScreenShare() && hideParticipants()) ||
-                    (spotlight() && participants().length === 0)
-                  }
-                  class={cn(
-                    staged()
-                      ? 'contents'
-                      : sideStrip() && (showScreenShare() || spotlight())
-                        ? 'w-48 shrink-0 min-h-0 overflow-y-auto'
-                        : showScreenShare() || spotlight()
-                          ? layout() === 'grid'
-                            ? 'h-48 shrink-0'
-                            : 'h-24 shrink-0'
-                          : 'flex-1 min-h-0',
-
-                    !staged() &&
-                      selfInGrid() &&
-                      `grid ${gridCols()} auto-rows-fr gap-2`,
-                    !staged() && 'pt-2 mobile:pt-0'
-                  )}
-                >
-                  <Show
-                    when={participants().length > 0}
-                    fallback={
-                      <LocalTile class="size-full" pinEnabled={false} />
-                    }
-                  >
-                    {/* Remote participants grid */}
-                    <div
-                      class={
-                        staged()
-                          ? 'contents'
-                          : selfInGrid()
-                            ? 'contents'
-                            : cn(
-                                showScreenShare()
-                                  ? sideStrip()
-                                    ? 'flex h-full flex-col items-center gap-2 overflow-y-auto'
-                                    : 'flex h-full justify-center gap-2 overflow-hidden'
-                                  : `grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`,
-                                'size-full'
-                              )
-                      }
-                    >
-                      <For each={participants()}>
-                        {(participant) => (
-                          <div
+                            aria-expanded={!hideParticipants()}
+                            tooltip={{
+                              content: hideParticipants()
+                                ? t('calls.showParticipants')
+                                : t('calls.hideParticipants'),
+                              placement:
+                                layout() === 'sidebar' ? 'left' : 'top',
+                            }}
+                            style={
+                              hideParticipants()
+                                ? undefined
+                                : sideStrip()
+                                  ? { right: 'calc(9rem + 1rem)' }
+                                  : { bottom: 'calc(6rem + 1rem)' }
+                            }
                             class={cn(
-                              'min-h-0 min-w-0',
-                              !staged() &&
-                                (showScreenShare()
-                                  ? 'flex-1 max-w-36'
-                                  : 'size-full'),
-                              staged() &&
-                                (stagePerson() === participant
-                                  ? sideStrip()
-                                    ? 'col-start-1 row-start-1'
-                                    : 'col-span-full row-start-1'
-                                  : sideStrip()
-                                    ? 'col-start-2'
-                                    : 'row-start-2')
+                              'absolute z-20 rounded-full border border-edge-muted bg-surface/70 text-ink opacity-0 pointer-events-none group-hover/share:opacity-100 group-hover/share:pointer-events-auto group-focus-within/share:opacity-100 group-focus-within/share:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto',
+                              layout() === 'sidebar'
+                                ? 'right-2 top-1/2 -translate-y-1/2 h-11 w-6'
+                                : 'bottom-2 left-1/2 -translate-x-1/2 h-6 w-11'
                             )}
-                            style={tilePosition(participant)}
-                          >
-                            <ParticipantTile
-                              participant={participant}
-                              stage={staged() && stagePerson() === participant}
-                              sidebar={
-                                sideStrip() && stagePerson() !== participant
-                              }
-                              filmstrip={
-                                (staged() && stagePerson() !== participant) ||
-                                showScreenShare()
-                              }
-                              avatarSize={
-                                (staged() && stagePerson() !== participant) ||
-                                showScreenShare()
-                                  ? 'sm'
-                                  : 'md'
-                              }
-                              isPinned={pinnedPerson() === participant}
-                              hidden={false}
-                              pinEnabled
-                              onTogglePin={() => togglePin(participant)}
-                            />
-                          </div>
-                        )}
-                      </For>
-                    </div>
-
-                    <Show when={callWork.showPrompt()}>
-                      <CallWorkPrompt
-                        accounts={work.accountsWithWork()}
-                        onView={openWork}
-                        onDismiss={workArrivals.dismiss}
-                      />
-                    </Show>
-
-                    {/* Auto alone uses a floating self view; other layouts own a tile. */}
-                    <div
-                      hidden={false}
-                      style={tilePosition('local')}
-                      class={cn(
-                        localOnStage()
-                          ? sideStrip()
-                            ? 'col-start-1 row-start-1 min-h-0'
-                            : 'col-span-full row-start-1 min-h-0'
-                          : selfInGrid()
-                            ? staged()
-                              ? 'row-start-2 min-h-0'
-                              : 'relative min-h-0'
-                            : 'absolute z-10 bottom-4 right-4 w-48 aspect-video shadow-lg'
-                      )}
-                    >
-                      <LocalTile
-                        class={
-                          staged() && !localOnStage()
-                            ? 'w-full h-auto max-h-full aspect-video min-h-0 self-center'
-                            : 'size-full min-h-0'
-                        }
-                        avatarSize="sm"
-                      />
-                    </div>
-                  </Show>
-                </div>
-                <CallReactionLayer
-                  root={reactionRoot}
-                  reactions={reactions.entries()}
-                />
-              </div>
-              {/* Settings expand over the tiles; the chat keeps its own full-height column. */}
-              <div
-                class="relative flex shrink-0 flex-col items-center gap-2 py-3 mobile:pb-[calc(var(--safe-bottom,0px)+12px)] transition-opacity duration-200 motion-reduce:transition-none"
-                classList={{
-                  'opacity-0 invisible pointer-events-none': controlsHidden(),
-                }}
-                inert={controlsHidden()}
-                data-holds-prompts={isTouchDevice() ? undefined : ''}
-              >
-                <div
-                  data-call-controls-row
-                  class="grid w-full items-center mobile:w-fit mobile:grid-cols-[auto_auto] mobile:gap-2 mobile:px-[max(16px,var(--mobile-chrome-gutter))]"
-                  style={
-                    isMobile()
-                      ? undefined
-                      : {
-                          'grid-template-columns': `minmax(min-content,1fr) auto minmax(${(panelToggleSize.width ?? (compactControls() ? 32 : 40)) + (compactControls() ? 8 : 12)}px,1fr)`,
-                        }
-                  }
-                >
-                  <Show when={!isMobile() && props.footerLeading}>
-                    <div class="col-start-1 row-start-1 mr-2 justify-self-start">
-                      {props.footerLeading}
-                    </div>
-                  </Show>
-                  <div class="col-start-2 row-start-1 flex min-w-0 justify-center mobile:col-start-1">
-                    <CallControls
-                      compact={compactControls()}
-                      onLeave={props.onLeave}
-                      onSettingsOpenChange={setSettingsOpen}
-                    >
-                      <Show when={canShareWithTeam()}>
-                        <CallSharingMenu
-                          compact={compactControls()}
-                          channelName={props.sharingChannelName}
-                          sharedWithTeam={sharedWithTeam()}
-                          disabled={teamShareLocked()}
-                          onToggle={() =>
-                            fireAndForget(teamShare.toggle(), 'channel-call')
-                          }
-                          onOpenChange={setSharingOpen}
-                        />
-                      </Show>
-                      <Show
-                        when={
-                          !isMobile() && !compactControls() && callCtx.room()
-                        }
-                      >
-                        <CallReactionMenu
-                          onReaction={(emoji) =>
-                            fireAndForget(
-                              reactions.send(emoji),
-                              'call-reaction'
-                            )
-                          }
-                          onOpenChange={setSettingsOpen}
-                        />
-                      </Show>
-                      <Show when={!isMobile()}>
-                        <CallMoreMenu
-                          compact={compactControls()}
-                          layout={layout()}
-                          fullscreen={fullscreen.active()}
-                          fullscreenAvailable={fullscreen.available()}
-                          onFullscreen={() =>
-                            fireAndForget(
-                              fullscreen.toggle(),
-                              'call-fullscreen'
-                            )
-                          }
-                          onReaction={
-                            callCtx.room()
-                              ? (emoji) =>
-                                  fireAndForget(
-                                    reactions.send(emoji),
-                                    'call-reaction'
-                                  )
-                              : undefined
-                          }
-                          onLayoutChange={(value) => {
-                            const interaction =
-                              beginInteraction('call.layout.change');
-                            try {
-                              setSavedLayout(value);
-                            } finally {
-                              interaction.end();
+                            onClick={() =>
+                              changeParticipantVisibility(!hideParticipants())
                             }
-                          }}
-                          hasScreenShare={hasAnyScreenShare()}
-                          hideParticipants={hideParticipants()}
-                          onHideParticipantsChange={changeParticipantVisibility}
-                          onOpenChange={setSettingsOpen}
-                        />
-                      </Show>
-                    </CallControls>
-                  </div>
+                          >
+                            <Dynamic
+                              component={
+                                layout() === 'sidebar'
+                                  ? hideParticipants()
+                                    ? CaretLeft
+                                    : CaretRight
+                                  : hideParticipants()
+                                    ? CaretUp
+                                    : CaretDown
+                              }
+                              class="size-4"
+                            />
+                          </Button>
+                        </Show>
+                      </div>
+                    </div>
+                  </Show>
+                  {/* Participants area; stays mounted while the screen share is maximized. */}
                   <div
-                    ref={setPanelToggleFrame}
+                    hidden={
+                      (showScreenShare() && hideParticipants()) ||
+                      (spotlight() && participants().length === 0)
+                    }
                     class={cn(
-                      isMobile() && 'island',
-                      'col-start-3 row-start-1 flex justify-center justify-self-end rounded-full mobile:col-start-2',
-                      isMobile() && 'p-1.5'
+                      staged()
+                        ? 'contents'
+                        : sideStrip() && (showScreenShare() || spotlight())
+                          ? 'w-48 shrink-0 min-h-0 overflow-y-auto'
+                          : showScreenShare() || spotlight()
+                            ? layout() === 'grid'
+                              ? 'h-48 shrink-0'
+                              : 'h-24 shrink-0'
+                            : 'flex-1 min-h-0',
+
+                      !staged() &&
+                        selfInGrid() &&
+                        `grid ${gridCols()} auto-rows-fr gap-2`,
+                      !staged() && 'pt-2 mobile:pt-0'
                     )}
                   >
-                    <PanelToggle />
+                    <Show
+                      when={participants().length > 0}
+                      fallback={
+                        <LocalTile class="size-full" pinEnabled={false} />
+                      }
+                    >
+                      {/* Remote participants grid */}
+                      <div
+                        class={
+                          staged()
+                            ? 'contents'
+                            : selfInGrid()
+                              ? 'contents'
+                              : cn(
+                                  showScreenShare()
+                                    ? sideStrip()
+                                      ? 'flex h-full flex-col items-center gap-2 overflow-y-auto'
+                                      : 'flex h-full justify-center gap-2 overflow-hidden'
+                                    : `grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`,
+                                  'size-full'
+                                )
+                        }
+                      >
+                        <For each={participants()}>
+                          {(participant) => (
+                            <div
+                              class={cn(
+                                'min-h-0 min-w-0',
+                                !staged() &&
+                                  (showScreenShare()
+                                    ? 'flex-1 max-w-36'
+                                    : 'size-full'),
+                                staged() &&
+                                  (stagePerson() === participant
+                                    ? sideStrip()
+                                      ? 'col-start-1 row-start-1'
+                                      : 'col-span-full row-start-1'
+                                    : sideStrip()
+                                      ? 'col-start-2'
+                                      : 'row-start-2')
+                              )}
+                              style={tilePosition(participant)}
+                            >
+                              <ParticipantTile
+                                participant={participant}
+                                stage={
+                                  staged() && stagePerson() === participant
+                                }
+                                sidebar={
+                                  sideStrip() && stagePerson() !== participant
+                                }
+                                filmstrip={
+                                  (staged() && stagePerson() !== participant) ||
+                                  showScreenShare()
+                                }
+                                avatarSize={
+                                  (staged() && stagePerson() !== participant) ||
+                                  showScreenShare()
+                                    ? 'sm'
+                                    : 'md'
+                                }
+                                isPinned={pinnedPerson() === participant}
+                                hidden={false}
+                                pinEnabled
+                                onTogglePin={() => togglePin(participant)}
+                              />
+                            </div>
+                          )}
+                        </For>
+                      </div>
+
+                      <Show when={callWork.showPrompt()}>
+                        <CallWorkPrompt
+                          accounts={work.accountsWithWork()}
+                          onView={openWork}
+                          onDismiss={workArrivals.dismiss}
+                        />
+                      </Show>
+
+                      {/* Auto alone uses a floating self view; other layouts own a tile. */}
+                      <div
+                        hidden={false}
+                        style={tilePosition('local')}
+                        class={cn(
+                          localOnStage()
+                            ? sideStrip()
+                              ? 'col-start-1 row-start-1 min-h-0'
+                              : 'col-span-full row-start-1 min-h-0'
+                            : selfInGrid()
+                              ? staged()
+                                ? 'row-start-2 min-h-0'
+                                : 'relative min-h-0'
+                              : 'absolute z-10 bottom-4 right-4 w-48 aspect-video shadow-lg'
+                        )}
+                      >
+                        <LocalTile
+                          class={
+                            staged() && !localOnStage()
+                              ? 'w-full h-auto max-h-full aspect-video min-h-0 self-center'
+                              : 'size-full min-h-0'
+                          }
+                          avatarSize="sm"
+                        />
+                      </div>
+                    </Show>
+                  </div>
+                  <CallReactionLayer
+                    root={reactionRoot}
+                    reactions={reactions.entries()}
+                  />
+                </div>
+                {/* Settings expand over the tiles; the chat keeps its own full-height column. */}
+                <div
+                  class="relative flex shrink-0 flex-col items-center gap-2 py-3 mobile:pb-[calc(var(--safe-bottom,0px)+12px)] transition-opacity duration-200 motion-reduce:transition-none"
+                  classList={{
+                    'opacity-0 invisible pointer-events-none': controlsHidden(),
+                  }}
+                  inert={controlsHidden()}
+                  data-holds-prompts={isTouchDevice() ? undefined : ''}
+                >
+                  <div
+                    data-call-controls-row
+                    class="grid w-full items-center mobile:w-fit mobile:grid-cols-[auto_auto] mobile:gap-2 mobile:px-[max(16px,var(--mobile-chrome-gutter))]"
+                    style={
+                      isMobile()
+                        ? undefined
+                        : {
+                            'grid-template-columns': `minmax(min-content,1fr) auto minmax(${(panelToggleSize.width ?? (compactControls() ? 32 : 40)) + (compactControls() ? 8 : 12)}px,1fr)`,
+                          }
+                    }
+                  >
+                    <Show when={!isMobile() && props.footerLeading}>
+                      <div class="col-start-1 row-start-1 mr-2 justify-self-start">
+                        {props.footerLeading}
+                      </div>
+                    </Show>
+                    <div class="col-start-2 row-start-1 flex min-w-0 justify-center mobile:col-start-1">
+                      <CallControls
+                        compact={compactControls()}
+                        onLeave={props.onLeave}
+                        onSettingsOpenChange={setSettingsOpen}
+                      >
+                        <Show when={canShareWithTeam()}>
+                          <CallSharingMenu
+                            compact={compactControls()}
+                            channelName={props.sharingChannelName}
+                            sharedWithTeam={sharedWithTeam()}
+                            disabled={teamShareLocked()}
+                            onToggle={() =>
+                              fireAndForget(teamShare.toggle(), 'channel-call')
+                            }
+                            onOpenChange={setSharingOpen}
+                          />
+                        </Show>
+                        <Show
+                          when={
+                            !isMobile() && !compactControls() && callCtx.room()
+                          }
+                        >
+                          <CallReactionMenu
+                            onReaction={(emoji) =>
+                              fireAndForget(
+                                reactions.send(emoji),
+                                'call-reaction'
+                              )
+                            }
+                            onOpenChange={setSettingsOpen}
+                          />
+                        </Show>
+                        <Show when={!isMobile()}>
+                          <CallMoreMenu
+                            compact={compactControls()}
+                            layout={layout()}
+                            fullscreen={fullscreen.active()}
+                            fullscreenAvailable={fullscreen.available()}
+                            onFullscreen={() =>
+                              fireAndForget(
+                                fullscreen.toggle(),
+                                'call-fullscreen'
+                              )
+                            }
+                            onReaction={
+                              callCtx.room()
+                                ? (emoji) =>
+                                    fireAndForget(
+                                      reactions.send(emoji),
+                                      'call-reaction'
+                                    )
+                                : undefined
+                            }
+                            onLayoutChange={(value) => {
+                              const interaction =
+                                beginInteraction('call.layout.change');
+                              try {
+                                setSavedLayout(value);
+                              } finally {
+                                interaction.end();
+                              }
+                            }}
+                            hasScreenShare={hasAnyScreenShare()}
+                            hideParticipants={hideParticipants()}
+                            onHideParticipantsChange={
+                              changeParticipantVisibility
+                            }
+                            onOpenChange={setSettingsOpen}
+                          />
+                        </Show>
+                      </CallControls>
+                    </div>
+                    <div
+                      ref={setPanelToggleFrame}
+                      class={cn(
+                        isMobile() && 'island',
+                        'col-start-3 row-start-1 flex justify-center justify-self-end rounded-full mobile:col-start-2',
+                        isMobile() && 'p-1.5'
+                      )}
+                    >
+                      <PanelToggle />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </Resize.Panel>
-          <Resize.Panel
-            id="call-sidebar"
-            minSize={280}
-            maxSize={480}
-            target={{ kind: 'px', px: DEFAULT_SIDE_PANEL_WIDTH }}
-            redistributionPreferredSize={panelWidth()}
-            onSizeChangeEnd={setPanelWidth}
-            hidden={() => !widePanel() || !panelOpen()}
-            persistent
-          >
-            <div ref={setSidebarMount} data-call-sidebar class="h-full py-2" />
-          </Resize.Panel>
-        </Resize.Zone>
-        <Show when={panelMounted()}>
-          <CallChatPanel
-            id={panelId}
-            open={panelOpen()}
-            onClose={closePanel}
-            activeTab={activeTab()}
-            onTabChange={(tab) => {
-              setFocusChatOnOpen(false);
-              setSelectedTab(tab);
-            }}
-            chatAvailable={canChat()}
-            participantCount={participants().length + 1}
-            participants={<CallParticipantsList localName={props.localName} />}
-            work={workTab()}
-            workDot={callWork.showTabDot()}
-            sidebarMount={widePanel() ? sidebarMount() : undefined}
-            overlayMount={overlayMount()}
-            returnFocus={panelButton}
-          >
-            <Show when={canChat() && callCtx.activeCallId()} keyed>
-              {(callId) => (
-                <Suspense>
-                  <Switch
-                    fallback={
-                      <CallChat
-                        callId={callId}
-                        open={panelOpen() && activeTab() === 'chat'}
-                        focusOnOpen={focusChatOnOpen()}
-                        onClose={closePanel}
-                      />
-                    }
-                  >
-                    <Match when={props.discussion}>
-                      {(discussion) =>
-                        discussion().render({
-                          get open() {
-                            return panelOpen() && activeTab() === 'chat';
-                          },
-                          get focusOnOpen() {
-                            return focusChatOnOpen();
-                          },
-                          onClose: closePanel,
-                        })
-                      }
-                    </Match>
-                    <Match when={props.guestChatSession} keyed>
-                      {(session) => (
-                        <GuestCallChat
+            </Resize.Panel>
+            <Resize.Panel
+              id="call-sidebar"
+              minSize={280}
+              maxSize={480}
+              target={{ kind: 'px', px: DEFAULT_SIDE_PANEL_WIDTH }}
+              redistributionPreferredSize={panelWidth()}
+              onSizeChangeEnd={setPanelWidth}
+              hidden={() => !widePanel() || !panelOpen()}
+              persistent
+            >
+              <div
+                ref={setSidebarMount}
+                data-call-sidebar
+                class="h-full py-2"
+              />
+            </Resize.Panel>
+          </Resize.Zone>
+          <Show when={panelMounted()}>
+            <CallChatPanel
+              id={panelId}
+              open={panelOpen()}
+              onClose={closePanel}
+              activeTab={activeTab()}
+              onTabChange={(tab) => {
+                setFocusChatOnOpen(false);
+                setSelectedTab(tab);
+              }}
+              chatAvailable={canChat()}
+              participantCount={participants().length + 1}
+              participants={
+                <CallParticipantsList localName={props.localName} />
+              }
+              work={workTab()}
+              workDot={callWork.showTabDot()}
+              sidebarMount={widePanel() ? sidebarMount() : undefined}
+              overlayMount={overlayMount()}
+              returnFocus={panelButton}
+            >
+              <Show when={canChat() && callCtx.activeCallId()} keyed>
+                {(callId) => (
+                  <Suspense>
+                    <Switch
+                      fallback={
+                        <CallChat
                           callId={callId}
-                          session={session}
                           open={panelOpen() && activeTab() === 'chat'}
                           focusOnOpen={focusChatOnOpen()}
                           onClose={closePanel}
                         />
-                      )}
-                    </Match>
-                  </Switch>
-                </Suspense>
-              )}
-            </Show>
-          </CallChatPanel>
-        </Show>
+                      }
+                    >
+                      <Match when={props.discussion}>
+                        {(discussion) =>
+                          discussion().render({
+                            get open() {
+                              return panelOpen() && activeTab() === 'chat';
+                            },
+                            get focusOnOpen() {
+                              return focusChatOnOpen();
+                            },
+                            onClose: closePanel,
+                          })
+                        }
+                      </Match>
+                      <Match when={props.guestChatSession} keyed>
+                        {(session) => (
+                          <GuestCallChat
+                            callId={callId}
+                            session={session}
+                            open={panelOpen() && activeTab() === 'chat'}
+                            focusOnOpen={focusChatOnOpen()}
+                            onClose={closePanel}
+                          />
+                        )}
+                      </Match>
+                    </Switch>
+                  </Suspense>
+                )}
+              </Show>
+            </CallChatPanel>
+          </Show>
+        </div>
       </div>
-    </div>
+    </CallFullscreenPortal>
   );
 }
