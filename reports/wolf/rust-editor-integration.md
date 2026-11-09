@@ -58,7 +58,11 @@ model/WASM clippy, and the WASM all-feature portability check pass.
 reordered compiler output, and the full shim check initially lacked source-matched conformance artifacts.
 The fresh optimized conformance build now passes and shim TypeScript checking
 passes; its subsequent hook-inventory check fails with `stale generated hook
-inventory`. Generator freshness and hook inventory remain unresolved, not waived. New WASM
+inventory`. Diagnostic regeneration isolates one metadata line:
+`selectionTransform` caller line 2986 -> 2991, with the same 41 hooks from 489
+source files. The full shim check passes on that diagnostic generated file;
+the committed inventory remains unchanged pending the owner checkpoint.
+Generator freshness and committed hook inventory remain unresolved, not waived. New WASM
 exports have not been promoted into live glue/declarations or activated.
 Audit: `audit-compat-selection-checkpoint.md`; current logs use `compat-` prefix.
 
@@ -71,7 +75,11 @@ root) -> Recent -> trusted title click -> editable body marker. File-location
 breadcrumbs are not result adapters. Fixture browser activity stopped before
 quiet sampling. The OFF owner stopped fail-closed after 11 Chromium samples
 when preparation timed out on round 12; no accepted baseline or sample trimming.
-Frozen OFF assets, authentication and runtime were not changed during sampling.
+A separate fresh run under harness `dc9a43645b` stopped fail-closed after nine
+valid Chromium records, when round 10 lost its execution context during initial
+navigation. Neither run is an accepted baseline; no retries, trimming or resume
+were counted. Frozen OFF assets, authentication and runtime were not changed
+during either sampling window.
 
 Tempo evidence already found `wasm.init`, `state.load` and `view.reconcile`
 under `editor.open` in own exported traces, recorded in
