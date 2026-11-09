@@ -124,3 +124,5 @@ Keep _updating true through update listeners and deferred callbacks without gran
 Forward LexicalNodeReplacement from the replacement type barrel so the root preserves the canonical upstream alias; keep bound internal replacement configs private.
 
 Assign the prepared registered-node map before backend construction and pass its rows to the backend without rereading config getters; only omitted config inherits the active editor's exact map.
+
+Route public builtin creation factories through actual registered replacements while preserving node identity and cold module evaluation.
