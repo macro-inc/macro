@@ -37,6 +37,17 @@ impl SyncPolicy for MacroSyncPolicy {
     fn own_undefined_fields(&self, node_type: &str) -> &[String] {
         crate::policy::own_undefined_fields(node_type)
     }
+    fn comparison_kind(&self, node_type: &str) -> lexical_loro::ComparisonKind {
+        match node_type {
+            Paragraph::TYPE => lexical_loro::ComparisonKind::Paragraph,
+            Text::TYPE
+            | Tab::TYPE
+            | lexical_rich_nodes::code::CodeHighlightNode::TYPE
+            | crate::nodes::DiffTextNode::TYPE
+            | crate::nodes::UnlinkedTextNode::TYPE => lexical_loro::ComparisonKind::Text,
+            _ => lexical_loro::ComparisonKind::Exact,
+        }
+    }
     fn allows_null_text(&self, node_type: &str) -> bool {
         node_type == "await"
     }

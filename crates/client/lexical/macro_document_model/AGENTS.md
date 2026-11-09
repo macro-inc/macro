@@ -66,7 +66,13 @@ keep the value in both editor JSON and Loro, and reject malformed text everywher
 
 - Keep decorator host actions in shared model policy: equation updates change only the expression, and user display names preserve ID keys, attached traversal and source history/selection/scroll tags.
 
+Keep source paragraph export rules comparison-only after projected children;
+retain the writer draft-stripped cache fields and every persisted value.
+The fixed Macro catalog supplies comparison metadata, never JavaScript constructor authority.
+
 ## Checks
+
+- `cargo test -p macro_document_model --test sync_draft_comparison` checks actual source draft-strip bootstrap, comparison-only canonical exports, immutable writer bytes and incremental parent/typing behavior.
 
 - `bun apps/web/scripts/lexical-group-b-app-blocks.ts --check` checks the Group B pasted app-link block catalog.
 - `bun apps/web/scripts/lexical-group-b-themes.ts --check` checks Group B theme paste validation/migration constants and source cases.

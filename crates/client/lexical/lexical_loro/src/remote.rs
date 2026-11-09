@@ -230,7 +230,7 @@ impl LoroProjection {
             building.stats.nodes_visited += 1;
             let mut incoming = schema::own_map(&map, self.policy)?;
             mask_local(&mut incoming, self.policy);
-            let mut current = own(state.view(), key, self.policy)?;
+            let mut current = comparison::model_own(state.view(), key, self.policy)?;
             if let Some(text) = text_after.get(&key) {
                 current.insert("text".into(), Value::String(text.clone()));
             }
@@ -242,12 +242,14 @@ impl LoroProjection {
             if current.get("type") != incoming.get("type") {
                 return Err(diverged(format!("remote type changed at {key}")));
             }
-            let mut compare = incoming.clone();
+            let mut compare = comparison::loro_own(&map, self.policy)?;
             for field in self.policy.ignore_in_remote_compare(&kind, &incoming) {
                 compare.remove(*field);
                 current.remove(*field);
             }
-            if compare != current {
+            if compare != current
+                || comparison::raw_paragraph_changed(state.view(), key, &incoming, self.policy)?
+            {
                 if state.view().is_text(key) {
                     let before = text_after
                         .get(&key)

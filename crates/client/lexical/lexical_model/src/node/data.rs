@@ -99,6 +99,13 @@ impl TextData {
             ..Self::default()
         }
     }
+    /// Format and style emitted by the text base serializer, retaining imported undefined fields.
+    pub fn json_format_style(&self) -> (Option<TextFormat>, Option<&str>) {
+        (
+            (!self.absent.contains(AbsentKeys::FORMAT)).then_some(self.format),
+            (!self.absent.contains(AbsentKeys::STYLE)).then_some(self.style.as_ref()),
+        )
+    }
     /// Whether this is an indivisible token.
     pub fn is_token(&self) -> bool {
         self.mode == TextMode::Token
