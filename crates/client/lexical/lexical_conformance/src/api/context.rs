@@ -281,8 +281,13 @@ impl Context {
             ));
         }
         self.replay.bindings.release_state(version)?;
-        self.replay.record_ids.release_version(version)?;
-        let released = self.replay.bindings.release_identities(version)?;
+        self.replay
+            .record_ids
+            .release_version(self.replay.editor_id, version)?;
+        let released = self
+            .replay
+            .bindings
+            .release_editor_identities(self.replay.editor_id, version)?;
         for tag in ["$h", "$sel", "$pt", "$caret", "$iterator", "$state", "$ed"] {
             for id in &released {
                 if let Some(value) = self.replay.bindings.remove_handle(&format!("{tag}:{id}"))?

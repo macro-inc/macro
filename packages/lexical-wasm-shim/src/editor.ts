@@ -1,4 +1,4 @@
-import { ConformanceBackend } from './backend/conformance';
+import { createBackend } from './backend/factory';
 import { ElementNode, LexicalNode, nativeNode, RootNode } from './nodes';
 import { NodeRuntime, withNodeRuntime } from './nodes/runtime';
 import { UpdateController, type UpdateOptions } from './update';
@@ -81,7 +81,7 @@ export class LexicalEditor {
   private state: EditorState;
 
   constructor(config: EditorConfig = {}) {
-    const backend = new ConformanceBackend({
+    const backend = createBackend({
       namespace: config.namespace ?? '',
     });
     this.runtime = new NodeRuntime(backend, nativeNode);

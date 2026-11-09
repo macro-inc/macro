@@ -857,3 +857,7 @@ impl DocumentSession<EditorSurface> {
         std::mem::take(&mut self.surface.projection_fault_writes)
     }
 }
+
+#[cfg(feature = "compatibility")]
+#[path = "compatibility.rs"]
+pub mod compatibility;

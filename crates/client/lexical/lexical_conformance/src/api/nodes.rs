@@ -14,6 +14,24 @@ pub(crate) fn call(
         return Ok(value);
     }
 
+    // These application getters read captured own fields, without getLatest().
+    if matches!(method, "getText" | "getSource" | "getAttributes")
+        && let Some(value) = super::properties::with_captured_record(r, tx, receiver, |record| {
+            let Some(node) =
+                record.get::<macro_document_model::nodes::CursorSystemNotificationNode>()
+            else {
+                return Ok(None);
+            };
+            Ok(Some(match method {
+                "getText" => json!(node.text),
+                "getSource" => json!(node.source),
+                _ => serde_json::to_value(&node.attributes)?,
+            }))
+        })?
+    {
+        return Ok(value);
+    }
+
     // These public accessors call getLatest() in upstream. Raw get:__fields
     // resolve the receiver's captured version in properties.rs instead.
     let selection_arg = match method {
