@@ -3,6 +3,9 @@ use crate::workflows::{runners, steps, vars};
 use gh_workflow::{Event, Expression, Job, Level, Permissions, Step, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
+#[cfg(test)]
+mod test;
+
 /// Paths that require the Lexical conformance checks.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("crates/client/lexical/**"),
@@ -37,6 +40,7 @@ pub const SESSION_PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("apps/web/justfile"),
     xtask_paths::repo_glob!("apps/web/vite.base.ts"),
     xtask_paths::repo_glob!("nix/tauri-desktop.nix"),
+    xtask_paths::repo_glob!("apps/web/scripts/native-editor-features*.ts"),
     xtask_paths::repo_glob!("packages/lexical-conformance/coverage/**"),
     xtask_paths::repo_glob!("tooling/xtask/crates/xtask_workflows/**"),
     xtask_paths::repo_glob!(".github/workflows/document_session.yml"),
@@ -87,6 +91,7 @@ fn prepared(name: &str) -> Job {
 /// Native replay never suppresses failing or ledger-stale fixtures.
 pub fn native(nightly: bool) -> Job {
     prepared("Native replay and traceability")
+        .add_step(native_editor_features())
         .add_env(("PROPTEST_CASES", if nightly { "20000" } else { "256" }))
         .add_env((
             "LEXICAL_COVERAGE_BASE",
@@ -168,9 +173,15 @@ pub fn fixtures(nightly: bool) -> Job {
 /// Session artifacts are checked as their implementation work packages land.
 pub fn session() -> Job {
     prepared("Document session client contract")
+        .add_step(native_editor_features())
         .add_step(
             Step::new("Session wasm, size and host contract")
                 .run("bun packages/lexical-conformance/coverage/document-session.ts"),
         )
         .add_step(steps::teardown_nix())
+}
+
+fn native_editor_features() -> Step<gh_workflow::Run> {
+    Step::new("Enforce native editor feature isolation")
+        .run("bun apps/web/scripts/native-editor-features.ts")
 }

@@ -19,6 +19,7 @@ TypeScript job logic in the owning package.
 - Scope future-path exceptions to a closed list, filter group and committed spec.
 - Clear prior result artifacts before accepting per-pipeline coverage evidence.
 - Keep deployment and production access out of conformance workflows.
+- Run the resolved native editor feature-graph guard before lexical/session compilation; production closures exclude compatibility/foreign-node features while explicit compatibility web remains a positive control.
 
 ## Checks
 

@@ -145,6 +145,7 @@ docx_engine_wasm_target := justfile_directory() / "../../target/docx-engine-wasm
 fig_engine_wasm_target := justfile_directory() / "../../target/fig-engine-wasm"
 psd_engine_wasm_target := justfile_directory() / "../../target/psd-engine-wasm"
 document_session_wasm_target := justfile_directory() / "../../target/document-session-wasm"
+document_session_compat_wasm_target := justfile_directory() / "../../target/document-session-compat-wasm"
 ai_engine_wasm_target := justfile_directory() / "../../target/ai-engine-wasm"
 
 [parallel]
@@ -503,17 +504,28 @@ gen-database-sql-types:
 ensure-cache-wasm:
     cd {{justfile_directory()}}/../.. && SQLX_OFFLINE=true cargo run -q -p xtask -- cache-wasm
 
-# Portable document session; synchronous main-thread editor and sync core.
+# Native view, FFI-independent host and headless session; no compatibility code.
 build-document-session-wasm:
-    scripts/cached-wasm-build.sh document_session_wasm {{justfile_directory()}}/src/lib/core/document-session/wasm -- env CARGO_TARGET_DIR="{{document_session_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/client/document_session_wasm --target web --profile document-session-wasm --out-dir {{justfile_directory()}}/src/lib/core/document-session/wasm
+    scripts/cached-wasm-build.sh document_session_wasm {{justfile_directory()}}/src/lib/core/document-session/wasm -- env CARGO_TARGET_DIR="{{document_session_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/client/document_session_wasm --target web --profile document-session-wasm --out-dir {{justfile_directory()}}/src/lib/core/document-session/wasm -- --no-default-features --features bebop-owned-all
     wasm-opt -Oz --converge src/lib/core/document-session/wasm/document_session_wasm_bg.wasm -o src/lib/core/document-session/wasm/document_session_wasm_bg.wasm
+    bun scripts/native-editor-features.ts --artifact src/lib/core/document-session/wasm/document_session_wasm_bg.wasm
     cp src/lib/core/document-session/wasm/document_session_wasm.d.ts ../../packages/collaboration/src/session/wasm.generated.d.ts
     bun scripts/document-session-size.ts src/lib/core/document-session/wasm/document_session_wasm_bg.wasm
+
+# Explicit opt-in for the unchanged Lexical API host; never overwrite native glue/types.
+build-document-session-compat-wasm:
+    scripts/cached-wasm-build.sh document_session_wasm {{justfile_directory()}}/src/lib/core/document-session/wasm-compat -- env CARGO_TARGET_DIR="{{document_session_compat_wasm_target}}" wasm-pack build {{justfile_directory()}}/../../crates/client/document_session_wasm --target web --profile document-session-wasm --out-dir {{justfile_directory()}}/src/lib/core/document-session/wasm-compat -- --no-default-features --features bebop-owned-all,compat-web
+    wasm-opt -Oz --converge src/lib/core/document-session/wasm-compat/document_session_wasm_bg.wasm -o src/lib/core/document-session/wasm-compat/document_session_wasm_bg.wasm
+    bun scripts/native-editor-features.ts --compat-artifact src/lib/core/document-session/wasm-compat/document_session_wasm_bg.wasm
+    bun scripts/document-session-size.ts src/lib/core/document-session/wasm-compat/document_session_wasm_bg.wasm
+
+check-native-editor-features:
+    bun scripts/native-editor-features.ts
 
 ensure-document-session-wasm:
     #!/usr/bin/env bash
     set -euo pipefail
     WASM="{{justfile_directory()}}/src/lib/core/document-session/wasm/document_session_wasm_bg.wasm"
-    if [ ! -f "$WASM" ] || ! cmp -s "${WASM%_bg.wasm}.d.ts" ../../packages/collaboration/src/session/wasm.generated.d.ts || bun scripts/document-session-stale.ts "$WASM"; then
+    if [ ! -f "$WASM" ] || ! cmp -s "${WASM%_bg.wasm}.d.ts" ../../packages/collaboration/src/session/wasm.generated.d.ts || ! bun scripts/native-editor-features.ts --artifact "$WASM" || bun scripts/document-session-stale.ts "$WASM"; then
         just --justfile "{{justfile()}}" build-document-session-wasm
     fi

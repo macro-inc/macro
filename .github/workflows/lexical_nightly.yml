@@ -45,6 +45,8 @@ jobs:
         bun-version: '1.3.13'
     - name: Install conformance dependencies
       run: bun install --cwd packages/lexical-conformance --frozen-lockfile --ignore-scripts
+    - name: Enforce native editor feature isolation
+      run: bun apps/web/scripts/native-editor-features.ts
     - name: Validate traceability tooling
       run: |-
         bunx tsc --noEmit -p coverage/tsconfig.json
@@ -208,6 +210,8 @@ jobs:
         bun-version: '1.3.13'
     - name: Install conformance dependencies
       run: bun install --cwd packages/lexical-conformance --frozen-lockfile --ignore-scripts
+    - name: Enforce native editor feature isolation
+      run: bun apps/web/scripts/native-editor-features.ts
     - name: Session wasm, size and host contract
       run: bun packages/lexical-conformance/coverage/document-session.ts
     - name: Teardown Nix

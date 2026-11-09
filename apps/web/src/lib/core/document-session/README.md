@@ -1,5 +1,23 @@
 # Native editor sessions
 
+`just -f apps/web/justfile build-document-session-wasm` builds the native view
+and headless artifact without compatibility or foreign-node features. It writes
+matching glue, WASM and declarations under `wasm/`. Native/FFI/server production
+graphs are checked by `check-native-editor-features`; development conformance
+feature unions are not production profiles.
+
+The explicit `build-document-session-compat-wasm` recipe enables `compat-web`
+and writes its own complete artifact set under `wasm-compat/`, using a separate
+Cargo target directory and feature-aware cache key. Its declarations belong to
+the compatibility module; never add optional compatibility methods to native
+types. Native build/cache reuse also checks actual WASM exports, so a previous
+compatibility artifact cannot silently become the native module.
+
+Native feature isolation replaces the former feature-on/off 5% timing gate.
+The compatibility host still requires user-facing measurements against upstream
+Lexical with the full application plugin set; feature isolation is not evidence
+of typing, paste, bulk, startup, document-open or bridge-budget acceptance.
+
 `engine-selection.ts` binds `rust-editor-model` once from the environment
 override or cached rollout at boot. Later rollout refreshes take effect on the
 next page load so existing classes, commands and editor transactions stay on
