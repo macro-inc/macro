@@ -94,3 +94,32 @@ fn initial_state_rejects_a_different_session_key_named_id() {
         "{error}"
     );
 }
+
+#[test]
+fn standalone_key_raw_import_keeps_empty_missing_and_nonstring_ids_omitted() {
+    for fields in [
+        serde_json::json!({"type":"root","$":{"id":""}}),
+        serde_json::json!({"type":"root","$":{"id":null}}),
+        serde_json::json!({"type":"root"}),
+        serde_json::json!({"type":"root","$":{"id":17}}),
+        serde_json::json!({"type":"root","$":{"id":false}}),
+        serde_json::json!({"type":"root","$":{"id":[]}}),
+        serde_json::json!({"type":"root","$":{"id":{}}}),
+    ] {
+        let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+        editor
+            .update(|tx| tx.set_state(NodeKey::ROOT, &builder::ID, Some("before".into())))
+            .unwrap();
+        editor
+            .update(|tx| tx.apply_remote_fields(NodeKey::ROOT, fields.as_object().unwrap()))
+            .unwrap();
+        let json = editor.state().to_json().unwrap();
+        assert!(
+            json.root
+                .get("$")
+                .and_then(|state| state.get("id"))
+                .is_none(),
+            "{json:?}"
+        );
+    }
+}
