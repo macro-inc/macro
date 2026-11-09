@@ -1135,14 +1135,12 @@ pub(crate) async fn dynamic_email_thread_cursor(
     // before the LIMIT, so a domain that covers most of a mailbox can run
     // for tens of minutes. The client gives up after 12s and the server
     // never cancels the query, so bound it in the database instead.
+    // Slightly above the web client's 12s Soup request timeout.
     let mut transaction = pool.begin().await?;
-    sqlx::query(TEAM_SCOPED_STATEMENT_TIMEOUT)
+    sqlx::query!("SET LOCAL statement_timeout = '15s'")
         .execute(&mut *transaction)
         .await?;
     let rows = query.fetch_all(&mut *transaction).await?;
     transaction.commit().await?;
     Ok(rows)
 }
-
-/// Slightly above the web client's 12s Soup request timeout.
-const TEAM_SCOPED_STATEMENT_TIMEOUT: &str = "SET LOCAL statement_timeout = '15s'";
