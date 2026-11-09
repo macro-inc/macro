@@ -257,9 +257,11 @@ impl<'editor> Transaction<'editor> {
     /// s2: ID-02, ID-03
     pub fn mark_dirty(&mut self, key: impl Into<NodeKey>) -> Result<(), Error> {
         self.guard_write()?;
-        self.dirty_since_flush = true;
         let key = key.into();
         let kind = self.kind(key).ok_or(Error::NodeNotFound(key))?;
+        #[cfg(feature = "foreign-nodes")]
+        let instance_cloned = self.clone_foreign_instance_for_write(key)?;
+        self.dirty_since_flush = true;
         if kind == NodeKind::Element {
             self.dirty_elements.insert(key, DirtyIntent::Intentional);
         } else {
@@ -275,7 +277,7 @@ impl<'editor> Transaction<'editor> {
             ancestor = self.parent(key);
         }
         #[cfg(feature = "foreign-nodes")]
-        if self.clone_foreign_instance_for_write(key)? {
+        if instance_cloned {
             return Ok(());
         }
         #[cfg(feature = "foreign-nodes")]
