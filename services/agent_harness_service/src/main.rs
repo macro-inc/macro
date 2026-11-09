@@ -722,6 +722,7 @@ async fn run() -> anyhow::Result<()> {
         pool.clone(),
         std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
         routine_code,
+        scheduling::routine_suggestions::ModelQuickPicks::new(Arc::clone(&recorder)),
         http_ready,
         Arc::clone(&notifications),
     )

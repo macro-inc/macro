@@ -161,6 +161,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     db: sqlx::PgPool,
     harness_address: std::net::SocketAddr,
     code: Option<crate::routine_code::SdkRoutineCode>,
+    quick_picks: routine_suggestions::ModelQuickPicks,
     ready: tokio::sync::watch::Receiver<bool>,
     notifications: Arc<Ingress>,
 ) -> Result<SchedulingRuntime> {
@@ -441,30 +442,33 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // drafts do; each session hands back its suggestions through
     // `macro.routines.suggest`. They read the newest mail through
     // email_service, which reads it from the provider.
-    let suggestions = Arc::new(RoutineSuggestionService::new(
-        Arc::clone(&service),
-        Arc::new(PgSuggestionRepo::new(db.clone())),
-        Arc::new(routine_suggestions::HarnessSuggestionSources {
-            email: Arc::new(EmailServiceClient::new(
-                config.internal_api_key.to_string(),
-                EmailServiceUrl::new()?.to_string(),
-            )),
-            apps: crate::routine_sessions::PipedreamConnectedApps(
-                pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
-            ),
-        }),
-        sessions,
-        suggestion_code,
-        request_sessions,
-        template_flags.clone(),
-        SuggestionAgent {
-            bot: bot_id::MACRO_NEW_BOT_ID,
-            guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
-            model: chat::domain::models::FREE_MODEL.to_owned(),
-        },
-        lifecycle.workers.clone(),
-        lifecycle.stop_workers.clone(),
-    ));
+    let suggestions = Arc::new(
+        RoutineSuggestionService::new(
+            Arc::clone(&service),
+            Arc::new(PgSuggestionRepo::new(db.clone())),
+            Arc::new(routine_suggestions::HarnessSuggestionSources {
+                email: Arc::new(EmailServiceClient::new(
+                    config.internal_api_key.to_string(),
+                    EmailServiceUrl::new()?.to_string(),
+                )),
+                apps: crate::routine_sessions::PipedreamConnectedApps(
+                    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(db.clone()),
+                ),
+            }),
+            sessions,
+            suggestion_code,
+            request_sessions,
+            template_flags.clone(),
+            SuggestionAgent {
+                bot: bot_id::MACRO_NEW_BOT_ID,
+                guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
+                model: chat::domain::models::FREE_MODEL.to_owned(),
+            },
+            lifecycle.workers.clone(),
+            lifecycle.stop_workers.clone(),
+        )
+        .with_quick_picks(Arc::new(quick_picks)),
+    );
     // Suggestion sessions a stopped process left behind lose their session.
     {
         let suggestions = Arc::clone(&suggestions);

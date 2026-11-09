@@ -51,7 +51,7 @@ use self::model::{
     GenerationOutcome, GenerationStatus, RoutineSuggestion, RoutineSuggestions, StoredPick,
     StoredSuggestion, SuggestOutcome, SuggestRequest, SuggestedPick, SuggestionFrom,
 };
-use self::ports::{SuggestionRepo, SuggestionSession, SuggestionSources};
+use self::ports::{QuickPicks, SuggestionRepo, SuggestionSession, SuggestionSources};
 use super::models::ActionPolicyError;
 use super::ports::{RequestSessions, RoutineCode, ScheduledActionService};
 
@@ -95,10 +95,13 @@ pub struct SuggestionAgent {
     pub model: String,
 }
 
-/// How a generation splits the surfaces across its parallel sessions.
+/// How a generation splits the surfaces across its parallel sessions, and
+/// whether a fast first wave of catalog picks (one structured completion)
+/// runs beside them so the first suggestions arrive within seconds.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SuggestionLayout {
     sessions: Vec<Vec<Surface>>,
+    first_wave: bool,
 }
 
 /// Most sessions one generation runs at once.
@@ -120,13 +123,27 @@ impl SuggestionLayout {
         if sessions.iter().any(Vec::is_empty) || seen.len() != ALL_SURFACES.len() {
             bail!("every surface is in one suggestion session, and no session is empty");
         }
-        Ok(Self { sessions })
+        Ok(Self {
+            sessions,
+            first_wave: false,
+        })
+    }
+
+    /// Run the fast first wave beside the sessions, or not.
+    pub fn with_first_wave(mut self, first_wave: bool) -> Self {
+        self.first_wave = first_wave;
+        self
+    }
+
+    pub fn first_wave(&self) -> bool {
+        self.first_wave
     }
 
     /// One session for every surface.
     pub fn single() -> Self {
         Self {
             sessions: vec![ALL_SURFACES.to_vec()],
+            first_wave: false,
         }
     }
 
@@ -136,10 +153,11 @@ impl SuggestionLayout {
 }
 
 impl Default for SuggestionLayout {
-    /// Three sessions, the busiest surfaces first in each, so the first
-    /// suggestions arrive soon.
+    /// A fast first wave and three sessions, the busiest surfaces first in
+    /// each, so the first suggestions arrive within seconds.
     fn default() -> Self {
         Self {
+            first_wave: true,
             sessions: vec![
                 vec![Surface::Email, Surface::Crm, Surface::Agents],
                 vec![Surface::Tasks, Surface::Calls, Surface::Reviews],
@@ -188,6 +206,8 @@ struct Generator<Actions, Repo, Sources, Sessions, Code> {
     code: Arc<Code>,
     agent: SuggestionAgent,
     layout: SuggestionLayout,
+    /// The fast first wave's model, when the host has one.
+    quick: Option<Arc<dyn QuickPicks>>,
 }
 
 /// What a generation is run with.
@@ -241,6 +261,7 @@ where
                 code,
                 agent,
                 layout: SuggestionLayout::default(),
+                quick: None,
             }),
             request_sessions,
             flags,
@@ -253,6 +274,14 @@ where
     pub fn with_layout(mut self, layout: SuggestionLayout) -> Self {
         if let Some(inner) = Arc::get_mut(&mut self.inner) {
             inner.layout = layout;
+        }
+        self
+    }
+
+    /// Run the layout's fast first wave on `quick`.
+    pub fn with_quick_picks(mut self, quick: Arc<dyn QuickPicks>) -> Self {
+        if let Some(inner) = Arc::get_mut(&mut self.inner) {
+            inner.quick = Some(quick);
         }
         self
     }
@@ -618,8 +647,12 @@ where
             });
             self.suggest_for(&user, surfaces, brief, &shutdown)
         });
-        let kept: Vec<(u32, bool)> = futures::future::join_all(runs).await;
-        let total: u32 = kept.iter().map(|(kept, _)| kept).sum();
+        let (first_wave, kept) = tokio::join!(
+            self.first_wave(&user, &inbox, &apps, &dismissed),
+            futures::future::join_all(runs),
+        );
+        let kept: Vec<(u32, bool)> = kept;
+        let total: u32 = first_wave + kept.iter().map(|(kept, _)| kept).sum::<u32>();
         let retries = kept.iter().filter(|(_, retried)| *retried).count();
         let outcome = if shutdown.is_cancelled() && total == 0 {
             GenerationOutcome::Cancelled
@@ -654,12 +687,83 @@ where
             outcome = outcome.as_ref(),
             sessions = kept.len(),
             kept = total,
+            first_wave_kept = first_wave,
             retries,
             inbox_messages = inbox.len(),
             surfaces_filled = filled,
             first_ms,
             duration_ms = started.elapsed().as_millis() as u64,
         );
+    }
+
+    /// The fast first wave: catalog picks from one structured completion,
+    /// checked like a session's. How many it kept.
+    async fn first_wave(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        inbox: &[ports::InboxMessage],
+        apps: &[String],
+        dismissed: &[String],
+    ) -> u32 {
+        let Some(quick) = self.quick.as_ref().filter(|_| self.layout.first_wave()) else {
+            return 0;
+        };
+        let span = tracing::info_span!(
+            "routine.suggestions.first_wave",
+            routine.suggestions.picked = tracing::field::Empty,
+            routine.suggestions.kept = tracing::field::Empty,
+            routine.suggestions.outcome = tracing::field::Empty,
+        );
+        async {
+            let span = tracing::Span::current();
+            let prompt = prompt::first_wave_prompt(inbox, apps, dismissed);
+            let Some(answer) = quick
+                .pick(
+                    user,
+                    prompt::FIRST_WAVE_INSTRUCTIONS,
+                    &prompt,
+                    &prompt::first_wave_schema(),
+                )
+                .await
+            else {
+                span.record("routine.suggestions.outcome", "failed");
+                return 0;
+            };
+            let picks = answer
+                .get("suggestions")
+                .and_then(serde_json::Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            span.record("routine.suggestions.picked", picks.len());
+            let wave = Uuid::now_v7();
+            let mut kept = 0_u32;
+            for pick in picks.into_iter().take(MAX_KEPT_PER_SESSION as usize) {
+                let Some(checked) = first_wave_pick(&pick) else {
+                    continue;
+                };
+                // A session may have suggested it already.
+                let StoredPick::Catalog { key, .. } = &checked.pick else {
+                    continue;
+                };
+                let taken = self.repo.suggestions(user).await.is_ok_and(|stored| {
+                    stored.iter().any(|suggestion| {
+                        matches!(&suggestion.pick, StoredPick::Catalog { key: taken, .. } if taken == key)
+                    })
+                });
+                if taken {
+                    continue;
+                }
+                match self.repo.add(user, wave, &checked, Utc::now()).await {
+                    Ok(_) => kept += 1,
+                    Err(error) => tracing::warn!(error = ?error, "could not keep a first-wave suggestion"),
+                }
+            }
+            span.record("routine.suggestions.kept", kept);
+            span.record("routine.suggestions.outcome", "done");
+            kept
+        }
+        .instrument(span)
+        .await
     }
 
     /// How long after `started` the first suggestion was kept.
@@ -886,6 +990,35 @@ fn action_for(session: &SuggestionSession) -> RoutineSessionAction {
         session_id: AgentSessionId::new_from_uuid(session.session),
         action_id: AgentActionId::mint(),
     }
+}
+
+/// One first-wave pick as the boundary checks a session's catalog pick, for
+/// any surface its routine lists.
+fn first_wave_pick(pick: &serde_json::Value) -> Option<model::CheckedSuggestion> {
+    let key = pick.get("key")?.as_str()?;
+    let knobs: serde_json::Map<String, serde_json::Value> = pick
+        .get("knobs")
+        .and_then(serde_json::Value::as_array)
+        .map(|knobs| {
+            knobs
+                .iter()
+                .filter_map(|knob| {
+                    Some((
+                        knob.get("name")?.as_str()?.to_owned(),
+                        knob.get("value")?.clone(),
+                    ))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let surfaces: Vec<Surface> = pick
+        .get("surfaces")
+        .and_then(|surfaces| serde_json::from_value(surfaces.clone()).ok())
+        .unwrap_or_default();
+    let keep = pick.get("keepProbability")?.as_f64()? as f32;
+    let reason = pick.get("reason")?.as_str()?;
+    let allowed = routine_program::catalog_routine(key)?.surfaces;
+    decode::catalog_pick(key, knobs, reason, surfaces, keep, allowed).ok()
 }
 
 fn rejected(problems: Vec<String>) -> SuggestOutcome {
