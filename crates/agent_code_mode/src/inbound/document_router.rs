@@ -77,6 +77,7 @@ pub struct RunDocumentProgram {
     pub source: String,
     /// Spread into `main`'s argument beside `macro`.
     #[serde(default)]
+    #[schema(value_type = Object)]
     pub arguments: serde_json::Map<String, serde_json::Value>,
     /// Total deadline in milliseconds, from 1 to 30000.
     #[serde(default = "default_timeout_ms")]

@@ -4,20 +4,24 @@ import { MAX_IN_FLIGHT_RUNS, attachProgramHost } from './preview-runner';
 
 type Posted = { message: unknown; origin: string };
 
-/** A frame whose window posts back into a list and can message the host. */
+/**
+ * A real (jsdom) frame whose window records what the host posts to it, and
+ * which can message the host as that window.
+ */
 function fakeFrame() {
   const posted: Posted[] = [];
-  const contentWindow = {
-    postMessage: (message: unknown, origin: string) =>
-      posted.push({ message, origin }),
-  };
-  const frame = { contentWindow } as unknown as HTMLIFrameElement;
+  const frame = document.createElement('iframe');
+  document.body.appendChild(frame);
+  const contentWindow = frame.contentWindow;
+  if (!contentWindow) throw new Error('jsdom gave the frame no window');
+  vi.spyOn(contentWindow, 'postMessage').mockImplementation(
+    (message: unknown, origin?: unknown) => {
+      posted.push({ message, origin: String(origin) });
+    }
+  );
   const send = (data: unknown) =>
     window.dispatchEvent(
-      new MessageEvent('message', {
-        data,
-        source: contentWindow as unknown as Window,
-      })
+      new MessageEvent('message', { data, source: contentWindow })
     );
   return { frame, posted, send };
 }
@@ -35,6 +39,8 @@ describe('attachProgramHost', () => {
   const detachers: Array<() => void> = [];
   afterEach(() => {
     for (const detach of detachers.splice(0)) detach();
+    document.body.replaceChildren();
+    vi.restoreAllMocks();
   });
 
   it('runs the program and posts its result back', async () => {
