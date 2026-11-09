@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            id, kind, name, owner_user_id, created_by, allow_permission_bypass,\n            created_at, updated_at, last_connected_at, last_disconnected_at,\n            EXISTS (\n                SELECT 1 FROM harness_runtime_connection c\n                WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()\n            ) AS \"has_live_connection!\",\n            EXISTS (\n                SELECT 1 FROM harness_runtime_connection c\n                WHERE c.harness_id = harnesses.id\n            ) AS \"has_connection_record!\",\n            NULL::\"AccessLevel\" AS \"access?: AccessLevel\",\n            ARRAY(\n                SELECT ea.source_id FROM entity_access ea\n                WHERE ea.entity_id = harnesses.id AND ea.entity_type = 'harness' AND ea.source_type = 'team'\n            ) AS shared_team_ids\n        FROM harnesses\n        WHERE id = $1 AND deleted_at IS NULL\n        ",
+  "query": "\n        SELECT\n            id, kind, name, owner_user_id, created_by, allow_permission_bypass,\n            created_at, updated_at, last_connected_at, last_disconnected_at,\n            capabilities AS \"capabilities: Json<HarnessCapabilities>\", computer_id, claude_mode,\n            EXISTS (SELECT 1 FROM harness_runtime_connection c WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()) AS \"has_live_connection!\",\n            EXISTS (SELECT 1 FROM harness_runtime_connection c WHERE c.harness_id = harnesses.id) AS \"has_connection_record!\",\n            NULL::\"AccessLevel\" AS \"access?: AccessLevel\",\n            ARRAY(SELECT ea.source_id FROM entity_access ea WHERE ea.entity_id = harnesses.id AND ea.entity_type = 'harness' AND ea.source_type = 'team') AS shared_team_ids\n        FROM harnesses\n        WHERE id = $1 AND deleted_at IS NULL\n        ",
   "describe": {
     "columns": [
       {
@@ -55,16 +55,31 @@
       },
       {
         "ordinal": 10,
+        "name": "capabilities: Json<HarnessCapabilities>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "computer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 12,
+        "name": "claude_mode",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
         "name": "has_live_connection!",
         "type_info": "Bool"
       },
       {
-        "ordinal": 11,
+        "ordinal": 14,
         "name": "has_connection_record!",
         "type_info": "Bool"
       },
       {
-        "ordinal": 12,
+        "ordinal": 15,
         "name": "access?: AccessLevel",
         "type_info": {
           "Custom": {
@@ -81,7 +96,7 @@
         }
       },
       {
-        "ordinal": 13,
+        "ordinal": 16,
         "name": "shared_team_ids",
         "type_info": "TextArray"
       }
@@ -102,11 +117,14 @@
       false,
       true,
       true,
+      false,
+      true,
+      false,
       null,
       null,
       null,
       null
     ]
   },
-  "hash": "b497d680771fc70f61dba40143ba60865152ef3ef17b1377b407ea405db8c32b"
+  "hash": "e7e7c20184e0cb75c3cc223ea7ba32810f3f376288e9fabe30a58e130b1646bc"
 }

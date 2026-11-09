@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE hosted_runtime_effect\n            SET run_after = $4\n            WHERE id IN (\n                SELECT effect.id\n                FROM hosted_runtime_effect effect\n                WHERE effect.worker = $1 AND effect.computer_id = ANY($5)\n                  AND effect.run_after <= $3\n                  AND effect.id = (\n                      SELECT MIN(earlier.id) FROM hosted_runtime_effect earlier\n                      WHERE earlier.computer_id = effect.computer_id\n                        AND earlier.worker = effect.worker\n                  )\n                ORDER BY effect.id\n                LIMIT $2\n                FOR UPDATE SKIP LOCKED\n            )\n            RETURNING id, computer_id, effect, attempts\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "computer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "effect",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "attempts",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Timestamptz",
+        "Timestamptz",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ae431a12e15c7a13ce2cb527cdbf030b19415c3902227f3797894438fb91227f"
+}
