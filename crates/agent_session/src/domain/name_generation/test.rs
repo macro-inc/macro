@@ -215,3 +215,34 @@ async fn admitted_naming_delegates_once() {
     );
     assert_eq!(calls.load(Ordering::SeqCst), 1);
 }
+
+#[tokio::test]
+async fn background_sessions_are_never_named_or_retitled() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let generator =
+        AdmittedAgentSessionNameGenerator::new(Namer(calls.clone()), Arc::new(Admission(Ok(()))));
+    let mut session =
+        crate::testing::test_agent_session(super::super::model::AgentSessionId::TEST_A);
+    let owner = session.owner_user().unwrap().clone();
+    session.source = super::super::model::SessionSource::User;
+    session.visibility = super::super::model::SessionVisibility::Hidden;
+    session.thread_id = None;
+    session.originating_message_id = None;
+    session.origin = trigger_context::TriggerOrigin::Requested { by: owner };
+    assert!(session.is_background());
+    assert!(
+        generator
+            .generate_name(&session, "suggest routines")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        generator
+            .retitle(&session, "Untitled", &conversation())
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+}

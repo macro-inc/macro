@@ -6,7 +6,9 @@
 //! whether it may be switched on by default always come from the catalog. A
 //! drafted routine passes saving's checks and is kept switched off, never
 //! acting as the person, for them to review before it is saved. A reason is
-//! one plain line that names no address.
+//! one plain line, and neither it nor a drafted routine's words name an
+//! email address, phone number or street address ([`personal_detail`]): the
+//! mail is other people's, and its details stay out of what is shown.
 
 use std::collections::HashSet;
 
@@ -72,6 +74,15 @@ pub fn drafted_pick(
     allowed: &[Surface],
 ) -> Result<CheckedSuggestion, Vec<String>> {
     let mut problems = Vec::new();
+    if let Some(detail) = drafted_texts(&routine)
+        .into_iter()
+        .find_map(|text| personal_detail(&text))
+    {
+        problems.push(format!(
+            "the routine's name, description or instructions name {detail}; \
+             describe the kind of mail or sender instead, without anyone's details"
+        ));
+    }
     if routine
         .task
         .get("dangerously_operate_as_user")
@@ -106,12 +117,18 @@ fn common(
     allowed: &[Surface],
     problems: &mut Vec<String>,
 ) -> Option<(String, Vec<Surface>, f32)> {
-    let reason = match line(reason, MAX_REASON_CHARS) {
-        Some(reason) if names_an_address(&reason) => {
-            problems.push("the reason must not name an email address".to_owned());
+    let reason = match line(reason, MAX_REASON_CHARS).map(|reason| {
+        let detail = personal_detail(&reason);
+        (reason, detail)
+    }) {
+        Some((_, Some(detail))) => {
+            problems.push(format!(
+                "the reason names {detail}; say why it fits in general terms, \
+                 without anyone's details"
+            ));
             None
         }
-        Some(reason) => Some(reason),
+        Some((reason, None)) => Some(reason),
         None => {
             problems.push(format!(
                 "the reason must be one plain line of at most {MAX_REASON_CHARS} characters"
@@ -207,14 +224,47 @@ fn fit(knob: &Knob, value: &Value) -> Option<Value> {
     }
 }
 
-/// Whether `text` holds something shaped like an email address.
-fn names_an_address(text: &str) -> bool {
-    text.split(|c: char| c.is_whitespace() || matches!(c, '<' | '>' | '(' | ')' | ',' | ';'))
-        .any(|word| {
-            word.split_once('@').is_some_and(|(local, domain)| {
-                !local.is_empty() && domain.contains('.') && !domain.starts_with('.')
-            })
-        })
+/// What personal detail `text` names, if any: an email address, a phone
+/// number or a street address, by their shape.
+pub fn personal_detail(text: &str) -> Option<&'static str> {
+    if lazy_regex::regex_is_match!(
+        r"(?i)\b[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}\b",
+        text
+    ) {
+        return Some("an email address");
+    }
+    if lazy_regex::regex_is_match!(
+        r"(?:\+\d{1,3}[\s.-]?)?(?:\(\d{2,4}\)|\d{2,4})[\s.-]\d{3,4}[\s.-]\d{3,4}\b",
+        text
+    ) {
+        return Some("a phone number");
+    }
+    if lazy_regex::regex_is_match!(
+        r"\b\d{1,6}[A-Za-z]?\s+(?:[A-Z][A-Za-z.'-]*\s+){1,4}(?i:street|st|avenue|ave|road|rd|boulevard|blvd|lane|ln|drive|dr|way|court|ct|place|pl|terrace|parkway|pkwy|highway|hwy|square|sq)\b",
+        text
+    ) {
+        return Some("a street address");
+    }
+    None
+}
+
+/// The words a drafted routine shows or runs on: its name, description and
+/// every text in its task but code.
+fn drafted_texts(routine: &ActionConfiguration) -> Vec<String> {
+    fn collect(value: &Value, texts: &mut Vec<String>) {
+        match value {
+            Value::String(text) => texts.push(text.clone()),
+            Value::Array(values) => values.iter().for_each(|value| collect(value, texts)),
+            Value::Object(fields) => fields
+                .iter()
+                .filter(|(key, _)| key.as_str() != "source")
+                .for_each(|(_, value)| collect(value, texts)),
+            _ => {}
+        }
+    }
+    let mut texts = vec![routine.name.clone(), routine.description.clone()];
+    collect(&routine.task, &mut texts);
+    texts
 }
 
 /// `text` trimmed, when it is one line of at most `max` characters with no
