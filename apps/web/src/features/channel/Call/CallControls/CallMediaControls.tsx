@@ -21,6 +21,10 @@ import {
   Show,
 } from 'solid-js';
 import type { CallState } from '../CallContext';
+import {
+  CallMediaPermissionHelp,
+  createCallMediaPermissionHelp,
+} from '../CallMediaPermissionHelp';
 import { LK_TRACK_SOURCE } from '../livekit-loader';
 import { CallControlBar } from './CallControlBar';
 
@@ -77,6 +81,7 @@ export function CallMediaControls(props: {
   children?: JSX.Element;
 }) {
   const call = props.media;
+  const permissionHelp = createCallMediaPermissionHelp(call);
   const cameraTrack = createMemo(() => {
     call.trackVersion?.();
     if (call.isVideoMuted() || call.cameraPermission?.() === 'denied')
@@ -189,8 +194,8 @@ export function CallMediaControls(props: {
         videoPermission={call.cameraPermission?.()}
         screenSharing={call.isScreenSharing()}
         screenUnavailable={props.screenUnavailable}
-        onToggleAudio={() => fire(call.toggleAudio)}
-        onToggleVideo={() => fire(call.toggleVideo)}
+        onToggleAudio={() => fire(() => permissionHelp.request('microphone'))}
+        onToggleVideo={() => fire(() => permissionHelp.request('camera'))}
         onToggleScreen={() => fire(call.toggleScreenShare)}
         onLeave={() => fire(props.onLeave)}
         error={error()}
@@ -490,6 +495,7 @@ export function CallMediaControls(props: {
       >
         {props.children}
       </CallControlBar>
+      <CallMediaPermissionHelp controller={permissionHelp} />
       <input
         ref={upload}
         type="file"

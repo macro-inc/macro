@@ -87,3 +87,111 @@ it('ignores stale captures after a newer permission result or disposal', async (
   await state.capture('microphone', () => Promise.resolve());
   expect(state.microphone()).toBe('prompt');
 });
+
+it('preserves prompt after dismissal and recovers only the current failed capture', async () => {
+  const status = Object.assign(new EventTarget(), {
+    state: 'prompt' as PermissionState,
+  });
+  vi.stubGlobal('navigator', { permissions: { query: async () => status } });
+  const granted = vi.fn(
+    async (device: 'camera' | 'microphone'): Promise<void> => {
+      await state.capture(device, async () => {});
+    }
+  );
+  let dispose = () => {};
+  const state = createRoot((cleanup) => {
+    dispose = cleanup;
+    return createCallMediaPermissions({ onGranted: granted });
+  });
+  await expect(
+    state.capture('camera', async () => {
+      throw new DOMException('Dismissed', 'NotAllowedError');
+    })
+  ).rejects.toThrow('Dismissed');
+  expect(state.camera()).toBe('prompt');
+  status.state = 'granted';
+  status.dispatchEvent(new Event('change'));
+  expect(granted).toHaveBeenCalledExactlyOnceWith('camera');
+  status.dispatchEvent(new Event('change'));
+  expect(granted).toHaveBeenCalledTimes(1);
+  await vi.waitFor(() => expect(state.camera()).toBe('granted'));
+  status.state = 'denied';
+  status.dispatchEvent(new Event('change'));
+  let current = true;
+  await expect(
+    state.capture(
+      'microphone',
+      async () => {
+        throw new DOMException('Denied', 'NotAllowedError');
+      },
+      () => current
+    )
+  ).rejects.toThrow('Denied');
+  current = false;
+  status.state = 'granted';
+  status.dispatchEvent(new Event('change'));
+  expect(granted).toHaveBeenCalledTimes(1);
+  dispose();
+});
+
+it('keeps OS denial visible until a granted browser permission captures successfully', async () => {
+  const status = Object.assign(new EventTarget(), {
+    state: 'denied' as PermissionState,
+  });
+  vi.stubGlobal('navigator', { permissions: { query: async () => status } });
+  const granted = vi.fn(async () => {});
+  let dispose = () => {};
+  const state = createRoot((cleanup) => {
+    dispose = cleanup;
+    return createCallMediaPermissions({ onGranted: granted });
+  });
+  await expect(
+    state.capture('camera', async () => {
+      throw new DOMException('OS denied', 'NotAllowedError');
+    })
+  ).rejects.toThrow('OS denied');
+  status.state = 'granted';
+  status.dispatchEvent(new Event('change'));
+  expect(granted).toHaveBeenCalledOnce();
+  expect(state.camera()).toBe('denied');
+  await state.capture('camera', async () => {});
+  expect(state.camera()).toBe('granted');
+  dispose();
+});
+
+it('deduplicates grant notifications while recovered capture is pending', async () => {
+  const status = Object.assign(new EventTarget(), {
+    state: 'denied' as PermissionState,
+  });
+  vi.stubGlobal('navigator', { permissions: { query: async () => status } });
+  let finish!: () => void;
+  let dispose = () => {};
+  const retry = vi.fn(() =>
+    state.capture(
+      'camera',
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        })
+    )
+  );
+  const state = createRoot((cleanup) => {
+    dispose = cleanup;
+    return createCallMediaPermissions({ onGranted: retry });
+  });
+  await expect(
+    state.capture('camera', async () => {
+      throw new DOMException('OS denied', 'NotAllowedError');
+    })
+  ).rejects.toThrow();
+  status.state = 'granted';
+  status.dispatchEvent(new Event('change'));
+  status.dispatchEvent(new Event('change'));
+  window.dispatchEvent(new Event('focus'));
+  await Promise.resolve();
+  expect(retry).toHaveBeenCalledOnce();
+  expect(state.camera()).toBe('denied');
+  finish();
+  await vi.waitFor(() => expect(state.camera()).toBe('granted'));
+  dispose();
+});

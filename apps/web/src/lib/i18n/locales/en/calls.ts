@@ -1,4 +1,21 @@
 export default {
+  enableMicrophone: 'Enable microphone',
+  enableCamera: 'Enable camera',
+  tryAgain: 'Try again',
+  cancelPermissionHelp: 'Cancel',
+  openSystemSettings: 'Open System Settings',
+  permissionHelpChrome:
+    'In Chrome, open the site controls beside the address, allow this site to use the microphone or camera, then try again.',
+  permissionHelpEdge:
+    'In Edge, open the site permissions beside the address, allow the microphone or camera, then try again.',
+  permissionHelpFirefox:
+    'In Firefox, open the permissions beside the address and clear the blocked microphone or camera permission, then try again.',
+  permissionHelpSafari:
+    'In Safari, open Settings for This Website and allow the microphone or camera, then try again. On iPhone, use Website Settings in the page menu.',
+  permissionHelpNative:
+    'Allow Macro to use this device in your system privacy settings, then try again.',
+  permissionHelpOther:
+    'Allow microphone or camera access in this site’s browser permissions, then try again.',
   layout: 'Layout',
   audioOutput: 'Audio output',
   reactions: 'Reactions',

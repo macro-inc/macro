@@ -506,7 +506,10 @@ function createCallState() {
   const userId = useUserId();
   const leaveMutation = useLeaveCallMutation();
   const nativeCall = useMaybeNativeCallState();
-  const mediaPermissions = createCallMediaPermissions();
+  const mediaPermissions = createCallMediaPermissions({
+    onGranted: (device) =>
+      device === 'microphone' ? toggleAudio(true) : toggleVideo(true),
+  });
   const [room, setRoom] = createSignal<Room | null>(null);
   const [store, setStore] = createStore<CallStoreState>({
     ...initialState,
@@ -1485,11 +1488,15 @@ function createCallState() {
     },
   });
 
-  async function toggleAudio() {
+  async function toggleAudio(enabled?: boolean) {
     const r = room();
     if (!r) return;
     const newMuted =
-      mediaPermissions.microphone() === 'denied' ? false : !store.isAudioMuted;
+      enabled !== undefined
+        ? !enabled
+        : mediaPermissions.microphone() === 'denied'
+          ? false
+          : !store.isAudioMuted;
     try {
       if (newMuted) {
         await traceCallMedia(
@@ -1528,14 +1535,14 @@ function createCallState() {
         // The mic track may have changed — re-apply the selected audio processing.
         await ensureNoiseSuppressionOnMicTrack(r);
       }
-      setStore('isAudioMuted', newMuted);
+      if (room() === r) setStore('isAudioMuted', newMuted);
     } catch (e) {
       console.error('failed to toggle audio', e);
       throw e;
     }
   }
 
-  async function toggleVideo() {
+  async function toggleVideo(enabled?: boolean) {
     if (currentNativeCallSnapshot()) {
       console.info(
         '[callkit] ignoring JS video toggle; native drawer controls camera'
@@ -1546,7 +1553,11 @@ function createCallState() {
     const r = room();
     if (!r) return;
     const newMuted =
-      mediaPermissions.camera() === 'denied' ? false : !store.isVideoMuted;
+      enabled !== undefined
+        ? !enabled
+        : mediaPermissions.camera() === 'denied'
+          ? false
+          : !store.isVideoMuted;
     try {
       if (newMuted) {
         await traceCallMedia(
@@ -1595,7 +1606,7 @@ function createCallState() {
         // New camera track was created — attach background effect processor if preference is on.
         await ensureBackgroundEffectOnCameraTrack(r, true);
       }
-      setStore('isVideoMuted', newMuted);
+      if (room() === r) setStore('isVideoMuted', newMuted);
     } catch (e) {
       console.error('failed to toggle video', e);
       throw e;

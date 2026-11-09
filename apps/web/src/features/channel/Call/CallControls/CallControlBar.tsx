@@ -22,7 +22,7 @@ export function BlockedMediaBadge(props: { blocked: boolean }) {
       <span
         aria-hidden="true"
         data-call-permission-badge
-        class="pointer-events-none absolute -top-1 -right-1 z-10 grid size-4 place-items-center rounded-full bg-surface-2 text-warning-ink"
+        class="absolute -top-1 -right-1 z-10 grid size-4 place-items-center rounded-full bg-surface-2 text-warning-ink"
       >
         <span class="grid size-full place-items-center rounded-full bg-warning-bg">
           <ExclamationMark class="size-3" />
@@ -100,6 +100,7 @@ function MediaSplitButton(props: {
               onClick={props.onToggle}
             >
               {props.icon}
+              <BlockedMediaBadge blocked={!!props.blocked} />
             </ButtonGroup.Button>
             <Show when={!isMobile() && !props.hideMenu}>
               <ButtonGroup.Divider />
@@ -126,7 +127,6 @@ function MediaSplitButton(props: {
               </ButtonGroup.Button>
             </Show>
           </ButtonGroup>
-          <BlockedMediaBadge blocked={!!props.blocked} />
         </div>
       )}
     >

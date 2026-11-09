@@ -339,8 +339,13 @@ are split buttons (`ButtonGroup`): the left half
 toggles the device; when muted or off, both segments use the subtle danger
 fill and failure ink. Browser-blocked devices instead stay neutral with a muted
 slashed icon and amber warning badge. Their label explains browser settings;
-pressing retries, and device menus stay available. Permission changes and
-successful capture clear the warning. Connecting controls remain neutral and
+pressing the badge or button retries, and device menus stay available. Retryable
+permission prompts use the browser's capture request. Denied access opens brief
+browser-specific instructions with Try again; the macOS app also offers Open System
+Settings for that device's privacy pane. A pending camera request does not block
+microphone actions, or vice versa. Failed capture recovers after permission changes
+or returning from system settings, without reloading; stale calls cannot recover.
+Only successful capture clears a previously failed device's warning. Connecting controls remain neutral and
 dimmed. The caret
 opens a settings menu above the toolbar on click only; hovering opens nothing.
 **Audio settings** lists microphones, speakers (when the browser can choose one),

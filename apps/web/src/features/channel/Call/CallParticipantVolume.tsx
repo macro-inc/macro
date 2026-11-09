@@ -61,7 +61,7 @@ export function CallParticipantVolume(props: {
             <Slider
               orientation="vertical"
               class="items-center"
-              onWheel={(event) => {
+              onWheel={(event: WheelEvent) => {
                 if (!event.deltaY) return;
                 event.preventDefault();
                 event.stopPropagation();

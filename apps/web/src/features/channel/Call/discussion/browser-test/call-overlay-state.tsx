@@ -157,6 +157,34 @@ window.addEventListener('fixture-reaction', () => {
       'macro.call.reaction.v1'
     );
 });
+async function captureMedia(
+  device: 'microphone' | 'camera',
+  enabled: boolean
+): Promise<void> {
+  await permissions?.capture(device, async () => {
+    if (params.get('capture') === 'permissions' && enabled) {
+      const permission = await navigator.permissions.query({
+        name: device as PermissionName,
+      });
+      if (permission.state !== 'granted')
+        throw new DOMException('Device blocked', 'NotAllowedError');
+    } else if (params.get('capture') === 'true' && enabled) {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: device === 'microphone',
+        video: device === 'camera',
+      });
+      stream.getTracks().forEach((track) => track.stop());
+    } else if (
+      (device === 'microphone'
+        ? permissions?.microphone()
+        : permissions?.camera()) === 'denied'
+    ) {
+      throw new DOMException('Device blocked', 'NotAllowedError');
+    }
+    if (device === 'microphone') setAudioMuted(!enabled);
+    else setVideoMuted(!enabled);
+  });
+}
 const call = {
   activeCallId: () => callId,
   callLifecycle: {
@@ -182,20 +210,10 @@ const call = {
   cameraPermission: () => permissions?.camera() ?? 'prompt',
   isVideoMuted: videoMuted,
   isScreenSharing: screenSharing,
-  toggleAudio: async () => {
-    if (permissions?.microphone() === 'denied')
-      throw new DOMException('Microphone blocked', 'NotAllowedError');
-    await permissions?.capture('microphone', async () =>
-      setAudioMuted(!audioMuted())
-    );
-  },
-  toggleVideo: async () => {
-    if (permissions?.camera() === 'denied')
-      throw new DOMException('Camera blocked', 'NotAllowedError');
-    await permissions?.capture('camera', async () =>
-      setVideoMuted(!videoMuted())
-    );
-  },
+  toggleAudio: async (enabled?: boolean) =>
+    captureMedia('microphone', enabled ?? audioMuted()),
+  toggleVideo: async (enabled?: boolean) =>
+    captureMedia('camera', enabled ?? videoMuted()),
   toggleScreenShare: async () => {
     setScreenSharing(!screenSharing());
   },
@@ -225,7 +243,9 @@ const call = {
 };
 export const CallProvider = (props: ParentProps) => props.children;
 export const useCallContext = () => {
-  permissions ??= createCallMediaPermissions();
+  permissions ??= createCallMediaPermissions({
+    onGranted: (device) => captureMedia(device, true),
+  });
   return call;
 };
 export const useCallContextOptional = () => call;

@@ -17,6 +17,10 @@ import {
 import { CallMediaControls } from './CallControls/CallMediaControls';
 import { CallReactionMenu } from './CallControls/CallReactionMenu';
 import { CallSharingMenu } from './CallControls/CallSharingMenu';
+import {
+  CallMediaPermissionHelp,
+  createCallMediaPermissionHelp,
+} from './CallMediaPermissionHelp';
 import type { CallReactionEmoji } from './call-reactions';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { useActiveCallCompanion } from './use-active-call-companion';
@@ -33,6 +37,7 @@ export function CallQuickControls(props: {
   onReaction?: (emoji: CallReactionEmoji) => void;
 }) {
   const call = useCallContext();
+  const permissionHelp = createCallMediaPermissionHelp(call);
   const sharing = useActiveCallTeamShare();
   const companion = useActiveCallCompanion();
   const audioBlocked = () => call.microphonePermission?.() === 'denied';
@@ -102,7 +107,10 @@ export function CallQuickControls(props: {
               }
               disabled={call.isConnecting()}
               onClick={() =>
-                fireAndForget(call.toggleAudio(), 'call-quick-controls')
+                fireAndForget(
+                  permissionHelp.request('microphone'),
+                  'call-quick-controls'
+                )
               }
             >
               <Show
@@ -113,8 +121,8 @@ export function CallQuickControls(props: {
                   class={audioBlocked() ? 'size-4 text-ink-subtle' : 'size-4'}
                 />
               </Show>
+              <BlockedMediaBadge blocked={audioBlocked()} />
             </Button>
-            <BlockedMediaBadge blocked={audioBlocked()} />
           </div>
           <Show when={props.controls.includes('camera')}>
             <div class="relative">
@@ -136,7 +144,10 @@ export function CallQuickControls(props: {
                 }
                 disabled={call.isConnecting()}
                 onClick={() =>
-                  fireAndForget(call.toggleVideo(), 'call-quick-controls')
+                  fireAndForget(
+                    permissionHelp.request('camera'),
+                    'call-quick-controls'
+                  )
                 }
               >
                 <Show
@@ -147,8 +158,8 @@ export function CallQuickControls(props: {
                     class={videoBlocked() ? 'size-4 text-ink-subtle' : 'size-4'}
                   />
                 </Show>
+                <BlockedMediaBadge blocked={videoBlocked()} />
               </Button>
-              <BlockedMediaBadge blocked={videoBlocked()} />
             </div>
           </Show>
           <Show when={props.controls.includes('screen')}>
@@ -180,6 +191,7 @@ export function CallQuickControls(props: {
               <PhoneDisconnect class="size-4" />
             </Button>
           </Show>
+          <CallMediaPermissionHelp controller={permissionHelp} />
         </div>
       }
     >
