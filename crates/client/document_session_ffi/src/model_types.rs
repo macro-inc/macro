@@ -75,6 +75,8 @@ uniffi::custom_type!(MarkedSelectionFormat,FfiMarkedSelectionFormat,{remote,lowe
 /// Native ModifyTarget; fields retain their domain meaning.
 #[uniffi::remote(Enum)]
 pub enum ModifyTarget {
+    /// A view exists but did not provide the required movement endpoints.
+    RequireView,
     /// Layout is unavailable; only structural movement runs.
     NoView,
     /// Points returned by the view.
@@ -453,4 +455,27 @@ pub struct SelectionChangeContext {
     pub post_delete_restore: Option<RangeSelection>,
     /// Whether the view observed a triple click.
     pub triple_click: bool,
+}
+
+/// A native-first UTF-16 splice; full TextFromView remains explicit resynchronization.
+#[uniffi::remote(Record)]
+pub struct ViewTextDelta {
+    /// Changed text node, including generation.
+    pub key: NodeKey,
+    /// UTF-16 start position.
+    pub offset: Utf16Offset,
+    /// UTF-16 code units to remove.
+    pub deleted: Utf16Offset,
+    /// Inserted Unicode text.
+    pub inserted: String,
+    /// Native anchor after the edit.
+    pub anchor: Option<Utf16Offset>,
+    /// Native focus after the edit.
+    pub focus: Option<Utf16Offset>,
+    /// Whether this finishes composition.
+    pub composition_end: bool,
+    /// Final composition data when supplied.
+    pub composition_data: Option<String>,
+    /// Host-resolved selection.
+    pub selection: ViewSelection,
 }

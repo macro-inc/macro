@@ -8,14 +8,18 @@ const environment = {
 	...process.env,
 	TMPDIR: "/home/wolf/tmp",
 	CARGO_BUILD_JOBS: "2",
+	CARGO_TARGET_DIR: join(root, "target"),
 };
+const rustVersion = execFileSync("rustc", ["-vV"], { encoding: "utf8" });
+const host = /^host: (.+)$/m.exec(rustVersion)?.[1];
+if (!host) throw new Error("Cannot determine the native binding host target");
 const run = (args: string[]) =>
 	execFileSync("cargo", args, {
 		cwd: root,
 		env: environment,
 		stdio: "inherit",
 	});
-run(["build", "-p", "document_session_ffi", "-j2"]);
+run(["build", "-p", "document_session_ffi", "--target", host, "-j2"]);
 const check = process.argv.includes("--check");
 const output = check
 	? mkdtempSync(join(environment.TMPDIR, "document-session-bindings-"))
@@ -30,11 +34,13 @@ try {
 		"bindgen",
 		"--bin",
 		"document-session-bindgen",
+		"--target",
+		host,
 		"-j2",
 		"--",
 		"generate",
 		"--library",
-		join(root, `target/debug/libdocument_session_ffi.${extension}`),
+		join(root, `target/${host}/debug/libdocument_session_ffi.${extension}`),
 		"--language",
 		"swift",
 		"--language",

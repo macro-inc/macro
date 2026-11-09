@@ -192,6 +192,11 @@ pub enum FfiInput {
         /// Root node with children and properties.
         root: SerializedNode,
     },
+    /// Native view already applied one UTF-16 text splice.
+    TextDeltaFromView {
+        /// Validated by the shared model before any selection write.
+        delta: ViewTextDelta,
+    },
     /// Native view already displays this text.
     TextFromView {
         /// Changed node identity, including generation.
@@ -335,6 +340,9 @@ impl FfiInput {
                     state: SerializedEditorState { root },
                     tags: TagSet::default(),
                 });
+            }
+            Self::TextDeltaFromView { delta } => {
+                return SessionInput::Editor(Input::TextDeltaFromView(delta));
             }
             Self::TextFromView {
                 key,

@@ -31,6 +31,7 @@ execFileSync(
 			...process.env,
 			TMPDIR: "/home/wolf/tmp",
 			CARGO_BUILD_JOBS: "2",
+			CARGO_TARGET_DIR: join(root, "target"),
 			[`CARGO_TARGET_${cargoTarget}_LINKER`]: compiler,
 			[`CC_${nativeTarget}`]: compiler,
 			[`CXX_${nativeTarget}`]: `${compiler}++`,

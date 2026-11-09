@@ -136,6 +136,35 @@ fn literal_native_editor_uses_structured_diff_and_one_dom_first_call_without_io(
             Point::text(key, Utf16Offset(3))
         ]
     );
+    for (deleted, inserted, expected) in [(0, "x", "a😀x"), (1, "", "a😀")] {
+        let input = FfiInput::TextDeltaFromView {
+            delta: ViewTextDelta {
+                key,
+                offset: Utf16Offset(3),
+                deleted: Utf16Offset(deleted),
+                inserted: inserted.into(),
+                anchor: None,
+                focus: None,
+                composition_end: false,
+                composition_data: None,
+                selection: ViewSelection::KeepModel,
+            },
+        };
+        let lifted = <FfiInput as uniffi::Lift<UniFfiTag>>::try_lift(<FfiInput as uniffi::Lower<
+            UniFfiTag,
+        >>::lower(input))
+        .unwrap();
+        session
+            .handle(
+                FfiNow {
+                    mono_ms: 3,
+                    wall_ms: 1_000_003,
+                },
+                lifted,
+            )
+            .unwrap();
+        assert_eq!(session.text_content().unwrap(), expected);
+    }
     // Reattaching a native surface must keep the live node identities and text.
     let FfiQueryReply::ViewDiff { diff } = session.query(FfiQuery::ViewDiff).unwrap() else {
         panic!("cold repaint")
