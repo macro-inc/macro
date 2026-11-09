@@ -6,6 +6,9 @@ use lexical_model::Error;
 use std::sync::atomic::{AtomicU64, Ordering};
 use wasm_bindgen::prelude::*;
 
+/// Opaque JS failures carried through model callbacks.
+pub mod error;
+
 #[cfg(target_arch = "wasm32")]
 use std::cell::RefCell;
 #[cfg(target_arch = "wasm32")]
@@ -172,7 +175,7 @@ pub fn invoke(
     scope: &dyn CallbackScope,
     request: &wire::CompatHostRequest,
 ) -> Result<wire::CompatHostReply, Error> {
-    invoke_with(scope, request, |host_slot, bytes| {
+    let reply = invoke_with(scope, request, |host_slot, bytes| {
         #[cfg(target_arch = "wasm32")]
         {
             let dispatcher =
@@ -198,7 +201,8 @@ pub fn invoke(
             let _ = (host_slot, bytes);
             Err(Error::Invariant("compatibility JS host requires WASM"))
         }
-    })
+    })?;
+    error::returned(reply)
 }
 
 /// Install the single module-stable dispatcher; editor slots remain weak in JS.
