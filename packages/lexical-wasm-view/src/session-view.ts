@@ -3,13 +3,14 @@ import {
   SessionExecutor,
 } from '@macro-inc/collaboration/session/executor';
 import type { EditorSession } from '@macro-inc/collaboration/session/wasm';
+import { Telemetry } from '@macro-inc/observability';
 import { EditorView, type ViewOptions } from './view/editor-view';
 import type { ViewSink } from './view/port';
 import type { NodeViewRegistry } from './view/registry';
 import { SessionPort } from './view/session-port';
 
 /** Connect the view to the existing I/O executor after the host loads WASM. */
-export async function mountSessionView(
+export function mountSessionView(
   root: HTMLElement,
   registry: NodeViewRegistry,
   options: ViewOptions,
@@ -64,7 +65,13 @@ export async function mountSessionView(
     const failed = view;
     view = undefined;
     failed?.dispose();
-    await executor.close();
+    // Construction is synchronous after WASM initialization. Failed mounts
+    // still drain their asynchronous terminal I/O before releasing the core.
+    executor
+      .close()
+      .catch((closeError) =>
+        Telemetry.error(closeError, { surface: 'editor.mount.close' })
+      );
     throw error;
   }
 }

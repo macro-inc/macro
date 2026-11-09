@@ -20,7 +20,7 @@ export interface LocalSessionOptions {
 }
 
 /** Independent, non-durable native editor for composers and read-only views. */
-export async function mountLocalSessionView(
+export function mountLocalSessionView(
   root: HTMLElement,
   registry: NodeViewRegistry,
   view: ViewOptions,
@@ -33,7 +33,7 @@ export async function mountLocalSessionView(
   const telemetry = new SessionTelemetry(span);
   let mounted: Awaited<ReturnType<typeof mountSessionView>> | undefined;
   try {
-    mounted = await mountSessionView(root, registry, view, {
+    mounted = mountSessionView(root, registry, view, {
       doc,
       owner,
       user: '',
@@ -101,11 +101,19 @@ export async function mountLocalSessionView(
       },
     };
   } catch (error) {
-    try {
-      await mounted?.close();
-    } finally {
+    const finish = () => {
       telemetry.close();
       span.end();
+    };
+    if (mounted) {
+      mounted
+        .close()
+        .finally(finish)
+        .catch((closeError) =>
+          Telemetry.error(closeError, { surface: 'editor.local.close' })
+        );
+    } else {
+      finish();
     }
     throw error;
   }
