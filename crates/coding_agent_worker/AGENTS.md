@@ -20,10 +20,58 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   on each connect. `[macro]` is a dev override that defaults to production.
 - `src/daemon.rs` + `src/runtime.rs`: the serving core — persistent harness
   service connection, ACP process bridge, start/stop/restart on re-pair.
+- Pass `macrod service --ignore-stdin-eof` under system service managers;
+  embedded services keep the default shutdown when their parent's stdin closes.
 - `src/self_knowledge.rs`: the `<macrod-runtime>` section the bridge
   (`src/harness.rs`) prefixes to each new session's first prompt — macrod
   version, workspace, forwarded MCP servers, permission bypass, listing only
   what the session has. General Macro guidance stays in the `SelfKnowledge` tool.
+- `src/enroll.rs`: `macrod enroll --from incus|file:<path> --config <path>`,
+  run as root by the box image's `macrod-enroll.service` on a Macro computer.
+  Reads the `hosted_runtimes` `Enrollment` (Incus guest API
+  `/dev/incus/sock`, key `user.macro.enrollment`, or a file), writes
+  `macrod.toml` with the deployment URLs resolved from its
+  `macro_service_urls` `OVERRIDE_*` values (API, storage and app together, plus an optional
+  computer-reachable egress URL; macrod.toml stays the one URL source at runtime).
+  It claims the pre-approved pairing, chowns the config to its directory's owner,
+  then writes `/var/lib/macrod/enrolled`. A stored credential skips the claim, so
+  retries are safe. `--root` (hidden) prefixes system paths for tests.
+- `src/capabilities.rs`: on an enrolled Macro computer only (the marker
+  exists), reports `HarnessCapabilities` (`screen` = Xvnc on
+  `127.0.0.1:5900`, probed once a minute) to `PUT /harnesses/me/capabilities`
+  when it changes. Open a fresh connection for each report so recurring polls
+  cannot pin a reassigned service IP after backend restarts. The reporter is
+  cancellation-aware and tracked by the daemon's `TaskTracker`, including
+  across re-pair and shutdown.
+- `src/computer.rs` (`src/computer/`): on an enrolled Macro computer only,
+  the `computerControl` runtime messages and each Claude Code session's env.
+  Credits mode (no token) adds `ANTHROPIC_BASE_URL` (the session's
+  `macro_internal` MCP URL with `/mcp/internal` → `/anthropic`),
+  `ANTHROPIC_AUTH_TOKEN` (its bearer) and
+  `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` to `session/new|load|resume`
+  as `_meta.claudeCode.options.env`; own-account mode adds
+  `CLAUDE_CODE_OAUTH_TOKEN` instead, for sessions opened after the switch.
+  `claude_sign_in.rs` drives `claude setup-token` on a hidden PTY (`pty.rs`,
+  rustix): returns its OAuth URL, then types the pasted code or GETs a pasted
+  `http://localhost:<port>/callback?code=` URL inside the box, and stores the
+  `sk-ant-oat01-` token at `/var/lib/macrod/claude-token` (0600);
+  sign-out deletes it. Match the pinned Claude Code setup-token rejection text
+  in `claude_sign_in.rs` and return typed `InvalidCode` immediately; silence
+  still times out after 60 seconds. `claude_sign_in_cancel` interrupts URL/token
+  waits before taking the sign-in mutex, then drops the PTY; completion owns
+  its process so all failures also kill it immediately. Cancellation during a
+  token-store save restores the prior token (or deletes the newly saved token
+  when previously using credits) before acknowledging cancellation. `token_store.rs` keeps disk access in the root-only
+  `macrod-token-store.service`, installed by enrollment. Its Unix socket is
+  0600, owned by the config's uid, verifies peer credentials in both directions,
+  and accepts only bounded load/save/delete requests. macrod and Claude stay
+  unprivileged. On an already enrolled box, rerun `macrod enroll` as root to
+  install the helper without re-pairing; the image's first-boot unit skips an
+  existing marker. ACP trace logs contain only direction and byte counts.
+  `screen.rs`: `screen_open` connects to Xvnc on
+  `127.0.0.1:5900`, then dials its own wss to
+  `<api_url>/harnesses/me/screen?stream=` and relays raw bytes. Spans:
+  `macrod.computer.control`, `macrod.screen.stream`.
 - `src/trigger.rs` + `src/dispatch.rs`: agent-trigger broker events → session
   create/dial/prompt against the live harness service.
 - `src/daemon.rs` `watch_presence`: each minute a connection has held, asks
@@ -120,8 +168,13 @@ external chat replies depend on it. Direct session controls still mint IDs.
 
 ## Gotchas
 
+- Paired credentials remain scope-free. Resolve webhook scope from current
+  `shared_team_ids`, never a team owner variant; every harness has a human owner.
+
 - `src/herdr.rs` and its submodule are Unix-only (`#[cfg(unix)]`); don't add
   Windows-breaking code there without a cfg gate.
+- Set the PTY master's close-on-exec flag with `fcntl` on macOS; its
+  `posix_openpt` does not accept `O_CLOEXEC`.
 - The ACP child is killed with its whole tree: a process group on Unix, a Job
   Object on Windows (`src/outbound/acp_process/job.rs`).
 - Every herdr call goes through the `HerdrCli` facade; add a capability to both
@@ -148,3 +201,17 @@ external chat replies depend on it. Direct session controls still mint IDs.
   update it alongside `src/herdr/` changes.
 - MCP server selection is supplied by `agent_harness` when the session binds;
   native launch forwards that list, with credentials refreshed on launch/resume.
+
+Macro computers replace the managed `/workspace` placeholder with their configured
+workspace on session start. Enrollment’s `OVERRIDE_AGENT_HARNESS_EGRESS_URL` is
+stored as `[macro].egress_url`; computer sessions route first-party MCP and
+Anthropic requests through it without changing custom external MCP addresses.
+
+Service/enrollment telemetry opts in with `OTEL_EXPORTER_OTLP_ENDPOINT`
+(gRPC). Only enrollment (`run_enroll`, `macrod.enroll.claim`) and capability
+report spans export, with the marker's computer UUID as a resource attribute.
+Enrollment joins the setup trace from `Enrollment.traceparent` and retains only
+that W3C context in `/var/lib/macrod/provision.traceparent`.
+A daemon started within an hour of enrollment is part of setup: its claim and
+first successful capability report send the setup `traceparent` (the raw parent
+when this daemon exports nothing). stdout remains the daemon protocol.
