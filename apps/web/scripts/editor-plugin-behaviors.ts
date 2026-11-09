@@ -16,7 +16,7 @@ export const EDITOR_PLUGIN_BEHAVIORS: Record<string, string> = {
   checklist:
     'Insert check lists; pointer hit target, editable/editor identity checks and five-pixel drag threshold; platform modifier+Enter aligns all selected checks with the first; remove checkbox tab stops.',
   'checklist-controls':
-    'Collect top-level checklist metadata; show progress for every list and task filters for lists containing tasks; dim nonmatching rows; persist filters; synchronize portal mounts; upgrade dirty plain imported list nodes.',
+    'Collect top-level checklist metadata; show progress for every collected checklist and task filters for checklists containing task mentions; dim nonmatching rows; persist filters; synchronize portal mounts; upgrade dirty plain imported list nodes.',
   code: 'Insert highlighted code; language picker/accessory; select-all scopes, Tab indentation, line movement and boundary exits; distinguish collapsed/ranged selections.',
   comments:
     'Wrap/unwrap selected text with comment marks; activate marked threads including caret boundaries; publish mark add/remove lifecycle, local/draft/server-thread state and shared peer changes. Comment-only authorization requires host coverage.',
