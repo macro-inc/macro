@@ -68,6 +68,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 
 - Keep composer visibility separate from global defaults and existing task pins.
 - Capture template application and task submission independently of later draft edits.
+- Exclude active submissions from recovery lists; keep their input durable until task creation is confirmed.
 - Persist template editing separately from the underlying task draft; retain creation identities across retries.
 - Persist the last applied task baseline so switching templates still confirms restored task edits.
 - Run local validation in this worktree's named stack without resetting seeded data.

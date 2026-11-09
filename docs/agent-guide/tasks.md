@@ -874,6 +874,9 @@ and reset, no-template selection, repeated Create More, editing, cancellation,
 conflicts, and deletion. Touch retains the tall composer, with Save in its
 reachable header and Cancel in the footer; name focus requires an explicit tap.
 At narrow desktop widths, the dropdown stays within the viewport.
+With and without a selected template, Create another must not show an
+unconfirmed-draft recovery banner during submission. Failed unconfirmed attempts
+remain recoverable; successful attempts never enter the recovery list.
 
 After creation, the `Task created` toast shows primary `Open` and, on desktop,
 secondary `Open split` to its left, with a close icon instead of Dismiss.

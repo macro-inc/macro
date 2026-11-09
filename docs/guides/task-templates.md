@@ -12,6 +12,8 @@ New template and Edit open template mode over a preserved task draft without a r
 
 Create More retains the selection and starts each fresh task from the saved template, not edits specific to the submitted task. Launch-context property presets, including grouped-view values and explicit assignees, remain authoritative. Its task action reads Create another. Desktop places expansion immediately left of Close. Touch keeps the existing tall composer with Save in its reachable header and Cancel in the footer.
 
+Durable task submissions are not recovery candidates while their mutation is idle or pending. This prevents the unconfirmed-draft warning from appearing below the header during Create More. Unconfirmed settled attempts remain recoverable, including after restarting the app.
+
 ## Markdown initialization
 
 Task creation passes optional pinned property definition IDs through the owned
