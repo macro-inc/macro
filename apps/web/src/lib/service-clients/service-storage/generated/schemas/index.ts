@@ -2526,6 +2526,7 @@ export * from './sharePipeline';
 export * from './shareWithChannelRequest';
 export * from './shortIdResponse';
 export * from './simpleMention';
+export * from './simpleSaveRequest';
 export * from './skillDescriptionBody';
 export * from './skillDescriptionBodyDescription';
 export * from './skippedCell';

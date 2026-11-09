@@ -32045,6 +32045,16 @@ export const simpleSaveParams = zod.object({
   document_id: zod.string().describe('Document ID'),
 });
 
+export const simpleSaveBody = zod
+  .object({
+    file: zod
+      .instanceof(File)
+      .describe(
+        "The file's new content, saved as the document's next version."
+      ),
+  })
+  .describe('Multipart body of `simple_save`.');
+
 export const simpleSaveResponse = zod.object({
   data: zod.object({
     documentMetadata: zod.object({
