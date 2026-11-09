@@ -210,12 +210,12 @@ disposable tree without changing compiler options. The independent source audit
 the archived WASM/DTS hashes. The advisory ceiling overage is435,592 bytes;
 initializer, native oracle, positive cache/crossing and parity gates remain open.
 
-The OFF inventory continuation through `5e9faf1616` is integrated, including code,
+The OFF inventory continuation through `3b4d2afdf2` is integrated, including code,
 table picker, checkbox/task conversion, link and mounted TaskList fixtures. Owner browser evidence
 is 114/114 code, 132/132 table and 153/153 link OFF cases, each across three
 viewport profiles; these are not native mobile/virtual-keyboard proofs. The exact
-ledger has 707 selectors across four explicit reports (full web22,440, media36,
-conversion11, TaskList19), including 448 new editor units; it is not a summed
+ledger has 739 selectors across five explicit reports (full web22,440, media36,
+conversion11, TaskList19, checklist planning32), including 480 new editor units; it is not a summed
 full-suite run, deduplicated behavior count or ON acceptance. The 19-case TaskList
 report replaces the earlier 12-case report. No duplicate broad OFF run was
 launched here. TaskList commits `16d9f311d3` / `65fa6cf3b0` are integrated as
@@ -233,9 +233,25 @@ scanner validates707 mappings/source anchors. It correctly credits zero OFF
 results in the disposable root because raw reports name the owner's different
 absolute root. A separate read-only exact-selector check confirms707 unique
 passing owner-path entries without rewriting reports; this does not establish
-execution/source binding. New editor units remain448 and browser cases153.
+execution/source binding. At that mapping-only checkpoint new editor units were448
+and browser cases153.
 Evidence: `inventory-707-scanner.log`, `inventory-707/source-ledger.json` and
 `inventory-707-owner-selector-verification.json` under the acceptance directory.
+
+Checklist planning continuation `3b4d2afdf2` is integrated as `334b85c124`.
+Independent focused execution passes32/32 OFF cases and scoped `just check`.
+The tests pin calendar/priority boundaries, task-fact precedence, filter
+composition, progress/wrapper order and actual DOM dim/clear/stale-key handling.
+Task facts are supplied; dropdown UI, real queries and native hosting remain
+unverified. The fifth report is separate from the earlier full run, with no
+duplicate broad web execution or ON claim. Evidence:
+`checklist-planning-independent-tests.log`, `checklist-planning-scoped-check.log`
+and `checklist-planning-integration-audit.md` under the acceptance directory.
+The updated scanner validates739 source mappings; the same preserved absolute
+owner paths still earn zero disposable-root OFF credit. Read-only verification
+finds739 unique passing owner-path selectors across the five reports, without
+rewriting them or asserting source/execution binding:
+`inventory-739-owner-selector-verification.json`.
 
 The three reported package formatting locations also pass read-only Biome checks
 from their package directories: two collaboration files and the view clipboard
