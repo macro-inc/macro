@@ -1,5 +1,5 @@
-// Real editor/parser lifecycle with task creation supplied at the service boundary.
-// No remote task creation or host permission acceptance is established.
+// Actual async editor/parser lifecycle; service/fetch boundaries are supplied.
+// No remote creation, menu/native admission or authorization acceptance.
 export const EDITOR_ASYNC_BEHAVIOR_MAP = [
   {
     source:
@@ -37,6 +37,19 @@ export const EDITOR_ASYNC_BEHAVIOR_MAP = [
       'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/checkbox-task-conversion.test.ts',
     cases: [
       'checkbox task conversion does not resurrect a checkbox deleted before its creation result arrives',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/snippets/snippetsPlugin.ts',
+    anchor: 'function snippetStateAsMarkdown(',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/snippet-sequential-state.test.ts',
+    cases: [
+      'literal snippet plugin sequential state removes the actual placeholder for an empty state on a fresh extraction editor',
+      'literal snippet plugin sequential state pins OFF reuse of the previous formatted snippet after a subsequent empty serialized root',
+      'literal snippet plugin sequential state pins OFF reuse after a malformed subsequent state while preserving actual parser errors',
+      'literal snippet plugin sequential state replaces extraction content for a subsequent valid state rather than retaining the previous text',
     ],
   },
 ] as const;
