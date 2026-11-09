@@ -1141,7 +1141,8 @@ scroll sideways. With `enable-routine-suggestions` and
 `enable-routine-code-steps` on (not on touch devices), suggestions take the
 strip's place: **Suggested for you** above the rows on **All** shows the first
 three of them as compact cards (icon with a violet sparkle for AI's picks,
-name, trigger → first step, and **Turn on**, **Review** or **Use**), then
+name, trigger → first step, and **Turn on** for AI's picks or a **Review →** /
+**Use →** label; the whole card opens it), then
 **N more · In Discover**, which opens a third tab, **Discover**. Discover
 replaces the list with every suggestion (AI's first, then Macro's) followed by
 the templates no suggestion already offers, four cards to a row (the knob
