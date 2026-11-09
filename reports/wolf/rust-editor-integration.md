@@ -2,6 +2,21 @@
 
 ## Current checkpoint: coherent configuration, priority WAL recovery and open metadata gates
 
+Reconciliation producer schema `aae5c5ab2c` is integrated as `577fe4a099`, with
+fingerprint `260b600ba0ab014808e9d2aaaafb03ce7c05aed5dcbb0f13b4751fe670163b83`.
+HostCall Reconcile uses tag7; ReconcileAck uses tag8, preserving Thrown tag7.
+The stage carries exact previous/next versions; its acknowledgement carries
+stage identity, capture leases, buffered operations and opaque patches rather
+than full root strings. Native transport still rejects this acknowledgement
+through the existing wildcard branch: exact stage/lease handling and actual
+mutable pending-state wiring remain unimplemented. This is schema-only evidence,
+not runtime readiness. Independent generator freshness, generated session types,
+all60 all-feature native library tests and scoped checks pass. Evidence:
+`reconcile-schema-{freshness,session-types,integrated-native-tests}.log` and
+`reconcile-schema-map-scoped-check.log`. Existing archived artifacts retain their
+own older schema; no binary/glue/declaration promotion or mixed-artifact test was
+performed for this producer checkpoint.
+
 Bounded native draft-count fix `51c4fd12f0` is integrated alone as `7464135a8f`.
 No optional plugin moves or format-only perf-branch commits were consumed. The
 plugin counts direct mutations and attachment-changing subtrees, rebuilds full
@@ -172,11 +187,11 @@ disposable tree without changing compiler options. The independent source audit
 the archived WASM/DTS hashes. The advisory ceiling overage is435,592 bytes;
 initializer, native oracle, positive cache/crossing and parity gates remain open.
 
-The OFF inventory continuation through `65fa6cf3b0` is integrated, including code,
+The OFF inventory continuation through `5e9faf1616` is integrated, including code,
 table picker, checkbox/task conversion, link and mounted TaskList fixtures. Owner browser evidence
 is 114/114 code, 132/132 table and 153/153 link OFF cases, each across three
 viewport profiles; these are not native mobile/virtual-keyboard proofs. The exact
-ledger has 698 selectors across four explicit reports (full web22,440, media36,
+ledger has 707 selectors across four explicit reports (full web22,440, media36,
 conversion11, TaskList19), including 448 new editor units; it is not a summed
 full-suite run, deduplicated behavior count or ON acceptance. The 19-case TaskList
 report replaces the earlier 12-case report. No duplicate broad OFF run was
@@ -186,6 +201,18 @@ launched here. TaskList commits `16d9f311d3` / `65fa6cf3b0` are integrated as
 hooks cover kind transitions and ordered-start identity, not native/custom-class
 hosting or the actual controls UI. Production declaration-oracle hooks and the
 resolver remain held.
+
+Mapping-only `ee31d991ed` / `5e9faf1616` are integrated as `a7c73d4cd1` /
+`edc86a8f77`. The nine existing agent-slash/checklist selectors add no new test
+execution. Checklist controls documentation now describes progress, filter
+dimensions and dimming; grouping/collapse is not implemented. The independent
+scanner validates707 mappings/source anchors. It correctly credits zero OFF
+results in the disposable root because raw reports name the owner's different
+absolute root. A separate read-only exact-selector check confirms707 unique
+passing owner-path entries without rewriting reports; this does not establish
+execution/source binding. New editor units remain448 and browser cases153.
+Evidence: `inventory-707-scanner.log`, `inventory-707/source-ledger.json` and
+`inventory-707-owner-selector-verification.json` under the acceptance directory.
 
 The three reported package formatting locations also pass read-only Biome checks
 from their package directories: two collaboration files and the view clipboard
