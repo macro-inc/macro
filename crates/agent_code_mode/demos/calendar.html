@@ -98,6 +98,23 @@
 
   const clock = (at: string) => new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
   async function load() {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -141,9 +158,9 @@
     await addEvent({ title, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() });
     titleInput.value = '';
     addButton.disabled = false;
-    await load();
+    await reload();
   });
-  await load();
+  await reload();
 </script>
 </body>
 </html>

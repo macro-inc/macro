@@ -100,6 +100,23 @@
     return node;
   }
 
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
   async function load() {
     const wanted = view;
     const { connected, threads: rows } = await threads({ view: wanted });
@@ -122,7 +139,7 @@
         button.disabled = true;
         li.style.opacity = '.4';
         await archive({ id: row.id });
-        await load();
+        await reload();
       });
       li.append(el('div', 'from', row.from), subject, button);
       ul.append(li);
@@ -134,12 +151,12 @@
     tab.addEventListener('click', () => {
       view = tab.dataset.view as View;
       for (const other of tabs) other.setAttribute('aria-pressed', String(other === tab));
-      load();
+      reload();
     });
   }
   // Mail has no live event in the stream; refresh when the page regains focus.
-  window.addEventListener('focus', load);
-  await load();
+  window.addEventListener('focus', reload);
+  await reload();
 </script>
 </body>
 </html>

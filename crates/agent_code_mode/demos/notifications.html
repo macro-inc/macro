@@ -124,6 +124,23 @@
     return `${Math.round(minutes / 1440)}d`;
   }
 
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
   async function load() {
     const wanted = showingDone;
     const rows = await feed({ done: wanted });
@@ -144,7 +161,7 @@
         button.disabled = true;
         li.style.opacity = '.4';
         await markDone({ ids: [row.id], done: !wanted });
-        await load();
+        await reload();
       });
       li.append(el('span', 'dot'), text, button);
       ul.append(li);
@@ -156,15 +173,15 @@
     showingDone = done;
     openTab.setAttribute('aria-pressed', String(!done));
     doneTab.setAttribute('aria-pressed', String(done));
-    load();
+    reload();
   }
 
   openTab.addEventListener('click', () => show(false));
   doneTab.addEventListener('click', () => show(true));
   // Notifications have no live event of their own; a mention or message
   // usually arrives with one.
-  on(['message.posted', 'message.mentioned', 'document.created'], load);
-  await load();
+  on(['message.posted', 'message.mentioned', 'document.created'], reload);
+  await reload();
 </script>
 </body>
 </html>

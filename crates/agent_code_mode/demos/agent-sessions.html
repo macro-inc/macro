@@ -107,6 +107,23 @@
     return 'state';
   }
 
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
   async function load() {
     const wanted = archived;
     const rows = await sessions({ archived: wanted });
@@ -130,7 +147,7 @@
         button.disabled = true;
         li.style.opacity = '.4';
         await setArchived({ id: row.id, archived: !wanted });
-        await load();
+        await reload();
       });
       const dot = el('span', stateClass(row.status, row.turnState));
       dot.title = row.turnState ?? row.status;
@@ -144,7 +161,7 @@
     archived = value;
     activeTab.setAttribute('aria-pressed', String(!value));
     archivedTab.setAttribute('aria-pressed', String(value));
-    load();
+    reload();
   }
 
   activeTab.addEventListener('click', () => show(false));
@@ -152,8 +169,8 @@
   on([
     'agent_session.opened', 'agent_session.renamed', 'agent_session.turn_started',
     'agent_session.turn_ended', 'agent_session.settled', 'agent_session.deleted',
-  ], load);
-  await load();
+  ], reload);
+  await reload();
 </script>
 </body>
 </html>

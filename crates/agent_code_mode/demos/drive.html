@@ -105,7 +105,6 @@
   const list = document.getElementById('list')!;
   const queryInput = document.getElementById('query') as HTMLInputElement;
   const newButton = document.getElementById('new') as HTMLButtonElement;
-  let latest = 0;
 
   function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
     const node = document.createElement(tag);
@@ -131,26 +130,43 @@
       if (row.snippet) text.append(el('div', 'snippet', row.snippet));
       label.append(el('span', 'badge', row.kind), text);
       name.append(label);
-      const when = new Date(row.updatedAt).toLocaleDateString(undefined, {
-        month: 'short', day: 'numeric', year: 'numeric',
-      });
+      const updated = new Date(row.updatedAt);
+      const when = updated.toDateString() === new Date().toDateString()
+        ? updated.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+        : updated.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
       tr.append(name, el('td', 'when when-col', when));
       table.append(tr);
     }
     list.replaceChildren(table);
   }
 
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
   async function load() {
-    const ticket = ++latest;
     const query = queryInput.value.trim();
     const rows = query ? await search({ query }) : await recent();
-    if (ticket === latest) render(rows, query);
+    render(rows, query);
   }
 
   let debounce: ReturnType<typeof setTimeout> | undefined;
   queryInput.addEventListener('input', () => {
     clearTimeout(debounce);
-    debounce = setTimeout(load, 250);
+    debounce = setTimeout(reload, 250);
   });
   newButton.addEventListener('click', async () => {
     newButton.disabled = true;
@@ -158,10 +174,10 @@
     await createNote({ name: `Note ${stamp}` });
     queryInput.value = '';
     newButton.disabled = false;
-    await load();
+    await reload();
   });
-  on(['document.created', 'document.updated', 'document.deleted'], load);
-  await load();
+  on(['document.created', 'document.updated', 'document.deleted'], reload);
+  await reload();
 </script>
 </body>
 </html>

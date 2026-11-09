@@ -123,10 +123,10 @@
     return node;
   }
 
-  function dueLabel(due: string | null) {
+  function dueLabel(due: string | null, open: boolean) {
     if (!due) return el('span');
     const date = new Date(due);
-    const label = el('span', date < new Date() ? 'overdue' : '');
+    const label = el('span', open && date < new Date() ? 'overdue' : '');
     label.textContent = `Due ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
     return label;
   }
@@ -157,13 +157,32 @@
           await load();
         });
         const meta = el('div', 'meta');
-        meta.append(dueLabel(task.due), select);
+        // Only open work can be overdue: the last two statuses are Completed and Canceled.
+        const open = statuses.findIndex((choice) => choice.id === option.id) < statuses.length - 2;
+        meta.append(dueLabel(task.due, open), select);
         card.append(el('div', 'name', task.name), meta);
         column.append(card);
       }
       return column;
     });
     root.replaceChildren(...columns);
+  }
+
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
   }
 
   async function load() {
@@ -183,15 +202,15 @@
     await createTask({ name });
     nameInput.value = '';
     addButton.disabled = false;
-    await load();
+    await reload();
   }
 
   addButton.addEventListener('click', add);
   nameInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') add();
   });
-  on(['document.created', 'document.updated', 'document.deleted'], load);
-  await load();
+  on(['document.created', 'document.updated', 'document.deleted'], reload);
+  await reload();
 </script>
 </body>
 </html>

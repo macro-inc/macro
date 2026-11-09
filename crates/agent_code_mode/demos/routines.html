@@ -99,6 +99,23 @@
   const format = (at: string) =>
     new Date(at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
   async function load() {
     const rows = await routines();
     if (rows.length === 0) {
@@ -119,7 +136,7 @@
       toggle.addEventListener('click', async () => {
         toggle.disabled = true;
         await setEnabled({ id: row.id, enabled: !row.enabled });
-        await load();
+        await reload();
       });
       const run = el('button', '', 'Run now');
       run.addEventListener('click', async () => {
@@ -145,7 +162,7 @@
     }));
   }
 
-  await load();
+  await reload();
 </script>
 </body>
 </html>

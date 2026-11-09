@@ -92,7 +92,6 @@
   const nameInput = document.getElementById('name') as HTMLInputElement;
   const emailInput = document.getElementById('email') as HTMLInputElement;
   const createButton = document.getElementById('create') as HTMLButtonElement;
-  let latest = 0;
 
   function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
     const node = document.createElement(tag);
@@ -101,8 +100,24 @@
     return node;
   }
 
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
   async function load() {
-    const ticket = ++latest;
     let rows: Awaited<ReturnType<typeof contacts>>;
     try {
       rows = await contacts({ query: queryInput.value.trim() });
@@ -110,7 +125,6 @@
       list.replaceChildren(el('p', 'empty', `CRM isn't available for this account: ${String(error)}`));
       return;
     }
-    if (ticket !== latest) return;
     if (rows.length === 0) {
       list.replaceChildren(el('p', 'empty', 'No contacts yet. People you email appear here.'));
       return;
@@ -139,7 +153,7 @@
   let debounce: ReturnType<typeof setTimeout> | undefined;
   queryInput.addEventListener('input', () => {
     clearTimeout(debounce);
-    debounce = setTimeout(load, 250);
+    debounce = setTimeout(reload, 250);
   });
   createButton.addEventListener('click', async () => {
     const name = nameInput.value.trim();
@@ -149,9 +163,9 @@
     nameInput.value = '';
     emailInput.value = '';
     createButton.disabled = false;
-    await load();
+    await reload();
   });
-  await load();
+  await reload();
 </script>
 </body>
 </html>
