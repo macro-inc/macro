@@ -34,10 +34,11 @@ pub struct HarnessSelfApi {
 }
 
 impl HarnessSelfApi {
-    /// A client for the deployment the config names, with this credential.
-    pub fn new(config: &Config, credentials: &HarnessCredentials) -> Self {
+    /// A client for the deployment the config names, with this credential,
+    /// sending over `http`.
+    pub fn new(config: &Config, credentials: &HarnessCredentials, http: reqwest::Client) -> Self {
         Self {
-            http: reqwest::Client::new(),
+            http,
             base: config
                 .macro_api
                 .storage_url
