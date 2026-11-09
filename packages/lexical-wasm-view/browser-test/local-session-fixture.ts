@@ -11,10 +11,12 @@ import { registerMacroElementViews } from '../src/view/node-views/macro';
 
 await init();
 const errors: string[] = [];
-async function mount(id: string, editable: boolean) {
+function mount(id: string, editable: boolean) {
   const root = document.getElementById(id);
   if (!root) throw new Error('Missing local surface');
-  return mountLocalSessionView(
+  // Builders construct a truthful native handle before the shell connects it.
+  root.remove();
+  const runtime = mountLocalSessionView(
     root,
     registerMacroElementViews(createBuiltinRegistry()),
     {
@@ -31,10 +33,14 @@ async function mount(id: string, editable: boolean) {
         EditorSession.createMacro(ABI_MAJOR, config, now, wall),
     }
   );
+  if (!runtime.view.node(0))
+    throw new Error('Local session did not seed synchronously');
+  document.body.appendChild(root);
+  return runtime;
 }
-const first = await mount('first', true);
-const second = await mount('second', true);
-const preview = await mount('preview', false);
+const first = mount('first', true);
+const second = mount('second', true);
+const preview = mount('preview', false);
 preview.port.setState(
   JSON.stringify({
     root: {

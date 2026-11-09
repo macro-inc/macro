@@ -30,6 +30,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 - Retarget copied DOM code from Lexical 0.45.0; preserve its MIT notice and pin.
 - Keep HTML import and code highlighting off the startup path.
 - Use mountLocalSessionView for local composers and read-only views; keep transport, durability and chatter disabled and seed before importing content.
+- Construct views synchronously only after the app's shared engine resource is ready; reconnect the same detached root and keep close asynchronous.
 - Resolve text leaves through dom.ts so nested semantic wrappers remain editable.
 - Match pinned link URL formatting and parsed-protocol filtering before painting href.
 - Handle session effect kind 9 before painting: end native composition and suppress

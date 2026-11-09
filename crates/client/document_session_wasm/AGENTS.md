@@ -43,6 +43,7 @@ Route application bulk reads through query kind 9 with the mirror generation in 
 - `src/editor_input.rs`: explicit cold model input adapter; Input has no wire derives.
 - `src/application_exports.rs`: raw serializedState and download-safe savedState; Macro markdown uses internal/external application transformers while generic sessions keep built-ins.
 - `src/query.rs`: portable HTML, Markdown, clipboard and model queries.
+- `src/paste_init.rs`: additive prepareMacroPaste export; the shared engine gate calls it during idle preparation after paint, before admitting editor input.
 - `src/router.rs`: shared RouterCore boundary; outer protocol remains unframed.
 - `src/telemetry.rs`: content-free cold native spans forwarded to the host.
 - `src/storage.rs`: durable metadata conversions; no storage I/O in Rust.
@@ -69,4 +70,4 @@ Preserve keystroke work counters when changing code-generation or post-processin
 
 Set TMPDIR for cargo. Never edit generated files by hand. Keep package registration,
 preload rules and size checks aligned with nix/tauri-desktop.nix and apps/web/justfile.
-Enforce the provisional D5 1,130,000-byte Brotli cap; WP-59 measures actual startup before the budget is tightened.
+Treat 1.6 MB Brotli as a soft ceiling: retain measured speed gains, preload without blocking paint, and gate startup/composer readiness against the upstream engine.

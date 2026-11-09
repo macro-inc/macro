@@ -3,9 +3,16 @@
 The experimental `rust-editor-model` flag selects the document body model in
 both block and Drive detail entry points. Set `VITE_ENABLE_RUST_EDITOR_MODEL`
 to `true` or `false` on an isolated local stack, then reopen the document after
-changing it. The selected model remains stable while that document is open.
-Off uses the existing LexicalMarkdown collaboration path. On initializes the
-session WASM lazily on the main thread and connects EditorView to SessionPort.
+changing it. The app caches its engine choice at boot; later rollout refreshes
+take effect on the next page load.
+Off uses the existing LexicalMarkdown collaboration path and makes no native
+module request. On preloads the session WASM through the app-wide readiness
+resource while the shell paints, then connects EditorView to SessionPort.
+The shared gate also prepares paste matchers after paint at idle before exposing
+the module. Only editor-building subtrees wait at EditorEngineBoundary. A native load failure
+shows the content retry action while the shell stays mounted and overlay groups
+remain held. Retry initializes the shared engine without changing models. The isolated
+readiness checks are documented in `apps/web/src/lib/core/document-session/README.md`.
 Both engines use the same Notebook layout, title, document properties, discussion
 and body loading/placeholder chrome. Copy as markdown and downloads use the
 selected body engine. Verify engine parity before treating the flagged path as
@@ -16,8 +23,8 @@ then close and reopen the document offline after its local snapshot is durable.
 Keep the app shell open for the offline navigation; the app has no asset-caching
 service worker. Confirm the same account retains its edits and logout/account
 switch cannot expose or synchronize another account's private rows. Use a private
-headless Chromium process and find `editor.open` with its `wasm.init`,
-`state.load` and `view.reconcile` phases in local Tempo. Do not use the shared
+headless Chromium process and find `editor.engine.initialize` for preload and
+`state.load` and `view.reconcile` for document opening in local Tempo. Do not use the shared
 browser or enable a remote rollout as part of this check.
 
 For DSS sync rollout checks, use PostHog flag `sync-via-gateway` (dev and

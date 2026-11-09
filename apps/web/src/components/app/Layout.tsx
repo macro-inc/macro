@@ -50,7 +50,9 @@ import {
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
+import { EditorEngineBoundary } from '@core/document-session/editor-engine';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
+import { MessageLoadError } from '@core/messages/MessageLoadError';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -221,6 +223,21 @@ export function PageContent(props: ParentProps) {
   );
 }
 
+/** Keep preload failures local to content, with one retry for the shared resource. */
+export function EditorContent(props: ParentProps) {
+  return (
+    <EditorEngineBoundary
+      failure={(retry) => (
+        <MessageLoadError onRetry={retry}>
+          Could not open this content.
+        </MessageLoadError>
+      )}
+    >
+      {props.children}
+    </EditorEngineBoundary>
+  );
+}
+
 /**
  * Sends first-time desktop users into the onboarding flow at /onboarding, and
  * new agents on any platform to their setup page.
@@ -299,8 +316,10 @@ export function AppChrome(props: ParentProps) {
           <Show when={!isTouchDevice()}>
             <GoToHotkeys />
             <Suspense>
-              <FavoritesCommands />
-              <CommandMenu />
+              <EditorEngineBoundary>
+                <FavoritesCommands />
+                <CommandMenu />
+              </EditorEngineBoundary>
             </Suspense>
           </Show>
           <Suspense>
@@ -310,7 +329,9 @@ export function AppChrome(props: ParentProps) {
           <Show when={isDesktopPlatform()}>
             <LocalRuntimeHost />
           </Show>
-          <NativeShareSheet />
+          <EditorEngineBoundary>
+            <NativeShareSheet />
+          </EditorEngineBoundary>
           <MacroMcpSetupModal />
           <CreateChannelModal />
           <Show when={companyDialogUsed()}>
@@ -351,7 +372,9 @@ export function AppChrome(props: ParentProps) {
               <PageContent>
                 {/* Route loading must not detach the chrome or mobile
                     navigation; the route draws its own loading state. */}
-                <Suspense>{props.children}</Suspense>
+                <Suspense>
+                  <EditorContent>{props.children}</EditorContent>
+                </Suspense>
               </PageContent>
             </ViewSwitcherContext.Provider>
           </SidebarPrefsProvider>
@@ -360,11 +383,15 @@ export function AppChrome(props: ParentProps) {
       <Show when={isTouchDevice() && isAuthenticated()}>
         <FloatRegionHost />
         <Suspense>
-          <UserCardDrawer />
+          <EditorEngineBoundary>
+            <UserCardDrawer />
+          </EditorEngineBoundary>
         </Suspense>
         <Show when={isMobile()}>
           <Suspense>
-            <MobileSettings />
+            <EditorEngineBoundary>
+              <MobileSettings />
+            </EditorEngineBoundary>
           </Suspense>
         </Show>
         {/* Search owns its filters at the top; suppress background composers. */}
@@ -380,12 +407,17 @@ export function AppChrome(props: ParentProps) {
           <MobileDockRow />
         </FloatRegion>
       </Show>
-      <InitialInteractiveOnboardingModal />
-      <Suspense>
-        <Show when={isAuthenticated()}>
-          <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
-        </Show>
-      </Suspense>
+      <EditorEngineBoundary>
+        <InitialInteractiveOnboardingModal />
+        <Suspense>
+          <Show when={isAuthenticated()}>
+            <Launcher
+              open={createMenuOpen()}
+              onOpenChange={setCreateMenuOpen}
+            />
+          </Show>
+        </Suspense>
+      </EditorEngineBoundary>
     </SidebarVisibilityContext.Provider>
   );
 }

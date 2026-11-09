@@ -191,6 +191,15 @@ impl LinkifyIt {
             compiled,
         })
     }
+    /// Build a replaced TLD configuration directly, without compiling defaults first.
+    pub fn with_replaced_tlds(options: Options, tlds: &[String]) -> Result<Self, LinkifyError> {
+        Ok(Self {
+            options,
+            tlds: tlds.to_vec(),
+            replaced: true,
+            compiled: Arc::new(compile(tlds, true, options.break_on_three_dashes)?),
+        })
+    }
     /// Replace or extend fuzzy-domain TLDs, matching the source's sorting and deduplication.
     pub fn tlds(&mut self, values: &[String], keep_old: bool) -> Result<(), LinkifyError> {
         let mut tlds = if keep_old {

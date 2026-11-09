@@ -26,6 +26,11 @@
 
 ## Verifying a change in a real browser
 
+Native editor surfaces share `EditorEngineProvider` and `EditorEngineBoundary`
+from `src/lib/core/document-session/editor-engine.tsx`. Keep shell chrome outside
+the readiness boundary and retain the cached boot engine choice; construct synchronous handles only after the shared
+module is ready. See that directory's README for state and browser checks.
+
 `just test-functional` builds a production-like bundle of its fixtures and runs
 Playwright against it, not a dev server: each page otherwise fetches thousands of
 modules through the test's own routes, which limits how many tests can run at

@@ -37,6 +37,8 @@ feature exports owned HTML; browser DOM import and layout stay in views.
 - Register LinkNode before AutoLink; autolink changes are transactional `AUTO_LINK_CHANGED` events.
 - Keep shared Match/Matcher and pinned linkify-it patterns in `utils`; regenerate the oracle corpus with the documented script.
 - Reject impossible schema/email streams by literal triggers and fuzzy domains by the pinned host test before full linkify scans; retain UTF-16 and match ordering against the corpus and unfiltered-regress proptest.
+- Construct replaced TLD configurations with with_replaced_tlds to avoid compiling and retaining an unused default set.
+
 - Legacy JS regexes match UTF-16 code units with `find_from_ucs2`.
 - Show regex source and flags in matcher Debug output; keep compiled VM internals out of diagnostics.
 

@@ -40,6 +40,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Keep clipboard identity invalidation before insertion and restore draft wrappers within the same update.
 - Keep node IDs and document IDs verbatim; validated ID crates do not rewrite wire values.
 - Keep browser DOM import, decoration, component caches and runtime plugins in views.
+- Build the CommonTlds linkifier directly from its replacement TLD list; engine idle preparation warms the same immutable matcher before paste.
 - Keep block-decorator alignment out of JSON and reset it through constructor clone hooks.
 - Preserve arbitrary taskListView object keys rather than narrowing its state parser.
 - Keep source object order and regex metadata in transformers/catalog.json generated from TS.
