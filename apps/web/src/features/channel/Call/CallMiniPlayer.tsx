@@ -8,6 +8,7 @@ import CornersIn from '@icon/system/regular/corners-in.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import Screencast from '@icon/system/regular/screencast.svg';
 import { useLiveCallRecordQuery } from '@queries/call/call';
+import { createMediaQuery } from '@solid-primitives/media';
 import { Button, cn, Dropdown } from '@ui';
 import type { Participant } from 'livekit-client';
 import {
@@ -17,8 +18,10 @@ import {
   onCleanup,
   onMount,
   Show,
+  untrack,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { Transition } from 'solid-transition-group';
 import { useCallContext } from './CallContext';
 import { CallLiveChip } from './CallLiveChip';
 import { CallParticipantVolume } from './CallParticipantVolume';
@@ -32,8 +35,8 @@ import {
   getCallPlayerSnapTarget,
   MAX_CALL_PLAYER_WIDTH,
   resizeCallPlayer,
-  selectCallPreview,
 } from './call-mini-player';
+import { createHeldCallPreview } from './call-mini-player-selection';
 import { createCallReactions } from './call-reactions';
 import { useCallVolumeOptional } from './call-volume';
 import { LK_TRACK_SOURCE } from './livekit-loader';
@@ -171,7 +174,34 @@ export function CallMiniPlayer(props: {
       preview(room.localParticipant, true, call.isLocalSpeaking()),
     ];
   });
-  const selected = () => selectCallPreview(candidates());
+  const reducedMotion = createMediaQuery('(prefers-reduced-motion: reduce)');
+  const selected = createHeldCallPreview(candidates, reducedMotion);
+  const previewAnimations = new Set<Animation>();
+  onCleanup(() => {
+    for (const animation of previewAnimations) {
+      animation.onfinish = null;
+      animation.cancel();
+    }
+  });
+  const animatePreview = (
+    element: Element,
+    done: () => void,
+    entering: boolean
+  ) => {
+    if (reducedMotion() || typeof element.animate !== 'function') {
+      done();
+      return;
+    }
+    const animation = element.animate(
+      [{ opacity: entering ? 0 : 1 }, { opacity: entering ? 1 : 0 }],
+      { duration: 200, easing: 'ease-out' }
+    );
+    previewAnimations.add(animation);
+    animation.onfinish = () => {
+      previewAnimations.delete(animation);
+      done();
+    };
+  };
   const audioOnly = () =>
     !candidates().some(
       (participant) => participant.hasVideo || participant.sharing
@@ -454,84 +484,126 @@ export function CallMiniPlayer(props: {
               }
               class={cn(
                 'relative mx-2 flex items-center justify-center overflow-hidden rounded-xl bg-panel',
-                audioOnly() ? 'min-h-36 gap-3 px-5 py-4' : 'aspect-video',
+                audioOnly() ? 'min-h-36' : 'aspect-video',
                 participant().speaking &&
                   'outline-2 -outline-offset-2 outline-success'
               )}
             >
-              <Show
-                when={participant().sharing && !participant().local}
-                fallback={
-                  <Show
-                    when={participant().hasVideo}
-                    fallback={
-                      <span
+              <Transition
+                onEnter={(element, done) => animatePreview(element, done, true)}
+                onExit={(element, done) => animatePreview(element, done, false)}
+                onBeforeExit={(element) => {
+                  element.setAttribute('inert', '');
+                  element.setAttribute('aria-hidden', 'true');
+                }}
+              >
+                <Show when={selected()?.id} keyed>
+                  {(id) => {
+                    const initial = untrack(selected);
+                    if (!initial) return null;
+                    const participant = () =>
+                      candidates().find((person) => person.id === id) ??
+                      initial;
+                    return (
+                      <div
+                        data-call-player-participant={id}
                         class={cn(
-                          'relative flex shrink-0 items-center justify-center rounded-full bg-ink-extra-muted text-surface text-lg font-semibold',
-                          audioOnly() ? 'size-12' : 'size-10',
-                          participant().speaking &&
-                            'outline-2 -outline-offset-2 outline-success'
+                          'absolute inset-0 flex items-center justify-center',
+                          audioOnly() && 'gap-3 px-5 py-4'
                         )}
                       >
-                        {participant().name.charAt(0).toUpperCase()}
-                        <MutedForYouBadge muted={participant().mutedForYou} />
-                        <MutedMicrophoneBadge
-                          muted={participant().muted}
-                          avatar
-                        />
-                      </span>
-                    }
-                  >
-                    <TrackView
-                      track={participant().camera}
-                      mirror={participant().local}
-                    />
-                  </Show>
-                }
-              >
-                <TrackView track={participant().screen} fit="contain" />
-              </Show>
+                        <Show
+                          when={participant().sharing && !participant().local}
+                          fallback={
+                            <Show
+                              when={participant().hasVideo}
+                              fallback={
+                                <span
+                                  class={cn(
+                                    'relative flex shrink-0 items-center justify-center rounded-full bg-ink-extra-muted text-surface text-lg font-semibold',
+                                    audioOnly() ? 'size-12' : 'size-10',
+                                    participant().speaking &&
+                                      'outline-2 -outline-offset-2 outline-success'
+                                  )}
+                                >
+                                  {participant().name.charAt(0).toUpperCase()}
+                                  <MutedForYouBadge
+                                    muted={participant().mutedForYou}
+                                  />
+                                  <MutedMicrophoneBadge
+                                    muted={participant().muted}
+                                    avatar
+                                  />
+                                </span>
+                              }
+                            >
+                              <TrackView
+                                track={participant().camera}
+                                mirror={participant().local}
+                              />
+                            </Show>
+                          }
+                        >
+                          <TrackView
+                            track={participant().screen}
+                            fit="contain"
+                          />
+                        </Show>
+
+                        <span
+                          class={cn(
+                            'text-sm',
+                            !audioOnly() &&
+                              'absolute bottom-2 left-2 rounded bg-surface/80 px-2 py-1'
+                          )}
+                        >
+                          <MutedMicrophoneBadge
+                            muted={participant().muted}
+                            inline
+                          />
+                          <MutedForYouBadge
+                            muted={participant().mutedForYou}
+                            inline
+                          />
+                          <Show when={participant().sharing}>
+                            <Screencast class="mr-1 inline size-3" />
+                          </Show>
+                          <Show
+                            when={participant().sharing}
+                            fallback={participant().name}
+                          >
+                            {participant().local
+                              ? t('calls.youAreSharing')
+                              : t('calls.presenterSharing', {
+                                  name: participant().name,
+                                })}
+                          </Show>
+                        </span>
+                        <Show
+                          when={
+                            !participant().local &&
+                            call.remoteParticipants().get(participant().id)
+                          }
+                        >
+                          {(remote) => (
+                            <div class="absolute right-2 top-2">
+                              <CallParticipantVolume
+                                participant={remote()}
+                                name={participant().name}
+                              />
+                            </div>
+                          )}
+                        </Show>
+                      </div>
+                    );
+                  }}
+                </Show>
+              </Transition>
               <CallReactionLayer
                 root={() => media}
                 reactions={reactions.entries()}
                 compact
               />
-              <span
-                class={cn(
-                  'text-sm',
-                  !audioOnly() &&
-                    'absolute bottom-2 left-2 rounded bg-surface/80 px-2 py-1'
-                )}
-              >
-                <MutedMicrophoneBadge muted={participant().muted} inline />
-                <MutedForYouBadge muted={participant().mutedForYou} inline />
-                <Show when={participant().sharing}>
-                  <Screencast class="mr-1 inline size-3" />
-                </Show>
-                <Show
-                  when={participant().sharing}
-                  fallback={participant().name}
-                >
-                  {participant().local
-                    ? t('calls.youAreSharing')
-                    : t('calls.presenterSharing', { name: participant().name })}
-                </Show>
-              </span>
-              <Show
-                when={
-                  !participant().local &&
-                  call.remoteParticipants().get(participant().id)
-                }
-              >
-                {(remote) => (
-                  <div class="absolute right-2 top-2">
-                    <CallParticipantVolume
-                      participant={remote()}
-                      name={participant().name}
-                    />
-                  </div>
-                )}
-              </Show>
             </div>
           )}
         </Show>

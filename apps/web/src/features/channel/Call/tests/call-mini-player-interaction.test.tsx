@@ -42,6 +42,11 @@ vi.mock('@ui', async (importOriginal) => ({
 
 beforeEach(() => {
   localStorage.clear();
+  vi.stubGlobal('matchMedia', () => ({
+    matches: false,
+    addEventListener() {},
+    removeEventListener() {},
+  }));
   vi.stubGlobal(
     'ResizeObserver',
     class {

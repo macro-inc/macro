@@ -38,3 +38,24 @@ it('updates fit and mirroring without reattaching a mounted track', () => {
   cleanup();
   expect(detach).toHaveBeenCalledTimes(1);
 });
+
+it('detaches only its own element when another view uses the same track', () => {
+  const first = document.createElement('video');
+  const second = document.createElement('video');
+  const attach = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+  const detach = vi.fn((element: HTMLMediaElement) => [element]);
+  const track = { attach, detach } as unknown as Track;
+  const [show, setShow] = createSignal(true);
+  render(() => (
+    <>
+      {show() && <TrackView track={track} />}
+      <TrackView track={track} />
+    </>
+  ));
+  expect(first.isConnected).toBe(true);
+  expect(second.isConnected).toBe(true);
+  setShow(false);
+  expect(detach).toHaveBeenCalledWith(first);
+  expect(first.isConnected).toBe(false);
+  expect(second.isConnected).toBe(true);
+});

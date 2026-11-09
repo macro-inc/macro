@@ -21,7 +21,11 @@ export function TrackView(props: {
       (track, prev) => {
         if (prev === track) return;
 
-        prev?.detach().forEach((el) => el.remove());
+        const previousElement = attachedElement();
+        if (prev && previousElement) {
+          prev.detach(previousElement);
+          previousElement.remove();
+        }
         attachedTrack = undefined;
         setAttachedElement(undefined);
 
@@ -51,11 +55,9 @@ export function TrackView(props: {
   );
 
   onCleanup(() => {
-    if (attachedTrack) {
-      attachedTrack.detach().forEach((el) => el.remove());
-    } else {
-      attachedElement()?.remove();
-    }
+    const element = attachedElement();
+    if (attachedTrack && element) attachedTrack.detach(element);
+    element?.remove();
   });
 
   return <div ref={ref} class="size-full" />;

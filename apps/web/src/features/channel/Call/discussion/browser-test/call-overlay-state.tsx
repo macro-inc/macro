@@ -48,11 +48,18 @@ function videoTrack(name: string, portrait = false) {
       attached.push(canvas);
       return canvas;
     },
-    detach() {
-      return attached.splice(0);
+    detach(element?: HTMLCanvasElement) {
+      if (!element) return attached.splice(0);
+      const index = attached.indexOf(element);
+      return index < 0 ? [] : attached.splice(index, 1);
     },
   };
 }
+const [speakingIdentity, setSpeakingIdentity] = createSignal<string>();
+window.addEventListener('fixture-speaker', (event) => {
+  if (event instanceof CustomEvent)
+    setSpeakingIdentity(event.detail || undefined);
+});
 const total = Number(params.get('count') ?? 2);
 const participants = Array.from(
   { length: Math.max(0, total - 1) },
@@ -203,7 +210,10 @@ const call = {
       participants.map((participant) => [participant.identity, participant])
     ),
   isLocalSpeaking: () => false,
-  isParticipantSpeaking: () => params.get('speaking') === 'true',
+  isParticipantSpeaking: (participant: { identity: string }) =>
+    speakingIdentity()
+      ? participant.identity === speakingIdentity()
+      : params.get('speaking') === 'true',
   isConnecting: connecting,
   isAudioMuted: audioMuted,
   microphonePermission: () => permissions?.microphone() ?? 'prompt',
