@@ -78,6 +78,7 @@ impl Modify for SecurityAddon {
         agent_code_mode::inbound::axum_router::get_review,
         agent_code_mode::inbound::axum_router::list_reviews,
         agent_code_mode::inbound::axum_router::decide_review,
+        agent_code_mode::inbound::document_router::get_document_build,
         agent_code_mode::inbound::document_router::run_document_program,
         agent_code_mode::inbound::axum_router::list_connected_apps,
         agent_code_mode::inbound::axum_router::list_connected_app_tools,

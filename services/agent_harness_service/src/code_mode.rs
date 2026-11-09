@@ -218,6 +218,7 @@ pub fn sdk_endpoints() -> anyhow::Result<SdkEndpoints> {
 }
 
 pub mod connected_apps;
+pub mod document_sources;
 pub mod reviews;
 
 async fn approve_run(

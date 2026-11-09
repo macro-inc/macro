@@ -1810,18 +1810,36 @@ async fn run() -> anyhow::Result<()> {
             MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
         ),
     );
-    let document_programs = match &user_code_mode {
-        Some(service) => agent_code_mode::inbound::document_router::document_program_router(
-            agent_code_mode::inbound::document_router::DocumentProgramRouterState::new(
-                service.clone(),
-                Arc::new(code_mode::FlaggedDocumentPrograms {
-                    flags: feature_flags.clone(),
-                    local: matches!(config.environment, Environment::Local),
-                }),
-                MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
-            ),
-        ),
-        None => axum::Router::new(),
+    // HTML documents build with the Deno toolchain and run their programs as
+    // the viewer through the user-scoped runner.
+    let document_programs = match (&user_code_mode, &code_runner) {
+        (Some(runner), Some((_, _, _, toolchain))) => {
+            let documents = document_storage_service_client::DocumentStorageServiceClient::new(
+                config.document_storage_service_auth_key.clone(),
+                macro_service_urls::DocumentStorageServiceUrl::new()?.to_string(),
+            );
+            let service = agent_code_mode::domain::DocumentPrograms::new(
+                Arc::new(
+                    code_mode::document_sources::StoredDocumentSources::new(documents)
+                        .map_err(|error| anyhow::anyhow!("invalid document reader: {error}"))?,
+                ),
+                Arc::clone(toolchain) as Arc<dyn code_execution::domain::ProgramChecker>,
+                Arc::clone(toolchain) as Arc<dyn code_execution::domain::ProgramBundler>,
+                runner.clone(),
+            );
+            agent_code_mode::inbound::document_router::document_program_router(
+                agent_code_mode::inbound::document_router::DocumentProgramRouterState::new(
+                    Arc::new(service),
+                    Arc::new(code_mode::FlaggedDocumentPrograms {
+                        flags: feature_flags.clone(),
+                        local: matches!(config.environment, Environment::Local),
+                    }),
+                    entity_access.clone(),
+                    MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+                ),
+            )
+        }
+        _ => axum::Router::new(),
     };
     let sharing = agent_session::inbound::axum_router::sharing::agent_session_sharing_router(
         AgentSessionRouterState::new(
