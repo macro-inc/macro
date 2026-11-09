@@ -116,11 +116,12 @@ impl Host {
                     root_cache.is_some(),
                 );
                 if let Some(id) = self.capture_index.get(&capture_key) {
-                    return self
+                    let capture = self
                         .captures
                         .get(&id)
-                        .map(|capture| capture.output.clone())
-                        .ok_or(BoundaryError::Invalid("capture index mismatch"));
+                        .ok_or(BoundaryError::Invalid("capture index mismatch"))?;
+                    self.capture_leases.emit(capture.reference)?;
+                    return Ok(capture.output.clone());
                 }
                 self.next_capture = self
                     .next_capture
@@ -178,6 +179,7 @@ impl Host {
                     has_root_cached_text: root_cache.is_some(),
                     root_cached_text: root_cache.unwrap_or("").encode_utf16().collect(),
                 };
+                self.capture_leases.emit(reference)?;
                 self.capture_index.insert(capture_key, reference.capture_id);
                 self.captures.insert(
                     reference.capture_id,

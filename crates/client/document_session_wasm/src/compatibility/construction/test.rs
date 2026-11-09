@@ -311,6 +311,49 @@ fn hosted_seed_batch_consumes_exact_tickets_and_preserves_original_instances(
         *instance_id = 203;
     }
     assert!(editor.compat_batch_inner(&bytes(&duplicate)?).is_err());
+    // The native constructed-operand owner outlives a JS lease transfer/release.
+    let constructed = editor
+        .compatibility
+        .as_ref()
+        .expect("host")
+        .constructed
+        .get(&reserved(&text)?)
+        .expect("constructed")
+        .capture_id;
+    editor.compat_capture_leases_inner(&bytes(&compat::CompatCaptureLeases {
+        editor_id: 1,
+        retain: vec![constructed],
+        release: vec![constructed],
+    })?)?;
+    let reused = editor.compat_batch_inner(&bytes(&compat::CompatBatchRequest {
+        scope: compat::CompatBatchScope::CompatBatchContinue {
+            update_id: failed.update_id,
+            expected_epoch: failed.mutation_epoch,
+        },
+        leases: compat::CompatCaptureLeases {
+            editor_id: 1,
+            retain: vec![],
+            release: vec![],
+        },
+        operations: vec![compat::CompatBatchOperation {
+            operation: Op::GetTextContent,
+            receiver: text.clone(),
+            args: vec![compat::CompatBatchArgument::CompatValueArgument {
+                value: calls::text("__text"),
+            }],
+            initial_instance: compat::CompatInstanceSeed::CompatNoInstanceSeed {},
+        }],
+        finalize: false,
+        now: 4.0,
+        wall: 4.0,
+    })?)?;
+    assert!(matches!(
+        reused.outcome,
+        compat::CompatBatchOutcome::CompatBatchSuccess {}
+    ));
+    assert!(
+        matches!(&reused.results[0].value, compat::ForeignCallbackValue::ForeignStringArgument { value } if *value == "seeded".encode_utf16().collect::<Vec<_>>())
+    );
     let committed = editor.compat_commit_inner(4.0, 4.0)?;
     assert_eq!(committed.version, applied.version);
     assert!(editor
