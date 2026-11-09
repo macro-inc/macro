@@ -133,7 +133,7 @@ impl LoroProjection {
             if map.is_deleted() {
                 continue;
             }
-            let incoming = schema::own_map(&map)?;
+            let incoming = schema::own_map(&map, self.policy)?;
             if self.policy.is_dropped_json(&incoming) || self.policy.is_transparent_json(&incoming)
             {
                 hidden.push(*key);
@@ -228,7 +228,7 @@ impl LoroProjection {
                 continue;
             }
             building.stats.nodes_visited += 1;
-            let mut incoming = schema::own_map(&map)?;
+            let mut incoming = schema::own_map(&map, self.policy)?;
             mask_local(&mut incoming, self.policy);
             let mut current = own(state.view(), key, self.policy)?;
             if let Some(text) = text_after.get(&key) {
@@ -323,14 +323,16 @@ impl LoroProjection {
         })
     }
     fn is_projected(&self, doc: &LoroDoc, map: &LoroMap) -> Result<bool> {
-        let own = schema::own_map(map)?;
+        let own = schema::own_map(map, self.policy)?;
         if self.policy.is_dropped_json(&own) || self.policy.is_transparent_json(&own) {
             return Ok(false);
         }
         for (id, _) in doc.get_path_to_container(&map.id()).unwrap_or_default() {
             if let Some(Container::Map(ancestor)) = doc.get_container(id)
                 && ancestor.get("type").is_some()
-                && self.policy.is_dropped_json(&schema::own_map(&ancestor)?)
+                && self
+                    .policy
+                    .is_dropped_json(&schema::own_map(&ancestor, self.policy)?)
             {
                 return Ok(false);
             }
@@ -384,7 +386,7 @@ impl LoroProjection {
         if let Some((key, Slot::Node)) = self.index.owner.get(&map.id()).copied() {
             return Ok(NodeTarget::Key(key));
         }
-        let mut incoming = schema::own_map(map)?;
+        let mut incoming = schema::own_map(map, self.policy)?;
         mask_local(&mut incoming, self.policy);
         let id = incoming
             .get("$")

@@ -6,6 +6,11 @@ pub trait SyncPolicy: Send + Sync + 'static {
     fn own_undefined_fields(&self, _node_type: &str) -> &[String] {
         &[]
     }
+    /// Whether this application node may retain a literal null own text field.
+    /// This does not authorize other value types or alter stored values.
+    fn allows_null_text(&self, _node_type: &str) -> bool {
+        false
+    }
     /// Drop the node and its entire subtree.
     fn is_dropped(&self, view: StateRef<'_>, key: NodeKey) -> bool;
     /// Replace this local wrapper with its synced descendants.

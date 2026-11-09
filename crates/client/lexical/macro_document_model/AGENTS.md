@@ -57,10 +57,12 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Keep this client crate excluded from workspace-hack.
 
 Canonicalize only top-level null unset table options, tablecell width, listitem
-checked, code/custom-code language and theme, and code-highlight highlightType
+checked, code/custom-code language and theme, code-highlight highlightType,
+PR mention url and classed-block attributes
 in the sync policy, matching source exportJSON. Preserve backgroundColor:null,
 nested array nulls, unknown nulls and every nonnull value; never erase the underlying
-Loro fields.
+Loro fields. Admit literal null own text only for Await through SyncPolicy;
+keep the value in both editor JSON and Loro, and reject malformed text everywhere else.
 
 - Keep decorator host actions in shared model policy: equation updates change only the expression, and user display names preserve ID keys, attached traversal and source history/selection/scroll tags.
 

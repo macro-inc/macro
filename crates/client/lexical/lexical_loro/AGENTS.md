@@ -18,6 +18,7 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 ## Boundaries
 
 - Keep application node types, canonical editor serialization and ownership policy behind SyncPolicy.
+- Require explicit SyncPolicy permission for null own text during read and binding; retain null unchanged and reject every other malformed text value.
 - Keep canonical editor aliases separate from source own-undefined storage encoding; compare canonical reads strictly and retain every underlying Loro value and operation.
 - Apply source own-undefined storage fields through SyncPolicy before writing; retain strict attach equality and keep PlainPolicy unchanged.
 - Verify client Loro 1.17.1 separately from the server's preserved JavaScript 1.16.3 dependency in the pair test.

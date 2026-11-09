@@ -114,7 +114,7 @@ pub(crate) fn children(map: &LoroMap) -> Result<Option<LoroMovableList>> {
         _ => Err(schema_error("children")),
     }
 }
-pub(crate) fn validate_slots(map: &LoroMap) -> Result<()> {
+pub(crate) fn validate_slots(map: &LoroMap, policy: &dyn SyncPolicy) -> Result<()> {
     if let Some(value) = map.get("$")
         && !matches!(
             value,
@@ -124,14 +124,21 @@ pub(crate) fn validate_slots(map: &LoroMap) -> Result<()> {
     {
         return Err(schema_error("$"));
     }
-    if let Some(value) = map.get("text")
-        && !matches!(
-            value,
+    if let Some(value) = map.get("text") {
+        let valid = match value {
             ValueOrContainer::Container(Container::Text(_))
-                | ValueOrContainer::Value(LoroValue::String(_))
-        )
-    {
-        return Err(schema_error("text"));
+            | ValueOrContainer::Value(LoroValue::String(_)) => true,
+            ValueOrContainer::Value(LoroValue::Null) => match map.get("type") {
+                Some(ValueOrContainer::Value(LoroValue::String(ty))) => {
+                    policy.allows_null_text(ty.as_ref())
+                }
+                _ => false,
+            },
+            _ => false,
+        };
+        if !valid {
+            return Err(schema_error("text"));
+        }
     }
     if let Some(value) = map.get("ids")
         && !matches!(
@@ -151,8 +158,8 @@ pub(crate) fn slot_id(map: &LoroMap, key: &str) -> Option<ContainerID> {
         _ => None,
     }
 }
-pub(crate) fn own_map(map: &LoroMap) -> Result<SerializedNode> {
-    validate_slots(map)?;
+pub(crate) fn own_map(map: &LoroMap, policy: &dyn SyncPolicy) -> Result<SerializedNode> {
+    validate_slots(map, policy)?;
     let mut result = SerializedNode::new();
     let mut error = None;
     map.for_each(|key, value| {
@@ -194,7 +201,7 @@ pub(crate) fn read_node_for_init(
     policy: &dyn SyncPolicy,
     transparent: &mut bool,
 ) -> Result<SerializedNode> {
-    let mut node = own_map(map)?;
+    let mut node = own_map(map, policy)?;
     mask_local(&mut node, policy);
     if let Some(list) = children(map)? {
         let mut result = Vec::new();
