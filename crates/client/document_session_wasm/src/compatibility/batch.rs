@@ -89,6 +89,11 @@ impl Host {
                         .collect::<Result<Vec<_>, _>>()?;
                     compat::ForeignCallbackValue::ForeignNodeArrayArgument { values }
                 }
+                compat::CompatBatchArgument::CompatSelectionIntentArgument { .. } => {
+                    return Err(BoundaryError::Invalid(
+                        "uninstalled selection intent adapter",
+                    ));
+                }
                 _ => return Err(BoundaryError::Invalid("unknown batch argument")),
             });
         }
@@ -406,6 +411,7 @@ impl EditorSession {
                     composition: records::optional(tx.composition_key()),
                     selection,
                     selections,
+                    selection_bindings: vec![],
                     tags: tx.tags().iter().map(ToString::to_string).collect(),
                     dirty_leaves: facts
                         .dirty_leaves

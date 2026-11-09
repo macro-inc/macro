@@ -139,6 +139,7 @@ impl Metadata for Frame<'_> {
             composition: records::optional(source.composition_key()),
             selection: host.selection(&source, self.version).map_err(model_error)?,
             selections: vec![],
+            selection_bindings: vec![],
             call: compat::CompatHostCall::CompatHostClone {
                 stage,
                 source_record: record,
