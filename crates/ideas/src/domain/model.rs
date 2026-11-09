@@ -498,6 +498,33 @@ pub struct Change {
     pub at: DateTime<Utc>,
 }
 
+/// Why code resolved an idea, as stored in `state_reason`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum ResolveReason {
+    /// The person answered what the idea asked them to answer.
+    Replied,
+    /// An item it is about was deleted.
+    Deleted,
+    /// The person can no longer open an item it is about.
+    AccessLost,
+}
+
+/// An open idea about an item, once per target naming that item.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenTarget {
+    /// The idea.
+    pub idea: Uuid,
+    /// Whose it is.
+    pub user: macro_user_id::user_id::MacroUserIdStr<'static>,
+    /// When it was first proposed.
+    pub created_at: DateTime<Utc>,
+    /// Whether it is an entity idea asking for a reply.
+    pub reply: bool,
+    /// The part of the item the target names, if only a part.
+    pub part_id: Option<String>,
+}
+
 /// Why an ideas call failed.
 #[derive(Debug, thiserror::Error)]
 pub enum IdeaError {

@@ -11,7 +11,8 @@ use model_entity::EntityType;
 use sqlx::{PgConnection, PgPool};
 
 use crate::domain::model::{
-    Category, Change, Idea, IdeaContent, IdeaKind, IdeaState, NewKind, Target, TargetRole,
+    Category, Change, EntityAction, Idea, IdeaContent, IdeaKind, IdeaState, NewKind, OpenTarget,
+    ResolveReason, Target, TargetRole,
 };
 use crate::domain::ports::{IdeaRepo, Limits, Written};
 
@@ -176,6 +177,14 @@ fn category_names(categories: &[Category]) -> Vec<String> {
     categories
         .iter()
         .map(|category| category.as_ref().to_owned())
+        .collect()
+}
+
+/// The states an idea is open in, as stored.
+fn open_states() -> Vec<String> {
+    [IdeaState::Proposed, IdeaState::Accepted]
+        .iter()
+        .map(|state| state.as_ref().to_owned())
         .collect()
 }
 
@@ -460,5 +469,68 @@ impl IdeaRepo for PgIdeaRepo {
         }
         tx.commit().await?;
         Ok(moved)
+    }
+
+    async fn open_about(
+        &self,
+        entity_type: EntityType,
+        entity_id: &str,
+    ) -> Result<Vec<OpenTarget>, Self::Err> {
+        let rows = sqlx::query!(
+            r#"SELECT i.id, i.user_id, i.created_at, t.part_id, e.action AS "action?"
+               FROM idea_target t
+               JOIN idea i ON i.id = t.idea_id
+               LEFT JOIN idea_entity e ON e.idea_id = i.id
+               WHERE t.entity_type = $1 AND t.entity_id = $2 AND t.role = $3
+                 AND i.state = ANY($4)
+               ORDER BY i.id, t.position"#,
+            entity_type.as_ref(),
+            entity_id,
+            TargetRole::About.as_ref(),
+            &open_states(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|row| {
+                let action = row
+                    .action
+                    .as_deref()
+                    .map(parse::<EntityAction>)
+                    .transpose()?;
+                Ok(OpenTarget {
+                    idea: row.id,
+                    user: MacroUserIdStr::try_from(row.user_id)
+                        .map_err(|_| PgIdeaRepoError::Decode("an idea's user".to_owned()))?,
+                    created_at: row.created_at,
+                    reply: action == Some(EntityAction::Reply),
+                    part_id: row.part_id,
+                })
+            })
+            .collect()
+    }
+
+    async fn resolve(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        reason: ResolveReason,
+        now: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        let moved = sqlx::query!(
+            r#"UPDATE idea
+               SET state = $4, state_reason = $5, updated_at = $6, state_changed_at = $6
+               WHERE user_id = $1 AND id = $2 AND state = ANY($3)"#,
+            user.as_ref(),
+            id,
+            &open_states(),
+            IdeaState::Resolved.as_ref(),
+            reason.as_ref(),
+            now,
+        )
+        .execute(&self.pool)
+        .await?
+        .rows_affected();
+        Ok(moved == 1)
     }
 }

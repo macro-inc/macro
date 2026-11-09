@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT i.id, i.user_id, i.created_at, t.part_id, e.action AS \"action?\"\n               FROM idea_target t\n               JOIN idea i ON i.id = t.idea_id\n               LEFT JOIN idea_entity e ON e.idea_id = i.id\n               WHERE t.entity_type = $1 AND t.entity_id = $2 AND t.role = $3\n                 AND i.state = ANY($4)\n               ORDER BY i.id, t.position",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "part_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "action?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "77b50d3fbba98840d388d655d17e90e89e0c8a696204d8821d333b6b3dc400fe"
+}

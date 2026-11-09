@@ -5,12 +5,15 @@ use std::future::Future;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_entity::EntityType;
 use model_owner::CreationPrincipal;
 
 use super::model::{
     Change, GenerationSession, GenerationTrigger, Idea, IdeaContent, IdeaError, IdeaReview,
-    IdeaState, IdeaWriteOutcome, Ideas, NewKind, RetireIdea, RewriteIdea, SuggestIdea, Target,
+    IdeaState, IdeaWriteOutcome, Ideas, NewKind, OpenTarget, ResolveReason, RetireIdea, RewriteIdea,
+    SuggestIdea, Target,
 };
+use super::resolution::{ResolutionEvent, Resolved};
 
 /// Limits a write must stay within, checked where it is stored so two
 /// writes at once can't pass them together.
@@ -103,6 +106,23 @@ pub trait IdeaRepo: Send + Sync + 'static {
         from: &[IdeaState],
         to: IdeaState,
         change: Option<&Change>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Every open idea about the item, once per target naming it.
+    fn open_about(
+        &self,
+        entity_type: EntityType,
+        entity_id: &str,
+    ) -> impl Future<Output = Result<Vec<OpenTarget>, Self::Err>> + Send;
+
+    /// Resolve the person's idea `id` for `reason` if it is still open;
+    /// whether it moved.
+    fn resolve(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        reason: ResolveReason,
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
@@ -230,4 +250,13 @@ pub trait IdeaApi: Send + Sync + 'static {
         id: Uuid,
         request: RetireIdea,
     ) -> impl Future<Output = Result<IdeaWriteOutcome, IdeaError>> + Send;
+}
+
+/// Ends the open ideas an event settles.
+pub trait ResolveIdeas: Send + Sync + 'static {
+    /// Resolve the open ideas `event` settles; resolving twice is a no-op.
+    fn resolve(
+        &self,
+        event: &ResolutionEvent,
+    ) -> impl Future<Output = Result<Resolved, IdeaError>> + Send;
 }
