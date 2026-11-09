@@ -1,4 +1,5 @@
-import { expect, test } from 'vitest';
+import { DiffOpcode } from '@macro-inc/collaboration/session/abi.generated';
+import { expect, test, vi } from 'vitest';
 import { Mirror, NO_KEY } from './mirror';
 import type { TypeRow } from './types';
 
@@ -127,3 +128,83 @@ test('malformed graph updates roll back changed records without copying clean su
   ).toThrow('root');
   expect(mirror.node(2)?.text).toBe('a');
 });
+
+test('maintained emptiness changes only after successful graph admission', () => {
+  const mirror = initialized();
+  expect(mirror.isEmpty).toBe(false);
+  expect(() =>
+    mirror.apply(
+      new Uint32Array([1, 0, 0, NO_KEY, 2, 7, 2, 0, 1, 6, 1, 1, 0]),
+      new TextEncoder().encode('b')
+    )
+  ).toThrow('Cyclic');
+  expect(mirror.isEmpty).toBe(false);
+  mirror.apply(
+    new Uint32Array([1, 0, 0, NO_KEY, 2, 1, 1, 1, 6, 0, 0]),
+    new Uint8Array()
+  );
+  expect(mirror.isEmpty).toBe(true);
+});
+
+for (const size of [64, 4096]) {
+  test(`emptiness admission and observation do not walk root children (${size})`, () => {
+    const mirror = new Mirror(types);
+    const words = [1, 0, 1, NO_KEY, size + 2];
+    words.push(2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    for (let key = 1; key <= size; key++)
+      words.push(2, key, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    words.push(6, 0, size, ...Array.from({ length: size }, (_, i) => i + 1));
+    mirror.initialize(new Uint32Array(words), new Uint8Array());
+    expect(mirror.isEmpty).toBe(true);
+    const children = mirror.node(0)?.children;
+    mirror.apply(
+      new Uint32Array([1, 0, 0, NO_KEY, 1, DiffOpcode.NodeProps, 0, 0, 0]),
+      new Uint8Array()
+    );
+    expect(mirror.node(0)?.children).toBe(children);
+    expect(Object.isFrozen(children)).toBe(true);
+    const text = new TextEncoder().encode('typed');
+    const reads = vi.spyOn(Map.prototype, 'get');
+    let count = 0;
+    let empty: boolean | null = null;
+    try {
+      mirror.apply(
+        new Uint32Array([
+          1,
+          0,
+          0,
+          NO_KEY,
+          2,
+          3,
+          size + 1,
+          2,
+          0,
+          0,
+          0,
+          0,
+          text.length,
+          0,
+          0,
+          0,
+          0,
+          6,
+          size,
+          1,
+          size + 1,
+        ]),
+        text
+      );
+      for (let i = 0; i < 100; i++) empty = mirror.isEmpty;
+      count = reads.mock.calls.length;
+    } finally {
+      reads.mockRestore();
+    }
+    expect(empty).toBe(false);
+    expect(count).toBeLessThan(32);
+    mirror.apply(
+      new Uint32Array([1, 0, 0, NO_KEY, 2, 1, size + 1, 1, 6, size, 0]),
+      new Uint8Array()
+    );
+    expect(mirror.isEmpty).toBe(true);
+  });
+}
