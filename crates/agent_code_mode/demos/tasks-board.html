@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tasks board</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 16px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 17px; margin: 0 auto 0 0; }
+  input, button, select { font: inherit; color: inherit; }
+  input { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); min-width: 0; flex: 1 1 220px; max-width: 320px; }
+  button { padding: 7px 12px; border: 0; border-radius: 8px; background: var(--accent);
+    color: #fff; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .board { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 12px; padding: 16px; align-items: start; }
+  .column { background: var(--chip); border-radius: 12px; padding: 10px; }
+  .column h2 { display: flex; justify-content: space-between; font-size: 12px;
+    text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 2px 4px 10px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px; margin-bottom: 8px; }
+  .card .name { font-weight: 550; margin-bottom: 8px; word-break: break-word; }
+  .card .meta { display: flex; justify-content: space-between; align-items: center;
+    gap: 8px; color: var(--muted); font-size: 12px; }
+  .card select { border: 1px solid var(--line); border-radius: 6px; background: var(--panel);
+    padding: 3px 6px; font-size: 12px; }
+  .empty, .status { color: var(--muted); padding: 8px 4px; }
+  .overdue { color: #d9480f; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Tasks</h1>
+  <input id="new-name" placeholder="New task name, then Enter" aria-label="New task name">
+  <button id="add">Add task</button>
+</header>
+<p class="status" id="status" style="padding: 8px 16px; margin: 0">Loading…</p>
+<main class="board" id="columns"></main>
+
+<script type="text/macro" id="board" lang="ts">
+  // The system Status property every task carries.
+  const STATUS = '00000001-0000-0000-0000-000000000002';
+  const DUE = '00000001-0000-0000-0000-000000000004';
+
+  export default async function (_args: {}, { macro }: ProgramContext) {
+    const options = await macro.properties.definition(STATUS).options();
+    const statuses = options
+      .sort((a, b) => a.displayOrder - b.displayOrder)
+      .map((option) => ({ id: option.id, name: String(option.value.value) }));
+
+    const page = await macro.workspace.page({
+      includeTypes: ['document'],
+      df: { l: { dst: 'task' } },
+      limit: 100,
+    });
+    const tasks = page.items.flatMap((item) => {
+      if (item.type !== 'document') return [];
+      const properties = 'properties' in item.snapshot.data ? item.snapshot.data.properties : [];
+      const status = properties.find((p) => p.definition.id === STATUS)?.value;
+      const due = properties.find((p) => p.definition.id === DUE)?.value;
+      return [{
+        id: item.id,
+        name: item.name,
+        statusId: status?.type === 'SelectOption' ? (status.value[0] ?? null) : null,
+        due: due?.type === 'Date' ? due.value : null,
+      }];
+    });
+    return { statuses, tasks };
+  }
+</script>
+
+<script type="text/macro" id="setStatus" lang="ts">
+  const STATUS = '00000001-0000-0000-0000-000000000002';
+
+  export default async function (
+    { taskId, optionId }: { taskId: string; optionId: string },
+    { macro }: ProgramContext,
+  ) {
+    await macro.tasks.byId(taskId).setProperty(macro.properties.definition(STATUS), {
+      type: 'select_option',
+      option_id: optionId,
+    });
+    return { ok: true };
+  }
+</script>
+
+<script type="text/macro" id="createTask" lang="ts">
+  export default async function ({ name }: { name: string }, { macro }: ProgramContext) {
+    const task = await macro.tasks.create({ name });
+    return { id: task.id };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { board, createTask, setStatus } from 'macro:programs';
+
+  type Board = Awaited<ReturnType<typeof board>>;
+
+  const root = document.getElementById("columns")!;
+  const status = document.getElementById('status')!;
+  const nameInput = document.getElementById('new-name') as HTMLInputElement;
+  const addButton = document.getElementById('add') as HTMLButtonElement;
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  function dueLabel(due: string | null) {
+    if (!due) return el('span');
+    const date = new Date(due);
+    const label = el('span', date < new Date() ? 'overdue' : '');
+    label.textContent = `Due ${date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+    return label;
+  }
+
+  function render({ statuses, tasks }: Board) {
+    const columns = statuses.map((option) => {
+      const column = el('section', 'column');
+      const inColumn = tasks.filter((task) => (task.statusId ?? statuses[0]?.id) === option.id);
+      const heading = el('h2');
+      heading.append(el('span', '', option.name), el('span', '', String(inColumn.length)));
+      column.append(heading);
+      if (inColumn.length === 0) column.append(el('div', 'empty', 'Nothing here'));
+
+      for (const task of inColumn) {
+        const card = el('article', 'card');
+        const select = el('select');
+        select.setAttribute('aria-label', `Status of ${task.name}`);
+        for (const choice of statuses) {
+          const item = el('option', '', choice.name);
+          item.value = choice.id;
+          item.selected = choice.id === option.id;
+          select.append(item);
+        }
+        select.addEventListener('change', async () => {
+          select.disabled = true;
+          status.textContent = `Moving “${task.name}”…`;
+          await setStatus({ taskId: task.id, optionId: select.value });
+          await load();
+        });
+        const meta = el('div', 'meta');
+        meta.append(dueLabel(task.due), select);
+        card.append(el('div', 'name', task.name), meta);
+        column.append(card);
+      }
+      return column;
+    });
+    root.replaceChildren(...columns);
+  }
+
+  async function load() {
+    try {
+      const data = await board();
+      render(data);
+      status.textContent = `${data.tasks.length} tasks`;
+    } catch (error) {
+      status.textContent = `Couldn't load tasks: ${String(error)}`;
+    }
+  }
+
+  async function add() {
+    const name = nameInput.value.trim();
+    if (!name) return;
+    addButton.disabled = true;
+    await createTask({ name });
+    nameInput.value = '';
+    addButton.disabled = false;
+    await load();
+  }
+
+  addButton.addEventListener('click', add);
+  nameInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') add();
+  });
+  on(['document.created', 'document.updated', 'document.deleted'], load);
+  await load();
+</script>
+</body>
+</html>

@@ -269,6 +269,32 @@ mod with_deno {
         assert!(problems[0].message.contains("TS2554"), "{problems:?}");
     }
 
+    /// The demo pages in `demos/` build against the current SDK, so an SDK
+    /// change that breaks one fails here.
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn every_demo_page_builds() {
+        let (_root, deno) = deno().await;
+        let demos = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("demos");
+        let mut pages: Vec<std::path::PathBuf> = std::fs::read_dir(&demos)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.extension().is_some_and(|extension| extension == "html"))
+            .collect();
+        pages.sort();
+        assert!(!pages.is_empty(), "no demo pages in {}", demos.display());
+
+        let mut failures = Vec::new();
+        for page in &pages {
+            let html = std::fs::read_to_string(page).unwrap();
+            if let BuildOutcome::Failed(problems) = build(&html, &deno, &deno).await.unwrap() {
+                failures.push((page.file_name().unwrap().to_owned(), problems));
+            }
+        }
+
+        assert!(failures.is_empty(), "{failures:#?}");
+    }
+
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
     async fn reports_a_program_error_by_its_id() {
