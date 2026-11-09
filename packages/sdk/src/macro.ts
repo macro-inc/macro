@@ -11,7 +11,6 @@ import { CallRecordNamespace } from './entities/calls/namespace';
 import { ChannelNamespace } from './entities/channels/namespace';
 import { ChatNamespace } from './entities/chats/namespace';
 import { ConnectedAppNamespace } from './entities/connected-apps/namespace';
-import { UiNamespace } from './entities/ui/namespace';
 import { CrmNamespace } from './entities/crm/namespace';
 import { DatabaseNamespace } from './entities/databases/namespace';
 import { DocumentNamespace } from './entities/documents/namespace';
@@ -37,6 +36,7 @@ import { RoutineNamespace } from './entities/routines/namespace';
 import { SearchNamespace } from './entities/search/namespace';
 import { TaskNamespace } from './entities/tasks/namespace';
 import { TeamNamespace } from './entities/teams/namespace';
+import { UiNamespace } from './entities/ui/namespace';
 import { UnfurlNamespace } from './entities/unfurls/namespace';
 import { UserNamespace } from './entities/users/namespace';
 import type { User } from './entities/users/user';
@@ -77,13 +77,6 @@ export {
 export { Connector } from './entities/connected-apps/connector';
 export { ConnectedAppNamespace } from './entities/connected-apps/namespace';
 export {
-  AppLink,
-  UiNamespace,
-  type UiOpenOptions,
-  type UiOpenResult,
-  type UiTarget,
-} from './entities/ui/namespace';
-export {
   type AddColumnOptions,
   type ApplyOpsOptions,
   type ChangeColumnTypeOptions,
@@ -115,6 +108,13 @@ export { FormOption, FormQuestion } from './entities/forms/question';
 export { FormResponse } from './entities/forms/response';
 export { FormSection } from './entities/forms/section';
 export type { CreatedEntity } from './entities/routines/namespace';
+export {
+  AppLink,
+  UiNamespace,
+  type UiOpenOptions,
+  type UiOpenResult,
+  type UiTarget,
+} from './entities/ui/namespace';
 export type { ListenOptions, MacroEvents } from './events/receiver';
 export {
   here,

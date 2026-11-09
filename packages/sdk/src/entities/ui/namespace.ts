@@ -7,8 +7,8 @@ import type { MacroClient } from '../../utils/client';
 import type { CodeExecution } from '../agent-sessions/code-execution';
 import { AppLink } from './app-link';
 
-export { AppLink };
 export type { UiDeclineReason, UiPlacement };
+export { AppLink };
 
 /** Something with a page in the Macro app: an item handle, or an `AppLink`. */
 export type UiTarget = { webUrl(): string };

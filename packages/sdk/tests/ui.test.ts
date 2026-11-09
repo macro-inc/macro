@@ -56,7 +56,7 @@ describe('macro.ui', () => {
     const none = macroAnswering({ status: 'no_client' });
     const noClient = await none.macro.ui.open(
       none.execution,
-      none.macro.ui.link(link)
+      none.macro.ui.link(link),
     );
     const refused = macroAnswering({
       status: 'declined',
@@ -65,7 +65,7 @@ describe('macro.ui', () => {
     const declined = await refused.macro.ui.open(
       refused.execution,
       refused.macro.ui.link(link),
-      { placement: 'new' }
+      { placement: 'new' },
     );
 
     expect(noClient).toEqual({ status: 'no_client', url: link });
@@ -96,7 +96,7 @@ describe('macro.ui', () => {
       expect(() => macro.ui.link(url), url).toThrow('Not a Macro app link');
     }
     expect(macro.ui.link('https://www.macro.com/app/channels/c').path).toBe(
-      '/channels/c'
+      '/channels/c',
     );
   });
 });
