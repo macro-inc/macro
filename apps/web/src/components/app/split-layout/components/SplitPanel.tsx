@@ -4,7 +4,11 @@ import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
 import { t } from '@app/lib/i18n';
-import { type PaneId, SplitRouter } from '@app/lib/split-router';
+import {
+  type PaneId,
+  SplitRouter,
+  useOptionalSplitRouter,
+} from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { MobilePageActionRow } from '@components/app/mobile/MobilePageActionRow';
@@ -154,6 +158,12 @@ export function SplitPanel(props: SplitPanelProps) {
     return manager ? shouldShowSplitCloseButton(manager) : false;
   };
 
+  const router = useOptionalSplitRouter();
+  const hasExternalChat = () =>
+    router
+      ?.entry(props.handle.id as string as PaneId)
+      ?.location.route.matches.some((match) => match.id === 'external-chat');
+
   const hasSplitHeader = () => {
     const content = props.handle.content();
     return (
@@ -163,7 +173,7 @@ export function SplitPanel(props: SplitPanelProps) {
         content.type === 'component' &&
         (content.id === LIST_VIEW_ID.search ||
           content.id === LIST_VIEW_ID.channels ||
-          content.id === 'external')
+          (content.id === 'external' && !hasExternalChat()))
       )
     );
   };

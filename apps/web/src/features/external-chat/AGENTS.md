@@ -55,9 +55,12 @@ belong to `features/external-view`. Architecture:
   `disconnected`, `not_added`, `not_allowed`, `unavailable`).
 - Members, sharing and Stop syncing live in the generic `SidePanel`
   (`components/chat-details.tsx`), floating and closed by default like an
-  in-view email thread. The header is `ViewShell.TopBar` (kept visible on
-  touch, under the safe area) with Share in a `HeaderActionGroup` and
-  `SidePanel.Toggle`. The host
+  in-view email thread. `components/chat-header.tsx` keeps `ViewShell.TopBar`
+  on desktop; touch uses `SplitHeaderLeft` / `SplitHeaderRight`,
+  `StaticSplitLabel`, and `HeaderIsland`, like an open channel. Preserve the
+  shared split header on the nested chat route and reserve its content inset
+  once, including while loading. Share and `SidePanel.Toggle` stay tappable
+  in their own islands. The host
   (`external-chat.tsx`, the functional fixture, tests) supplies
   `SidePanel.Root`; the view renders the `SidePanel.Layout`. While it is
   open on a pane at least 900px wide, the timeline and composer pad

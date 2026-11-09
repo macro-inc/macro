@@ -1,4 +1,3 @@
-import { ViewShell } from '@app/components/view-shell';
 import { ChannelLoading } from '@channel/Channel/ChannelLoading';
 import { buildChannelMessageListMeta } from '@channel/Channel/message-list-meta';
 import { ChannelInput } from '@channel/Input/ChannelInput';
@@ -11,7 +10,6 @@ import { DateDivider } from '@channel/Message/DateDivider';
 import { NewDivider } from '@channel/Message/NewDivider';
 import { SenderName } from '@channel/Message/SenderName';
 import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDrawerManager';
-import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -27,8 +25,7 @@ import { getDisplayName, tryMacroId } from '@core/user';
 import type { IUser } from '@core/user/types';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ShareFatIcon from '@phosphor/share-fat.svg';
-import TimerIcon from '@phosphor/timer.svg';
-import { Button, ConfirmDialog, Tooltip } from '@ui';
+import { Button, ConfirmDialog } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -39,9 +36,9 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import { ChatDetails } from '../components/chat-details';
+import { ExternalChatHeader } from '../components/chat-header';
 import { AttachmentChip } from '../components/inbound-attachment';
 import { MessageMedia } from '../components/message-media';
 import { RichCard } from '../components/rich-cards';
@@ -441,50 +438,18 @@ export function ExternalChatView(props: {
   };
 
   return (
-    <div class="flex h-full min-h-0 min-w-0 flex-col bg-panel text-ink">
-      {/* Desktop chrome is the view shell's top bar; touch keeps it as the
-          page header, below the safe area. */}
-      <ViewShell.TopBar class="touch:flex touch:h-auto touch:min-h-12 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.75rem)]">
-        {props.leading}
-        <Show when={provider()}>
-          {(provider) => (
-            <span
-              aria-hidden="true"
-              class={`flex size-5 shrink-0 items-center justify-center rounded-full ${provider().badgeClass}`}
-            >
-              <Dynamic component={provider().icon} class="size-3" />
-            </span>
-          )}
-        </Show>
-        <div class="flex min-w-0 flex-1 items-baseline gap-2">
-          <h1 class="ph-no-capture min-w-0 truncate text-sm font-semibold">
-            {source.chat.data ? chatTitle(source.chat.data) : 'Chat'}
-          </h1>
-          <Show when={source.chat.data && disappearingNote(source.chat.data)}>
-            {(note) => (
-              <Tooltip
-                label={note()}
-                as="span"
-                class="flex shrink-0 self-center"
-              >
-                <TimerIcon
-                  class="size-3.5 text-ink-extra-muted"
-                  aria-label={note()}
-                  data-whatsapp-disappearing
-                />
-              </Tooltip>
-            )}
-          </Show>
-          <span class="shrink-0 truncate text-xs text-ink-extra-muted mobile:hidden">
-            {provider()?.label}
-            <Show when={importing()}>{(status) => <> · {status()}</>}</Show>
-          </span>
-        </div>
-        <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
-          <HeaderActionGroup label="Sharing">{props.share}</HeaderActionGroup>
-          <SidePanel.Toggle />
-        </div>
-      </ViewShell.TopBar>
+    <div class="flex h-full min-h-0 min-w-0 flex-col bg-panel text-ink touch:pt-(--mobile-content-inset-top)">
+      <ExternalChatHeader
+        title={source.chat.data ? chatTitle(source.chat.data) : 'Chat'}
+        provider={provider()}
+        leading={props.leading}
+        share={props.share}
+        details={<SidePanel.Toggle />}
+        disappearing={
+          source.chat.data ? disappearingNote(source.chat.data) : undefined
+        }
+        importing={importing()}
+      />
       {/* Always reachable, however far back the timeline is scrolled. */}
       <Show when={canImport()}>
         <div class="flex min-w-0 items-center gap-3 border-b border-edge-muted px-4 py-2 text-xs text-ink-muted">

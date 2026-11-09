@@ -15,7 +15,7 @@ The WhatsApp page opens with the WhatsApp `TutorialSidebarItem` (from `features/
   the command menu.
 - Mobile: **External** in the bottom dock (or **More views → External** when
   the dock is full). It has no back button, like other navigation views; the
-  External sidebar is hidden on touch. Like Channels, it omits the floating split
+  External sidebar is hidden on touch. Like Channels, the account list omits the floating split
   header; the WhatsApp title uses the shared collection header directly below
   the safe area on phones and tablets, above the scrollable **In Macro** chats.
   Opening a chat drills in full-screen; its **Back to WhatsApp** button returns.
@@ -118,8 +118,10 @@ media; unknown types keep DSS's placeholder text. The header has the provider's 
 for a community's group), a timer icon when WhatsApp's disappearing messages
 are on (the timeline's start also says "Disappearing messages are on in
 WhatsApp (7 days). Macro keeps them."), **Share**, and the standard side panel
-toggle (**Show Side Panel**, `]`; **Show details** on touch). Like an in-view
-email thread, the details float over the timeline (`aside[aria-label="Block
+toggle (**Show Side Panel**, `]`; **Show details** on touch). On phones and
+tablets, Back, the provider badge/name, Share and details occupy the shared
+floating split-header islands, positioned at the safe area like an open channel.
+Like an in-view email thread, the details float over the timeline (`aside[aria-label="Block
 details"]`, outside click or the toggle closes them, starts closed; on a
 pane 900px or wider the timeline and composer move left to make room) and are a
 bottom sheet on touch. Sections: **Members (n)** (groups only; list
