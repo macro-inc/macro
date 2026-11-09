@@ -1,0 +1,46 @@
+// Production compatibility calls use typed native references and UTF-16 values.
+// This envelope does not alter the flat model Diff or session transport ABI.
+const uint32 COMPATIBILITY_PROTOCOL_MAJOR = 1;
+struct CompatConfig { uint32 editorId; ForeignClassRegistration[] classes; }
+enum CompatOperation : uint16 {
+  Unknown = 0;
+  GetRoot = 1; GetNodeByKey = 2;
+  CreateText = 3; CreateParagraph = 4; CreateHeading = 5;
+  CreateLineBreak = 6; CreateTab = 7;
+  GetLatest = 8; GetWritable = 9;
+  Append = 10; GetChildren = 11; GetChildrenSize = 12;
+  GetTextContent = 13; GetTextContentSize = 14; SetTextContent = 15;
+  GetFirstChild = 16; GetLastChild = 17; GetParent = 18;
+  GetPreviousSibling = 19; GetNextSibling = 20;
+  GetIndent = 21; SetIndent = 22; IsAttached = 23; IsInline = 24;
+  GetSelection = 25; GetPreviousSelection = 26;
+  GetCompositionKey = 27; AddUpdateTag = 28;
+  GetNodeField = 29; SetNativeField = 30;
+  ExportNodeJson = 31; ExportStateJson = 32;
+}
+struct CompatRequest {
+  CompatOperation operation;
+  bool historical;
+  uint64 stateVersion;
+  bool hasReceiver;
+  ForeignRecordRef receiver;
+  ForeignCallbackValue[] args;
+}
+struct CompatReply { ForeignCallbackValue value; ForeignRenderRecord[] records; }
+struct CompatDirtyElement { ForeignKey key; bool intentional; }
+struct CompatSnapshot {
+  uint64 version;
+  ForeignRenderBatch batch;
+  bool hasSelection;
+  ForeignSelectionRef selection;
+}
+struct CompatCommit {
+  uint64 version;
+  bool changed;
+  ForeignKey[] dirtyLeaves;
+  CompatDirtyElement[] dirtyElements;
+  string[] tags;
+  ForeignRenderBatch batch;
+  bool hasSelection;
+  ForeignSelectionRef selection;
+}
