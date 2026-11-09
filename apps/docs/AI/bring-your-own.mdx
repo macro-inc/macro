@@ -140,7 +140,9 @@ Older versions of `macrod` read `macrod.toml` from the folder you started them i
 
 ## Update macrod
 
-`macrod` updates itself. While it runs, it checks for a new release every hour, downloads it, and verifies its checksum and that it starts. Your `macrod.toml` and pairing are kept. If an update fails, `macrod` keeps running the current version and shows the error in its **Logs** tab.
+`macrod` updates itself. While it runs, it checks for a new release every hour, downloads it, and verifies its checksum, that it starts, and that it serves your `macrod.toml`. Your `macrod.toml` and pairing are kept. If an update fails, `macrod` keeps running the current version and shows the error in its **Logs** tab.
+
+When `macrod` starts, it removes settings older versions wrote that it no longer reads: `[identity]`, `scope` in `[credentials]`, and `[server]`. It keeps the original file beside it, as `macrod.toml.bak` for example.
 
 - **macOS and Linux:** `macrod` replaces itself in place as soon as no agent turn is running. Your agent keeps running through the update, so its sessions and anything it started stay alive.
 - **Windows:** the new version is installed next to the running one, and the footer shows **Update … ready — restart macrod to use it**. Quit `macrod` and start it again to use it. The `macrod` command always starts the newest installed version and removes older ones.
@@ -165,7 +167,6 @@ or start `macrod` with `MACROD_NO_UPDATE=1` set. `macrod` then only changes when
 - **Your agent is missing from Quickstart:** check that it is installed and its command is available in the terminal where you launch `macrod`. For a different ACP agent, use **Custom command**.
 - **Your code is invalid or expired:** start a new pairing from the terminal and enter the new code. The code in the screenshot is only an example.
 - **Your runtime is offline:** check that your computer is awake, `macrod` is running, and it can reach Macro. Check the terminal's **Logs** tab for errors.
-- **`macrod` says your config sets `[identity]` or a `scope` in `[credentials]`:** delete those lines from `~/.macrod/macrod.toml`. The runtime's name, access, and permission bypass are set in **Settings → Runtimes**.
 - **`macrod` asks you to pair again after an update:** run `macrod` from the project folder you used to start it in. It moves that folder's `macrod.toml` into `~/.macrod` and tells you the command to use from now on. Run `macrod profiles` to see every runtime on your computer.
 - **You had `allow_permission_bypass = false` in `macrod.toml`:** that setting is gone, and your computer no longer has a local veto. Whether a runtime may bypass permission requests is set by the runtime's managers in **Settings → Runtimes**, under **Allow bypassing permission requests**.
 

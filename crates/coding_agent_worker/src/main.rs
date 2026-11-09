@@ -385,6 +385,9 @@ async fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    if let Err(error) = config::migrate(&selection.path) {
+        tracing::warn!(error = ?error, "could not migrate the config; serving it as it is");
+    }
     let relaunch_arguments = relaunch_arguments(&selection, profile_flag_given);
     // The agent the macrod this process replaced was relaying, if any.
     #[cfg(unix)]
