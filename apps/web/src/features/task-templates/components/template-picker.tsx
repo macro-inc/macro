@@ -221,11 +221,16 @@ function TemplateChoices(
         <For each={[false, true]}>
           {(shared) => (
             <Show when={filtered().some((item) => item.shared === shared)}>
-              <Dynamic component={props.menu ? Dropdown.Group : 'div'}>
+              <Dynamic
+                component={props.menu ? Dropdown.Group : 'div'}
+                class="p-0"
+              >
                 <Dynamic
                   component={props.menu ? Dropdown.GroupLabel : 'p'}
                   class={
-                    props.menu ? undefined : 'px-2 py-2 text-xs text-ink-muted'
+                    props.menu
+                      ? undefined
+                      : 'px-2 h-7 flex items-center text-xs text-ink-extra-muted'
                   }
                 >
                   {shared ? props.teamName : t('create.taskTemplatePersonal')}
