@@ -22,3 +22,5 @@ MCP client that wrote it, its registered name plus an optional verified
 
 - Kinds are stored by name in `comms_messages.triggered_via_kind`; never rename
   or remove a variant that rows may carry.
+- Readers decode the kind strictly, so a new variant must be deployed to every
+  reader before `mcp_auth_proxy` starts classifying clients as it.
