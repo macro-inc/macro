@@ -279,7 +279,10 @@ mod with_deno {
         let mut pages: Vec<std::path::PathBuf> = std::fs::read_dir(&demos)
             .unwrap()
             .map(|entry| entry.unwrap().path())
-            .filter(|path| path.extension().is_some_and(|extension| extension == "html"))
+            .filter(|path| {
+                path.extension()
+                    .is_some_and(|extension| extension == "html")
+            })
             .collect();
         pages.sort();
         assert!(!pages.is_empty(), "no demo pages in {}", demos.display());
