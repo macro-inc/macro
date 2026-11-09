@@ -519,8 +519,10 @@ for 60 seconds, the call ends automatically.
 Hover or keyboard-focus a participant, your own view, or a shared screen to reveal Pin. Clicking the tile also pins it. The pinned tile takes the stage, with everyone else, including your own view, and active shares in the strip. A share normally occupies the stage when nobody is pinned. Hover the pinned tile for Unpin, or click it again. Switching directly to another tile replaces the pin. Pinning uses Speaker placement unless Sidebar is selected and never changes the saved Layout choice. If the pinned person leaves or the shared screen ends, the pin clears and does not return on reconnection. Pin actions record `call.pin` interactions. On phones, hold a tile for the anchored Pin/Unpin menu; plain taps do not pin. The selected tile lifts above a dimmed stage. A pinned person fills the top, with everyone else including you in one row below. The Unpin pill stays visible on phones. Moving the touch cancels the hold; Escape or touching outside dismisses the menu.
 
 On supported desktop browsers, hover or focus a remote person's tile for Volume,
-beside Pin. The slider changes only that person's microphone playback for you,
-from 0–100%. The narrow popover uses a vertical slider without a visible heading.
+beside Pin. The same control is available in the call roster and floating player.
+The slider changes only that person's microphone playback for you, from 0–100%.
+Drag up to increase volume, click the track to jump, or use the wheel and arrow
+keys for one-percent steps. The narrow popover has no visible heading.
 The small avatar above the slider is the viewer; its tooltip and
 the slider label explain that only this device changes. The thumb uses the
 shared white switch appearance. It survives track resubscription and leaving the call view, but resets

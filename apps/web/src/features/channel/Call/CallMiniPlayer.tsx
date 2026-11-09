@@ -21,6 +21,7 @@ import {
 import { Portal } from 'solid-js/web';
 import { useCallContext } from './CallContext';
 import { CallLiveChip } from './CallLiveChip';
+import { CallParticipantVolume } from './CallParticipantVolume';
 import { CallQuickControls } from './CallQuickControls';
 import { CallReactionLayer } from './CallReactionLayer';
 import {
@@ -511,6 +512,21 @@ export function CallMiniPlayer(props: {
                     : t('calls.presenterSharing', { name: participant().name })}
                 </Show>
               </span>
+              <Show
+                when={
+                  !participant().local &&
+                  call.remoteParticipants().get(participant().id)
+                }
+              >
+                {(remote) => (
+                  <div class="absolute right-2 top-2">
+                    <CallParticipantVolume
+                      participant={remote()}
+                      name={participant().name}
+                    />
+                  </div>
+                )}
+              </Show>
             </div>
           )}
         </Show>

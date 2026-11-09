@@ -10,6 +10,7 @@ import { Avatar, Badge, cn } from '@ui';
 import type { RemoteParticipant } from 'livekit-client';
 import { createMemo, For, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
+import { CallParticipantVolume } from './CallParticipantVolume';
 import { CallWaveform } from './CallWaveform';
 import { useCallVolumeOptional } from './call-volume';
 import { isProgramParticipant } from './is-program-participant';
@@ -26,6 +27,7 @@ function ParticipantRow(props: {
   muted: boolean;
   mutedForYou?: boolean;
   videoEnabled: boolean;
+  participant?: RemoteParticipant;
 }) {
   return (
     <li
@@ -71,6 +73,14 @@ function ParticipantRow(props: {
           </Show>
         </div>
       </div>
+      <Show when={props.participant}>
+        {(participant) => (
+          <CallParticipantVolume
+            participant={participant()}
+            name={props.name}
+          />
+        )}
+      </Show>
       <Show when={props.compact && props.speaking}>
         <CallWaveform class="size-4" speaking={props.speaking} />
       </Show>
@@ -131,6 +141,7 @@ function RemoteParticipantRow(props: {
   };
   return (
     <ParticipantRow
+      participant={props.participant}
       name={name()}
       compact={props.compact}
       userId={userId()}

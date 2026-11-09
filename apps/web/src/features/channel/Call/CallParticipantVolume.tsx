@@ -33,6 +33,8 @@ export function CallParticipantVolume(props: {
   const localLabel = () => t('calls.volumeForYou', { name: props.name });
   const volumes = useCallVolumeOptional() ?? createCallVolumeState();
   const volume = () => Math.round(volumes.level(props.participant) * 100);
+  const setLevel = (value: number) =>
+    volumes.set(props.participant, Math.max(0, Math.min(100, value)) / 100);
   let button: HTMLButtonElement | undefined;
   return (
     <Show when={supported && !isMobile() && !props.participant.isAgent}>
@@ -59,13 +61,17 @@ export function CallParticipantVolume(props: {
             <Slider
               orientation="vertical"
               class="items-center"
+              onWheel={(event) => {
+                if (!event.deltaY) return;
+                event.preventDefault();
+                event.stopPropagation();
+                setLevel(volume() - Math.sign(event.deltaY));
+              }}
               value={[volume()]}
               minValue={0}
               maxValue={100}
               step={1}
-              onChange={([value]) => {
-                volumes.set(props.participant, value / 100);
-              }}
+              onChange={([value]) => setLevel(value)}
               getValueLabel={({ values }) => `${values[0]}%`}
             >
               <Slider.Label class="sr-only">{localLabel()}</Slider.Label>
@@ -90,7 +96,7 @@ export function CallParticipantVolume(props: {
                   </Show>
                 </Tooltip>
                 <div class="h-32">
-                  <Slider.Track>
+                  <Slider.Track data-call-volume-track>
                     <Slider.Fill />
                     <Slider.Thumb appearance="switch">
                       <Slider.Input />
