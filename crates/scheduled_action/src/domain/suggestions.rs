@@ -885,7 +885,10 @@ fn origin_of(
                 StoredPick::Catalog { .. } => "catalog",
                 StoredPick::Routine { .. } => "routine",
             },
-            surface: suggestion.surfaces.first().map(|surface| surface_name(*surface)),
+            surface: suggestion
+                .surfaces
+                .first()
+                .map(|surface| surface_name(*surface)),
         });
     }
     CATALOG
