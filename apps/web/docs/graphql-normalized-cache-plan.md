@@ -840,7 +840,7 @@ Invalidations arriving during a refresh cause a trailing authorized read instead
 of being discarded; simultaneous refresh requests share one read.
 
 [Mutation coverage](../src/lib/queries/mutation-coverage.test.ts) enumerates all
-37 mutation documents and fails when a document has no declared strategy.
+47 mutation documents and fails when a document has no declared strategy.
 Because predictions are keyed by mutation field, it also checks that local
 resolver documents select only resolved fields, and that any other document
 reaching a field resolver is a listed exception the resolver declines.
@@ -851,9 +851,9 @@ every schema argument of its field with the schema's type:
 
 | Strategy | Operations |
 | --- | --- |
-| Local resolver (8) | MarkEmailThreadSeen, MarkEmailThreadUnread, SetEmailThreadArchived, UpdateNotifications, RenameEntities, MoveEntities, UpdateInitiative, DeleteEntityProperty |
-| Existing domain optimistic recipe (12) | SaveEmailDraft, DeleteEmailDraft, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent, InviteCalendarEventGuests, MarkWorkFeedItemsDone |
-| Authoritative outcome (11) | SendEmailMessage, CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity, UndoWorkFeedItemsDone |
+| Local resolver (9) | MarkEmailThreadSeen, MarkEmailThreadUnread, SetEmailThreadArchived, SetEmailThreadsArchived, UpdateNotifications, RenameEntities, MoveEntities, UpdateInitiative, DeleteEntityProperty |
+| Existing domain optimistic recipe (18) | SaveEmailDraft, DeleteEmailDraft, SendEmailMessage, CancelEmailSend, SetFavorite, ReorderFavorites, SetEntityProperty, UpdateEntityPropertyOptions, CreateCalendarEvent, UpdateCalendarEvent, DeleteCalendarEvent, RespondToCalendarEvent, InviteCalendarEventGuests, MarkWorkFeedItemsDone, MarkNotificationInboxRowsDone, ClearNotificationInbox, MarkNotificationInboxNotificationDone, MarkNotificationInboxRowsSeen |
+| Authoritative outcome (14) | CreateSavedView, UpdateSavedView, DeleteSavedView, CreateInitiative, DeleteInitiative, EnsureInitiativeDescriptionSurface, RenameDatabase, TrashDatabase, RenameForm, TrashForm, RecordChannelActivity, UpdateNotificationsForEntity, UndoWorkFeedItemsDone, UndoNotificationInboxRowsDone |
 | Authoritative entity mutation (5) | UpdateEntitySharePolicies, TrashEntities, RestoreEntities, DeleteEntitiesPermanently, DuplicateEntities |
 | Inactive (1) | SetEntityFavorite |
 
