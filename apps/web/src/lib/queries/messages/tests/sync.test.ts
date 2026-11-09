@@ -761,9 +761,9 @@ describe('live timeline activity', () => {
       .getQueryData<MessageTimelineData>(key)!
       .pages.flatMap((page) =>
         page.entries.map((entry) =>
-          entry.type === 'message'
-            ? entry.message.id
-            : `activity:${entry.activity.id}`
+          entry.type === 'activity'
+            ? `activity:${entry.activity.id}`
+            : entry.message.id
         )
       );
 

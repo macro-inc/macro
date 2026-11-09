@@ -11,6 +11,68 @@
     "version": "1.0.0"
   },
   "paths": {
+    "/activity": {
+      "get": {
+        "tags": ["activity"],
+        "summary": "Read the acting user's own activity in a time range, newest first.",
+        "description": "Includes actions agents performed on the user's behalf. Returns at most\n100 events; `truncated` reports that more matched, so narrow the range.",
+        "operationId": "read_my_activity",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Inclusive start, RFC 3339.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Exclusive end, RFC 3339; must be after `from`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Activity in the range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadActivityResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`from` is not before `to`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ai-cost/pricing": {
       "post": {
         "tags": ["ai_usage"],
@@ -1994,6 +2056,185 @@
         }
       }
     },
+    "/memory/activity": {
+      "get": {
+        "tags": ["memory"],
+        "summary": "Read privacy-reviewed professional activity of the caller or a current teammate.",
+        "description": "Reports use UTC calendar days, Monday-start weeks and calendar months.\nAn empty list means no stored activity, not no work.",
+        "operationId": "get_user_activity",
+        "parameters": [
+          {
+            "name": "user",
+            "in": "query",
+            "description": "A `macro|` user id; omit for the caller.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "start",
+            "in": "query",
+            "description": "Inclusive first UTC date.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "description": "Inclusive last UTC date, at most 366 days after `start`.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Activity reports in the range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityReports"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid user id or date range",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The user is not the caller or a current teammate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/memory/explicit": {
+      "get": {
+        "tags": ["memory"],
+        "summary": "Read the caller's private explicit memory and its revision.",
+        "description": "Content is newline-separated; edits address one-based lines.",
+        "operationId": "read_explicit_memory",
+        "responses": {
+          "200": {
+            "description": "The caller's explicit memory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplicitMemory"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["memory"],
+        "summary": "Apply one edit to the caller's private explicit memory.",
+        "description": "A stale revision changes nothing and answers 409; reread before retrying.\nAdditions that fail privacy review answer 422.",
+        "operationId": "edit_explicit_memory",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateExplicitMemoryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The edited explicit memory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExplicitMemory"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid line or content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The revision is stale",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Rejected by privacy review",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/onboarding": {
       "get": {
         "tags": ["onboarding"],
@@ -2707,6 +2948,142 @@
         }
       }
     },
+    "/skills": {
+      "get": {
+        "tags": ["skills"],
+        "summary": "List the caller's skills, or search them by name when `query` is given.\nBuilt-in skills are included.",
+        "operationId": "list_skills",
+        "parameters": [
+          {
+            "name": "query",
+            "in": "query",
+            "description": "Words from the skill's name, matched as one adjacent phrase. Omit to\nlist the 100 most recently updated skills.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "matchType",
+            "in": "query",
+            "description": "How `query` is matched; `partial` when omitted.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SkillsMatchType"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching skills, most recently updated first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Blank query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "500": {
+            "description": "Listing failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Search failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/skills/{id}": {
+      "get": {
+        "tags": ["skills"],
+        "summary": "Read one skill's complete instructions: a skill document the caller can\nview, or a built-in skill.",
+        "operationId": "read_skill",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The skill's id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The skill's instructions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillContentResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "No skill the caller can view has this id",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Reading failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Access check unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/stream/chat/message": {
       "post": {
         "tags": ["chat_message"],
@@ -2960,6 +3337,16 @@
               }
             }
           },
+          "404": {
+            "description": "Web fetch is not configured in this deployment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
           "422": {
             "description": "The page could not be read",
             "content": {
@@ -2984,7 +3371,7 @@
             }
           },
           "503": {
-            "description": "Web fetch unconfigured, busy, or usage validation unavailable",
+            "description": "Web fetch busy, or usage validation unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -3045,6 +3432,16 @@
               }
             }
           },
+          "404": {
+            "description": "Web search is not configured in this deployment",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebErrorBody"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Per-user hourly rate limit exceeded"
           },
@@ -3059,7 +3456,7 @@
             }
           },
           "503": {
-            "description": "Web search unconfigured, busy, or usage validation unavailable",
+            "description": "Web search busy, or usage validation unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -3078,6 +3475,51 @@
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
         "enum": ["view", "comment", "edit", "owner"]
+      },
+      "Activity": {
+        "type": "object",
+        "description": "A privacy-reviewed activity report; period_end is inclusive.",
+        "required": ["granularity", "periodStart", "periodEnd", "content"],
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "granularity": {
+            "$ref": "#/components/schemas/Granularity"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date"
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date"
+          }
+        }
+      },
+      "ActivityErrorBody": {
+        "type": "object",
+        "description": "Error body for activity reads.",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error description."
+          }
+        }
+      },
+      "ActivityReports": {
+        "type": "object",
+        "description": "Activity reports for one user, ordered by period.",
+        "required": ["reports"],
+        "properties": {
+          "reports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Activity"
+            }
+          }
+        }
       },
       "AddServerRequest": {
         "type": "object",
@@ -3114,7 +3556,8 @@
           "dictation",
           "image_generation",
           "email_focus",
-          "web_search"
+          "web_search",
+          "non_billable_agent_session"
         ]
       },
       "AssistantMessagePart": {
@@ -3790,6 +4233,11 @@
           }
         }
       },
+      "CompletionThinking": {
+        "type": "string",
+        "description": "How much a model may think before it gives a structured answer.",
+        "enum": ["default", "low"]
+      },
       "CompletionUsage": {
         "type": "object",
         "description": "User and feature attribution for one invocation.",
@@ -4197,6 +4645,20 @@
         "type": "string",
         "description": "How long a projection remains active without being requested.",
         "enum": ["day", "week", "month"]
+      },
+      "ExplicitMemory": {
+        "type": "object",
+        "description": "A private explicit memory document and its optimistic concurrency token.",
+        "required": ["content", "revision"],
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
       },
       "FeatureUsage": {
         "type": "object",
@@ -4881,6 +5343,11 @@
           }
         }
       },
+      "Granularity": {
+        "type": "string",
+        "description": "Fixed calendar granularity, always in UTC, with Monday-start weeks.",
+        "enum": ["day", "week", "month", "summary"]
+      },
       "HttpSendChatMessageRequest": {
         "type": "object",
         "description": "HTTP request payload for sending a chat message.\nUnlike the WebSocket payload, this does not include stream_id as it's generated server-side.",
@@ -5163,6 +5630,59 @@
       },
       "MacroUserIdStr": {
         "type": "string"
+      },
+      "MemoryEdit": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["line", "content", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["insert"]
+              },
+              "content": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["line", "content", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["replace"]
+              },
+              "content": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["line", "action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["delete"]
+              },
+              "line": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        ],
+        "description": "An edit to one one-based line. A revision is required to prevent replay\nor concurrent edits from inserting twice or deleting a different line."
       },
       "MemoryErrorBody": {
         "type": "object",
@@ -6016,6 +6536,24 @@
         "description": "The materialization status of a user's projection instance.",
         "enum": ["loading", "cold", "ready", "refreshing", "error"]
       },
+      "ReadActivityResponse": {
+        "type": "object",
+        "description": "Response from [`ReadActivity`].",
+        "required": ["activities", "truncated"],
+        "properties": {
+          "activities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolActivityEvent"
+            },
+            "description": "Matching activity events, newest first."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Whether more than 100 events matched the requested range."
+          }
+        }
+      },
       "RefreshCadence": {
         "type": "string",
         "description": "How frequently an active projection is regenerated.",
@@ -6294,6 +6832,93 @@
           }
         }
       },
+      "SkillContentResponse": {
+        "type": "object",
+        "description": "A skill's complete instructions.",
+        "required": ["id", "name", "content", "builtIn"],
+        "properties": {
+          "builtIn": {
+            "type": "boolean",
+            "description": "Whether this is a built-in skill, with no document behind it."
+          },
+          "content": {
+            "type": "string",
+            "description": "The skill's full markdown instructions."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The skill's id."
+          },
+          "name": {
+            "type": "string",
+            "description": "The skill's name."
+          }
+        }
+      },
+      "SkillErrorBody": {
+        "type": "object",
+        "description": "Machine-readable failure of a skill request.",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable failure code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Explanation without backend diagnostics."
+          }
+        }
+      },
+      "SkillListing": {
+        "type": "object",
+        "description": "One skill the caller can read.",
+        "required": ["id", "name", "builtIn"],
+        "properties": {
+          "builtIn": {
+            "type": "boolean",
+            "description": "Whether this is a built-in skill, with no document behind it."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "When to use the skill, when it says."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The skill document's id, or a built-in skill's well-known id."
+          },
+          "name": {
+            "type": "string",
+            "description": "The skill's name."
+          },
+          "updatedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the skill document was last updated; built-in skills have none."
+          }
+        }
+      },
+      "SkillsMatchType": {
+        "type": "string",
+        "description": "How search terms are matched against skill names.",
+        "enum": ["partial", "exact"]
+      },
+      "SkillsResponse": {
+        "type": "object",
+        "description": "The skills matching a listing or search, most recently updated first,\nbuilt-in skills last.",
+        "required": ["skills"],
+        "properties": {
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkillListing"
+            },
+            "description": "The matching skills."
+          }
+        }
+      },
       "SlackChannelMeta": {
         "type": "object",
         "description": "Metadata for one staged Slack channel.",
@@ -6526,6 +7151,10 @@
           "prompt": {
             "type": "string"
           },
+          "thinking": {
+            "$ref": "#/components/schemas/CompletionThinking",
+            "description": "How much the model may think first; `low` answers faster. Applies to\ncompletions without tools."
+          },
           "toolset": {
             "$ref": "#/components/schemas/ToolSet"
           }
@@ -6564,6 +7193,250 @@
         "type": "string",
         "description": "The kind of entity a projection is materialized for.",
         "enum": ["user", "team"]
+      },
+      "ToolActivityAction": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The entity was created.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["created"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The entity's content or metadata was edited.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["edited"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The entity was opened.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["opened"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The entity was soft-deleted.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["deleted"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A message was sent in the entity.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["messaged"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An email message was sent on the thread.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["sent"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone submitted a response to the entity (form).",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["responded"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A property value changed on the entity.",
+            "required": ["property", "type"],
+            "properties": {
+              "from": {
+                "description": "The previous value, when known."
+              },
+              "from_labels": {
+                "type": ["array", "null"],
+                "items": {
+                  "type": "string"
+                },
+                "description": "Previous select/tag option ids resolved to display labels."
+              },
+              "property": {
+                "type": "string",
+                "description": "The property definition id."
+              },
+              "property_name": {
+                "type": ["string", "null"],
+                "description": "The property definition's human-readable display name, when it is\nstill visible to the caller."
+              },
+              "property_type": {
+                "type": ["string", "null"],
+                "description": "The property's canonical data type, including `tag` for tag sets."
+              },
+              "to": {
+                "description": "The new value, or `None` when cleared."
+              },
+              "to_labels": {
+                "type": ["array", "null"],
+                "items": {
+                  "type": "string"
+                },
+                "description": "New select/tag option ids resolved to display labels."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["propertyChanged"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A principal was added to the entity.",
+            "required": ["participant", "type"],
+            "properties": {
+              "participant": {
+                "type": "string",
+                "description": "The added principal."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["participantAdded"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A principal was removed from the entity.",
+            "required": ["participant", "type"],
+            "properties": {
+              "participant": {
+                "type": "string",
+                "description": "The removed principal."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["participantRemoved"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A call was started in the entity.",
+            "required": ["call_id", "type"],
+            "properties": {
+              "call_id": {
+                "type": "string",
+                "description": "The started call's id."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["callStarted"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A task was added to the project. Resolve references through authorized project history.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["taskAdded"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A task was removed from the project.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["taskRemoved"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An action outside this deployment's vocabulary.",
+            "required": ["tag", "type"],
+            "properties": {
+              "payload": {
+                "description": "The stored payload, verbatim."
+              },
+              "tag": {
+                "type": "string",
+                "description": "The stored action tag."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["unknown"]
+              }
+            }
+          }
+        ],
+        "description": "One activity action returned to the AI."
+      },
+      "ToolActivityEvent": {
+        "type": "object",
+        "description": "One activity event returned by [`ReadActivity`].",
+        "required": [
+          "actorId",
+          "entityType",
+          "entityId",
+          "action",
+          "occurredAt"
+        ],
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/ToolActivityAction",
+            "description": "What the principal did."
+          },
+          "actorId": {
+            "type": "string",
+            "description": "The principal that mechanically performed the action."
+          },
+          "entityId": {
+            "type": "string",
+            "description": "The entity acted on."
+          },
+          "entityType": {
+            "type": "string",
+            "description": "The kind of entity acted on."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the action occurred."
+          }
+        }
       },
       "ToolOutcome": {
         "oneOf": [
@@ -6658,6 +7531,22 @@
           "operation": {
             "$ref": "#/components/schemas/UpdateOperation",
             "description": "The type of operation to be performed on the chanel share permission\nYou can add, remove or replace and existing permission"
+          }
+        }
+      },
+      "UpdateExplicitMemoryRequest": {
+        "type": "object",
+        "description": "One explicit memory edit at the revision it was based on.",
+        "required": ["revision", "edit"],
+        "properties": {
+          "edit": {
+            "$ref": "#/components/schemas/MemoryEdit",
+            "description": "The one-based line edit to apply."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The revision returned by the last read or successful edit."
           }
         }
       },

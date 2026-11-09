@@ -23,13 +23,18 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
 - `src/pull_request_archive.rs`: consumes `macro.github_pull_requests` (group
   `agent-harness-pull-request-archive`) and auto-archives sessions whose
-  linked pull requests finished (`agent_session::domain::auto_archive`).
+  linked pull requests finished (`agent_session::domain::auto_archive`), and
+  ends their work registrations first
+  (`agent_session::domain::work_registration`).
 - `src/internal_mcp.rs`: the internal MCP server exposed to running sessions.
 - `src/public_mcp.rs` + `src/public_mcp/`: public workspace MCP and OAuth;
-  reuses the harness tool context and retains bearer authentication. Users with
-  `ai-code-mode` get only `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on
-  `tools/list` (`tool_service.rs`); hidden native tools stay callable. The flag
-  is cached per user (`tool_mode_cache.rs`).
+  reuses the harness tool context and retains bearer authentication. Wherever
+  the harness can run code, every client but ChatGPT gets only
+  `ExecuteCode`/`DescribeCodeTools`/`ReadCodeDocs` on `tools/list`
+  (`tool_service.rs`); hidden native tools stay callable. ChatGPT gets the
+  direct tools: its plugin directory refuses generic executors.
+  `src/code_mode/connected_apps.rs` serves a running execution's
+  `macro.connectedApps` through the in-process egress service.
   Code execution's destination list in `src/code_mode.rs` also includes the
   configured editing worker, whose comment-mark endpoint requires a scoped
   document token; this does not grant permission to edit document content.
@@ -61,7 +66,33 @@ Pulumi stacks; they do not host extra agent processes.
   domain/adapters live in `crates/scheduled_action`. Its run observers send
   `routine_run_finished` analytics and, for every run, an inbox-only
   `routine_run_finished` notification to the owner
-  (`src/scheduling/routine_run_notifications.rs`).
+  (`src/scheduling/routine_run_notifications.rs`). AI drafts routines
+  (`POST /scheduled-actions/drafts`) in ordinary hidden sessions of the
+  in-process Macro agent on the person's Ask AI model, admitted and billed
+  as their agent session usage; `scheduling.rs` composes the drafter, its
+  `scheduled_action_draft` store, the check's code-mode invocation lookup
+  (`CorrelationSessions`), what a session created from its agent activity
+  (`ActivityCreations`) and the sweep of drafts a stopped process left.
+  Routine code steps run through `src/routine_code.rs`,
+  on routines' own Deno executor (own slots, CPU limit, lower priority) and
+  type checker, with a token for the owner's access (`mint_for_routine`):
+  attributed to Macro acting for them, or, when the routine sets
+  `dangerously_operate_as_user`, to the owner with no agent badge. Every such
+  token carries the routine id, which the events its writes produce keep, so
+  they never start routines.
+  Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
+  newest 100 messages (labels, 500-character snippets) through
+  email_service's internal recent-messages route and the person's connected
+  Pipedream apps; their hidden sessions run on the free tier's model, gated
+  on `enable-routine-suggestions`. `scheduling.rs` sweeps suggestion
+  sessions a stopped process left open every minute.
+  A routine's code steps are checked together, one file each; the owner's
+  time zone for `run.timezone` comes from their primary calendar
+  (`CalendarTimeZones`).
+  A step waits up to five minutes for one of `ROUTINE_CODE_SLOTS` before its
+  credential is minted, so its token and 30-second limit start when it runs;
+  a step that never gets one fails with "Macro was busy running other
+  routines".
 - `src/preview.rs` + `src/preview/`: preview control routes, public HTTP and SSH listeners;
   lease/ticket and authorization logic lives in `crates/agent_preview`. The shared
   pool stores replica ownership and credential hashes; startup and ten-second
@@ -113,7 +144,9 @@ produce events, independently of public session control.
 
 ## Checks
 
-- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset).
+- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset). Add
+  `-- --include-ignored` with Deno 2.9.6 on `PATH` for the real-runtime
+  routine code tests.
 - `just check` (`SQLX_OFFLINE=true cargo check`).
 - `just run-local` — needs `DAYTONA_API_KEY`, `DAYTONA_SNAPSHOT`,
   `GITHUB_TOKEN` in the environment or a local `.env`.
@@ -180,3 +213,5 @@ listener failure shuts down the process so ECS can replace the task.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/config-and-service-urls.md`
+
+- Code-mode credentials create durable per-invocation agent correlation; the final merged HTTP router validates incoming attribution before handlers.

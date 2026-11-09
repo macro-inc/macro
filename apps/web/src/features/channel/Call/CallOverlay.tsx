@@ -1,3 +1,8 @@
+import {
+  CallWorkPrompt,
+  CallWorkTab,
+  createCallWork,
+} from '@app/features/agent-work/views/call-work';
 import { t } from '@app/lib/i18n';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { Resize } from '@core/component/Resize';
@@ -10,8 +15,10 @@ import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
+import CornersInIcon from '@icon/system/regular/corners-in.svg';
+import CornersOutIcon from '@icon/system/regular/corners-out.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
-import { Button, cn } from '@ui';
+import { Badge, Button, cn } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import {
   createEffect,
@@ -20,8 +27,11 @@ import {
   For,
   type JSXElement,
   lazy,
+  Match,
+  on,
   Show,
   Suspense,
+  Switch,
 } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
@@ -32,6 +42,8 @@ import {
   type CallPanelTab,
 } from './chat/components/CallChatPanel';
 import { createControlsVisibility } from './create-controls-visibility';
+import type { CallPanelState } from './discussion/CallDiscussionContent';
+import { isProgramParticipant } from './is-program-participant';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
 import { ParticipantAvatarBackground } from './ParticipantAvatarBackground';
@@ -45,16 +57,22 @@ function VideoTag(props: {
   children: JSXElement;
   class?: string;
   variant?: 'default' | 'truncated';
+  isProgram?: boolean;
 }) {
   return (
     <div
       class={cn(
-        'absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface/70 text-ink text-xs',
-        props.variant === 'truncated' ? 'truncate max-w-[80%]' : '',
+        'absolute bottom-1 left-1 flex max-w-[calc(100%-0.5rem)] items-center gap-1 rounded bg-surface/70 px-1.5 py-0.5 text-ink text-xs',
+        props.variant === 'truncated' && 'max-w-[80%]',
         props.class
       )}
     >
-      {props.children}
+      <span class="min-w-0 truncate">{props.children}</span>
+      <Show when={props.isProgram}>
+        <Badge variant="secondary" size="xs">
+          {t('calls.agent')}
+        </Badge>
+      </Show>
     </div>
   );
 }
@@ -176,6 +194,7 @@ function LocalParticipantTile(props: {
   track: Track | undefined;
   userId: string | undefined;
   fallbackName: string | undefined;
+  isProgram: boolean;
   avatarSize?: 'sm' | 'md';
   class?: string;
   isFocused?: boolean;
@@ -205,7 +224,10 @@ function LocalParticipantTile(props: {
 
       <MutedMicrophoneBadge muted={props.isAudioMuted} label="You are muted" />
 
-      <Show when={props.isConnecting} fallback={<VideoTag>You</VideoTag>}>
+      <Show
+        when={props.isConnecting}
+        fallback={<VideoTag isProgram={props.isProgram}>You</VideoTag>}
+      >
         <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface/70 text-ink-muted text-xs">
           Connecting...
         </div>
@@ -270,7 +292,12 @@ function ParticipantTile(props: {
         label={`${displayName()} is muted`}
       />
 
-      <VideoTag variant="truncated">{displayName()}</VideoTag>
+      <VideoTag
+        variant="truncated"
+        isProgram={isProgramParticipant(props.participant.attributes)}
+      >
+        {displayName()}
+      </VideoTag>
     </ParticipantTileWrapper>
   );
 }
@@ -291,7 +318,12 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
     <div class="relative size-full flex items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted">
       <TrackView track={screenTrack()} fit="contain" />
 
-      <VideoTag variant="truncated">{displayName()}'s screen</VideoTag>
+      <VideoTag
+        variant="truncated"
+        isProgram={isProgramParticipant(props.participant.attributes)}
+      >
+        {displayName()}'s screen
+      </VideoTag>
     </div>
   );
 }
@@ -307,6 +339,16 @@ export function CallOverlay(props: {
   footerLeading?: JSXElement;
   /** Narrow RTC credential for a guest; never an account bearer. */
   guestChatSession?: { token: string; participantId: string };
+  /** The host's own discussion, in place of the call's chat. */
+  discussion?: {
+    /** Names the panel's discussion tab. */
+    label: () => string | undefined;
+    /** Open the panel as soon as this turns true. */
+    opensByDefault: () => boolean;
+    /** There's news for someone whose panel is closed. */
+    hasUpdates: () => boolean;
+    render: (panel: CallPanelState) => JSXElement;
+  };
 }) {
   const callCtx = useCallContext();
   const currentUserId = useUserId();
@@ -324,7 +366,6 @@ export function CallOverlay(props: {
   const [sidebarMount, setSidebarMount] = createSignal<HTMLDivElement>();
   const [overlayMount, setOverlayMount] = createSignal<HTMLDivElement>();
   const widePanel = () => !isMobile() && (resizeContext()?.size() ?? 0) >= 800;
-  const activeTab = () => (canChat() ? selectedTab() : 'participants');
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [sharingOpen, setSharingOpen] = createSignal(false);
   const [keyboardFocus, setKeyboardFocus] = createSignal(false);
@@ -345,6 +386,17 @@ export function CallOverlay(props: {
     setPanelOpen(false);
     panelButton?.focus();
   };
+  createEffect(
+    on(
+      () => props.discussion?.opensByDefault() ?? false,
+      (opensByDefault) => {
+        if (!opensByDefault) return;
+        setFocusChatOnOpen(false);
+        setPanelMounted(true);
+        setPanelOpen(true);
+      }
+    )
+  );
   const togglePanel = () => {
     if (panelOpen()) return closePanel();
     setFocusChatOnOpen(true);
@@ -360,6 +412,7 @@ export function CallOverlay(props: {
   const PanelToggle = () => (
     <Button
       ref={panelButton}
+      class="relative"
       variant="secondary"
       size={isMobile() ? 'icon-xl' : 'icon-lg'}
       aria-label={panelOpen() ? t('calls.closePanel') : t('calls.openPanel')}
@@ -377,11 +430,52 @@ export function CallOverlay(props: {
       >
         <ChatIcon class="size-4 mobile:size-6" />
       </Show>
+      <Show
+        when={
+          callWork.showButtonDot() ||
+          (!panelOpen() && props.discussion?.hasUpdates())
+        }
+      >
+        <span
+          aria-hidden="true"
+          class="absolute top-1 right-1 size-1.5 rounded-full bg-accent"
+        />
+      </Show>
     </Button>
   );
 
   const participants = () =>
     Array.from(callCtx.remoteParticipants().values()).filter((p) => !p.isAgent);
+
+  const callWork = createCallWork({
+    accountIds: () =>
+      participants().map((participant) => tryMacroId(participant.identity)),
+    selectedTab,
+    panelOpen,
+    canChat,
+  });
+  const work = callWork.work;
+  const hasWork = callWork.hasWork;
+  const activeTab = callWork.activeTab;
+  const workArrivals = callWork.arrivals;
+  const workTab = () => {
+    if (!hasWork()) return undefined;
+
+    return (
+      <CallWorkTab
+        accounts={work.accountsWithWork()}
+        itemsFor={(id) => work.byAccount().get(id) ?? []}
+        isSpeaking={isAccountSpeaking}
+      />
+    );
+  };
+  const openWork = () => {
+    workArrivals.dismiss();
+    setFocusChatOnOpen(false);
+    setSelectedTab('work');
+    setPanelMounted(true);
+    setPanelOpen(true);
+  };
 
   const [selectedParticipant, setSelectedParticipant] = createSignal<
     RemoteParticipant | 'local'
@@ -437,8 +531,22 @@ export function CallOverlay(props: {
     });
   };
 
+  const isAccountSpeaking = (accountId: string) => {
+    const participant = participants().find(
+      (candidate) => tryMacroId(candidate.identity) === accountId
+    );
+    return participant ? callCtx.isParticipantSpeaking(participant) : false;
+  };
+
   const hasAnyScreenShare = () =>
     callCtx.isScreenSharing() || remoteScreenShares().length > 0;
+
+  const [screenShareMaximized, setScreenShareMaximized] = createSignal(false);
+  const showScreenShare = () => hasAnyScreenShare() && !focusedParticipant();
+  const maximizeLabel = () =>
+    screenShareMaximized()
+      ? t('calls.restoreScreenShare')
+      : t('calls.maximizeScreenShare');
 
   const gridCols = () => {
     if (focusedParticipant() && focusedParticipant() !== 'local')
@@ -508,12 +616,33 @@ export function CallOverlay(props: {
                   class="flex-1 min-h-0 pt-2"
                   classList={{ hidden: !!focusedParticipant() }}
                 >
-                  <div class="h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
+                  <div class="relative h-full rounded-lg overflow-hidden bg-surface-2 flex items-center justify-center">
+                    <Button
+                      class="absolute right-2 top-2 z-10"
+                      variant="secondary"
+                      size="icon-sm"
+                      aria-label={maximizeLabel()}
+                      tooltip={{ content: maximizeLabel(), placement: 'left' }}
+                      onClick={() => setScreenShareMaximized((value) => !value)}
+                    >
+                      <Show
+                        when={screenShareMaximized()}
+                        fallback={<CornersOutIcon class="size-4" />}
+                      >
+                        <CornersInIcon class="size-4" />
+                      </Show>
+                    </Button>
                     <Show when={callCtx.isScreenSharing()}>
                       <div class="relative size-full">
                         <TrackView track={localScreenTrack()} fit="contain" />
 
-                        <VideoTag>Your screen</VideoTag>
+                        <VideoTag
+                          isProgram={isProgramParticipant(
+                            callCtx.room()?.localParticipant.attributes
+                          )}
+                        >
+                          Your screen
+                        </VideoTag>
                       </div>
                     </Show>
                     <For each={remoteScreenShares()}>
@@ -525,9 +654,10 @@ export function CallOverlay(props: {
                 </div>
               </Show>
 
-              {/* Participants area */}
+              {/* Participants area; stays mounted while the screen share is maximized. */}
               <div
-                class={`${hasAnyScreenShare() && !focusedParticipant() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} relative pt-2 mobile:pt-0`}
+                hidden={showScreenShare() && screenShareMaximized()}
+                class={`${showScreenShare() ? 'h-45 shrink-0' : 'flex-1 min-h-0'} relative pt-2 mobile:pt-0`}
               >
                 <Show
                   when={participants().length > 0}
@@ -545,6 +675,9 @@ export function CallOverlay(props: {
                         callCtx.room()?.localParticipant.name ||
                         currentUserName()
                       }
+                      isProgram={isProgramParticipant(
+                        callCtx.room()?.localParticipant.attributes
+                      )}
                       isFocused={focusedParticipant() === 'local'}
                     />
                   }
@@ -579,6 +712,14 @@ export function CallOverlay(props: {
                     </For>
                   </div>
 
+                  <Show when={callWork.showPrompt()}>
+                    <CallWorkPrompt
+                      accounts={work.accountsWithWork()}
+                      onView={openWork}
+                      onDismiss={workArrivals.dismiss}
+                    />
+                  </Show>
+
                   {/* Local participant PIP (Google Meet style: small, bottom-right) */}
                   <div
                     class={cn(
@@ -601,6 +742,9 @@ export function CallOverlay(props: {
                         callCtx.room()?.localParticipant.name ||
                         currentUserName()
                       }
+                      isProgram={isProgramParticipant(
+                        callCtx.room()?.localParticipant.attributes
+                      )}
                       avatarSize="sm"
                       isFocused={focusedParticipant() === 'local'}
                       onToggleFocus={() => toggleParticipantFocus('local')}
@@ -671,16 +815,17 @@ export function CallOverlay(props: {
             chatAvailable={canChat()}
             participantCount={participants().length + 1}
             participants={<CallParticipantsList localName={props.localName} />}
+            work={workTab()}
+            workDot={callWork.showTabDot()}
             sidebarMount={widePanel() ? sidebarMount() : undefined}
             overlayMount={overlayMount()}
             returnFocus={panelButton}
+            discussionLabel={props.discussion?.label()}
           >
             <Show when={canChat() && callCtx.activeCallId()} keyed>
               {(callId) => (
                 <Suspense>
-                  <Show
-                    when={props.guestChatSession}
-                    keyed
+                  <Switch
                     fallback={
                       <CallChat
                         callId={callId}
@@ -690,16 +835,31 @@ export function CallOverlay(props: {
                       />
                     }
                   >
-                    {(session) => (
-                      <GuestCallChat
-                        callId={callId}
-                        session={session}
-                        open={panelOpen() && activeTab() === 'chat'}
-                        focusOnOpen={focusChatOnOpen()}
-                        onClose={closePanel}
-                      />
-                    )}
-                  </Show>
+                    <Match when={props.discussion}>
+                      {(discussion) =>
+                        discussion().render({
+                          get open() {
+                            return panelOpen() && activeTab() === 'chat';
+                          },
+                          get focusOnOpen() {
+                            return focusChatOnOpen();
+                          },
+                          onClose: closePanel,
+                        })
+                      }
+                    </Match>
+                    <Match when={props.guestChatSession} keyed>
+                      {(session) => (
+                        <GuestCallChat
+                          callId={callId}
+                          session={session}
+                          open={panelOpen() && activeTab() === 'chat'}
+                          focusOnOpen={focusChatOnOpen()}
+                          onClose={closePanel}
+                        />
+                      )}
+                    </Match>
+                  </Switch>
                 </Suspense>
               )}
             </Show>

@@ -1,0 +1,11 @@
+[package]
+edition = "2024"
+name = "natural_time"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+chrono = { workspace = true }
+nom = { workspace = true }
+strsim = { workspace = true }
+thiserror = { workspace = true }

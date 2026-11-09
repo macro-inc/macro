@@ -208,6 +208,7 @@ vi.mock('./record-detail', () => ({
 vi.mock('./crm-settings', () => ({ Crm: () => <div>Stage settings</div> }));
 vi.mock('./export-companies', () => ({ CrmExport: () => null }));
 vi.mock('./import-companies', () => ({ CrmImport: () => null }));
+vi.mock('./email-privacy', () => ({ CrmEmailOptInBanner: () => null }));
 vi.mock('./pipeline', () => ({
   PipelineView: (props: {
     pipeline: { name: string };
@@ -248,7 +249,7 @@ vi.mock('../context/crm-context', () => ({
 vi.mock('./use-crm', () => ({
   useCurrentTeamQuery: () => ({
     isSuccess: true,
-    data: { team: { id: 'team', crm_enabled: true } },
+    data: { team: { id: 'team', crm_enabled: false } },
   }),
   useCrmLists: () => ({
     lists: () => [
@@ -367,16 +368,28 @@ it('omits pipelines and lists when those features are disabled', () => {
   const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
   expect(
     tabs.getAllByRole('button').map((button) => button.textContent)
-  ).toEqual(['Companies', 'People', 'Tasks', 'Email', 'Notes', 'Calls']);
+  ).toEqual([
+    'Companies',
+    'People',
+    'Sales Tasks',
+    'Sales Email',
+    'Sales Notes',
+    'Sales Calls',
+  ]);
 });
 
 it('opens each CRM activity feed instead of the company list', () => {
   const { activeTab } = setup();
   const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
-  for (const label of ['Tasks', 'Email', 'Notes', 'Calls']) {
+  for (const [label, id] of [
+    ['Sales Tasks', 'tasks'],
+    ['Sales Email', 'email'],
+    ['Sales Notes', 'notes'],
+    ['Sales Calls', 'calls'],
+  ]) {
     fireEvent.click(tabs.getByRole('button', { name: label }));
-    expect(activeTab()).toBe(label.toLowerCase());
-    expect(screen.getByText(`${label.toLowerCase()} feed`)).toBeTruthy();
+    expect(activeTab()).toBe(id);
+    expect(screen.getByText(`${id} feed`)).toBeTruthy();
     expect(screen.queryByText('Record list')).toBeNull();
   }
   fireEvent.click(tabs.getByRole('button', { name: 'Companies' }));
@@ -407,7 +420,12 @@ it('hides activity navigation and leaves its feed when the rollout turns off', (
   expect(screen.queryByText('email feed')).toBeNull();
   expect(screen.getByText('Record list')).toBeTruthy();
   const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
-  for (const name of ['Tasks', 'Email', 'Notes', 'Calls']) {
+  for (const name of [
+    'Sales Tasks',
+    'Sales Email',
+    'Sales Notes',
+    'Sales Calls',
+  ]) {
     expect(tabs.queryByRole('button', { name })).toBeNull();
   }
 });

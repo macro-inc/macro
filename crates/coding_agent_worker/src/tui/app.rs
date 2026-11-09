@@ -21,6 +21,7 @@ use crate::outbound::pairing::{ClaimStatus, PairingClient, machine_name};
 
 /// How often the dashboard re-reads the server.
 pub(crate) const REFRESH_EVERY: Duration = Duration::from_secs(3);
+const REFRESH_FAILED: &str = "refresh failed";
 
 /// Which tab is showing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -174,6 +175,11 @@ impl App {
     }
 
     /// (Re)start the serving core on the current config and credential.
+    /// Whether this process currently holds a runtime connection.
+    pub(crate) fn runtime_connected(&self) -> bool {
+        self.daemon.as_ref().is_some_and(Daemon::runtime_connected)
+    }
+
     pub(crate) async fn restart_daemon(&mut self) -> bool {
         if let Some(daemon) = self.daemon.take() {
             daemon.stop().await;
@@ -250,9 +256,26 @@ impl App {
             Ok(snapshot) => {
                 self.snapshot = snapshot;
                 self.last_refresh = Some(Instant::now());
+                // A failure this refresh recovered from is no longer news, and
+                // left up it reads as a live problem.
+                if self.showing_refresh_failure() {
+                    self.status = None;
+                }
             }
-            Err(error) => self.fail(format!("refresh failed: {error}")),
+            Err(error) => {
+                // Failed refreshes retry on every tick; log the first of a run.
+                if !self.showing_refresh_failure() {
+                    tracing::warn!(error = %error, "could not refresh the dashboard");
+                }
+                self.fail(format!("{REFRESH_FAILED}: {error}"));
+            }
         }
+    }
+
+    fn showing_refresh_failure(&self) -> bool {
+        self.status
+            .as_ref()
+            .is_some_and(|(message, _)| message.starts_with(REFRESH_FAILED))
     }
 
     pub(crate) async fn maybe_refresh(&mut self) {

@@ -87,13 +87,12 @@ where
     type Error = PipelineRepoError;
 
     async fn crm_enabled(&self, team: Uuid) -> Result<bool, Self::Error> {
-        Ok(sqlx::query_scalar!(
-            "SELECT crm_enabled FROM team_crm_settings WHERE team_id = $1",
-            team
+        Ok(
+            sqlx::query_scalar!(r#"SELECT TRUE AS "enabled!" FROM team WHERE id = $1"#, team)
+                .fetch_optional(&self.pool)
+                .await?
+                .unwrap_or(false),
         )
-        .fetch_optional(&self.pool)
-        .await?
-        .unwrap_or(false))
     }
 
     async fn get_many(&self, ids: &[Uuid]) -> Result<Vec<Pipeline>, Self::Error> {

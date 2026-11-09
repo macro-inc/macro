@@ -10,27 +10,75 @@ enforced by the ordinary backend APIs.
 
 - `src/macro.ts`: public exports and namespace registration.
 - `documents.createCanvas()` creates shared content before returning a Document handle;
-  it requires no browser open or upload.
+  it requires no browser open or upload. `document.canvas()` (`entities/canvases/canvas.ts`, its own code-mode entity)
+  reads (`scene`), edits (`apply` code against a revision, `edit` by instructions) and
+  renders the live scene over DSS `/documents/{id}/canvas/*`; `render` returns a
+  `StaticImage` the server stored, since static file storage rejects API keys.
+  `Canvas.webUrl()` is `/app/canvas/<id>`; `Document.webUrl()` uses the loaded
+  native file type's route and falls back to `/app/md/` before detail loads.
+- `documents.createSpreadsheet()` and `documents.spreadsheet(document)` return a
+  `Spreadsheet` (`src/entities/spreadsheets/spreadsheet.ts`, its own code-mode entity) whose `read`,
+  `calculate` and `applyEdits` run the spreadsheet tools' engine, and whose
+  `edit(instructions)` overrides `Document.edit` with the worker's spreadsheet
+  writer model; code mode hides `ReadSpreadsheet`, `CalculateSpreadsheet` and
+  `EditSpreadsheet`.
 - File bytes must work inside code mode, whose sandbox reaches only Macro hosts:
   `documents.upload()` posts them to storage's `/documents/upload`, and
   `Document.bytes()` downloads through the CloudFront export host (`document-content`
-  in the harness's `sdk_hosts`). Never return a presigned S3 URL as the only path.
+  in the harness's `sdk_endpoints`). Never return a presigned S3 URL as the only path.
 - `src/entities/entity.ts`: lazy detail reads, mutation invalidation and safe JSON.
+- `Document.readPresentation`/`editPresentation`/`copyPresentation`,
+  `readWord`/`editWord`, and `readDesign`/`readPhotoshop`/`readIllustrator`
+  run the matching direct tools' services through storage routes; the edit
+  operation unions are generated from `pptx_engine::EditOp` and
+  `WordDocumentOperation` (`office-files.ts` aliases them).
 - `src/entities/workspace/namespace.ts`: filtered activity pages and iteration,
   agent sessions included.
 - `src/entities/search/namespace.ts`: `macro.search`, one unified search across
   every kind of item with the direct search tools' filters (types, exact match,
   tags, inbox, agent session transcripts), returning typed handles.
+- `src/entities/calendar/booking-namespace.ts`: `macro.calendar.booking`, booking links
+  (`BookingLink`), settings, booked meetings (`Booking`) and insights over calendar
+  `/scheduling`. Link writes carry the user's quoted `userConfirmation`, which the
+  route rejects when blank; `BookingLink` handles keep their `team` for edits.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
+  `agents.list()` reads storage agent records, which built-in personas lack;
+  `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
+  included) that the `ListCodingAgents` tool serves. `routines.create` takes
+  either the single agent task or `steps` (generated `CodeStep`s, agent steps
+  with `Agent` handles) and `dangerouslyOperateAsUser`, which its TSDoc
+  restricts to an explicit user request; `routineBody` maps both onto the
+  scheduler's `RoutineTask`. `routines.check` sends the same body to
+  `POST /scheduled-actions/check` (as `{routine, created}`), which runs
+  saving's checks and saves nothing; code mode's catalog lists it as a read.
+  `created` takes handles with an `entityType` (`CreatedEntity`) and is kept
+  with a routine draft for its review.
 - `users.search(nameOrEmail)` searches existing Macro contacts with batched auth
   names and returns seeded User handles; it is not a global directory. Empty
   contact sets are 404, but authorization/service errors must propagate.
 - `src/entities/sharing/`, `messages/`: scoped access requests and message threads.
 - `src/entities/databases/query.ts`: SQL statements, typed table/row references and version guards.
+- `Contact.setEmail(address)` adds a missing address; `setCompany(company)`
+  links or switches a known personal-provider contact. Neither accepts clearing.
+- `src/entities/databases/saved-query.ts`: `database.saveQuery()` / `table.saveQuery()`
+  save a checked `SELECT` server-side and return a `SavedQuery` whose `toBlock()` is the
+  document's `<m-db-query>` block. The block format must match lexical-core's
+  `parseDatabaseQueryData`; `withView()` follows the AI editor's `setDatabaseQueryView` rules.
 - `src/entities/crm/pipeline.ts`: pipeline-authorized table/row/view handles;
   `PipelineTable.views()` returns views whose `positions()` reads saved board order.
+- `src/entities/crm/pipeline-entry.ts`: `PipelineEntry` handles from the
+  name-based pipeline methods (`find`, `addRecords`, `updateEntries`,
+  `removeRecords`, `edit`, `importCsv`/`exportCsv`), which call
+  `crm::inbound::pipeline_workflows`; field values are tagged by kind.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
   `external_chat`) and their message/send/upload/participant handles.
+- `src/entities/connected-apps/`: `macro.connectedApps.list(execution)` returns the
+  connected apps and custom MCP servers a running code execution's session
+  agent was given; `app.tools()` and `tool.call(args)` go through the harness,
+  which stamps the credential and holds each owner-account call in a turn
+  someone else prompted for the owner's approval. `discover(execution, name)`
+  and `Connector.inspect()` mirror `DiscoverConnectors`; `addServer` mirrors
+  `ConnectMcpServer`. Only works inside a running execution.
 - `src/entities/whatsapp/`: the owner's WhatsApp account and chat list; `WhatsAppChat.add()`
   returns an `ExternalChat`.
 - `src/entities/me/`: `macro.me.update()` sets the caller's name and profile
@@ -40,29 +88,53 @@ enforced by the ordinary backend APIs.
 - `src/entities/images/`: `macro.images.generate()` (cognition
   `POST /images/generate`, admitted against the user's AI allowance) returns a
   sized `GeneratedImage`; `StaticImage` handles attach to `channel.send(text,
-  { images })` and `thread.reply` as `static/image` attachments.
+  { images })` and `thread.reply` as `static/image` attachments, and
+  `Document` handles as `document` attachments (`{ documents }`).
+  `toMarkdown()` (also `markdown` in `toJSON()`) writes the `<m-image>` tag that
+  shows one inline. It must match lexical-core's `I_IMAGE_CONSTRAINED`
+  (pinned in `lexical-core/tests/generated-image.test.ts`).
+- `src/entities/documents/text-comment.ts`: `Document.commentOnText()` anchors a
+  thread to quoted text (`POST /documents/{id}/comments/text`, the
+  `CommentOnText` tool's domain function); a 422 becomes
+  `CommentQuoteNotPlacedError` carrying the reason.
 - `src/entities/web/`: `macro.web.search()` / `macro.web.fetch()` (cognition
   `POST /web/search`, `/web/fetch`, Tavily via `crates/web_search`), admitted and
   metered against the user's AI allowance; code mode hides the `WebSearch` /
   `WebFetch` tools in their favour.
+- `src/entities/bots/`: `macro.bots` manages bots (`Bot`: profile, channel
+  grants, webhook URLs, `BotToken`s) with user auth, and reads the
+  authenticated bot (`me`, `channels`) with bot auth. Code mode hides the
+  bot-management tools in its favour; `IssueBotCredential` stays, because its
+  chat card mints a token the model never reads.
+- `src/entities/memory/`, `activity/`: `macro.memory.read()`/`edit()` (cognition
+  `/memory/explicit`) and `macro.activity.mine()` (cognition `/activity`);
+  `User.activity()` reads `/memory/activity` and `Initiative.activity()` DSS
+  `/initiatives/{id}/activity`. Code mode hides the matching direct tools.
 - `services.ts`, `openapi-ts.config.ts`: generated service contract inputs.
+- `src/calls/`: optional Node and browser LiveKit helpers, exported only as
+  `@macro-inc/sdk/calls/node` and `@macro-inc/sdk/calls/browser`. Keep them out of
+  `src/macro.ts` and its dependency graph; LiveKit runtimes stay optional peers.
+- `src/entities/calls/`: live and recorded call handles; token-bearing `CallConnection` never serializes its token.
 
 ## Boundaries
 
 - Keep handwritten behavior in `src/`; never edit `generated/` or `specs/`.
 - Keep WhatsApp pairing, passkeys, connection setup/disconnect and rollout configuration out of the handwritten public SDK; operate on accounts linked in the app, with personal bearer sessions for account/access controls. External chat sends/uploads accept the connection owner's session or own API token; bots never send.
-- Keep notification mute, unmute, and snooze endpoints, including bulk item preferences, in the app-only coverage exclusions.
+- Use POST to start channel calls and call-id scoped joins/leaves; the legacy GET starts a call as a side effect.
+- One item's mute, snooze and unmute are `muteNotifications`/`unmuteNotifications` on every favoritable handle; keep mute-all, email unsubscribe and bulk item preferences in the app-only coverage exclusions.
 - Keep `external-chat/` provider-neutral; provider-specific reads (WhatsApp community chats) branch on `provider` with an exhaustive match.
 - Use existing entity handles for reads and mutations. Follow the
   [SDK rule](../../.agents/rules/sdk.md) and `add-sdk-endpoint` skill.
 - `../sdk-docs/` generates the public TypeDoc reference and static docs Worker.
-  Runtime-specific bundles belong to their consumer, not this package.
+  Consumer application bundles belong to their consumer. The calls entry points
+  are built separately from core, with LiveKit and OpenTelemetry external.
 
 ## Checks
 
 Run from this directory: `bun test`, `bun run check`, `bun run coverage`, and
-`bun run lint`. Coverage requires each generated endpoint to be wrapped or
-explicitly classified in `src/coverage/skipped.ts`. Build output in `dist/` is
+`bun run lint`. After building, run `bun run check:pack` to verify isolated
+consumer imports, types, and bundle separation. Coverage requires each generated
+endpoint to be wrapped or explicitly classified in `src/coverage/skipped.ts`. Build output in `dist/` is
 excluded from source linting.
 
 ## Local agent APIs
@@ -73,6 +145,10 @@ the existing gateway prefixes.
 
 ## Gotchas
 
+- Dependency changes require refreshing both platform hashes in
+  `nix-support/node_modules-hashes.json`; use
+  `tooling/scripts/update-node-modules-hash.sh` on each platform. Nix code-mode
+  generation otherwise restores dependencies from the old SDK snapshot.
 - Every entity's namespace class carries one `@routing` sentence ("Use when …;
   not …") that agents route on, and may carry an `@agent` block: how that area
   of Macro works, for agents only. Both are stripped from the public
@@ -117,12 +193,18 @@ the existing gateway prefixes.
 - Async iterators are lazy; `limit` is page size. Preserve filters on every page
   and do not fetch another page after the caller breaks the loop.
 - Handles must serialize identity or loaded detail, never authenticated clients.
+- Lazy detail invalidation fences in-flight reads so a pre-write response cannot restore stale cached fields.
 - Draft writes must select the draft's inbox with `X-Email-Link-Id`; callers
   supply plain HTML and the SDK encodes it for the draft wire contract.
 - Read many task or initiative names with `tasks.summaries` (`/documents/preview`)
   or `initiatives.summaries` (the list response); `name()` per handle loads each
-  entity. Task create `propertyValues` replace the service defaults (creator
-  assigned, Not started), so `Task.create` spells them out when it sends any.
+  entity. `initiatives.list(filters)` pages `/initiatives/page` and maps
+  the system Status and Priority option ids to names; keep its tables in step
+  with `system_properties`' `StatusOption` and `PriorityOption`. Task create
+  `propertyValues` replace the service defaults (creator assigned, Not
+  started), so `Task.create` spells them out when it sends any.
+- CRM records and initiatives share `messages/discussion.ts`: their comments are
+  messages under a `crm_company`, `crm_contact` or `initiative` parent.
 - Meeting list lookup only covers the owner's newest 100 standalone meetings;
   handles seeded from invitations retain their token for refetching after writes.
 - Team routes act on the caller's current team, which the auth service
@@ -157,3 +239,18 @@ the existing gateway prefixes.
 
 - Workspace-import report/cancel endpoints remain app-only review plumbing,
   explicitly classified alongside the existing Notion routes in coverage skips.
+
+- `AgentSession.activity()` and invocation handles iterate durable agent-correlated history lazily; session visibility controls the feed.
+
+## Call media entry points
+
+- See `CALLS.md` for the optional room helpers. `src/calls/common.ts` owns connection
+  cleanup, `node.ts` publishes caller-supplied frames, and `browser.ts` publishes
+  MediaStreams. Keep the existing one-time leave and audio DTX defaults.
+- Never log, trace, or serialize room tokens. Call spans use `@opentelemetry/api`
+  and are no-ops without a host tracer provider.
+- Node has no room-wide publish defaults, so `publishTrack` is wrapped to disable
+  audio DTX. Unpublish Node tracks by publication SID; browser tracks by object.
+- Keep LiveKit and OpenTelemetry external in the calls build so room objects and
+  tracing use the consumer's runtime instances. Do not re-export calls helpers
+  or their runtime types from `src/macro.ts`.

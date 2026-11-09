@@ -3,7 +3,6 @@ mod analytics;
 mod markdown_images;
 #[cfg(test)]
 mod test;
-mod tool_mode_cache;
 mod tool_response;
 mod tool_service;
 
@@ -19,6 +18,7 @@ use mcp_auth_proxy::{
         service::{McpAuthProxyService, McpAuthProxyServiceDeps, McpAuthProxyServiceImpl},
     },
     outbound::{
+        email_sign_in::AuthServiceEmailCodes,
         fusionauth::FusionAuthOAuthProvider,
         postgres::PostgresAuthStore,
         redis::{RedisClientRegistry, RedisInflightAuth},
@@ -30,13 +30,11 @@ use rmcp::transport::streamable_http_server::{
 };
 use secretsmanager_client::LocalOrRemoteSecret;
 use std::sync::Arc;
-use tool_mode_cache::CachedToolMode;
 use tool_service::{AuthenticatedToolService, CodeModeSurface};
 
-/// User-scoped code execution and the flag that offers it.
+/// User-scoped code execution.
 pub struct PublicCodeMode {
     pub service: Arc<dyn agent_code_mode::domain::UserCodeMode>,
-    pub selector: Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>,
 }
 
 /// Browser-based MCP clients Macro has vetted, whose users skip the consent
@@ -84,7 +82,6 @@ pub async fn router(
             tools: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
             service: code_mode.service,
             cognition: tool_context.cognition_tool_context.service.clone(),
-            selector: Arc::new(CachedToolMode::new(code_mode.selector)),
         })
     });
     // Create the MCP service with authenticated tool handler
@@ -166,6 +163,11 @@ async fn build_auth_proxy(
 )> {
     let mcp_public_url = public_url.to_string();
     let mcp_oauth_redirect_uri = format!("{mcp_public_url}/oauth/callback");
+    let email_codes = AuthServiceEmailCodes::new(
+        &macro_service_urls::AuthServiceUrl::new()?,
+        mcp_oauth_redirect_uri.clone(),
+    )
+    .context("failed to initialize MCP email sign-in")?;
 
     let fusionauth_api_key = LocalOrRemoteSecret::new_from_secret_manager(
         config.fusionauth_api_key_secret_key.as_ref().to_owned(),
@@ -243,6 +245,7 @@ async fn build_auth_proxy(
         client_registrations: store.clone(),
         refresh_token_bindings: store,
         oauth_provider: Arc::new(auth_provider),
+        email_codes: Arc::new(email_codes),
     });
     Ok((auth_proxy, backfill))
 }

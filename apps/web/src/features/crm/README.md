@@ -79,6 +79,21 @@ A person under an archived company routes to that company before restoration.
 Both information panels start with Record details and References; company-only
 Properties, Lists and Email sharing follow, with no duplicate visibility toggle.
 
+Contact headers and Record details share `ContactEmailField` and
+`ContactCompanyField`. Their Tasks-style pills add an email only when blank and link/switch company
+only for server-classified personal-provider emails. Existing email and
+ineligible company values are read-only; no clear/unlink actions are exposed.
+The separate Go to button navigates without selecting.
+Keep these property controls at a 24px visible face with 12px type/icons;
+reserve separate 44px touch targets with transparent expansion and margins.
+Desktop uses the property popover and entity picker; touch uses the shared dialog
+and picker sheet. Drafts remain visible on rejection, pending saves cannot be
+repeated, and record identity keys retire drafts when the record changes.
+After a desktop email addition, return focus to the read-only value in the
+originating property; it is programmatically focusable without adding a tab stop.
+Only committed responses update contact details, both company lists, address
+lookups and normalized contact fields, with session and stale-response fences.
+
 People, Companies and company Team use an exclusive Visible/Archived filter.
 `people-visibility` keeps the workspace choice local to the account/team/role/view,
 preserves search and other display choices, and sanitizes shared/persisted contact
@@ -129,7 +144,8 @@ The selected-record fallback survives detail query errors until the record close
 Global task creation snapshots the focused pane's getter before opening, without
 fetching details or capturing navigation history. Record contexts isolate drafts.
 
-`enable-crm-activity` gates workspace activity tabs, whether CRM supplies its
+`enable-crm-activity` gates workspace activity tabs (labelled Sales Tasks, Sales Email,
+Sales Notes and Sales Calls), whether CRM supplies its
 composer context, and, with `enable-crm`, the Customer / Contact pill in the task
 composer and Universal Input's task mode. Those two read both flags through
 `customerContactEnabled`. It defaults off everywhere and can be overridden locally with
@@ -213,15 +229,15 @@ source trail without an extra separator; do not duplicate the selected title in
 the prefix. Modified clicks keep their existing split behavior.
 Standalone record previews retain their normal navigation outside the workspace.
 Record-detail lists and activity membership remain unchanged.
-Sidebar Tasks reuse the production Tasks filters, sort, grouping, and list/board/Gantt
+Sales Tasks reuse the production Tasks filters, sort, grouping, and list/board/Gantt
 layouts (subject to the normal feature flags and touch fallback). They use a separate
 CRM persistence scope, and every query, including search and grouped continuation,
 retains the mandatory CRM association. Record-detail Tasks stay unchanged.
-Email reuses the shared read/done/attachment/calendar/tag facets. Notes expose creator
-and tag filters; Calls expose audience and tag filters. These lists have independent
+Sales Email reuses the shared read/done/attachment/calendar/tag facets. Sales Notes expose
+creator and tag filters; Sales Calls expose audience and tag filters. These lists have independent
 per-entry search, sort direction, and date/none grouping settings. Date headings follow
-the selected sort field in viewer-local time. Email defaults to last-update date groups;
-Notes and Calls default to no grouping. Local-only filters continue paging through
+the selected sort field in viewer-local time. Sales Email defaults to last-update date groups;
+Sales Notes and Sales Calls default to no grouping. Local-only filters continue paging through
 empty pages; clearing filters never clears the CRM scope.
 
 Activity extends the existing authorized CRM association path rather than

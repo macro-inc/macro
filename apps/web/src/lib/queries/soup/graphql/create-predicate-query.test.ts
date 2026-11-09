@@ -265,3 +265,25 @@ it('does not create root performance spans for repeated cache evaluations', asyn
     span.mockRestore();
   }
 });
+
+it('does not read on cache changes while hidden, then catches up once', async () => {
+  const visibility = vi.spyOn(document, 'visibilityState', 'get');
+  try {
+    const state = setup();
+    state.requests[0].resolve(snapshot());
+    await flush();
+
+    visibility.mockReturnValue('hidden');
+    state.change('2');
+    state.change('3');
+    state.generations.forEach((cb) => cb({ storage: 'preserved' }));
+    expect(state.requests).toHaveLength(1);
+
+    visibility.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    expect(state.requests).toHaveLength(2);
+    expect(state.requests[1].args.liveQuery?.since).toBeUndefined();
+  } finally {
+    visibility.mockRestore();
+  }
+});

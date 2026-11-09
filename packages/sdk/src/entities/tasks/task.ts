@@ -53,8 +53,9 @@ export interface SimilarTask {
 }
 
 /**
- * A Macro task: a document with sub-type `task`. Inherits the full document
- * surface ({@link Document.rename}, move, delete, restore, content, events)
+ * A Macro task: a document with sub-type `task`, so every `Document` method
+ * works on it, including `content` and `edit` for its body. Inherits the full
+ * document surface ({@link Document.rename}, move, delete, restore, events)
  * and adds task-specific state.
  */
 export class Task extends Document {
