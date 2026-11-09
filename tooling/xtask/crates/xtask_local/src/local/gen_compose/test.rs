@@ -32,7 +32,7 @@ fn fusionauth_kickstart_is_privately_relabelled_and_replaces_inherited_mounts() 
     for name in [None, Some("selinux-test")] {
         let instance = Instance::derive(name, None).unwrap();
         let mut services = IndexMap::new();
-        add_local_infra(&mut services, &instance, false);
+        add_local_infra(&mut services, &instance, false).unwrap();
         let compose = dct::Compose {
             services: dct::Services(services),
             ..Default::default()
@@ -102,4 +102,42 @@ fn relay_image_tag_follows_its_dockerfile() {
     assert_ne!(tag, sdk_webhook_relay_image(b"FROM alpine\nRUN b\n"));
     assert_eq!(tag, sdk_webhook_relay_image(b"FROM alpine\nRUN a\n"));
     assert!(tag.starts_with("macro-sdk-webhook-relay:"));
+}
+
+/// Every instance runs the repository-built images under tags keyed by their
+/// inputs, so a changed image is built rather than an old one reused, and an
+/// unchanged one is shared rather than rebuilt per instance.
+#[test]
+fn every_instance_runs_the_content_tagged_images() {
+    for image in content_tagged_images() {
+        let tag = image.tag().unwrap();
+        let key = tag.strip_prefix(&format!("{}:", image.repository)).unwrap();
+        assert_eq!(key.len(), 12);
+        assert!(key.bytes().all(|b| b.is_ascii_hexdigit()));
+        for name in [None, Some("content-tag-test")] {
+            let instance = Instance::derive(name, None).unwrap();
+            let mut services = IndexMap::new();
+            add_local_infra(&mut services, &instance, false).unwrap();
+            let service = services[image.service].as_ref().unwrap();
+            assert_eq!(
+                service.image.as_deref(),
+                Some(tag.as_str()),
+                "{}",
+                image.service
+            );
+        }
+    }
+}
+
+/// The sync worker's tag follows its Rust closure, not unrelated files.
+#[test]
+fn sync_service_inputs_cover_its_closure_only() {
+    let inputs = sync_service_inputs().unwrap();
+    assert!(inputs.iter().any(|path| path == "Cargo.lock"));
+    assert!(inputs.iter().any(|path| path == "services/sync-service"));
+    assert!(
+        !inputs
+            .iter()
+            .any(|path| path.starts_with("docs") || path.starts_with("apps"))
+    );
 }

@@ -7393,6 +7393,7 @@ dependencies = [
  "scraper",
  "serde",
  "serde_json",
+ "serde_path_to_error",
  "sha2 0.10.9",
  "sqlx",
  "thiserror 2.0.18",
@@ -13720,8 +13721,11 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "nom 8.0.0",
+ "serde",
+ "serde-wasm-bindgen",
  "strsim",
  "thiserror 2.0.18",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -17536,6 +17540,7 @@ dependencies = [
  "glob",
  "jev",
  "kafka_util",
+ "lazy-regex",
  "lexical_client",
  "macro_authorization",
  "macro_db_migrator",
@@ -17690,6 +17695,7 @@ dependencies = [
  "doppler-config",
  "email",
  "email_db_client",
+ "encoding_rs",
  "ensure_exists",
  "entity_registry",
  "entity_registry_db_utils",
@@ -23248,15 +23254,6 @@ name = "xtask"
 version = "0.1.0"
 
 [[package]]
-name = "xtask_cache_wasm"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde_json",
- "xtask_paths",
-]
-
-[[package]]
 name = "xtask_deps"
 version = "0.1.0"
 dependencies = [
@@ -23327,6 +23324,7 @@ dependencies = [
  "aws-sdk-s3",
  "aws-sdk-sqs",
  "bollard",
+ "chrono",
  "clap",
  "console 0.15.11",
  "docker-compose-types",
@@ -23341,14 +23339,33 @@ dependencies = [
  "macro_event_topics",
  "macro_queues",
  "rdkafka",
+ "regex",
  "serde",
  "serde_json",
  "serde_yaml",
  "sha2 0.10.9",
  "tempfile",
  "tokio",
+ "xtask_local_telemetry",
  "xtask_paths",
  "xtask_ports",
+]
+
+[[package]]
+name = "xtask_local_telemetry"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "toml 0.8.23",
+ "uuid",
+ "wiremock",
 ]
 
 [[package]]

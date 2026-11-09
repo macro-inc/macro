@@ -164,7 +164,7 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
   const prod = monitors().filter((r) =>
     r.inputs.message.includes('Runbook: https://github.com/macro-inc/macro/')
   );
-  expect(prod).toHaveLength(35);
+  expect(prod).toHaveLength(36);
   for (const monitor of prod) {
     const linked = monitor.inputs.message.match(
       /Dashboard: https:\/\/us5\.datadoghq\.com\/dashboard\/([\w-]+)\//
@@ -194,4 +194,15 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
         : [`y = ${critical}`, ...(warning ? [`y = ${warning}`] : [])],
     });
   }
+});
+
+test('routine suggestion failures notify over an hour, above a floor', () => {
+  const failures = monitors().find(
+    (r) => r.name === 'routine-suggestions-failures'
+  );
+  expect(failures?.inputs.query).toBe(
+    'sum(last_1h):sum:macro.routine_suggestions.generation{env:prod,outcome:failed}.as_count() / (sum:macro.routine_suggestions.generation{env:prod,!outcome:cancelled}.as_count() + 20) > 0.1'
+  );
+  expect(failures?.inputs.priority).toBe('3');
+  expect(failures?.inputs.message).not.toContain('@webhook-goalert ');
 });

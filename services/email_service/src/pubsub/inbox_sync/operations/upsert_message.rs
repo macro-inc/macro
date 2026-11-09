@@ -520,8 +520,9 @@ async fn handle_attachment_upload(
     Ok(None)
 }
 
-/// Uploads claimed attachments in order. Other upload failures are logged and
-/// skipped, but a fetch the rate limit refused stops the run: the refused
+/// Uploads claimed attachments in order. An attachment deleted mid-run is
+/// skipped. Other upload failures are logged and skipped, but a fetch the
+/// rate limit refused stops the run: the refused
 /// attachment and the ones not yet tried lose their claims so a retry of the
 /// upsert claims them again, and the refusal is returned.
 async fn upload_claimed_attachments<F, Fut>(
@@ -556,6 +557,11 @@ where
                 }
                 return Ok(Some(error));
             }
+            // A newer revision of the message carries its own attachment rows.
+            Err(UploadAttachmentError::AttachmentDeleted) => tracing::info!(
+                %attachment_id,
+                "skipped attachment deleted before it could be imported"
+            ),
             // keep processing if it fails, best effort
             Err(e) => tracing::error!("Failed to upload attachment to Macro: {e}"),
         }

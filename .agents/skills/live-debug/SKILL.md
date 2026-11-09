@@ -35,7 +35,11 @@ stack to pick it up (`just run_local stop`, then `just run_local`, both with
 
 Start the stack from a shell with no terminal or with `--detach`, and read
 `just run_local status --json`. After a Rust edit, `just run_local rebuild` reloads
-only what changed. `just run_local logs` shows the last job's log, and `--service
+only what changed. Working on one service, `just run_local rebuild --services
+<name>` (comma-separated compose or binary names) rebuilds and restarts only it;
+services it leaves on older code are listed in `stale_services` from `just
+run_local status --json`, and `just run_local rebuild` with no flag catches them
+all up. `just run_local logs` shows the last job's log, and `--service
 <name>` a service's (`frontend` is Vite).
 
 ## Query telemetry (prefer APIs over the Grafana UI)

@@ -279,6 +279,8 @@ pub enum ActionPolicyError {
     DescriptionTooLong,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
+    #[error("only a routine suggestion session may suggest routines")]
+    NotSuggesting,
 }
 
 /// A routine's finished runs, as code reads them: its last run and its last
@@ -370,6 +372,11 @@ pub struct ScheduledAction {
     #[serde(default)]
     #[schema(value_type = Option<String>, format = Uuid)]
     pub template_id: Option<Uuid>,
+    /// The routine suggestion it was saved from, if any: a plain pointer
+    /// that stays after the suggestion is replaced.
+    #[serde(default)]
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub suggestion_id: Option<Uuid>,
     /// What the routine is for, in the owner's words; empty when unset.
     #[serde(default)]
     pub description: String,
