@@ -8,6 +8,7 @@ use std::{
 };
 mod audit_snapshot;
 mod batch;
+mod batch_execution;
 mod bindings;
 mod calls;
 mod capture_index;

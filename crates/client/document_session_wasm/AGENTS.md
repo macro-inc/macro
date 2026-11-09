@@ -200,3 +200,10 @@ explicit graph retirement fence. Validate the full lease plan and epoch before
 opening a compact Begin, retain before release, and prune only touched capture
 indexes. Legacy diagnostic calls retain their original unleased discard policy
 until a compact batch or valid cold lease drain opts into emission retention.
+
+Share compact and scoped callback execution through batch_execution under an
+existing pending metadata frame. Keep Host borrows inside prepare/encode only;
+never hold them while a native plan or normalizer invokes JS. Scoped callbacks
+must not normalize/admit recursively; the outer flush owns normalization. Advance
+the mutation epoch before execution and return its actual latest value so child
+operations are not overwritten by the parent receipt.

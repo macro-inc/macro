@@ -291,11 +291,6 @@ pub(super) fn clone_instance(
     crate::compatibility_host::error::returned(reply)
 }
 
-/// Keep metadata available to clone callbacks while the outer batch normalizes.
-pub(super) fn flush(host: &mut Host, tx: &mut Transaction<'_>) -> Result<(), BoundaryError> {
-    with_pending_frame(host, || tx.flush().map_err(BoundaryError::Model))
-}
-
 /// Bind a synchronous pending callback phase without retaining a metadata guard.
 pub(super) fn with_pending_frame<T>(
     host: &mut Host,
