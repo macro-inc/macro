@@ -5693,7 +5693,7 @@
         "properties": {
           "code": {
             "type": "string",
-            "description": "The code Claude showed, or the `http://localhost:<port>/callback?...`\naddress the browser could not open."
+            "description": "The code Claude showed after the user signed in."
           }
         }
       },
@@ -5713,6 +5713,10 @@
         "description": "`POST /harnesses/{harness_id}/claude-sign-in/complete` answer.",
         "required": ["signedIn"],
         "properties": {
+          "account": {
+            "type": ["string", "null"],
+            "description": "The Claude account's email address, when Claude reports one."
+          },
           "signedIn": {
             "type": "boolean",
             "description": "Always `true`."

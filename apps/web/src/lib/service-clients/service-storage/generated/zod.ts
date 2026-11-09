@@ -43268,6 +43268,7 @@ export const approveHarnessPairingBody = zod
   })
   .describe('Request to approve a pairing and register the harness.');
 
+export const approveHarnessPairingResponseCapabilitiesClaudeDefault = null;
 export const approveHarnessPairingResponseCapabilitiesScreenDefault = false;
 
 export const approveHarnessPairingResponse = zod
@@ -43284,6 +43285,41 @@ export const approveHarnessPairingResponse = zod
       ),
     capabilities: zod
       .object({
+        claude: zod
+          .union([
+            zod.null(),
+            zod
+              .union([
+                zod
+                  .object({
+                    status: zod.enum(['signed_out']),
+                  })
+                  .describe(
+                    'No Claude account; sessions run on Macro credits.'
+                  ),
+                zod
+                  .object({
+                    account: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The account's email address, when Claude reports one."
+                      ),
+                    expires_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the sign-in stops refreshing and must be repeated.'
+                      ),
+                    status: zod.enum(['signed_in']),
+                  })
+                  .describe('Signed in to a Claude account.'),
+              ])
+              .describe(
+                "Claude Code's sign-in on a Macro computer, as `claude auth status` reports it."
+              ),
+          ])
+          .optional(),
         screen: zod
           .boolean()
           .optional()
@@ -43351,6 +43387,7 @@ export const claimHarnessPairingBody = zod
     "Request to claim an approved pairing's credential.\n\nThe daemon serializes this, so both derives are used."
   );
 
+export const claimHarnessPairingResponseHarnessCapabilitiesClaudeDefault = null;
 export const claimHarnessPairingResponseHarnessCapabilitiesScreenDefault = false;
 
 export const claimHarnessPairingResponse = zod
@@ -43369,6 +43406,41 @@ export const claimHarnessPairingResponse = zod
           ),
         capabilities: zod
           .object({
+            claude: zod
+              .union([
+                zod.null(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        status: zod.enum(['signed_out']),
+                      })
+                      .describe(
+                        'No Claude account; sessions run on Macro credits.'
+                      ),
+                    zod
+                      .object({
+                        account: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            "The account's email address, when Claude reports one."
+                          ),
+                        expires_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe(
+                            'When the sign-in stops refreshing and must be repeated.'
+                          ),
+                        status: zod.enum(['signed_in']),
+                      })
+                      .describe('Signed in to a Claude account.'),
+                  ])
+                  .describe(
+                    "Claude Code's sign-in on a Macro computer, as `claude auth status` reports it."
+                  ),
+              ])
+              .optional(),
             screen: zod
               .boolean()
               .optional()
@@ -43428,6 +43500,7 @@ export const claimHarnessPairingResponse = zod
 /**
  * @summary Handler for `GET /harnesses`.
  */
+export const listHarnessesResponseCapabilitiesClaudeDefault = null;
 export const listHarnessesResponseCapabilitiesScreenDefault = false;
 
 export const listHarnessesResponseItem = zod
@@ -43444,6 +43517,41 @@ export const listHarnessesResponseItem = zod
       ),
     capabilities: zod
       .object({
+        claude: zod
+          .union([
+            zod.null(),
+            zod
+              .union([
+                zod
+                  .object({
+                    status: zod.enum(['signed_out']),
+                  })
+                  .describe(
+                    'No Claude account; sessions run on Macro credits.'
+                  ),
+                zod
+                  .object({
+                    account: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The account's email address, when Claude reports one."
+                      ),
+                    expires_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the sign-in stops refreshing and must be repeated.'
+                      ),
+                    status: zod.enum(['signed_in']),
+                  })
+                  .describe('Signed in to a Claude account.'),
+              ])
+              .describe(
+                "Claude Code's sign-in on a Macro computer, as `claude auth status` reports it."
+              ),
+          ])
+          .optional(),
         screen: zod
           .boolean()
           .optional()
@@ -43495,6 +43603,7 @@ export const listHarnessesResponse = zod.array(listHarnessesResponseItem);
 /**
  * @summary Handler for `GET /harnesses/directory`.
  */
+export const listHarnessDirectoryResponseCapabilitiesClaudeDefault = null;
 export const listHarnessDirectoryResponseCapabilitiesScreenDefault = false;
 
 export const listHarnessDirectoryResponseItem = zod
@@ -43511,6 +43620,41 @@ export const listHarnessDirectoryResponseItem = zod
       ),
     capabilities: zod
       .object({
+        claude: zod
+          .union([
+            zod.null(),
+            zod
+              .union([
+                zod
+                  .object({
+                    status: zod.enum(['signed_out']),
+                  })
+                  .describe(
+                    'No Claude account; sessions run on Macro credits.'
+                  ),
+                zod
+                  .object({
+                    account: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The account's email address, when Claude reports one."
+                      ),
+                    expires_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the sign-in stops refreshing and must be repeated.'
+                      ),
+                    status: zod.enum(['signed_in']),
+                  })
+                  .describe('Signed in to a Claude account.'),
+              ])
+              .describe(
+                "Claude Code's sign-in on a Macro computer, as `claude auth status` reports it."
+              ),
+          ])
+          .optional(),
         screen: zod
           .boolean()
           .optional()
@@ -43564,6 +43708,7 @@ export const listHarnessDirectoryResponse = zod.array(
 /**
  * @summary Handler for `GET /harnesses/me`.
  */
+export const getSelfHarnessResponseCapabilitiesClaudeDefault = null;
 export const getSelfHarnessResponseCapabilitiesScreenDefault = false;
 
 export const getSelfHarnessResponse = zod
@@ -43580,6 +43725,41 @@ export const getSelfHarnessResponse = zod
       ),
     capabilities: zod
       .object({
+        claude: zod
+          .union([
+            zod.null(),
+            zod
+              .union([
+                zod
+                  .object({
+                    status: zod.enum(['signed_out']),
+                  })
+                  .describe(
+                    'No Claude account; sessions run on Macro credits.'
+                  ),
+                zod
+                  .object({
+                    account: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The account's email address, when Claude reports one."
+                      ),
+                    expires_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the sign-in stops refreshing and must be repeated.'
+                      ),
+                    status: zod.enum(['signed_in']),
+                  })
+                  .describe('Signed in to a Claude account.'),
+              ])
+              .describe(
+                "Claude Code's sign-in on a Macro computer, as `claude auth status` reports it."
+              ),
+          ])
+          .optional(),
         screen: zod
           .boolean()
           .optional()
@@ -43646,10 +43826,44 @@ export const listHarnessAgentsResponse = zod.array(
 replaces the previous report.
  * @summary Handler for `PUT /harnesses/me/capabilities`.
  */
+export const putSelfHarnessCapabilitiesBodyClaudeDefault = null;
 export const putSelfHarnessCapabilitiesBodyScreenDefault = false;
 
 export const putSelfHarnessCapabilitiesBody = zod
   .object({
+    claude: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                status: zod.enum(['signed_out']),
+              })
+              .describe('No Claude account; sessions run on Macro credits.'),
+            zod
+              .object({
+                account: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "The account's email address, when Claude reports one."
+                  ),
+                expires_at: zod.iso
+                  .datetime({})
+                  .nullish()
+                  .describe(
+                    'When the sign-in stops refreshing and must be repeated.'
+                  ),
+                status: zod.enum(['signed_in']),
+              })
+              .describe('Signed in to a Claude account.'),
+          ])
+          .describe(
+            "Claude Code's sign-in on a Macro computer, as `claude auth status` reports it."
+          ),
+      ])
+      .optional(),
     screen: zod
       .boolean()
       .optional()
@@ -43712,6 +43926,7 @@ export const patchHarnessBody = zod
     'Request to change a registered harness. Omitted fields stay as they are.'
   );
 
+export const patchHarnessResponseCapabilitiesClaudeDefault = null;
 export const patchHarnessResponseCapabilitiesScreenDefault = false;
 
 export const patchHarnessResponse = zod
@@ -43728,6 +43943,41 @@ export const patchHarnessResponse = zod
       ),
     capabilities: zod
       .object({
+        claude: zod
+          .union([
+            zod.null(),
+            zod
+              .union([
+                zod
+                  .object({
+                    status: zod.enum(['signed_out']),
+                  })
+                  .describe(
+                    'No Claude account; sessions run on Macro credits.'
+                  ),
+                zod
+                  .object({
+                    account: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        "The account's email address, when Claude reports one."
+                      ),
+                    expires_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'When the sign-in stops refreshing and must be repeated.'
+                      ),
+                    status: zod.enum(['signed_in']),
+                  })
+                  .describe('Signed in to a Claude account.'),
+              ])
+              .describe(
+                "Claude Code's sign-in on a Macro computer, as `claude auth status` reports it."
+              ),
+          ])
+          .optional(),
         screen: zod
           .boolean()
           .optional()

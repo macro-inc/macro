@@ -82,6 +82,13 @@ export function MacroComputers(props: {
       : undefined;
   };
 
+  const claudeAccountFor = (computer: ComputerStatus) => {
+    const claude = props.harnesses.find(
+      (candidate) => candidate.id === computer.harnessId
+    )?.capabilities?.claude;
+    return claude?.status === 'signed_in' ? claude.account : undefined;
+  };
+
   const agentsOn = (computer: ComputerStatus) =>
     agents.isSuccess && computer.harnessId
       ? agents.data.filter((agent) => agent.harness_id === computer.harnessId)
@@ -219,6 +226,7 @@ export function MacroComputers(props: {
                           harnessId={harnessId()}
                           canManage={canManageClaude(computer)}
                           mode={runtimeFor(computer)?.claudeMode}
+                          account={claudeAccountFor(computer)}
                         />
                       )}
                     </Show>

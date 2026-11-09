@@ -18,6 +18,8 @@ export function ComputerClaudeAccess(props: {
   harnessId: string;
   canManage: boolean;
   mode: string | undefined;
+  /** The Claude account macrod last reported, from the harness capabilities. */
+  account?: string | null;
 }) {
   const rollout = useFeatureFlag(enableMacroComputers);
   const mode = useClaudeModeQuery(() =>
@@ -32,6 +34,8 @@ export function ComputerClaudeAccess(props: {
   const [url, setUrl] = createSignal<string>();
   const [code, setCode] = createSignal('');
   const [error, setError] = createSignal<string>();
+  const [signedInAccount, setSignedInAccount] = createSignal<string | null>();
+  const account = () => signedInAccount() ?? props.account ?? undefined;
   const pending = () =>
     start.isPending ||
     complete.isPending ||
@@ -75,12 +79,13 @@ export function ComputerClaudeAccess(props: {
     request = new AbortController();
     setError(undefined);
     try {
-      await complete.mutateAsync({
+      const signedIn = await complete.mutateAsync({
         harnessId: props.harnessId,
         code: code().trim(),
         signal: request.signal,
       });
       if (current !== generation) return;
+      setSignedInAccount(signedIn.account ?? null);
       setCode('');
       setUrl(undefined);
     } catch (error) {
@@ -113,6 +118,7 @@ export function ComputerClaudeAccess(props: {
     setError(undefined);
     try {
       await signOut.mutateAsync(props.harnessId);
+      setSignedInAccount(null);
       setCode('');
       setUrl(undefined);
     } catch {
@@ -125,7 +131,9 @@ export function ComputerClaudeAccess(props: {
       <span class="flex min-w-0 flex-col items-start gap-2">
         <span>
           {currentMode() === 'own_account'
-            ? t('computers.claudeOwnAccount')
+            ? account()
+              ? t('computers.claudeConnectedAs', { account: account() })
+              : t('computers.claudeOwnAccount')
             : currentMode() === 'macro_credits'
               ? t('computers.claudeCredits')
               : t('computers.claudeUnavailable')}
@@ -170,6 +178,9 @@ export function ComputerClaudeAccess(props: {
                 >
                   {t('computers.openClaudeSignIn')}
                 </a>
+                <p class="w-full text-ink-muted">
+                  {t('computers.claudeSharedAccount')}
+                </p>
                 <label class="flex w-full flex-col gap-1">
                   {t('computers.claudeCodeLabel')}
                   <Input
@@ -195,7 +206,7 @@ export function ComputerClaudeAccess(props: {
                     fireAndForget(cancelSignIn(), 'computer-claude')
                   }
                 >
-                  {t('common.cancel')}
+                  {t('computers.claudeSkip')}
                 </Button>
               </form>
             )}

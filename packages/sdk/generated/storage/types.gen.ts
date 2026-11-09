@@ -4140,6 +4140,23 @@ export type ClaimedPairing = {
 };
 
 /**
+ * Claude Code's sign-in on a Macro computer, as `claude auth status` reports it.
+ */
+export type ClaudeAccount = {
+    status: 'signed_out';
+} | {
+    /**
+     * The account's email address, when Claude reports one.
+     */
+    account?: string | null;
+    /**
+     * When the sign-in stops refreshing and must be repeated.
+     */
+    expires_at?: string | null;
+    status: 'signed_in';
+};
+
+/**
  * How Claude Code on a Macro computer is paid for.
  */
 export type ClaudeMode = 'macro_credits' | 'own_account';
@@ -12455,6 +12472,7 @@ export type HarnessAgent = {
  * harnesses that never report stay plain.
  */
 export type HarnessCapabilities = {
+    claude?: null | ClaudeAccount;
     /**
      * A display Macro can stream (Xvnc on `127.0.0.1:5900`).
      */

@@ -31382,6 +31382,42 @@
           }
         }
       },
+      "ClaudeAccount": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "No Claude account; sessions run on Macro credits.",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["signed_out"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Signed in to a Claude account.",
+            "required": ["status"],
+            "properties": {
+              "account": {
+                "type": ["string", "null"],
+                "description": "The account's email address, when Claude reports one."
+              },
+              "expires_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the sign-in stops refreshing and must be repeated."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["signed_in"]
+              }
+            }
+          }
+        ],
+        "description": "Claude Code's sign-in on a Macro computer, as `claude auth status` reports it."
+      },
       "ClaudeMode": {
         "type": "string",
         "description": "How Claude Code on a Macro computer is paid for.",
@@ -44786,6 +44822,18 @@
         "type": "object",
         "description": "What a harness's machine can do beyond running agents.\n\nmacrod reports this after it connects; every field defaults to off, so\nharnesses that never report stay plain.",
         "properties": {
+          "claude": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ClaudeAccount",
+                "description": "The Claude account Claude Code on a Macro computer is signed in to;\nabsent where macrod does not manage Claude."
+              }
+            ],
+            "default": null
+          },
           "screen": {
             "type": "boolean",
             "description": "A display Macro can stream (Xvnc on `127.0.0.1:5900`).",

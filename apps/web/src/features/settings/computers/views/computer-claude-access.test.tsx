@@ -8,6 +8,7 @@ import { ComputerClaudeAccess } from './computer-claude-access';
 
 const mocks = vi.hoisted(() => ({
   enabled: true,
+  mode: 'macro_credits',
   start: vi.fn(async () => ({ url: 'https://claude.ai/oauth/authorize' })),
   complete: vi.fn(
     async (_vars: {
@@ -28,7 +29,7 @@ vi.mock('@core/util/url', () => ({ openExternalUrl: mocks.open }));
 vi.mock('@queries/computers/claude', () => ({
   useClaudeModeQuery: () => ({
     isSuccess: true,
-    data: { mode: 'macro_credits' },
+    data: { mode: mocks.mode },
     isError: false,
   }),
   useClaudeSignInMutation: () => ({
@@ -52,6 +53,7 @@ vi.mock('@queries/computers/claude', () => ({
 
 beforeEach(() => {
   mocks.enabled = true;
+  mocks.mode = 'macro_credits';
   vi.clearAllMocks();
   mocks.pendingStart = () => false;
   mocks.pendingComplete = () => false;
@@ -63,7 +65,7 @@ it('opens Claude and submits the trimmed code or callback URL', async () => {
   ));
   fireEvent.click(screen.getByRole('button', { name: 'Sign in with Claude' }));
   const input = await screen.findByLabelText(
-    'Paste the code or the URL you were sent to'
+    'Paste the code Claude showed you'
   );
   expect(mocks.open).toHaveBeenCalledWith('https://claude.ai/oauth/authorize');
   fireEvent.input(input, {
@@ -79,7 +81,7 @@ it('opens Claude and submits the trimmed code or callback URL', async () => {
   );
   await waitFor(() =>
     expect(
-      screen.queryByLabelText('Paste the code or the URL you were sent to')
+      screen.queryByLabelText('Paste the code Claude showed you')
     ).toBeNull()
   );
 });
@@ -105,7 +107,7 @@ it('explains a rejected code and lets the user start again', async () => {
   ));
   fireEvent.click(screen.getByRole('button', { name: 'Sign in with Claude' }));
   const input = await screen.findByLabelText(
-    'Paste the code or the URL you were sent to'
+    'Paste the code Claude showed you'
   );
   fireEvent.input(input, { target: { value: 'bad-code' } });
   fireEvent.click(screen.getByRole('button', { name: 'Complete sign-in' }));
@@ -115,7 +117,7 @@ it('explains a rejected code and lets the user start again', async () => {
     )
   );
   expect(
-    screen.queryByLabelText('Paste the code or the URL you were sent to')
+    screen.queryByLabelText('Paste the code Claude showed you')
   ).toBeNull();
 });
 
@@ -140,13 +142,13 @@ it('disables starting another sign-in until the paste form is cancelled', async 
   ));
   const start = screen.getByRole('button', { name: 'Sign in with Claude' });
   fireEvent.click(start);
-  await screen.findByLabelText('Paste the code or the URL you were sent to');
+  await screen.findByLabelText('Paste the code Claude showed you');
   expect(start).toHaveProperty('disabled', true);
-  fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Skip, use Macro credits' }));
   await waitFor(() => expect(mocks.cancel).toHaveBeenCalledWith('computer'));
   await waitFor(() => expect(start).not.toHaveProperty('disabled', true));
   expect(
-    screen.queryByLabelText('Paste the code or the URL you were sent to')
+    screen.queryByLabelText('Paste the code Claude showed you')
   ).toBeNull();
 });
 
@@ -169,7 +171,7 @@ it('disables sign-in while start awaits its URL', async () => {
   fireEvent.click(start);
   expect(start).toHaveProperty('disabled', true);
   started.resolve({ url: 'https://claude.ai/oauth/authorize' });
-  await screen.findByLabelText('Paste the code or the URL you were sent to');
+  await screen.findByLabelText('Paste the code Claude showed you');
 });
 
 it('can cancel a pending submit and ignores its late result', async () => {
@@ -189,21 +191,21 @@ it('can cancel a pending submit and ignores its late result', async () => {
   ));
   fireEvent.click(screen.getByRole('button', { name: 'Sign in with Claude' }));
   const input = await screen.findByLabelText(
-    'Paste the code or the URL you were sent to'
+    'Paste the code Claude showed you'
   );
   fireEvent.input(input, { target: { value: 'test-code' } });
   fireEvent.click(screen.getByRole('button', { name: 'Complete sign-in' }));
   expect(
     screen.getByRole('button', { name: 'Sign in with Claude' })
   ).toHaveProperty('disabled', true);
-  const cancel = screen.getByRole('button', { name: 'Cancel' });
+  const cancel = screen.getByRole('button', { name: 'Skip, use Macro credits' });
   expect(cancel).not.toHaveProperty('disabled', true);
   fireEvent.click(cancel);
   await waitFor(() => expect(mocks.cancel).toHaveBeenCalledWith('computer'));
   completed.resolve({ signedIn: true });
   await waitFor(() =>
     expect(
-      screen.queryByLabelText('Paste the code or the URL you were sent to')
+      screen.queryByLabelText('Paste the code Claude showed you')
     ).toBeNull()
   );
   expect(screen.queryByRole('alert')).toBeNull();
@@ -217,7 +219,7 @@ it('aborts and cancels a submitted sign-in when its controls unmount', async () 
   ));
   fireEvent.click(screen.getByRole('button', { name: 'Sign in with Claude' }));
   const input = await screen.findByLabelText(
-    'Paste the code or the URL you were sent to'
+    'Paste the code Claude showed you'
   );
   fireEvent.input(input, { target: { value: 'test-code' } });
   fireEvent.click(screen.getByRole('button', { name: 'Complete sign-in' }));
@@ -227,4 +229,32 @@ it('aborts and cancels a submitted sign-in when its controls unmount', async () 
   expect(signal?.aborted).toBe(true);
   expect(mocks.cancel).toHaveBeenCalledWith('computer');
   submitted.resolve({ signedIn: true });
+});
+
+it('names the connected account and offers Macro credits instead', () => {
+  mocks.mode = 'own_account';
+  render(() => (
+    <ComputerClaudeAccess
+      harnessId="computer"
+      canManage
+      mode="own_account"
+      account="team@example.com"
+    />
+  ));
+  expect(screen.getByText('Connected as team@example.com')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Use Macro credits' })).toBeTruthy();
+});
+
+it('tells the signer the whole team shares the account and lets them skip', async () => {
+  render(() => (
+    <ComputerClaudeAccess harnessId="computer" canManage mode="macro_credits" />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Sign in with Claude' }));
+  expect(
+    await screen.findByText(
+      'Everyone on the team uses this Claude account on this computer.'
+    )
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Skip, use Macro credits' }));
+  await waitFor(() => expect(mocks.cancel).toHaveBeenCalledWith('computer'));
 });

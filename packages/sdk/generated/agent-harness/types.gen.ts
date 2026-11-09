@@ -1180,8 +1180,7 @@ export type ClaudeModeResponse = {
  */
 export type ClaudeSignInComplete = {
     /**
-     * The code Claude showed, or the `http://localhost:<port>/callback?...`
-     * address the browser could not open.
+     * The code Claude showed after the user signed in.
      */
     code: string;
 };
@@ -1200,6 +1199,10 @@ export type ClaudeSignInStarted = {
  * `POST /harnesses/{harness_id}/claude-sign-in/complete` answer.
  */
 export type ClaudeSignedIn = {
+    /**
+     * The Claude account's email address, when Claude reports one.
+     */
+    account?: string | null;
     /**
      * Always `true`.
      */

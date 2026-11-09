@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { HarnessCapabilitiesClaude } from './harnessCapabilitiesClaude';
 
 /**
  * What a harness's machine can do beyond running agents.
@@ -12,6 +13,7 @@ macrod reports this after it connects; every field defaults to off, so
 harnesses that never report stay plain.
  */
 export interface HarnessCapabilities {
+  claude?: HarnessCapabilitiesClaude;
   /** A display Macro can stream (Xvnc on `127.0.0.1:5900`). */
   screen?: boolean;
 }

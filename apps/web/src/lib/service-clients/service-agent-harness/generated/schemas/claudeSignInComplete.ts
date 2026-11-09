@@ -9,7 +9,6 @@
  * `POST /harnesses/{harness_id}/claude-sign-in/complete` body.
  */
 export interface ClaudeSignInComplete {
-  /** The code Claude showed, or the `http://localhost:<port>/callback?...`
-address the browser could not open. */
+  /** The code Claude showed after the user signed in. */
   code: string;
 }

@@ -159,6 +159,7 @@ export * from './classifyInputRequest';
 export * from './classifyInputResponse';
 export * from './claudeModeResponse';
 export * from './claudeSignedIn';
+export * from './claudeSignedInAccount';
 export * from './claudeSignInComplete';
 export * from './claudeSignInStarted';
 export * from './codingAgent';
