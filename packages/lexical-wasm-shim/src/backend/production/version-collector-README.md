@@ -72,9 +72,14 @@ source-matched native audit snapshots at unchanged active version. The real
 `retainedCaptures <= 2 * liveNodes` check follows that barrier. Snapshot version
 and retirement epoch come from the generated native response, not this queue.
 
-Current deterministic tests cover protected/canceled work, disposal, observer
-constraints and failed pre-ack paths without fabricating successful native
-acknowledgements. Positive native retirement, post-ack failure/retry and one
-`--expose-gc` smoke test require the coherent native capture-lease implementation
-and matching artifact. Until those run and the backend bridge lands, this is a
-source-only checkpoint, not a completed GC barrier or production acceptance.
+Deterministic queue tests cover protected/canceled work, disposal, observer
+constraints and pre-ack failures. The production native lifetime fixture in
+`../../../tests/collector-native/README.md` additionally covers real retirement,
+exact capture preservation, native preflight rejection, post-ack failure/retry,
+reentry, and one `--expose-gc` smoke through the sole existing NodeHandles version
+finalizer. It uses exact source-matched compat-web output and generated types.
+
+That state-only boundary proof does not establish the production backend's raw
+capture-owner finalizer, full Macro route, initializer or performance gates. Keep
+those acceptance claims separate; do not enable against an older native artifact
+that lacks independent capture leases.
