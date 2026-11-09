@@ -22,9 +22,11 @@ export function BlockedMediaBadge(props: { blocked: boolean }) {
       <span
         aria-hidden="true"
         data-call-permission-badge
-        class="pointer-events-none absolute -top-1 -right-1 z-10 grid size-4 place-items-center rounded-full bg-warning-bg text-warning-ink ring-2 ring-menu"
+        class="pointer-events-none absolute -top-1 -right-1 z-10 grid size-4 place-items-center rounded-full bg-surface-2 text-warning-ink ring-2 ring-menu"
       >
-        <ExclamationMark class="size-3" />
+        <span class="grid size-full place-items-center rounded-full bg-warning-bg">
+          <ExclamationMark class="size-3" />
+        </span>
       </span>
     </Show>
   );
