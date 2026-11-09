@@ -1,0 +1,562 @@
+{
+  "pin": "0cfcc169296723e07de2396cd42ea3434b5b79ed",
+  "existingSingletons": [
+    {
+      "source": "./commands",
+      "names": [
+        "createCommand",
+        "SELECTION_CHANGE_COMMAND",
+        "SELECTION_INSERT_CLIPBOARD_NODES_COMMAND",
+        "CLICK_COMMAND",
+        "BEFORE_INPUT_COMMAND",
+        "INPUT_COMMAND",
+        "COMPOSITION_START_COMMAND",
+        "COMPOSITION_END_COMMAND",
+        "DELETE_CHARACTER_COMMAND",
+        "INSERT_LINE_BREAK_COMMAND",
+        "INSERT_PARAGRAPH_COMMAND",
+        "CONTROLLED_TEXT_INSERTION_COMMAND",
+        "PASTE_COMMAND",
+        "REMOVE_TEXT_COMMAND",
+        "DELETE_WORD_COMMAND",
+        "DELETE_LINE_COMMAND",
+        "FORMAT_TEXT_COMMAND",
+        "UNDO_COMMAND",
+        "REDO_COMMAND",
+        "KEY_DOWN_COMMAND",
+        "KEY_ARROW_RIGHT_COMMAND",
+        "MOVE_TO_END",
+        "KEY_ARROW_LEFT_COMMAND",
+        "MOVE_TO_START",
+        "KEY_ARROW_UP_COMMAND",
+        "KEY_ARROW_DOWN_COMMAND",
+        "KEY_ENTER_COMMAND",
+        "KEY_SPACE_COMMAND",
+        "KEY_BACKSPACE_COMMAND",
+        "KEY_ESCAPE_COMMAND",
+        "KEY_DELETE_COMMAND",
+        "KEY_TAB_COMMAND",
+        "INSERT_TAB_COMMAND",
+        "INDENT_CONTENT_COMMAND",
+        "OUTDENT_CONTENT_COMMAND",
+        "DROP_COMMAND",
+        "FORMAT_ELEMENT_COMMAND",
+        "DRAGSTART_COMMAND",
+        "DRAGOVER_COMMAND",
+        "DRAGEND_COMMAND",
+        "COPY_COMMAND",
+        "CUT_COMMAND",
+        "SELECT_ALL_COMMAND",
+        "CLEAR_EDITOR_COMMAND",
+        "CLEAR_HISTORY_COMMAND",
+        "CAN_REDO_COMMAND",
+        "CAN_UNDO_COMMAND",
+        "FOCUS_COMMAND",
+        "BLUR_COMMAND",
+        "KEY_MODIFIER_COMMAND"
+      ]
+    },
+    {
+      "source": "./constants",
+      "names": [
+        "IS_BOLD",
+        "IS_ITALIC",
+        "IS_STRIKETHROUGH",
+        "IS_UNDERLINE",
+        "IS_CODE",
+        "IS_SUBSCRIPT",
+        "IS_SUPERSCRIPT",
+        "IS_HIGHLIGHT",
+        "IS_ALL_FORMATTING",
+        "TEXT_TYPE_TO_FORMAT",
+        "NODE_STATE_KEY",
+        "COMMAND_PRIORITY_EDITOR",
+        "COMMAND_PRIORITY_LOW",
+        "COMMAND_PRIORITY_NORMAL",
+        "COMMAND_PRIORITY_HIGH",
+        "COMMAND_PRIORITY_CRITICAL",
+        "COMMAND_PRIORITY_BEFORE_EDITOR",
+        "COMMAND_PRIORITY_BEFORE_LOW",
+        "COMMAND_PRIORITY_BEFORE_NORMAL",
+        "COMMAND_PRIORITY_BEFORE_HIGH",
+        "COMMAND_PRIORITY_BEFORE_CRITICAL",
+        "HISTORIC_TAG",
+        "HISTORY_PUSH_TAG",
+        "HISTORY_MERGE_TAG",
+        "PASTE_TAG",
+        "COLLABORATION_TAG",
+        "SKIP_COLLAB_TAG",
+        "SKIP_SCROLL_INTO_VIEW_TAG",
+        "SKIP_DOM_SELECTION_TAG",
+        "SKIP_SELECTION_FOCUS_TAG",
+        "COMPOSITION_START_TAG",
+        "COMPOSITION_END_TAG"
+      ]
+    }
+  ],
+  "internalConstants": [
+    "DOM_ELEMENT_TYPE",
+    "DOM_TEXT_TYPE",
+    "DOM_DOCUMENT_TYPE",
+    "DOM_DOCUMENT_FRAGMENT_TYPE",
+    "NO_DIRTY_NODES",
+    "HAS_DIRTY_NODES",
+    "FULL_RECONCILE",
+    "IS_NORMAL",
+    "IS_TOKEN",
+    "IS_SEGMENTED",
+    "IS_LOWERCASE",
+    "IS_UPPERCASE",
+    "IS_CAPITALIZE",
+    "IS_DIRECTIONLESS",
+    "IS_UNMERGEABLE",
+    "IS_ALIGN_LEFT",
+    "IS_ALIGN_CENTER",
+    "IS_ALIGN_RIGHT",
+    "IS_ALIGN_JUSTIFY",
+    "IS_ALIGN_START",
+    "IS_ALIGN_END",
+    "NON_BREAKING_SPACE",
+    "COMPOSITION_SUFFIX",
+    "DOUBLE_LINE_BREAK",
+    "COMPOSITION_START_CHAR",
+    "RTL_REGEX",
+    "LTR_REGEX",
+    "DETAIL_TYPE_TO_DETAIL",
+    "ELEMENT_TYPE_TO_FORMAT",
+    "ELEMENT_FORMAT_TO_TYPE",
+    "TEXT_MODE_TO_TYPE",
+    "TEXT_TYPE_TO_MODE",
+    "PROTOTYPE_CONFIG_METHOD",
+    "FOCUS_TAG"
+  ],
+  "originalRootSha256": "1d738cbac73513fb2e8133fcb99adab9b9a282d14bb2590fbe99bd6f5261cd40",
+  "baseCommit": "970270d05ebcd93b72d175deebd00d21543647a9",
+  "added": [
+    {
+      "name": "CaretDirection",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "CaretType",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "DOMExportOutput",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "EditorSetOptions",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "EditorThemeClasses",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "EditorThemeClassName",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "EditorUpdateOptions",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "ElementFormatType",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "FlipDirection",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "KlassConstructor",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "LexicalUpdateJSON",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "NodeKey",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "NodeMutation",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "RootMode",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "SerializedEditor",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "SerializedElementNode",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "SerializedLineBreakNode",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "SerializedParagraphNode",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "SerializedRootNode",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "SerializedTabNode",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "SerializedTextNode",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "Spread",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "StepwiseIteratorConfig",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "TextFormatType",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "TextModeType",
+      "typeOnly": true,
+      "source": "lexical"
+    },
+    {
+      "name": "CAN_USE_BEFORE_INPUT",
+      "typeOnly": false,
+      "source": "../../lexical-wasm-view/src/compat/environment"
+    },
+    {
+      "name": "CAN_USE_DOM",
+      "typeOnly": false,
+      "source": "../../lexical-wasm-view/src/compat/environment"
+    },
+    {
+      "name": "IS_ANDROID",
+      "typeOnly": false,
+      "source": "../../lexical-wasm-view/src/compat/environment"
+    },
+    {
+      "name": "IS_ANDROID_CHROME",
+      "typeOnly": false,
+      "source": "../../lexical-wasm-view/src/compat/environment"
+    },
+    {
+      "name": "IS_APPLE",
+      "typeOnly": false,
+      "source": "../../lexical-wasm-view/src/compat/environment"
+    },
+    {
+      "name": "IS_APPLE_WEBKIT",
+      "typeOnly": false,
+      "source": "../../lexical-wasm-view/src/compat/environment"
+    },
+    {
+      "name": "IS_CHROME",
+      "typeOnly": false,
+      "source": "../../lexical-wasm-view/src/compat/environment"
+    },
+    {
+      "name": "IS_FIREFOX",
+      "typeOnly": false,
+      "source": "../../lexical-wasm-view/src/compat/environment"
+    },
+    {
+      "name": "IS_IOS",
+      "typeOnly": false,
+      "source": "../../lexical-wasm-view/src/compat/environment"
+    },
+    {
+      "name": "IS_SAFARI",
+      "typeOnly": false,
+      "source": "../../lexical-wasm-view/src/compat/environment"
+    },
+    {
+      "name": "DOMSlot",
+      "typeOnly": true,
+      "source": "../../lexical-wasm-view/src/compat/dom-slot"
+    },
+    {
+      "name": "ElementDOMSlot",
+      "typeOnly": true,
+      "source": "../../lexical-wasm-view/src/compat/dom-slot"
+    },
+    {
+      "name": "DEFAULT_EDITOR_DOM_CONFIG",
+      "typeOnly": false,
+      "source": "./editor-dom-config"
+    },
+    {
+      "name": "ArtificialNode__DO_NOT_USE",
+      "typeOnly": false,
+      "source": "./nodes/artificial"
+    },
+    {
+      "name": "BaseStaticNodeConfig",
+      "typeOnly": true,
+      "source": "./nodes/config"
+    },
+    {
+      "name": "StaticNodeConfigRecord",
+      "typeOnly": true,
+      "source": "./nodes/config"
+    },
+    {
+      "name": "StaticNodeConfigValue",
+      "typeOnly": true,
+      "source": "./nodes/config"
+    },
+    {
+      "name": "getStyleObjectFromCSS",
+      "typeOnly": false,
+      "source": "./nodes/dom-style"
+    },
+    {
+      "name": "setDOMStyleFromCSS",
+      "typeOnly": false,
+      "source": "./nodes/dom-style"
+    },
+    {
+      "name": "setDOMStyleObject",
+      "typeOnly": false,
+      "source": "./nodes/dom-style"
+    },
+    {
+      "name": "DOMChildConversion",
+      "typeOnly": true,
+      "source": "./nodes/dom-types"
+    },
+    {
+      "name": "DOMConversion",
+      "typeOnly": true,
+      "source": "./nodes/dom-types"
+    },
+    {
+      "name": "DOMConversionFn",
+      "typeOnly": true,
+      "source": "./nodes/dom-types"
+    },
+    {
+      "name": "DOMConversionMap",
+      "typeOnly": true,
+      "source": "./nodes/dom-types"
+    },
+    {
+      "name": "DOMConversionOutput",
+      "typeOnly": true,
+      "source": "./nodes/dom-types"
+    },
+    {
+      "name": "DOMConversionProp",
+      "typeOnly": true,
+      "source": "./nodes/dom-types"
+    },
+    {
+      "name": "DOMSlotForNode",
+      "typeOnly": true,
+      "source": "./nodes/editor-config"
+    },
+    {
+      "name": "$applyNodeReplacement",
+      "typeOnly": false,
+      "source": "./nodes/replacement"
+    },
+    {
+      "name": "$create",
+      "typeOnly": false,
+      "source": "./nodes/replacement"
+    },
+    {
+      "name": "getRegisteredNode",
+      "typeOnly": false,
+      "source": "./nodes/replacement"
+    },
+    {
+      "name": "getRegisteredNodeOrThrow",
+      "typeOnly": false,
+      "source": "./nodes/replacement"
+    },
+    {
+      "name": "getTransformSetFromKlass",
+      "typeOnly": false,
+      "source": "./nodes/replacement"
+    },
+    {
+      "name": "Klass",
+      "typeOnly": true,
+      "source": "./nodes/replacement"
+    },
+    {
+      "name": "LexicalNodeReplacement",
+      "typeOnly": true,
+      "source": "./nodes/replacement"
+    },
+    {
+      "name": "Transform",
+      "typeOnly": true,
+      "source": "./nodes/replacement"
+    },
+    {
+      "name": "$getState",
+      "typeOnly": false,
+      "source": "./nodes/state"
+    },
+    {
+      "name": "$getStateChange",
+      "typeOnly": false,
+      "source": "./nodes/state"
+    },
+    {
+      "name": "$getWritableNodeState",
+      "typeOnly": false,
+      "source": "./nodes/state"
+    },
+    {
+      "name": "$setState",
+      "typeOnly": false,
+      "source": "./nodes/state"
+    },
+    {
+      "name": "AnyStateConfig",
+      "typeOnly": true,
+      "source": "./nodes/state"
+    },
+    {
+      "name": "createState",
+      "typeOnly": false,
+      "source": "./nodes/state"
+    },
+    {
+      "name": "NodeStateJSON",
+      "typeOnly": true,
+      "source": "./nodes/state"
+    },
+    {
+      "name": "StateConfig",
+      "typeOnly": true,
+      "source": "./nodes/state"
+    },
+    {
+      "name": "StateConfigKey",
+      "typeOnly": true,
+      "source": "./nodes/state"
+    },
+    {
+      "name": "StateConfigValue",
+      "typeOnly": true,
+      "source": "./nodes/state"
+    },
+    {
+      "name": "StateValueConfig",
+      "typeOnly": true,
+      "source": "./nodes/state"
+    },
+    {
+      "name": "StateValueOrUpdater",
+      "typeOnly": true,
+      "source": "./nodes/state"
+    },
+    {
+      "name": "ValueOrUpdater",
+      "typeOnly": true,
+      "source": "./nodes/state"
+    },
+    {
+      "name": "createSharedNodeState",
+      "typeOnly": false,
+      "source": "./nodes/static-config"
+    },
+    {
+      "name": "getStaticNodeConfig",
+      "typeOnly": false,
+      "source": "./nodes/static-config"
+    },
+    {
+      "name": "$parseSerializedNode",
+      "typeOnly": false,
+      "source": "./serialization"
+    },
+    {
+      "name": "SerializedEditorState",
+      "typeOnly": true,
+      "source": "./serialization"
+    },
+    {
+      "name": "SerializedLexicalNode",
+      "typeOnly": true,
+      "source": "./serialization"
+    }
+  ],
+  "existingPublicSingletonGroups": [
+    "commands",
+    "format constants",
+    "command priorities",
+    "update tags"
+  ],
+  "deferredRecursiveOriginalAliases": [
+    "DOMExportOutputMap",
+    "EditorStateReadOptions",
+    "HTMLConfig",
+    "LexicalExportJSON",
+    "NodeMap",
+    "StaticNodeConfig"
+  ],
+  "canonicalUtilityAliases": [
+    "KlassConstructor"
+  ],
+  "pinnedPackagePublicSubpaths": [
+    "."
+  ],
+  "unforwardedInternalRuntime": [
+    "bindStateRuntime",
+    "StateRecord",
+    "SharedState",
+    "bindJSONRuntime",
+    "exportEditorState",
+    "bindReplacementRuntime",
+    "getPendingNodeToClone",
+    "setPendingNodeToClone",
+    "prepareEditorRegisteredNodes",
+    "initializeConversionCache",
+    "getDOMNodeConversionFunction"
+  ],
+  "namespaceAcceptance": false,
+  "nativeAcceptance": false
+}

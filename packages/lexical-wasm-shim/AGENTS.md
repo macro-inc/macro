@@ -126,4 +126,10 @@ Forward LexicalNodeReplacement from the replacement type barrel so the root pres
 Assign the prepared registered-node map before backend construction and pass its rows to the backend without rereading config getters; only omitted config inherits the active editor's exact map.
 
 Route public builtin creation factories through actual registered replacements while preserving node identity and cold module evaluation.
+
 Let the production backend seed its initial mirror independently of EditorState construction. Associate every EditorState with its real editor at construction; route toJSON through the JS serialization algorithms and restore nested scopes on errors. Keep detached parseEditorState blocked until a real native detached-state parsing capability is provided.
+
+Keep the root export manifest pinned to Original public names and kinds; forward
+actual producer bindings explicitly, leave state/runtime binders internal, and
+use canonical type-only data/constructor utilities without importing Original
+node/editor/selection graphs. Public slot aliases use the actual view classes.
