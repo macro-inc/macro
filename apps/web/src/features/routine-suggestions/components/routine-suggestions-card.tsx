@@ -1,55 +1,92 @@
+import { formatLocale, t } from '@app/lib/i18n';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, cn } from '@ui';
-import { Show } from 'solid-js';
-import { RoutineSparkGlyph } from './routine-spark-glyph';
+import { For } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { surfaceLook } from '../../routines/components/routine-template-strip';
+import type { RoutineSurface } from '../core/surfaces';
 
 /**
- * The compact "Suggested routines" card at the top of a view sidebar. The
- * whole card opens the suggestions; the close button dismisses it.
+ * The card at the top of a view sidebar: the first few suggestions' icons in
+ * an overlapping stack, how many there are and their names, inside a border
+ * that fades from violet through blue to the card's edge. The whole card
+ * opens the suggestions; the corner close button hides the card.
  */
 export function RoutineSuggestionsCard(props: {
-  /** Names the top suggestion once one exists, else the surface pitch. */
-  teaser: string;
-  /** Suggestions beyond the teased one, shown as "+N more". */
-  more: number;
+  count: number;
+  /** The suggestions' names, first first. */
+  titles: readonly string[];
+  /** Up to three icons' parts of the app, first on top. */
+  looks: readonly RoutineSurface[];
+  /** Names the surface in the close button, e.g. "Email". */
+  surfaceLabel: string;
   onOpen(trigger: HTMLButtonElement): void;
   onDismiss(): void;
   class?: string;
 }) {
+  const names = () =>
+    new Intl.ListFormat(formatLocale(), {
+      style: 'short',
+      type: 'unit',
+    }).format(props.titles);
+  const hideLabel = () =>
+    t('routineSuggestions.hideCard', { surface: props.surfaceLabel });
   return (
     <div
       class={cn(
-        'group/routine-card relative min-w-0 shrink-0 rounded-xl border border-violet/20 bg-panel transition-colors not-touch:hover:border-violet/40',
+        'group/routine-card relative min-w-0 shrink-0 [--routine-card-accent:45%] [--routine-card-hover:transparent] [--routine-card-violet:75%] not-touch:hover:[--routine-card-accent:55%] not-touch:hover:[--routine-card-hover:var(--color-hover)] not-touch:hover:[--routine-card-violet:90%]',
         props.class
       )}
     >
       <button
         type="button"
         aria-haspopup="dialog"
-        class="flex w-full min-w-0 items-center gap-2.5 rounded-xl py-2 pr-9 pl-2 text-left outline-none focus-visible:outline-2 focus-visible:outline-accent touch:min-h-[44px]"
+        class="flex w-full min-w-0 items-center gap-2.5 rounded-xl border border-transparent py-2.5 pr-2.5 pl-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-edge-focus"
+        style={{
+          background: [
+            'linear-gradient(var(--routine-card-hover), var(--routine-card-hover)) padding-box',
+            'linear-gradient(var(--color-control), var(--color-control)) padding-box',
+            'linear-gradient(120deg, color-mix(in oklch, var(--color-violet) var(--routine-card-violet), transparent), color-mix(in oklch, var(--color-accent) var(--routine-card-accent), transparent) 45%, var(--color-edge-muted) 80%) border-box',
+          ].join(', '),
+        }}
         onClick={(event) => props.onOpen(event.currentTarget)}
       >
-        <RoutineSparkGlyph />
-        <span class="min-w-0 flex-1">
-          <span class="block truncate text-xs font-medium text-ink">
-            Suggested routines
-          </span>
-          <span class="flex min-w-0 items-center gap-1 text-[11px] leading-4 text-ink-muted">
-            <span class="truncate">{props.teaser}</span>
-            <Show when={props.more > 0}>
-              <span class="shrink-0 text-violet-ink">+{props.more}</span>
-            </Show>
-          </span>
+        <span class="isolate flex shrink-0 items-center" aria-hidden="true">
+          <For each={props.looks}>
+            {(look, index) => (
+              <span
+                class="flex size-[18px] items-center justify-center rounded-full bg-surface-3 shadow-[0_0_0_1.5px_var(--color-control)] not-first:-ml-[5px]"
+                style={{ 'z-index': props.looks.length - index() }}
+              >
+                <Dynamic
+                  component={surfaceLook(look).icon}
+                  class={cn('size-2.5', surfaceLook(look).tint)}
+                />
+              </span>
+            )}
+          </For>
         </span>
+        <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+          <span class="truncate text-sm font-medium text-ink">
+            {t('routineSuggestions.cardTitle', { count: props.count })}
+          </span>
+          <span class="truncate text-xs text-ink-muted">{names()}</span>
+        </span>
+        <CaretRightIcon
+          class="size-3.5 shrink-0 text-ink-extra-muted"
+          aria-hidden="true"
+        />
       </button>
       <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Dismiss suggested routines"
-        class="absolute top-1/2 right-1.5 -translate-y-1/2 not-touch:opacity-0 not-touch:group-hover/routine-card:opacity-100 not-touch:focus-visible:opacity-100"
+        variant="secondary"
+        size="icon-xs"
+        aria-label={hideLabel()}
+        tooltip={{ content: hideLabel(), placement: 'left' }}
+        class="absolute -top-2 -right-2 not-touch:opacity-0 not-touch:group-hover/routine-card:opacity-100 not-touch:focus-visible:opacity-100"
         onClick={() => props.onDismiss()}
       >
-        <XIcon class="size-3.5" aria-hidden="true" />
+        <XIcon class="size-2.5" aria-hidden="true" />
       </Button>
     </div>
   );
