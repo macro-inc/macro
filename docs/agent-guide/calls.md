@@ -530,7 +530,10 @@ in the next call. Your own tile, agents, phones and native mobile apps do not sh
 it; screen-share audio is unchanged. Only an explicit 0% choice marks a person as
 muted for you; an unset SDK gain never does. At 0%, the speaker control and that person's
 tile/avatar show a muted-speaker badge labelled **Muted for you**, distinct from
-their microphone status. Raising volume clears the badge across call views.
+their microphone status. Their own muted microphone keeps a crossed-out microphone
+with a **Microphone off** tooltip. When both states apply, both indicators remain
+visible on tiles, avatars and in the player and roster. Raising volume clears only
+the personal-mute badge across call views.
 
 ### Work in a call
 

@@ -75,6 +75,8 @@ const participants = Array.from(
       name,
       isAgent: false,
       getTrackPublication(source: string) {
+        if (source === 'microphone')
+          return { isMuted: params.get('mic') !== 'on', isSubscribed: true };
         if (source === 'camera' && params.get('media') === 'on')
           return { track: camera, isMuted: false, isSubscribed: true };
         if (

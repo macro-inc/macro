@@ -155,6 +155,10 @@ export function CallMiniPlayer(props: {
         camera: camera?.track,
         screen: screen?.track,
         local,
+        muted: local
+          ? call.isAudioMuted()
+          : (participant.getTrackPublication(LK_TRACK_SOURCE.Microphone)
+              ?.isMuted ?? true),
         mutedForYou: !local && volumes?.level(participant) === 0,
       };
     };
@@ -471,6 +475,10 @@ export function CallMiniPlayer(props: {
                       >
                         {participant().name.charAt(0).toUpperCase()}
                         <MutedForYouBadge muted={participant().mutedForYou} />
+                        <MutedMicrophoneBadge
+                          muted={participant().muted}
+                          avatar
+                        />
                       </span>
                     }
                   >
@@ -483,10 +491,6 @@ export function CallMiniPlayer(props: {
               >
                 <TrackView track={participant().screen} fit="contain" />
               </Show>
-              <MutedMicrophoneBadge
-                muted={participant().local && call.isAudioMuted()}
-                label="You are muted"
-              />
               <CallReactionLayer
                 root={() => media}
                 reactions={reactions.entries()}
@@ -499,6 +503,7 @@ export function CallMiniPlayer(props: {
                     'absolute bottom-2 left-2 rounded bg-surface/80 px-2 py-1'
                 )}
               >
+                <MutedMicrophoneBadge muted={participant().muted} inline />
                 <MutedForYouBadge muted={participant().mutedForYou} inline />
                 <Show when={participant().sharing}>
                   <Screencast class="mr-1 inline size-3" />

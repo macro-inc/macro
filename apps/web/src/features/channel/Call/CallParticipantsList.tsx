@@ -6,7 +6,7 @@ import Microphone from '@icon/system/regular/microphone.svg';
 import MicrophoneSlash from '@icon/system/regular/microphone-slash.svg';
 import VideoCamera from '@icon/system/regular/video-camera.svg';
 import VideoCameraSlash from '@icon/system/regular/video-camera-slash.svg';
-import { Avatar, Badge, cn } from '@ui';
+import { Avatar, Badge, cn, Tooltip } from '@ui';
 import type { RemoteParticipant } from 'livekit-client';
 import { createMemo, For, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
@@ -16,6 +16,7 @@ import { useCallVolumeOptional } from './call-volume';
 import { isProgramParticipant } from './is-program-participant';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { MutedForYouBadge } from './MutedForYouBadge';
+import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
 
 function ParticipantRow(props: {
   name: string;
@@ -56,6 +57,7 @@ function ParticipantRow(props: {
           {(id) => <UserIcon id={id()} size="fill" suppressClick />}
         </Show>
         <MutedForYouBadge muted={!!props.mutedForYou} />
+        <MutedMicrophoneBadge muted={props.muted} avatar />
       </div>
       <div class="min-w-0 flex-1">
         <div class="flex min-w-0 items-center gap-1">
@@ -85,20 +87,26 @@ function ParticipantRow(props: {
         <CallWaveform class="size-4" speaking={props.speaking} />
       </Show>
       <Show when={!props.compact || props.muted}>
-        <span
-          class={cn(
-            'shrink-0',
-            props.muted ? 'text-failure' : 'text-ink-muted'
-          )}
-          role="img"
-          aria-label={
+        <Tooltip
+          label={
             props.muted ? t('calls.microphoneOff') : t('calls.microphoneOn')
           }
         >
-          <Show when={props.muted} fallback={<Microphone class="size-4" />}>
-            <MicrophoneSlash class="size-4" />
-          </Show>
-        </span>
+          <span
+            class={cn(
+              'shrink-0',
+              props.muted ? 'text-failure' : 'text-ink-muted'
+            )}
+            role="img"
+            aria-label={
+              props.muted ? t('calls.microphoneOff') : t('calls.microphoneOn')
+            }
+          >
+            <Show when={props.muted} fallback={<Microphone class="size-4" />}>
+              <MicrophoneSlash class="size-4" />
+            </Show>
+          </span>
+        </Tooltip>
       </Show>
       <Show when={!props.compact || !props.videoEnabled}>
         <span

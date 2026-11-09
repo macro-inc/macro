@@ -47,7 +47,7 @@ export function CallParticipantVolume(props: {
           size="icon-sm"
           class="rounded-full bg-surface/70 text-ink"
           aria-label={t('calls.volume')}
-          tooltip={t('calls.volume')}
+          tooltip={volume() === 0 ? t('calls.mutedForYou') : t('calls.volume')}
         >
           <Show when={volume() === 0} fallback={<SpeakerIcon class="size-4" />}>
             <SpeakerSlash class="size-4" />

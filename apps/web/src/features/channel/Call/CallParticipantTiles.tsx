@@ -247,6 +247,7 @@ function ParticipantAvatar(props: {
   fallbackName: string | undefined;
   avatarSize?: 'sm' | 'md';
   mutedForYou?: boolean;
+  muted?: boolean;
 }) {
   const avatarClass = () =>
     cn(
@@ -271,6 +272,7 @@ function ParticipantAvatar(props: {
           {fallbackInitial()}
         </div>
         <MutedForYouBadge muted={!!props.mutedForYou} />
+        <MutedMicrophoneBadge muted={!!props.muted} avatar />
       </div>
     </div>
   );
@@ -313,6 +315,7 @@ export function LocalParticipantTile(props: {
             userId={props.userId}
             fallbackName={props.fallbackName}
             avatarSize={props.avatarSize}
+            muted={props.isAudioMuted}
           />
         }
       >
@@ -408,6 +411,7 @@ export function ParticipantTile(props: {
             fallbackName={displayName()}
             avatarSize={props.avatarSize}
             mutedForYou={mutedForYou()}
+            muted={isAudioMuted()}
           />
         }
       >
