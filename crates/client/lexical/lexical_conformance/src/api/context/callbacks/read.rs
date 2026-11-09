@@ -63,6 +63,12 @@ impl CallbackContext {
 }
 
 impl CallbackRead<'_, '_> {
+    /// Update facts owned by the invoking scope, including historical reads.
+    pub fn update_facts(&self) -> Result<std::sync::Arc<lexical_model::ForeignUpdateFacts>> {
+        self.validate()?;
+        Ok(self.tx.view().foreign_update_facts())
+    }
+
     pub(super) fn validate(&self) -> Result<()> {
         self.context.frames.captured(self.snapshot).map(|_| ())
     }

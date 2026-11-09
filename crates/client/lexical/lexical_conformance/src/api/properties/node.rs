@@ -10,6 +10,7 @@ pub(super) fn get(node: NodeRef<'_>, receiver: &Value, name: &str) -> Result<Val
         "__prev" => Ok(node.prev().map_or(Value::Null, key_value)),
         "__next" => Ok(node.next().map_or(Value::Null, key_value)),
         "__key" => Ok(key_value(key)),
+        "__cachedText" if key == NodeKey::ROOT => Ok(json!(node.foreign_raw_root_cached_text())),
         "__first" => Ok(element(node)?.first_child().map_or(Value::Null, key_value)),
         "__last" => Ok(element(node)?.last_child().map_or(Value::Null, key_value)),
         "__size" => Ok(json!(element(node)?.children_size())),

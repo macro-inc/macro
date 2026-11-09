@@ -147,3 +147,5 @@ Node and markdown selection-export APIs pass ForeignSelectionCapture values thro
 Namespace handle/version owners and record identities by editor, including saved snapshot metadata. Historical reads and node-map materialization carry the saved owner without replacing the active editor; releasing one editor's version must preserve other editors' equal version numbers.
 
 Resolve the notification node getText/getSource/getAttributes methods against the captured instance: the pinned JS methods read own fields directly. Keep getLatest-based graph methods on the active graph.
+
+Prepare historical read contexts from the resumed pending transaction before releasing it; preserve its owned dirty/composition facts through readonly peers without retaining an ancestor transaction borrow. Read raw root cached text only from the exact captured slot.

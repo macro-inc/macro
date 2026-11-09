@@ -1,6 +1,59 @@
 use super::*;
 
 #[test]
+fn update_facts_preserve_live_intent_through_owned_historical_reads() -> Result<()> {
+    let editor = Editor::builder(EditorMode::Headless)
+        .build()
+        .expect("editor");
+    let mut host = Session::new(editor);
+    assert_eq!(host.update_facts()?.dirty_type, ForeignDirtyType::Clean);
+    host.begin_update(TagSet::default())?;
+    let (paragraph, text) = host.with_update(|_, tx| {
+        let paragraph = tx.create(Paragraph::default())?.key();
+        let text = tx.create_text("before")?.key();
+        tx.append(paragraph, &[text])?;
+        tx.append(NodeKey::ROOT, &[paragraph])?;
+        Ok((paragraph, text))
+    })?;
+    let created = host.update_facts()?;
+    assert_eq!(created.dirty_type, ForeignDirtyType::Nodes);
+    assert!(created.dirty_leaves.contains(&text));
+    assert!(
+        created
+            .dirty_elements
+            .contains(&(paragraph, DirtyIntent::Intentional))
+    );
+    host.commit()?;
+    assert_eq!(host.update_facts()?.dirty_type, ForeignDirtyType::Clean);
+    let published = host.committed_version();
+    host.begin_update(TagSet::default())?;
+    host.with_update(|_, tx| {
+        tx.text(text)?.set_text_content("after")?;
+        Ok(())
+    })?;
+    let pending = host.update_facts()?;
+    assert!(pending.dirty_leaves.contains(&text));
+    assert!(
+        pending
+            .dirty_elements
+            .contains(&(paragraph, DirtyIntent::AncestorOfDirty))
+    );
+    host.read_state(published, |read| {
+        assert_eq!(read.update_facts()?.as_ref(), pending.as_ref());
+        read.with_state_read(0, |nested| {
+            assert_eq!(nested.update_facts()?.as_ref(), pending.as_ref());
+            Ok(())
+        })?;
+        assert_eq!(read.update_facts()?.as_ref(), pending.as_ref());
+        Ok(())
+    })?;
+    assert_eq!(host.update_facts()?.as_ref(), pending.as_ref());
+    host.discard_update()?;
+    assert_eq!(host.update_facts()?.dirty_type, ForeignDirtyType::Clean);
+    Ok(())
+}
+
+#[test]
 fn associated_reads_start_empty_and_reject_unknown_versions() -> Result<()> {
     let editor = Editor::builder(EditorMode::Headless)
         .build()
