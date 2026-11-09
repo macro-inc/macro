@@ -14,7 +14,10 @@ release; see [file exports](../tauri/file_export_plugin/AGENTS.md).
 Play as the source of truth — is described in `docs/development/android.md`.)
 
 Web bundles ship to installed apps over the air (see
-`tauri/macro_bundle_updater_plugin`), but native code — anything under
+`tauri/macro_bundle_updater_plugin`). On iOS they persist in a backup-excluded
+Application Support directory so storage pressure cannot purge them; the
+updater ignores legacy cache contents (see
+`tauri/src-tauri/README.md#ota-bundle-storage`). Native code — anything under
 `apps/web/tauri/` — only reaches users through the App Store. A bundle that
 depends on new native code must therefore only reach native builds that have
 it, and users on older native builds must be pushed to update instead of
