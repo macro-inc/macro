@@ -6,6 +6,7 @@ import {
   type ParentProps,
 } from 'solid-js';
 
+export const useCallSpeaking = () => () => false;
 export const useCallContextOptional = () => undefined;
 export const useCallAgain = () => ({
   canCallAgain: () => true,

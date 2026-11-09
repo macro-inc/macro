@@ -219,16 +219,22 @@ for (const theme of ['light', 'dark']) {
       });
       const waveform = page.locator('[data-macro-icon="waveform"]');
       await expect(waveform).toHaveCount(1);
-      await expect(waveform).toHaveCSS(
+      await expect(waveform).toHaveAttribute('data-speaking', 'true');
+      const bar = waveform.locator('[data-waveform-bar]').first();
+      await expect(bar).toHaveCSS(
         'animation-name',
-        reducedMotion === 'reduce' ? 'none' : 'recording-speaking'
+        reducedMotion === 'reduce' ? 'none' : 'call-waveform-live'
       );
+      if (reducedMotion !== 'reduce')
+        await expect(bar).toHaveCSS('animation-play-state', 'running');
       if (process.env.CALL_PLAYBACK_SCREENSHOT_DIR)
         await page.screenshot({
-          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d57-${theme}-${reducedMotion}.png`,
+          path: `${process.env.CALL_PLAYBACK_SCREENSHOT_DIR}/d65-${theme}-${reducedMotion}.png`,
         });
       await video.evaluate((element: HTMLVideoElement) => element.pause());
-      await expect(waveform).toHaveCSS('animation-name', 'none');
+      await expect(waveform).toHaveAttribute('data-speaking', 'false');
+      if (reducedMotion !== 'reduce')
+        await expect(bar).toHaveCSS('animation-play-state', 'paused');
     });
   }
   for (const reducedMotion of ['no-preference', 'reduce'] as const) {

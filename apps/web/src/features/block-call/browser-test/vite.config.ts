@@ -27,6 +27,13 @@ export default defineConfig({
           return resolve(
             'src/features/block-call/browser-test/view-adapters.tsx'
           );
+        if (
+          importer?.endsWith('/CallWaveform.tsx') &&
+          source === './use-call-speaking'
+        )
+          return resolve(
+            'src/features/block-call/browser-test/view-adapters.tsx'
+          );
         if (source === '@components/app/side-panel')
           return resolve('src/components/app/side-panel/SidePanel.tsx');
         if (!importer?.includes('/features/block-call/')) return;

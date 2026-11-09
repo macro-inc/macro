@@ -66,8 +66,9 @@ Transcript header button. The card fades and slides into wide layouts while the
 player settles over 240ms; reduced motion disables both entry animations.
 Transcript rows show a flush-right recording time, with the active waveform to its left; long speaker names truncate and reveal the full name in a
 tooltip on hover or row focus. Click or press Enter on a row to seek.
-The active line's waveform animates only while playback runs and stays still
-when paused or reduced motion is enabled. Playback follows the transcript until the user
+The active line reuses the live-call waveform and its bar timing on desktop,
+driven by recording playback. It stays still when paused, on phones, or when
+reduced motion is enabled. Playback follows the transcript until the user
 scrolls away; Sync to video sits on an opaque floating pill above pinned or phone
 playback and returns to the current line. Authorized chat messages
 appear inline at their recorded moment. Details keeps owner, dates, duration,

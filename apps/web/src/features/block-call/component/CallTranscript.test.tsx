@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cn } from '@ui/utils/classname';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { CallTranscript } from './CallTranscript';
 
+vi.mock('@channel/Call/use-call-speaking', () => ({
+  useCallSpeaking: () => () => false,
+}));
 vi.mock('@channel/Message', () => ({
   Message: {
     Root: (props: { children: JSX.Element }) => <div>{props.children}</div>,
@@ -29,6 +33,7 @@ vi.mock('@queries/messages/message-sender', () => ({
   senderFromStorageId: () => ({ type: 'user', user_id: 'speaker' }),
 }));
 vi.mock('@ui', () => ({
+  cn,
   Tooltip: {
     Root: (props: { children: JSX.Element }) => props.children,
     Trigger: (props: { children: JSX.Element; onClick: () => void }) => (

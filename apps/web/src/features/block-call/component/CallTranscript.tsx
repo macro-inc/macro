@@ -1,5 +1,5 @@
-import './call-transcript.css';
 import { t } from '@app/lib/i18n';
+import { CallWaveform } from '@channel/Call/CallWaveform';
 import { guestDisplayName, isCallGuestId } from '@channel/Call/call-identity';
 import { Message } from '@channel/Message';
 import { SenderName } from '@channel/Message/SenderName';
@@ -9,7 +9,6 @@ import type { MessageData } from '@core/messages/types';
 import { formatVideoTimestamp } from '@core/util/duration';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import CrosshairIcon from '@icon/system/regular/crosshair.svg';
-import WaveformIcon from '@icon/system/regular/waveform.svg';
 import { senderFromStorageId } from '@queries/messages/message-sender';
 import type { CallRecordTranscriptSegment } from '@service-storage/generated/schemas/callRecordTranscriptSegment';
 import { Avatar, Button, Tooltip } from '@ui';
@@ -357,12 +356,10 @@ export function CallTranscript(props: {
                             </span>
                             <span class="flex shrink-0 items-center justify-end gap-2">
                               <Show when={active()}>
-                                <WaveformIcon
-                                  class="size-3 shrink-0 text-accent"
-                                  classList={{
-                                    'recording-speaking-waveform':
-                                      props.playing,
-                                  }}
+                                <CallWaveform
+                                  class="size-3 shrink-0"
+                                  live
+                                  speaking={props.playing ?? false}
                                 />
                               </Show>
                               <Show when={item.seconds !== null}>
