@@ -2,6 +2,7 @@ import type { PointType } from 'lexical';
 import type { NodeSelection } from './node';
 import type { Point } from './point';
 import type { RangeSelection } from './range';
+import type { SelectionRuntime } from './runtime';
 
 type Matches<Expected, Actual extends Expected> = Actual;
 type SelectionExports =
@@ -29,6 +30,16 @@ export type RangeSelectionContract = Matches<
   RangeSelection
 >;
 export type PointContract = Matches<import('lexical').Point, Point>;
+export type TableSelectionFactoryContract = Matches<
+  Pick<
+    typeof import('@lexical/table'),
+    '$createTableSelection' | '$isTableSelection'
+  >,
+  {
+    $createTableSelection: SelectionRuntime['createTableSelection'];
+    $isTableSelection: SelectionRuntime['isTableSelection'];
+  }
+>;
 export type NodeSelectionContract = Matches<
   import('lexical').NodeSelection,
   NodeSelection
