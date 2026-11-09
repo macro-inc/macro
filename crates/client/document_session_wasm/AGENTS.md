@@ -155,3 +155,10 @@ Run the raw lifecycle smoke with Bun and explicit source-matched wasm-bindgen
 JS/WASM paths: `bun crates/client/document_session_wasm/tests/hosted-lifecycle.mjs
 <module.js> <module_bg.wasm>`. It uses pinned upstream root clone methods and
 checks only the lifecycle boundary, not the full facade or browser parity.
+
+Default/native builds enable only bebop-owned-all and exclude compatibility plus
+lexical_model/foreign-nodes. Enable compat-web explicitly for the separate compat
+web artifact; it includes owned wire types and the compatibility runtime. Keep
+native and compat glue, wasm and generated declarations together in distinct
+outputs; a native declaration must not grow optional compatibility stubs.
+
