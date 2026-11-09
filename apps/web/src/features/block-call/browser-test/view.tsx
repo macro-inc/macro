@@ -2,6 +2,7 @@ import '../../../index.css';
 import {
   DEFAULT_DARK_THEME,
   DEFAULT_LIGHT_THEME,
+  DEFAULT_THEMES,
 } from '@app/features/theme/constants';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { SidePanel } from '@components/app/side-panel';
@@ -14,10 +15,10 @@ import { CallRecordingRoot } from '../component/CallRecording/CallRecordingRoot'
 import clip from './clip.webm?url';
 
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
+const theme = new URLSearchParams(location.search).get('theme');
 applyTheme(
-  new URLSearchParams(location.search).get('theme') === 'light'
-    ? DEFAULT_LIGHT_THEME
-    : DEFAULT_DARK_THEME
+  DEFAULT_THEMES.find((item) => item.id === theme)?.id ??
+    (theme === 'light' ? DEFAULT_LIGHT_THEME : DEFAULT_DARK_THEME)
 );
 const RECORD: CallRecord = {
   callId: 'fixture-call',

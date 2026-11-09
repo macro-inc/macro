@@ -60,7 +60,7 @@ player; split panes switch independently of the window. Identity spans the
 group, aligned to the video's left edge. The left column scrolls through
 the player, Summary and Call chat while the transcript stays in view and scrolls
 internally. The card uses the next Layer surface depth, the player's corner radius,
-no border or shadow, and an inset Sync surface in both themes. Details floats over
+a light-theme inset edge and shadow (dark stays unchanged), and an inset Sync surface in both themes. Details floats over
 the card without changing its scroll position or follow state. There is no separate
 Transcript header button. The card fades and slides into wide layouts while the
 player settles over 240ms; reduced motion disables both entry animations.

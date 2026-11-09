@@ -36,7 +36,7 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - Animate only the active transcript waveform during native playback; keep it still on pause and under reduced motion.
 - Keep transcript names truncated with full-name tooltips beside a fixed 96px right timing slot.
 - Align identity to the centered group's left edge above both columns; let the left column and transcript scroll independently, with the card aligned to the video and filling the remaining pane height.
-- Use Layer offset={1} and bg-surface for the wide transcript card, rounded like the player without a border or shadow; keep Details floating over it without resetting transcript state.
+- Use Layer offset={1} and bg-surface for the wide transcript card, rounded like the player with a light-only inset edge-frame ring and shadow-md; keep Details floating over it without resetting transcript state.
 
 - Animate wide transcript entry and player settling without remounting either column; disable both animations for reduced motion.
 ## Checks
