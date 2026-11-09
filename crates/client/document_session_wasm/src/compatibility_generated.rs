@@ -1193,6 +1193,8 @@ impl<'raw> ::bebop::Record<'raw> for CompatSelectionPatch<'raw> {}
 #[derive(Clone, Debug, PartialEq, Copy)]
 #[repr(packed)]
 pub struct CompatAuditSnapshot {
+    pub version: u64,
+    pub retirement_epoch: u64,
     pub retained_captures: u64,
     pub live_nodes: u64,
 }
@@ -1210,6 +1212,8 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatAuditSnapshot {
 
     ::bebop::define_serialize_chained!(*Self => |zelf, dest| {
         Ok(
+            ::bebop::packed_read!(zelf.version)._serialize_chained(dest)? +
+            ::bebop::packed_read!(zelf.retirement_epoch)._serialize_chained(dest)? +
             ::bebop::packed_read!(zelf.retained_captures)._serialize_chained(dest)? +
             ::bebop::packed_read!(zelf.live_nodes)._serialize_chained(dest)?
         )
@@ -1226,10 +1230,16 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatAuditSnapshot {
         i += read;
         let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
-            retained_captures: v0,
-            live_nodes: v1,
+            version: v0,
+            retirement_epoch: v1,
+            retained_captures: v2,
+            live_nodes: v3,
         }))
     }
 }
@@ -13600,4 +13610,4 @@ pub mod owned {
     pub use super::CompatNativePrototype;}
 
 /// Exact source schema fingerprint for the paired compatibility adapter.
-pub const COMPATIBILITY_SCHEMA_HASH: &str = "24c38b2078bf718c3812f5e0c4d25ee9bbb288845648c291d0eb79df730174eb";
+pub const COMPATIBILITY_SCHEMA_HASH: &str = "767306e64a6b74111330f49313e49dc061dc68b2c6bbce1c22b8d37cb55d3760";
