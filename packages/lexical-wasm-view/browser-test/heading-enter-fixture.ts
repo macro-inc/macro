@@ -134,8 +134,11 @@ const inputParity = {
   },
 };
 Object.assign(window, { inputParity });
+window.resolveInputParityReady();
 declare global {
   interface Window {
     inputParity: typeof inputParity;
+    inputParityReady: Promise<void>;
+    resolveInputParityReady(): void;
   }
 }

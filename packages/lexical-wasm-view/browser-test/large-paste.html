@@ -1,0 +1,4 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8" /><title>Large clipboard input parity</title>
+<style>main { display: flex; gap: 40px; } [contenteditable] { width: 600px; min-height: 240px; white-space: pre-wrap; }</style></head>
+<body><main><div id="upstream" role="textbox" aria-label="Flag off"></div><div id="native" role="textbox" aria-label="Flag on"></div></main><script>window.largePasteReady = new Promise(resolve => { window.resolveLargePasteReady = resolve; });</script><script type="module" src="./large-paste-fixture.ts"></script></body></html>
