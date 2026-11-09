@@ -41109,13 +41109,8 @@
       "ExternalChatReaction": {
         "type": "object",
         "description": "Grouped reactions.",
-        "required": ["emoji", "count", "mine"],
+        "required": ["emoji", "reactors", "mine"],
         "properties": {
-          "count": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Number of reacting people."
-          },
           "emoji": {
             "type": "string",
             "description": "Emoji."
@@ -41123,6 +41118,13 @@
           "mine": {
             "type": "boolean",
             "description": "Caller has this reaction."
+          },
+          "reactors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalChatPersonRef"
+            },
+            "description": "The people who reacted with it, earliest first."
           }
         }
       },

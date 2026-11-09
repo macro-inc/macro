@@ -215,16 +215,7 @@ export function ChannelOption(props: {
             <JoinChannelButton channelId={props.channel.id} hoverOnly />
           </Show>
           <span class="flex shrink-0 items-center gap-2">
-            <ChannelMutedIndicator muted={item().muted} />
-            <ChannelCallIndicator
-              status={item().incomingCallId ? undefined : item().callStatus}
-            />
-            <Show when={!unjoined() && item().unread}>
-              <span
-                aria-label="Unread"
-                class="size-2 shrink-0 rounded-full bg-accent"
-              />
-            </Show>
+            {/* The hover timestamp leads so the indicators after it stay put. */}
             <Show when={!unjoined() && !item().incomingCallId && timestamp()}>
               {(value) => (
                 <span class="relative hidden shrink-0 group-hover/channel-option:block touch:hidden">
@@ -251,6 +242,16 @@ export function ChannelOption(props: {
                   </Tooltip>
                 </span>
               )}
+            </Show>
+            <ChannelMutedIndicator muted={item().muted} />
+            <ChannelCallIndicator
+              status={item().incomingCallId ? undefined : item().callStatus}
+            />
+            <Show when={!unjoined() && item().unread}>
+              <span
+                aria-label="Unread"
+                class="size-2 shrink-0 rounded-full bg-accent"
+              />
             </Show>
           </span>
           <IncomingCallActions
