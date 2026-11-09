@@ -56,6 +56,8 @@ fn exact_callback_scopes_restore_after_nested_transport_and_expire() -> Result<(
     };
     let request = wire::CompatHostRequest {
         context: outer.context,
+        selection: wire::CompatSelectionData::CompatNoSelection {},
+        selections: vec![],
         dirty_leaves: vec![],
         dirty_elements: vec![],
         dirty_type: 0,
@@ -179,6 +181,8 @@ fn acknowledgements_reject_wrong_scope_call_kind_and_state_identity() -> Result<
     };
     let request = wire::CompatHostRequest {
         context,
+        selection: wire::CompatSelectionData::CompatNoSelection {},
+        selections: vec![],
         dirty_leaves: vec![],
         dirty_elements: vec![],
         dirty_type: 0,
