@@ -34,4 +34,6 @@ separately from actual native acceptance.
 Run `tests/run-oracle.ts` with `LEXICAL_NODES_UPSTREAM_ROOT` pointing to the
 unaltered v0.45.0 source and `LEXICAL_NODES_NATIVE_CONFIG` pointing to the native
 facade unit-test configuration. The runner checks original suite hashes before
-and after execution and requires every listed suite to execute.
+and after execution and requires all 275 assertions to pass without skips or
+incomplete results. Keep the report candidate-only with `nativeAcceptance:false`
+until external engine identity proof is bound.

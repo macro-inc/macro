@@ -11,11 +11,12 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { oracleCases } from './oracle-cases';
+import { validateCandidateReport } from './oracle-report';
 
 const source = process.env.LEXICAL_NODES_UPSTREAM_ROOT;
 if (!source || !process.env.LEXICAL_NODES_NATIVE_CONFIG) {
   throw new Error(
-    'Actual-native node acceptance requires LEXICAL_NODES_UPSTREAM_ROOT and LEXICAL_NODES_NATIVE_CONFIG'
+    'Node oracle candidates require LEXICAL_NODES_UPSTREAM_ROOT and LEXICAL_NODES_NATIVE_CONFIG'
   );
 }
 const directory =
@@ -24,6 +25,8 @@ const directory =
 mkdirSync(directory, { recursive: true });
 const report = join(directory, 'vitest.json');
 if (existsSync(report)) unlinkSync(report);
+const provenancePath = join(directory, 'provenance.json');
+if (existsSync(provenancePath)) unlinkSync(provenancePath);
 
 function verifyOriginals(root: string): void {
   for (const spec of oracleCases) {
@@ -59,30 +62,27 @@ const run = spawnSync(
   }
 );
 verifyOriginals(source);
+const provenance = {
+  requestedEngine: 'actual-native',
+  classification: 'candidate-only',
+  nativeAcceptance: false,
+  upstream: 'v0.45.0',
+  specs: oracleCases,
+  exitCode: run.status,
+  error: run.error?.message,
+  report,
+};
 writeFileSync(
-  join(directory, 'provenance.json'),
-  `${JSON.stringify({ engine: 'actual-native', upstream: 'v0.45.0', specs: oracleCases, exitCode: run.status, error: run.error?.message, report }, null, 2)}\n`
+  provenancePath,
+  `${JSON.stringify({ ...provenance, candidatePassed: false }, null, 2)}\n`
 );
 if (run.error) throw run.error;
 if (run.status !== 0) process.exit(run.status ?? 1);
 if (!existsSync(report))
   throw new Error('Native node oracle produced no report');
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 const result: unknown = JSON.parse(readFileSync(report, 'utf8'));
-if (!isRecord(result) || !Array.isArray(result.testResults))
-  throw new Error('Invalid node oracle report');
-const suites: unknown[] = result.testResults;
-for (const spec of oracleCases) {
-  const suite = suites.find(
-    (entry) => isRecord(entry) && entry.name === resolve(source, spec.file)
-  );
-  if (
-    !isRecord(suite) ||
-    !Array.isArray(suite.assertionResults) ||
-    suite.assertionResults.length !== spec.cases
-  ) {
-    throw new Error(`Node oracle suite case count differs: ${spec.file}`);
-  }
-}
+validateCandidateReport(result, source);
+writeFileSync(
+  provenancePath,
+  `${JSON.stringify({ ...provenance, candidatePassed: true }, null, 2)}\n`
+);
