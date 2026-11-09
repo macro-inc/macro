@@ -23,6 +23,44 @@ use ::bebop::FixedSized as _;
 pub const COMPATIBILITY_PROTOCOL_MAJOR: u32 = 1;
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct CompatBegin<'raw> {
+    pub tags: ::std::vec::Vec<&'raw str>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatBegin<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <::std::vec::Vec<&'raw str>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.tags.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.tags._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            tags: v0,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatBegin<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct CompatConfig<'raw> {
     pub editor_id: u32,
     pub classes: ::std::vec::Vec<ForeignClassRegistration<'raw>>,
@@ -103,6 +141,28 @@ pub enum CompatOperation {
     SetNativeField = 30,
     ExportNodeJson = 31,
     ExportStateJson = 32,
+    CreateRangeSelection = 33,
+    CreateNodeSelection = 34,
+    SetSelection = 35,
+    SelectionClone = 36,
+    SelectionGetNodes = 37,
+    SelectionGetTextContent = 38,
+    SelectionInsertText = 39,
+    SelectionInsertNodes = 40,
+    SelectionFormatText = 41,
+    SelectionDeleteCharacter = 42,
+    SelectionDeleteWord = 43,
+    SelectionDeleteLine = 44,
+    SelectionInsertParagraph = 45,
+    SelectionInsertLineBreak = 46,
+    SelectionExtract = 47,
+    SelectionIsCollapsed = 48,
+    SelectionIsBackward = 49,
+    NodeSelectionAdd = 50,
+    NodeSelectionDelete = 51,
+    NodeSelectionClear = 52,
+    NodeSelectionHas = 53,
+    SelectionHasFormat = 54,
 }
 
 impl ::core::convert::TryFrom<u16> for CompatOperation {
@@ -143,6 +203,28 @@ impl ::core::convert::TryFrom<u16> for CompatOperation {
             30 => Ok(CompatOperation::SetNativeField),
             31 => Ok(CompatOperation::ExportNodeJson),
             32 => Ok(CompatOperation::ExportStateJson),
+            33 => Ok(CompatOperation::CreateRangeSelection),
+            34 => Ok(CompatOperation::CreateNodeSelection),
+            35 => Ok(CompatOperation::SetSelection),
+            36 => Ok(CompatOperation::SelectionClone),
+            37 => Ok(CompatOperation::SelectionGetNodes),
+            38 => Ok(CompatOperation::SelectionGetTextContent),
+            39 => Ok(CompatOperation::SelectionInsertText),
+            40 => Ok(CompatOperation::SelectionInsertNodes),
+            41 => Ok(CompatOperation::SelectionFormatText),
+            42 => Ok(CompatOperation::SelectionDeleteCharacter),
+            43 => Ok(CompatOperation::SelectionDeleteWord),
+            44 => Ok(CompatOperation::SelectionDeleteLine),
+            45 => Ok(CompatOperation::SelectionInsertParagraph),
+            46 => Ok(CompatOperation::SelectionInsertLineBreak),
+            47 => Ok(CompatOperation::SelectionExtract),
+            48 => Ok(CompatOperation::SelectionIsCollapsed),
+            49 => Ok(CompatOperation::SelectionIsBackward),
+            50 => Ok(CompatOperation::NodeSelectionAdd),
+            51 => Ok(CompatOperation::NodeSelectionDelete),
+            52 => Ok(CompatOperation::NodeSelectionClear),
+            53 => Ok(CompatOperation::NodeSelectionHas),
+            54 => Ok(CompatOperation::SelectionHasFormat),
             d => Err(::bebop::DeserializeError::InvalidEnumDiscriminator(d.into())),
         }
     }
@@ -184,6 +266,28 @@ impl ::core::convert::From<CompatOperation> for u16 {
             CompatOperation::SetNativeField => 30,
             CompatOperation::ExportNodeJson => 31,
             CompatOperation::ExportStateJson => 32,
+            CompatOperation::CreateRangeSelection => 33,
+            CompatOperation::CreateNodeSelection => 34,
+            CompatOperation::SetSelection => 35,
+            CompatOperation::SelectionClone => 36,
+            CompatOperation::SelectionGetNodes => 37,
+            CompatOperation::SelectionGetTextContent => 38,
+            CompatOperation::SelectionInsertText => 39,
+            CompatOperation::SelectionInsertNodes => 40,
+            CompatOperation::SelectionFormatText => 41,
+            CompatOperation::SelectionDeleteCharacter => 42,
+            CompatOperation::SelectionDeleteWord => 43,
+            CompatOperation::SelectionDeleteLine => 44,
+            CompatOperation::SelectionInsertParagraph => 45,
+            CompatOperation::SelectionInsertLineBreak => 46,
+            CompatOperation::SelectionExtract => 47,
+            CompatOperation::SelectionIsCollapsed => 48,
+            CompatOperation::SelectionIsBackward => 49,
+            CompatOperation::NodeSelectionAdd => 50,
+            CompatOperation::NodeSelectionDelete => 51,
+            CompatOperation::NodeSelectionClear => 52,
+            CompatOperation::NodeSelectionHas => 53,
+            CompatOperation::SelectionHasFormat => 54,
         }
     }
 }
@@ -288,23 +392,27 @@ impl<'raw> ::bebop::Record<'raw> for CompatRequest<'raw> {}
 pub struct CompatReply<'raw> {
     pub value: ForeignCallbackValue<'raw>,
     pub records: ::std::vec::Vec<ForeignRenderRecord<'raw>>,
+    pub selections: ::std::vec::Vec<CompatSelectionData<'raw>>,
 }
 
 impl<'raw> ::bebop::SubRecord<'raw> for CompatReply<'raw> {
     const MIN_SERIALIZED_SIZE: usize =
         <ForeignCallbackValue<'raw>>::MIN_SERIALIZED_SIZE +
-        <::std::vec::Vec<ForeignRenderRecord<'raw>>>::MIN_SERIALIZED_SIZE;
+        <::std::vec::Vec<ForeignRenderRecord<'raw>>>::MIN_SERIALIZED_SIZE +
+        <::std::vec::Vec<CompatSelectionData<'raw>>>::MIN_SERIALIZED_SIZE;
 
     #[inline]
     fn serialized_size(&self) -> usize {
         self.value.serialized_size() +
-        self.records.serialized_size()
+        self.records.serialized_size() +
+        self.selections.serialized_size()
     }
 
     ::bebop::define_serialize_chained!(Self => |zelf, dest| {
         Ok(
             zelf.value._serialize_chained(dest)? +
-            zelf.records._serialize_chained(dest)?
+            zelf.records._serialize_chained(dest)? +
+            zelf.selections._serialize_chained(dest)?
         )
     });
 
@@ -319,10 +427,13 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatReply<'raw> {
         i += read;
         let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
             value: v0,
             records: v1,
+            selections: v2,
         }))
     }
 }
@@ -379,22 +490,19 @@ impl<'raw> ::bebop::Record<'raw> for CompatDirtyElement {}
 pub struct CompatSnapshot<'raw> {
     pub version: u64,
     pub batch: ForeignRenderBatch<'raw>,
-    pub has_selection: bool,
-    pub selection: ForeignSelectionRef,
+    pub selection: CompatSelectionData<'raw>,
 }
 
 impl<'raw> ::bebop::SubRecord<'raw> for CompatSnapshot<'raw> {
     const MIN_SERIALIZED_SIZE: usize =
         <u64>::MIN_SERIALIZED_SIZE +
         <ForeignRenderBatch<'raw>>::MIN_SERIALIZED_SIZE +
-        <bool>::MIN_SERIALIZED_SIZE +
-        <ForeignSelectionRef>::MIN_SERIALIZED_SIZE;
+        <CompatSelectionData<'raw>>::MIN_SERIALIZED_SIZE;
 
     #[inline]
     fn serialized_size(&self) -> usize {
         self.version.serialized_size() +
         self.batch.serialized_size() +
-        self.has_selection.serialized_size() +
         self.selection.serialized_size()
     }
 
@@ -402,7 +510,6 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatSnapshot<'raw> {
         Ok(
             zelf.version._serialize_chained(dest)? +
             zelf.batch._serialize_chained(dest)? +
-            zelf.has_selection._serialize_chained(dest)? +
             zelf.selection._serialize_chained(dest)?
         )
     });
@@ -420,14 +527,11 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatSnapshot<'raw> {
         i += read;
         let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
-        let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-        i += read;
 
         Ok((i, Self {
             version: v0,
             batch: v1,
-            has_selection: v2,
-            selection: v3,
+            selection: v2,
         }))
     }
 }
@@ -436,48 +540,48 @@ impl<'raw> ::bebop::Record<'raw> for CompatSnapshot<'raw> {}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompatCommit<'raw> {
+    pub flags: u32,
     pub version: u64,
     pub changed: bool,
     pub dirty_leaves: ::bebop::SliceWrapper<'raw, ForeignKey>,
     pub dirty_elements: ::bebop::SliceWrapper<'raw, CompatDirtyElement>,
     pub tags: ::std::vec::Vec<&'raw str>,
     pub batch: ForeignRenderBatch<'raw>,
-    pub has_selection: bool,
-    pub selection: ForeignSelectionRef,
+    pub selection: CompatSelectionData<'raw>,
 }
 
 impl<'raw> ::bebop::SubRecord<'raw> for CompatCommit<'raw> {
     const MIN_SERIALIZED_SIZE: usize =
+        <u32>::MIN_SERIALIZED_SIZE +
         <u64>::MIN_SERIALIZED_SIZE +
         <bool>::MIN_SERIALIZED_SIZE +
         <::bebop::SliceWrapper<'raw, ForeignKey>>::MIN_SERIALIZED_SIZE +
         <::bebop::SliceWrapper<'raw, CompatDirtyElement>>::MIN_SERIALIZED_SIZE +
         <::std::vec::Vec<&'raw str>>::MIN_SERIALIZED_SIZE +
         <ForeignRenderBatch<'raw>>::MIN_SERIALIZED_SIZE +
-        <bool>::MIN_SERIALIZED_SIZE +
-        <ForeignSelectionRef>::MIN_SERIALIZED_SIZE;
+        <CompatSelectionData<'raw>>::MIN_SERIALIZED_SIZE;
 
     #[inline]
     fn serialized_size(&self) -> usize {
+        self.flags.serialized_size() +
         self.version.serialized_size() +
         self.changed.serialized_size() +
         self.dirty_leaves.serialized_size() +
         self.dirty_elements.serialized_size() +
         self.tags.serialized_size() +
         self.batch.serialized_size() +
-        self.has_selection.serialized_size() +
         self.selection.serialized_size()
     }
 
     ::bebop::define_serialize_chained!(Self => |zelf, dest| {
         Ok(
+            zelf.flags._serialize_chained(dest)? +
             zelf.version._serialize_chained(dest)? +
             zelf.changed._serialize_chained(dest)? +
             zelf.dirty_leaves._serialize_chained(dest)? +
             zelf.dirty_elements._serialize_chained(dest)? +
             zelf.tags._serialize_chained(dest)? +
             zelf.batch._serialize_chained(dest)? +
-            zelf.has_selection._serialize_chained(dest)? +
             zelf.selection._serialize_chained(dest)?
         )
     });
@@ -507,19 +611,407 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatCommit<'raw> {
         i += read;
 
         Ok((i, Self {
-            version: v0,
-            changed: v1,
-            dirty_leaves: v2,
-            dirty_elements: v3,
-            tags: v4,
-            batch: v5,
-            has_selection: v6,
+            flags: v0,
+            version: v1,
+            changed: v2,
+            dirty_leaves: v3,
+            dirty_elements: v4,
+            tags: v5,
+            batch: v6,
             selection: v7,
         }))
     }
 }
 
 impl<'raw> ::bebop::Record<'raw> for CompatCommit<'raw> {}
+
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum CompatPointKind {
+    Unknown = 0,
+    Text = 1,
+    Element = 2,
+}
+
+impl ::core::convert::TryFrom<u8> for CompatPointKind {
+    type Error = ::bebop::DeserializeError;
+
+    fn try_from(value: u8) -> ::bebop::DeResult<Self> {
+        match value {
+            0 => Ok(CompatPointKind::Unknown),
+            1 => Ok(CompatPointKind::Text),
+            2 => Ok(CompatPointKind::Element),
+            d => Err(::bebop::DeserializeError::InvalidEnumDiscriminator(d.into())),
+        }
+    }
+}
+
+impl ::core::convert::From<CompatPointKind> for u8 {
+    fn from(value: CompatPointKind) -> Self {
+        match value {
+            CompatPointKind::Unknown => 0,
+            CompatPointKind::Text => 1,
+            CompatPointKind::Element => 2,
+        }
+    }
+}
+
+impl ::bebop::SubRecord<'_> for CompatPointKind {
+    const MIN_SERIALIZED_SIZE: usize = ::std::mem::size_of::<u8>();
+    const EXACT_SERIALIZED_SIZE: Option<usize> = Some(::std::mem::size_of::<u8>());
+
+    #[inline]
+    fn serialized_size(&self) -> usize { ::std::mem::size_of::<u8>() }
+
+    ::bebop::define_serialize_chained!(*Self => |zelf, dest| {
+        u8::from(zelf)._serialize_chained(dest)
+    });
+
+    #[inline]
+    fn _deserialize_chained(raw: &[u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let (n, v) = u8::_deserialize_chained(raw)?;
+        Ok((n, v.try_into()?))
+    }
+}
+
+impl ::bebop::FixedSized for CompatPointKind {
+    const SERIALIZED_SIZE: usize = ::std::mem::size_of::<u8>();
+}
+
+
+#[derive(Clone, Debug, PartialEq, Copy)]
+#[repr(packed)]
+pub struct CompatPoint {
+    pub key: ForeignKey,
+    pub offset: u32,
+    pub kind: CompatPointKind,
+}
+
+impl ::bebop::FixedSized for CompatPoint {}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatPoint {
+    const MIN_SERIALIZED_SIZE: usize = Self::SERIALIZED_SIZE;
+    const EXACT_SERIALIZED_SIZE: Option<usize> = Some(Self::SERIALIZED_SIZE);
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        Self::SERIALIZED_SIZE
+    }
+
+    ::bebop::define_serialize_chained!(*Self => |zelf, dest| {
+        Ok(
+            ::bebop::packed_read!(zelf.key)._serialize_chained(dest)? +
+            ::bebop::packed_read!(zelf.offset)._serialize_chained(dest)? +
+            ::bebop::packed_read!(zelf.kind)._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            key: v0,
+            offset: v1,
+            kind: v2,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatPoint {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CompatSelectionData<'raw> {
+    /// An unknown type which is likely defined in a newer version of the schema.
+    Unknown,
+
+    /// Discriminator 1
+    CompatNoSelection {
+    },
+
+    /// Discriminator 2
+    CompatRangeSelection {
+        reference: ForeignSelectionRef,
+        anchor: CompatPoint,
+        focus: CompatPoint,
+        format: u32,
+        style: ::bebop::SliceWrapper<'raw, u16>,
+        dirty: bool,
+        has_cached_backward: bool,
+        cached_backward: bool,
+        has_cached_nodes: bool,
+        cached_nodes: ::bebop::SliceWrapper<'raw, ForeignNodeRef>,
+    },
+
+    /// Discriminator 3
+    CompatNodeSelection {
+        reference: ForeignSelectionRef,
+        keys: ::bebop::SliceWrapper<'raw, ForeignKey>,
+        dirty: bool,
+        has_cached_nodes: bool,
+        cached_nodes: ::bebop::SliceWrapper<'raw, ForeignNodeRef>,
+    },
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatSelectionData<'raw> {
+    const MIN_SERIALIZED_SIZE: usize = ::bebop::LEN_SIZE + 1;
+
+    fn serialized_size(&self) -> usize {
+        ::bebop::LEN_SIZE + 1 +
+        match self {
+            CompatSelectionData::Unknown => {
+                0
+            }
+            Self::CompatNoSelection {
+            }
+            => {
+                0
+            }
+            Self::CompatRangeSelection {
+                reference: ref _reference,
+                anchor: ref _anchor,
+                focus: ref _focus,
+                format: ref _format,
+                style: ref _style,
+                dirty: ref _dirty,
+                has_cached_backward: ref _has_cached_backward,
+                cached_backward: ref _cached_backward,
+                has_cached_nodes: ref _has_cached_nodes,
+                cached_nodes: ref _cached_nodes,
+            }
+            => {
+                _reference.serialized_size() +
+                _anchor.serialized_size() +
+                _focus.serialized_size() +
+                _format.serialized_size() +
+                _style.serialized_size() +
+                _dirty.serialized_size() +
+                _has_cached_backward.serialized_size() +
+                _cached_backward.serialized_size() +
+                _has_cached_nodes.serialized_size() +
+                _cached_nodes.serialized_size()
+            }
+            Self::CompatNodeSelection {
+                reference: ref _reference,
+                keys: ref _keys,
+                dirty: ref _dirty,
+                has_cached_nodes: ref _has_cached_nodes,
+                cached_nodes: ref _cached_nodes,
+            }
+            => {
+                _reference.serialized_size() +
+                _keys.serialized_size() +
+                _dirty.serialized_size() +
+                _has_cached_nodes.serialized_size() +
+                _cached_nodes.serialized_size()
+            }
+        }
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        let size = zelf.serialized_size();
+        ::bebop::write_len(dest, size - ::bebop::LEN_SIZE - 1)?;
+        match zelf {
+            Self::Unknown => {
+                return Err(::bebop::SerializeError::CannotSerializeUnknownUnion);
+            }
+            Self::CompatNoSelection {
+            }
+            => {
+                1u8._serialize_chained(dest)?;
+            }
+            Self::CompatRangeSelection {
+                reference: ref _reference,
+                anchor: ref _anchor,
+                focus: ref _focus,
+                format: ref _format,
+                style: ref _style,
+                dirty: ref _dirty,
+                has_cached_backward: ref _has_cached_backward,
+                cached_backward: ref _cached_backward,
+                has_cached_nodes: ref _has_cached_nodes,
+                cached_nodes: ref _cached_nodes,
+            }
+            => {
+                2u8._serialize_chained(dest)?;
+                _reference._serialize_chained(dest)?;
+                _anchor._serialize_chained(dest)?;
+                _focus._serialize_chained(dest)?;
+                _format._serialize_chained(dest)?;
+                _style._serialize_chained(dest)?;
+                _dirty._serialize_chained(dest)?;
+                _has_cached_backward._serialize_chained(dest)?;
+                _cached_backward._serialize_chained(dest)?;
+                _has_cached_nodes._serialize_chained(dest)?;
+                _cached_nodes._serialize_chained(dest)?;
+            }
+            Self::CompatNodeSelection {
+                reference: ref _reference,
+                keys: ref _keys,
+                dirty: ref _dirty,
+                has_cached_nodes: ref _has_cached_nodes,
+                cached_nodes: ref _cached_nodes,
+            }
+            => {
+                3u8._serialize_chained(dest)?;
+                _reference._serialize_chained(dest)?;
+                _keys._serialize_chained(dest)?;
+                _dirty._serialize_chained(dest)?;
+                _has_cached_nodes._serialize_chained(dest)?;
+                _cached_nodes._serialize_chained(dest)?;
+            }
+        }
+        Ok(size)
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let len = ::bebop::read_len(raw)? + ::bebop::LEN_SIZE + 1;
+        let mut i = ::bebop::LEN_SIZE + 1;
+        let de = match raw[::bebop::LEN_SIZE] {
+            1 => {
+                CompatSelectionData::CompatNoSelection {}
+            }
+            2 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v7) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v8) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v9) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                CompatSelectionData::CompatRangeSelection {
+                    reference: v0,
+                    anchor: v1,
+                    focus: v2,
+                    format: v3,
+                    style: v4,
+                    dirty: v5,
+                    has_cached_backward: v6,
+                    cached_backward: v7,
+                    has_cached_nodes: v8,
+                    cached_nodes: v9,
+                }
+            }
+            3 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                CompatSelectionData::CompatNodeSelection {
+                    reference: v0,
+                    keys: v1,
+                    dirty: v2,
+                    has_cached_nodes: v3,
+                    cached_nodes: v4,
+                }
+            }
+            _ => {
+                i = len;
+                CompatSelectionData::Unknown
+            }
+        };
+        if !cfg!(feature = "unchecked") && i != len {
+            debug_assert!(i > len);
+            Err(::bebop::DeserializeError::CorruptFrame)
+        }
+        else {
+            Ok((i, de))
+        }
+    }
+
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatSelectionData<'raw> {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CompatSelectionPatch<'raw> {
+    pub historical: bool,
+    pub state_version: u64,
+    pub activate: bool,
+    pub selection: CompatSelectionData<'raw>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatSelectionPatch<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <bool>::MIN_SERIALIZED_SIZE +
+        <u64>::MIN_SERIALIZED_SIZE +
+        <bool>::MIN_SERIALIZED_SIZE +
+        <CompatSelectionData<'raw>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.historical.serialized_size() +
+        self.state_version.serialized_size() +
+        self.activate.serialized_size() +
+        self.selection.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.historical._serialize_chained(dest)? +
+            zelf.state_version._serialize_chained(dest)? +
+            zelf.activate._serialize_chained(dest)? +
+            zelf.selection._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            historical: v0,
+            state_version: v1,
+            activate: v2,
+            selection: v3,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatSelectionPatch<'raw> {}
 
 #[repr(u32)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -3615,6 +4107,52 @@ pub mod owned {
     pub use super::COMPATIBILITY_PROTOCOL_MAJOR;
 
     #[derive(Clone, Debug, PartialEq)]
+    pub struct CompatBegin {
+        pub tags: ::std::vec::Vec<String>,
+    }
+
+    impl<'raw> ::core::convert::From<super::CompatBegin<'raw>> for CompatBegin {
+        fn from(value: super::CompatBegin) -> Self {
+            Self {
+                tags: value.tags.into_iter().map(|value| value.into()).collect(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for CompatBegin {
+        const MIN_SERIALIZED_SIZE: usize =
+            <::std::vec::Vec<String>>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.tags.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.tags._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                tags: v0,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for CompatBegin {}
+
+    #[derive(Clone, Debug, PartialEq)]
     pub struct CompatConfig {
         pub editor_id: u32,
         pub classes: ::std::vec::Vec<ForeignClassRegistration>,
@@ -3760,6 +4298,7 @@ pub mod owned {
     pub struct CompatReply {
         pub value: ForeignCallbackValue,
         pub records: ::std::vec::Vec<ForeignRenderRecord>,
+        pub selections: ::std::vec::Vec<CompatSelectionData>,
     }
 
     impl<'raw> ::core::convert::From<super::CompatReply<'raw>> for CompatReply {
@@ -3767,6 +4306,7 @@ pub mod owned {
             Self {
                 value: value.value.into(),
                 records: value.records.into_iter().map(|value| value.into()).collect(),
+                selections: value.selections.into_iter().map(|value| value.into()).collect(),
             }
         }
     }
@@ -3774,18 +4314,21 @@ pub mod owned {
     impl<'raw> ::bebop::SubRecord<'raw> for CompatReply {
         const MIN_SERIALIZED_SIZE: usize =
             <ForeignCallbackValue>::MIN_SERIALIZED_SIZE +
-            <::std::vec::Vec<ForeignRenderRecord>>::MIN_SERIALIZED_SIZE;
+            <::std::vec::Vec<ForeignRenderRecord>>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<CompatSelectionData>>::MIN_SERIALIZED_SIZE;
 
         #[inline]
         fn serialized_size(&self) -> usize {
             self.value.serialized_size() +
-            self.records.serialized_size()
+            self.records.serialized_size() +
+            self.selections.serialized_size()
         }
 
         ::bebop::define_serialize_chained!(Self => |zelf, dest| {
             Ok(
                 zelf.value._serialize_chained(dest)? +
-                zelf.records._serialize_chained(dest)?
+                zelf.records._serialize_chained(dest)? +
+                zelf.selections._serialize_chained(dest)?
             )
         });
 
@@ -3800,10 +4343,13 @@ pub mod owned {
             i += read;
             let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
                 value: v0,
                 records: v1,
+                selections: v2,
             }))
         }
     }
@@ -3816,8 +4362,7 @@ pub mod owned {
     pub struct CompatSnapshot {
         pub version: u64,
         pub batch: ForeignRenderBatch,
-        pub has_selection: bool,
-        pub selection: ForeignSelectionRef,
+        pub selection: CompatSelectionData,
     }
 
     impl<'raw> ::core::convert::From<super::CompatSnapshot<'raw>> for CompatSnapshot {
@@ -3825,8 +4370,7 @@ pub mod owned {
             Self {
                 version: value.version,
                 batch: value.batch.into(),
-                has_selection: value.has_selection,
-                selection: value.selection,
+                selection: value.selection.into(),
             }
         }
     }
@@ -3835,14 +4379,12 @@ pub mod owned {
         const MIN_SERIALIZED_SIZE: usize =
             <u64>::MIN_SERIALIZED_SIZE +
             <ForeignRenderBatch>::MIN_SERIALIZED_SIZE +
-            <bool>::MIN_SERIALIZED_SIZE +
-            <ForeignSelectionRef>::MIN_SERIALIZED_SIZE;
+            <CompatSelectionData>::MIN_SERIALIZED_SIZE;
 
         #[inline]
         fn serialized_size(&self) -> usize {
             self.version.serialized_size() +
             self.batch.serialized_size() +
-            self.has_selection.serialized_size() +
             self.selection.serialized_size()
         }
 
@@ -3850,7 +4392,6 @@ pub mod owned {
             Ok(
                 zelf.version._serialize_chained(dest)? +
                 zelf.batch._serialize_chained(dest)? +
-                zelf.has_selection._serialize_chained(dest)? +
                 zelf.selection._serialize_chained(dest)?
             )
         });
@@ -3868,14 +4409,11 @@ pub mod owned {
             i += read;
             let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
-            let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
-            i += read;
 
             Ok((i, Self {
                 version: v0,
                 batch: v1,
-                has_selection: v2,
-                selection: v3,
+                selection: v2,
             }))
         }
     }
@@ -3884,63 +4422,63 @@ pub mod owned {
 
     #[derive(Clone, Debug, PartialEq)]
     pub struct CompatCommit {
+        pub flags: u32,
         pub version: u64,
         pub changed: bool,
         pub dirty_leaves: ::std::vec::Vec<ForeignKey>,
         pub dirty_elements: ::std::vec::Vec<CompatDirtyElement>,
         pub tags: ::std::vec::Vec<String>,
         pub batch: ForeignRenderBatch,
-        pub has_selection: bool,
-        pub selection: ForeignSelectionRef,
+        pub selection: CompatSelectionData,
     }
 
     impl<'raw> ::core::convert::From<super::CompatCommit<'raw>> for CompatCommit {
         fn from(value: super::CompatCommit) -> Self {
             Self {
+                flags: value.flags,
                 version: value.version,
                 changed: value.changed,
                 dirty_leaves: value.dirty_leaves.iter().map(|value| value).collect(),
                 dirty_elements: value.dirty_elements.iter().map(|value| value).collect(),
                 tags: value.tags.into_iter().map(|value| value.into()).collect(),
                 batch: value.batch.into(),
-                has_selection: value.has_selection,
-                selection: value.selection,
+                selection: value.selection.into(),
             }
         }
     }
 
     impl<'raw> ::bebop::SubRecord<'raw> for CompatCommit {
         const MIN_SERIALIZED_SIZE: usize =
+            <u32>::MIN_SERIALIZED_SIZE +
             <u64>::MIN_SERIALIZED_SIZE +
             <bool>::MIN_SERIALIZED_SIZE +
             <::std::vec::Vec<ForeignKey>>::MIN_SERIALIZED_SIZE +
             <::std::vec::Vec<CompatDirtyElement>>::MIN_SERIALIZED_SIZE +
             <::std::vec::Vec<String>>::MIN_SERIALIZED_SIZE +
             <ForeignRenderBatch>::MIN_SERIALIZED_SIZE +
-            <bool>::MIN_SERIALIZED_SIZE +
-            <ForeignSelectionRef>::MIN_SERIALIZED_SIZE;
+            <CompatSelectionData>::MIN_SERIALIZED_SIZE;
 
         #[inline]
         fn serialized_size(&self) -> usize {
+            self.flags.serialized_size() +
             self.version.serialized_size() +
             self.changed.serialized_size() +
             self.dirty_leaves.serialized_size() +
             self.dirty_elements.serialized_size() +
             self.tags.serialized_size() +
             self.batch.serialized_size() +
-            self.has_selection.serialized_size() +
             self.selection.serialized_size()
         }
 
         ::bebop::define_serialize_chained!(Self => |zelf, dest| {
             Ok(
+                zelf.flags._serialize_chained(dest)? +
                 zelf.version._serialize_chained(dest)? +
                 zelf.changed._serialize_chained(dest)? +
                 zelf.dirty_leaves._serialize_chained(dest)? +
                 zelf.dirty_elements._serialize_chained(dest)? +
                 zelf.tags._serialize_chained(dest)? +
                 zelf.batch._serialize_chained(dest)? +
-                zelf.has_selection._serialize_chained(dest)? +
                 zelf.selection._serialize_chained(dest)?
             )
         });
@@ -3970,19 +4508,375 @@ pub mod owned {
             i += read;
 
             Ok((i, Self {
-                version: v0,
-                changed: v1,
-                dirty_leaves: v2,
-                dirty_elements: v3,
-                tags: v4,
-                batch: v5,
-                has_selection: v6,
+                flags: v0,
+                version: v1,
+                changed: v2,
+                dirty_leaves: v3,
+                dirty_elements: v4,
+                tags: v5,
+                batch: v6,
                 selection: v7,
             }))
         }
     }
 
     impl<'raw> ::bebop::Record<'raw> for CompatCommit {}
+
+    pub use super::CompatPointKind;
+
+    pub use super::CompatPoint;
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub enum CompatSelectionData {
+        /// An unknown type which is likely defined in a newer version of the schema.
+        Unknown,
+
+        /// Discriminator 1
+        CompatNoSelection {
+        },
+
+        /// Discriminator 2
+        CompatRangeSelection {
+            reference: ForeignSelectionRef,
+            anchor: CompatPoint,
+            focus: CompatPoint,
+            format: u32,
+            style: ::std::vec::Vec<u16>,
+            dirty: bool,
+            has_cached_backward: bool,
+            cached_backward: bool,
+            has_cached_nodes: bool,
+            cached_nodes: ::std::vec::Vec<ForeignNodeRef>,
+        },
+
+        /// Discriminator 3
+        CompatNodeSelection {
+            reference: ForeignSelectionRef,
+            keys: ::std::vec::Vec<ForeignKey>,
+            dirty: bool,
+            has_cached_nodes: bool,
+            cached_nodes: ::std::vec::Vec<ForeignNodeRef>,
+        },
+    }
+
+    impl<'raw> ::core::convert::From<super::CompatSelectionData<'raw>> for CompatSelectionData {
+        fn from(value: super::CompatSelectionData) -> Self {
+            match value {
+                super::CompatSelectionData::Unknown => {
+                    Self::Unknown
+                }
+                super::CompatSelectionData::CompatNoSelection {
+                }
+                => {
+                    Self::CompatNoSelection {
+                    }
+                }
+                super::CompatSelectionData::CompatRangeSelection {
+                    reference: _reference,
+                    anchor: _anchor,
+                    focus: _focus,
+                    format: _format,
+                    style: _style,
+                    dirty: _dirty,
+                    has_cached_backward: _has_cached_backward,
+                    cached_backward: _cached_backward,
+                    has_cached_nodes: _has_cached_nodes,
+                    cached_nodes: _cached_nodes,
+                }
+                => {
+                    Self::CompatRangeSelection {
+                        reference: _reference,
+                        anchor: _anchor,
+                        focus: _focus,
+                        format: _format,
+                        style: _style.iter().map(|value| value).collect(),
+                        dirty: _dirty,
+                        has_cached_backward: _has_cached_backward,
+                        cached_backward: _cached_backward,
+                        has_cached_nodes: _has_cached_nodes,
+                        cached_nodes: _cached_nodes.iter().map(|value| value).collect(),
+                    }
+                }
+                super::CompatSelectionData::CompatNodeSelection {
+                    reference: _reference,
+                    keys: _keys,
+                    dirty: _dirty,
+                    has_cached_nodes: _has_cached_nodes,
+                    cached_nodes: _cached_nodes,
+                }
+                => {
+                    Self::CompatNodeSelection {
+                        reference: _reference,
+                        keys: _keys.iter().map(|value| value).collect(),
+                        dirty: _dirty,
+                        has_cached_nodes: _has_cached_nodes,
+                        cached_nodes: _cached_nodes.iter().map(|value| value).collect(),
+                    }
+                }
+            }
+        }
+
+    }
+    impl<'raw> ::bebop::SubRecord<'raw> for CompatSelectionData {
+        const MIN_SERIALIZED_SIZE: usize = ::bebop::LEN_SIZE + 1;
+
+        fn serialized_size(&self) -> usize {
+            ::bebop::LEN_SIZE + 1 +
+            match self {
+                CompatSelectionData::Unknown => {
+                    0
+                }
+                Self::CompatNoSelection {
+                }
+                => {
+                    0
+                }
+                Self::CompatRangeSelection {
+                    reference: ref _reference,
+                    anchor: ref _anchor,
+                    focus: ref _focus,
+                    format: ref _format,
+                    style: ref _style,
+                    dirty: ref _dirty,
+                    has_cached_backward: ref _has_cached_backward,
+                    cached_backward: ref _cached_backward,
+                    has_cached_nodes: ref _has_cached_nodes,
+                    cached_nodes: ref _cached_nodes,
+                }
+                => {
+                    _reference.serialized_size() +
+                    _anchor.serialized_size() +
+                    _focus.serialized_size() +
+                    _format.serialized_size() +
+                    _style.serialized_size() +
+                    _dirty.serialized_size() +
+                    _has_cached_backward.serialized_size() +
+                    _cached_backward.serialized_size() +
+                    _has_cached_nodes.serialized_size() +
+                    _cached_nodes.serialized_size()
+                }
+                Self::CompatNodeSelection {
+                    reference: ref _reference,
+                    keys: ref _keys,
+                    dirty: ref _dirty,
+                    has_cached_nodes: ref _has_cached_nodes,
+                    cached_nodes: ref _cached_nodes,
+                }
+                => {
+                    _reference.serialized_size() +
+                    _keys.serialized_size() +
+                    _dirty.serialized_size() +
+                    _has_cached_nodes.serialized_size() +
+                    _cached_nodes.serialized_size()
+                }
+            }
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            let size = zelf.serialized_size();
+            ::bebop::write_len(dest, size - ::bebop::LEN_SIZE - 1)?;
+            match zelf {
+                Self::Unknown => {
+                    return Err(::bebop::SerializeError::CannotSerializeUnknownUnion);
+                }
+                Self::CompatNoSelection {
+                }
+                => {
+                    1u8._serialize_chained(dest)?;
+                }
+                Self::CompatRangeSelection {
+                    reference: ref _reference,
+                    anchor: ref _anchor,
+                    focus: ref _focus,
+                    format: ref _format,
+                    style: ref _style,
+                    dirty: ref _dirty,
+                    has_cached_backward: ref _has_cached_backward,
+                    cached_backward: ref _cached_backward,
+                    has_cached_nodes: ref _has_cached_nodes,
+                    cached_nodes: ref _cached_nodes,
+                }
+                => {
+                    2u8._serialize_chained(dest)?;
+                    _reference._serialize_chained(dest)?;
+                    _anchor._serialize_chained(dest)?;
+                    _focus._serialize_chained(dest)?;
+                    _format._serialize_chained(dest)?;
+                    _style._serialize_chained(dest)?;
+                    _dirty._serialize_chained(dest)?;
+                    _has_cached_backward._serialize_chained(dest)?;
+                    _cached_backward._serialize_chained(dest)?;
+                    _has_cached_nodes._serialize_chained(dest)?;
+                    _cached_nodes._serialize_chained(dest)?;
+                }
+                Self::CompatNodeSelection {
+                    reference: ref _reference,
+                    keys: ref _keys,
+                    dirty: ref _dirty,
+                    has_cached_nodes: ref _has_cached_nodes,
+                    cached_nodes: ref _cached_nodes,
+                }
+                => {
+                    3u8._serialize_chained(dest)?;
+                    _reference._serialize_chained(dest)?;
+                    _keys._serialize_chained(dest)?;
+                    _dirty._serialize_chained(dest)?;
+                    _has_cached_nodes._serialize_chained(dest)?;
+                    _cached_nodes._serialize_chained(dest)?;
+                }
+            }
+            Ok(size)
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let len = ::bebop::read_len(raw)? + ::bebop::LEN_SIZE + 1;
+            let mut i = ::bebop::LEN_SIZE + 1;
+            let de = match raw[::bebop::LEN_SIZE] {
+                1 => {
+                    CompatSelectionData::CompatNoSelection {}
+                }
+                2 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v5) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v6) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v7) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v8) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v9) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    CompatSelectionData::CompatRangeSelection {
+                        reference: v0,
+                        anchor: v1,
+                        focus: v2,
+                        format: v3,
+                        style: v4,
+                        dirty: v5,
+                        has_cached_backward: v6,
+                        cached_backward: v7,
+                        has_cached_nodes: v8,
+                        cached_nodes: v9,
+                    }
+                }
+                3 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    CompatSelectionData::CompatNodeSelection {
+                        reference: v0,
+                        keys: v1,
+                        dirty: v2,
+                        has_cached_nodes: v3,
+                        cached_nodes: v4,
+                    }
+                }
+                _ => {
+                    i = len;
+                    CompatSelectionData::Unknown
+                }
+            };
+            if !cfg!(feature = "unchecked") && i != len {
+                debug_assert!(i > len);
+                Err(::bebop::DeserializeError::CorruptFrame)
+            }
+            else {
+                Ok((i, de))
+            }
+        }
+
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for CompatSelectionData {}
+
+    #[derive(Clone, Debug, PartialEq)]
+    pub struct CompatSelectionPatch {
+        pub historical: bool,
+        pub state_version: u64,
+        pub activate: bool,
+        pub selection: CompatSelectionData,
+    }
+
+    impl<'raw> ::core::convert::From<super::CompatSelectionPatch<'raw>> for CompatSelectionPatch {
+        fn from(value: super::CompatSelectionPatch) -> Self {
+            Self {
+                historical: value.historical,
+                state_version: value.state_version,
+                activate: value.activate,
+                selection: value.selection.into(),
+            }
+        }
+    }
+
+    impl<'raw> ::bebop::SubRecord<'raw> for CompatSelectionPatch {
+        const MIN_SERIALIZED_SIZE: usize =
+            <bool>::MIN_SERIALIZED_SIZE +
+            <u64>::MIN_SERIALIZED_SIZE +
+            <bool>::MIN_SERIALIZED_SIZE +
+            <CompatSelectionData>::MIN_SERIALIZED_SIZE;
+
+        #[inline]
+        fn serialized_size(&self) -> usize {
+            self.historical.serialized_size() +
+            self.state_version.serialized_size() +
+            self.activate.serialized_size() +
+            self.selection.serialized_size()
+        }
+
+        ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+            Ok(
+                zelf.historical._serialize_chained(dest)? +
+                zelf.state_version._serialize_chained(dest)? +
+                zelf.activate._serialize_chained(dest)? +
+                zelf.selection._serialize_chained(dest)?
+            )
+        });
+
+        fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+            let mut i = 0;
+            if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+                let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+                return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+            }
+
+            let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+            let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
+
+            Ok((i, Self {
+                historical: v0,
+                state_version: v1,
+                activate: v2,
+                selection: v3,
+            }))
+        }
+    }
+
+    impl<'raw> ::bebop::Record<'raw> for CompatSelectionPatch {}
 
     pub use super::ForeignNativeField;
 
