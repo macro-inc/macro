@@ -37,6 +37,18 @@ impl CompatUpdate {
             selection: ViewSelection::KeepModel,
         })
     }
+    /// Recover ownership after ordinary policy rejects the command before adoption.
+    /// This does not undo an adopted update or an already published transition.
+    pub fn recover_unadopted(&self) -> Result<Option<PendingUpdate>, Error> {
+        if self.was_adopted() {
+            return Ok(None);
+        }
+        Ok(self
+            .pending
+            .lock()
+            .map_err(|_| Error::Invariant("host update lock poisoned"))?
+            .take())
+    }
     /// Adoption is not a successful-commit receipt; callers must also check output errors.
     pub fn was_adopted(&self) -> bool {
         self.adopted.load(Ordering::Acquire)

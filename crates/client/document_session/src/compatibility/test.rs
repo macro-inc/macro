@@ -88,6 +88,7 @@ fn same_core_admission_obeys_readiness_access_and_consumption()
             if accepted { "admitted text" } else { "" }
         );
         if accepted {
+            assert!(update.recover_unadopted()?.is_none());
             assert_ne!(session.version(), version);
             assert!(session.surface().state().selection().is_some());
             assert!(session.surface().history().can_undo);
@@ -109,6 +110,24 @@ fn same_core_admission_obeys_readiness_access_and_consumption()
                 session.surface().state().root_text_content().as_ref(),
                 "admitted text"
             );
+        } else {
+            let recovered = update.recover_unadopted()?.expect("unadopted state");
+            assert!(update.recover_unadopted()?.is_none());
+            let (recovered, ()) = session.with_compat_update(recovered, |tx| {
+                assert_eq!(tx.text_content(NodeKey::ROOT), "admitted text");
+                assert!(tx.selection().is_some());
+            })?;
+            assert_eq!(session.version(), version);
+            let retry = CompatUpdate::new(recovered);
+            let out = session.handle(now, retry.input());
+            assert!(
+                out.view
+                    .iter()
+                    .any(|effect| matches!(effect, ViewEffect::Error(_)))
+            );
+            assert!(!retry.was_adopted());
+            assert!(retry.recover_unadopted()?.is_some());
+            assert!(session.surface().state().is_empty_state());
         }
     }
     Ok(())

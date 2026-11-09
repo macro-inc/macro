@@ -93,3 +93,8 @@ Record before/after selection cursors per Loro history group, using the model-ac
 Run routed history keys through model KeyDown and command listeners first; only successful unhandled Undo/Redo routes fall through to Loro history after listener commits are projected.
 
 Detect duplicate durable IDs only against attached owners; subtree removal may leave stale descendant index entries, and undo/redo must preserve the restored identities.
+
+Recover an unadopted compatibility update through CompatUpdate::recover_unadopted
+when normal readiness/access policy refuses it; preserve its exact pending state
+for a later caller decision. Recovery is single-consumption and does not roll back
+an adopted update or a published transition. Check publication receipts separately.
