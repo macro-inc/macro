@@ -71,7 +71,7 @@ jobs:
           echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
         fi
     - name: Build two tagged releases
-      run: crates/coding_agent_worker/e2e/build_releases.sh "$RUNNER_TEMP/releases" v2000.1.1.1 v2000.1.1.2
+      run: crates/coding_agent_worker/e2e/build_releases.sh "$RUNNER_TEMP/releases" v2099.1.1.1 v2099.1.1.2
       shell: bash
       env:
         SQLX_OFFLINE: 'true'
@@ -79,10 +79,10 @@ jobs:
         CARGO_BUILD: cargo zigbuild
         AWS_LC_SYS_CMAKE_BUILDER: '1'
     - name: Self-update end to end
-      run: python3 crates/coding_agent_worker/e2e/update_e2e.py --releases "$RUNNER_TEMP/releases" --v1 v2000.1.1.1 --v2 v2000.1.1.2
+      run: python3 crates/coding_agent_worker/e2e/update_e2e.py --releases "$RUNNER_TEMP/releases" --v1 v2099.1.1.1 --v2 v2099.1.1.2
       shell: bash
     - name: Installer in bash, zsh and fish
-      run: nix shell nixpkgs#zsh nixpkgs#fish --command crates/coding_agent_worker/e2e/installer_test.sh "$RUNNER_TEMP/releases" v2000.1.1.1
+      run: nix shell nixpkgs#zsh nixpkgs#fish --command crates/coding_agent_worker/e2e/installer_test.sh "$RUNNER_TEMP/releases" v2099.1.1.1
       shell: bash
     - name: Teardown Nix
       if: always()
@@ -104,15 +104,15 @@ jobs:
         sccache: 'false'
         rust-cache: 'false'
     - name: Build two tagged releases
-      run: crates/coding_agent_worker/e2e/build_releases.sh "$RUNNER_TEMP/releases" v2000.1.1.1 v2000.1.1.2
+      run: crates/coding_agent_worker/e2e/build_releases.sh "$RUNNER_TEMP/releases" v2099.1.1.1 v2099.1.1.2
       shell: bash
       env:
         SQLX_OFFLINE: 'true'
     - name: Self-update end to end
-      run: python3 crates/coding_agent_worker/e2e/update_e2e.py --releases "$RUNNER_TEMP/releases" --v1 v2000.1.1.1 --v2 v2000.1.1.2
+      run: python3 crates/coding_agent_worker/e2e/update_e2e.py --releases "$RUNNER_TEMP/releases" --v1 v2099.1.1.1 --v2 v2099.1.1.2
       shell: bash
     - name: Installer in bash and zsh
-      run: crates/coding_agent_worker/e2e/installer_test.sh "$RUNNER_TEMP/releases" v2000.1.1.1
+      run: crates/coding_agent_worker/e2e/installer_test.sh "$RUNNER_TEMP/releases" v2099.1.1.1
       shell: bash
       env:
         INSTALLER_TEST_SHELLS: bash zsh
@@ -133,21 +133,21 @@ jobs:
         sccache: 'false'
         rust-cache: 'false'
     - name: Build two tagged releases
-      run: crates/coding_agent_worker/e2e/build_releases.sh "$RUNNER_TEMP/releases" v2000.1.1.1 v2000.1.1.2
+      run: crates/coding_agent_worker/e2e/build_releases.sh "$RUNNER_TEMP/releases" v2099.1.1.1 v2099.1.1.2
       shell: bash
       env:
         SQLX_OFFLINE: 'true'
         AWS_LC_SYS_PREBUILT_NASM: '1'
     - name: Launcher layout and install.ps1
-      run: '& ./crates/coding_agent_worker/e2e/windows_test.ps1 -Releases "$env:RUNNER_TEMP/releases" -V1 v2000.1.1.1 -V2 v2000.1.1.2'
+      run: '& ./crates/coding_agent_worker/e2e/windows_test.ps1 -Releases "$env:RUNNER_TEMP/releases" -V1 v2099.1.1.1 -V2 v2099.1.1.2'
       shell: pwsh
     - name: Self-update end to end
-      run: '& ./crates/coding_agent_worker/e2e/windows_update_test.ps1 -Releases "$env:RUNNER_TEMP/releases" -V1 v2000.1.1.1 -V2 v2000.1.1.2'
+      run: '& ./crates/coding_agent_worker/e2e/windows_update_test.ps1 -Releases "$env:RUNNER_TEMP/releases" -V1 v2099.1.1.1 -V2 v2099.1.1.2'
       shell: pwsh
     - name: Setup Node
       uses: actions/setup-node@v4
       with:
         node-version: '24'
     - name: Claude Code from npm
-      run: '& ./crates/coding_agent_worker/e2e/windows_claude_code_test.ps1 -Releases "$env:RUNNER_TEMP/releases" -Version v2000.1.1.2'
+      run: '& ./crates/coding_agent_worker/e2e/windows_claude_code_test.ps1 -Releases "$env:RUNNER_TEMP/releases" -Version v2099.1.1.2'
       shell: pwsh
