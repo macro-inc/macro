@@ -110,7 +110,9 @@ Set `CALL_FULL_HOST=true` for the real CallOverlay host, Work gating against
 boundaries are substituted. No hosted account data is accessed.
 The full host also covers 3–6-person pinning geometry, short-stage and multi-share
 bounds, mounted tracks, reactive video fit, solo self-view placement, and the real
-floating-player/popover controls with synthetic media.
+floating-player/popover controls with synthetic media. Keep the desktop discussion
+card attached across docked/overlay changes, and verify wrapped-thread reading gaps,
+drafts, fullscreen navigation, and local-volume indicators across call surfaces.
 Verify call-panel changes in the full call host and browser-test harnesses with
 screenshots; list signed-in call checks separately instead of blocking on authentication.
 Keep the call chat card opaque on `surface-2`; omit docked borders, add its soft shadow only in light mode, and retain the narrow-pane shadow and phone sheet surface.

@@ -13,8 +13,10 @@ import type { RemoteParticipant, Track } from 'livekit-client';
 import { createSignal, type JSXElement, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallParticipantVolume } from './CallParticipantVolume';
+import { useCallVolumeOptional } from './call-volume';
 import { isProgramParticipant } from './is-program-participant';
 import { LK_TRACK_SOURCE } from './livekit-loader';
+import { MutedForYouBadge } from './MutedForYouBadge';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
 import { TrackView } from './TrackView';
 
@@ -24,6 +26,7 @@ function VideoTag(props: {
   variant?: 'default' | 'truncated';
   isProgram?: boolean;
   muted?: boolean;
+  mutedForYou?: boolean;
   mutedLabel?: string;
   sharing?: boolean;
   pinned?: boolean;
@@ -47,6 +50,7 @@ function VideoTag(props: {
         label={props.mutedLabel ?? ''}
         inline
       />
+      <MutedForYouBadge muted={!!props.mutedForYou} inline />
       <span class="min-w-0 truncate">{props.children}</span>
       <Show when={props.isProgram}>
         <Badge variant="secondary" size="xs">
@@ -242,10 +246,11 @@ function ParticipantAvatar(props: {
   userId: string | undefined;
   fallbackName: string | undefined;
   avatarSize?: 'sm' | 'md';
+  mutedForYou?: boolean;
 }) {
   const avatarClass = () =>
     cn(
-      'overflow-hidden rounded-full',
+      'rounded-full',
       props.avatarSize === 'sm' ? 'size-12' : 'size-20 sm:size-24'
     );
 
@@ -265,6 +270,7 @@ function ParticipantAvatar(props: {
         >
           {fallbackInitial()}
         </div>
+        <MutedForYouBadge muted={!!props.mutedForYou} />
       </div>
     </div>
   );
@@ -366,6 +372,8 @@ export function ParticipantTile(props: {
   };
 
   const isSpeaking = () => callCtx.isParticipantSpeaking(props.participant);
+  const volumes = useCallVolumeOptional();
+  const mutedForYou = () => volumes?.level(props.participant) === 0;
 
   return (
     <ParticipantTileWrapper
@@ -399,6 +407,7 @@ export function ParticipantTile(props: {
             userId={macroId()}
             fallbackName={displayName()}
             avatarSize={props.avatarSize}
+            mutedForYou={mutedForYou()}
           />
         }
       >
@@ -413,6 +422,7 @@ export function ParticipantTile(props: {
         pinned={props.isPinned}
         isProgram={isProgramParticipant(props.participant.attributes)}
         muted={isAudioMuted()}
+        mutedForYou={mutedForYou()}
         mutedLabel={`${displayName()} is muted`}
         sharing={(() => {
           callCtx.trackVersion();

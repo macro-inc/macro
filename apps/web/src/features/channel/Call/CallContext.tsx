@@ -46,6 +46,7 @@ import { type CallLifecycleState, createCallLifecycle } from './call-lifecycle';
 import { createCallMediaPermissions } from './call-media-permissions';
 import { traceCallMedia } from './call-media-telemetry';
 import { publishCallResolution } from './call-resolution';
+import { CallVolumeProvider } from './call-volume';
 import { createLatestAsyncRequestQueue } from './latest-async-request-queue';
 import {
   getKrisp,
@@ -1911,9 +1912,11 @@ export function CallProvider(props: ParentProps) {
 
   return (
     <CallContext.Provider value={state}>
-      <CallFullscreenProvider callId={state.activeCallId}>
-        {props.children}
-      </CallFullscreenProvider>
+      <CallVolumeProvider>
+        <CallFullscreenProvider callId={state.activeCallId}>
+          {props.children}
+        </CallFullscreenProvider>
+      </CallVolumeProvider>
       <CallAudioSink />
     </CallContext.Provider>
   );

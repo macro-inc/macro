@@ -1,4 +1,5 @@
 import { CallFullscreenProvider } from '../../call-fullscreen-host';
+import { CallVolumeProvider } from '../../call-volume';
 import '@app/index.css';
 import { CallOverlay as MainCallOverlay } from 'virtual:baseline-call-overlay';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
@@ -80,89 +81,93 @@ function Fixture() {
                             Refresh discussion
                           </button>
                           <ImperativeDialogHost />
-                          <CallFullscreenProvider callId={() => 'fixture-call'}>
-                            <main class="h-screen bg-page text-ink">
-                              <Show when={params.get('headerWidth')}>
-                                {(width) => (
-                                  <header
-                                    class="@container/channel-header"
-                                    style={{ width: `${width()}px` }}
-                                  >
-                                    <div class="flex items-center gap-3 p-2">
-                                      <span class="min-w-0 flex-1 truncate">
-                                        Call channel
-                                      </span>
-                                      <ActiveCallHeader channelId="00000000-0000-7000-8000-00000000c0c0" />
-                                    </div>
-                                  </header>
-                                )}
-                              </Show>
-                              <Suspense>
-                                <Switch>
-                                  <Match
-                                    when={params.get('surface') === 'player'}
-                                  >
-                                    <CallMiniPlayer
-                                      onCollapse={() => {}}
-                                      onOpenCall={() => {}}
-                                    />
-                                  </Match>
-                                  <Match
-                                    when={
-                                      params.get('surface') === 'popover' &&
-                                      !surfaceOverride()
-                                    }
-                                  >
-                                    <Popover open>
-                                      <Popover.Anchor>
-                                        <span class="absolute top-20 left-20">
-                                          Call
+                          <CallVolumeProvider>
+                            <CallFullscreenProvider
+                              callId={() => 'fixture-call'}
+                            >
+                              <main class="h-screen bg-page text-ink">
+                                <Show when={params.get('headerWidth')}>
+                                  {(width) => (
+                                    <header
+                                      class="@container/channel-header"
+                                      style={{ width: `${width()}px` }}
+                                    >
+                                      <div class="flex items-center gap-3 p-2">
+                                        <span class="min-w-0 flex-1 truncate">
+                                          Call channel
                                         </span>
-                                      </Popover.Anchor>
-                                      <ActiveCallPopover
-                                        onOpenCall={() =>
-                                          setSurfaceOverride(true)
-                                        }
-                                        onShowPlayer={() => {}}
+                                        <ActiveCallHeader channelId="00000000-0000-7000-8000-00000000c0c0" />
+                                      </div>
+                                    </header>
+                                  )}
+                                </Show>
+                                <Suspense>
+                                  <Switch>
+                                    <Match
+                                      when={params.get('surface') === 'player'}
+                                    >
+                                      <CallMiniPlayer
+                                        onCollapse={() => {}}
+                                        onOpenCall={() => {}}
                                       />
-                                    </Popover>
-                                  </Match>
-                                  <Match when={true}>
-                                    <Dynamic
-                                      component={
-                                        params.get('baseline') === 'main'
-                                          ? MainCallOverlay
-                                          : CallOverlay
+                                    </Match>
+                                    <Match
+                                      when={
+                                        params.get('surface') === 'popover' &&
+                                        !surfaceOverride()
                                       }
-                                      onLeave={() => undefined}
-                                      showTeamSharing={false}
-                                      showChat={params.get('chat') !== 'off'}
-                                      discussion={{
-                                        label: () => undefined,
-                                        opensByDefault: () =>
-                                          params.get('view') === 'panel',
-                                        hasUpdates: () =>
-                                          params.get('unread') === 'true',
-                                        render: (panel) => (
-                                          <CallDiscussionContent
-                                            discussion={() => ({
-                                              kind: 'channel_thread',
-                                              channel_id:
-                                                '00000000-0000-7000-8000-00000000c0c0',
-                                              root_id:
-                                                '00000000-0000-7000-8000-0000000ca110',
-                                            })}
-                                            panel={panel}
-                                            onViewChannel={() => undefined}
-                                          />
-                                        ),
-                                      }}
-                                    />
-                                  </Match>
-                                </Switch>
-                              </Suspense>
-                            </main>
-                          </CallFullscreenProvider>
+                                    >
+                                      <Popover open>
+                                        <Popover.Anchor>
+                                          <span class="absolute top-20 left-20">
+                                            Call
+                                          </span>
+                                        </Popover.Anchor>
+                                        <ActiveCallPopover
+                                          onOpenCall={() =>
+                                            setSurfaceOverride(true)
+                                          }
+                                          onShowPlayer={() => {}}
+                                        />
+                                      </Popover>
+                                    </Match>
+                                    <Match when={true}>
+                                      <Dynamic
+                                        component={
+                                          params.get('baseline') === 'main'
+                                            ? MainCallOverlay
+                                            : CallOverlay
+                                        }
+                                        onLeave={() => undefined}
+                                        showTeamSharing={false}
+                                        showChat={params.get('chat') !== 'off'}
+                                        discussion={{
+                                          label: () => undefined,
+                                          opensByDefault: () =>
+                                            params.get('view') === 'panel',
+                                          hasUpdates: () =>
+                                            params.get('unread') === 'true',
+                                          render: (panel) => (
+                                            <CallDiscussionContent
+                                              discussion={() => ({
+                                                kind: 'channel_thread',
+                                                channel_id:
+                                                  '00000000-0000-7000-8000-00000000c0c0',
+                                                root_id:
+                                                  '00000000-0000-7000-8000-0000000ca110',
+                                              })}
+                                              panel={panel}
+                                              onViewChannel={() => undefined}
+                                            />
+                                          ),
+                                        }}
+                                      />
+                                    </Match>
+                                  </Switch>
+                                </Suspense>
+                              </main>
+                            </CallFullscreenProvider>
+                          </CallVolumeProvider>
                         </ChannelTabProvider>
                       </DragDropProvider>
                     </GlobalAppStateProvider>

@@ -525,7 +525,9 @@ The small avatar above the slider is the viewer; its tooltip and
 the slider label explain that only this device changes. The thumb uses the
 shared white switch appearance. It survives track resubscription and leaving the call view, but resets
 in the next call. Your own tile, agents, phones and native mobile apps do not show
-it; screen-share audio is unchanged.
+it; screen-share audio is unchanged. At 0%, the speaker control and that person's
+tile/avatar show a muted-speaker badge labelled **Muted for you**, distinct from
+their microphone status. Raising volume clears the badge across call views.
 
 ### Work in a call
 

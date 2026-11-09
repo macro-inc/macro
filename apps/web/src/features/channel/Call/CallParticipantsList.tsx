@@ -11,8 +11,10 @@ import type { RemoteParticipant } from 'livekit-client';
 import { createMemo, For, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallWaveform } from './CallWaveform';
+import { useCallVolumeOptional } from './call-volume';
 import { isProgramParticipant } from './is-program-participant';
 import { LK_TRACK_SOURCE } from './livekit-loader';
+import { MutedForYouBadge } from './MutedForYouBadge';
 
 function ParticipantRow(props: {
   name: string;
@@ -22,6 +24,7 @@ function ParticipantRow(props: {
   isProgram: boolean;
   speaking: boolean;
   muted: boolean;
+  mutedForYou?: boolean;
   videoEnabled: boolean;
 }) {
   return (
@@ -33,7 +36,7 @@ function ParticipantRow(props: {
     >
       <div
         class={cn(
-          'shrink-0 rounded-full',
+          'relative shrink-0 rounded-full',
           props.compact ? 'size-6' : 'size-8',
           props.speaking && 'outline-2 -outline-offset-2 outline-success'
         )}
@@ -50,6 +53,7 @@ function ParticipantRow(props: {
         >
           {(id) => <UserIcon id={id()} size="fill" suppressClick />}
         </Show>
+        <MutedForYouBadge muted={!!props.mutedForYou} />
       </div>
       <div class="min-w-0 flex-1">
         <div class="flex min-w-0 items-center gap-1">
@@ -114,6 +118,7 @@ function RemoteParticipantRow(props: {
   compact?: boolean;
 }) {
   const call = useCallContext();
+  const volumes = useCallVolumeOptional();
   const userId = () => tryMacroId(props.participant.identity);
   const name = () =>
     props.participant.name?.trim() ||
@@ -132,6 +137,7 @@ function RemoteParticipantRow(props: {
       isProgram={isProgramParticipant(props.participant.attributes)}
       speaking={call.isParticipantSpeaking(props.participant)}
       muted={publication(LK_TRACK_SOURCE.Microphone)?.isMuted ?? true}
+      mutedForYou={volumes?.level(props.participant) === 0}
       videoEnabled={publication(LK_TRACK_SOURCE.Camera)?.isMuted === false}
     />
   );

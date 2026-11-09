@@ -34,7 +34,9 @@ import {
   selectCallPreview,
 } from './call-mini-player';
 import { createCallReactions } from './call-reactions';
+import { useCallVolumeOptional } from './call-volume';
 import { LK_TRACK_SOURCE } from './livekit-loader';
+import { MutedForYouBadge } from './MutedForYouBadge';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
 import { TrackView } from './TrackView';
 
@@ -43,6 +45,7 @@ export function CallMiniPlayer(props: {
   onOpenCall: () => void;
 }) {
   const call = useCallContext();
+  const volumes = useCallVolumeOptional();
   const reactions = createCallReactions(call.room);
   const record = useLiveCallRecordQuery(() => call.activeCallId() ?? '');
   const [corner, setCorner] = createSignal<CallPlayerCorner>('bottom-right');
@@ -151,6 +154,7 @@ export function CallMiniPlayer(props: {
         camera: camera?.track,
         screen: screen?.track,
         local,
+        mutedForYou: !local && volumes?.level(participant) === 0,
       };
     };
     return [
@@ -458,13 +462,14 @@ export function CallMiniPlayer(props: {
                     fallback={
                       <span
                         class={cn(
-                          'flex shrink-0 items-center justify-center rounded-full bg-ink-extra-muted text-surface text-lg font-semibold',
+                          'relative flex shrink-0 items-center justify-center rounded-full bg-ink-extra-muted text-surface text-lg font-semibold',
                           audioOnly() ? 'size-12' : 'size-10',
                           participant().speaking &&
                             'outline-2 -outline-offset-2 outline-success'
                         )}
                       >
                         {participant().name.charAt(0).toUpperCase()}
+                        <MutedForYouBadge muted={participant().mutedForYou} />
                       </span>
                     }
                   >
@@ -493,6 +498,7 @@ export function CallMiniPlayer(props: {
                     'absolute bottom-2 left-2 rounded bg-surface/80 px-2 py-1'
                 )}
               >
+                <MutedForYouBadge muted={participant().mutedForYou} inline />
                 <Show when={participant().sharing}>
                   <Screencast class="mr-1 inline size-3" />
                 </Show>

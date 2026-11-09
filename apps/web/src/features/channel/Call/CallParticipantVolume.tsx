@@ -4,11 +4,12 @@ import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import SpeakerIcon from '@icon/system/regular/speaker-high.svg';
+import SpeakerSlash from '@icon/system/regular/speaker-slash.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Avatar, Button, Slider, Tooltip } from '@ui';
 import type { RemoteParticipant } from 'livekit-client';
-import { createSignal, Show } from 'solid-js';
-import { LK_TRACK_SOURCE } from './livekit-loader';
+import { Show } from 'solid-js';
+import { createCallVolumeState, useCallVolumeOptional } from './call-volume';
 
 /** iOS Safari exposes volume but ignores writes; native mobile owns its audio. */
 export function supportsParticipantVolume() {
@@ -30,11 +31,8 @@ export function CallParticipantVolume(props: {
   const supported = supportsParticipantVolume();
   const viewerId = useUserId();
   const localLabel = () => t('calls.volumeForYou', { name: props.name });
-  const [volume, setVolume] = createSignal(
-    Math.round(
-      (props.participant.getVolume(LK_TRACK_SOURCE.Microphone) ?? 1) * 100
-    )
-  );
+  const volumes = useCallVolumeOptional() ?? createCallVolumeState();
+  const volume = () => Math.round(volumes.level(props.participant) * 100);
   let button: HTMLButtonElement | undefined;
   return (
     <Show when={supported && !isMobile() && !props.participant.isAgent}>
@@ -49,7 +47,9 @@ export function CallParticipantVolume(props: {
           aria-label={t('calls.volume')}
           tooltip={t('calls.volume')}
         >
-          <SpeakerIcon class="size-4" />
+          <Show when={volume() === 0} fallback={<SpeakerIcon class="size-4" />}>
+            <SpeakerSlash class="size-4" />
+          </Show>
         </Popover.Trigger>
         <Popover.Portal
           mount={button?.closest<HTMLElement>('.portal-scope') ?? undefined}
@@ -64,11 +64,7 @@ export function CallParticipantVolume(props: {
               maxValue={100}
               step={1}
               onChange={([value]) => {
-                props.participant.setVolume(
-                  value / 100,
-                  LK_TRACK_SOURCE.Microphone
-                );
-                setVolume(value);
+                volumes.set(props.participant, value / 100);
               }}
               getValueLabel={({ values }) => `${values[0]}%`}
             >
