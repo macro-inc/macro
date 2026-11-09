@@ -48,6 +48,10 @@ Keep drag source validity tied to documentRevision; selection-only commits do no
 
 ## Checks
 
+- Preserve the previous model selection when projecting non-range selections: clear only an owned DOM range after a non-null model selection, retaining readonly, nested-editor and captured-input selections.
+- Register actual external editor roots from their root-listener lifecycle through `view/editor-roots`, releasing the listener and current registration on disposal; keep stale cleanup from removing a newer owner.
+- `selection-projection.test.ts` compares real Source and native sessions for owned, foreign, initial-null, nested and readonly DOM ranges; image-click browser parity also requires the actual native Click dispatch.
+
 - `bun run check`, `bun run test`, `bun run test:browser`
 - `performance.browser.e2e.ts` exercises the real facade exporter and shared browser observer over native paste/reconcile/scroll, current-task long-task delivery, content-free attributes and exact model Undo restoration.
 - `commit-work.browser.e2e.ts` counts real mark measurements and native Highlight range mutations with 8/128 comment/table/code groups, and checks downstream anchors after a block resizes; table observer tests cover merged rows and 8/256-row edit work.

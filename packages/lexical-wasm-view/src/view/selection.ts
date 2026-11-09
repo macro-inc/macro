@@ -4,8 +4,8 @@
  * unchanged-selection early return, Lexical 0.45.0, 0cfcc169296723e07de2396cd42ea3434b5b79ed.
  */
 import { textLeaf } from './dom';
-
-import type { EditorView } from './editor-view';
+import { externalEditorRootOwner } from './editor-roots';
+import { EditorView } from './editor-view';
 import type { Point, ViewSelection } from './types';
 
 export function resolvePoint(
@@ -127,19 +127,79 @@ export function domPoint(
     };
   return { node: slot.element, offset: slot.element.childNodes.length };
 }
+/** Match the source capture guard without importing its editor runtime. */
+export function isSelectionCapturedInDecoratorInput(
+  view: EditorView,
+  anchor: Node | null
+): boolean {
+  const active = view.root.ownerDocument.activeElement;
+  const HTMLElementType = view.root.ownerDocument.defaultView?.HTMLElement;
+  if (!anchor || !HTMLElementType || !(active instanceof HTMLElementType))
+    return false;
+  const key = view.keyFromDOM(anchor);
+  if (key === null || view.node(key)?.kind !== 'decorator') return false;
+  return (
+    active.nodeName === 'INPUT' ||
+    active.nodeName === 'TEXTAREA' ||
+    (active.contentEditable === 'true' &&
+      EditorView.fromDOM(active)?.root !== active &&
+      externalEditorRootOwner(active) === undefined &&
+      Reflect.get(active, '__lexicalEditor') == null)
+  );
+}
+
+/** Both endpoints must be contained; only the anchor chooses the owning editor. */
+export function isSelectionWithinEditor(
+  view: EditorView,
+  anchor: Node | null,
+  focus: Node | null
+): boolean {
+  try {
+    if (
+      !anchor ||
+      !focus ||
+      !view.root.contains(anchor) ||
+      !view.root.contains(focus) ||
+      isSelectionCapturedInDecoratorInput(view, anchor) ||
+      !view.ownsSelection(anchor)
+    )
+      return false;
+    // External roots are registered by their actual editor's mount lifecycle.
+    let current: Node | null = anchor;
+    while (current && current !== view.root) {
+      if (externalEditorRootOwner(current) !== undefined) return false;
+      current = current.parentNode;
+    }
+    return current === view.root;
+  } catch {
+    return false;
+  }
+}
+
 export function writeSelection(
   view: EditorView,
-  selection: ViewSelection
+  selection: ViewSelection,
+  previousSelection: ViewSelection = view.selection().selection
 ): void {
+  if (view.root.contentEditable === 'false') return;
   if (selection.kind === 'keep') return;
   const dom = view.root.ownerDocument.getSelection();
   if (!dom) return;
-  if (selection.kind === 'none') {
-    if (dom.anchorNode && view.root.contains(dom.anchorNode))
+  if (
+    isSelectionCapturedInDecoratorInput(
+      view,
+      view.root.ownerDocument.activeElement
+    )
+  )
+    return;
+  if (selection.kind !== 'range') {
+    if (
+      previousSelection.kind !== 'none' &&
+      isSelectionWithinEditor(view, dom.anchorNode, dom.focusNode)
+    )
       dom.removeAllRanges();
     return;
   }
-  if (selection.kind !== 'range') return;
   const anchor = domPoint(view, selection.anchor),
     focus = domPoint(view, selection.focus);
   if (!anchor || !focus)
