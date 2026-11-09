@@ -26,21 +26,33 @@ program up and get the outcome back.
   minted for an agent's run is refused, so a program cannot start another run.
 - **What.** Reads and writes. Writes are the user's own: `ToolCaller::Document`
   mints a token with no agent.
-- **Where.** HTML file preview only (`HtmlPreview` in a code block and in Drive
-  detail). Canvas artifacts are out. Render stays the default mode. No CSP is
-  added to the preview.
-- **How a file calls it.** Both forms: `macro.run(id, args)` runs
-  `<script type="text/macro" id="…">`, and `macro.run(source, args)` runs the
-  string. The program is TypeScript `async function main({ macro, ...args })`.
-  `macro` is the SDK, already signed in. The frame never sees the token.
-- **Consent.** A dry run goes first. Reads complete with no prompt. If the dry
-  run's activity contains a write, the app lists those operations and asks
-  before the real run. "Always allow writes for this file" is a server-side
-  preference. Not built yet; the route already accepts `dryRun` because the
-  routine-step contract does.
-- **Limits.** Document runs get their own pool, smaller than agent and MCP
-  runs: 2 concurrent per viewer, 30 s. The frame enforces the concurrency cap
-  today; the server still shares the public MCP executor.
+- **Where.** Stored HTML documents only, previewed in Drive detail. HTML in a
+  chat or Markdown code block has no stored file to build, version or hash,
+  so it stays a plain sandboxed frame. Canvas artifacts are out. Render stays
+  the default mode. The preview gets a strict CSP (no network), which closes
+  fetch, beacon and image leaks but not the frame navigating itself, so
+  consent still covers reads.
+- **How a file calls it.** Only by program id. The client imports its
+  programs from `macro:programs` and calls them as typed functions. The
+  build compiles those calls into the host transport. `window.macro` and its
+  messages are internal to the build output, not an API agents write
+  against. A program's default export receives `(args, { macro })` and
+  returns plain JSON; the build wraps it for the runtime, so authors never
+  write `{ data }`. `macro` is the SDK, already signed in. The frame never
+  sees the token.
+- **Run route.** `POST /documents/{id}/code-executions` takes
+  `{ version, program, arguments }`, never source. The server checks that the
+  viewer can view that version, loads its own build of it, and runs the
+  bundle stored under that program id.
+- **Consent.** From the manifest, not a dry run. The server knows each
+  program's SDK operations before anything runs. Opening a file whose author
+  is someone else, or whose programs write, shows one prompt per file listing
+  what it can do. The approval is keyed by the document and the manifest's
+  operation set: an edit that keeps the same operations doesn't ask again.
+  The runtime refuses any operation outside the program's manifest entry.
+- **Limits.** Enforced only on the server: a per-viewer queue in front of a
+  document-run pool, 2 running per viewer, 30 s each. The page waits in the
+  queue instead of failing.
 - **Rollout.** `enable-html-code-mode`, the same key on web and the harness.
   On in local dev; the harness allows every run on a local stack, whose
   PostHog key is often a placeholder. Off leaves the preview a plain sandboxed
@@ -122,17 +134,19 @@ if the run is cancelled.
 
 ## Left to build
 
-1. Dry-run consent in the host: run with `dryRun`, prompt only when activity
-   shows a write, then run for real. Persist "always allow" for that document.
-2. A `Limits` profile and admission keyed by viewer and document, instead of
-   the shared public MCP slots.
-3. Show a failed run in the preview chrome. Today the frame's promise rejects
-   and the page has to catch it.
-4. The backend build: extract, check and bundle a stored HTML file. Cache the
-   result by the source's hash, and keep the manifest of program hashes and
-   operations.
+1. The backend build: extract, check and bundle a stored HTML file. Cache the
+   result by the source's hash, and keep the manifest of program ids, hashes
+   and operations.
+2. The run route takes `{ version, program, arguments }` and runs the stored
+   bundle. Drop `source` and `dryRun`.
+3. The web preview loads the built HTML for Drive HTML documents with a
+   strict CSP, and stops wiring programs into code-block previews.
+4. Manifest consent: the per-file prompt, the saved approval, and the
+   runtime gate on manifest operations.
 5. The publish SDK method, which returns diagnostics and replaces an existing
    document in place.
-6. The run route takes a program hash instead of source. It resolves the
-   hash against the server's build of the document version the viewer can
-   see.
+6. A `Limits` profile with a per-viewer queue, instead of the shared public
+   MCP slots and the frame's cap.
+7. Show a failed run or build in the preview chrome.
+8. Optional: `program.live(args, render)`, which re-runs a program when an
+   event touches an entity type its operations read.
