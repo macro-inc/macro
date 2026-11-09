@@ -2,12 +2,13 @@ import { t } from '@app/lib/i18n';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
+import FileIcon from '@icon/system/regular/file.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import ProhibitIcon from '@icon/system/regular/prohibit.svg';
-import TrashIcon from '@icon/system/regular/trash.svg';
 import {
   Button,
+  type ButtonVariant,
+  buttonClasses,
   cn,
   Dialog,
   Dropdown,
@@ -16,7 +17,7 @@ import {
   SingleSelectCheck,
 } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
-
+import { Dynamic } from 'solid-js/web';
 /** A template row supplies actions without exposing transport or query state. */
 export type TemplatePickerItem = {
   key: string;
@@ -24,7 +25,6 @@ export type TemplatePickerItem = {
   shared: boolean;
   select(): void;
   edit?: () => void;
-  remove?: () => void;
 };
 
 type TemplateChoicesProps = {
@@ -33,6 +33,11 @@ type TemplateChoicesProps = {
   error: boolean;
   selectedKey: string;
   selectedLabel: string;
+  teamName: string;
+  dirty: boolean;
+  pending: boolean;
+  onReset?: () => void;
+  onUpdate?: () => void;
   onSelectNone(): void;
   onNew(): void;
   onRetry(): void;
@@ -40,23 +45,37 @@ type TemplateChoicesProps = {
 
 function TemplateAction(props: {
   menu: boolean;
+  variant?: ButtonVariant;
+  disabled?: boolean;
   label?: string;
   iconOnly?: boolean;
-  danger?: boolean;
   closeOnSelect?: boolean;
   value?: string;
   selected?: boolean;
   children: JSX.Element;
   onSelect(): void;
 }) {
+  const menuClass = () => {
+    if (props.variant)
+      return buttonClasses({
+        variant: props.variant,
+        size: 'sm',
+        class: 'w-auto data-highlighted:overlay-hover',
+      });
+    return props.iconOnly ? 'w-7 shrink-0 justify-center' : 'min-w-0 flex-1';
+  };
   return (
     <Switch
       fallback={
         <Button
-          variant={props.danger ? 'danger-ghost' : 'ghost'}
+          variant={props.variant ?? 'ghost'}
           size={props.iconOnly ? 'icon-xs' : 'sm'}
-          fullWidth={!props.iconOnly}
-          class={props.iconOnly ? 'shrink-0' : 'min-w-0 justify-start'}
+          fullWidth={!props.iconOnly && !props.variant}
+          disabled={props.disabled}
+          class={cn(
+            !props.variant &&
+              (props.iconOnly ? 'shrink-0' : 'min-w-0 justify-start')
+          )}
           aria-label={props.label}
           aria-pressed={props.value ? props.selected : undefined}
           onClick={props.onSelect}
@@ -78,10 +97,8 @@ function TemplateAction(props: {
       </Match>
       <Match when={props.menu}>
         <Dropdown.Item
-          class={cn(
-            props.iconOnly ? 'w-7 shrink-0 justify-center' : 'min-w-0 flex-1',
-            props.danger && 'text-failure-ink'
-          )}
+          class={menuClass()}
+          disabled={props.disabled}
           aria-label={props.label}
           textValue={props.label}
           onSelect={props.onSelect}
@@ -159,21 +176,10 @@ function TemplateChoices(
           selected={props.selectedKey === 'none'}
           onSelect={() => run(props.onSelectNone)}
         >
-          <ProhibitIcon class="size-4 shrink-0" />
+          <FileIcon class="size-4 shrink-0" />
           <span class="min-w-0 flex-1">{t('create.taskTemplateNone')}</span>
           <SingleSelectCheck active={props.selectedKey === 'none'} />
         </TemplateAction>
-        <TemplateAction
-          menu={props.menu}
-          value="new"
-          selected={props.selectedKey === 'new'}
-          onSelect={() => run(props.onNew)}
-        >
-          <PlusIcon class="size-4 shrink-0" />
-          <span class="min-w-0 flex-1">{t('create.taskTemplateNew')}</span>
-          <SingleSelectCheck active={props.selectedKey === 'new'} />
-        </TemplateAction>
-        <hr class="my-1 border-edge-muted" />
         <Switch>
           <Match when={props.error}>
             <div class="flex flex-col items-start gap-2 px-2 py-3 text-sm">
@@ -212,57 +218,90 @@ function TemplateChoices(
             </div>
           </Match>
         </Switch>
-        <For each={filtered()}>
-          {(item) => (
-            <div class="flex min-w-0 items-center gap-1">
-              <TemplateAction
-                menu={props.menu}
-                value={item.key}
-                selected={props.selectedKey === item.key}
-                label={item.label}
-                onSelect={() => run(item.select)}
-              >
-                <CopyIcon class="size-4 shrink-0" />
-                <span class="min-w-0 truncate">{item.label}</span>
-                <span class="ml-auto shrink-0 text-xs text-ink-muted">
-                  {item.shared
-                    ? t('create.taskTemplateTeam')
-                    : t('create.taskTemplatePersonal')}
-                </span>
-                <SingleSelectCheck active={props.selectedKey === item.key} />
-              </TemplateAction>
-              <Show when={item.edit}>
-                {(edit) => (
-                  <TemplateAction
-                    menu={props.menu}
-                    iconOnly
-                    label={t('create.taskTemplateEditNamed', {
-                      name: item.label,
-                    })}
-                    onSelect={() => run(edit())}
-                  >
-                    <PencilIcon class="size-4" />
-                  </TemplateAction>
-                )}
-              </Show>
-              <Show when={item.remove}>
-                {(remove) => (
-                  <TemplateAction
-                    menu={props.menu}
-                    iconOnly
-                    danger
-                    label={t('create.taskTemplateDeleteNamed', {
-                      name: item.label,
-                    })}
-                    onSelect={() => run(remove())}
-                  >
-                    <TrashIcon class="size-4" />
-                  </TemplateAction>
-                )}
-              </Show>
-            </div>
+        <For each={[false, true]}>
+          {(shared) => (
+            <Show when={filtered().some((item) => item.shared === shared)}>
+              <Dynamic component={props.menu ? Dropdown.Group : 'div'}>
+                <Dynamic
+                  component={props.menu ? Dropdown.GroupLabel : 'p'}
+                  class={
+                    props.menu ? undefined : 'px-2 py-2 text-xs text-ink-muted'
+                  }
+                >
+                  {shared ? props.teamName : t('create.taskTemplatePersonal')}
+                </Dynamic>
+                <For each={filtered().filter((item) => item.shared === shared)}>
+                  {(item) => (
+                    <div class="group/template flex min-w-0 items-center gap-1">
+                      <TemplateAction
+                        menu={props.menu}
+                        value={item.key}
+                        selected={props.selectedKey === item.key}
+                        label={item.label}
+                        onSelect={() => run(item.select)}
+                      >
+                        <CopyIcon class="size-4 shrink-0" />
+                        <span class="min-w-0 flex-1 truncate">
+                          {item.label}
+                        </span>
+                        <Show
+                          when={props.dirty && props.selectedKey === item.key}
+                        >
+                          <span class="size-1.5 shrink-0 rounded-full bg-accent" />
+                        </Show>
+                        <SingleSelectCheck
+                          active={props.selectedKey === item.key}
+                        />
+                      </TemplateAction>
+                      <Show when={item.edit}>
+                        {(edit) => (
+                          <div class="shrink-0 opacity-0 group-hover/template:opacity-100 group-focus-within/template:opacity-100 touch:opacity-100">
+                            <TemplateAction
+                              menu={props.menu}
+                              iconOnly
+                              label={t('create.taskTemplateEditNamed', {
+                                name: item.label,
+                              })}
+                              onSelect={() => run(edit())}
+                            >
+                              <PencilIcon class="size-4" />
+                            </TemplateAction>
+                          </div>
+                        )}
+                      </Show>
+                    </div>
+                  )}
+                </For>
+              </Dynamic>
+            </Show>
           )}
         </For>
+        <Dropdown.Separator class="my-1 border-edge-muted" />
+        <TemplateAction menu={props.menu} onSelect={() => run(props.onNew)}>
+          <PlusIcon class="size-4 shrink-0" />
+          <span class="min-w-0 flex-1">{t('create.taskTemplateNew')}</span>
+        </TemplateAction>
+        <Show when={props.dirty && props.onReset && props.onUpdate}>
+          <Dropdown.Separator class="my-1 border-edge-muted" />
+          <div class="flex items-center justify-between gap-2 p-1.5">
+            <TemplateAction
+              menu={props.menu}
+              variant="ghost"
+              disabled={props.pending}
+              onSelect={() => props.onReset && run(props.onReset)}
+            >
+              {t('create.taskTemplateReset')}
+            </TemplateAction>
+            <TemplateAction
+              menu={props.menu}
+              variant="primary"
+              disabled={props.pending}
+              onSelect={() => props.onUpdate && run(props.onUpdate)}
+            >
+              {t('create.taskTemplateUpdate')}
+            </TemplateAction>
+          </div>
+        </Show>
       </div>
     </div>
   );
@@ -289,6 +328,9 @@ export function TemplateDropdown(
       >
         <CopyIcon class="size-4 shrink-0" />
         <span class="min-w-0 max-w-50 truncate">{props.selectedLabel}</span>
+        <Show when={props.dirty}>
+          <span class="size-1.5 shrink-0 rounded-full bg-accent" />
+        </Show>
         <CaretDownIcon class="size-3 shrink-0" />
       </Dropdown.Trigger>
       <Dropdown.Content
