@@ -54,18 +54,29 @@ program up and get the outcome back.
   Delivery is best-effort: a reconnect sends `macro.resync` and the page
   refetches. The app's GraphQL live queries were the alternative; the stream
   was chosen because agents already know its event names from the SDK.
-- **Build.** Deno for everything, no Vite. An artifact is a TypeScript
-  project: client code plus server programs in `src/server/`, with npm
-  dependencies. `deno check` type-checks both sides against the SDK
-  declarations. `deno bundle` bundles the client into the HTML and each
-  server program on its own. The client imports `#server/<name>`, which
-  `deno.json` maps to generated stubs that call `macro.run(<hash>, args)`.
-  React and Preact JSX work. Solid, Svelte, Tailwind and HMR need Vite and
-  are out until required. The build runs in `code_execution`'s Deno sandbox,
-  with npm reached through a registry proxy. Coding agents run the same
-  commands in their own sandbox. The archived plugin compiler
-  (`archive/plugin-platform-2026-08`, `packages/plugin-cli`) has the
-  client/server import policy and per-entry hashing to port.
+- **Build.** The agent uploads one readable HTML file, and the backend
+  builds it with Deno; there is no Vite and no toolchain on the agent's side.
+  Server programs are `<script type="text/macro" id="…" lang="ts">` blocks
+  whose default export takes `(args, { macro })`. Client code is a
+  `<script type="module" lang="ts">` that imports its programs, typed, from
+  `macro:programs` and `on` from `macro:client`. Both sides may import
+  `npm:` packages. The backend extracts the blocks into virtual files,
+  runs `deno check` against the SDK declarations, and runs `deno bundle` for
+  the client and for each program. It hashes each bundled program and records
+  the SDK operations it calls. The server computes this manifest, so it is
+  trusted, not declared by the author. The build runs in `code_execution`'s
+  Deno sandbox, with npm reached through a cached registry proxy and no
+  install scripts. The stored document stays the source that agents and
+  people edit. The built HTML is derived content keyed by the source's hash,
+  and the preview loads it. React and Preact JSX work; Solid, Svelte,
+  Tailwind and HMR need Vite and are out until required. The archived plugin
+  compiler (`archive/plugin-platform-2026-08`, `packages/plugin-cli`) has
+  the client/server import policy and per-program hashing to port.
+- **Publishing.** Agents call one SDK method that uploads and builds, and
+  returns the document with any diagnostics. Given an existing document, it
+  saves a new version under the same id. A plain upload or an edit in Drive
+  builds when first viewed. A failed build shows its diagnostics in the
+  preview chrome instead of the page.
 
 ## Flow
 
@@ -117,5 +128,11 @@ if the run is cancelled.
    the shared public MCP slots.
 3. Show a failed run in the preview chrome. Today the frame's promise rejects
    and the page has to catch it.
-4. The Deno build: bundle, generate stubs, and write a manifest of program
-   hashes. The run route then takes a program hash instead of source.
+4. The backend build: extract, check and bundle a stored HTML file. Cache the
+   result by the source's hash, and keep the manifest of program hashes and
+   operations.
+5. The publish SDK method, which returns diagnostics and replaces an existing
+   document in place.
+6. The run route takes a program hash instead of source. It resolves the
+   hash against the server's build of the document version the viewer can
+   see.
