@@ -11,6 +11,11 @@ pub trait SyncPolicy: Send + Sync + 'static {
     fn allows_null_text(&self, _node_type: &str) -> bool {
         false
     }
+    /// Source export rule used only when comparing projected model and Loro values.
+    /// This never changes writer fields, persisted data, or construction authority.
+    fn comparison_kind(&self, _node_type: &str) -> ComparisonKind {
+        ComparisonKind::Exact
+    }
     /// Drop the node and its entire subtree.
     fn is_dropped(&self, view: StateRef<'_>, key: NodeKey) -> bool;
     /// Replace this local wrapper with its synced descendants.

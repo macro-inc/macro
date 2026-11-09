@@ -229,8 +229,8 @@ impl LoroProjection {
         policy: &'static dyn SyncPolicy,
     ) -> Result<Self> {
         doc.set_record_timestamp(false);
-        let expected = synced_json(state, policy)?;
-        let actual = reconstruct_state(doc, policy)?;
+        let expected = comparison::model(state, policy)?;
+        let actual = comparison::loro(doc, policy)?;
         if expected != actual {
             return Err(diverged("attach synced JSON differs"));
         }
@@ -268,8 +268,9 @@ impl LoroProjection {
         doc: &LoroDoc,
         state: &EditorState,
     ) -> std::result::Result<(), Inconsistency> {
-        let editor = synced_json(state, self.policy).map(|s| serde_json::Value::Object(s.root));
-        let actual = reconstruct_state(doc, self.policy).map(|s| serde_json::Value::Object(s.root));
+        let editor =
+            comparison::model(state, self.policy).map(|s| serde_json::Value::Object(s.root));
+        let actual = comparison::loro(doc, self.policy).map(|s| serde_json::Value::Object(s.root));
         match (editor, actual) {
             (Ok(editor), Ok(actual)) if editor == actual => {}
             (editor, actual) => {
@@ -305,7 +306,7 @@ impl LoroProjection {
                 if !view.is_attached(key) || synced_owner(view, key, self.policy) != Some(key) {
                     continue;
                 }
-                let expected = own(view, key, self.policy);
+                let expected = comparison::model_own(view, key, self.policy);
                 let actual = self.index.map(doc, key).and_then(|map| {
                     if map.is_deleted() {
                         return Err(diverged("indexed map deleted"));
@@ -322,8 +323,7 @@ impl LoroProjection {
                     {
                         return Err(diverged("cached slot identity changed"));
                     }
-                    let mut json = schema::own_map(&map, self.policy)?;
-                    mask_local(&mut json, self.policy);
+                    let json = comparison::loro_own(&map, self.policy)?;
                     let expected_children = synced_children(view, key, self.policy);
                     let maps = projected_children(&map, self.policy)?;
                     if expected_children.len() != maps.len()

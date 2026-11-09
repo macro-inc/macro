@@ -73,6 +73,8 @@ pub struct LocalProjected {
     /// Incremental work performed.
     pub stats: ProjectionStats,
 }
+mod comparison;
+pub use comparison::ComparisonKind;
 mod policy;
 pub use policy::*;
 mod index;
