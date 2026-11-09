@@ -291,7 +291,10 @@ test('sending from the panel replies in the call thread, never to the channel', 
 }, testInfo) => {
   // The touch composer starts collapsed; its own suite covers opening it.
   test.skip(testInfo.project.name === 'phone');
-  const { posted } = await open(page, 'panel', { status: { state: 'live' } });
+  const { posted } = await open(page, 'panel', {
+    status: { state: 'live' },
+    fullOverlay: process.env.CALL_FULL_HOST === 'true',
+  });
 
   await expect(page.getByText('Replying in the call thread')).toHaveCount(0);
   const composer = page.locator('[data-markdown-editable]');
@@ -314,6 +317,7 @@ test('a thread with messages opens at the newest, and a reply quotes in place', 
   test.skip(testInfo.project.name === 'phone');
   const { posted } = await open(page, 'panel', {
     status: { state: 'live' },
+    fullOverlay: process.env.CALL_FULL_HOST === 'true',
     replies: Array.from({ length: 40 }, (_, index) =>
       reply(
         `00000000-0000-7000-8000-0000000b00${(10 + index).toString()}`,
@@ -345,23 +349,32 @@ test('dismissing an explicit reply returns to the unflagged call-thread composer
   test.skip(testInfo.project.name === 'phone');
   const { posted } = await open(page, 'panel', {
     status: { state: 'live' },
+    fullOverlay: process.env.CALL_FULL_HOST === 'true',
     replies: [reply('00000000-0000-7000-8000-000000000b01', 'A call message')],
   });
   const message = page.getByText('A call message', { exact: true });
   await expect(message).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText('Replying in the call thread')).toHaveCount(0);
+  const editor = await page.locator('[data-markdown-editable]').elementHandle();
   await message.hover();
   await page
     .getByRole('button', { name: 'Reply', exact: true })
     .first()
     .click();
-  await page
-    .getByRole('button', { name: 'Stop replying', exact: true })
-    .click();
-  await expect(
-    page.getByRole('button', { name: 'Stop replying', exact: true })
-  ).toHaveCount(0);
+  if (process.env.CALL_REPRO_DIR)
+    await page.screenshot({
+      path: `${process.env.CALL_REPRO_DIR}/review-explicit-reply-${process.env.CALL_REPRO_PHASE ?? 'after'}.png`,
+    });
+  const dismiss = page.getByRole('button', {
+    name: 'Stop replying',
+    exact: true,
+  });
+  await expect(dismiss).toBeVisible();
+  expect(await editor?.evaluate((element) => element.isConnected)).toBe(true);
+  await dismiss.click();
+  await expect(dismiss).toHaveCount(0);
   await expect(page.getByText('Replying in the call thread')).toHaveCount(0);
+  expect(await editor?.evaluate((element) => element.isConnected)).toBe(true);
   await page.locator('[data-markdown-editable]').click();
   await page.keyboard.type('Back in the call');
   await page.getByRole('button', { name: /send/i }).click();

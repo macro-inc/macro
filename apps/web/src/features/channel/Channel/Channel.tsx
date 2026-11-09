@@ -403,6 +403,16 @@ export function Channel(props: ChannelProps) {
     onReplyThreadReleased: (threadId) => releaseSelectionAndTarget(threadId),
   });
 
+  const isDefaultCallThread = () => {
+    const target = unifiedInput.replyTarget();
+    return (
+      !!callPanel &&
+      target?.threadId === callPanel.rootId &&
+      !target.replyId &&
+      !target.message
+    );
+  };
+
   const threadManager = createThreadManager(
     props.initialMessagesStateSnapshot?.threads
   );
@@ -1280,14 +1290,14 @@ export function Channel(props: ChannelProps) {
                                   (messageById().get(threadId)?.thread
                                     .reply_count ?? 0) > 0
                                 }
-                                plain={!!callPanel}
+                                plain={isDefaultCallThread()}
                                 placeholder={
-                                  callPanel
+                                  isDefaultCallThread()
                                     ? t('calls.messageThisCall')
                                     : undefined
                                 }
                                 pinnedLabel={
-                                  threadId === callPanel?.rootId
+                                  isDefaultCallThread()
                                     ? () => t('calls.replyingInCallThread')
                                     : undefined
                                 }

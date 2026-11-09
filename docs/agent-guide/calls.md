@@ -138,8 +138,9 @@ In the call, the panel opens on desktop and tablet, closed on phones. Its first 
 On phones, Chat and Participants fill the shared sheet's tab row; Participants keeps the attendee count. The sheet opens at 65% height. It shows the channel up to the call's row, opened on the call-specific chat illustration at the default 192px size and “Start the conversation.” when the thread is empty
 and at the newest message otherwise. The composer shares the messages' horizontal inset
 in both docked and overlay panels while keeping its bottom spacing. The composer opens as a plain message input bound to the call discussion. Reply
-mode appears only after choosing Reply on a message; closing or sending that reply
-returns to the plain call composer. The call root remains above the conversation;
+mode appears only after choosing Reply on a message, with target navigation and
+**Stop replying** available; closing or sending that reply returns to the plain
+call composer without replacing its editor. The call root remains above the conversation;
 replies show root-style avatars, names and times without thread rails or indent.
 This is presentation only: nothing posts top-level from the panel. A popup counts top-level messages
 others have sent to the channel since you joined, and **View** swaps to the Messages tab with the
