@@ -20,7 +20,7 @@ identities come from callers; transport and durable storage run outside this cra
 - `push_in_flight` and `is_delivered` expose read-only own-WAL diagnostics, including
   acknowledgements above a prefix blocked by parked rows; hosts never mutate them.
 - `PeerSupply` validates host-generated peers; never generate identities here.
-- `PresenceBackend` is the clock-injected port; `SyncCore` installs
+- `PresenceBackend: Send` is the clock-injected port; `SyncCore` installs
   `ProtocolPresence` over `sync_protocol::presence` by default. It retains Loro
   wire bytes and sender timestamps, returns ordered peers and expires strictly
   after the configured wall timeout.

@@ -1,4 +1,5 @@
 use super::*;
+use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 struct PresenceState {
@@ -7,7 +8,7 @@ struct PresenceState {
     applied: Vec<Vec<u8>>,
     all: usize,
 }
-struct Presence(Rc<RefCell<PresenceState>>);
+struct Presence(Arc<Mutex<PresenceState>>);
 impl PresenceBackend for Presence {
     fn set(
         &mut self,
@@ -15,24 +16,24 @@ impl PresenceBackend for Presence {
         value: loro::LoroValue,
         at: UnixMillis,
     ) -> Result<(), PresenceError> {
-        let mut s = self.0.borrow_mut();
+        let mut s = self.0.lock().unwrap();
         s.values.insert(key.into(), value);
         s.writes.push((key.into(), at));
         Ok(())
     }
     fn apply(&mut self, bytes: &[u8], _: UnixMillis) -> Result<(), PresenceError> {
-        self.0.borrow_mut().applied.push(bytes.into());
+        self.0.lock().unwrap().applied.push(bytes.into());
         Ok(())
     }
     fn encode(&self, key: &str, _: UnixMillis) -> Result<Vec<u8>, PresenceError> {
         Ok(key.as_bytes().to_vec())
     }
     fn encode_all(&self, _: UnixMillis) -> Result<Vec<u8>, PresenceError> {
-        self.0.borrow_mut().all += 1;
+        self.0.lock().unwrap().all += 1;
         Ok(vec![1])
     }
     fn remove_outdated(&mut self, at: UnixMillis) -> bool {
-        let mut s = self.0.borrow_mut();
+        let mut s = self.0.lock().unwrap();
         if s.writes.last().is_some_and(|(_, t)| at.0 - t.0 > 10000) {
             s.values.clear();
             true
@@ -42,7 +43,8 @@ impl PresenceBackend for Presence {
     }
     fn peers(&self, key: &str) -> Vec<PeerPresence> {
         self.0
-            .borrow()
+            .lock()
+            .unwrap()
             .values
             .iter()
             .filter(|(k, v)| k.as_str() != key && **v != loro::LoroValue::Null)
@@ -56,8 +58,8 @@ impl PresenceBackend for Presence {
         None
     }
 }
-fn install(h: &mut Harness) -> Rc<RefCell<PresenceState>> {
-    let state = Rc::new(RefCell::new(PresenceState::default()));
+fn install(h: &mut Harness) -> Arc<Mutex<PresenceState>> {
+    let state = Arc::new(Mutex::new(PresenceState::default()));
     h.core
         .set_presence_backend(Box::new(Presence(state.clone())));
     state
@@ -68,7 +70,7 @@ fn s7_004_chatter_imports_updates_and_awareness() {
     h.core.config.chatter = true;
     let state = install(&mut h);
     h.send(SyncInput::Chatter(ChatterMessage::Awareness(vec![4])));
-    assert_eq!(state.borrow().applied, vec![vec![4]]);
+    assert_eq!(state.lock().unwrap().applied, vec![vec![4]]);
     h.send(SyncInput::Chatter(ChatterMessage::Update(
         row(1).record.bytes,
     )));
@@ -85,9 +87,9 @@ fn s7_010_presence_changes_coalesce_for_25ms() {
     h.core.presence_due = None;
     h.send(SyncInput::SetPresence(Some(1.into())));
     h.at(10, SyncInput::SetPresence(Some(2.into())));
-    assert!(state.borrow().writes.is_empty());
+    assert!(state.lock().unwrap().writes.is_empty());
     h.at(25, SyncInput::Tick);
-    assert_eq!(state.borrow().writes.len(), 1);
+    assert_eq!(state.lock().unwrap().writes.len(), 1);
 }
 #[test]
 fn s7_056_presence_sends_only_when_open() {
@@ -109,9 +111,9 @@ fn s7_090_presence_expiry_uses_supplied_wall_time() {
     let state = install(&mut h);
     h.send(SyncInput::SetPresence(Some(1.into())));
     h.at(25, SyncInput::Tick);
-    assert!(!state.borrow().values.is_empty());
+    assert!(!state.lock().unwrap().values.is_empty());
     h.at(11000, SyncInput::Tick);
-    assert!(state.borrow().values.is_empty());
+    assert!(state.lock().unwrap().values.is_empty());
 }
 #[test]
 fn s7_091_presence_contains_user_and_selection() {
@@ -119,7 +121,7 @@ fn s7_091_presence_contains_user_and_selection() {
     let state = install(&mut h);
     h.send(SyncInput::SetPresence(Some(42.into())));
     h.at(25, SyncInput::Tick);
-    let state = state.borrow();
+    let state = state.lock().unwrap();
     let loro::LoroValue::Map(value) = state.values.get("1").unwrap() else {
         panic!()
     };
@@ -134,7 +136,7 @@ fn s7_091_presence_contains_user_and_selection() {
 fn s7_092_remote_presence_excludes_self_and_cleared_values() {
     let mut h = Harness::running(TransportKind::None, Persistence::Memory);
     let state = install(&mut h);
-    state.borrow_mut().values = BTreeMap::from([
+    state.lock().unwrap().values = BTreeMap::from([
         ("1".into(), 1.into()),
         ("2".into(), 2.into()),
         ("3".into(), loro::LoroValue::Null),
@@ -153,7 +155,7 @@ fn s7_093_palette_color_comes_from_configuration() {
     let state = install(&mut h);
     h.send(SyncInput::SetPresence(Some(1.into())));
     h.at(25, SyncInput::Tick);
-    let s = state.borrow();
+    let s = state.lock().unwrap();
     let loro::LoroValue::Map(v) = s.values.get("1").unwrap() else {
         panic!()
     };
@@ -168,9 +170,9 @@ fn s7_104_presence_refreshes_after_three_seconds() {
     let state = install(&mut h);
     h.send(SyncInput::SetPresence(Some(1.into())));
     h.at(25, SyncInput::Tick);
-    let n = state.borrow().writes.len();
+    let n = state.lock().unwrap().writes.len();
     h.at(3025, SyncInput::Tick);
-    assert_eq!(state.borrow().writes.len(), n + 1);
+    assert_eq!(state.lock().unwrap().writes.len(), n + 1);
 }
 #[test]
 fn s7_110_initial_sync_imports_awareness() {
@@ -185,7 +187,7 @@ fn s7_110_initial_sync_imports_awareness() {
         snapshot: SliceWrapper::from_cooked(&[]),
         awareness: SliceWrapper::from_cooked(&[8]),
     });
-    assert_eq!(state.borrow().applied, vec![vec![8]]);
+    assert_eq!(state.lock().unwrap().applied, vec![vec![8]]);
 }
 #[test]
 fn s7_113_ai_range_fixed_presence_key_encodes_all() {
@@ -197,8 +199,8 @@ fn s7_113_ai_range_fixed_presence_key_encodes_all() {
     let state = install(&mut h);
     h.send(SyncInput::SetPresence(Some(1.into())));
     h.at(25, SyncInput::Tick);
-    assert!(state.borrow().values.contains_key("worker-test"));
-    assert_eq!(state.borrow().all, 1);
+    assert!(state.lock().unwrap().values.contains_key("worker-test"));
+    assert_eq!(state.lock().unwrap().all, 1);
 }
 
 #[test]
