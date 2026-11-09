@@ -30,11 +30,12 @@ export function routineCatalogQueryOptions(timezone: string) {
 
 /**
  * Macro's catalog routines, with schedules in this browser's zone; empty
- * until they load, so the routines list never waits on them.
+ * until they first load, so the routines list never waits on them, and kept
+ * through a failed refetch (FE-48).
  */
 export function useRoutineCatalog(): () => RoutineTemplate[] {
   const query = useQuery(() =>
     routineCatalogQueryOptions(getDefaultTimezone())
   );
-  return () => (query.isSuccess ? query.data : []);
+  return () => (query.isPending ? [] : (query.data ?? []));
 }
