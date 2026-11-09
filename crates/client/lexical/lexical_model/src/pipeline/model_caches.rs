@@ -138,6 +138,8 @@ fn root_text_changed(tx: &Transaction<'_>) -> bool {
     let previous_view = StateRef {
         #[cfg(feature = "foreign-nodes")]
         foreign_origin: next_view.foreign_origin,
+        #[cfg(feature = "foreign-nodes")]
+        foreign_update_facts: next_view.foreign_update_facts,
         ..previous.view()
     };
     let unchanged_elements = !tx.full_reconcile

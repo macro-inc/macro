@@ -198,3 +198,5 @@ Opt out of class static transforms with without_static_transforms only when an e
 Supply foreign_instance_hooks on the builder when hydration or initial document callbacks need the runtime; install it before initial-state parsing/publication, without running JS constructors during registration.
 
 Install foreign_native_hooks on exact builtin registrations before flag computation; retain their typed payload/index/ancestry and saved native baseline. Dynamic foreign children must execute inherited baseline mutations through native projection, while native payloads use the baseline directly. Import/update/export/clone lifecycle and static-transform callbacks use separate host paths.
+
+Capture actual update dirty sets, intent and full-reconcile mode in ForeignReadSnapshot metadata for pure host callouts; preserve those facts through readonly peers, suspend/resume and authorized historical read contexts instead of inferring them from rendered records or the peer dirty sets. Composition remains the snapshot view fact.

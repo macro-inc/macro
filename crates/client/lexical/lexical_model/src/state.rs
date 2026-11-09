@@ -111,6 +111,8 @@ impl EditorState {
     pub fn view(&self) -> StateRef<'_> {
         StateRef {
             #[cfg(feature = "foreign-nodes")]
+            foreign_update_facts: None,
+            #[cfg(feature = "foreign-nodes")]
             foreign_selection_argument: None,
             #[cfg(feature = "foreign-nodes")]
             native_projection: None,

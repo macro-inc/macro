@@ -13,6 +13,8 @@ pub use structural::CommonAncestor;
 #[derive(Clone, Copy)]
 pub struct StateRef<'state> {
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_update_facts: Option<crate::foreign::update_facts::UpdateFactsRef<'state>>,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_selection_argument: Option<&'state ForeignSelectionCapture>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_native_calls:
@@ -910,6 +912,8 @@ impl<'state> StateRef<'state> {
         }
         let snapshot = self.with_text_slice(key, text)?;
         StateRef {
+            #[cfg(feature = "foreign-nodes")]
+            foreign_update_facts: self.foreign_update_facts,
             #[cfg(feature = "foreign-nodes")]
             foreign_selection_argument: self.foreign_selection_argument,
             #[cfg(feature = "foreign-nodes")]

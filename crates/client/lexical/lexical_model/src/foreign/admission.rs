@@ -42,6 +42,7 @@ impl Transaction<'_> {
         self.foreign_read_only = update.read_only;
         self.foreign_read_sources = update.read_sources;
         self.foreign_read_origin = update.read_origin;
+        self.foreign_read_update_facts = update.read_update_facts;
         self.foreign_retired_records = update.retired_records;
         self.foreign_previous_selection = update.previous_selection;
         self.foreign_previous_selection_identity = update.previous_selection_identity;
