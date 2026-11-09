@@ -176,10 +176,7 @@ export function ChannelsMobileView(props: {
         class="scrollbar-hidden size-full min-h-0 overflow-y-auto overscroll-none"
       >
         <div ref={setListHeader}>
-          <div
-            aria-hidden="true"
-            class="h-[calc(var(--mobile-content-inset-top,0px)+0.75rem)]"
-          />
+          <div aria-hidden="true" class="h-(--mobile-content-inset-top)" />
           <Show when={pinned().length > 0}>
             <ChannelPinGrid>
               <For each={pinned()}>

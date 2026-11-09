@@ -25,11 +25,21 @@ test('collapses beside the view title and reopens before touch filters', async (
   await collapse.tap();
   const expand = page.getByRole('button', { name: 'Show navigation' });
   await expect(expand).toBeVisible();
-  const expandBox = await expand.boundingBox();
-  const filterBox = await page
-    .getByRole('button', { name: 'Filters', exact: true })
-    .boundingBox();
-  expect(expandBox!.x + expandBox!.width).toBeLessThan(filterBox!.x);
+  const controls = await page.evaluate(() => {
+    const expand = document.querySelector<HTMLButtonElement>(
+      '[data-view-sidebar-toggle="expand"]'
+    );
+    const filters = document.querySelector<HTMLButtonElement>(
+      '[aria-label="Filters"]'
+    );
+    if (!expand || !filters) throw new Error('Touch controls are missing');
+    // Measure together while the sidebar's close animation moves the pane.
+    return {
+      expandRight: expand.getBoundingClientRect().right,
+      filterLeft: filters.getBoundingClientRect().left,
+    };
+  });
+  expect(controls.expandRight).toBeLessThan(controls.filterLeft);
   await expand.tap();
   await expect(collapse).toBeVisible();
   await expect(collapse).toBeFocused();
@@ -65,7 +75,7 @@ test('uses the same width breakpoint on touch and retains the wide preference af
   await expect(expand).toBeVisible();
 });
 
-test('the mobile channel list scrolls full frame behind its navigation row', async ({
+test('phone Chat has no navigation row or extra gap and wide Chat retains sidebar controls', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -73,26 +83,24 @@ test('the mobile channel list scrolls full frame behind its navigation row', asy
     '/src/components/view-shell/browser-test/touch-sidebar.html?channels'
   );
   const expand = page.getByRole('button', { name: 'Show navigation' });
-  await expect(expand).toBeVisible();
+  await expect(expand).toBeHidden();
   const scroller = page.getByTestId('channel-scroll');
   const shell = page.locator('[data-view-shell-main]');
   const scrollBox = await scroller.boundingBox();
   const shellBox = await shell.boundingBox();
   expect(scrollBox!.y).toBe(shellBox!.y);
   expect(scrollBox!.height).toBe(shellBox!.height);
-  const buttonBefore = await expand.boundingBox();
   const first = scroller.locator('[data-channel-row="0"]');
-  const rowBefore = await first.boundingBox();
-  expect(rowBefore!.y).toBeGreaterThanOrEqual(
-    buttonBefore!.y + buttonBefore!.height
-  );
+  expect((await first.boundingBox())!.y).toBe(scrollBox!.y);
   await scroller.evaluate((element) => {
     element.scrollTop = 80;
   });
-  expect((await first.boundingBox())!.y).toBeLessThan(buttonBefore!.y);
-  expect(await expand.boundingBox()).toEqual(buttonBefore);
-  await expand.tap();
-  await expect(
-    page.getByRole('button', { name: 'Close navigation backdrop' })
-  ).toBeVisible();
+  expect((await first.boundingBox())!.y).toBeLessThan(scrollBox!.y);
+  await page.setViewportSize({ width: 1000, height: 844 });
+  await page.getByRole('button', { name: 'Hide navigation' }).tap();
+  await expect(expand).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(expand).toBeHidden();
+  await page.setViewportSize({ width: 1000, height: 844 });
+  await expect(expand).toBeVisible();
 });

@@ -3,11 +3,35 @@ import { ChannelsViewMain } from '@app/features/channels-view/components/Channel
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
-import { ViewShell } from '../ViewShell';
+import { useViewShell, ViewShell } from '../ViewShell';
 import { ViewSidebar } from '../ViewSidebar';
 
 document.documentElement.dataset.touchDevice = 'true';
 document.documentElement.dataset.platform = 'ios';
+
+function ChannelsFixtureMain() {
+  const shell = useViewShell();
+  return (
+    <ChannelsViewMain mobileLayout={shell.breakpoints.narrow?.() ?? false}>
+      <div
+        data-testid="channel-scroll"
+        class="size-full min-h-0 overflow-y-auto"
+      >
+        <div aria-hidden="true" class="h-(--mobile-content-inset-top)" />
+        <For each={Array.from({ length: 30 }, (_, index) => index)}>
+          {(index) => (
+            <div
+              data-channel-row={index}
+              class="h-18 shrink-0 border-b border-edge p-4"
+            >
+              Conversation {index + 1}
+            </div>
+          )}
+        </For>
+      </div>
+    </ChannelsViewMain>
+  );
+}
 
 function Fixture() {
   const [tab, setTab] = createSignal('all');
@@ -58,27 +82,7 @@ function Fixture() {
             </ViewShell.Main>
           }
         >
-          <ChannelsViewMain mobileLayout>
-            <div
-              data-testid="channel-scroll"
-              class="size-full min-h-0 overflow-y-auto"
-            >
-              <div
-                aria-hidden="true"
-                class="h-[calc(var(--mobile-content-inset-top,0px)+0.75rem)]"
-              />
-              <For each={Array.from({ length: 30 }, (_, index) => index)}>
-                {(index) => (
-                  <div
-                    data-channel-row={index}
-                    class="h-18 shrink-0 border-b border-edge p-4"
-                  >
-                    Conversation {index + 1}
-                  </div>
-                )}
-              </For>
-            </div>
-          </ChannelsViewMain>
+          <ChannelsFixtureMain />
         </Show>
       </ViewShell.Root>
     </div>

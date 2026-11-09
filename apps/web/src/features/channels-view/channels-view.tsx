@@ -3,6 +3,7 @@ import {
   ViewShell,
   ViewSidebar,
 } from '@app/components/view-shell';
+import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { markChannelNotificationsSeenOnOpen } from '@app/features/next-soup/utils';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
@@ -189,24 +190,26 @@ function ChannelsViewRoot() {
             </div>
           }
         >
-          <ViewShell.Aside>
-            <DebugSuspense
-              name="ChannelsView.rail"
-              fallback={
-                <SpinnerIcon
-                  aria-hidden={false}
-                  aria-label="Loading channels"
-                  class="size-5 animate-spin"
+          <Show when={!mobileLayout()}>
+            <ViewShell.Aside>
+              <DebugSuspense
+                name="ChannelsView.rail"
+                fallback={
+                  <SpinnerIcon
+                    aria-hidden={false}
+                    aria-label="Loading channels"
+                    class="size-5 animate-spin"
+                  />
+                }
+              >
+                <DesktopChannelsRail
+                  sources={sources}
+                  searchOpen={railSearchOpen()}
+                  onSearchOpenChange={setRailSearchOpen}
                 />
-              }
-            >
-              <DesktopChannelsRail
-                sources={sources}
-                searchOpen={railSearchOpen()}
-                onSearchOpenChange={setRailSearchOpen}
-              />
-            </DebugSuspense>
-          </ViewShell.Aside>
+              </DebugSuspense>
+            </ViewShell.Aside>
+          </Show>
           <ChannelsViewMain mobileLayout={mobileLayout()}>
             <Show
               when={!mobileLayout()}
@@ -415,13 +418,16 @@ export function ChannelDetailRouteView() {
 
 /** Chat workspace with shared workspace navigation. */
 export function ChannelsView(props: ChannelsViewProps) {
+  const inlinePreviewLayout = useInlinePreviewLayout();
   return (
     <DebugSuspense name="ChannelsView.root">
       <SplitPanel.Root>
         <SplitPanel.Body>
           <ViewShell.Root
             asidePreferenceKey="channels"
-            aside={{ preserveDuringResize: false }}
+            aside={
+              inlinePreviewLayout() ? { preserveDuringResize: false } : false
+            }
             main={{ preferredWidth: 640 }}
             resizable
           >

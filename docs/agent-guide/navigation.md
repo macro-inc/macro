@@ -392,7 +392,8 @@ The app views are referred to as **workspaces**. Expanded workspace sidebars sta
 at the shared 256px width; manual resizing and narrow layouts can change the
 displayed width. Navigation sidebars use the same container-width rule on desktop
 and touch, including unfolded Duo: docked above 720px, an overlay at 720px or
-below. **Hide navigation** sits to the right of the sidebar title. After hiding,
+below. Chat is the touch exception: at 720px or narrower it shows its full-frame
+conversation list without a sidebar or expand button. **Hide navigation** sits to the right of the sidebar title. After hiding,
 **Show navigation** is the first control in the touch filter row, or the main
 header when that view has no filter row. Each workspace retains its wide-layout
 choice across reloads and fold/unfold transitions; closing a narrow overlay does

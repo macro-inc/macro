@@ -1066,13 +1066,12 @@ The sidebar title row's **Hide navigation** control hides the whole rail.
 Reopen it with **Show navigation** before the conversation title on desktop,
 or as the leading header pill on touch. Chat remembers the wide-layout choice
 independently of other workspaces. The rail uses the shared 256px starting width,
-docks above 720px, and opens as an overlay at 720px or narrower. It remains
-collapsible with no conversation selected and while showing Threads. Narrow
-touch keeps the Recent conversation list and full-screen navigation; unfolded
-touch uses the same inline conversation selection as a wide desktop pane.
-The narrow touch list fills the frame behind its floating navigation row. Its
-initial top clearance scrolls away with the conversations while the row stays
-fixed and remains tappable.
+docks above 720px. Narrow desktop panes use a navigation overlay. It remains
+collapsible with no conversation selected and while showing Threads. At 720px
+or narrower, touch shows only the full-frame Recent conversation list and
+full-screen navigation, with no sidebar, expand button, or reserved navigation
+row. Only the safe-area top inset precedes the list. Wider touch panes use the
+sidebar and inline conversation selection like desktop.
 
 ### Sidebar redesign rollout
 
