@@ -25,6 +25,7 @@ serde.workspace = true
 proptest.workspace = true
 
 [features]
+compatibility = ["lexical_model/foreign-nodes"]
 conformance = []
 # Simulation-only malformed projection producer; never ship enabled.
 test-faults = []

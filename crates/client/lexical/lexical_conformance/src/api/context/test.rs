@@ -843,3 +843,42 @@ fn first_previous_selection_and_point_captures_survive_rollback_of_a_later_updat
     context.discard_update()?;
     Ok(())
 }
+
+#[test]
+fn notification_own_getters_survive_detached_collection() -> Result<()> {
+    use macro_document_model::nodes::CursorSystemNotificationNode;
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .node::<CursorSystemNotificationNode>()
+        .build()
+        .expect("editor");
+    let mut host = Context::default();
+    let mut tx = editor.transaction();
+    host.begin_update(&mut tx)?;
+    let key = tx.create(CursorSystemNotificationNode {
+        text: "retained notification".into(),
+        source: "fixture".into(),
+        attributes: [("kind".into(), "notice".into())].into(),
+    })?;
+    let raw = host.replay.node(tx.view(), key.into())?;
+    host.encode(raw.clone())?;
+    tx.flush()?;
+    assert!(!tx.view().contains(key));
+    host.finish_update(&tx)?;
+    let commit = tx.commit()?;
+    host.publish(commit.next)?;
+    let mut tx = editor.transaction();
+    assert_eq!(
+        super::super::nodes::call(&mut host.replay, &mut tx, &raw, "getText", &[])?,
+        json!("retained notification")
+    );
+    assert_eq!(
+        super::super::nodes::call(&mut host.replay, &mut tx, &raw, "getSource", &[])?,
+        json!("fixture")
+    );
+    assert_eq!(
+        super::super::nodes::call(&mut host.replay, &mut tx, &raw, "getAttributes", &[])?,
+        json!({"kind":"notice"})
+    );
+    assert!(super::super::nodes::call(&mut host.replay, &mut tx, &raw, "getLatest", &[]).is_err());
+    Ok(())
+}

@@ -609,7 +609,7 @@ fn nested_model_callback_frames_share_record_identity_without_borrowing_the_pare
         );
         assert_eq!(tx.text_content(NodeKey::ROOT), "\n\nnested");
         tx.commit()?;
-        records.release_version(1)?;
+        records.release_version(0, 1)?;
         let recaptured = parent.node(editor.state().view(), crate::replay::node_key(&nested)?)?;
         assert_ne!(recaptured["identity"], nested["identity"]);
         bindings.release_saved_state(snapshot["$snapshot"].as_u64().expect("snapshot") as usize)?;

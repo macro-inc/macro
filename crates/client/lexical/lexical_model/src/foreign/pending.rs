@@ -1,9 +1,9 @@
-//! Owned updates held across development host calls.
+//! Owned unpublished updates held across runtime host calls.
 use crate::collections::{IndexMap, IndexSet};
 use crate::*;
 use std::sync::Arc;
 
-/// Opaque development host identity for an editor, independent of its state.
+/// Opaque runtime host identity for an editor, independent of its state.
 /// Clones retain only an identity marker, never the editor or its callbacks.
 #[derive(Clone)]
 pub struct ForeignEditorIdentity(pub(super) Arc<()>);
@@ -34,6 +34,7 @@ pub struct PendingUpdate {
     update: Arc<()>,
     native_calls: Arc<super::native::NativeCalls>,
     read_only: bool,
+    defer_publication: bool,
     read_sources: Option<crate::state::NodeMap>,
     read_origin: Option<super::ReadOrigin>,
     retired_records: crate::state::NodeMap,
@@ -108,6 +109,7 @@ impl Transaction<'_> {
             update: self.foreign_update,
             native_calls: self.foreign_native_calls,
             read_only: self.foreign_read_only,
+            defer_publication: self.foreign_defer_publication,
             read_sources: self.foreign_read_sources,
             read_origin: self.foreign_read_origin,
             retired_records: self.foreign_retired_records,
@@ -154,6 +156,7 @@ impl Editor {
             foreign_update: update.update,
             foreign_native_calls: update.native_calls,
             foreign_read_only: update.read_only,
+            foreign_defer_publication: update.defer_publication,
             foreign_read_sources: update.read_sources,
             foreign_read_origin: update.read_origin,
             foreign_retired_records: update.retired_records,
@@ -189,3 +192,6 @@ impl Editor {
 
 #[cfg(test)]
 mod test;
+
+#[path = "admission.rs"]
+mod admission;

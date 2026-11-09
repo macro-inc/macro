@@ -17,10 +17,10 @@ struct Values {
     states: HashMap<(u64, u64), EditorState>,
     retired: HashMap<(u64, u64), HashMap<NodeKey, Arc<NodeRecord>>>,
     saved_states: Vec<Option<EditorState>>,
-    saved_versions: HashMap<usize, u64>,
+    saved_versions: HashMap<usize, (u64, u64)>,
     published_snapshots: HashMap<(u64, u64), usize>,
     identities: HashMap<String, u32>,
-    owners: HashMap<u32, u64>,
+    owners: HashMap<u32, (u64, u64)>,
     next_handle: u32,
 }
 
@@ -54,7 +54,13 @@ impl Bindings {
             .checked_add(1)
             .ok_or_else(|| fail("API handle overflow"))?;
         values.identities.insert(identity, id);
-        values.owners.insert(id, owner);
+        values.owners.insert(
+            id,
+            (
+                value.get("editor").and_then(Value::as_u64).unwrap_or(0),
+                owner,
+            ),
+        );
         values.handles.insert(format!("{tag}:{id}"), value.clone());
         Ok((id, true))
     }
@@ -66,14 +72,18 @@ impl Bindings {
         Ok(())
     }
 
-    pub fn release_identities(&self, version: u64) -> Result<std::collections::HashSet<u32>> {
+    pub fn release_editor_identities(
+        &self,
+        editor: u64,
+        version: u64,
+    ) -> Result<std::collections::HashSet<u32>> {
         let mut values = self.lock()?;
         let released = values
             .owners
             .iter()
-            .filter_map(|(id, owner)| (*owner == version).then_some(*id))
+            .filter_map(|(id, owner)| (*owner == (editor, version)).then_some(*id))
             .collect::<std::collections::HashSet<_>>();
-        values.owners.retain(|_, owner| *owner != version);
+        values.owners.retain(|_, owner| *owner != (editor, version));
         values.identities.retain(|_, id| !released.contains(id));
         Ok(released)
     }
@@ -92,7 +102,7 @@ impl Bindings {
         let id = values.saved_states.len();
         values.saved_states.push(Some(state.clone()));
         values.published_snapshots.insert((editor, version), id);
-        values.saved_versions.insert(id, version);
+        values.saved_versions.insert(id, (editor, version));
         Ok(id)
     }
 
@@ -239,7 +249,7 @@ impl Bindings {
         Ok(id)
     }
 
-    pub fn saved_version(&self, id: usize) -> Result<Option<u64>> {
+    pub fn saved_owner(&self, id: usize) -> Result<Option<(u64, u64)>> {
         Ok(self.lock()?.saved_versions.get(&id).copied())
     }
 

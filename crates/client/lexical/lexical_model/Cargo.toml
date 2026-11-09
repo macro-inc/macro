@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 [features]
-# Development-only runtime hosting and suspended updates; no production consumer.
+# Runtime hosting and suspended updates, including session compatibility.
 foreign-nodes = ["dep:syn"]
 bench-counters = []
 model-segmentation = ["dep:unicode-segmentation"]

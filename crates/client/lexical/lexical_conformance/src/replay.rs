@@ -84,6 +84,7 @@ pub struct Replayer {
     pub(crate) bindings: Bindings,
     pub(crate) record_ids: RecordIdentities,
     pub(crate) record_owner: Option<(u64, EditorState)>,
+    pub(crate) record_editor: Option<u64>,
     pub(crate) version: u64,
     pub(crate) committed_version: u64,
     pub(crate) editor_id: u64,
@@ -628,23 +629,31 @@ impl Replayer {
                 result
             }
             "read" => {
-                let previous = self.read_state.take();
-                let previous_owner = self.record_owner.take();
-                let mut version = self.committed_version;
-                self.read_state = if let Some(state) = op.get("state") {
+                let (state, owner) = if let Some(state) = op.get("state") {
                     let decoded = self.decode(state)?;
                     let id = integer(&decoded["$snapshot"])? as usize;
-                    version = self.bindings.saved_version(id)?.unwrap_or(self.version);
-                    Some(self.saved_state(id)?)
+                    let owner = self
+                        .bindings
+                        .saved_owner(id)?
+                        .unwrap_or((self.editor_id, self.version));
+                    (Some(self.saved_state(id)?), owner)
                 } else if self.updates.is_empty() {
-                    Some(tx.committed_state().clone())
+                    (
+                        Some(tx.committed_state().clone()),
+                        (self.editor_id, self.committed_version),
+                    )
                 } else {
-                    None
+                    (None, (self.editor_id, self.version))
                 };
-                self.record_owner = self.read_state.clone().map(|state| (version, state));
+                let previous = self.read_state.take();
+                let previous_owner = self.record_owner.take();
+                let previous_editor = self.record_editor.replace(owner.0);
+                self.read_state = state;
+                self.record_owner = self.read_state.clone().map(|state| (owner.1, state));
                 let result = self.execute_calls(&op["calls"], tx);
                 self.read_state = previous;
                 self.record_owner = previous_owner;
+                self.record_editor = previous_editor;
                 result
             }
             "tick" => {
@@ -920,9 +929,10 @@ impl Replayer {
                     .is_some_and(|node| record.matches(node))
             })
             .map_or(self.version, |(version, _)| *version);
-        let (version, identity) = self.record_ids.identify(key, record, version)?;
+        let editor = self.record_editor.unwrap_or(self.editor_id);
+        let (version, identity) = self.record_ids.identify(editor, key, record, version)?;
         Ok(
-            json!({"$node":key.index(),"generation":key.generation(),"identity":identity,"ver":version,"editor":self.editor_id,"type":node.type_name()}),
+            json!({"$node":key.index(),"generation":key.generation(),"identity":identity,"ver":version,"editor":editor,"type":node.type_name()}),
         )
     }
     pub(crate) fn selection_slot(

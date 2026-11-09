@@ -26,6 +26,8 @@ pub struct Transaction<'editor> {
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_read_only: bool,
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_defer_publication: bool,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_read_sources: Option<crate::state::NodeMap>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_read_origin: Option<crate::foreign::ReadOrigin>,
@@ -80,6 +82,8 @@ impl<'editor> Transaction<'editor> {
             foreign_native_calls: Arc::default(),
             #[cfg(feature = "foreign-nodes")]
             foreign_read_only: false,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_defer_publication: false,
             #[cfg(feature = "foreign-nodes")]
             foreign_read_sources: None,
             #[cfg(feature = "foreign-nodes")]
