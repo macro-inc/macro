@@ -49,10 +49,36 @@ passed under Vitest. Source audit found no false-negative guard defect. Logs:
 stopped for the compatibility pivot; no upstream compat or full parity gate is
 claimed.
 
-The disposable-copy `just check` found inherited Rust formatting drift in
-`document_session/src/editor/builder.rs` and the existing
-`plugins_group_a/mod.rs` declarations-only rule violation; these remain open.
-`git diff --check` passed for this checkpoint.
+The two inherited check failures were fixed in `5157b020f5` (builder formatting)
+and `5142b49c45` (Group A registration moved into its own module). The three
+Group A shortcut tests passed. Generator-owned TS output now uses the existing
+compiler-output exclusion policy in both package and shared web check entry
+points (`3072b22f88`, `d559b553c6`); exact schema freshness passed for 27 fields
+from 12 pinned classes. Disposable-copy `just check` is now **pass**, recorded in
+`paste-integration-check-fixed4.log`; `git diff --check` also passed.
+
+The published paired harness has 34 document cases, including strict heading
+Enter, content-addressed per-case sidecars, standard Playwright JSON, raw full
+Chromium AX diagnostic artifacts, and zero pixel tolerance. It explicitly fails
+closed while production compat provenance, actual saved-state reader evidence
+and full accessibility comparison remain unavailable. It does not substitute raw
+model JSON for saved JSON. Root lifecycle/session injection remains held pending
+the owner's real root-rebind contract.
+
+Latest paired native checkpoints after containment removal:
+
+| Case | Pixels | Markdown | Raw DOM | Saved JSON | Full AX parity |
+| --- | --- | --- | --- | --- | --- |
+| Empty | exact | exact | fail | blocked | blocked |
+| Heading | exact | exact | fail | blocked | blocked |
+| Bold | exact | exact | fail | blocked | blocked |
+| Heading + Enter | exact | exact | fail | blocked | blocked |
+
+Evidence: `parity-runs/20261109-005540` and `parity-runs/20261109-005816` under
+`/home/wolf/tmp/integration3-acceptance/`. The latter includes raw full AX artifacts
+for both engines. No DOM exception was applied. These checkpoints supersede the
+earlier pixel differences in the historical evidence below; none passes the
+production compatibility gate.
 
 ## Incremental verification
 
