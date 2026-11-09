@@ -77,7 +77,10 @@ pub(crate) enum TriggerHealth {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(
     not(unix),
-    expect(dead_code, reason = "only herdr, which is Unix-only, shows macrod elsewhere")
+    expect(
+        dead_code,
+        reason = "only herdr, which is Unix-only, shows macrod elsewhere"
+    )
 )]
 pub(crate) enum Viewer {
     /// Not in herdr: the terminal macrod was started in.
