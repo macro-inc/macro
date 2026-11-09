@@ -1,4 +1,4 @@
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
 import { createSignal, Suspense } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { AgentsRouteView } from './route-views';
@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
     loading: true,
   }),
   routeId: 'agents',
+  agentPage: 'connections',
   redirect: vi.fn(),
   updateMeta: vi.fn(),
   touch: false,
@@ -27,7 +28,7 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
       content: () => ({
         type: 'component',
         id: state.routeId,
-        params: { agentPage: 'connections' },
+        params: { agentPage: state.agentPage },
       }),
       updateMeta: state.updateMeta,
     },
@@ -57,13 +58,17 @@ vi.mock('@app/features/routines/queries/entities', () => ({}));
 vi.mock('../next-soup/sidebar/soup-filter-presets', () => ({}));
 vi.mock('./views/AgentsView', () => ({ AgentsView: () => null }));
 vi.mock('../settings/IntegrationsPage', () => ({
-  IntegrationsPage: () => null,
+  IntegrationsPage: () => <p>Integrations page</p>,
+}));
+vi.mock('../artifacts/artifacts-page', () => ({
+  ArtifactsPage: () => <p>Artifacts page</p>,
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
   state.touch = false;
   state.routeId = 'agents';
+  state.agentPage = 'connections';
 });
 afterEach(cleanup);
 
@@ -116,4 +121,26 @@ it('replaces the mobile conversation alias instead of trapping Back in a redirec
     { type: 'agent', id: 'session-id' },
     true
   );
+});
+
+it('opens the requested Artifacts or Connections page on the legacy Agents layout', async () => {
+  state.flag = () => ({ enabled: false, loading: false });
+  state.agentPage = 'artifacts';
+  render(() => (
+    <Suspense fallback={null}>
+      <AgentsRouteView />
+    </Suspense>
+  ));
+  expect(await screen.findByText('Artifacts page')).toBeTruthy();
+  expect(screen.queryByText('Integrations page')).toBeNull();
+  cleanup();
+
+  state.agentPage = 'connections';
+  render(() => (
+    <Suspense fallback={null}>
+      <AgentsRouteView />
+    </Suspense>
+  ));
+  expect(await screen.findByText('Integrations page')).toBeTruthy();
+  expect(screen.queryByText('Artifacts page')).toBeNull();
 });

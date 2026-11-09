@@ -30,6 +30,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  lazy,
   Match,
   on,
   onMount,
@@ -41,6 +42,7 @@ import { routineContent } from '../../routines/routine-navigation';
 import { RoutinesPage } from '../../routines/routines-page';
 import '../agents-view.css';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { ComposerGreeting } from '@core/component/ComposerGreeting';
 import { enableAgentUpdates } from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -69,6 +71,10 @@ import { agentConversationsQuery } from '../queries/agent-conversations-query';
 import { createAgentRosterSource } from '../queries/agent-roster-source';
 import { agentsTour } from '../tour';
 import { NewChatPage, type StartConversation } from './NewChatPage';
+
+const ArtifactsPage = lazy(async () => ({
+  default: (await import('../../artifacts/artifacts-page')).ArtifactsPage,
+}));
 
 type SelectedConversation = {
   conversation: AgentConversationTarget;
@@ -338,6 +344,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     if (page() === 'routines') return 'Routines';
     if (page() === 'agents') return 'Agents';
     if (page() === 'connections') return 'Integrations';
+    if (page() === 'artifacts') return t('artifacts.title');
     return undefined;
   };
 
@@ -442,6 +449,9 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                               </Match>
                               <Match when={page() === 'connections'}>
                                 <IntegrationsPage />
+                              </Match>
+                              <Match when={page() === 'artifacts'}>
+                                <ArtifactsPage />
                               </Match>
                               <Match when={page() === 'agents'}>
                                 <AgentSettings
