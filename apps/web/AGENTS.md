@@ -95,6 +95,13 @@ It uses the real records view with a local source and picker to exercise opening
 replacement, cancellation, keyboard editing, and read-only references. Navigation
 adapter tests separately check file types, access failures, and split selection.
 
+Keep shared mention, image and equation components on `DecoratorHost`; preserve
+the source host's command order, transaction boundaries and cached media props.
+Their backend-free source interaction check is
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/decorator-host/browser-test/playwright.config.ts`.
+Compare its raw model and DOM captures before and after host refactors in all
+three engines; source results do not establish native binding acceptance.
+
 Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
 backend-free desktop/phone regression: the card reserves its height from
 `previewData.poll.optionCount` as a `min-height`, grows to wrapped text, and
