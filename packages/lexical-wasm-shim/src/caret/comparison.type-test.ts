@@ -1,7 +1,22 @@
-import { compareNumberWithUpstreamType } from '../compatibility-exceptions';
-import type { PointCaret } from '../selection/runtime';
-import { $comparePointCaretNext } from './ancestry';
+import type { compareNumberWithUpstreamType } from '../compatibility-exceptions';
+import type { $comparePointCaretNext } from './ancestry';
 
-declare const caret: PointCaret<'next'>;
-export const numericOrder: -1 | 0 | 1 = compareNumberWithUpstreamType(NaN, 0);
-export const caretOrder: -1 | 0 | 1 = $comparePointCaretNext(caret, caret);
+type Assert<Condition extends true> = Condition;
+export type NumericResult = Assert<
+  ReturnType<typeof compareNumberWithUpstreamType> extends -1 | 0 | 1
+    ? true
+    : false
+>;
+export type CompleteNumericResult = Assert<
+  -1 | 0 | 1 extends ReturnType<typeof compareNumberWithUpstreamType>
+    ? true
+    : false
+>;
+export type NumericInputs = Assert<
+  Parameters<typeof compareNumberWithUpstreamType> extends [number, number]
+    ? true
+    : false
+>;
+export type CaretResult = Assert<
+  ReturnType<typeof $comparePointCaretNext> extends -1 | 0 | 1 ? true : false
+>;
