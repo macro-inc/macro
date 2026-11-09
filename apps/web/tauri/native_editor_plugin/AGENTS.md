@@ -33,6 +33,7 @@ Android registration exposes bridge commands; it does not select native editing 
 - Check the process-wide lease registry before opening a lease file; use one channel per live OS lease.
 - Use a non-destructive SQLite corruption handler and preserve the original database files.
 - Preserve composing spans when applying text patches and Android selection handles.
+- Route physical editing shortcuts through KeyDown with their real modifier facts before the typed command; preserve model-returned history selection and subtree identities.
 - Do not enable reduced node rendering as a substitute for application parity.
 - Keep editor editability, content-interaction permission and comment capability distinct; recheck permission when committing gestures or asynchronous results.
 

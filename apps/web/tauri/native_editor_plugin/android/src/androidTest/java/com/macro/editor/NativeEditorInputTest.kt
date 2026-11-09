@@ -7,6 +7,14 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class NativeEditorInputTest {
+    @Test fun codeRedoPreservesRawJsonAndCaret() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync {
+            NativeHistoryScenario.restoredCodeIdentity(instrumentation.targetContext, false)
+            NativeHistoryScenario.restoredCodeIdentity(instrumentation.targetContext, true)
+        }
+    }
+
     @Test fun nativeMenusSelectTypedMentionsAndPreserveLiteralOnDismiss() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.runOnMainSync { NativeMenuScenario.run(instrumentation.targetContext) }
