@@ -11,6 +11,7 @@ import {
   TabNode,
   TextNode,
 } from './index';
+import { $applyNodeReplacement } from './replacement/helpers';
 
 export type { DOMConversionMap } from './dom-types';
 
@@ -24,13 +25,13 @@ function $isTextNode(node: LexicalNode): node is TextNode {
   return node instanceof TextNode;
 }
 function $createTextNode(text = ''): TextNode {
-  return new TextNode(text);
+  return $applyNodeReplacement(new TextNode(text));
 }
 function $createTabNode(): TabNode {
-  return new TabNode();
+  return $applyNodeReplacement(new TabNode());
 }
 function $createLineBreakNode(): LineBreakNode {
-  return new LineBreakNode();
+  return $applyNodeReplacement(new LineBreakNode());
 }
 function convertSpanElement(domNode: HTMLElement): DOMConversionOutput {
   // domNode is a <span> since we matched it by nodeName
@@ -330,7 +331,7 @@ export function paragraphImportDOM(): DOMConversionMap {
     p: () => ({
       priority: 0,
       conversion: (element) => {
-        const node = new ParagraphNode();
+        const node = $applyNodeReplacement(new ParagraphNode());
         setParagraphFormat(node, element.style.textAlign);
         const indent = element.getAttribute('data-lexical-indent');
         const parsed =
@@ -372,7 +373,10 @@ export function lineBreakImportDOM(): DOMConversionMap {
             isWhitespaceDomTextNode(last));
         if (atEnd) return null;
       }
-      return { conversion: () => ({ node: new LineBreakNode() }), priority: 0 };
+      return {
+        conversion: () => ({ node: $createLineBreakNode() }),
+        priority: 0,
+      };
     },
   };
 }

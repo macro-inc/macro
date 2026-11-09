@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 import { expect, test } from 'vitest';
-import { ConformanceBackend } from '../../backend/conformance';
 import { $getRoot, createEditor } from '../../editor';
 import { DEFAULT_EDITOR_DOM_CONFIG } from '../../editor-dom-config';
-import { nativeNode, ParagraphNode, TextNode } from '../index';
-import { NodeRuntime, withNodeRuntime } from '../runtime';
+import { ParagraphNode, TextNode } from '../index';
 
 test('text DOM preserves nested formatting, theme combinations and styles across updates', () => {
   let slotCalls = 0;
@@ -76,28 +74,28 @@ test('text DOM preserves nested formatting, theme combinations and styles across
 });
 
 test('paragraph import preserves authoritative indent, direction and legacy alignment', () => {
-  const backend = new ConformanceBackend({ namespace: 'node import' });
-  const runtime = new NodeRuntime(backend, nativeNode);
+  const editor = createEditor({ namespace: 'node import' });
   try {
-    withNodeRuntime(runtime, () => {
-      backend.beginUpdate([], false);
-      const element = document.createElement('p');
-      element.setAttribute('align', 'right');
-      element.setAttribute('dir', 'rtl');
-      element.setAttribute('data-lexical-indent', '3');
-      element.style.paddingInlineStart = 'calc(3 * 17px)';
-      const conversion = ParagraphNode.importDOM()
-        ?.p(element)
-        ?.conversion(element);
-      const node = conversion?.node;
-      if (!(node instanceof ParagraphNode))
-        throw new Error('expected imported paragraph');
-      expect(node.getIndent()).toBe(3);
-      expect(node.getDirection()).toBe('rtl');
-      expect(node.getFormatType()).toBe('right');
-      backend.discard();
-    });
+    editor.update(
+      () => {
+        const element = document.createElement('p');
+        element.setAttribute('align', 'right');
+        element.setAttribute('dir', 'rtl');
+        element.setAttribute('data-lexical-indent', '3');
+        element.style.paddingInlineStart = 'calc(3 * 17px)';
+        const conversion = ParagraphNode.importDOM()
+          ?.p(element)
+          ?.conversion(element);
+        const node = conversion?.node;
+        if (!(node instanceof ParagraphNode))
+          throw new Error('expected imported paragraph');
+        expect(node.getIndent()).toBe(3);
+        expect(node.getDirection()).toBe('rtl');
+        expect(node.getFormatType()).toBe('right');
+      },
+      { discrete: true }
+    );
   } finally {
-    backend.dispose();
+    editor.dispose();
   }
 });
