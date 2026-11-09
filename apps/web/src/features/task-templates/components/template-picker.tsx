@@ -87,7 +87,7 @@ function TemplateAction(props: {
       <Match when={props.menu && props.value}>
         <Dropdown.RadioItem
           value={props.value ?? ''}
-          class="min-w-0 flex-1"
+          class="min-w-0 flex-1 group-hover/template:bg-ink/5 group-focus-within/template:bg-ink/5"
           aria-label={props.label}
           textValue={props.label}
           onSelect={props.onSelect}
@@ -238,7 +238,7 @@ function TemplateChoices(
                 </Dynamic>
                 <For each={filtered().filter((item) => item.shared === shared)}>
                   {(item) => (
-                    <div class="group/template flex min-w-0 items-center gap-1">
+                    <div class="group/template relative min-w-0">
                       <TemplateAction
                         menu={props.menu}
                         value={item.key}
@@ -246,22 +246,29 @@ function TemplateChoices(
                         label={item.label}
                         onSelect={() => run(item.select)}
                       >
-                        <CopyIcon class="size-4 shrink-0" />
-                        <span class="min-w-0 flex-1 truncate">
-                          {item.label}
-                        </span>
-                        <Show
-                          when={props.dirty && props.selectedKey === item.key}
+                        <div
+                          class={cn(
+                            'flex min-w-0 flex-1 items-center gap-1.5',
+                            item.edit && 'pr-7'
+                          )}
                         >
-                          <span class="size-1.5 shrink-0 rounded-full bg-accent" />
-                        </Show>
-                        <Show when={props.selectedKey === item.key}>
-                          <CheckIcon class="size-3.5 shrink-0 text-accent" />
-                        </Show>
+                          <CopyIcon class="size-4 shrink-0" />
+                          <span class="min-w-0 flex-1 truncate">
+                            {item.label}
+                          </span>
+                          <Show
+                            when={props.dirty && props.selectedKey === item.key}
+                          >
+                            <span class="size-1.5 shrink-0 rounded-full bg-accent" />
+                          </Show>
+                          <Show when={props.selectedKey === item.key}>
+                            <CheckIcon class="size-3.5 shrink-0 text-accent" />
+                          </Show>
+                        </div>
                       </TemplateAction>
                       <Show when={item.edit}>
                         {(edit) => (
-                          <div class="shrink-0 opacity-0 group-hover/template:opacity-100 group-focus-within/template:opacity-100 touch:opacity-100">
+                          <div class="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 group-hover/template:opacity-100 group-focus-within/template:opacity-100 touch:opacity-100">
                             <TemplateAction
                               menu={props.menu}
                               iconOnly
