@@ -30,7 +30,7 @@ not import runtime values from upstream `lexical` or its internal modules.
 - Create no DOM and call no createDOM/decorate hook before setRootElement receives a root.
 - Bind the actual supplied root; null unbinds and later roots reuse the same core/session.
 - Supply a real empty-root EditorState from the core for the first full reconcile after each bind.
-- Run reconcile in withReconciliation with the published read-only next state associated with its editor; captured previous-node fields retain their previous values.
+- Keep reconcile and DOM probes read-only by default. Only the actual authorized prefreeze stage may inject reconcile's optional withScope callback to retain its writable pending frame; DOM probes still use the read-only default, and captured previous-node fields retain their previous values.
 - Keep root-string deltas bounded to invalidation; require an exact JS derived-cache path before freeze, and never substitute null/stale/memo writes to published raw fields. Native-finalized caches and the upstream-model DOM oracle do not establish this production obligation.
 - Supply authoritative removedNodes from the sparse delta even while unmounted; remove only those decorator entries, never scan all decorators on an unchanged commit. Keep upstream plain-record cloning only for actual decorator changes.
 - Preserve the pinned interleaving of DOM hooks, moves and removals when skipping untouched sibling runs.

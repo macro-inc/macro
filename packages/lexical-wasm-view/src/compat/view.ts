@@ -53,7 +53,8 @@ export function createCompatView(
 
   function reconcile(
     commit: CompatCommit,
-    parentSpan?: Span
+    parentSpan?: Span,
+    withScope?: CompatRuntime['withReconciliation']
   ): MutatedNodes | null {
     if (disposed) throw new Error('Compat view is disposed');
     const root = editor._rootElement;
@@ -72,8 +73,8 @@ export function createCompatView(
     let mutations: MutatedNodes | null = commit.mutatedNodes ?? null;
     editor._updating = true;
     try {
-      span.run(() =>
-        runtime.withReconciliation(editor, commit.editorState, () => {
+      span.run(() => {
+        const body = () => {
           if (commit.dirtyType !== 0) {
             mutations = $reconcileRoot(
               commit.prevEditorState,
@@ -115,8 +116,11 @@ export function createCompatView(
             }
             $updateDOMBlockCursorElement(editor, root, selection);
           }
-        })
-      );
+        };
+        if (withScope === undefined)
+          runtime.withReconciliation(editor, commit.editorState, body);
+        else withScope(editor, commit.editorState, body);
+      });
     } catch (error) {
       span.error('Compat reconciliation failed');
       throw error;

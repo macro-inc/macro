@@ -168,3 +168,82 @@ test('decorator DOM hooks run only after binding the supplied root', () => {
   createDOM.mockRestore();
   decorate.mockRestore();
 });
+
+test('explicit reconciliation scope delegates once while default reads remain read-only', () => {
+  const editor = createEditor({
+    onError(error) {
+      throw error;
+    },
+  });
+  editor._headless = true;
+  editor._commands.clear();
+  // The adapter consumes published states; finalize the source core's initial
+  // mutable empty state through a real commit before binding the root.
+  editor.update(
+    () => {
+      $getRoot().append($createParagraphNode().append($createTextNode('seed')));
+    },
+    { discrete: true }
+  );
+  const runtime = getUpstreamRuntime();
+  const view = createCompatView(editor, runtime);
+  const root = document.createElement('div');
+  view.setRootElement(root);
+  let commit: CompatCommit | undefined;
+  const stop = editor.registerUpdateListener((value) => {
+    commit = { ...value, dirtyType: 1 };
+  });
+  const reads = vi.spyOn(runtime, 'withReconciliation');
+  try {
+    editor.update(
+      () => {
+        $getRoot()
+          .getFirstChildOrThrow<ParagraphNode>()
+          .getFirstChildOrThrow<TextNode>()
+          .setTextContent('first');
+      },
+      { discrete: true }
+    );
+    if (!commit) throw new Error('Missing first real commit');
+    view.reconcile(commit);
+    expect(reads).toHaveBeenCalledTimes(1);
+    editor.update(
+      () => {
+        $getRoot()
+          .getFirstChildOrThrow<ParagraphNode>()
+          .getFirstChildOrThrow<TextNode>()
+          .setTextContent('second');
+      },
+      { discrete: true }
+    );
+    if (!commit) throw new Error('Missing second real commit');
+    const next = commit;
+    let scopes = 0;
+    reads.mockClear();
+    view.reconcile(next, undefined, (owner, state, body) => {
+      scopes++;
+      expect(owner).toBe(editor);
+      expect(state).toBe(next.editorState);
+      // Authenticate the scope through the real upstream read stack. This is
+      // delegation coverage, not a fabricated writable native-stage callback.
+      return runtime.withReconciliation(owner, state, () => {
+        expect(runtime.isCurrentlyReadOnlyMode()).toBe(true);
+        expect(runtime.getActiveEditorState()).toBe(state);
+        return body();
+      });
+    });
+    expect(scopes).toBe(1);
+    expect(reads).toHaveBeenCalledTimes(1);
+    expect(root.textContent).toBe('second');
+    expect(() =>
+      view.reconcile(next, undefined, () => {
+        throw new Error('scope failure');
+      })
+    ).toThrow('scope failure');
+    expect(editor._updating).toBe(false);
+  } finally {
+    reads.mockRestore();
+    stop();
+    view.dispose();
+  }
+});
