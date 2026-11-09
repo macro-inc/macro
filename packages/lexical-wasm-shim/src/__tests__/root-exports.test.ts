@@ -2,19 +2,27 @@ import { spawnSync } from 'node:child_process';
 import { URL as NodeURL } from 'node:url';
 import { expect, test } from 'vitest';
 import * as environment from '../../../lexical-wasm-view/src/compat/environment';
+import * as caret from '../caret';
 import * as commands from '../commands';
 import * as constants from '../constants';
 import * as defaultDOM from '../editor-dom-config';
+import * as extensionCore from '../extension-core';
 import * as root from '../index';
 import * as artificial from '../nodes/artificial';
 import * as css from '../nodes/dom-style';
 import * as replacement from '../nodes/replacement';
 import * as state from '../nodes/state';
 import * as staticConfig from '../nodes/static-config';
+import * as selectionHelpers from '../selection/helpers';
 import * as serialization from '../serialization';
+import * as utilities from '../utilities';
 import manifest from './root-exports.manifest.json';
 
 const producers: Record<string, object> = {
+  './caret': caret,
+  './extension-core': extensionCore,
+  './utilities': utilities,
+  './selection/helpers': selectionHelpers,
   './editor-dom-config': defaultDOM,
   './nodes/artificial': artificial,
   './nodes/dom-style': css,
