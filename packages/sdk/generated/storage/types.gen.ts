@@ -28,6 +28,10 @@ export type AccessRequest = {
      */
     id: string;
     /**
+     * The agent that asked on the requester's behalf, when one did.
+     */
+    requestedByAgent?: string | null;
+    /**
      * Requested upgrade.
      */
     requestedLevel: AccessLevel;
@@ -282,7 +286,7 @@ export type AddFavoriteRequest = {
     /**
      * The type of the entity to favorite.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 };
 
 /**
@@ -1375,7 +1379,7 @@ export type ApprovePairingRequest = {
      */
     name?: string | null;
     /**
-     * Owning team. Omit for a private, user-owned harness.
+     * Team to open the harness to. Omit to keep it to the approving user.
      */
     team_id?: string | null;
 };
@@ -4152,7 +4156,7 @@ export type CollabSurfaceResponse = {
     /**
      * Type of the parent entity.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
     /**
      * Lifecycle state (`ready` for every surface visible via the API).
      */
@@ -9206,7 +9210,7 @@ export type EnsureCollabSurfaceRequest = {
     /**
      * Type of the parent entity access derives from.
      */
-    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    parentEntityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 };
 
 /**
@@ -10412,7 +10416,7 @@ export type Favorite = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
     /**
      * File type of the favorited document, when applicable.
      */
@@ -10434,7 +10438,7 @@ export type FavoriteEntityRef = {
     /**
      * The type of the favorited entity.
      */
-    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+    entityType: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 };
 
 /**
@@ -12354,6 +12358,11 @@ export type GuideSpec = {
  */
 export type Harness = {
     /**
+     * What the caller may do with it. Reported as `none` where no caller is
+     * in question, such as to the daemon itself.
+     */
+    access?: HarnessAccess;
+    /**
      * Whether agents may bypass ACP permission requests on this harness.
      */
     allow_permission_bypass?: boolean;
@@ -12390,10 +12399,19 @@ export type Harness = {
      */
     owner: HarnessOwner;
     /**
+     * Teams it is a team machine for: their every member is a user of it.
+     */
+    shared_team_ids?: Array<string>;
+    /**
      * Update timestamp.
      */
     updated_at: string;
 };
+
+/**
+ * What one caller may do with a runtime.
+ */
+export type HarnessAccess = 'owner' | 'user' | 'read' | 'none';
 
 /**
  * An agent bound to a harness, as listed for the daemon.
@@ -12416,10 +12434,7 @@ export type HarnessAgent = {
 export type HarnessId = string;
 
 /**
- * Harness owner.
- *
- * Exactly one of a user or a team, mirroring the bots owner pattern. There
- * are no system harnesses.
+ * The person whose runtime this is.
  */
 export type HarnessOwner = {
     type: 'user';
@@ -12427,12 +12442,30 @@ export type HarnessOwner = {
      * Owner user id.
      */
     user_id: string;
-} | {
+};
+
+/**
+ * An agent that lives on a runtime, as opposed to a coding agent directed
+ * there turn by turn. Anyone who can reach it can talk to it; it stays up only
+ * while its own owner can use the runtime.
+ */
+export type HarnessResident = {
     /**
-     * Owner team id.
+     * Bot id.
      */
-    team_id: string;
-    type: 'team';
+    bot_id: BotId;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * The user owning the agent, when a person does.
+     */
+    owner_user_id?: string | null;
+    /**
+     * The team owning the agent, when a team does.
+     */
+    team_id?: string | null;
 };
 
 /**
@@ -17241,6 +17274,20 @@ export type SetEmailSyncRequest = {
 };
 
 /**
+ * Request to open or close a runtime to one of the owner's teams.
+ */
+export type SetHarnessTeamAccessRequest = {
+    /**
+     * Whether every member of the team may use the runtime.
+     */
+    enabled: boolean;
+    /**
+     * The team, which the owner must belong to.
+     */
+    team_id: string;
+};
+
+/**
  * How a cell's options or references relate to a set of them. The first
  * two fit a column holding one value, the last three one holding several.
  */
@@ -17317,7 +17364,7 @@ export type ShareEntity = {
 /**
  * An entity type with an existing Share surface.
  */
-export type ShareEntityType = 'document' | 'chat' | 'project' | 'initiative' | 'database' | 'call' | 'email_thread' | 'agent_session' | 'external_chat';
+export type ShareEntityType = 'document' | 'chat' | 'project' | 'initiative' | 'database' | 'call' | 'email_thread' | 'agent_session' | 'external_chat' | 'harness';
 
 export type SharePermissionV2 = {
     /**
@@ -30306,7 +30353,7 @@ export type ListFavoritesData = {
         /**
          * Restrict to favorites whose entity is one of these types.
          */
-        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat'>;
+        entityType?: Array<'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat'>;
         /**
          * Restrict to favorites whose entity is one of these ids.
          */
@@ -30375,7 +30422,7 @@ export type RemoveFavoriteByEntityData = {
         /**
          * The type of an entity in Macro
          */
-        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
+        entity_type: 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'harness' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
         /**
          * The id of the favorited entity.
          */
@@ -31077,6 +31124,26 @@ export type ListHarnessesResponses = {
 
 export type ListHarnessesResponse = ListHarnessesResponses[keyof ListHarnessesResponses];
 
+export type ListHarnessDirectoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/harnesses/directory';
+};
+
+export type ListHarnessDirectoryErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListHarnessDirectoryError = ListHarnessDirectoryErrors[keyof ListHarnessDirectoryErrors];
+
+export type ListHarnessDirectoryResponses = {
+    200: Array<Harness>;
+};
+
+export type ListHarnessDirectoryResponse = ListHarnessDirectoryResponses[keyof ListHarnessDirectoryResponses];
+
 export type DeleteSelfHarnessData = {
     body?: never;
     path?: never;
@@ -31211,6 +31278,56 @@ export type PatchHarnessResponses = {
 };
 
 export type PatchHarnessResponse = PatchHarnessResponses[keyof PatchHarnessResponses];
+
+export type ListHarnessResidentsData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: HarnessId;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/residents';
+};
+
+export type ListHarnessResidentsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListHarnessResidentsError = ListHarnessResidentsErrors[keyof ListHarnessResidentsErrors];
+
+export type ListHarnessResidentsResponses = {
+    200: Array<HarnessResident>;
+};
+
+export type ListHarnessResidentsResponse = ListHarnessResidentsResponses[keyof ListHarnessResidentsResponses];
+
+export type SetHarnessTeamAccessData = {
+    body: SetHarnessTeamAccessRequest;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: HarnessId;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}/team-access';
+};
+
+export type SetHarnessTeamAccessErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetHarnessTeamAccessError = SetHarnessTeamAccessErrors[keyof SetHarnessTeamAccessErrors];
+
+export type SetHarnessTeamAccessResponses = {
+    204: void;
+};
+
+export type SetHarnessTeamAccessResponse = SetHarnessTeamAccessResponses[keyof SetHarnessTeamAccessResponses];
 
 export type HealthHandlerData = {
     body?: never;

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                h.id, h.kind, h.name, h.owner_user_id, h.created_by, h.allow_permission_bypass,\n                h.created_at, h.updated_at, h.last_connected_at, h.last_disconnected_at,\n                harness_access_level(h.id, $1) AS \"access?: AccessLevel\",\n                ARRAY(\n                    SELECT ea.source_id FROM entity_access ea\n                    WHERE ea.entity_id = h.id AND ea.entity_type = 'harness' AND ea.source_type = 'team'\n                ) AS shared_team_ids\n            FROM harnesses h\n            WHERE h.deleted_at IS NULL\n              AND (\n                COALESCE(h.owner_user_id, h.created_by) = $1\n                OR COALESCE(h.owner_user_id, h.created_by) IN (\n                    SELECT theirs.user_id\n                    FROM team_user mine\n                    JOIN team_user theirs ON theirs.team_id = mine.team_id\n                    WHERE mine.user_id = $1\n                )\n              )\n            ORDER BY h.created_at DESC\n            ",
+  "query": "\n        SELECT\n            id, kind, name, owner_user_id, created_by, allow_permission_bypass,\n            created_at, updated_at, last_connected_at, last_disconnected_at,\n            EXISTS (\n                SELECT 1 FROM harness_runtime_connection c\n                WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()\n            ) AS \"has_live_connection!\",\n            EXISTS (\n                SELECT 1 FROM harness_runtime_connection c\n                WHERE c.harness_id = harnesses.id\n            ) AS \"has_connection_record!\",\n            NULL::\"AccessLevel\" AS \"access?: AccessLevel\",\n            ARRAY(\n                SELECT ea.source_id FROM entity_access ea\n                WHERE ea.entity_id = harnesses.id AND ea.entity_type = 'harness' AND ea.source_type = 'team'\n            ) AS shared_team_ids\n        FROM harnesses\n        WHERE id = $1 AND deleted_at IS NULL\n        ",
   "describe": {
     "columns": [
       {
@@ -55,6 +55,16 @@
       },
       {
         "ordinal": 10,
+        "name": "has_live_connection!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "has_connection_record!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
         "name": "access?: AccessLevel",
         "type_info": {
           "Custom": {
@@ -71,14 +81,14 @@
         }
       },
       {
-        "ordinal": 11,
+        "ordinal": 13,
         "name": "shared_team_ids",
         "type_info": "TextArray"
       }
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -93,8 +103,10 @@
       true,
       true,
       null,
+      null,
+      null,
       null
     ]
   },
-  "hash": "a9ef448a494ef18e8e3d5a4523dd3fe1d70ee573dd934706dd999c21899c72d8"
+  "hash": "b497d680771fc70f61dba40143ba60865152ef3ef17b1377b407ea405db8c32b"
 }
