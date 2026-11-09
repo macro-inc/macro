@@ -15,10 +15,11 @@ import { menuMount } from './routine-search-menu';
 
 type KnobChange = (name: string, value: Knob['value']) => void;
 
+// Positioned, so a value stays clickable on a card whose whole face is a button.
 const VALUE =
-  'inline rounded-sm px-0.5 font-medium text-accent underline decoration-2 underline-offset-4 outline-none hover:text-accent-ink focus-visible:ring-2 focus-visible:ring-edge-muted';
+  'relative inline rounded-sm px-0.5 font-medium text-accent underline decoration-2 underline-offset-4 outline-none hover:text-accent-ink focus-visible:ring-2 focus-visible:ring-edge-muted';
 const QUESTION =
-  'inline rounded-sm px-0.5 text-ink underline decoration-accent decoration-dotted decoration-2 underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-edge-muted';
+  'relative inline rounded-sm px-0.5 text-ink underline decoration-accent decoration-dotted decoration-2 underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-edge-muted';
 
 /** How large a sentence reads: the routine page's, or a card's. */
 export type SentenceSize = 'md' | 'sm' | 'xs';

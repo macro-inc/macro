@@ -64,32 +64,36 @@ function cardModel(
 }
 
 /**
- * One card's wiring: it counts as shown once on screen, turns on in place,
- * opens the editor to review or start from it, and keeps knob changes.
+ * One card's wiring: it counts as shown once on screen; the card opens the
+ * routine in the editor, or once on, the routine; Turn on saves it in place
+ * with the values on the card. Call it once per card, as the card renders.
  */
 function cardHandlers(
-  item: () => SuggestionItem,
+  item: SuggestionItem,
   actions: SuggestionActions,
-  above: () => string[]
+  above: () => string[],
+  onOpenRoutine: (routineId: string) => void
 ) {
-  onMount(() => actions.shown(item()));
+  onMount(() => actions.shown(item));
   return {
-    onAction() {
-      const current = item();
-      if (suggestionAction(current) === 'turn-on') {
-        fireAndForget(
-          actions.enable(current, above()),
-          'routine-suggestions.enable'
-        );
+    onOpen() {
+      const status = actions.statusFor(item);
+      if (status.kind === 'enabled') {
+        onOpenRoutine(status.routineId);
         return;
       }
-      actions.customize(current);
+      actions.customize(item);
+    },
+    onTurnOn() {
+      fireAndForget(
+        actions.enable(item, above()),
+        'routine-suggestions.enable'
+      );
     },
     onKnob(name: string, value: Parameters<typeof withKnobValue>[2]) {
-      const current = item();
-      const sentence = suggestionSentence(current, actions.editsFor(current));
+      const sentence = suggestionSentence(item, actions.editsFor(item));
       if (!sentence) return;
-      actions.editKnobs(current, withKnobValue(sentence.knobs, name, value));
+      actions.editKnobs(item, withKnobValue(sentence.knobs, name, value));
     },
   };
 }
@@ -145,9 +149,10 @@ export function SuggestionDialogGrid(props: {
           <For each={items()}>
             {(item, index) => {
               const handlers = cardHandlers(
-                () => item,
+                item,
                 props.actions,
-                idsBefore(items, index)
+                idsBefore(items, index),
+                props.onOpenRoutine
               );
               return (
                 <SuggestionDialogCard
@@ -162,7 +167,6 @@ export function SuggestionDialogGrid(props: {
                             'routine-suggestions.dismiss'
                           )
                   }
-                  onOpenRoutine={props.onOpenRoutine}
                 />
               );
             }}
@@ -179,6 +183,7 @@ export function SuggestionDiscoverGrid(props: {
   actions: SuggestionActions;
   emptyLabel: string;
   onRetry(): void;
+  onOpenRoutine(routineId: string): void;
 }) {
   return (
     <RoutineSuggestionList
@@ -198,16 +203,20 @@ export function SuggestionDiscoverGrid(props: {
           aria-label={t('routineSuggestions.listLabel')}
         >
           <For each={items()}>
-            {(item, index) => (
-              <SuggestionDiscoverCard
-                model={cardModel(item, props.actions)}
-                {...cardHandlers(
-                  () => item,
-                  props.actions,
-                  idsBefore(items, index)
-                )}
-              />
-            )}
+            {(item, index) => {
+              const handlers = cardHandlers(
+                item,
+                props.actions,
+                idsBefore(items, index),
+                props.onOpenRoutine
+              );
+              return (
+                <SuggestionDiscoverCard
+                  model={cardModel(item, props.actions)}
+                  {...handlers}
+                />
+              );
+            }}
           </For>
         </ul>
       )}
@@ -226,6 +235,7 @@ export function SuggestionRow(props: {
   shown: number;
   actions: SuggestionActions;
   onOpenDiscover(): void;
+  onOpenRoutine(routineId: string): void;
 }): JSX.Element {
   const visible = () => props.items.slice(0, props.shown);
   const more = () => Math.max(0, props.items.length - visible().length);
@@ -252,18 +262,21 @@ export function SuggestionRow(props: {
         )}
       >
         <For each={visible()}>
-          {(item, index) => (
-            <SuggestionCompactCard
-              model={cardModel(item, props.actions)}
-              onAction={
-                cardHandlers(
-                  () => item,
-                  props.actions,
-                  idsBefore(visible, index)
-                ).onAction
-              }
-            />
-          )}
+          {(item, index) => {
+            const handlers = cardHandlers(
+              item,
+              props.actions,
+              idsBefore(visible, index),
+              props.onOpenRoutine
+            );
+            return (
+              <SuggestionCompactCard
+                model={cardModel(item, props.actions)}
+                onOpen={handlers.onOpen}
+                onTurnOn={handlers.onTurnOn}
+              />
+            );
+          }}
         </For>
         <Show when={more() > 0}>
           <SuggestionMoreCell count={more()} onOpen={props.onOpenDiscover} />

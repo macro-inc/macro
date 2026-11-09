@@ -34,6 +34,8 @@ export default {
   reviewName: 'Review {{name}}',
   use: 'Use',
   useName: 'Start a routine from {{name}}',
+  editName: 'Edit {{name}} before turning it on',
+  openName: 'Open {{name}}',
   enabled: 'Enabled',
   on: 'On',
   notInterested: 'Not interested',

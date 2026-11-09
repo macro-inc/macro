@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import {
   cleanup,
   fireEvent,
@@ -14,6 +15,7 @@ import { createSuggestionActions } from '../primitives/suggestion-actions';
 import { context, drafted, forYou, TAGS, template } from '../tests/fixtures';
 import {
   SuggestionDialogGrid,
+  SuggestionRow,
   suggestionListView,
 } from './suggestion-list-view';
 
@@ -130,6 +132,26 @@ describe('suggestion cards', () => {
     expect(host.onOpenRoutine).toHaveBeenCalledWith('routine-1');
   });
 
+  it('open an AI pick in the editor from anywhere on its card, while its values and Turn on stay their own', async () => {
+    const host = renderCards();
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'Edit Tag new email before turning it on',
+      })
+    );
+    expect(host.customize).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ suggestionId: 'pick-1' })
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Reply tag: Respond. Change it' })
+    );
+    expect(
+      await screen.findByRole('textbox', { name: 'Reply tag' })
+    ).toBeTruthy();
+    expect(host.customize).toHaveBeenCalledOnce();
+    expect(host.created).toEqual([]);
+  });
+
   it('send a drafted routine and Macro’s template to the editor, never saving them from the card', () => {
     const host = renderCards();
     fireEvent.click(
@@ -162,5 +184,37 @@ describe('suggestion cards', () => {
     await waitFor(() =>
       expect(screen.queryByText('Supplier digest')).toBeNull()
     );
+  });
+});
+
+describe('the row above the routines list', () => {
+  it('counts each card it shows as shown, and says how many more Discover has', () => {
+    vi.mocked(analytics.track).mockClear();
+    const onOpenDiscover = vi.fn();
+    render(() => {
+      const actions = createSuggestionActions({
+        placement: () => ({ kind: 'routines' }),
+        create: vi.fn(async () => 'routine-1'),
+        customize: vi.fn(),
+        dismiss: vi.fn(async () => {}),
+        notify: vi.fn(),
+      });
+      return (
+        <SuggestionRow
+          items={items}
+          shown={2}
+          actions={actions}
+          onOpenDiscover={onOpenDiscover}
+          onOpenRoutine={vi.fn()}
+        />
+      );
+    });
+    const shown = vi
+      .mocked(analytics.track)
+      .mock.calls.filter(([event]) => event === 'routine_suggestion_shown')
+      .map(([, props]) => (props as { suggestionId: string }).suggestionId);
+    expect(shown).toEqual(['pick-1', 'template-1']);
+    fireEvent.click(screen.getByRole('button', { name: '1 more in Discover' }));
+    expect(onOpenDiscover).toHaveBeenCalledOnce();
   });
 });

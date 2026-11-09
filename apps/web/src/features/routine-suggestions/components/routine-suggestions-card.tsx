@@ -10,8 +10,9 @@ import type { RoutineSurface } from '../core/surfaces';
 /**
  * The card at the top of a view sidebar: the first few suggestions' icons in
  * an overlapping stack, how many there are and their names, inside a border
- * that fades from violet through blue to the card's edge. The whole card
- * opens the suggestions; the corner close button hides the card.
+ * that fades from violet at the top through blue to the card's edge. The
+ * whole card opens the suggestions; on hover its close button takes the
+ * caret's place, like the other sidebar cards' close buttons.
  */
 export function RoutineSuggestionsCard(props: {
   count: number;
@@ -47,7 +48,7 @@ export function RoutineSuggestionsCard(props: {
           background: [
             'linear-gradient(var(--routine-card-hover), var(--routine-card-hover)) padding-box',
             'linear-gradient(var(--color-control), var(--color-control)) padding-box',
-            'linear-gradient(120deg, color-mix(in oklch, var(--color-violet) var(--routine-card-violet), transparent), color-mix(in oklch, var(--color-accent) var(--routine-card-accent), transparent) 45%, var(--color-edge-muted) 80%) border-box',
+            'linear-gradient(180deg, color-mix(in oklch, var(--color-violet) var(--routine-card-violet), transparent), color-mix(in oklch, var(--color-accent) var(--routine-card-accent), transparent) 45%, var(--color-edge-muted) 90%) border-box',
           ].join(', '),
         }}
         onClick={(event) => props.onOpen(event.currentTarget)}
@@ -74,19 +75,20 @@ export function RoutineSuggestionsCard(props: {
           <span class="truncate text-xs text-ink-muted">{names()}</span>
         </span>
         <CaretRightIcon
-          class="size-3.5 shrink-0 text-ink-extra-muted"
+          class="size-3.5 shrink-0 text-ink-extra-muted not-touch:group-hover/routine-card:opacity-0 not-touch:group-has-[[data-card-dismiss]:focus-visible]/routine-card:opacity-0"
           aria-hidden="true"
         />
       </button>
       <Button
-        variant="secondary"
-        size="icon-xs"
+        variant="ghost"
+        size="icon-sm"
+        data-card-dismiss
         aria-label={hideLabel()}
-        tooltip={{ content: hideLabel(), placement: 'left' }}
-        class="absolute -top-2 -right-2 not-touch:opacity-0 not-touch:group-hover/routine-card:opacity-100 not-touch:focus-visible:opacity-100"
+        tooltip={hideLabel()}
+        class="absolute top-1/2 right-1.5 -translate-y-1/2 not-touch:opacity-0 not-touch:group-hover/routine-card:opacity-100 not-touch:focus-visible:opacity-100"
         onClick={() => props.onDismiss()}
       >
-        <XIcon class="size-2.5" aria-hidden="true" />
+        <XIcon class="size-3.5" aria-hidden="true" />
       </Button>
     </div>
   );

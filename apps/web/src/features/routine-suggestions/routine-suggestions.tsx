@@ -411,6 +411,7 @@ function RoutinesSuggestionRow(props: { onOpenDiscover(): void }) {
           shown={ROW_CARDS}
           actions={list.actions}
           onOpenDiscover={props.onOpenDiscover}
+          onOpenRoutine={list.openRoutine}
         />
       )}
     </Show>
@@ -487,6 +488,7 @@ function RoutinesDiscoverPage(props: { search: Accessor<string> }) {
             : t('routineSuggestions.empty')
         }
         onRetry={list.source.retry}
+        onOpenRoutine={list.openRoutine}
       />
     </section>
   );

@@ -47,9 +47,50 @@ export type SuggestionCardModel = {
 };
 
 type CardHandlers = {
-  onAction(): void;
+  /** The whole card: opens the routine in the editor, or once on, the routine. */
+  onOpen(): void;
+  /** Turn on, for AI's catalog picks. */
+  onTurnOn(): void;
   onKnob(name: string, value: Knob['value']): void;
 };
+
+/** What the card itself does when clicked, as its accessible name. */
+function openLabel(model: SuggestionCardModel) {
+  const name = model.title;
+  if (model.status.kind === 'enabled')
+    return t('routineSuggestions.openName', { name });
+  if (model.action === 'review')
+    return t('routineSuggestions.reviewName', { name });
+  if (model.action === 'use') return t('routineSuggestions.useName', { name });
+  return t('routineSuggestions.editName', { name });
+}
+
+/**
+ * The card's title as a button whose hit area covers the whole card, with
+ * the card's hover tint and focus ring. Controls on the card (values, Turn
+ * on, Not interested) are positioned, so they sit above it. It stays
+ * unpositioned when focused (the app positions every :focus-visible
+ * element), or the ring would shrink to the title.
+ */
+function CardTarget(props: {
+  model: SuggestionCardModel;
+  class?: string;
+  onOpen(): void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={openLabel(props.model)}
+      class={cn(
+        "min-w-0 truncate text-left text-sm font-medium text-ink outline-none after:absolute after:inset-0 after:rounded-xl after:content-[''] not-touch:hover:after:bg-hover focus-visible:static focus-visible:after:ring-2 focus-visible:after:ring-edge-focus",
+        props.class
+      )}
+      onClick={() => props.onOpen()}
+    >
+      {props.model.title}
+    </button>
+  );
+}
 
 /** A suggestion's icon in its tint, with AI's violet sparkle on its corner when picked. */
 export function SuggestionGlyph(props: { look: AppSurface; picked: boolean }) {
@@ -66,13 +107,12 @@ export function SuggestionGlyph(props: { look: AppSurface; picked: boolean }) {
   );
 }
 
-/** The card's one action, or once it's on, that it is. */
-function ActionButton(props: {
-  model: SuggestionCardModel;
-  /** A ghost Use, where cards are many (Discover). */
-  quietUse?: boolean;
-  onAction(): void;
-}) {
+/**
+ * The card's one visible action: Turn on for AI's catalog picks; for a
+ * drafted routine or a template, a quiet label for what clicking the card
+ * does; once on, that it is.
+ */
+function CardAction(props: { model: SuggestionCardModel; onTurnOn(): void }) {
   return (
     <Switch>
       <Match when={props.model.status.kind === 'enabled'}>
@@ -85,40 +125,28 @@ function ActionButton(props: {
         <Button
           variant="primary"
           size="xs"
+          class="relative"
           disabled={props.model.status.kind === 'enabling'}
           aria-label={t('routineSuggestions.turnOnName', {
             name: props.model.title,
           })}
-          onClick={() => props.onAction()}
+          onClick={() => props.onTurnOn()}
         >
           {props.model.status.kind === 'enabling'
             ? t('routineSuggestions.turningOn')
             : t('routineSuggestions.turnOn')}
         </Button>
       </Match>
-      <Match when={props.model.action === 'review'}>
-        <Button
-          variant="secondary"
-          size="xs"
-          aria-label={t('routineSuggestions.reviewName', {
-            name: props.model.title,
-          })}
-          onClick={() => props.onAction()}
+      <Match when={props.model.action !== 'turn-on'}>
+        <span
+          aria-hidden="true"
+          class="flex shrink-0 items-center gap-1 text-xs font-medium text-ink-muted not-touch:group-hover/card:text-ink"
         >
-          {t('routineSuggestions.review')}
-        </Button>
-      </Match>
-      <Match when={props.model.action === 'use'}>
-        <Button
-          variant={props.quietUse ? 'ghost' : 'secondary'}
-          size="xs"
-          aria-label={t('routineSuggestions.useName', {
-            name: props.model.title,
-          })}
-          onClick={() => props.onAction()}
-        >
-          {t('routineSuggestions.use')}
-        </Button>
+          {props.model.action === 'review'
+            ? t('routineSuggestions.review')
+            : t('routineSuggestions.use')}
+          <ArrowRightIcon class="size-3" />
+        </span>
       </Match>
     </Switch>
   );
@@ -194,15 +222,14 @@ export function SuggestionDialogCard(
     model: SuggestionCardModel;
     /** Not interested; absent where it can't be dismissed. */
     onDismiss?: () => void;
-    onOpenRoutine(routineId: string): void;
   }
 ) {
   return (
-    <li class="group/suggestion list-none">
+    <li class="group/card list-none">
       <Card
         variant="filled"
         depth={3}
-        class="flex h-full min-w-0 flex-col gap-1.5 p-4"
+        class="relative flex h-full min-w-0 flex-col gap-1.5 p-4"
       >
         <div class="flex min-w-0 items-center gap-2">
           <Dynamic
@@ -239,7 +266,7 @@ export function SuggestionDialogCard(
               <Button
                 variant="ghost"
                 size="icon-xs"
-                class="-my-1 -mr-1 opacity-0 group-hover/suggestion:opacity-100 focus-visible:opacity-100"
+                class="relative z-[1] -my-1 -mr-1 not-touch:opacity-0 not-touch:group-hover/card:opacity-100 not-touch:focus-visible:opacity-100"
                 aria-label={t('routineSuggestions.notInterestedIn', {
                   name: props.model.title,
                 })}
@@ -251,7 +278,9 @@ export function SuggestionDialogCard(
             )}
           </Show>
         </div>
-        <h3 class="mt-0.5 text-sm font-medium text-ink">{props.model.title}</h3>
+        <h3 class="mt-0.5 flex min-w-0">
+          <CardTarget model={props.model} onOpen={props.onOpen} />
+        </h3>
         <SuggestionText
           model={props.model}
           size="sm"
@@ -266,21 +295,20 @@ export function SuggestionDialogCard(
               (props.model.picked ? '' : t('routineSuggestions.fromMacro'))}
           </span>
           <Show
-            when={props.model.status.kind === 'enabled' && props.model.status}
+            when={props.model.status.kind === 'enabled'}
             fallback={
-              <ActionButton model={props.model} onAction={props.onAction} />
+              <CardAction model={props.model} onTurnOn={props.onTurnOn} />
             }
           >
-            {(enabled) => (
-              <Button
-                variant="success"
-                size="xs"
-                onClick={() => props.onOpenRoutine(enabled().routineId)}
-              >
-                <CheckIcon class="size-3" aria-hidden="true" />
-                {t('routineSuggestions.enabled')}
-              </Button>
-            )}
+            <Button
+              variant="success"
+              size="xs"
+              class="relative"
+              onClick={() => props.onOpen()}
+            >
+              <CheckIcon class="size-3" aria-hidden="true" />
+              {t('routineSuggestions.enabled')}
+            </Button>
           </Show>
         </div>
       </Card>
@@ -293,15 +321,15 @@ export function SuggestionDiscoverCard(
   props: CardHandlers & { model: SuggestionCardModel }
 ) {
   return (
-    <li class="min-w-0 list-none">
+    <li class="group/card min-w-0 list-none">
       <RoutineSurface class="flex h-full flex-col gap-1.5 pt-3 pr-3 pb-2.5 pl-3.5">
         <div class="flex h-[22px] min-w-0 items-center gap-2">
           <SuggestionGlyph
             look={props.model.look}
             picked={props.model.picked}
           />
-          <h3 class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
-            {props.model.title}
+          <h3 class="flex min-w-0 flex-1">
+            <CardTarget model={props.model} onOpen={props.onOpen} />
           </h3>
         </div>
         <SuggestionText
@@ -319,11 +347,7 @@ export function SuggestionDiscoverCard(
               triggerIcon={false}
             />
           </span>
-          <ActionButton
-            model={props.model}
-            quietUse
-            onAction={props.onAction}
-          />
+          <CardAction model={props.model} onTurnOn={props.onTurnOn} />
         </div>
       </RoutineSurface>
     </li>
@@ -332,15 +356,17 @@ export function SuggestionDiscoverCard(
 
 /** A compact card for the one row above the routines list. */
 export function SuggestionCompactCard(
-  props: Pick<CardHandlers, 'onAction'> & { model: SuggestionCardModel }
+  props: Pick<CardHandlers, 'onOpen' | 'onTurnOn'> & {
+    model: SuggestionCardModel;
+  }
 ) {
   return (
-    <li class="min-w-0 list-none">
+    <li class="group/card min-w-0 list-none">
       <RoutineSurface class="flex h-full items-center gap-3 py-2.5 pr-2.5 pl-3.5">
         <SuggestionGlyph look={props.model.look} picked={props.model.picked} />
         <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-          <h3 class="truncate text-sm font-medium text-ink">
-            {props.model.title}
+          <h3 class="flex min-w-0">
+            <CardTarget model={props.model} onOpen={props.onOpen} />
           </h3>
           <RoutineChain
             surface={props.model.surface}
@@ -348,7 +374,7 @@ export function SuggestionCompactCard(
             triggerIcon={false}
           />
         </div>
-        <ActionButton model={props.model} onAction={props.onAction} />
+        <CardAction model={props.model} onTurnOn={props.onTurnOn} />
       </RoutineSurface>
     </li>
   );
