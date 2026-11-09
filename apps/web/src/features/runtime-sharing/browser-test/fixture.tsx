@@ -6,9 +6,9 @@ import { QueryClientProvider } from '@tanstack/solid-query';
 import { Button, ImperativeDialogHost } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
+import { TeammateRuntimesSection } from '../../settings/components/teammate-runtimes-section';
 import { macroLightTheme } from '../../theme/themes/macro-light';
 import { RuntimeShareDialog } from '../views/RuntimeShareDialog';
-import { UserRuntimes } from '../views/UserRuntimes';
 import { OWNER_ID } from './preview-adapters';
 
 document.documentElement.dataset.themeLight = 'true';
@@ -27,9 +27,9 @@ function Fixture() {
         )
       : undefined;
   return (
-    <main class="flex w-80 flex-col gap-4 p-4">
+    <main class="@container flex w-full max-w-xl flex-col gap-4 p-4">
       <Button onClick={() => setOpen(true)}>Open Share menu</Button>
-      <UserRuntimes userId="macro|alice@example.com" />
+      <TeammateRuntimesSection canRemoveShared={false} onRemove={() => {}} />
       <Show when={mine()}>
         {(harness) => (
           <RuntimeShareDialog
