@@ -1239,27 +1239,30 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatKeyReservation<'raw> {
 
 impl<'raw> ::bebop::Record<'raw> for CompatKeyReservation<'raw> {}
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct CompatBeginRequest<'raw> {
-    pub tags: ::std::vec::Vec<&'raw str>,
-    pub reserve_keys: u32,
+#[derive(Clone, Debug, PartialEq, Copy)]
+#[repr(packed)]
+pub struct CompatClassMaskPatch {
+    pub owner_id: u32,
+    pub class_id: u32,
+    pub hooks: u64,
 }
 
-impl<'raw> ::bebop::SubRecord<'raw> for CompatBeginRequest<'raw> {
-    const MIN_SERIALIZED_SIZE: usize =
-        <::std::vec::Vec<&'raw str>>::MIN_SERIALIZED_SIZE +
-        <u32>::MIN_SERIALIZED_SIZE;
+impl ::bebop::FixedSized for CompatClassMaskPatch {}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatClassMaskPatch {
+    const MIN_SERIALIZED_SIZE: usize = Self::SERIALIZED_SIZE;
+    const EXACT_SERIALIZED_SIZE: Option<usize> = Some(Self::SERIALIZED_SIZE);
 
     #[inline]
     fn serialized_size(&self) -> usize {
-        self.tags.serialized_size() +
-        self.reserve_keys.serialized_size()
+        Self::SERIALIZED_SIZE
     }
 
-    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+    ::bebop::define_serialize_chained!(*Self => |zelf, dest| {
         Ok(
-            zelf.tags._serialize_chained(dest)? +
-            zelf.reserve_keys._serialize_chained(dest)?
+            ::bebop::packed_read!(zelf.owner_id)._serialize_chained(dest)? +
+            ::bebop::packed_read!(zelf.class_id)._serialize_chained(dest)? +
+            ::bebop::packed_read!(zelf.hooks)._serialize_chained(dest)?
         )
     });
 
@@ -1274,10 +1277,65 @@ impl<'raw> ::bebop::SubRecord<'raw> for CompatBeginRequest<'raw> {
         i += read;
         let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
         i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            owner_id: v0,
+            class_id: v1,
+            hooks: v2,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for CompatClassMaskPatch {}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CompatBeginRequest<'raw> {
+    pub tags: ::std::vec::Vec<&'raw str>,
+    pub reserve_keys: u32,
+    pub class_mask_patches: ::bebop::SliceWrapper<'raw, CompatClassMaskPatch>,
+}
+
+impl<'raw> ::bebop::SubRecord<'raw> for CompatBeginRequest<'raw> {
+    const MIN_SERIALIZED_SIZE: usize =
+        <::std::vec::Vec<&'raw str>>::MIN_SERIALIZED_SIZE +
+        <u32>::MIN_SERIALIZED_SIZE +
+        <::bebop::SliceWrapper<'raw, CompatClassMaskPatch>>::MIN_SERIALIZED_SIZE;
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        self.tags.serialized_size() +
+        self.reserve_keys.serialized_size() +
+        self.class_mask_patches.serialized_size()
+    }
+
+    ::bebop::define_serialize_chained!(Self => |zelf, dest| {
+        Ok(
+            zelf.tags._serialize_chained(dest)? +
+            zelf.reserve_keys._serialize_chained(dest)? +
+            zelf.class_mask_patches._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+        let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
 
         Ok((i, Self {
             tags: v0,
             reserve_keys: v1,
+            class_mask_patches: v2,
         }))
     }
 }
@@ -6457,10 +6515,13 @@ pub mod owned {
 
     impl<'raw> ::bebop::Record<'raw> for CompatKeyReservation {}
 
+    pub use super::CompatClassMaskPatch;
+
     #[derive(Clone, Debug, PartialEq)]
     pub struct CompatBeginRequest {
         pub tags: ::std::vec::Vec<String>,
         pub reserve_keys: u32,
+        pub class_mask_patches: ::std::vec::Vec<CompatClassMaskPatch>,
     }
 
     impl<'raw> ::core::convert::From<super::CompatBeginRequest<'raw>> for CompatBeginRequest {
@@ -6468,6 +6529,7 @@ pub mod owned {
             Self {
                 tags: value.tags.into_iter().map(|value| value.into()).collect(),
                 reserve_keys: value.reserve_keys,
+                class_mask_patches: value.class_mask_patches.iter().map(|value| value).collect(),
             }
         }
     }
@@ -6475,18 +6537,21 @@ pub mod owned {
     impl<'raw> ::bebop::SubRecord<'raw> for CompatBeginRequest {
         const MIN_SERIALIZED_SIZE: usize =
             <::std::vec::Vec<String>>::MIN_SERIALIZED_SIZE +
-            <u32>::MIN_SERIALIZED_SIZE;
+            <u32>::MIN_SERIALIZED_SIZE +
+            <::std::vec::Vec<CompatClassMaskPatch>>::MIN_SERIALIZED_SIZE;
 
         #[inline]
         fn serialized_size(&self) -> usize {
             self.tags.serialized_size() +
-            self.reserve_keys.serialized_size()
+            self.reserve_keys.serialized_size() +
+            self.class_mask_patches.serialized_size()
         }
 
         ::bebop::define_serialize_chained!(Self => |zelf, dest| {
             Ok(
                 zelf.tags._serialize_chained(dest)? +
-                zelf.reserve_keys._serialize_chained(dest)?
+                zelf.reserve_keys._serialize_chained(dest)? +
+                zelf.class_mask_patches._serialize_chained(dest)?
             )
         });
 
@@ -6501,10 +6566,13 @@ pub mod owned {
             i += read;
             let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
             i += read;
+            let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+            i += read;
 
             Ok((i, Self {
                 tags: v0,
                 reserve_keys: v1,
+                class_mask_patches: v2,
             }))
         }
     }
@@ -10108,4 +10176,4 @@ pub mod owned {
     pub use super::ForeignNativeField;}
 
 /// Exact source schema fingerprint for the paired compatibility adapter.
-pub const COMPATIBILITY_SCHEMA_HASH: &str = "09ca9d476170325d1db727ed2cb2376027ef6bfeb64e310a502285e4ab504b93";
+pub const COMPATIBILITY_SCHEMA_HASH: &str = "4e87d1ece9442315d2712fdc5c74a574e622587cc06cd2ec2063bc793835be96";

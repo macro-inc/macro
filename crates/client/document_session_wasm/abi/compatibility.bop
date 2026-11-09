@@ -96,7 +96,10 @@ struct CompatSelectionPatch {
 struct CompatKeyReservation {
   uint32 editorId; uint64 reservationId; ForeignKey[] keys;
 }
-struct CompatBeginRequest { string[] tags; uint32 reserveKeys; }
+struct CompatClassMaskPatch { uint32 ownerId; uint32 classId; uint64 hooks; }
+struct CompatBeginRequest {
+  string[] tags; uint32 reserveKeys; CompatClassMaskPatch[] classMaskPatches;
+}
 struct CompatBeginReply {
   uint64 version; uint32 updateId; uint64 mutationEpoch;
   ForeignOptionalKey composition; CompatKeyReservation reservation;
@@ -160,7 +163,7 @@ union CompatBatchOutcome {
 }
 // Operation failure index equals the successful prefix results.length; finalize
 // failure follows all operation results. Failure always has published=false and
-// invalidates admission. The final delta includes partial failing-operation effects
+// prevents admission for that request. The final delta includes partial failing-operation effects
 // needed by captures/selection (or explicit discard), not just successful results.
 // Noop and composition are part of this single final crossing.
 struct CompatBatchReply {
