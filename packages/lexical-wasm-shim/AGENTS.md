@@ -110,5 +110,6 @@ Read editor dirty sets/type through backend.getUpdateMetadata; reject unavailabl
 
 Install this standalone package with its own frozen bun.lock before checking hooks; the root workspace does not install it. Derive hook evidence with the package-pinned TypeScript version, since symbol inference can change the first recorded caller across compiler versions.
 
+Keep command reexports bound to commands.ts objects and expose only the pinned root constant subset.
 
 Development transform queue swaps do not yet preserve public dirty-collection identity across every callback phase; do not treat sampled native facts as proof of that compatibility gate.
