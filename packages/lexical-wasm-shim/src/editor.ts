@@ -1,4 +1,5 @@
 import { createBackend } from './backend/factory';
+import type { NodeClass } from './foreign/registry';
 import { ElementNode, LexicalNode, nativeNode, RootNode } from './nodes';
 import { NodeRuntime, withNodeRuntime } from './nodes/runtime';
 import { UpdateController, type UpdateOptions } from './update';
@@ -24,6 +25,7 @@ export function getActiveStateEditor(): LexicalEditor {
 
 export interface EditorConfig {
   readonly namespace?: string;
+  readonly nodes?: readonly NodeClass[];
   readonly onError?: (error: unknown, editor: LexicalEditor) => void;
 }
 
@@ -81,11 +83,9 @@ export class LexicalEditor {
   private state: EditorState;
 
   constructor(config: EditorConfig = {}) {
-    const backend = createBackend({
-      namespace: config.namespace ?? '',
-    });
+    const backend = createBackend(config);
     this.runtime = new NodeRuntime(backend, nativeNode);
-    this.state = new EditorState(this, 0);
+    this.state = new EditorState(this, backend.initialVersion);
     this.updates = new UpdateController({
       backend,
       scope: (body) => this.scope(body),
