@@ -79,7 +79,7 @@ pub const ON_BY_DEFAULT_KEEP: f32 = 0.6;
 /// Suggestions one session may keep.
 pub const MAX_KEPT_PER_SESSION: u32 = 12;
 /// The longest a session runs.
-pub const SESSION_TIMEOUT: Duration = Duration::from_secs(90);
+pub const SESSION_TIMEOUT: Duration = Duration::from_secs(240);
 /// How long a session row may stay before the sweep deletes it and its
 /// session.
 pub const STALE_SESSION: Duration = Duration::from_secs(10 * 60);
@@ -142,14 +142,15 @@ impl SuggestionLayout {
 }
 
 impl Default for SuggestionLayout {
-    /// Three sessions, the busiest surfaces first in each, so the first
-    /// suggestions arrive soon.
+    /// Three sessions by surface group, the layout the suggestion benchmark
+    /// chose: each hands back its catalog picks in about 20 to 35 seconds,
+    /// then drafts. A fast first wave of catalog picks could join them later.
     fn default() -> Self {
         Self {
             sessions: vec![
-                vec![Surface::Email, Surface::Crm, Surface::Agents],
-                vec![Surface::Tasks, Surface::Calls, Surface::Reviews],
-                vec![Surface::Calendar, Surface::Chat, Surface::Files],
+                vec![Surface::Email, Surface::Calendar, Surface::Tasks],
+                vec![Surface::Crm, Surface::Calls, Surface::Chat],
+                vec![Surface::Files, Surface::Reviews, Surface::Agents],
             ],
         }
     }
@@ -209,6 +210,9 @@ struct Run {
 enum Ending {
     Finished,
     TimedOut,
+    /// The prompt may or may not have reached the session; it is stopped
+    /// and, having kept nothing, retried once.
+    DeliveryUnknown,
     Failed,
     Cancelled,
 }
@@ -764,6 +768,7 @@ where
             let ending = tokio::select! {
                 ending = tokio::time::timeout(SESSION_TIMEOUT, self.run(&action, brief)) => match ending {
                     Ok(Ok(ending)) => ending,
+                    Ok(Err(RoutineSessionError::PromptDeliveryUnknown)) => Ending::DeliveryUnknown,
                     Ok(Err(error)) => {
                         tracing::warn!(error = ?error, "a routine suggestion session failed");
                         Ending::Failed
@@ -985,14 +990,22 @@ pub fn fill(
         .iter()
         .filter(|suggestion| !suggestion.dismissed && !saved.contains(&suggestion.id))
         .collect();
-    open.sort_by(|a, b| b.keep_probability.total_cmp(&a.keep_probability));
+    // Drafted routines first, then catalog picks, each best first; a second
+    // one with the same catalog key or name is left out.
+    open.sort_by(|a, b| {
+        drafted(b)
+            .cmp(&drafted(a))
+            .then(b.keep_probability.total_cmp(&a.keep_probability))
+    });
+    let mut names: HashSet<String> = HashSet::new();
+    open.retain(|suggestion| names.insert(suggestion_name(suggestion)));
     let on_by_default: HashSet<Uuid> = open
         .iter()
         .filter(|suggestion| match &suggestion.pick {
             StoredPick::Catalog { key, .. } => {
                 suggestion.keep_probability >= ON_BY_DEFAULT_KEEP
                     && routine_program::catalog_routine(key)
-                        .is_some_and(|routine| routine.safe_default)
+                        .is_some_and(|routine| routine.safe_default && !routine.affects_others)
             }
             StoredPick::Routine { .. } => false,
         })
@@ -1050,6 +1063,22 @@ pub fn fill(
         }
     }
     shown
+}
+
+fn drafted(suggestion: &StoredSuggestion) -> bool {
+    matches!(suggestion.pick, StoredPick::Routine { .. })
+}
+
+/// What two suggestions share when they are the same routine: a catalog
+/// pick's title (its key names one title), a drafted routine's name.
+fn suggestion_name(suggestion: &StoredSuggestion) -> String {
+    match &suggestion.pick {
+        StoredPick::Catalog { key, .. } => routine_program::catalog_routine(key)
+            .map_or(key.as_str(), |routine| routine.title)
+            .trim()
+            .to_lowercase(),
+        StoredPick::Routine { routine } => routine.name.trim().to_lowercase(),
+    }
 }
 
 fn for_you(suggestion: &StoredSuggestion, on_by_default: bool) -> RoutineSuggestion {
