@@ -19,12 +19,50 @@ pub(super) fn key(key: NodeKey) -> compat::ForeignKey {
         generation: key.generation(),
     }
 }
-fn optional(value: Option<NodeKey>) -> compat::ForeignOptionalKey {
+pub(super) fn optional(value: Option<NodeKey>) -> compat::ForeignOptionalKey {
     compat::ForeignOptionalKey {
         present: value.is_some(),
         key: key(value.unwrap_or(NodeKey::ROOT)),
     }
 }
+pub(super) fn base_patch(value: &BaseData) -> compat::ForeignBasePatch {
+    match value {
+        BaseData::Text(data) => compat::ForeignBasePatch {
+            text: Some(compat::ForeignTextBase {
+                text: Some(data.text.as_str().encode_utf16().collect()),
+                format: Some(data.format.bits()),
+                detail: Some(data.detail.bits()),
+                mode: Some(match data.mode {
+                    TextMode::Normal => 0,
+                    TextMode::Token => 1,
+                    TextMode::Segmented => 2,
+                }),
+                style: Some(data.style.to_string()),
+            }),
+            element: None,
+        },
+        BaseData::Element(data) => compat::ForeignBasePatch {
+            text: None,
+            element: Some(compat::ForeignElementBase {
+                format: Some(data.format.bits()),
+                indent: Some(data.indent),
+                direction: Some(match data.direction {
+                    None => 0,
+                    Some(TextDirection::Ltr) => 1,
+                    Some(TextDirection::Rtl) => 2,
+                }),
+                text_format: Some(data.text_format.bits()),
+                text_style: Some(data.text_style.to_string()),
+                style: Some(data.style.to_string()),
+            }),
+        },
+        _ => compat::ForeignBasePatch {
+            text: None,
+            element: None,
+        },
+    }
+}
+
 impl Host {
     pub(super) fn records(
         &mut self,
@@ -42,10 +80,9 @@ impl Host {
             .map(|record| {
                 let node = record.record();
                 let instance = node.foreign_instance();
-                if instance
-                    .as_ref()
-                    .is_some_and(|instance| !instance.owner().same_owner(&self.owner))
-                {
+                if instance.as_ref().is_some_and(|instance| {
+                    !self.owner_aliases.contains(&instance.owner().downgrade())
+                }) {
                     return Err(BoundaryError::Invalid(
                         "unregistered foreign instance owner",
                     ));
@@ -89,41 +126,7 @@ impl Host {
                     .next_capture
                     .checked_add(1)
                     .ok_or(BoundaryError::Invalid("capture identity exhausted"))?;
-                let base = match record.base() {
-                    BaseData::Text(data) => compat::ForeignBasePatch {
-                        text: Some(compat::ForeignTextBase {
-                            text: Some(data.text.as_str().encode_utf16().collect()),
-                            format: Some(data.format.bits()),
-                            detail: Some(data.detail.bits()),
-                            mode: Some(match data.mode {
-                                TextMode::Normal => 0,
-                                TextMode::Token => 1,
-                                TextMode::Segmented => 2,
-                            }),
-                            style: Some(data.style.to_string()),
-                        }),
-                        element: None,
-                    },
-                    BaseData::Element(data) => compat::ForeignBasePatch {
-                        text: None,
-                        element: Some(compat::ForeignElementBase {
-                            format: Some(data.format.bits()),
-                            indent: Some(data.indent),
-                            direction: Some(match data.direction {
-                                None => 0,
-                                Some(TextDirection::Ltr) => 1,
-                                Some(TextDirection::Rtl) => 2,
-                            }),
-                            text_format: Some(data.text_format.bits()),
-                            text_style: Some(data.text_style.to_string()),
-                            style: Some(data.style.to_string()),
-                        }),
-                    },
-                    _ => compat::ForeignBasePatch {
-                        text: None,
-                        element: None,
-                    },
-                };
+                let base = base_patch(record.base());
                 let links = record.links();
                 let native_type = record.native_type().unwrap_or("").to_owned();
                 let mut projection = compat::ForeignNativeProjection {
