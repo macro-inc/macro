@@ -1,6 +1,6 @@
 //! Admission for provider-backed turns, independent of the ACP transport.
 
-use agent_session::domain::model::SessionMetering;
+use agent_session::domain::model::SessionBilling;
 use ai_billing::domain::{AiAdmissionError, AiAdmissionService};
 use ai_usage::AiFeature;
 use model_owner::Owner;
@@ -24,9 +24,9 @@ pub async fn admit_turn(
 /// The feature a session's turns are admitted and metered as, from how
 /// whoever opened it said to meter it.
 #[must_use]
-pub fn session_feature(metering: SessionMetering) -> AiFeature {
-    match metering {
-        SessionMetering::AgentSession => AiFeature::AgentSession,
-        SessionMetering::RoutineSuggestions => AiFeature::RoutineSuggestions,
+pub fn session_feature(billing: SessionBilling) -> AiFeature {
+    match billing {
+        SessionBilling::Billable => AiFeature::AgentSession,
+        SessionBilling::NonBillable => AiFeature::NonBillableAgentSession,
     }
 }

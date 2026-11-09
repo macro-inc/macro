@@ -273,7 +273,7 @@ impl Fixture {
 
     fn prepare(&self) -> PrepareRoutineSession {
         PrepareRoutineSession {
-            metering: Default::default(),
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             selection: self.selection(),
             session_id: self.session.id,

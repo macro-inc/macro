@@ -755,8 +755,8 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.get(id).await
     }
 
-    async fn metering(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionMetering> {
-        self.repo.metering(id).await
+    async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
+        self.repo.billing(id).await
     }
 
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {

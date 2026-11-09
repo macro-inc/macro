@@ -3537,7 +3537,7 @@
           "image_generation",
           "email_focus",
           "web_search",
-          "routine_suggestions"
+          "non_billable_agent_session"
         ]
       },
       "AssistantMessagePart": {

@@ -145,8 +145,8 @@ through `set_name` clears it, so a name a person chose is never replaced.
   `activity` returns content-free counts (tool calls, turns).
 - A background session (`AgentSession::is_background`, `SessionPurpose::Background`)
   is work the owner asked for that runs out of sight: source `user`, origin
-  `requested` by the owner, `hidden`, opened from no message. Routine draft
-  and routine suggestion sessions are such sessions. The harness sends no
+  `requested` by the owner, `hidden`, opened from no message. A routine
+  draft's session is one. The harness sends no
   notifications about it, and it is never named or retitled
   (`AdmittedAgentSessionNameGenerator`).
 
@@ -168,11 +168,11 @@ through `set_name` clears it, so a name a person chose is never replaced.
   code, and it must keep sorting before `agent_session_legacy_warm_write`
   (triggers fire in name order).
 
-- What an in-process session's turns are admitted and metered as is
-  `agent_session.metering` (`SessionMetering`: `agent_session`, the default,
-  or `routine_suggestions`), set at creation from `OpenManagedSession` /
-  `PrepareRoutineSession` and read at attach (`session_metering`). A
-  non-default session never claims a warm row, which is already metered.
+- Whether an in-process session's turns are billed is
+  `agent_session.billing` (`SessionBilling`: `billable`, the default, or
+  `non_billable`), set at creation from `OpenManagedSession` /
+  `PrepareRoutineSession` and read at attach (`session_billing`). A
+  non-billable session never claims a warm row, which is billable.
 - `ReadAgentSession` bounds its response, not storage work: it folds the full
   effective history like the app. Raw log limits break replay and turn numbering;
   bounded reads need a persisted conversation projection or a fold-aware port.

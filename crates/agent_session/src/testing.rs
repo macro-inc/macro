@@ -95,8 +95,8 @@ pub struct InMemoryAgentSessionRepo {
     conversation_sessions: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
     /// Sessions whose name was generated, mirroring `name_is_generated`.
     generated_names: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
-    /// Session -> how it is metered, mirroring `agent_session.metering`.
-    meterings: Arc<Mutex<HashMap<AgentSessionId, crate::domain::model::SessionMetering>>>,
+    /// Session -> whether it is billed, mirroring `agent_session.billing`.
+    billings: Arc<Mutex<HashMap<AgentSessionId, crate::domain::model::SessionBilling>>>,
 }
 
 impl InMemoryAgentSessionRepo {
@@ -234,10 +234,10 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             source: params.purpose.source(),
             visibility: params.purpose.visibility(params.thread_id, false),
         };
-        self.meterings
+        self.billings
             .lock()
             .expect("in-memory session store is not poisoned")
-            .insert(session.id, params.metering);
+            .insert(session.id, params.billing);
         if let Some(hash) = params.egress_token_hash {
             self.egress_token_hashes
                 .lock()
@@ -302,7 +302,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         self.find(id).await?.ok_or(AgentSessionError::NotFound(id))
     }
 
-    async fn metering(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionMetering> {
+    async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
         if !self
             .sessions
             .lock()
@@ -311,10 +311,10 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         {
             return Err(AgentSessionError::NotFound(id));
         }
-        // A session inserted directly, not through `create`, is metered as
+        // A session inserted directly, not through `create`, is billed as
         // the column defaults.
         Ok(self
-            .meterings
+            .billings
             .lock()
             .expect("in-memory session store is not poisoned")
             .get(&id)

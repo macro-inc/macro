@@ -101,9 +101,9 @@ each run.
   dismissed (permanent, `.../{id}/dismiss` for either kind) and saved ones
   (`scheduled_action.suggestion_id`). `onByDefault` marks at most two safe
   catalog picks AI rated likely kept, never one that affects others. Unlike a draft's, a suggestion session
-  is prepared with `SessionMetering::RoutineSuggestions`, so its turns are
-  metered as the non-billable `RoutineSuggestions`, never billed as agent
-  session usage. The sweep deletes sessions a stopped
+  is prepared with `SessionBilling::NonBillable`, so its turns are
+  recorded as the non-billable `NonBillableAgentSession`, never billed as
+  agent session usage. The sweep deletes sessions a stopped
   process left open. Spans: `routine.suggestions.generate`, `.session`,
   `.suggest`; log events `routine_suggestions.generated`, `.suggested`,
   `.dismissed`, `.saved`.

@@ -196,12 +196,12 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// Get a persisted agent session by id.
     fn get_session(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
-    /// What the session's in-process turns are admitted and metered as, set
+    /// Whether the session's in-process turns are billed to its owner, set
     /// by whoever opened it.
-    fn session_metering(
+    fn session_billing(
         &self,
         id: AgentSessionId,
-    ) -> impl Future<Output = Result<crate::domain::model::SessionMetering>> + Send;
+    ) -> impl Future<Output = Result<crate::domain::model::SessionBilling>> + Send;
 
     /// A persisted agent session by id, or `None` when there is none.
     fn find_session(
@@ -934,11 +934,11 @@ where
         self.repo.get(id).await
     }
 
-    async fn session_metering(
+    async fn session_billing(
         &self,
         id: AgentSessionId,
-    ) -> Result<crate::domain::model::SessionMetering> {
-        self.repo.metering(id).await
+    ) -> Result<crate::domain::model::SessionBilling> {
+        self.repo.billing(id).await
     }
 
     async fn find_session(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
@@ -2140,8 +2140,8 @@ where
         self.repo.get(id).await
     }
 
-    async fn metering(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionMetering> {
-        self.repo.metering(id).await
+    async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
+        self.repo.billing(id).await
     }
 
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {

@@ -13,7 +13,7 @@ async fn view_router_with_log(log: Vec<crate::domain::model::AgentSessionLog>) -
     let repo = InMemoryAgentSessionRepo::new();
     repo.extend_log(log);
     repo.create(CreateAgentSessionParams {
-        metering: Default::default(),
+        billing: Default::default(),
         origin: trigger_context::TriggerOrigin::Unknown,
         purpose: crate::domain::model::SessionPurpose::Standalone,
         repo_branch: None,

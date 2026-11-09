@@ -388,8 +388,8 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
     // agent session usage.
     assert_eq!(prepared.source, SessionSource::User);
     assert_eq!(
-        prepared.metering,
-        agent_session::domain::model::SessionMetering::AgentSession
+        prepared.billing,
+        agent_session::domain::model::SessionBilling::Billable
     );
     assert_eq!(
         prepared.origin,
