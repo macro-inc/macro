@@ -34,7 +34,7 @@ Route application bulk reads through query kind 9 with the mirror generation in 
 ## Start here
 
 - Generate native payload field IDs and both descriptor tables from pinned class ASTs with generate-native-fields.ts; synchronize ordinary JS properties through explicit native projections, not replacement accessors.
-- `abi/foreign-host.bop`: production JS class/record/clone/opaque-value metadata; generate both languages with packages/collaboration/scripts/generate-foreign-host-schema.ts. Keep JS values editor-local in opaque slots and node/selection/state references typed. Clone acknowledgements verify tree links and apply only scalar base patches to the destination.
+- `abi/foreign-host.bop`: production JS class/record/clone/opaque-value metadata; generate both languages with packages/collaboration/scripts/generate-foreign-host-schema.ts. Keep JS values editor-local in opaque slots and node/selection/state references typed. Clone acknowledgements verify tree links and apply only validated base/native patches to the destination; retain instance owner namespaces across editor-state transfers. Keep public export acknowledgements opaque and serialized export acknowledgements explicit; root cached text is derived metadata rather than a native payload field.
 - `abi/session.bop`: authoritative ABI, generated constants and messages.
 - `src/machine.rs`: clocks, lifecycle and one handle call per input.
 - `src/macro_editor.rs`: application MarkdownSync surface preset/policy, input clock and continuing per-peer constructor entropy for `EditorSession.createMacro`; group plugin registration lives in macro_document_model/src/surface.rs.
