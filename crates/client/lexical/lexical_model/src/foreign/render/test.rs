@@ -389,3 +389,65 @@ fn removal_facts_include_collected_descendants_across_suspension() -> Result<(),
     assert!(!tx.foreign_removed_keys().any(|key| key == NodeKey::ROOT));
     Ok(())
 }
+
+#[test]
+fn retired_render_metadata_preserves_final_fields_without_resurrecting_graph_nodes()
+-> Result<(), Error> {
+    struct Hooks(Arc<AtomicU32>);
+    impl ForeignHooks for Hooks {
+        fn adjust_export_json(
+            &self,
+            _: NodeView<'_>,
+            _: &ForeignData,
+            _: &mut SerializedNode,
+        ) -> Override<Result<(), Error>> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Override::Value(Err(Error::Invariant("render must not export")))
+        }
+    }
+    let exports = Arc::new(AtomicU32::new(0));
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .foreign_node(ForeignNodeType {
+            type_name: "retired-render-text".into(),
+            class_name: "RetiredRenderText".into(),
+            kind: NodeKind::Text,
+            extends: Some("text"),
+            required_state: vec![],
+            hooks: Arc::new(Hooks(exports.clone())),
+        })
+        .build()
+        .expect("editor");
+    let mut tx = editor.transaction();
+    let paragraph = tx.create(Paragraph {})?;
+    let key = tx.create_foreign("retired-render-text", Default::default())?;
+    tx.text(key)?.set_text_content("before")?;
+    tx.append(paragraph, &[key])?;
+    tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+    tx.flush()?;
+    let before = tx.view().snapshot_for_foreign_read()?;
+    tx.text(key)?.set_text_content("after")?;
+    tx.remove(key, false)?;
+    tx.flush()?;
+    let removed = tx.view().snapshot_for_foreign_read()?;
+    assert!(removed.render_records([key]).is_err());
+    assert!(removed.render_retired_records([NodeKey::ROOT]).is_err());
+    let record = removed
+        .render_retired_records([key])?
+        .pop()
+        .expect("retired");
+    let BaseData::Text(text) = record.base() else {
+        panic!("text");
+    };
+    assert_eq!(text.text.as_str(), "after");
+    assert!(record.links().parent.is_none());
+    assert!(record.identity() == &removed.retired_record_identity(key).expect("identity"));
+    assert!(removed.state().node(key).is_none());
+    let original = before.render_records([key])?.pop().expect("original");
+    let BaseData::Text(text) = original.base() else {
+        panic!("text");
+    };
+    assert_eq!(text.text.as_str(), "before");
+    assert_eq!(original.links().parent, Some(paragraph.key()));
+    assert_eq!(exports.load(Ordering::SeqCst), 0);
+    Ok(())
+}

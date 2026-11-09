@@ -108,47 +108,79 @@ impl<'state> NodeRef<'state> {
     }
 }
 impl ForeignReadSnapshot {
-    /// Capture an ordered set of records for a separate typed host render batch.
-    /// Missing keys reject; removed keys belong in the batch's separate removal list.
+    /// Capture an ordered set of live records without public export callbacks.
     pub fn render_records(
         &self,
         keys: impl IntoIterator<Item = NodeKey>,
     ) -> Result<Vec<ForeignRenderRecord>, Error> {
         keys.into_iter()
-            .map(|key| {
-                let node = self.view().node_or_err(key)?;
-                let mut entry = self.state().registry.node(node.type_index());
-                let native_type = loop {
-                    match entry {
-                        Some(current) if current.foreign.is_none() => {
-                            break Some(current.type_name);
-                        }
-                        Some(current) => {
-                            entry = current
-                                .foreign
-                                .as_ref()
-                                .and_then(|definition| definition.extends)
-                                .and_then(|name| self.state().registry.get(name));
-                        }
-                        None => break None,
-                    }
-                };
-                Ok(ForeignRenderRecord {
-                    record: node.capture_for_foreign_read(),
-                    identity: self.record_identity(key)?,
-                    owner: self.state().foreign_instances.owner.clone(),
-                    native_type,
-                    root_cached_text: if key == NodeKey::ROOT {
-                        node.slot
-                            .foreign_root_cache
-                            .as_ref()
-                            .and_then(|cache| cache.value.get().cloned())
-                    } else {
-                        None
-                    },
-                })
-            })
+            .map(|key| self.render_record(key, false))
             .collect()
+    }
+    /// Capture final removed fields for existing JS instances before map deletion.
+    /// These records never become reachable through ordinary graph lookup.
+    pub fn render_retired_records(
+        &self,
+        keys: impl IntoIterator<Item = NodeKey>,
+    ) -> Result<Vec<ForeignRenderRecord>, Error> {
+        keys.into_iter()
+            .map(|key| self.render_record(key, true))
+            .collect()
+    }
+    /// Exact removed record identity, without resolving latest or materializing fields.
+    pub fn retired_record_identity(&self, key: NodeKey) -> Option<ForeignRecordIdentity> {
+        self.view()
+            .retired_records?
+            .get(&key)
+            .map(|slot| slot.foreign_identity.0.clone())
+    }
+    fn render_record(&self, key: NodeKey, retired: bool) -> Result<ForeignRenderRecord, Error> {
+        let view = self.view();
+        let (node, identity) = if retired {
+            if view.contains(key) {
+                return Err(Error::Invariant("retired render key is live"));
+            }
+            let slot = view
+                .retired_records
+                .and_then(|records| records.get(&key))
+                .ok_or(Error::NodeNotFound(key))?;
+            (
+                NodeRef::from_retired(slot, &self.state().registry),
+                slot.foreign_identity.0.clone(),
+            )
+        } else {
+            (view.node_or_err(key)?, self.record_identity(key)?)
+        };
+        let mut entry = self.state().registry.node(node.type_index());
+        let native_type = loop {
+            match entry {
+                Some(current) if current.foreign.is_none() => {
+                    break Some(current.type_name);
+                }
+                Some(current) => {
+                    entry = current
+                        .foreign
+                        .as_ref()
+                        .and_then(|definition| definition.extends)
+                        .and_then(|name| self.state().registry.get(name));
+                }
+                None => break None,
+            }
+        };
+        Ok(ForeignRenderRecord {
+            record: node.capture_for_foreign_read(),
+            identity,
+            owner: self.state().foreign_instances.owner.clone(),
+            native_type,
+            root_cached_text: if key == NodeKey::ROOT {
+                node.slot
+                    .foreign_root_cache
+                    .as_ref()
+                    .and_then(|cache| cache.value.get().cloned())
+            } else {
+                None
+            },
+        })
     }
 }
 

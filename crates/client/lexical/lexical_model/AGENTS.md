@@ -246,3 +246,7 @@ validated host acknowledgement; preserve staged publication denial. Derived
 cache writes must not replay transforms/GC on admission. Reopen only an actually
 sealed unpublished phase after policy refusal; stage tokens never grant commit
 authority or rollback a published transition.
+
+Render retired records only through the explicit owned metadata API; preserve
+last removed scalar/link fields and identity without restoring graph reachability
+or invoking public export hooks. Live render lookup must still reject those keys.
