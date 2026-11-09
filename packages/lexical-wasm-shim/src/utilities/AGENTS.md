@@ -17,3 +17,7 @@ Keep the jsdom directive on DOM tests so the default package runner also uses a
 real DOM. Run pure.config.mts tests against independent Original controls, strict package
 types/hooks, ordinary declaration emission, cold import and scoped just check.
 These helpers do not bind an editor, clone authority or the native oracle.
+
+Use tree.ts for pinned actual-node traversal and raw detach source algorithms.
+Raw detach currently rejects missing __first write authority; keep that native
+gate open without substituting Node.remove or a fabricated writable stage.
