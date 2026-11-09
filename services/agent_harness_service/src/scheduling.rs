@@ -21,7 +21,9 @@ mod routine_analytics;
 mod routine_run_notifications;
 pub mod routine_suggestions;
 use config::Config;
+use ideas::domain::resolution::IdeaResolution;
 use ideas::domain::service::IdeaService;
+use ideas::inbound::kafka_consumer::run_idea_resolution_consumer;
 use ideas::inbound::router::{IdeaRouterState, idea_router};
 use ideas::outbound::idea_access::EntityIdeaAccess;
 use ideas::outbound::pg_idea_repo::PgIdeaRepo;
@@ -395,6 +397,8 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     )
     .with_conditions(Arc::new(conditions));
     let brokers = config.kafka_brokers.to_string();
+    let ideas_brokers = brokers.clone();
+    let ideas_ready = ready.clone();
     let intake_shutdown = lifecycle.stop_consumers.clone();
     let mut worker_ready = ready.clone();
     let worker_shutdown = lifecycle.stop_workers.clone();
@@ -543,10 +547,12 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             agent_model: chat::domain::models::FREE_MODEL.to_owned(),
         },
     ));
+    let idea_repo = Arc::new(PgIdeaRepo::new(db.clone()));
+    let idea_access = Arc::new(EntityIdeaAccess(access.as_ref().clone()));
     let ideas = Arc::new(
         IdeaService::new(
-            Arc::new(PgIdeaRepo::new(db.clone())),
-            Arc::new(EntityIdeaAccess(access.as_ref().clone())),
+            Arc::clone(&idea_repo),
+            Arc::clone(&idea_access),
             correlation_sessions,
             generations.clone(),
             generations.clone(),
@@ -620,6 +626,29 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         service: generation,
         authorization_state: authorization_state.clone(),
     };
+    // Between generations, ideas end by events: the person's own reply, a
+    // deleted item, lost access. Its own consumer group, started with the
+    // other consumers once the listener is ready.
+    let resolution = IdeaResolution::new(idea_repo, idea_access);
+    let ideas_shutdown = lifecycle.stop_consumers.clone();
+    lifecycle.consumers.spawn(supervise_consumer(
+        move || {
+            let mut ready = ideas_ready.clone();
+            let brokers = ideas_brokers.clone();
+            let resolution = resolution.clone();
+            let shutdown = ideas_shutdown.clone();
+            async move {
+                tokio::select! {
+                    biased;
+                    _ = shutdown.cancelled() => return Ok(()),
+                    result = ready.wait_for(|ready| *ready) => if result.is_err() { return Ok(()); },
+                }
+                run_idea_resolution_consumer(&brokers, resolution, shutdown.cancelled()).await
+            }
+        },
+        lifecycle.stop_consumers.clone(),
+        CONSUMER_RESTART_DELAY,
+    ));
     let template_state = RoutineTemplateRouterState {
         service: Arc::new(RoutineTemplateServiceImpl::new(
             Arc::clone(&service),
