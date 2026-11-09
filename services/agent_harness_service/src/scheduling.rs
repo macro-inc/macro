@@ -177,6 +177,35 @@ impl ideas::domain::ports::RequestSessions for CorrelationSessions {
     }
 }
 
+/// A routine idea is dismissed by dismissing its routine suggestion, which
+/// dismisses both together.
+struct SuggestionDismissal<S>(Arc<S>);
+
+#[async_trait::async_trait]
+impl<S> ideas::domain::ports::RoutineSuggestionDismissal for SuggestionDismissal<S>
+where
+    S: scheduled_action::domain::suggestions::ports::RoutineSuggestionApi,
+{
+    async fn dismiss_suggestion(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        suggestion: uuid::Uuid,
+    ) -> Result<bool, rootcause::Report> {
+        match self.0.dismiss(user, suggestion).await {
+            Ok(()) => Ok(true),
+            Err(error)
+                if matches!(
+                    error.downcast_ref::<scheduled_action::domain::models::ActionPolicyError>(),
+                    Some(scheduled_action::domain::models::ActionPolicyError::NotFound)
+                ) =>
+            {
+                Ok(false)
+            }
+            Err(error) => Err(rootcause::report!("{error:?}")),
+        }
+    }
+}
+
 /// Scheduling routes and workers owned by the harness process.
 pub struct SchedulingRuntime {
     pub router: Router,
@@ -521,6 +550,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             correlation_sessions,
             generations.clone(),
             generations.clone(),
+            Arc::new(SuggestionDismissal(Arc::clone(&suggestions))),
             template_flags.clone(),
         )
         .with_sdk_reference(agent_code_mode::domain::index_digest(
