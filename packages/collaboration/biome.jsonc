@@ -11,7 +11,8 @@
       "!**/*.d.ts",
       "!**/node_modules",
       "!src/sync-service/generated",
-      "!!**/abi.generated.ts"
+      "!!**/abi.generated.ts",
+      "!!**/foreign-host.generated.ts"
     ]
   }
 }
