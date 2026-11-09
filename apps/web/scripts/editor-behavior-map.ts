@@ -605,5 +605,261 @@ export const EDITOR_BEHAVIOR_MAP = [
       'document-card block navigation document entry selects a leading decorator without changing content',
     ],
   },
+  {
+    source: 'packages/lexical-core/transformers/customTransformers.ts',
+    anchor: 'const customTransformer =',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/list-transform-boundaries.test.ts',
+    cases: [
+      'custom list transform boundaries (import=true) number transforms a paragraph only when it is a paragraph',
+      'custom list transform boundaries (import=true) bullet transforms a paragraph only when it is a paragraph',
+      'custom list transform boundaries (import=true) check transforms a paragraph only when it is a paragraph',
+      'custom list transform boundaries (import=true) number transforms a h1 only when it is a paragraph',
+      'custom list transform boundaries (import=true) bullet transforms a h1 only when it is a paragraph',
+      'custom list transform boundaries (import=true) check transforms a h1 only when it is a paragraph',
+      'custom list transform boundaries (import=true) number transforms a h2 only when it is a paragraph',
+      'custom list transform boundaries (import=true) bullet transforms a h2 only when it is a paragraph',
+      'custom list transform boundaries (import=true) check transforms a h2 only when it is a paragraph',
+      'custom list transform boundaries (import=true) number transforms a h3 only when it is a paragraph',
+      'custom list transform boundaries (import=true) bullet transforms a h3 only when it is a paragraph',
+      'custom list transform boundaries (import=true) check transforms a h3 only when it is a paragraph',
+      'custom list transform boundaries (import=false) number transforms a paragraph only when it is a paragraph',
+      'custom list transform boundaries (import=false) bullet transforms a paragraph only when it is a paragraph',
+      'custom list transform boundaries (import=false) check transforms a paragraph only when it is a paragraph',
+      'custom list transform boundaries (import=false) number transforms a h1 only when it is a paragraph',
+      'custom list transform boundaries (import=false) bullet transforms a h1 only when it is a paragraph',
+      'custom list transform boundaries (import=false) check transforms a h1 only when it is a paragraph',
+      'custom list transform boundaries (import=false) number transforms a h2 only when it is a paragraph',
+      'custom list transform boundaries (import=false) bullet transforms a h2 only when it is a paragraph',
+      'custom list transform boundaries (import=false) check transforms a h2 only when it is a paragraph',
+      'custom list transform boundaries (import=false) number transforms a h3 only when it is a paragraph',
+      'custom list transform boundaries (import=false) bullet transforms a h3 only when it is a paragraph',
+      'custom list transform boundaries (import=false) check transforms a h3 only when it is a paragraph',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: '      INSERT_DOCUMENT_MENTION_COMMAND,\n      (payload)',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/mention-insertion.test.ts',
+    cases: [
+      'mention command insertion (empty=true) document inserts its real node, payload and paragraph boundary',
+      'mention command insertion (empty=true) document agent inserts its real node, payload and paragraph boundary',
+      'mention command insertion (empty=false) document inserts its real node, payload and paragraph boundary',
+      'mention command insertion (empty=false) document agent inserts its real node, payload and paragraph boundary',
+      'mention append preserves a range (backward=true) document appends after selected text without replacing it',
+      'mention append preserves a range (backward=false) document appends after selected text without replacing it',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: '      INSERT_USER_MENTION_COMMAND,\n      (payload)',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/mention-insertion.test.ts',
+    cases: [
+      'mention command insertion (empty=true) user inserts its real node, payload and paragraph boundary',
+      'mention command insertion (empty=false) user inserts its real node, payload and paragraph boundary',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: '      INSERT_CONTACT_MENTION_COMMAND,\n      (payload)',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/mention-insertion.test.ts',
+    cases: [
+      'mention command insertion (empty=true) contact inserts its real node, payload and paragraph boundary',
+      'mention command insertion (empty=false) contact inserts its real node, payload and paragraph boundary',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: '      INSERT_DATE_MENTION_COMMAND,\n      (payload)',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/mention-insertion.test.ts',
+    cases: [
+      'mention command insertion (empty=true) date inserts its real node, payload and paragraph boundary',
+      'mention command insertion (empty=false) date inserts its real node, payload and paragraph boundary',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: '      INSERT_GROUP_MENTION_COMMAND,\n      (payload)',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/mention-insertion.test.ts',
+    cases: [
+      'mention command insertion (empty=true) group inserts its real node, payload and paragraph boundary',
+      'mention command insertion (empty=false) group inserts its real node, payload and paragraph boundary',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: '      INSERT_AGENT_SESSION_MENTION_COMMAND,\n      (payload)',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/mention-insertion.test.ts',
+    cases: [
+      'mention command insertion (empty=true) agent session inserts its real node, payload and paragraph boundary',
+      'mention command insertion (empty=false) agent session inserts its real node, payload and paragraph boundary',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: '      INSERT_PR_MENTION_COMMAND,\n      (payload)',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/mention-insertion.test.ts',
+    cases: [
+      'mention command insertion (empty=true) pull request inserts its real node, payload and paragraph boundary',
+      'mention command insertion (empty=false) pull request inserts its real node, payload and paragraph boundary',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: '      INSERT_THEME_MENTION_COMMAND,\n      (payload)',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/mention-insertion.test.ts',
+    cases: [
+      'mention command insertion (empty=true) theme inserts its real node, payload and paragraph boundary',
+      'mention command insertion (empty=false) theme inserts its real node, payload and paragraph boundary',
+      'mention append preserves a range (backward=true) theme appends after selected text without replacing it',
+      'mention append preserves a range (backward=false) theme appends after selected text without replacing it',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: '      INSERT_BOOKING_LINK_MENTION_COMMAND,\n      (payload)',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/mention-insertion.test.ts',
+    cases: [
+      'mention command insertion (empty=true) booking link inserts its real node, payload and paragraph boundary',
+      'mention command insertion (empty=false) booking link inserts its real node, payload and paragraph boundary',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: 'function $deleteSelectedMentions',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/mention-insertion.test.ts',
+    cases: [
+      'selected tracked mention Backspace document removes only the selected mention',
+      'selected tracked mention Backspace document agent removes only the selected mention',
+      'selected tracked mention Backspace user removes only the selected mention',
+      'selected tracked mention Backspace contact removes only the selected mention',
+      'selected tracked mention Backspace date removes only the selected mention',
+      'selected tracked mention Backspace group removes only the selected mention',
+      'selected tracked mention Backspace agent session removes only the selected mention',
+      'selected tracked mention Backspace pull request removes only the selected mention',
+      'selected tracked mention Delete document removes only the selected mention',
+      'selected tracked mention Delete document agent removes only the selected mention',
+      'selected tracked mention Delete user removes only the selected mention',
+      'selected tracked mention Delete contact removes only the selected mention',
+      'selected tracked mention Delete date removes only the selected mention',
+      'selected tracked mention Delete group removes only the selected mention',
+      'selected tracked mention Delete agent session removes only the selected mention',
+      'selected tracked mention Delete pull request removes only the selected mention',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: '      UPDATE_DOCUMENT_NAME_COMMAND,\n      (payload)',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/mention-insertion.test.ts',
+    cases: [
+      'remote mention labels and local undo document label updates do not become a separate undo step',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: '      UPDATE_USER_DISPLAY_NAME_COMMAND,\n      (payload)',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/mention-insertion.test.ts',
+    cases: [
+      'remote mention labels and local undo user label updates do not become a separate undo step',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: 'function registerMentionsPlugin',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/mention-insertion.test.ts',
+    cases: [
+      'mention node dependencies rejects registration when a required date node is absent',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/mentions/mentionsPlugin.ts',
+    anchor: '      INSERT_BOOKING_LINK_MENTION_COMMAND,\n      (payload)',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/mention-insertion.test.ts',
+    cases: [
+      'mention node dependencies yields booking-link insertion when its optional node is absent',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/find-and-replace/findAndReplacePlugin.ts',
+    anchor: 'function findMatchOffsets',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/find-replace.test.ts',
+    cases: [
+      'find and replace literal search maps literal "one" in "One ONE" to actual text-node offsets',
+      'find and replace literal search maps literal "a+b" in "a+b ab a+b" to actual text-node offsets',
+      'find and replace literal search maps literal "[a]+" in "[a]+ aaa" to actual text-node offsets',
+      'find and replace literal search maps literal "aa" in "aaaa" to actual text-node offsets',
+      'find and replace literal search maps literal "" in "retained" to actual text-node offsets',
+      'find and replace literal search maps literal "absent" in "retained" to actual text-node offsets',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/find-and-replace/findAndReplacePlugin.ts',
+    anchor: 'function areListOffsetsEqual',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/find-replace.test.ts',
+    cases: [
+      'find and replace literal search only reports offsets when the search result changes',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/find-and-replace/findAndReplacePlugin.ts',
+    anchor: '      DO_REPLACE_COMMAND,\n      (payload',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/find-replace.test.ts',
+    cases: [
+      'find and replace edits (once=false) replaces "one" with "x" in "one one"',
+      'find and replace edits (once=false) replaces "ab" with "long" in "ab ab"',
+      'find and replace edits (once=false) replaces "one" with "" in "one one"',
+      'find and replace edits (once=false) replaces "one" with "x" in "One ONE"',
+      'find and replace edits (once=false) replaces "a+b" with "x" in "a+b a+b"',
+      'replace-all preserves formatting when one match spans text-node boundaries',
+    ],
+  },
+  {
+    source:
+      'apps/web/src/lib/core/component/LexicalMarkdown/plugins/find-and-replace/findAndReplacePlugin.ts',
+    anchor: '      DO_REPLACE_ONCE_COMMAND,\n      (payload',
+    testFile:
+      'apps/web/src/lib/core/component/LexicalMarkdown/behavior-inventory/find-replace.test.ts',
+    cases: [
+      'find and replace edits (once=true) replaces "one" with "x" in "one one"',
+      'find and replace edits (once=true) replaces "ab" with "long" in "ab ab"',
+      'find and replace edits (once=true) replaces "one" with "" in "one one"',
+      'find and replace edits (once=true) replaces "one" with "x" in "One ONE"',
+      'find and replace edits (once=true) replaces "a+b" with "x" in "a+b a+b"',
+    ],
+  },
   ...EDITOR_EXISTING_BEHAVIOR_MAP,
 ] as const;

@@ -4,7 +4,12 @@ These tests exercise production Lexical APIs and Macro plugins through their
 normal imports. They cover title normalization, insertion and placeholders,
 list deletion, indentation, clipboard precedence and quoted paste, focus
 boundaries, equation/table picker commands, menu navigation, Android input
-triggers, emoji/tag lifecycle, checklist input, and word counts.
+triggers, emoji/tag lifecycle, checklist input, word counts, location restoration,
+metadata/accessories, platform formatting, decorator navigation, list transform
+boundaries and mention insertion/deletion/history. Direct transformer calls
+cover import/typing modes; direct mention commands do not establish menu UI
+coverage. Remote-label history tests establish grouping, not preservation of
+remote labels through undo/redo.
 
 From this worktree's `apps/web`, with its own dependencies:
 
@@ -79,9 +84,13 @@ uses one worker without retries, and blocks nonlocal HTTP/WebSocket traffic.
 its port and evidence destinations. Defaults use the OS temporary directory.
 Desktop, tablet touch and phone touch run the same paste, formatting,
 read-only, save/reopen, undo and production slash-menu interactions. The menu
-uses the real analytics/flag providers and Macro stylesheet, with service-backed
+uses the real analytics/flag providers, editor theme and Macro stylesheet, with service-backed
 actions excluded from this isolated fixture. Its filtering, wrapping keyboard
 navigation, insertion, dismissal and pointer/touch focus behavior are exercised.
+Checklist tests target the measured pseudo-element, verify its actual hit target,
+and translate layout coordinates into the visual viewport for native touch.
+The fixture uses padding rather than outer body margins to avoid overflowing
+the phone viewport. File paste/drop tests stop at the host callback boundary.
 Touch profiles in Chromium do not
 prove iOS/WebKit or Android virtual-keyboard behavior.
 
