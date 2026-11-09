@@ -14,6 +14,8 @@ pub enum EditorMode {
 /// Owns the current immutable snapshot and a non-rollback key allocator.
 pub struct Editor {
     #[cfg(feature = "foreign-nodes")]
+    pub(crate) foreign_instances: Arc<crate::foreign::instances::ForeignInstances>,
+    #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_runtime: crate::foreign::runtime::ForeignRuntime,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) suspend_owner: Arc<()>,
@@ -39,11 +41,24 @@ impl Editor {
         source: KeySource,
         view_host: ViewHost,
     ) -> Result<Self, Error> {
+        let state = EditorState::empty(registry)?;
+        #[cfg(feature = "foreign-nodes")]
+        let (state, suspend_owner, foreign_instances) = {
+            let owner = Arc::new(());
+            let instances = Arc::new(crate::foreign::instances::ForeignInstances::for_owner(
+                owner.clone(),
+            ));
+            let mut state = state;
+            state.foreign_instances = instances.clone();
+            (state, owner, instances)
+        };
         Ok(Self {
             #[cfg(feature = "foreign-nodes")]
             foreign_runtime: Default::default(),
             #[cfg(feature = "foreign-nodes")]
-            suspend_owner: Arc::new(()),
+            suspend_owner,
+            #[cfg(feature = "foreign-nodes")]
+            foreign_instances,
             #[cfg(feature = "foreign-nodes")]
             suspend_version: CommitId(0),
             extensions: Default::default(),
@@ -52,7 +67,7 @@ impl Editor {
             listener_table: Default::default(),
             initial_commits: vec![],
             initial_diff: None,
-            state: EditorState::empty(registry)?,
+            state,
             keys: match source {
                 KeySource::PerEditor => SharedKeyCounter::new(),
                 KeySource::Shared(keys) => keys,

@@ -7,6 +7,7 @@ pub struct ForeignReadLease(pub(super) Arc<()>);
 
 /// Owned update metadata; this does not retain the pending node map or editor.
 pub struct ForeignReadContext {
+    pub(super) foreign_instances: Arc<crate::foreign::instances::ForeignInstances>,
     pub(super) registry: Arc<Registry>,
     pub(super) origin: ReadOrigin,
     pub(super) native_calls: Option<Arc<crate::foreign::native::NativeCalls>>,
@@ -21,6 +22,7 @@ pub struct ForeignReadContext {
 impl Clone for ForeignReadContext {
     fn clone(&self) -> Self {
         Self {
+            foreign_instances: self.foreign_instances.clone(),
             registry: self.registry.clone(),
             origin: self.origin.clone(),
             native_calls: self.native_calls.clone(),
@@ -88,6 +90,7 @@ impl StateRef<'_> {
     /// Originless immutable states cannot supply an update context.
     pub fn context_for_foreign_read(self) -> Result<ForeignReadContext, Error> {
         Ok(ForeignReadContext {
+            foreign_instances: self.state.foreign_instances.clone(),
             registry: self.state.registry.clone(),
             origin: self
                 .foreign_origin
