@@ -53,6 +53,13 @@ coordinates: after native selection clears, recomputation falls back to the
 original cached rectangle. These do not establish rendered popup UI, AI
 requests or a native table action bar.
 
+Focus-guard cases keep editor.focus and native DOM selection/focus real. A
+host-owned button in the actual TaskList unmanaged mount verifies embedded
+focus ownership; it is not the production controls renderer. Synthetic pointer
+and cancelable focus events, fake timers, supplied pointerType and jsdom range
+geometry pin mouse/pen and 500 ms touch boundaries, root replacement and
+disposal. They do not establish physical event ordering or native focus timing.
+
 From this worktree's `apps/web`, with its own dependencies:
 
 ```sh
