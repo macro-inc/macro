@@ -33,6 +33,17 @@
         "tags": ["ideas"],
         "summary": "The caller's feed.",
         "operationId": "list_ideas",
+        "parameters": [
+          {
+            "name": "timezone",
+            "in": "query",
+            "description": "IANA time zone, e.g. `America/New_York`: nightly generations run in\nthe reader's night.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "The caller's open ideas they can open every item of, best first",
@@ -975,28 +986,18 @@
         }
       }
     },
-    "/scheduled-actions/suggestions/generate": {
-      "post": {
+    "/scheduled-actions/suggestions/review": {
+      "get": {
         "tags": ["scheduled actions"],
-        "operationId": "generate_routine_suggestions",
-        "parameters": [
-          {
-            "name": "timezone",
-            "in": "query",
-            "description": "IANA time zone, e.g. `America/New_York`.",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
+        "summary": "What a routines generation session reads before managing suggestions.",
+        "operationId": "review_routine_suggestions",
         "responses": {
           "200": {
-            "description": "The caller's suggestions; the first call, once their inbox is connected, starts AI suggesting in the background, and later calls change nothing",
+            "description": "Every suggestion AI made for the user, open or not",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RoutineSuggestions"
+                  "$ref": "#/components/schemas/SuggestionReview"
                 }
               }
             }
@@ -1011,8 +1012,18 @@
               }
             }
           },
+          "403": {
+            "description": "Only a routines generation session may review",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "404": {
-            "description": "Routine suggestions are off for the caller",
+            "description": "Routine suggestions are off for the user",
             "content": {
               "text/plain": {
                 "schema": {
@@ -1065,6 +1076,86 @@
           },
           "404": {
             "description": "No such suggestion for the caller, or suggestions are off",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/scheduled-actions/suggestions/{id}/retire": {
+      "post": {
+        "tags": ["scheduled actions"],
+        "summary": "Retire an open suggestion that no longer fits, from a routines\ngeneration session.",
+        "operationId": "retire_routine_suggestion",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the suggestion",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetireSuggestion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Whether the suggestion was retired, and why not when it wasn't",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestOutcome"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only a routines generation session may retire",
             "content": {
               "text/plain": {
                 "schema": {
@@ -1848,6 +1939,66 @@
           },
           "404": {
             "description": "The routine is not shared",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/suggestions/generate": {
+      "post": {
+        "tags": ["suggestions"],
+        "summary": "Start the caller's onboarding generation, once their inbox is connected.",
+        "operationId": "start_suggestion_generation",
+        "parameters": [
+          {
+            "name": "timezone",
+            "in": "query",
+            "description": "IANA time zone, e.g. `America/New_York`.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller's onboarding generation started in the background: their ideas and routine suggestions, as each is on for them. Later calls start nothing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationStarted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Neither ideas nor routine suggestions are on for the caller",
             "content": {
               "text/plain": {
                 "schema": {
@@ -2975,6 +3126,17 @@
           }
         }
       },
+      "GenerationStarted": {
+        "type": "object",
+        "description": "What starting a generation did.",
+        "required": ["started"],
+        "properties": {
+          "started": {
+            "type": "boolean",
+            "description": "Whether a run started; false when one ran before or is running."
+          }
+        }
+      },
       "GenerationStatus": {
         "type": "string",
         "description": "Where a person's suggestions are in being generated.",
@@ -3402,6 +3564,74 @@
           }
         },
         "additionalProperties": false
+      },
+      "RetireSuggestion": {
+        "type": "object",
+        "description": "Retiring an open suggestion that no longer fits.",
+        "required": ["reason"],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "description": "Why, for the change log."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ReviewedState": {
+        "type": "string",
+        "description": "Where one of the person's suggestions is, for a routines session\nmanaging them.",
+        "enum": ["open", "dismissed", "retired", "saved"]
+      },
+      "ReviewedSuggestion": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SuggestedPick"
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "surfaces",
+              "reason",
+              "keepProbability",
+              "state",
+              "createdAt"
+            ],
+            "properties": {
+              "closedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When it was dismissed or retired."
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it was suggested."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "keepProbability": {
+                "type": "number",
+                "format": "float"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "state": {
+                "$ref": "#/components/schemas/ReviewedState"
+              },
+              "surfaces": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Surface"
+                }
+              }
+            }
+          }
+        ],
+        "description": "One suggestion AI made for the person, as a routines session reviews it."
       },
       "RewriteIdea": {
         "type": "object",
@@ -4490,6 +4720,25 @@
         "description": "Who suggests a routine.",
         "enum": ["for_you", "macro"]
       },
+      "SuggestionReview": {
+        "type": "object",
+        "description": "Every suggestion AI made for the person, for a routines session.",
+        "required": ["suggestions", "keptLeft"],
+        "properties": {
+          "keptLeft": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Suggestions this session may still hand back.",
+            "minimum": 0
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewedSuggestion"
+            }
+          }
+        }
+      },
       "Surface": {
         "type": "string",
         "description": "The part of the app a routine is about, where it is offered.",
@@ -4611,6 +4860,10 @@
     {
       "name": "ideas",
       "description": "Each person's ideas, and the tools generation sessions manage them with"
+    },
+    {
+      "name": "suggestions",
+      "description": "Generations of each person's ideas and routine suggestions"
     }
   ]
 }

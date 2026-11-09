@@ -153,16 +153,6 @@ export const scheduledActionClient = {
       method: 'GET',
     }),
 
-  /**
-   * Start the caller's one generation of suggestions, from their inbox and
-   * apps, with schedules in `timezone`. Later calls change nothing.
-   */
-  generateRoutineSuggestions: async (args: { timezone: string }) =>
-    scheduledActionFetch<RoutineSuggestions>(
-      `/scheduled-actions/suggestions/generate?${new URLSearchParams({ timezone: args.timezone })}`,
-      { method: 'POST' }
-    ),
-
   /** The caller isn't interested in a suggestion; it isn't suggested again. */
   dismissRoutineSuggestion: (args: { suggestionId: string }) =>
     scheduledActionFetch(

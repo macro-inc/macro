@@ -7,6 +7,7 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { MacroEntityType } from '../entity';
 import { Routine, type RoutineOptions, routineBody } from './routine';
+import { RoutineSuggestion } from './suggestion';
 
 /** Something created for a routine to use: any handle with an entity type, such as a `Database`. */
 export interface CreatedEntity {
@@ -160,7 +161,7 @@ export class RoutineNamespace {
   }
 
   /**
-   * Suggest a routine to the user. Only a routine suggestion session may
+   * Suggest a routine to the user. Only a routines generation session may
    * call this; any other session gets a 403. Suggest a catalog routine by
    * `key` with `knobs`, or a `routine` the catalog lacks, written as `check`
    * takes it and checked the same way. `surfaces` are the parts of the app
@@ -218,6 +219,27 @@ export class RoutineNamespace {
             keepProbability: suggestion.keepProbability,
           };
     return unwrap(await this.client.scheduledAction.suggestRoutine({ body }));
+  }
+
+  /**
+   * Every routine suggestion AI made for the user, open or not, and how
+   * many more this session may hand back. Only a routines generation
+   * session may call this. Retire with `suggestion.retire(reason)` what no
+   * longer fits; suggestions are never rewritten.
+   */
+  async review(): Promise<{
+    suggestions: RoutineSuggestion[];
+    keptLeft: number;
+  }> {
+    const review = unwrap(
+      await this.client.scheduledAction.reviewRoutineSuggestions(),
+    );
+    return {
+      suggestions: review.suggestions.map((record) =>
+        RoutineSuggestion.from(this.client, record),
+      ),
+      keptLeft: review.keptLeft,
+    };
   }
 
   /** List routines, optionally including event triggers. */

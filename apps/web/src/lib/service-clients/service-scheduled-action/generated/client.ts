@@ -17,14 +17,16 @@ import type {
   Draft,
   DraftRoutineRequest,
   EmptyResponse,
-  GenerateRoutineSuggestionsParams,
+  GenerationStarted,
   IdeaReview,
   Ideas,
   IdeaWriteOutcome,
   InProgressExecution,
+  ListIdeasParams,
   ListRoutineSuggestionsParams,
   ListScheduledActionsParams,
   RetireIdea,
+  RetireSuggestion,
   RewriteIdea,
   RoutineCatalogParams,
   RoutineCheck,
@@ -33,7 +35,9 @@ import type {
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
+  StartSuggestionGenerationParams,
   SuggestIdea,
+  SuggestionReview,
   SuggestOutcome,
   SuggestRequest,
 } from './schemas';
@@ -113,14 +117,27 @@ export type listIdeasResponse =
   | listIdeasResponseSuccess
   | listIdeasResponseError;
 
-export const getListIdeasUrl = () => {
-  return `/ideas`;
+export const getListIdeasUrl = (params?: ListIdeasParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/ideas?${stringifiedParams}`
+    : `/ideas`;
 };
 
 export const listIdeas = async (
+  params?: ListIdeasParams,
   options?: RequestInit
 ): Promise<listIdeasResponse> => {
-  const res = await fetch(getListIdeasUrl(), {
+  const res = await fetch(getListIdeasUrl(params), {
     ...options,
     method: 'GET',
   });
@@ -1072,79 +1089,73 @@ export const suggestRoutine = async (
   } as suggestRoutineResponse;
 };
 
-export type generateRoutineSuggestionsResponse200 = {
-  data: RoutineSuggestions;
+/**
+ * @summary What a routines generation session reads before managing suggestions.
+ */
+export type reviewRoutineSuggestionsResponse200 = {
+  data: SuggestionReview;
   status: 200;
 };
 
-export type generateRoutineSuggestionsResponse401 = {
+export type reviewRoutineSuggestionsResponse401 = {
   data: string;
   status: 401;
 };
 
-export type generateRoutineSuggestionsResponse404 = {
+export type reviewRoutineSuggestionsResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type reviewRoutineSuggestionsResponse404 = {
   data: string;
   status: 404;
 };
 
-export type generateRoutineSuggestionsResponse500 = {
+export type reviewRoutineSuggestionsResponse500 = {
   data: string;
   status: 500;
 };
 
-export type generateRoutineSuggestionsResponseSuccess =
-  generateRoutineSuggestionsResponse200 & {
+export type reviewRoutineSuggestionsResponseSuccess =
+  reviewRoutineSuggestionsResponse200 & {
     headers: Headers;
   };
-export type generateRoutineSuggestionsResponseError = (
-  | generateRoutineSuggestionsResponse401
-  | generateRoutineSuggestionsResponse404
-  | generateRoutineSuggestionsResponse500
+export type reviewRoutineSuggestionsResponseError = (
+  | reviewRoutineSuggestionsResponse401
+  | reviewRoutineSuggestionsResponse403
+  | reviewRoutineSuggestionsResponse404
+  | reviewRoutineSuggestionsResponse500
 ) & {
   headers: Headers;
 };
 
-export type generateRoutineSuggestionsResponse =
-  | generateRoutineSuggestionsResponseSuccess
-  | generateRoutineSuggestionsResponseError;
+export type reviewRoutineSuggestionsResponse =
+  | reviewRoutineSuggestionsResponseSuccess
+  | reviewRoutineSuggestionsResponseError;
 
-export const getGenerateRoutineSuggestionsUrl = (
-  params: GenerateRoutineSuggestionsParams
-) => {
-  const normalizedParams = new URLSearchParams();
-
-  Object.entries(params || {}).forEach(([key, value]) => {
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : value.toString());
-    }
-  });
-
-  const stringifiedParams = normalizedParams.toString();
-
-  return stringifiedParams.length > 0
-    ? `/scheduled-actions/suggestions/generate?${stringifiedParams}`
-    : `/scheduled-actions/suggestions/generate`;
+export const getReviewRoutineSuggestionsUrl = () => {
+  return `/scheduled-actions/suggestions/review`;
 };
 
-export const generateRoutineSuggestions = async (
-  params: GenerateRoutineSuggestionsParams,
+export const reviewRoutineSuggestions = async (
   options?: RequestInit
-): Promise<generateRoutineSuggestionsResponse> => {
-  const res = await fetch(getGenerateRoutineSuggestionsUrl(params), {
+): Promise<reviewRoutineSuggestionsResponse> => {
+  const res = await fetch(getReviewRoutineSuggestionsUrl(), {
     ...options,
-    method: 'POST',
+    method: 'GET',
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();
 
-  const data: generateRoutineSuggestionsResponse['data'] = body
+  const data: reviewRoutineSuggestionsResponse['data'] = body
     ? JSON.parse(body)
     : {};
   return {
     data,
     status: res.status,
     headers: res.headers,
-  } as generateRoutineSuggestionsResponse;
+  } as reviewRoutineSuggestionsResponse;
 };
 
 export type dismissRoutineSuggestionResponse204 = {
@@ -1206,6 +1217,80 @@ export const dismissRoutineSuggestion = async (
     status: res.status,
     headers: res.headers,
   } as dismissRoutineSuggestionResponse;
+};
+
+/**
+ * @summary Retire an open suggestion that no longer fits, from a routines
+generation session.
+ */
+export type retireRoutineSuggestionResponse200 = {
+  data: SuggestOutcome;
+  status: 200;
+};
+
+export type retireRoutineSuggestionResponse400 = {
+  data: string;
+  status: 400;
+};
+
+export type retireRoutineSuggestionResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type retireRoutineSuggestionResponse403 = {
+  data: string;
+  status: 403;
+};
+
+export type retireRoutineSuggestionResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type retireRoutineSuggestionResponseSuccess =
+  retireRoutineSuggestionResponse200 & {
+    headers: Headers;
+  };
+export type retireRoutineSuggestionResponseError = (
+  | retireRoutineSuggestionResponse400
+  | retireRoutineSuggestionResponse401
+  | retireRoutineSuggestionResponse403
+  | retireRoutineSuggestionResponse500
+) & {
+  headers: Headers;
+};
+
+export type retireRoutineSuggestionResponse =
+  | retireRoutineSuggestionResponseSuccess
+  | retireRoutineSuggestionResponseError;
+
+export const getRetireRoutineSuggestionUrl = (id: string) => {
+  return `/scheduled-actions/suggestions/${id}/retire`;
+};
+
+export const retireRoutineSuggestion = async (
+  id: string,
+  retireSuggestion: RetireSuggestion,
+  options?: RequestInit
+): Promise<retireRoutineSuggestionResponse> => {
+  const res = await fetch(getRetireRoutineSuggestionUrl(id), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(retireSuggestion),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: retireRoutineSuggestionResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as retireRoutineSuggestionResponse;
 };
 
 export type getScheduledActionResponse200 = {
@@ -1953,4 +2038,82 @@ export const activateScheduledActionTemplate = async (
     status: res.status,
     headers: res.headers,
   } as activateScheduledActionTemplateResponse;
+};
+
+/**
+ * @summary Start the caller's onboarding generation, once their inbox is connected.
+ */
+export type startSuggestionGenerationResponse200 = {
+  data: GenerationStarted;
+  status: 200;
+};
+
+export type startSuggestionGenerationResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type startSuggestionGenerationResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type startSuggestionGenerationResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type startSuggestionGenerationResponseSuccess =
+  startSuggestionGenerationResponse200 & {
+    headers: Headers;
+  };
+export type startSuggestionGenerationResponseError = (
+  | startSuggestionGenerationResponse401
+  | startSuggestionGenerationResponse404
+  | startSuggestionGenerationResponse500
+) & {
+  headers: Headers;
+};
+
+export type startSuggestionGenerationResponse =
+  | startSuggestionGenerationResponseSuccess
+  | startSuggestionGenerationResponseError;
+
+export const getStartSuggestionGenerationUrl = (
+  params: StartSuggestionGenerationParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/suggestions/generate?${stringifiedParams}`
+    : `/suggestions/generate`;
+};
+
+export const startSuggestionGeneration = async (
+  params: StartSuggestionGenerationParams,
+  options?: RequestInit
+): Promise<startSuggestionGenerationResponse> => {
+  const res = await fetch(getStartSuggestionGenerationUrl(params), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startSuggestionGenerationResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as startSuggestionGenerationResponse;
 };
