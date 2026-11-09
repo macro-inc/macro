@@ -1,5 +1,7 @@
 # Tasks
 
+On touch, task pills float over the full-height list with a list-local top fade. The initial chrome inset, tutorial, warning rows, and touch column headings scroll with the tasks.
+
 ## Surface
 
 The main Tasks list (List layout, not project or CRM task lists) starts with the Tasks `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits outside the virtualized rows, so list keyboard focus skips it.

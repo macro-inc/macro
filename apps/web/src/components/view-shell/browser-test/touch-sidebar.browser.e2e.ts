@@ -104,3 +104,66 @@ test('phone Chat has no navigation row or extra gap and wide Chat retains sideba
   await page.setViewportSize({ width: 1000, height: 844 });
   await expect(expand).toBeVisible();
 });
+
+for (const { width, nested } of [
+  { width: 390, nested: false },
+  { width: 1000, nested: false },
+  { width: 1000, nested: true },
+]) {
+  test(`floating list controls keep the fade off navigation at ${width}px (nested: ${nested})`, async ({
+    page,
+  }) => {
+    // Exercise the real iOS fade in this browser without enabling native bridges.
+    await page.route(
+      '**/src/components/app/mobile/MobileEdgeFade.tsx*',
+      async (route) => {
+        const response = await route.fetch();
+        const source = await response.text();
+        const body = source.replace(
+          /import \{ isPlatform \} from [^;]+;/,
+          "const isPlatform = (target) => target === 'ios';"
+        );
+        if (body === source)
+          throw new Error('Fade platform import was not found');
+        await route.fulfill({ response, body });
+      }
+    );
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto(
+      `/src/components/view-shell/browser-test/touch-sidebar.html?list${nested ? '&nested' : ''}`
+    );
+    const scroller = page.getByTestId('collection-scroll');
+    await expect(scroller).toBeVisible();
+    const main = page.locator('[data-view-shell-main]');
+    const header = page.locator('[data-mobile-list-header]').last();
+    const first = page.locator('[data-collection-row="0"]');
+    const fade = page.locator('[data-mobile-top-edge-fade]').last();
+    await expect(fade).toBeVisible();
+    const bounds = await main.boundingBox();
+    expect((await scroller.boundingBox())!.y).toBe(bounds!.y);
+    expect((await scroller.boundingBox())!.height).toBe(bounds!.height);
+    const fadeBox = await fade.boundingBox();
+    expect(fadeBox!.x).toBe(bounds!.x);
+    expect(fadeBox!.width).toBe(bounds!.width);
+    expect((await first.boundingBox())!.y).toBeGreaterThanOrEqual(
+      (await header.boundingBox())!.y + (await header.boundingBox())!.height
+    );
+    const more = page.getByRole('button', { name: 'More controls' });
+    await expect(more).toBeVisible();
+    await more.click();
+    await expect(page.locator('[data-extra-controls]')).toBeVisible();
+    expect((await first.boundingBox())!.y).toBeGreaterThanOrEqual(
+      (await header.boundingBox())!.y + (await header.boundingBox())!.height
+    );
+    await scroller.evaluate((element) => {
+      element.scrollTop = 180;
+    });
+    expect((await first.boundingBox())!.y).toBeLessThan(
+      (await header.boundingBox())!.y
+    );
+    await page.getByRole('button', { name: 'Recent', exact: true }).click();
+    await expect(
+      page.getByRole('button', { name: 'Recent', exact: true })
+    ).toHaveAttribute('aria-pressed', 'true');
+  });
+}

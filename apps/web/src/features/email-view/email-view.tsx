@@ -4,6 +4,7 @@ import {
   ViewShell,
   ViewSidebar,
 } from '@app/components/view-shell';
+import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { SplitRouter } from '@app/lib/split-router';
 import { TraceFlow } from '@app/observability/flow';
@@ -202,14 +203,11 @@ function EmailMobileLayout(props: ParentProps) {
       : [];
 
   return (
-    <>
-      <header
-        aria-label="Email filters"
-        class="pointer-events-none absolute inset-x-0 top-0 z-split-panel-chrome flex min-w-0 pt-[calc(var(--safe-top,0px)+0.5rem)]"
-      >
+    <MobileListLayout
+      header={
         <PillTabs
           scrollable
-          class="w-full"
+          class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
           contentClass="px-(--mobile-chrome-gutter)"
           leading={
             <>
@@ -230,17 +228,10 @@ function EmailMobileLayout(props: ParentProps) {
           value={state.tab}
           onChange={setTab}
         />
-      </header>
-      <main
-        class="size-full min-h-0 min-w-0"
-        style={{
-          // Match Inbox: 0.5rem above the 2.5rem pills, then a 0.75rem gap.
-          '--mobile-content-inset-top': 'calc(var(--safe-top, 0px) + 3.75rem)',
-        }}
-      >
-        {props.children}
-      </main>
-    </>
+      }
+    >
+      {props.children}
+    </MobileListLayout>
   );
 }
 
@@ -259,7 +250,10 @@ function EmailViewRoot() {
   const [listPane, setListPane] = createSignal<EmailListPane>();
   const focusList = () => listElement()?.focus();
 
-  onMount(() => panel.handle.setDisplayName('Email'));
+  onMount(() => {
+    panel.handle.setDisplayName('Email');
+    panel.handle.updateMeta?.({ splitPanelLayout: 'composable' });
+  });
 
   useReadingPaneHotkey({
     scopeId: panel.splitHotkeyScope,

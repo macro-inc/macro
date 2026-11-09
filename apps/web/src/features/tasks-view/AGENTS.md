@@ -58,7 +58,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Keep saved-view names and menus in the mobile picker; overlay creation above the filter drawer footer on a drawer-colored backing without blocking the last scrollable controls, and put Save changes at the footer's right edge, opposite Clear all.
 - Place the saved-view picker after Filters and before built-in mobile tabs; omit duplicate headers and general create controls, but offer Create view in the empty state.
 - Group the shared sidebar and picker empty state in a subtly bordered, rounded container with 12px padding, the inherited background, and no shadow: “Your go-to views”, “Save your setup for next time.” and a `secondary`, `sm` Create view button with a leading plus icon, without a separate illustration; keep the sidebar header's icon-only plus available in every section state, and isolate both creation buttons' keyboard scopes from task-list selection shortcuts.
-- Keep mobile pills in a flex wrapper inside the header so their shadow margins cannot collapse the header and overlap task content.
+- Render touch task pills through `MobileListLayout`, reserve its inset inside `ListViewport`, and keep touch column headings and warning rows inside the scroller.
 - Keep desktop list-header filters, layout, sort, and grouping at `md` / `icon-md` (32px), matching New and Search; preserve the mobile filter drawer.
 - Show one local New view draft row after creation starts; prefill its save dialog with New view, replace the row on confirmed save, and remove it on cancellation or navigation without adding fake cached records.
 - Close the selected-view menu before opening a dialog, discard deferred actions after account or selection changes, and close dialogs after account, saved-view, or built-in-tab navigation.
@@ -80,7 +80,7 @@ Run from `apps/web`:
 
 - `bun run test src/features/tasks-view`
 - `bun run type-check`
-- Project grouping browser regression: `bunx playwright test --config src/features/tasks-view/browser-test/playwright.config.ts project-grouping.browser.e2e.ts`.
+- Project grouping browser regression: `MACRO_DEV_HTTPS=false bunx playwright test --config src/features/tasks-view/browser-test/playwright.config.ts project-grouping.browser.e2e.ts`.
 
 ## Related
 

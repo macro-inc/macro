@@ -56,3 +56,10 @@ Workspace sidebars use the shared 720px container breakpoint on touch and deskto
 Wide panes dock navigation; narrow panes open it as an overlay. The title header
 places collapse on the right; collapsed touch navigation uses the leading pill
 control, before filters.
+
+`MobileListLayout` owns floating touch collection controls, measures their height,
+and paints the top fade only inside that list pane. Reserve its
+`--mobile-content-inset-top` within the scroller (for `ListViewport`, opt into
+`touchInset`). Nested activity controls add their height to the parent inset;
+desktop headers stay in flow. Keep workspace metadata composable on touch when
+its chrome is local, so the legacy split-wide fade does not cover the sidebar.

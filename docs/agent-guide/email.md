@@ -1,5 +1,7 @@
 # Email
 
+Email paints its touch top fade within the email-list pane only, leaving the sidebar title and collapse control clear.
+
 ## Thread motion
 
 Message cards animate their height when expanding or collapsing a message or

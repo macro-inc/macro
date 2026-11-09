@@ -388,6 +388,12 @@ on desktop and a bottom drawer on touch. It keeps focus in the project-name
 input, and `Continue editing in split` transfers the current draft. Existing
 folders remain available in Files search.
 
+Touch collection filters and the top fade are bounded to their list pane, leaving
+sidebar titles and collapse controls clear. Tasks, Drive, Email, and CRM keep the
+list viewport full height: the measured filter inset is inside the scroller, so
+rows start below the controls and scroll behind them. Drive folder paths and
+stacked CRM activity controls contribute to that measured inset.
+
 The app views are referred to as **workspaces**. Expanded workspace sidebars start
 at the shared 256px width; manual resizing and narrow layouts can change the
 displayed width. Navigation sidebars use the same container-width rule on desktop

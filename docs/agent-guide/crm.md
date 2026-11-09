@@ -1,5 +1,7 @@
 # Customers (CRM)
 
+On touch, CRM lists fill their pane behind floating filter controls and a list-local top fade. Activity controls stack below the main navigation pills; their combined measured height clears the first row.
+
 ## Customers (CRM) — `/app/companies`
 
 The local sidebar uses the same width-based navigation as Email and Tasks on

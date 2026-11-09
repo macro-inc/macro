@@ -349,7 +349,7 @@ registerComponent(
 registerComponent(
   'mail',
   () => <MailRouteView />,
-  () => composableLayout()
+  () => composableLayout(true)
 );
 registerComponent(
   'documents',

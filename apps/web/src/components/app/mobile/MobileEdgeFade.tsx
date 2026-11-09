@@ -16,7 +16,8 @@ export function MobileTopEdgeFade() {
     <Show when={isPlatform('ios')}>
       <Layer depth={0}>
         <div
-          class="pointer-events-none absolute inset-x-0 top-0"
+          data-mobile-top-edge-fade
+          class="pointer-events-none absolute inset-x-0 top-0 z-1"
           style={{
             height: `calc(var(--mobile-content-inset-top, 0px) + ${TOP_FALLOFF})`,
             background:

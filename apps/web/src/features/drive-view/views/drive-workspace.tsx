@@ -1,4 +1,5 @@
 import { useViewTabHotkeys, ViewShell } from '@app/components/view-shell';
+import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { FolderDropZone } from '@app/features/next-soup/actions';
 import { SplitRouter } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -13,10 +14,12 @@ import { useDriveDetailNavigation } from '../drive-detail-navigation';
 import { DriveBreadcrumbs } from './drive-breadcrumbs';
 import {
   DriveFolderHierarchy,
+  DriveFolderPath,
   useDriveFolderHierarchyVisible,
 } from './drive-folder-hierarchy';
 import { DriveHeader } from './drive-header';
 import { DriveList } from './drive-list';
+import { DriveMobileTabs } from './drive-mobile-tabs';
 import { DriveSidebar } from './drive-sidebar';
 
 export function DriveLoading() {
@@ -84,7 +87,14 @@ export function DriveWorkspace(props: { tour?: JSX.Element }) {
               <Show
                 when={navigation.active() || navigation.activeCallId()}
                 fallback={
-                  <>
+                  <MobileListLayout
+                    header={
+                      <div class="flex min-w-0 flex-col gap-1">
+                        <DriveMobileTabs />
+                        <DriveFolderPath />
+                      </div>
+                    }
+                  >
                     <DriveHeader />
                     {props.tour}
                     <ViewShell.Content>
@@ -96,7 +106,7 @@ export function DriveWorkspace(props: { tour?: JSX.Element }) {
                         </FolderDropZone>
                       </Suspense>
                     </ViewShell.Content>
-                  </>
+                  </MobileListLayout>
                 }
               >
                 <Suspense fallback={<DriveLoading />}>
