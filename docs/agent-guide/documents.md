@@ -3241,3 +3241,5 @@ its matching snapshot cover), then compare full JSON, durable IDs and DOM after
 warm reload and a new context without IndexedDB. Keep missing renderers, different
 IDs and failed durability as failures. Local recovery, rendered counts and fixed
 waits do not establish server persistence. Qualify mega-paste restoration separately.
+
+Copied content keeps its formatting when pasted into the same or another document. Undo removes the paste; redo restores the same pasted content and references.

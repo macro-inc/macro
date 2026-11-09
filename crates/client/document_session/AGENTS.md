@@ -104,3 +104,5 @@ for a later caller decision. Recovery is single-consumption and does not roll ba
 an adopted update or a published transition. Check publication receipts separately.
 
 Use EditorConfig.namespace for both rich paste and clipboard export; application MarkdownSync uses the source document namespace, while portable standalone sessions retain their configured default.
+
+Invalidate the injected durable ID key recursively at Critical/Before InsertClipboardNodes and yield to insertion handlers; never invalidate snapshot/remote imports or history restoration. Cross-document JSON/HTML, repeated paste, destination identity and exact undo/redo controls live in src/editor/clipboard_id_test.rs.
