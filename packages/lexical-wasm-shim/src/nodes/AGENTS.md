@@ -26,7 +26,8 @@ Preserve the upstream public config-record alias and its constraints; the
 central exception's internal return shape uses the actual core config types.
 `runtime-primitives.ts` resolves nodes, writable captures and native-backed field
 writes through `runtime.ts`. `../compatibility-exceptions.ts` centralizes the
-eight approved upstream assertions, including caret numeric ordering; keep their call sites in the type-contract
+eight approved upstream assertions, including caret numeric ordering, and the
+separate public extension wildcard type entry. Keep their sites in the type-contract
 manifest. The production backend must supply acknowledged local reads and batched
 writes; the legacy conformance backend still makes diagnostic native calls.
 
