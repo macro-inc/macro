@@ -105,4 +105,5 @@ Keep app declarations upstream; validate independent classes through their obser
 
 Keep CreateEditorArgs distinct from the full normalized EditorConfig; retain theme and configured hook identities and restore readonly mode across historical reads, nested updates and throws. Forward the normalized config to backend construction without rereading user getters.
 
-Read editor dirty sets/type through backend.getUpdateMetadata; reject unavailable metadata instead of guessing from rendered records or returning empty sets. The development adapter rejects this capability until its real native export is wired.
+Read editor dirty sets/type through backend.getUpdateMetadata; reject unavailable metadata instead of guessing from rendered records or returning empty sets. The development adapter obtains exact owned native facts through update_metadata; this diagnostic RPC is not the production zero-crossing mirror.
+

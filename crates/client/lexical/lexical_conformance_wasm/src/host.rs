@@ -251,6 +251,18 @@ impl EditorHandle {
             .map(|name| debug::returned_string((*name).to_owned()))
             .collect()
     }
+    /// Read authoritative dirty sets from the live or owned callback scope.
+    pub fn update_metadata(&self) -> Result<JsValue, JsValue> {
+        let available = self.session.borrow().is_some();
+        let facts = if available {
+            self.with_session(|session| session.update_facts().map_err(debug::error))?
+        } else {
+            super::host_callbacks::update_facts(&self.owner)?
+        };
+        let metadata = super::host_packet::HostUpdateMetadata::from_update_facts(&facts);
+        let value = serde_json::to_value(metadata).map_err(debug::error)?;
+        to_js(value).map_err(Into::into)
+    }
     /// Dispatch `{args:[...], this?: encodedHandle}` inside the pending update.
     pub fn call(&self, api_id: u32, args: JsValue) -> Result<JsValue, JsValue> {
         let call: Call = serde_json::from_value(from_js(args)?).map_err(debug::error)?;

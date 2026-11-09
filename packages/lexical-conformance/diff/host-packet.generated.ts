@@ -39,3 +39,13 @@ export type HostNodeMutation<Node, Arg> = {
   /**  Positional upstream method arguments encoded for the development host. */
   args: Arg[];
 };
+
+/**  Exact native facts used by development editor metadata accessors. */
+export type HostUpdateMetadata = {
+  /**  Pinned values: clean=0, dirty nodes=1, full reconciliation=2. */
+  dirty_type: number;
+  /**  Dirty leaf keys, preserving native processing order. */
+  dirty_leaves: string[];
+  /**  Dirty element keys and intentional flags in native processing order. */
+  dirty_elements: [string, boolean][];
+};
