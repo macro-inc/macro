@@ -6,6 +6,7 @@ pub(super) struct Capture {
     pub reference: compat::ForeignRecordRef,
     pub source: Arc<ForeignReadSnapshot>,
     pub identity: ForeignRecordIdentity,
+    pub output: compat::ForeignRenderRecord,
 }
 pub(super) fn key(key: NodeKey) -> compat::ForeignKey {
     compat::ForeignKey {
@@ -39,6 +40,7 @@ impl Host {
         access: compat::ForeignAccess,
         writable: &[NodeKey],
     ) -> Result<Vec<compat::ForeignRenderRecord>, BoundaryError> {
+        let writable: std::collections::HashSet<_> = writable.iter().copied().collect();
         source
             .render_records(keys)?
             .into_iter()
@@ -72,6 +74,15 @@ impl Host {
                     },
                     capture_id: self.next_capture,
                 };
+                let capture_key =
+                    capture_index::CaptureKey::new(reference, record.identity().clone());
+                if let Some(id) = self.capture_index.get(&capture_key) {
+                    return self
+                        .captures
+                        .get(&id)
+                        .map(|capture| capture.output.clone())
+                        .ok_or(BoundaryError::Invalid("capture index mismatch"));
+                }
                 self.next_capture = self
                     .next_capture
                     .checked_add(1)
@@ -166,12 +177,14 @@ impl Host {
                         .encode_utf16()
                         .collect(),
                 };
+                self.capture_index.insert(capture_key, reference.capture_id);
                 self.captures.insert(
                     reference.capture_id,
                     Capture {
                         reference,
                         source: source.clone(),
                         identity: record.identity().clone(),
+                        output: output.clone(),
                     },
                 );
                 Ok(output)

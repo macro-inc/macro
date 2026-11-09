@@ -111,6 +111,16 @@ fn typed_calls_publish_once_on_the_real_core_and_keep_exact_historical_captures(
         .find(|record| record.type_name == "root")
         .unwrap()
         .record;
+    let capture_count = editor.compatibility.as_ref().unwrap().captures.len();
+    for _ in 0..10 {
+        let repeated = editor.compat_call_inner(&bytes(&request)?)?;
+        assert_eq!(repeated.records.len(), 1);
+        assert!(repeated.records[0].record == root);
+    }
+    assert_eq!(
+        editor.compatibility.as_ref().unwrap().captures.len(),
+        capture_count
+    );
     request.operation = Op::CreateParagraph;
     let reply = editor.compat_call_inner(&bytes(&request)?)?;
     let Value::ForeignNodeArgument { value: p } = reply.value else {
@@ -349,5 +359,85 @@ fn admission_rejects_readonly_and_unseeded_sessions_without_publishing_staged_te
         assert!(session.surface().state().is_empty_state());
         assert!(editor.compatibility.as_ref().unwrap().pending.is_none());
     }
+    Ok(())
+}
+
+#[test]
+fn historical_leaf_reply_size_and_capture_count_are_independent_of_document_size(
+) -> Result<(), BoundaryError> {
+    let mut sizes = vec![];
+    for count in [10, 10_000] {
+        let config = wire::SessionConfigMsg {
+            doc: "compat-sparse-read".into(),
+            session: "00000000-0000-0000-0000-000000000001".into(),
+            user: "fixture-user".into(),
+            peers: vec![17, 18, 19],
+            access: wire::Access::Edit,
+            transport: wire::Transport::None,
+            durable: false,
+            chatter: false,
+            headless: false,
+            view_engine: 1,
+            view_os: 0,
+            token: String::new(),
+            traceparent: String::new(),
+            coalesce: 25,
+            snapshot_interval: 0,
+            observed: vec![],
+        };
+        let mut session = EditorSession::create_compat_inner(
+            generated::ABI_MAJOR,
+            &bytes(&config)?,
+            0.0,
+            0.0,
+            &bytes(&compat::CompatConfig {
+                editor_id: 1,
+                classes: vec![],
+            })?,
+        )?;
+        let mut model = Editor::builder(EditorMode::Headless)
+            .build()
+            .expect("core registry");
+        let mut tx = model.transaction();
+        let leaf = {
+            let mut first = None;
+            let mut paragraphs = Vec::with_capacity(count);
+            for _ in 0..count {
+                let p = tx.create(Paragraph::default())?;
+                let t = tx.create_text("fixed text")?;
+                first.get_or_insert(t.key());
+                tx.append(p, &[t.key()])?;
+                paragraphs.push(p.key());
+            }
+            tx.append(NodeKey::ROOT, &paragraphs)?;
+            first.expect("nonempty document")
+        };
+        let source = Arc::new(tx.view().snapshot_for_foreign_read()?);
+        let state = source.state().clone();
+        let host = session.compatibility.as_mut().unwrap();
+        host.owner = state.view().foreign_instance_owner();
+        host.states.insert(0, state);
+        let issued = host.records(source, vec![leaf], 0, 0, compat::ForeignAccess::Frozen, &[])?;
+        let receiver = issued[0].record;
+        let request = bytes(&compat::CompatRequest {
+            operation: Op::GetTextContent,
+            historical: true,
+            state_version: 0,
+            has_receiver: true,
+            receiver,
+            args: vec![],
+        })?;
+        let first = session.compat_call_inner(&request)?;
+        assert_eq!(first.records.len(), 1);
+        assert!(first.records[0].record == receiver);
+        for _ in 0..20 {
+            let repeated = session.compat_call_inner(&request)?;
+            assert!(repeated.records[0].record == receiver);
+        }
+        assert_eq!(session.compatibility.as_ref().unwrap().captures.len(), 1);
+        sizes.push(bytes(&first)?.len());
+    }
+    assert_eq!(sizes[0], sizes[1]);
+    assert!(sizes[0] <= 4096);
     Ok(())
 }

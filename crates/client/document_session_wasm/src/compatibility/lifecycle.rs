@@ -102,6 +102,7 @@ impl EditorSession {
             host.pending_version = None;
             host.captures
                 .retain(|_, capture| capture.reference.update_id != host.update);
+            host.prune_capture_index();
             Ok(true)
         }
     }
@@ -244,6 +245,7 @@ impl EditorSession {
         host.pending_version = None;
         host.captures
             .retain(|_, capture| capture.reference.update_id != host.update);
+        host.prune_capture_index();
         Ok(())
     }
     /// Close a flushed no-op without publishing a replacement state or listeners.
@@ -275,6 +277,7 @@ impl EditorSession {
         host.states.remove(&version);
         host.captures
             .retain(|_, capture| capture.reference.node.version != version);
+        host.prune_capture_index();
         Ok(())
     }
 }
