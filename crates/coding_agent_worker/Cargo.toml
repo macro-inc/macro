@@ -74,7 +74,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 zeroize = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true, features = ["fs", "pty", "termios"] }
+rustix = { workspace = true }
 
 # Release archives: tar.gz everywhere but Windows, which gets a zip.
 [target.'cfg(not(windows))'.dependencies]
