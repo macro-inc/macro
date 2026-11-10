@@ -1810,3 +1810,54 @@ async fn a_background_idea_says_what_it_sends_and_running_it_approves_that(pool:
     );
     assert!(prompt.contains("sendConfirmed"));
 }
+
+/// An idea retired while its run waits, then suggested again, can't start a
+/// second run until the first one settles.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_restored_idea_starts_no_second_run_while_its_first_is_going(pool: PgPool) {
+    let mut h = harness(pool, true).await;
+    let runs = Arc::new(FakeRuns::default());
+    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
+    let session = h.session(OWNER, "ideas").await;
+    let idea = h
+        .suggest(
+            session,
+            prompt_idea("quotes:compare", "Compare the supplier quotes"),
+        )
+        .await
+        .idea
+        .unwrap();
+    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    let run_session = runs.started.lock().unwrap()[0].0;
+    runs.set(run_session, SessionState::NeedsApproval);
+    let retired = h
+        .service
+        .retire(
+            &principal(OWNER),
+            Some(session),
+            idea.id,
+            RetireIdea {
+                reason: "The quotes expired".to_owned(),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(retired.ok, "{:?}", retired.problems);
+    let restored = h
+        .suggest(
+            session,
+            prompt_idea("quotes:compare", "Compare the new supplier quotes"),
+        )
+        .await;
+    assert!(restored.ok, "{:?}", restored.problems);
+    assert!(matches!(
+        h.service.accept(&user(OWNER), idea.id).await,
+        Err(IdeaError::NotFound)
+    ));
+    assert_eq!(runs.started.lock().unwrap().len(), 1);
+    // Once the first run settles failed, the restored idea may run.
+    runs.set(run_session, SessionState::Failed);
+    assert_eq!(h.service.settle_runs().await.unwrap(), 1);
+    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    assert_eq!(runs.started.lock().unwrap().len(), 2);
+}

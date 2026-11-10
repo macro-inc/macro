@@ -343,13 +343,15 @@ impl IdeaRepo for PgIdeaRepo {
     async fn start_run(&self, run: &StoredRun) -> Result<bool, Self::Err> {
         let mut tx = self.pool.begin().await?;
         ideas_db_utils::lock_user(&mut tx, run.user.as_ref()).await?;
-        // Proposed, or accepted with no run going and its last one failed.
+        // Proposed with no run going (a restored idea's old run may still
+        // be), or accepted with no run going and its last one failed.
         let accepted = sqlx::query!(
             r#"UPDATE idea SET state = 'accepted', updated_at = $3,
                    state_changed_at = CASE WHEN state = 'accepted' THEN state_changed_at ELSE $3 END
                WHERE id = $1 AND user_id = $2
                  AND EXISTS (SELECT 1 FROM idea_prompt p WHERE p.idea_id = idea.id AND p.run_mode = 'background')
-                 AND (state = 'proposed'
+                 AND ((state = 'proposed' AND NOT EXISTS (
+                          SELECT 1 FROM idea_run r WHERE r.idea_id = idea.id AND r.settled_at IS NULL))
                       OR (state = 'accepted' AND NOT EXISTS (
                           SELECT 1 FROM idea_run r WHERE r.idea_id = idea.id
                             AND (r.outcome IS DISTINCT FROM 'failed'))))"#,
