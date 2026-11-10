@@ -109,7 +109,7 @@ impl Host for SystemHost {
     }
 }
 
-/// Enroll this computer, or refresh its token helper when already enrolled.
+/// Enroll this computer; an enrolled one (the marker exists) is left as it is.
 pub async fn run_enroll(options: EnrollOptions) -> rootcause::Result<()> {
     run_enroll_with_host(options, &SystemHost).await
 }

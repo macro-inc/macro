@@ -35,7 +35,11 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   It claims the pre-approved pairing, chowns the config to its directory's owner,
   then writes `/var/lib/macrod/enrolled`. A stored credential skips the claim, so
   retries are safe; a failed claim retries every 250 ms for up to five
-  minutes. `--root` (hidden) prefixes system paths for tests.
+  minutes. `--root` (hidden) prefixes system paths for tests. Enrollment
+  writes only the config, the credential and its markers: no systemd units,
+  users or anything under `/etc`, which is read-only on the NixOS guest (the
+  image declares every unit). The marker lives on the data disk, so an image
+  update skips enrollment and macrod reconnects with its stored credential.
 - `src/capabilities.rs`: on an enrolled Macro computer only (the marker
   exists), reports `HarnessCapabilities` (`screen` = Xvnc on
   `127.0.0.1:5900`, and `claude` = the Claude sign-in, both probed once a
