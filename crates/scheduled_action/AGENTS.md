@@ -79,7 +79,7 @@ each run.
   the routines guide, the catalog for its surfaces, what was dismissed, and the
   newest 100 messages and connected apps inside `<untrusted>` tags, angle
   brackets in the data swapped so it can't close them; a nightly brief adds
-  review and retire) and count what it kept (`kept`). A session hands back
+  review and retire, and allows catalog routines only) and count what it kept (`kept`). A session hands back
   each suggestion through `macro.routines.suggest`
   (`POST /scheduled-actions/suggestions`), reads earlier ones through
   `macro.routines.review()` (`GET .../suggestions/review`) and retires open

@@ -65,13 +65,10 @@ pub fn brief(data: &BriefData<'_>) -> String {
              `await macro.routines.list()`, and retire with `suggestion.retire(reason)` open \
              suggestions that no longer fit their work or duplicate one of their routines. Then \
              suggest at most 2 new routines in all (not 3 per surface), and none unless the \
-             evidence is strong. Draft at most one routine the catalog lacks, and only one built \
-             around something specific in their workspace that you name (a deal, vendor, \
-             project, channel, label or report they keep), that discovers, evaluates or advances \
-             it; a general habit is a catalog routine or nothing. Never a weekly recap, digest or \
-             audit, and never what their own routines already do. When you draft nothing, don't \
-             read the routine-writing docs. Suggestions are never rewritten; retire one and \
-             suggest a better one instead."
+             evidence is strong. At night suggest only catalog routines: never draft one, and \
+             don't read the routine-writing docs. Never a weekly recap, digest or audit, and \
+             never what their own routines already do. Suggestions are never rewritten; retire \
+             one and suggest a better one instead."
         }
     };
     let task = TASK
