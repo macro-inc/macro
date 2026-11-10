@@ -554,7 +554,8 @@ type CompleteSubscriptionRoot {
 	"""
 	agentSessionActivityAppended(sessionId: ID!): [GraphqlActivityEvent!]!
 	"""
-	Subscribe to realtime notifications for the authenticated user.
+	Subscribe to realtime notifications for the authenticated user. Noise
+	is never sent here; the notification inbox subscription carries it.
 	"""
 	notificationUpdates: GraphqlNotificationPatch!
 	"""
@@ -11699,6 +11700,12 @@ undo for one inbox send the same scope.
 """
 input NotificationInboxScopeInput {
 	"""
+	The lane the inbox reads; omitted means signal. Noise is the
+	notifications the viewer's stacks captured: stored, but never pushed
+	or counted as unread elsewhere.
+	"""
+	lane: NotificationLane
+	"""
 	Row kinds to include; omitted or empty means every kind.
 	"""
 	rowTypes: [NotificationInboxRowType!]
@@ -11707,6 +11714,20 @@ input NotificationInboxScopeInput {
 	alone. Defaults to false.
 	"""
 	unreadOnly: Boolean
+}
+
+"""
+The notification lane as represented by GraphQL variables and responses.
+"""
+enum NotificationLane {
+	"""
+	Delivered normally: pushed, digested and counted as unread.
+	"""
+	SIGNAL
+	"""
+	Stored and shown in the Noise view, but never pushed, digested or counted as unread.
+	"""
+	NOISE
 }
 
 """

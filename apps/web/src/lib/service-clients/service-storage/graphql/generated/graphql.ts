@@ -2450,6 +2450,12 @@ export type NotificationInboxRowType =
  * undo for one inbox send the same scope.
  */
 export type NotificationInboxScopeInput = {
+  /**
+   * The lane the inbox reads; omitted means signal. Noise is the
+   * notifications the viewer's stacks captured: stored, but never pushed
+   * or counted as unread elsewhere.
+   */
+  lane?: NotificationLane | null | undefined;
   /** Row kinds to include; omitted or empty means every kind. */
   rowTypes?: Array<NotificationInboxRowType> | null | undefined;
   /**
@@ -2458,6 +2464,13 @@ export type NotificationInboxScopeInput = {
    */
   unreadOnly?: boolean | null | undefined;
 };
+
+/** The notification lane as represented by GraphQL variables and responses. */
+export type NotificationLane =
+  /** Stored and shown in the Noise view, but never pushed, digested or counted as unread. */
+  | 'NOISE'
+  /** Delivered normally: pushed, digested and counted as unread. */
+  | 'SIGNAL';
 
 /** The notification state as represented by GraphQL variables and responses. */
 export type NotificationState =

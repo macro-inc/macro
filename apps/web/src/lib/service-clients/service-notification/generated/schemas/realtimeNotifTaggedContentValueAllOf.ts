@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+import type { NotificationLane } from './notificationLane';
 import type { NotificationState } from './notificationState';
 import type { RealtimeNotifTaggedContentValueAllOfDeletedAt } from './realtimeNotifTaggedContentValueAllOfDeletedAt';
 import type { RealtimeNotifTaggedContentValueAllOfNotificationMetadata } from './realtimeNotifTaggedContentValueAllOfNotificationMetadata';
@@ -16,6 +17,9 @@ export type RealtimeNotifTaggedContentValueAllOf = {
   created_at: string;
   /** When the notification was deleted. */
   deleted_at?: RealtimeNotifTaggedContentValueAllOfDeletedAt;
+  /** The lane every recipient of this payload was routed into. Messages
+queued before lanes existed are signal. */
+  lane?: NotificationLane;
   /** The notification event type string (e.g. "channel_mention").
 TODO make this a new type */
   notification_event_type: string;

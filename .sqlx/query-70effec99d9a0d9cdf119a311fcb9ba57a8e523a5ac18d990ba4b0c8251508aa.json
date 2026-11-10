@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            WITH updated AS (\n                UPDATE user_notification\n                SET state = CASE\n                    WHEN $3 THEN 'done'::notification_state\n                    WHEN state = 'done' THEN 'seen'::notification_state\n                    ELSE state\n                END\n                WHERE user_id = $1 AND notification_id = ANY($2) AND deleted_at IS NULL\n                RETURNING\n                    user_id,\n                    notification_id,\n                    sent,\n                    state,\n                    created_at,\n                    seen_at,\n                    deleted_at\n            )\n            SELECT\n                updated.user_id as owner_id,\n                updated.notification_id,\n                n.event_item_id,\n                n.event_item_type,\n                updated.sent,\n                updated.state as \"state!: NotificationState\",\n                updated.created_at::timestamptz as \"created_at!\",\n                updated.seen_at::timestamptz as viewed_at,\n                NOW()::timestamptz as \"updated_at!\",\n                updated.deleted_at::timestamptz,\n                n.metadata as \"notification_metadata: serde_json::Value\",\n                n.notification_event_type,\n                n.sender_id\n            FROM updated\n            JOIN notification n ON n.id = updated.notification_id\n            ORDER BY array_position($2, updated.notification_id)\n            ",
+  "query": "\n            SELECT\n                un.user_id as owner_id,\n                un.notification_id,\n                n.event_item_id,\n                n.event_item_type,\n                un.sent,\n                un.state as \"state!: NotificationState\",\n                un.lane as \"lane!: NotificationLane\",\n                un.created_at::timestamptz as \"created_at!\",\n                un.seen_at::timestamptz as viewed_at,\n                un.created_at::timestamptz as \"updated_at!\",\n                un.deleted_at::timestamptz,\n                n.metadata as \"notification_metadata: serde_json::Value\",\n                n.notification_event_type as notification_event_type,\n                n.sender_id as sender_id\n            FROM user_notification un\n            JOIN notification n ON n.id = un.notification_id\n            WHERE un.user_id = $1\n            AND un.notification_id = $2\n            AND un.deleted_at IS NULL\n            LIMIT 1\n            ",
   "describe": {
     "columns": [
       {
@@ -46,36 +46,51 @@
       },
       {
         "ordinal": 6,
+        "name": "lane!: NotificationLane",
+        "type_info": {
+          "Custom": {
+            "name": "notification_lane",
+            "kind": {
+              "Enum": [
+                "signal",
+                "noise"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
         "name": "created_at!",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "viewed_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "updated_at!",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "deleted_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "notification_metadata: serde_json::Value",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "notification_event_type",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "sender_id",
         "type_info": "Text"
       }
@@ -83,11 +98,11 @@
     "parameters": {
       "Left": [
         "Text",
-        "UuidArray",
-        "Bool"
+        "Uuid"
       ]
     },
     "nullable": [
+      false,
       false,
       false,
       false,
@@ -103,5 +118,5 @@
       true
     ]
   },
-  "hash": "70f0146984b16a5b70fbb14799ccbd16f8c5a50435267c60ead54941914229fb"
+  "hash": "70effec99d9a0d9cdf119a311fcb9ba57a8e523a5ac18d990ba4b0c8251508aa"
 }

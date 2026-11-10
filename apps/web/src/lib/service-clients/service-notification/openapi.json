@@ -451,6 +451,15 @@
             }
           },
           {
+            "name": "lane",
+            "in": "query",
+            "description": "The lane to list: signal or noise. Omitted lists signal.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/NotificationLane"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "Size limit per page.",
@@ -740,6 +749,15 @@
             }
           },
           {
+            "name": "lane",
+            "in": "query",
+            "description": "The lane to list: signal or noise. Omitted lists signal.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/NotificationLane"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "Size limit per page. Default 20, max 500.",
@@ -827,6 +845,15 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "lane",
+            "in": "query",
+            "description": "The lane to list: signal or noise. Omitted lists signal.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/NotificationLane"
             }
           },
           {
@@ -1393,6 +1420,10 @@
                 "type": "string",
                 "format": "uuid",
                 "description": "The notification ID."
+              },
+              "lane": {
+                "$ref": "#/components/schemas/NotificationLane",
+                "description": "The lane the notification was routed into for its owner. Always sent;\noptional in the schema because clients also read notifications stored\nor delivered before lanes existed, which are signal."
               },
               "notification_event_type": {
                 "type": "string",
@@ -3370,6 +3401,11 @@
         ],
         "description": "The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern."
       },
+      "NotificationLane": {
+        "type": "string",
+        "description": "Where a notification was routed for its recipient, decided once at ingress.\n\nReaders of a user's notifications ask for one lane. `Signal` is the default\neverywhere, so a reader that says nothing never sees noise.",
+        "enum": ["signal", "noise"]
+      },
       "NotificationServiceApiVersion": {
         "type": "string",
         "enum": ["v1"]
@@ -3472,6 +3508,10 @@
                 "type": ["string", "null"],
                 "format": "date-time",
                 "description": "When the notification was deleted."
+              },
+              "lane": {
+                "$ref": "#/components/schemas/NotificationLane",
+                "description": "The lane every recipient of this payload was routed into. Messages\nqueued before lanes existed are signal."
               },
               "notification_event_type": {
                 "type": "string",
