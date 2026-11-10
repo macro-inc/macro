@@ -4,7 +4,7 @@ import {
   NotificationStacksProvider,
   type StacksState,
 } from '../context/notification-stacks-context';
-import { fakeStacksContext, supportStack } from '../tests/stacks';
+import { fakeStacksContext, rule, supportStack } from '../tests/stacks';
 import { StacksSection } from './stacks-section';
 
 const openStackEditor = vi.hoisted(() => vi.fn());
@@ -44,6 +44,27 @@ describe('StacksSection', () => {
     });
     expect(on.checked).toBe(true);
     expect(off.checked).toBe(false);
+  });
+
+  it('says why a stack with rules the editor cannot show has no Edit', () => {
+    setup({
+      t: 'ready',
+      stacks: [
+        supportStack({
+          capture: [
+            rule({ kinds: ['reaction'] }),
+            rule({ kinds: ['comment'] }),
+          ],
+        }),
+      ],
+    });
+
+    expect(screen.getByText('Custom rules')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'This stack has rules this editor can’t show. You can still turn it off or delete it.'
+      )
+    ).toBeTruthy();
   });
 
   it('turns a stack off from its switch', () => {
