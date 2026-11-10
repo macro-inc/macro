@@ -63,7 +63,7 @@ let
   userService = description: service: {
     inherit description;
     wantedBy = [ "default.target" ];
-    # Persona users run their own user managers; the desktop is macro's.
+    # The desktop is macro's, not every user's.
     unitConfig.ConditionUser = "macro";
     serviceConfig = {
       Restart = "always";
@@ -173,14 +173,12 @@ in
       neededForBoot = true;
     };
     systemd.tmpfiles.settings."05-macro-box-state" = lib.mkIf (cfg.dataDisk != null) {
-      # The enrollment marker and Claude token store.
+      # The enrollment marker.
       "/var/lib/macrod"."L+".argument = persistentMacrodState;
     };
 
     systemd.tmpfiles.settings."10-macro-box" = {
       ${persistentMacrodState}.d.mode = "0755";
-      # Enrollment writes persona environment files here.
-      "/etc/macro/personas".d.mode = "0700";
       ${workspace}.d = macroDirectory;
       "${home}/.config".d = macroDirectory;
       "${home}/.config/chromium".d = macroDirectory;
@@ -190,7 +188,7 @@ in
       # Where macrod installs the ACP adapter, so it never runs npm.
       ${adapterDirectory}."L+".argument = "${cfg.claudeAgentAcp}";
       "${home}/.claude".d = macroDirectory;
-      # Copied once, like useradd copies /etc/skel for persona users.
+      # Copied once, like useradd copies /etc/skel for a new user.
       "${home}/.claude.json" = {
         C.argument = "/etc/skel/.claude.json";
         Z = macroOwner;
@@ -338,49 +336,14 @@ in
       };
     };
 
-    # Keeps the Claude token root-only; Claude runs as macro. /etc/systemd is
-    # read-only here, so enrollment installs no units of its own.
-    systemd.services.macrod-token-store = {
-      description = "Private Claude token storage";
-      wantedBy = [ "multi-user.target" ];
-      after = [ "macrod-enroll.service" ];
-      unitConfig.ConditionPathExists = enrolledMarker;
-      serviceConfig = {
-        ExecStart = "${lib.getExe' cfg.macrod "macrod"} computer-token-store --owner ${toString config.users.users.macro.uid}";
-        RuntimeDirectory = "macrod";
-        RuntimeDirectoryMode = "0755";
-        UMask = "0077";
-        NoNewPrivileges = true;
-        ProtectSystem = "strict";
-        # The state may live under /home, on the data disk.
-        ProtectHome = "tmpfs";
-        BindPaths = lib.optional (cfg.dataDisk != null) persistentMacrodState;
-        PrivateTmp = true;
-        PrivateDevices = true;
-        RestrictAddressFamilies = "AF_UNIX";
-        ReadWritePaths = [
-          persistentMacrodState
-          "/run/macrod"
-        ];
-        Restart = "on-failure";
-        RestartSec = 2;
-      };
-    };
-
     systemd.services.macrod = {
       description = "Macro agent daemon";
       wantedBy = [ "multi-user.target" ];
-      # macrod reads the Claude token from the token store's socket on start.
-      # from its socket on start.
-      wants = [
-        "network-online.target"
-        "macrod-token-store.service"
-      ];
+      wants = [ "network-online.target" ];
       requires = [ "macrod-enroll.service" ];
       after = [
         "network-online.target"
         "macrod-enroll.service"
-        "macrod-token-store.service"
       ];
       path = systemPath;
       environment.HOME = home;

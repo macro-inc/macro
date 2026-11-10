@@ -71,13 +71,12 @@ pkgs.testers.runNixOSTest {
         machine.wait_until_fails("systemctl is-active --quiet macrod-enroll.service")
         machine.succeed("journalctl -u macrod-enroll.service | grep -F '/dev/incus/sock is missing'")
 
-    with subtest("macrod runs as macro after enrollment and the token store"):
+    with subtest("macrod runs as macro after enrollment"):
         after = machine.succeed("systemctl show macrod.service --property=After --value")
-        assert "macrod-enroll.service" in after and "macrod-token-store.service" in after, after
+        assert "macrod-enroll.service" in after, after
         machine.succeed("[ $(systemctl show macrod.service --property=User --value) = macro ]")
         machine.succeed("[ $(systemctl show macrod.service --property=Restart --value) = always ]")
         machine.succeed("[ $(systemctl show macrod.service --property=WorkingDirectory --value) = /home/macro/work ]")
-        machine.succeed("systemctl cat macrod-token-store.service | grep -F 'computer-token-store --owner 1000'")
 
     with subtest("Claude Code's ACP adapter needs no install"):
         environment = machine.succeed("systemctl show macrod-enroll.service --property=Environment --value").strip()
@@ -114,7 +113,6 @@ pkgs.testers.runNixOSTest {
         updated.succeed("grep -Fx enrolled /var/lib/macrod/enrolled")
         updated.succeed("[ $(systemctl show macrod-enroll.service --property=ConditionResult --value) = no ]")
         updated.succeed("[ $(systemctl show macrod.service --property=ConditionResult --value) = yes ]")
-        updated.succeed("[ $(systemctl show macrod-token-store.service --property=ConditionResult --value) = yes ]")
         updated.succeed("systemctl cat docker.service | grep -o -- '--config-file=[^ ]*' | cut -d= -f2 | xargs jq --exit-status '.\"data-root\" == \"/home/.system/docker\"'")
   '';
 }
