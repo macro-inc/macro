@@ -37,9 +37,10 @@ event contract (schema, sanitization, delivery semantics).
   inside a team ("Engineering", "Engineering / Platform"), nested one level
   (`SubteamService`, its own router at `/team/subteams`). Anyone on the team
   creates one and manages it; managers and team admins change it; members
-  join open subteams and always may leave. `outbound/subteam_repo.rs` enforces
-  nesting in one statement, and `subteam_member` references `team_user`, so
-  leaving the team leaves its subteams.
+  join open subteams and always may leave. `outbound/subteam_repo.rs` checks
+  and writes nesting under a per-team advisory lock, since each check reads
+  rows a concurrent write can change, and `subteam_member` references
+  `team_user`, so leaving the team leaves its subteams.
 - `src/domain/team_repo.rs`: reuse `get_user_teams` for viewer teams and `get_all_team_members` for team membership, including owners.
 
 ## Scope

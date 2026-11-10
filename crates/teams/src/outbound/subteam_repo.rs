@@ -75,6 +75,21 @@ fn assemble(subteams: Vec<SubteamRow>, members: Vec<MemberRow>) -> anyhow::Resul
     Ok(subteams)
 }
 
+/// Serializes a workspace's nesting changes until `transaction` ends. Each
+/// nesting write checks other rows (the parent is top level, the team has no
+/// teams of its own), which a concurrent write can change before it commits.
+async fn lock_nesting(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    team_id: uuid::Uuid,
+) -> anyhow::Result<()> {
+    let key = format!("subteam-nesting:{team_id}");
+    sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key)
+        .execute(transaction.as_mut())
+        .await?;
+
+    Ok(())
+}
+
 /// Whether `error` is a member's foreign key to the workspace failing.
 fn is_not_workspace_member(error: &sqlx::Error) -> bool {
     error
@@ -102,7 +117,7 @@ impl PgSubteamRepository {
                 created_at
             FROM subteam
             WHERE team_id = $1 AND ($2::uuid IS NULL OR id = $2)
-            ORDER BY lower(name), id
+            ORDER BY parent_id IS NOT NULL, lower(name), id
             "#,
             team_id,
             subteam_id,
@@ -156,6 +171,9 @@ impl SubteamRepository for PgSubteamRepository {
     ) -> anyhow::Result<CreateSubteamOutcome> {
         let subteam_id = uuid::Uuid::now_v7();
         let mut transaction = self.pool.begin().await?;
+        if subteam.parent_id.is_some() {
+            lock_nesting(&mut transaction, team_id).await?;
+        }
 
         // The parent must be a top-level team in the same workspace.
         let inserted = sqlx::query!(
@@ -266,8 +284,9 @@ impl SubteamRepository for PgSubteamRepository {
         subteam_id: uuid::Uuid,
         parent_id: Option<uuid::Uuid>,
     ) -> anyhow::Result<NestOutcome> {
-        // One statement, so a concurrent nest cannot slip a second level in
-        // between the checks and the write.
+        let mut transaction = self.pool.begin().await?;
+        lock_nesting(&mut transaction, team_id).await?;
+
         let nested = sqlx::query!(
             r#"
             UPDATE subteam
@@ -287,8 +306,9 @@ impl SubteamRepository for PgSubteamRepository {
             subteam_id,
             parent_id,
         )
-        .execute(&self.pool)
+        .execute(transaction.as_mut())
         .await?;
+        transaction.commit().await?;
 
         if nested.rows_affected() > 0 {
             return Ok(NestOutcome::Nested);

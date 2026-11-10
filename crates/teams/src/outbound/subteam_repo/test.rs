@@ -289,3 +289,98 @@ async fn leaving_the_workspace_leaves_its_teams(pool: Pool<Postgres>) -> anyhow:
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("subteams"))
+)]
+async fn lists_top_level_teams_first(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repository = PgSubteamRepository::new(pool);
+    let zeta = create(&repository, "Zeta", None).await?;
+    let alpha = create(&repository, "Alpha", Some(zeta.id)).await?;
+
+    let names: Vec<String> = repository
+        .list_subteams(TEAM1)
+        .await?
+        .into_iter()
+        .map(|subteam| subteam.name)
+        .collect();
+    assert_eq!(names, vec![zeta.name, alpha.name]);
+
+    Ok(())
+}
+
+/// Whether `inner` ended up nested under `middle` while `middle` is nested in turn.
+async fn has_two_levels(
+    repository: &PgSubteamRepository,
+    inner: uuid::Uuid,
+    middle: uuid::Uuid,
+) -> anyhow::Result<bool> {
+    let inner = repository.get_subteam(TEAM1, inner).await?.unwrap();
+    let middle = repository.get_subteam(TEAM1, middle).await?.unwrap();
+
+    Ok(inner.parent_id == Some(middle.id) && middle.parent_id.is_some())
+}
+
+// Each round races two writes whose checks pass on their own; together they
+// would make a second level. Repeated because the race needs both checks to
+// run before either write commits.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("subteams"))
+)]
+async fn concurrent_nesting_never_makes_a_second_level(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repository = PgSubteamRepository::new(pool);
+
+    for round in 0..20 {
+        let outer = create(&repository, &format!("Outer {round}"), None).await?;
+        let middle = create(&repository, &format!("Middle {round}"), None).await?;
+        let inner = create(&repository, &format!("Inner {round}"), None).await?;
+
+        let (nest_inner, nest_middle) = tokio::join!(
+            repository.nest_subteam(TEAM1, inner.id, Some(middle.id)),
+            repository.nest_subteam(TEAM1, middle.id, Some(outer.id)),
+        );
+        nest_inner?;
+        nest_middle?;
+
+        assert!(
+            !has_two_levels(&repository, inner.id, middle.id).await?,
+            "round {round} nested a team two levels deep"
+        );
+    }
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("subteams"))
+)]
+async fn creating_under_a_team_while_nesting_it_never_makes_a_second_level(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repository = PgSubteamRepository::new(pool);
+
+    for round in 0..20 {
+        let outer = create(&repository, &format!("Outer {round}"), None).await?;
+        let middle = create(&repository, &format!("Middle {round}"), None).await?;
+
+        let inner = new_subteam(&format!("Inner {round}"), Some(middle.id));
+        let manager = user("macro|ada@example.com");
+        let (created, nest_middle) = tokio::join!(
+            repository.create_subteam(TEAM1, &inner, &manager, &[]),
+            repository.nest_subteam(TEAM1, middle.id, Some(outer.id)),
+        );
+        nest_middle?;
+
+        if let CreateSubteamOutcome::Created(inner) = created? {
+            assert!(
+                !has_two_levels(&repository, inner.id, middle.id).await?,
+                "round {round} created a team two levels deep"
+            );
+        }
+    }
+
+    Ok(())
+}

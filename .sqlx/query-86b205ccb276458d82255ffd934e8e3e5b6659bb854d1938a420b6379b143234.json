@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id,\n                parent_id,\n                name,\n                description,\n                color AS \"color: SubteamColor\",\n                join_policy AS \"join_policy: SubteamJoinPolicy\",\n                created_at\n            FROM subteam\n            WHERE team_id = $1 AND ($2::uuid IS NULL OR id = $2)\n            ORDER BY lower(name), id\n            ",
+  "query": "\n            SELECT\n                id,\n                parent_id,\n                name,\n                description,\n                color AS \"color: SubteamColor\",\n                join_policy AS \"join_policy: SubteamJoinPolicy\",\n                created_at\n            FROM subteam\n            WHERE team_id = $1 AND ($2::uuid IS NULL OR id = $2)\n            ORDER BY parent_id IS NOT NULL, lower(name), id\n            ",
   "describe": {
     "columns": [
       {
@@ -80,5 +80,5 @@
       false
     ]
   },
-  "hash": "c0c4bd89c664926df48e96800ac43acbd3277edfee61d5088ff4b78f023ab733"
+  "hash": "86b205ccb276458d82255ffd934e8e3e5b6659bb854d1938a420b6379b143234"
 }
