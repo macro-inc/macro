@@ -25,6 +25,8 @@ const BulkEditEntityModalContent = (props: {
   onCancel?: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
+  /** What else the deletion removes, under its description. */
+  note?: string;
 }) => {
   const handleFinish = () => {
     props.setIsOpen(false);
@@ -69,6 +71,7 @@ const BulkEditEntityModalContent = (props: {
             </Show>
             <Show when={props.view === 'delete'}>
               <BulkDeleteView
+                note={props.note}
                 onPartialDelete={props.onPartialDelete}
                 entities={props.entities}
                 onFinish={handleFinish}
@@ -120,6 +123,8 @@ const [globalModalProps, setGlobalModalProps] = createSignal<{
   onCancel?: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
+  /** What else the deletion removes, under its description. */
+  note?: string;
 } | null>(null);
 const [modalOpen, setModalOpen] = createControlledOpenSignal(false, {
   id: 'entity-edit',
@@ -133,6 +138,8 @@ export const openBulkEditModal = (props: {
   onCancel?: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
+  /** What else the deletion removes, under its description. */
+  note?: string;
 }) => {
   setModalOpen(true);
   setGlobalModalProps(props);
@@ -171,6 +178,7 @@ export const GlobalBulkEditEntityModal = () => {
           entities={props().entities}
           onFinish={handleFinish}
           onMoved={props().onMoved}
+          note={props().note}
           onCancel={handleCancel}
           onError={handleError}
           onPartialDelete={props().onPartialDelete}

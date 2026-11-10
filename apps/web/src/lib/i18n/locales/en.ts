@@ -22,6 +22,7 @@ import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
+import subRoutines from './en/sub-routines';
 import tabs from './en/tabs';
 import tutorials from './en/tutorials';
 import viewMenus from './en/view-menus';
@@ -55,6 +56,7 @@ export default {
   settingsMobileApp,
   settingsNav,
   splitMenu,
+  subRoutines,
   tabs,
   tutorials,
   viewMenus,

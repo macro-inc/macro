@@ -1,5 +1,7 @@
+import { t } from '@app/lib/i18n';
 import { Layout as EntityLayout } from '@entity/core/Layout';
 import { Slot as EntitySlot } from '@entity/core/Slot';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import { Badge, cn, ToggleSwitch, Tooltip } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -57,6 +59,11 @@ export function RoutineListRow(props: {
   pending: boolean;
   onOpen: (id: string, history?: boolean) => void;
   onToggle: (row: RoutineRow) => void;
+  /** Whether the routines its runs created show under it; absent when it has none. */
+  expanded?: boolean;
+  onExpand?: (expanded: boolean) => void;
+  /** A routine another routine's run created, shown under that routine. */
+  nested?: boolean;
 }) {
   const toggleDisabled = () =>
     !props.row.editable ||
@@ -69,6 +76,8 @@ export function RoutineListRow(props: {
       return 'Update the schedule before turning this routine on';
     if (!props.row.enabled && props.row.status === 'Running')
       return 'Wait for the current run to finish before turning this routine on';
+    if (!props.row.enabled && props.row.pausedByParent)
+      return t('subRoutines.pausedWithParent');
     return `Turn ${props.row.enabled ? 'off' : 'on'}`;
   };
   const doesLabel = () =>
@@ -84,7 +93,36 @@ export function RoutineListRow(props: {
       onClick={() => props.onOpen(props.row.id)}
     >
       <RoutineRowLayout class="px-2 text-sm">
-        <EntitySlot role="cell" class="flex min-w-0 items-center gap-3 py-2">
+        <EntitySlot
+          role="cell"
+          class={cn(
+            'flex min-w-0 items-center gap-3 py-2',
+            props.nested && 'pl-7'
+          )}
+        >
+          <Show when={props.onExpand}>
+            {(expand) => (
+              <button
+                type="button"
+                aria-expanded={props.expanded}
+                aria-label={t('subRoutines.toggle', {
+                  count: props.row.children.length,
+                })}
+                class="-ml-1 flex size-5 shrink-0 items-center justify-center rounded-md text-ink-muted outline-none hover:bg-ink/10 focus-visible:bg-ink/10"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  expand()(!props.expanded);
+                }}
+              >
+                <CaretRightIcon
+                  class={cn(
+                    'size-3 transition-transform',
+                    props.expanded && 'rotate-90'
+                  )}
+                />
+              </button>
+            )}
+          </Show>
           <TriggerIcon kind={props.row.whenKind} />
           <span class="flex min-w-0 flex-col">
             <Tooltip label={props.row.name} class="min-w-0 max-w-full">
@@ -95,6 +133,13 @@ export function RoutineListRow(props: {
                 {props.row.name}
               </button>
             </Tooltip>
+            <Show when={!props.expanded && props.row.children.length > 0}>
+              <span class="truncate text-[13px] text-ink-extra-muted">
+                {t('subRoutines.count', {
+                  count: props.row.children.length,
+                })}
+              </span>
+            </Show>
             <Show when={props.row.description}>
               {(description) => (
                 <span class="truncate text-[13px] text-ink-muted">
