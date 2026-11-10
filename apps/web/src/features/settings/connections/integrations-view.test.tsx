@@ -362,6 +362,7 @@ describe('unified Integrations page', () => {
       .map((row) => row.querySelector('span.font-medium')?.textContent);
     expect(names.slice(0, 2)).toEqual(['Team tools', 'Granola']);
     expect(names).toContain('GitHub');
+    expect(names).not.toContain('Dialpad');
     expect(screen.getByText('Integration catalog')).toBeTruthy();
   });
 

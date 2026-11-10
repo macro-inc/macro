@@ -583,6 +583,15 @@ async fn setup_finishes_only_under_the_lease_that_stored_the_secret(pool: PgPool
         .await
         .unwrap()
         .unwrap();
+    assert!(
+        service
+            .repo
+            .begin_setup(&connection, &secret())
+            .await
+            .unwrap()
+            .is_none(),
+        "a live lease keeps other instances out"
+    );
     // The first lease expires while its setup is still talking to Dialpad.
     sqlx::query!(
         "UPDATE dialpad_sync_connections SET setup_started_at = now() - interval '1 hour' WHERE id = $1",
