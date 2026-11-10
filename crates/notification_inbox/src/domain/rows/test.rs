@@ -670,6 +670,30 @@ fn a_requested_review_offers_the_pull_request() {
 }
 
 #[test]
+fn a_manual_notification_on_a_channel_is_its_own_agent_row() {
+    let manual = notification(
+        2,
+        entity(EntityType::Channel, CHANNEL),
+        "manual",
+        json!({
+            "title": "Deploy finished",
+            "agent": { "id": uuid(0xB07), "name": "Scout" },
+        }),
+        2,
+        NotificationState::Unseen,
+    );
+    let listed = channel_rows(&[channel_send(1, CHANNEL, 0x100, 1), manual]);
+    assert_eq!(
+        shape(&listed),
+        vec![
+            (InboxRowType::Agent, vec![uuid(2)], vec![]),
+            (InboxRowType::ChannelMessages, vec![uuid(1)], vec![]),
+        ]
+    );
+    assert_eq!(listed[0].actor, agent());
+}
+
+#[test]
 fn a_manual_notification_is_an_agent_row_from_its_agent_or_its_sender() {
     let document = group(EntityType::Document, DOC);
     let from_agent = notification(
