@@ -1901,6 +1901,51 @@ describe('Agents', () => {
     expect(defaultModel).toHaveProperty('textContent', 'Harness default');
   });
 
+  it('lets a stale workspace go back to the runtime default when the runtime reports none', async () => {
+    harnessMocks.query.data = [{ ...MACROD_HARNESS, reported_workspaces: [] }];
+    modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels([
+      { id: 'default', name: 'Harness default' },
+    ]);
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-1',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Bug fixer',
+          handle: 'bug-fixer',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Fix the root cause.',
+        harness: 'macrod',
+        harness_id: MACROD_HARNESS.id,
+        workspace_path: '/home/dev/old',
+        default_model: 'default',
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+
+    render(() => <Agents {...agentsPageProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+
+    const dialog = screen.getByRole('region', { name: 'Edit agent' });
+    const workspace = within(dialog).getByLabelText('Workspace');
+    expect(workspace).toHaveProperty('disabled', false);
+    chooseSelectOption(workspace, 'Runtime default');
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Save changes' })
+    );
+
+    await waitFor(() => {
+      expect(agentMocks.update).toHaveBeenCalledWith(
+        expect.objectContaining({ workspacePath: undefined })
+      );
+    });
+  });
+
   const linearAgent = {
     bot: {
       id: 'agent-mcp',

@@ -703,6 +703,14 @@ function AgentEditorPage(props: {
     props.agent?.harness_id === harnessId()
       ? props.agent.workspace_path
       : undefined;
+  // A saved workspace the runtime stopped reporting still counts as a
+  // choice, so the user can move back to the runtime default.
+  const agentWorkspaceOptions = () =>
+    workspaceOptions(
+      selectedHarness()?.workspaces ?? [],
+      savedWorkspaceOnSelectedHarness(),
+      'Runtime default'
+    );
   const modelQueryForHarness = (id: string) => {
     const index = props.connectedHarnesses.findIndex(
       (harness) => harness.id === id
@@ -1391,15 +1399,9 @@ function AgentEditorPage(props: {
                         </span>
                         <SettingsSelect
                           label="Workspace"
-                          options={workspaceOptions(
-                            selectedHarness()?.workspaces ?? [],
-                            savedWorkspaceOnSelectedHarness(),
-                            'Runtime default'
-                          )}
+                          options={agentWorkspaceOptions()}
                           value={workspaceOption()}
-                          disabled={
-                            (selectedHarness()?.workspaces.length ?? 0) === 0
-                          }
+                          disabled={agentWorkspaceOptions().length <= 1}
                           onChange={setWorkspaceOption}
                         />
                         <span class="text-xs text-ink-extra-muted">
