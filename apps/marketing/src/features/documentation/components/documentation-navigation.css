@@ -1,7 +1,7 @@
-.site-documentation-header { --doc-nav-background: #000; }
+.site-documentation-header { --doc-nav-background: #080808; }
 .site-header.site-documentation-header { left: 20px; }
 html[data-palette='cream'] .site-documentation-header { --doc-nav-background: #f5f1e8; }
-.macro-homepage .site-documentation-header { --doc-nav-background: light-dark(#fff, #000); }
+.macro-homepage .site-documentation-header { --doc-nav-background: light-dark(#fff, #080808); }
 .site-header.site-documentation-header .site-menu-toggle { display: grid; position: relative; z-index: 2; width: 68px; height: 68px; margin-inline: -16px; border-radius: 50%; color: var(--nav-ink); cursor: default; }
 .site-header.site-documentation-header .site-menu-mark { width: 36px; height: 36px; }
 .site-header.site-documentation-header .site-menu-toggle:is(:hover, :focus-visible) { background: color-mix(in srgb, var(--nav-ink) 8%, transparent); }
