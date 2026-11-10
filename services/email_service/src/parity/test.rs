@@ -4,6 +4,11 @@ use rdkafka::mocking::MockCluster;
 use rdkafka::{ClientConfig, Message, Offset, TopicPartitionList};
 use std::time::Duration;
 
+static SCENARIO_PATTERN: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+    regex::Regex::new(r"#\[sqlx::test\([^\]]*\)\]\s*(?:#\[[^\]]*\]\s*)*async fn ([a-zA-Z0-9_]+)\(")
+        .expect("scenario declarations")
+});
+
 #[test]
 fn normalization_preserves_behavior_and_reuses_runtime_id_names() {
     if !crate::parity::process_per_test() {
@@ -33,17 +38,6 @@ fn normalization_preserves_behavior_and_reuses_runtime_id_names() {
 }
 
 #[test]
-fn differ_reports_changed_lines_with_unified_headers() {
-    if !crate::parity::process_per_test() {
-        return;
-    }
-    let diff = super::transcript::difference("one\ntwo\nthree\n", "one\nchanged\nthree\n");
-    assert!(diff.starts_with("--- golden\n+++ actual\n@@"));
-    assert!(diff.contains("-two\n+changed\n"));
-    assert_eq!(super::transcript::difference("same", "same"), "");
-}
-
-#[test]
 fn error_backtraces_do_not_change_transcripts() {
     if !crate::parity::process_per_test() {
         return;
@@ -62,10 +56,6 @@ fn error_backtraces_do_not_change_transcripts() {
 }
 
 #[test]
-#[expect(
-    clippy::disallowed_methods,
-    reason = "Concurrent PARITY_UPDATE writers publish SQL before all scenario goldens are refreshed"
-)]
 fn no_orphan_goldens() {
     if !crate::parity::process_per_test() {
         return;
@@ -74,7 +64,7 @@ fn no_orphan_goldens() {
     if !root.exists() {
         return;
     }
-    let updating = std::env::var("PARITY_UPDATE").as_deref() == Ok("1");
+    let updating = super::transcript::updating_snapshots();
     for entry in std::fs::read_dir(&root).expect("golden suites") {
         let suite = entry.expect("suite entry").path();
         assert!(suite.is_dir(), "goldens must be grouped by suite");
@@ -87,6 +77,11 @@ fn no_orphan_goldens() {
         let mut source = std::fs::read_to_string(source_root.join(format!("{name}.rs")))
             .expect("a source module for every golden suite");
         collect_sources(&source_root.join(name), &mut source);
+        let scenarios: std::collections::BTreeSet<String> = SCENARIO_PATTERN
+            .captures_iter(&source)
+            .map(|capture| capture[1].to_owned())
+            .collect();
+        let mut snapshots = std::collections::BTreeSet::new();
         let mut referenced = std::collections::BTreeSet::new();
         for entry in std::fs::read_dir(&suite).expect("suite goldens") {
             let path = entry.expect("golden entry").path();
@@ -94,16 +89,19 @@ fn no_orphan_goldens() {
                 assert_eq!(path.file_name().expect("directory name"), "sql");
                 continue;
             }
+            assert_eq!(
+                path.extension().and_then(|value| value.to_str()),
+                Some("snap"),
+                "unexpected golden or pending snapshot {}",
+                path.display()
+            );
             let name = path
                 .file_stem()
                 .expect("golden name")
                 .to_str()
                 .expect("UTF-8");
-            assert!(
-                source.contains(&format!("async fn {name}(")),
-                "orphan golden {}",
-                path.display()
-            );
+            assert!(scenarios.contains(name), "orphan golden {}", path.display());
+            snapshots.insert(name.to_owned());
             if !updating {
                 let mut in_sql = false;
                 for line in std::fs::read_to_string(&path).expect("golden text").lines() {
@@ -124,6 +122,12 @@ fn no_orphan_goldens() {
         // A parallel updater can publish a statement before its scenario file.
         // Normal comparison runs validate the complete, stable reference set.
         if !updating {
+            assert_eq!(
+                snapshots,
+                scenarios,
+                "every scenario must have a snapshot in {}",
+                suite.display()
+            );
             super::transcript::assert_sql_references(&suite, referenced);
         }
     }

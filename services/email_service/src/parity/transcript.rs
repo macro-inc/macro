@@ -124,12 +124,12 @@ impl Transcript {
 
     #[expect(
         clippy::disallowed_methods,
-        reason = "PARITY_OUT and PARITY_UPDATE are explicit test controls, never application secrets"
+        reason = "PARITY_OUT is an explicit test output path, never an application secret"
     )]
     pub fn finish(self) {
         let relative = PathBuf::from(&self.suite).join(format!("{}.txt", self.name));
-        let golden = golden_root().join(&relative);
-        let update = std::env::var("PARITY_UPDATE").as_deref() == Ok("1");
+        let suite_path = golden_root().join(&self.suite);
+        let update = updating_snapshots();
         for (id, sql) in &self.statements {
             write_statement(&golden_root().join(&self.suite), id, sql, update);
         }
@@ -147,20 +147,25 @@ impl Transcript {
                 &self.debug_spans,
             );
         }
-        if update {
-            write_file(&golden, &self.text);
-        } else {
-            let expected = std::fs::read_to_string(&golden).unwrap_or_else(|error| {
-                panic!(
-                    "{}: {error}; generate with PARITY_UPDATE=1",
-                    golden.display()
-                )
-            });
-            if expected != self.text {
-                panic!("{}", difference(&expected, &self.text));
-            }
-        }
+        insta::with_settings!({
+            snapshot_path => suite_path,
+            prepend_module_to_snapshot => false,
+            omit_expression => true,
+        }, {
+            insta::assert_snapshot!(self.name, self.text);
+        });
     }
+}
+
+#[expect(
+    clippy::disallowed_methods,
+    reason = "INSTA_UPDATE explicitly selects snapshot recording, never an application secret"
+)]
+pub(super) fn updating_snapshots() -> bool {
+    matches!(
+        std::env::var("INSTA_UPDATE").as_deref(),
+        Ok("always" | "1" | "force" | "new" | "unseen")
+    )
 }
 
 fn statement_id(sql: &str) -> String {
@@ -188,7 +193,10 @@ fn write_statement(suite: &Path, id: &str, sql: &str, create: bool) {
         }
     }
     let actual = std::fs::read_to_string(&path).unwrap_or_else(|error| {
-        panic!("{}: {error}; generate with PARITY_UPDATE=1", path.display())
+        panic!(
+            "{}: {error}; generate with INSTA_UPDATE=always",
+            path.display()
+        )
     });
     assert_eq!(actual, sql, "SQL statement contents: {}", path.display());
 }
@@ -267,46 +275,4 @@ fn write_file(path: &Path, text: &str) {
     std::fs::create_dir_all(path.parent().expect("transcript directory"))
         .expect("create transcript directory");
     std::fs::write(path, text).expect("write transcript");
-}
-
-pub(super) fn difference(expected: &str, actual: &str) -> String {
-    if expected == actual {
-        return String::new();
-    }
-    let before: Vec<_> = expected.lines().collect();
-    let after: Vec<_> = actual.lines().collect();
-    let prefix = before
-        .iter()
-        .zip(&after)
-        .take_while(|(a, b)| a == b)
-        .count();
-    let suffix = before[prefix..]
-        .iter()
-        .rev()
-        .zip(after[prefix..].iter().rev())
-        .take_while(|(a, b)| a == b)
-        .count();
-    let start = prefix.saturating_sub(2);
-    let old_end = (before.len() - suffix + 2).min(before.len());
-    let new_end = (after.len() - suffix + 2).min(after.len());
-    let mut out = format!(
-        "--- golden\n+++ actual\n@@ -{},{} +{},{} @@\n",
-        start + 1,
-        old_end - start,
-        start + 1,
-        new_end - start
-    );
-    for line in &before[start..prefix] {
-        writeln!(out, " {line}").expect("diff context");
-    }
-    for line in &before[prefix..before.len() - suffix] {
-        writeln!(out, "-{line}").expect("diff removal");
-    }
-    for line in &after[prefix..after.len() - suffix] {
-        writeln!(out, "+{line}").expect("diff addition");
-    }
-    for line in &before[before.len() - suffix..old_end] {
-        writeln!(out, " {line}").expect("diff context");
-    }
-    out
 }

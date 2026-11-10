@@ -1,0 +1,432 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: mark unread
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/messages/labels",
+    "auth": "user A",
+    "body": {
+      "message_ids": [
+        "<msg:m1a>",
+        "<msg:m1b>"
+      ],
+      "label_id": "<label:A/UNREAD>",
+      "value": true
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "131"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "body": {
+      "successful_ids": [
+        "<msg:m1a>",
+        "<msg:m1b>"
+      ],
+      "failed_ids": [],
+      "missing_ids": []
+    }
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":200,"http.route":"/email/messages/labels","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/messages/labels"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","user_id":"<user:A>"}
+    INFO fetch_owned_link_for_message {"message_id":"<msg:m1a>"}
+    INFO fetch_label_by_id {"label_id":"<label:A/UNREAD>","link_id":"<link:A>"}
+    INFO get_simple_messages_batch {"fusionauth_user_id":"<fusion:A>","message_ids":"[<msg:m1a>, <msg:m1b>]"}
+    INFO lock_thread_label_writes {}
+    INFO messages_changing_label {"add":true,"link_id":"<link:A>","provider_label_id":"UNREAD"}
+    INFO mark_pending_label_writes {"label_present":true,"link_id":"<link:A>","provider_label_id":"UNREAD","write_id":"<uuid:1>"}
+    INFO insert_message_labels_batch {"link_id":"<link:A>","message_ids":"[<msg:m1a>, <msg:m1b>]","provider_label_id":"UNREAD"}
+    INFO update_message_read_status_batch {"is_read":false,"link_id":"<link:A>","message_ids":"[<msg:m1a>, <msg:m1b>]"}
+    INFO enqueue_gmail_ops_modify_labels_batch {"link_id":"<link:A>","message_count":1,"pending_write_id":"<uuid:1>"}
+      INFO enqueue_gmail_ops_notification {"link_id":"<link:A>"}
+        INFO enqueue_notification {"queue_url":"<sqs>/000000000000/gmail-ops"}
+    INFO kafka.publish {"key":"<link:A>","messaging.destination.name":"macro.email","messaging.operation.name":"publish","messaging.operation.type":"send","messaging.system":"kafka","otel.kind":"producer","topic":"macro.email"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  ef48b1f66ab1 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  a7f41a578321 rows_affected=1 rows_returned=1
+  99de782f2de8 rows_affected=2 rows_returned=2
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  bfdd968ccdc6 rows_affected=1 rows_returned=1
+  2228eb53cc28 rows_affected=1 rows_returned=0
+  7b2a018c9fb3 rows_affected=1 rows_returned=0
+  557241dab85d rows_affected=2 rows_returned=2
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=0 rows_returned=0
+  ad640ecb32fd rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-ops",
+        "MessageBody": {
+          "linkId": "<link:A>",
+          "operation": {
+            "modify_message_labels_batch": {
+              "messages": [
+                {
+                  "dbMessageId": "<msg:m1b>",
+                  "providerMessageId": "m1b"
+                }
+              ],
+              "labelsToAdd": [
+                "UNREAD"
+              ],
+              "labelsToRemove": [],
+              "pendingWriteId": "<uuid:1>"
+            }
+          }
+        },
+        "DelaySeconds": 0,
+        "Entries": null
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-1"
+      }
+    }
+  ]
+kafka:
+  [
+    {
+      "topic": "macro.email",
+      "key": "<link:A>",
+      "payload": {
+        "event_id": "<uuid:2>",
+        "schema_version": 1,
+        "event_type": "email.thread_read",
+        "metadata": {
+          "link_id": "<link:A>",
+          "owner": "<user:A>",
+          "actor": "<user:A>",
+          "thread_id": "<thread:t1>",
+          "is_read": false,
+          "origin": "user_action"
+        }
+      }
+    }
+  ]
+redis:
+  {}
+db:
+  {
+    "email_gmail_pending_label_writes": {
+      "removed": [],
+      "added": [
+        {
+          "seq": 1,
+          "write_id": "<uuid:1>",
+          "expires_at": "<ts>",
+          "message_id": "<msg:m1b>",
+          "label_present": true,
+          "provider_label_id": "UNREAD",
+          "label_present_before": false
+        }
+      ],
+      "changed": []
+    },
+    "email_message_labels": {
+      "removed": [],
+      "added": [
+        {
+          "label_id": "<label:A/UNREAD>",
+          "message_id": "<msg:m1b>"
+        }
+      ],
+      "changed": []
+    },
+    "email_messages": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<msg:m1a>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        },
+        {
+          "id": "<msg:m1b>",
+          "is_read": {
+            "before": true,
+            "after": false
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: mark read
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/messages/labels",
+    "auth": "user A",
+    "body": {
+      "message_ids": [
+        "<msg:m1a>",
+        "<msg:m1b>"
+      ],
+      "label_id": "<label:A/UNREAD>",
+      "value": false
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "status": 200,
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "131"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "body": {
+      "successful_ids": [
+        "<msg:m1a>",
+        "<msg:m1b>"
+      ],
+      "failed_ids": [],
+      "missing_ids": []
+    }
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":200,"http.route":"/email/messages/labels","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/messages/labels"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","user_id":"<user:A>"}
+    INFO fetch_owned_link_for_message {"message_id":"<msg:m1a>"}
+    INFO fetch_label_by_id {"label_id":"<label:A/UNREAD>","link_id":"<link:A>"}
+    INFO get_simple_messages_batch {"fusionauth_user_id":"<fusion:A>","message_ids":"[<msg:m1a>, <msg:m1b>]"}
+    INFO lock_thread_label_writes {}
+    INFO messages_changing_label {"add":false,"link_id":"<link:A>","provider_label_id":"UNREAD"}
+    INFO mark_pending_label_writes {"label_present":false,"link_id":"<link:A>","provider_label_id":"UNREAD","write_id":"<uuid:3>"}
+    INFO delete_message_labels_batch {"link_id":"<link:A>","message_ids":"[<msg:m1a>, <msg:m1b>]","provider_label_id":"UNREAD"}
+    INFO update_message_read_status_batch {"is_read":true,"link_id":"<link:A>","message_ids":"[<msg:m1a>, <msg:m1b>]"}
+    INFO enqueue_gmail_ops_modify_labels_batch {"link_id":"<link:A>","message_count":2,"pending_write_id":"<uuid:3>"}
+      INFO enqueue_gmail_ops_notification {"link_id":"<link:A>"}
+        INFO enqueue_notification {"queue_url":"<sqs>/000000000000/gmail-ops"}
+    INFO kafka.publish {"key":"<link:A>","messaging.destination.name":"macro.email","messaging.operation.name":"publish","messaging.operation.type":"send","messaging.system":"kafka","otel.kind":"producer","topic":"macro.email"}
+logs:
+  []
+sql:
+  ef48b1f66ab1 rows_affected=1 rows_returned=1
+  a7f41a578321 rows_affected=1 rows_returned=1
+  99de782f2de8 rows_affected=2 rows_returned=2
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  bfdd968ccdc6 rows_affected=2 rows_returned=2
+  2228eb53cc28 rows_affected=2 rows_returned=0
+  699f7b5b5a37 rows_affected=2 rows_returned=0
+  557241dab85d rows_affected=2 rows_returned=2
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=1 rows_returned=0
+  ad640ecb32fd rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-ops",
+        "MessageBody": {
+          "linkId": "<link:A>",
+          "operation": {
+            "modify_message_labels_batch": {
+              "messages": [
+                {
+                  "dbMessageId": "<msg:m1a>",
+                  "providerMessageId": "m1a"
+                },
+                {
+                  "dbMessageId": "<msg:m1b>",
+                  "providerMessageId": "m1b"
+                }
+              ],
+              "labelsToAdd": [],
+              "labelsToRemove": [
+                "UNREAD"
+              ],
+              "pendingWriteId": "<uuid:3>"
+            }
+          }
+        },
+        "DelaySeconds": 0,
+        "Entries": null
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-2"
+      }
+    }
+  ]
+kafka:
+  [
+    {
+      "topic": "macro.email",
+      "key": "<link:A>",
+      "payload": {
+        "event_id": "<uuid:4>",
+        "schema_version": 1,
+        "event_type": "email.thread_read",
+        "metadata": {
+          "link_id": "<link:A>",
+          "owner": "<user:A>",
+          "actor": "<user:A>",
+          "thread_id": "<thread:t1>",
+          "is_read": true,
+          "origin": "user_action"
+        }
+      }
+    }
+  ]
+redis:
+  {}
+db:
+  {
+    "email_gmail_pending_label_writes": {
+      "removed": [],
+      "added": [
+        {
+          "seq": 2,
+          "write_id": "<uuid:3>",
+          "expires_at": "<ts>",
+          "message_id": "<msg:m1a>",
+          "label_present": false,
+          "provider_label_id": "UNREAD",
+          "label_present_before": true
+        },
+        {
+          "seq": 3,
+          "write_id": "<uuid:3>",
+          "expires_at": "<ts>",
+          "message_id": "<msg:m1b>",
+          "label_present": false,
+          "provider_label_id": "UNREAD",
+          "label_present_before": true
+        }
+      ],
+      "changed": []
+    },
+    "email_message_labels": {
+      "removed": [
+        {
+          "label_id": "<label:A/UNREAD>",
+          "message_id": "<msg:m1a>"
+        },
+        {
+          "label_id": "<label:A/UNREAD>",
+          "message_id": "<msg:m1b>"
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "email_messages": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<msg:m1a>",
+          "is_read": {
+            "before": false,
+            "after": true
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        },
+        {
+          "id": "<msg:m1b>",
+          "is_read": {
+            "before": false,
+            "after": true
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    },
+    "email_threads": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<thread:t1>",
+          "is_read": {
+            "before": false,
+            "after": true
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }

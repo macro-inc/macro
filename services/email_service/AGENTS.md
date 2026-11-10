@@ -58,12 +58,13 @@ the gateway `/email` prefix.
   with private Postgres/Redis URLs (no `ENVIRONMENT` needed). It requires nextest's
   process-per-test isolation; plain `cargo test` prints a skip message and returns
   from parity tests before installing their global subscriber or starting a lab.
-  Use `PARITY_UPDATE=1` only to record an intentional baseline, and `PARITY_OUT`
+  Use `INSTA_UPDATE=always` only to record an intentional baseline, and `PARITY_OUT`
   to compare transcripts and callsite sidecars between builds.
   The full span tree is in `*.debug-spans.txt`; goldens retain production INFO+
   spans. Suites declare their output directory through `LabOptions.suite`.
   SQL text is shared in `golden/<suite>/sql/<hash>.sql`; normal comparison runs
-  reject orphan statement files after `PARITY_UPDATE` refreshes the goldens.
+  reject orphan statement files after insta refreshes the `.snap` goldens; review
+  with `cargo insta review` and leave no pending `.snap.new` files.
 - Local SQS: `just create-localstack` / `create-queues` before running
   `pubsub_workers` locally; queue names are in the `justfile`.
 

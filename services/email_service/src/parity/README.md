@@ -24,14 +24,19 @@ installing tracing or starting a lab and prints
 `parity: skipped, run with cargo nextest (process per test)`.
 Keep `TMPDIR` in the task's cache directory.
 
-- `PARITY_UPDATE=1` rewrites checked-in goldens under `golden/<suite>/<name>.txt`.
+- `INSTA_UPDATE=always` records insta snapshots under `golden/<suite>/<name>.snap`.
+  Review changes with `cargo insta review` where available, or inspect the diff.
+  `INSTA_UPDATE=no` compares without writing; CI uses this behavior by default.
+  Local mismatches may create `.snap.new` files; review or remove them before the
+  orphan check can pass. Insta removes the terminal blank line from snapshots;
+  the raw `PARITY_OUT` transcript keeps its original bytes.
 - Each distinct SQL statement lives in `golden/<suite>/sql/<hash>.sql`, with the
   first twelve SHA-256 hex digits of its exact, whitespace-normalized contents
   (one line plus a final newline) as its hash. Steps list executions in order,
   one hash and its affected/returned row counts per line. Updates publish complete
   statement files atomically without overwriting existing content; comparison
   runs assert the contents and reject unreferenced or missing statement files.
-  Orphan SQL validation runs after generation, outside `PARITY_UPDATE`, because
+  Orphan SQL validation runs after snapshot generation, because
   concurrent writers refresh scenario references independently.
 - `PARITY_OUT=/path` also writes each transcript there, plus a
   `<scenario>.callsites.txt` sidecar. The sidecar lists distinct sorted
@@ -43,7 +48,8 @@ Keep `TMPDIR` in the task's cache directory.
 - `<scenario>.debug-spans.txt` contains the full span tree, including DEBUG and
   TRACE spans. Children of omitted spans attach to the nearest retained ancestor
   in the golden tree; log ancestry also lists only retained spans.
-- Without `PARITY_UPDATE=1`, a mismatch fails with a unified diff.
+- Insta reports snapshot mismatches with its diff. Comparison runs never create
+  or update SQL statement files in the golden directory.
 
 Add a scenario as a `#[sqlx::test]` under `suites/`, returning immediately when
 `process_per_test()` is false, setting `LabOptions.suite`, and reserving three
@@ -54,7 +60,8 @@ Finish the transcript and run each write form separately. The fixture has
 three users, two inboxes owned by A, an inbox owned by B and delegated to A, and
 an unrelated user C. Goldens preserve the current handler's behavior, including
 its different inbox and message lookup scopes. The orphan check requires every
-golden to have a corresponding scenario function.
+snapshot to have a corresponding scenario function and every scenario to have a
+snapshot; pending `.snap.new` files fail the check too.
 
 Known IDs have symbolic names; other UUIDs are numbered in first-appearance
 order. Timestamps and endpoints are normalized throughout. Request IDs, durations,
@@ -73,7 +80,7 @@ The lab does not set process environment variables. Config, service URLs, AWS
 credentials/endpoints, the read-receipt pixel URL, and Kafka transport are explicit,
 so `ENVIRONMENT` (unset/local/dev/prod), `LOCAL_AWS_URL`, and service URL overrides
 do not select dependencies. Error backtraces are stripped, so `RUST_BACKTRACE`
-does not change transcripts. Only `DATABASE_URL`, `REDIS_URI`, `PARITY_UPDATE`, and
+does not change transcripts. Only `DATABASE_URL`, `REDIS_URI`, `INSTA_UPDATE`, and
 `PARITY_OUT` configure a run; `NEXTEST` is the required runner marker. The label requests have no Origin header, so the
 production CORS origin predicate does not consult ambient allowed origins.
 
