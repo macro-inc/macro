@@ -1,0 +1,64 @@
+crates/channel_sender/src/test.rs
+  s_f385c1167dfa50::t_b754f506efc2ec 27-37
+crates/messages/src/domain/service/guest_chat.rs
+  s_f385c1167dfa50::t_25cadcf9a9443f 194-198
+  s_f385c1167dfa50::t_fe350679249da6 182-183
+  s_f385c1167dfa50::t_45dd31a10a4c83 219,221-224,473,552
+  s_f385c1167dfa50::t_5dd569b2f2346c 220,305-311,419-422
+  s_f385c1167dfa50::t_44bbea490f486d 304,312-316
+  s_f385c1167dfa50::t_b120d6b3630671 387-400
+  s_f385c1167dfa50::t_69bf6670ccdd6c 355-356,363-365,370,380,386,409-410,423-424,433-436,474-475,483-486,490-491,500-501,512-515,526-529
+  s_f385c1167dfa50::t_b269916d153a8a 204-207
+  s_f385c1167dfa50::t_f416e97beff9ce 418
+  s_f385c1167dfa50::t_ce6aff801231e3 92-96,98-103,105-111,113-118,120-128,167-170,177-180,184-185,200-203,208-209,211,226,231,299-303,352-353,358-362,366-369,371-379,381-385,401-408,412-417,426-432,437-472,477-482,487-489,492-499,502-511,517-525,530-551
+  s_f385c1167dfa50::t_119e1f42422024 210
+  s_f385c1167dfa50::t_08c021aff8a2c0 217,225,247,296-298,317-351,354
+  s_f385c1167dfa50::t_cdae48de3e97f2 357,411,425,476,516
+  s_f385c1167dfa50::t_1b786aa7f25e44 5,60-78,91,97,104,112,119,166,171-176,181,186-193,199,212,214,216
+crates/messages/src/domain/models.rs
+  s_f385c1167dfa50::t_916f26cbc6e7d6 372-373,375
+  s_f385c1167dfa50::t_622a88cb760319 374
+crates/messages/src/outbound/pg_message_repo.rs
+  s_f385c1167dfa50::t_916f26cbc6e7d6 194
+crates/channel_sender/src/lib.rs
+  s_f385c1167dfa50::t_354b150beeddc3 17,69,78,148-154,167
+  s_f385c1167dfa50::t_fe6c766d22f2de 115-119
+crates/channels/src/inbound/toolset/test.rs
+  s_f385c1167dfa50::t_572d75be1f0b5c 209
+crates/messages/src/outbound/pg_message_repo/test.rs
+  s_f385c1167dfa50::t_056ca9f9c83980 2,7,1583-1593,1598-1605,1610,1619-1620,1632-1633,1640-1642,1654,1661-1663
+  s_f385c1167dfa50::t_5dd569b2f2346c 3-5,1594-1597,1606-1609,1611-1618,1621-1631,1634-1639,1643-1653,1655-1660
+  s_f385c1167dfa50::t_747d625defcc51 1664
+crates/messages/src/inbound/guest_chat.rs
+  s_f385c1167dfa50::t_9d06c6f79de117 3-4,66-74,113-117,123-133,138-148,153-160,166-183
+  s_f385c1167dfa50::t_66dd352d3e4ca2 7,65,110-112,118-122,134-137,149-152,161-165,184
+services/document_storage_service/src/api/swagger.rs
+  s_f385c1167dfa50::t_f8f15603bf7789 1015-1019
+  s_f385c1167dfa50::t_66dd352d3e4ca2 345-349
+docs/design/call-guest-chat.md
+  s_f385c1167dfa50::t_f49d582340c818 59-60
+crates/messages/src/domain/service/test/guest_chat.rs
+  s_f385c1167dfa50::t_056ca9f9c83980 277
+  s_f385c1167dfa50::t_6ff5beb24a74ed 313-352
+  s_f385c1167dfa50::t_23d7bc0334b540 142-145,148-151,154-162,169-172,188-247,251-254,274-276,278-285,288-299
+  s_f385c1167dfa50::t_f324cf886aa938 137-141,146-147,152-153,163-168,173-187,248-250,300
+  s_f385c1167dfa50::t_a84971c3a06bb5 255-273
+  s_f385c1167dfa50::t_ebbbe434ad019f 301-312,353
+  s_f385c1167dfa50::t_6271555e16a7fb 286-287
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "611da91ddfd6dd5ad8fef6c8b1b043223c5f89a7",
+  "prompts": {},
+  "sessions": {
+    "s_f385c1167dfa50": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c74b-242d-7891-a934-0dbc0677f3cf",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
