@@ -157,6 +157,7 @@ fn exact_error_ordinal_includes_cursor_expansion_and_initialize_but_not_flat_dif
         generation: 0,
         full_reconcile: false,
         view_text_matches: None,
+        decorator_renders: vec![],
         ops: vec![],
     };
     let output = document_session::SessionOutput {

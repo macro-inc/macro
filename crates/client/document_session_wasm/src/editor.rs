@@ -14,7 +14,9 @@ impl EditorSession {
     fn reject_compat_view_commands(&self) -> Result<(), BoundaryError> {
         #[cfg(feature = "compatibility")]
         if self.compatibility.is_some() {
-            return Err(BoundaryError::Invalid("ordinary view commands do not use compatibility scopes"));
+            return Err(BoundaryError::Invalid(
+                "ordinary view commands do not use compatibility scopes",
+            ));
         }
         Ok(())
     }

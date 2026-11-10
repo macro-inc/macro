@@ -182,13 +182,7 @@ impl Registry {
                 "view command failure acknowledgement required",
             ));
         }
-        for lease in state.issued.drain(..).filter_map(|weak| weak.upgrade()) {
-            lease.store(false, Ordering::Relaxed);
-        }
-        while let Some(lease) = state.failures.pop_front() {
-            lease.current.store(false, Ordering::Relaxed);
-            state.retired.push_back(lease);
-        }
+        Self::invalidate_output(&mut state);
         let epoch = state.epoch;
         drop(state);
         let id = match Id::issue() {
@@ -197,6 +191,7 @@ impl Registry {
             Err(error) => return Err(error),
         };
         let invocation = Invocation {
+            retire_view: Cell::new(false),
             registry: self.clone(),
             id,
             epoch,
@@ -204,6 +199,37 @@ impl Registry {
             allow_callbacks: !pending,
         };
         Ok(INVOCATION.set(&invocation, body))
+    }
+    fn invalidate_output(state: &mut RegistryState) {
+        for lease in state.issued.drain(..).filter_map(|weak| weak.upgrade()) {
+            lease.store(false, Ordering::Relaxed);
+        }
+        while let Some(lease) = state.failures.pop_front() {
+            lease.current.store(false, Ordering::Relaxed);
+            state.retired.push_back(lease);
+        }
+    }
+    pub(crate) fn replace_local_output(&self) -> Result<(), Error> {
+        let mut state = self.lock()?;
+        if state.fault.is_some()
+            || !state.failures.is_empty()
+            || !state.retired.is_empty()
+            || !state.reports.is_empty()
+        {
+            return Err(Error::Invariant(
+                "view command failure acknowledgement required",
+            ));
+        }
+        Self::invalidate_output(&mut state);
+        Ok(())
+    }
+    pub(crate) fn take_view_retirement(&self) -> bool {
+        if !INVOCATION.is_set() {
+            return false;
+        }
+        INVOCATION.with(|current| {
+            current.registry.owner == self.owner && current.retire_view.replace(false)
+        })
     }
     pub(crate) fn take_failure(&self) -> Result<Option<ViewCommandFailure>, Error> {
         let mut state = self.lock()?;

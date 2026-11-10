@@ -1,7 +1,7 @@
 //! Ordinary Enter listeners borrow the dispatching transaction, never the session.
 use crate::*;
 use lexical_model::*;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::num::NonZeroU64;
 use std::sync::{
     atomic::{AtomicU64, Ordering},
@@ -81,6 +81,7 @@ struct Listener {
     callback: NonZeroU64,
 }
 struct Invocation {
+    retire_view: Cell<bool>,
     allow_callbacks: bool,
     registry: Arc<Registry>,
     id: Id,

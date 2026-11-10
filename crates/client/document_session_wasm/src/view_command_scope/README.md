@@ -23,6 +23,11 @@ Free scoped operations query actual pending selection/text/own JSON, set a view
 selection, register/remove Enter listeners, dispatch whitelisted inputs, or
 explicitly dispatch nested programmatic Enter. Every operation requires the exact
 currently nested issued scope. Published view caches retain their ordinary role.
+The JS admission layer must reject ordinary EditorSession receiver calls before
+entering generated WASM wrappers while any module callback is active, including
+getters and free on another owner. Track the actual dispatcher tuple in a JS
+try/finally stack; do not call a receiver to discover that tuple. These wrappers borrow the already borrowed session; their rejection
+is not a scoped operation or a recoverable way to query pending state.
 
 `viewCommandScopeDispatch` accepts only these generated EditorCommand values:
 InsertText, RemoveText, InsertParagraph, InsertLineBreak, InsertTab, Indent,
@@ -52,3 +57,12 @@ injection and the two-error aggregate are mechanical controls, explicitly not a
 claim that one normal Session input produced the aggregate. A source checkpoint
 alone does not establish a source-matched WASM/DTS, component browser parity,
 production compatibility initialization, or the full application plugin profile.
+
+Inside an active UI callback, requestRetireViewObservation(owner, invocation,
+scope) validates the exact current metadata and sets only the invocation's intent
+flag. It does not reborrow the transaction/session, discard output, clear failure
+records, or drive Stop. The native Machine epilogue takes that flag after handle
+returns and retires its actual decorator observer before observed-output encoding.
+The view owns active-scope listener cleanup and queued Stop; idle retirement keeps
+its ordinary entry. Observation stays inactive until an actual successful remount
+initialization under the observer producer's separate lifecycle contract.

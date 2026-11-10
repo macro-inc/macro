@@ -276,6 +276,13 @@ impl Machine {
                 s.handle(now, input);
             }
         }
+        if self
+            .view_commands
+            .as_ref()
+            .is_some_and(|registry| registry.take_view_retirement())
+        {
+            self.decorator_observer.retire();
+        }
         let mut messages = std::mem::take(&mut self.initial_telemetry);
         messages.extend(capture.finish());
         let (out, surface) = match &self.session {
@@ -414,6 +421,9 @@ impl Machine {
         self.call(SessionInput::Sync(input), mono, wall)
     }
     pub(crate) fn reject_text(&mut self, reason: &'static str) -> Result<u32, BoundaryError> {
+        if let Some(registry) = &self.view_commands {
+            registry.replace_local_output()?;
+        }
         let Session::Editor(session) = &self.session else {
             return Err(BoundaryError::Invalid("editor"));
         };
