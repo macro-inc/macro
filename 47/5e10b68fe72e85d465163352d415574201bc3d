@@ -1,0 +1,112 @@
+crates/webhook/src/inbound/kafka_consumer/test.rs
+  s_154e7eadce3a09::t_acab351524058f 299
+  s_f9d6164e5a309f::t_9abad1d08a45e5 308,315
+  s_f9d6164e5a309f::t_7c91bfd4c3acfc 294
+  s_f9d6164e5a309f::t_75ec8454816f89 162,194,197,251,320
+  s_f9d6164e5a309f::t_148475e60cc088 293,297-298,300-304,307,310,312,314,316-317
+  s_154e7eadce3a09::t_e2929189d5c2c1 74,190-193,195-196,292,295-296,305-306,309,311,313
+  s_154e7eadce3a09::t_d240d992efb983 291,318-319,321
+services/document_storage_service/src/api/swagger.rs
+  s_154e7eadce3a09::t_e2929189d5c2c1 1124-1147
+crates/webhook/src/inbound/kafka_stream_consumer.rs
+  s_154e7eadce3a09::t_e2929189d5c2c1 8,77
+crates/webhook/src/domain/ingestion/stream.rs
+  s_154e7eadce3a09::t_e2929189d5c2c1 7,18,80-90
+  s_154e7eadce3a09::t_29929897758deb 91-92
+crates/webhook/src/domain/events/test.rs
+  s_1a988e31a26782::t_0f1a130d3a6447 329-330,332-350
+  s_154e7eadce3a09::t_e2929189d5c2c1 327-328,331,351
+crates/webhook/src/topics.rs
+  s_154e7eadce3a09::t_e2929189d5c2c1 14,22
+crates/webhook/src/domain/ingestion/test.rs
+  s_8fbfafdc848103::t_5d0cc8b29ed10f 2007-2011,2085,2105-2108,2112-2114,2144,2150,2155,2161,2163,2200,2202,2204,2231,2236,2241
+  s_8fbfafdc848103::t_a11da5510c8d61 2035,2132
+  s_154e7eadce3a09::t_e2929189d5c2c1 2002-2006,2012-2034,2036-2084,2086-2104,2109-2111,2115-2131,2133-2143,2145-2149,2151-2154,2156-2160,2162,2164-2199,2201,2203,2205-2230,2232-2235,2237-2240,2242-2246
+crates/webhook/src/domain/events.rs
+  s_fe2609a124e6b6::t_e3bb20e0da543a 205
+  s_154e7eadce3a09::t_e2929189d5c2c1 206
+crates/webhook/Cargo.toml
+  s_154e7eadce3a09::t_e2929189d5c2c1 22,33,44,83
+crates/webhook/src/inbound/kafka_consumer.rs
+  s_154e7eadce3a09::t_e2929189d5c2c1 3-4,43-45,120-122,186
+crates/webhook/src/domain/ingestion.rs
+  s_154e7eadce3a09::t_e2929189d5c2c1 24,42-43,124-129,418-419,422-475,763-773
+  s_1001c7855d00da::t_617bdea4f73473 420-421
+  s_154e7eadce3a09::t_a2d192ebda78c6 774-776
+crates/webhook/src/domain/stream/test.rs
+  s_ac6d17aa234de4::t_fa68d67a993c5a 730-734
+  s_ac6d17aa234de4::t_96cd2c1fb262e9 700-703,705-706,708-729,735
+  s_154e7eadce3a09::t_e2929189d5c2c1 566-574,577-578,580-595,602-611,613-619,626-627,630-634,636-639,641,686-688,690-699
+  s_154e7eadce3a09::t_acab351524058f 673-676,704
+  s_ac6d17aa234de4::t_90d3e3c21a0752 575-576,628,689,707
+  s_ac6d17aa234de4::t_400ff15238ec8e 579,642-652,658-668
+  s_ac6d17aa234de4::t_d116261de49e63 596-601,612,620-625,629,635,640,653-657,669-672,677-685
+.github/workspace-dep-closures.json
+  s_154e7eadce3a09::t_c0ca41a9e278fe 3789,3800,3802-3803,3809-3811,3813,3834-3835,3862,3874,3908,14849,14859,14861-14862,14868-14870,14872,14891-14892,14918,14930,14964
+Cargo.lock
+  s_154e7eadce3a09::t_ac2fbdd4877cdd 21997
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "475e10b68fe72e85d465163352d415574201bc3d",
+  "prompts": {},
+  "sessions": {
+    "s_1001c7855d00da": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f317-74a3-8efd-df29b6106150",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_154e7eadce3a09": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad735192-5c05-45ca-a84d-09b5ccc7f8bc",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_1a988e31a26782": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f462-7183-8152-d1cc76db5e4b",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8fbfafdc848103": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f1f9-7402-8e6f-f4484684c4aa",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_ac6d17aa234de4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f358-75c1-9bcc-32fb20eda7f8",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_f9d6164e5a309f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f30f-73c1-ab40-81059e954306",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_fe2609a124e6b6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f295-7d90-94fd-678d8e7cac9d",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
