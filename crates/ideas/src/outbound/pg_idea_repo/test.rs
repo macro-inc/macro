@@ -99,3 +99,86 @@ async fn concurrent_creates_stay_within_the_limits(pool: PgPool) {
     assert_eq!(repo.added_in(generation).await.unwrap(), 3);
     assert_eq!(repo.ideas(&user).await.unwrap().len(), 3);
 }
+
+async fn routine_idea(pool: &PgPool) -> (Uuid, Uuid) {
+    let suggestion = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO routine_suggestion
+             (id, user_id, session_id, surfaces, catalog_key, reason, keep_probability, created_at)
+           VALUES ($1, $2, $3, '{email}', 'inbox-digest', 'Busy inbox.', 0.5, now())"#,
+        suggestion,
+        OWNER,
+        Uuid::now_v7(),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    let idea = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO idea (id, user_id, kind, dedup_key, title, summary, importance,
+                             categories, state, session_id, created_at, updated_at, state_changed_at)
+           VALUES ($1, $2, 'routine', 'routine:inbox', 'Inbox digest', 'Busy inbox.', 50,
+                   '{}', 'proposed', $3, now(), now(), now())"#,
+        idea,
+        OWNER,
+        Uuid::now_v7(),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO idea_routine (idea_id, routine_suggestion_id) VALUES ($1, $2)",
+        idea,
+        suggestion,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    (idea, suggestion)
+}
+
+/// Deleting a routine suggestion, by any code, deletes its idea, so the
+/// person never holds an idea without its kind's row.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn deleting_a_routine_suggestion_deletes_its_idea(pool: PgPool) {
+    insert_user(&pool, OWNER).await;
+    let (idea, suggestion) = routine_idea(&pool).await;
+    sqlx::query!("DELETE FROM routine_suggestion WHERE id = $1", suggestion)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let left = sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM idea WHERE id = $1"#, idea)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(left, 0);
+}
+
+/// A row that doesn't decode is skipped, so the person's other ideas still
+/// read.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_broken_idea_row_is_skipped_and_the_rest_read(pool: PgPool) {
+    insert_user(&pool, OWNER).await;
+    let (idea, _) = routine_idea(&pool).await;
+    let broken = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO idea (id, user_id, kind, dedup_key, title, summary, importance,
+                             categories, state, session_id, created_at, updated_at, state_changed_at)
+           VALUES ($1, $2, 'prompt', 'prompt:broken', 'Broken', 'No prompt row.', 50,
+                   '{}', 'proposed', $3, now(), now(), now())"#,
+        broken,
+        OWNER,
+        Uuid::now_v7(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = PgIdeaRepo::new(pool);
+    let user = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    let ideas = repo.ideas(&user).await.unwrap();
+    assert_eq!(
+        ideas.iter().map(|idea| idea.id).collect::<Vec<_>>(),
+        vec![idea]
+    );
+    assert!(repo.idea(&user, broken).await.unwrap().is_none());
+}

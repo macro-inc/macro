@@ -78,19 +78,29 @@ impl PgIdeaRepo {
         )
         .fetch_all(&self.pool)
         .await?;
-        let mut by_idea: HashMap<Uuid, Vec<(TargetRole, Target)>> = HashMap::new();
+        type Decoded = Result<(TargetRole, Target), PgIdeaRepoError>;
+        let mut by_idea: HashMap<Uuid, Vec<Decoded>> = HashMap::new();
         for row in targets {
-            let role = parse::<TargetRole>(&row.role)?;
-            let target = Target {
-                entity_type: parse::<EntityType>(&row.entity_type)?,
-                entity_id: row.entity_id,
-                part_id: row.part_id,
-            };
-            by_idea.entry(row.idea_id).or_default().push((role, target));
+            let target = parse::<TargetRole>(&row.role).and_then(|role| {
+                Ok((
+                    role,
+                    Target {
+                        entity_type: parse::<EntityType>(&row.entity_type)?,
+                        entity_id: row.entity_id,
+                        part_id: row.part_id,
+                    },
+                ))
+            });
+            by_idea.entry(row.idea_id).or_default().push(target);
         }
-        rows.into_iter()
-            .map(|row| {
-                let targets = by_idea.remove(&row.id).unwrap_or_default();
+        let ideas = rows.into_iter().filter_map(|row| {
+            let id = row.id;
+            let idea = (|| -> Result<Idea, PgIdeaRepoError> {
+                let targets = by_idea
+                    .remove(&row.id)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect::<Result<Vec<_>, _>>()?;
                 let of = |wanted: TargetRole| -> Vec<Target> {
                     targets
                         .iter()
@@ -146,8 +156,14 @@ impl PgIdeaRepo {
                     state_changed_at: row.state_changed_at,
                     kind,
                 })
+            })();
+            // One broken row must not hide the person's other ideas.
+            idea.inspect_err(|error| {
+                tracing::warn!(idea_id = %id, error = %error, "skipped an undecodable idea row");
             })
-            .collect()
+            .ok()
+        });
+        Ok(ideas.collect())
     }
 }
 
