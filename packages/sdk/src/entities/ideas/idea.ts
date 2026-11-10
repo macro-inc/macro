@@ -192,9 +192,10 @@ export class Idea {
   }
 
   /**
-   * The user takes up this proposed idea: it is marked accepted, and nothing
-   * else happens, so do what it suggests yourself. For the user's own agent;
-   * a generation session gets a 403.
+   * The user takes up this idea. A background prompt idea starts running in a
+   * hidden session (see `run`), and one whose last run failed runs again; any
+   * other idea is only marked accepted, so do what it suggests yourself. For
+   * the user's own agent; a generation session gets a 403.
    */
   async accept(): Promise<void> {
     unwrap(

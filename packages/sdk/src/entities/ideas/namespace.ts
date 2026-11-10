@@ -71,7 +71,7 @@ export type IdeaSuggestion =
  * ### For the user
  *
  * - Read their feed with `macro.ideas.list()`: their open ideas, best first.
- * - When they take one up, call `idea.accept()`, then do it yourself: run a prompt idea's `prompt`, or do its `action` on the items in `about`. Accepting only marks it accepted.
+ * - When they take one up, call `idea.accept()`. A background prompt idea then runs by itself in a hidden session; its `run` says how it is going. Any other idea is only marked accepted, so do it yourself: run a composer prompt idea's `prompt`, or do an entity idea's `action` on the items in `about`, using its `draft` when it has one.
  * - When they don't want one, call `idea.dismiss()`.
  * - Never suggest, rewrite or retire ideas for the user: only an ideas generation session may, and any other session gets a 403.
  *
