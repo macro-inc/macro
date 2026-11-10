@@ -2,13 +2,15 @@
 //!
 //! A runtime can list hundreds of sessions, and it redials whenever its
 //! socket drops, so a dial must never stampede the replica: idle sessions
-//! wait for their next prompt, every dial on this replica shares
-//! [`REATTACH_CONCURRENCY`] permits, each held until the session's ACP
-//! restore finishes, and a harness dialing again stops its previous dial
-//! from starting more (restores already running finish under their permit).
+//! wait for their next prompt, every restore takes a permit from the
+//! replica's [`AttachBudget`](crate::domain::attach_budget::AttachBudget),
+//! held until the session's ACP restore finishes or the budget's hold limit
+//! runs out, and a harness dialing again stops its previous dial from
+//! starting more (restores already running keep their permit).
 
 use super::deliver::DialReattach;
 use super::*;
+use crate::domain::attach_budget::AttachPath;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_session::domain::connection::ListedSession;
 use futures::StreamExt as _;
@@ -16,9 +18,8 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio_util::sync::CancellationToken;
 
-/// How many sessions this replica attaches and restores at once, across
-/// every dial. An attach claims the session and provisions its egress, and
-/// its restore replays history over the runtime's socket.
+/// How many of a dial's sessions are in flight at once; the attach budget
+/// decides how many of them restore.
 pub(crate) const REATTACH_CONCURRENCY: usize = 8;
 /// How many times a dial tries to restore one session.
 const REATTACH_ATTEMPTS: u32 = 3;
@@ -250,13 +251,19 @@ where
             // the restore is done.
             let permit = tokio::select! {
                 () = cancelled.cancelled() => return (Outcome::Abandoned, retries),
-                permit = self.inner.reattach_permits.acquire() => permit,
+                permit = self.inner.attach_budget.acquire(AttachPath::Dial, harness, session_id) => permit,
             };
-            let Ok(_permit) = permit else {
+            let Ok(permit) = permit else {
                 return (Outcome::Abandoned, retries);
             };
-            let attempt = self.restore(session_id).await;
-            drop(_permit);
+            let attempt = permit
+                .hold_until(self.restore(session_id))
+                .await
+                .unwrap_or_else(|| {
+                    Err(HarnessError::Handshake(
+                        "the runtime did not restore the session in time".to_owned(),
+                    ))
+                });
             let Err(error) = attempt else {
                 return (Outcome::Restored, retries);
             };

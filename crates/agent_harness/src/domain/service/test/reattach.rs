@@ -426,7 +426,7 @@ async fn a_redial_restores_recent_sessions_and_leaves_idle_ones_to_their_next_pr
 async fn a_redial_restores_only_a_few_sessions_at_a_time() {
     let (service, repo, _containers, _announcer, runtimes) = harness();
     let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
-    let limit = super::super::reattach::REATTACH_CONCURRENCY;
+    let limit = crate::domain::attach_budget::HARNESS_ATTACH_SHARE;
     let total = limit + 4;
     let mut sessions = Vec::new();
     for _ in 0..total {
@@ -486,7 +486,7 @@ async fn a_redial_restores_only_a_few_sessions_at_a_time() {
 async fn a_redial_cancels_the_harness_previous_dial() {
     let (service, repo, _containers, _announcer, runtimes) = harness();
     let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
-    let limit = super::super::reattach::REATTACH_CONCURRENCY;
+    let limit = crate::domain::attach_budget::HARNESS_ATTACH_SHARE;
     let total = limit + 1;
     let mut sessions = Vec::new();
     for _ in 0..total {
