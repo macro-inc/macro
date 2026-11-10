@@ -10,7 +10,7 @@ import {
   isDisplayableSoupItem,
   mapApiSoupItemToEntity,
 } from '@queries/soup/transform-utils';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createMemo, mapArray } from 'solid-js';
 import type { ArtifactListSource } from '../context/artifact-source';
 import { ARTIFACT_FILE_TYPES, isArtifact } from '../core/artifact';
 
@@ -48,12 +48,17 @@ export function createArtifactListSource(
     meta: { itemFilter: ARTIFACT_ITEM_FILTER },
   }));
 
+  // A pending first page's data read would suspend the list.
+  const entities = () => (query.isPending ? [] : (query.data?.entities ?? []));
+  // Keyed by entity, so an update keeps the rows of documents it didn't change.
+  const documents = createMemo(
+    mapArray(entities, (entity) =>
+      withEntityNotifications(entity, notifications)
+    )
+  );
+
   return {
-    // A pending first page's data read would suspend the list.
-    documents: () =>
-      (query.isPending ? [] : (query.data?.entities ?? [])).map((entity) =>
-        withEntityNotifications(entity, notifications)
-      ),
+    documents,
     loading: () => query.isPending && query.isEnabled,
     failed: () => Boolean(query.error) && !query.isFetchNextPageError,
     hasMore: () => query.hasNextPage,
