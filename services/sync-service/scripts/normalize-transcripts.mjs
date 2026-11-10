@@ -198,6 +198,12 @@ export function normalize(lines) {
       entry.body_b64 = Buffer.from(body).toString('base64');
     }
     const normalized = visit(entry);
+    // Atomic storage.put(entries) carries operation IDs as object keys rather
+    // than the legacy string argument. Apply the SAME recorded-clock/entropy
+    // normalization only to that storage namespace, never arbitrary JSON keys.
+    if (entry.port === 'storage.put' && entry.args?.length === 1 && entry.args[0] && !Array.isArray(entry.args[0]) && typeof entry.args[0] === 'object') {
+      normalized.args[0] = Object.fromEntries(Object.entries(normalized.args[0]).map(([key, value]) => [text(key), value]));
+    }
     if (entry.out === 'dump') {
       normalized.kv.sort(([a], [b]) => a.localeCompare(b));
       normalized.kv_bytes?.sort(([a], [b]) => a.localeCompare(b));
@@ -218,10 +224,11 @@ export function normalize(lines) {
 
 
 function corpus(root) {
-  if (root.startsWith('git:')) {
-    const revision = root.slice(4);
+  if (root.startsWith('git:') || root.startsWith('git-activated:')) {
+    const activated = root.startsWith('git-activated:');
+    const revision = root.slice(root.indexOf(':') + 1);
     // Old commits retain the original C0 location; new commits own the corpus in the sim.
-    const prefixes = ['crates/sync_server_sim/tests/transcripts/', 'services/sync-service/tests/transcripts/'];
+    const prefixes = activated ? ['crates/sync_server_sim/tests/transcripts-activated/'] : ['crates/sync_server_sim/tests/transcripts/', 'services/sync-service/tests/transcripts/'];
     const paths = execFileSync('git', ['ls-tree', '--full-tree', '-r', '--name-only', revision, '--', ...prefixes], { encoding: 'utf8' }).trim().split('\n').filter(path => path.endsWith('.jsonl'));
     const records = new Map();
     for (const path of paths) {

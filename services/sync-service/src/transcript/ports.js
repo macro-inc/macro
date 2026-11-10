@@ -113,7 +113,33 @@ export function observePorts(state, env, emit) {
   }
   for (const ws of state.getWebSockets()) remember(ws);
 
+  let nextTransaction = 0;
   const storage = proxyMethods(state.storage, 'storage', record, {
+    transaction(callback) {
+      const transaction = nextTransaction++;
+      const callbackId = record.context();
+      let attempt = 0;
+      record({ port: 'storage.transaction', args: [], transaction }, callbackId);
+      try {
+        const result = state.storage.transaction(native => {
+          const currentAttempt = attempt++;
+          const observed = (event) => record({ ...event, transaction, attempt: currentAttempt }, callbackId);
+          observed.context = () => callbackId;
+          observed({ port: 'storage.transaction.begin', args: [] });
+          return callback(proxyMethods(native, 'storage.transaction', observed));
+        });
+        return result.then(value => {
+          record({ return: 'storage.transaction', value: valueOf(value), transaction }, callbackId);
+          return value;
+        }, error => {
+          record({ throw: 'storage.transaction', error: String(error), transaction }, callbackId);
+          throw error;
+        });
+      } catch (error) {
+        record({ throw: 'storage.transaction', error: String(error), transaction }, callbackId);
+        throw error;
+      }
+    },
     sql: proxyMethods(state.storage.sql, 'sql', record),
   });
   const observedState = proxyMethods(state, 'state', record, {

@@ -74,3 +74,14 @@ test('excludes only the newly observable presence clock reads', () => {
   expect(normalize([ordinary, presence])).toBe(normalize([ordinary]));
   expect(normalize([ordinary, presence, ordinary])).not.toBe(normalize([ordinary]));
 });
+
+test('normalizes recorded operation clocks in atomic storage keys without masking bytes or arbitrary keys', () => {
+  const records = (time: number, bytes = [0, 255], port = 'storage.put', keyTime = time) => [
+    JSON.stringify({room: 'room', callback: 1, clock: 'op_id_nanos', value: String(time)}),
+    JSON.stringify({room: 'room', callback: 1, port, args: [{[`o/${keyTime.toString(16).padStart(16, '0')}.00000000`]: bytes}]}),
+  ];
+  expect(normalize(records(10))).toBe(normalize(records(11)));
+  expect(normalize(records(10))).not.toBe(normalize(records(10, [0, 254])));
+  expect(normalize(records(10, [0, 255], 'other'))).not.toBe(normalize(records(11, [0, 255], 'other')));
+  expect(normalize(records(10, [0, 255], 'storage.put', 12))).not.toBe(normalize(records(10, [0, 255], 'storage.put', 13)));
+});

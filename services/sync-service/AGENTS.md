@@ -149,3 +149,8 @@ validate the new physical format, multi-megabyte payloads and cross-build storag
 outside the existing small-message golden corpus. They still run with the
 transcript feature built; all existing 155 scenarios retain unchanged capture.
 Never disable recording for an existing corpus scenario to conceal a difference.
+
+Capture atomic storage transactions losslessly, including each retry, argument,
+return, error and commit. Normalize recorded clock/entropy IDs in bulk put keys
+with the same rules as string keys; never normalize payload values or arbitrary
+object keys to conceal a storage or wire difference.
