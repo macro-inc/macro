@@ -49,9 +49,7 @@ describe('foldAgentActivityRows', () => {
 
     const items = foldAgentActivityRows(rows);
     expect(items.map((item) => item.entityId)).toEqual(['a', 'b']);
-    expect(
-      items[0]?.steps.map((step) => [step.verb, step.rows.length])
-    ).toEqual([
+    expect(items[0]?.steps.map((step) => [step.verb, step.count])).toEqual([
       ['edited', 2],
       ['created', 1],
       ['edited', 1],

@@ -347,10 +347,10 @@ function StepLabel(props: { step: AgentActivityStep }) {
   const verb = () => t(stepLabelKey(props.step.verb));
   return (
     <>
-      {props.step.rows.length > 1
+      {props.step.count > 1
         ? t('agentWork.verbCount', {
             verb: verb(),
-            count: props.step.rows.length,
+            count: props.step.count,
           })
         : verb()}
     </>
