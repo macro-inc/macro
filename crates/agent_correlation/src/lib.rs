@@ -12,3 +12,4 @@ pub mod domain;
 pub mod inbound;
 #[cfg(feature = "postgres")]
 pub mod outbound;
+pub mod scope;

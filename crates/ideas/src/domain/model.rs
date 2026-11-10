@@ -463,6 +463,9 @@ pub struct GenerationSession {
     /// The surfaces a routines session suggests for, by wire name; empty
     /// for ideas.
     pub surfaces: Vec<String>,
+    /// The trace its generation runs in. A session's tool calls reach the
+    /// API without its trace context, so they record this to be joined.
+    pub trace_id: Option<String>,
 }
 
 /// What a change-log entry records.

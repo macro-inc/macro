@@ -30,6 +30,38 @@ pub enum PgIdeaRepoError {
     Decode(String),
 }
 
+/// Which of a person's ideas a read loads.
+enum Read<'a> {
+    /// Open, and done since `done_since`: the feed.
+    Shown { done_since: DateTime<Utc> },
+    /// Open, and the `closed` most recently closed: a session's review.
+    Review { closed: i64 },
+    /// One, by id.
+    Id(Uuid),
+    /// One, by dedup key.
+    Key(&'a str),
+}
+
+/// An idea's base row with its kind's columns.
+struct IdeaRow {
+    id: Uuid,
+    kind: String,
+    dedup_key: String,
+    title: String,
+    summary: String,
+    importance: i16,
+    categories: Vec<String>,
+    state: String,
+    state_reason: Option<String>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+    state_changed_at: DateTime<Utc>,
+    prompt: Option<String>,
+    run_mode: Option<String>,
+    action: Option<String>,
+    routine_suggestion_id: Option<Uuid>,
+}
+
 /// [`IdeaRepo`] on MacroDB.
 pub struct PgIdeaRepo {
     pool: PgPool,
@@ -41,33 +73,111 @@ impl PgIdeaRepo {
         Self { pool }
     }
 
-    /// The person's ideas: every one, or only `id`, or only `dedup_key`'s.
+    /// The person's ideas that `read` names, one query per kind of read so
+    /// each plan uses its own index.
     async fn load(
         &self,
         user: &MacroUserIdStr<'_>,
-        id: Option<Uuid>,
-        dedup_key: Option<&str>,
+        read: Read<'_>,
     ) -> Result<Vec<Idea>, PgIdeaRepoError> {
-        let rows = sqlx::query!(
-            r#"SELECT i.id, i.kind, i.dedup_key, i.title, i.summary, i.importance,
-                      i.categories, i.state, i.state_reason, i.created_at, i.updated_at,
-                      i.state_changed_at,
-                      p.prompt AS "prompt?", p.run_mode AS "run_mode?",
-                      e.action AS "action?",
-                      r.routine_suggestion_id AS "routine_suggestion_id?"
-               FROM idea i
-               LEFT JOIN idea_prompt p ON p.idea_id = i.id
-               LEFT JOIN idea_entity e ON e.idea_id = i.id
-               LEFT JOIN idea_routine r ON r.idea_id = i.id
-               WHERE i.user_id = $1
-                 AND ($2::uuid IS NULL OR i.id = $2)
-                 AND ($3::text IS NULL OR i.dedup_key = $3)"#,
-            user.as_ref(),
-            id,
-            dedup_key,
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *tx)
+            .await?;
+        let rows = match read {
+            Read::Shown { done_since } => {
+                sqlx::query_as!(
+                    IdeaRow,
+                    r#"SELECT i.id, i.kind, i.dedup_key, i.title, i.summary, i.importance,
+                              i.categories, i.state, i.state_reason, i.created_at, i.updated_at,
+                              i.state_changed_at,
+                              p.prompt AS "prompt?", p.run_mode AS "run_mode?",
+                              e.action AS "action?",
+                              r.routine_suggestion_id AS "routine_suggestion_id?"
+                       FROM idea i
+                       LEFT JOIN idea_prompt p ON p.idea_id = i.id
+                       LEFT JOIN idea_entity e ON e.idea_id = i.id
+                       LEFT JOIN idea_routine r ON r.idea_id = i.id
+                       WHERE i.user_id = $1
+                         AND (i.state IN ('proposed', 'accepted')
+                              OR (i.state = 'done' AND i.state_changed_at >= $2))"#,
+                    user.as_ref(),
+                    done_since,
+                )
+                .fetch_all(&mut *tx)
+                .await?
+            }
+            Read::Review { closed } => {
+                sqlx::query_as!(
+                    IdeaRow,
+                    r#"SELECT i.id AS "id!", i.kind AS "kind!", i.dedup_key AS "dedup_key!",
+                              i.title AS "title!", i.summary AS "summary!",
+                              i.importance AS "importance!", i.categories AS "categories!",
+                              i.state AS "state!", i.state_reason,
+                              i.created_at AS "created_at!", i.updated_at AS "updated_at!",
+                              i.state_changed_at AS "state_changed_at!",
+                              p.prompt AS "prompt?", p.run_mode AS "run_mode?",
+                              e.action AS "action?",
+                              r.routine_suggestion_id AS "routine_suggestion_id?"
+                       FROM (
+                           SELECT * FROM idea
+                           WHERE user_id = $1 AND state IN ('proposed', 'accepted')
+                           UNION ALL
+                           (SELECT * FROM idea
+                            WHERE user_id = $1 AND state NOT IN ('proposed', 'accepted')
+                            ORDER BY state_changed_at DESC
+                            LIMIT $2)
+                       ) i
+                       LEFT JOIN idea_prompt p ON p.idea_id = i.id
+                       LEFT JOIN idea_entity e ON e.idea_id = i.id
+                       LEFT JOIN idea_routine r ON r.idea_id = i.id"#,
+                    user.as_ref(),
+                    closed,
+                )
+                .fetch_all(&mut *tx)
+                .await?
+            }
+            Read::Id(id) => {
+                sqlx::query_as!(
+                    IdeaRow,
+                    r#"SELECT i.id, i.kind, i.dedup_key, i.title, i.summary, i.importance,
+                              i.categories, i.state, i.state_reason, i.created_at, i.updated_at,
+                              i.state_changed_at,
+                              p.prompt AS "prompt?", p.run_mode AS "run_mode?",
+                              e.action AS "action?",
+                              r.routine_suggestion_id AS "routine_suggestion_id?"
+                       FROM idea i
+                       LEFT JOIN idea_prompt p ON p.idea_id = i.id
+                       LEFT JOIN idea_entity e ON e.idea_id = i.id
+                       LEFT JOIN idea_routine r ON r.idea_id = i.id
+                       WHERE i.id = $2 AND i.user_id = $1"#,
+                    user.as_ref(),
+                    id,
+                )
+                .fetch_all(&mut *tx)
+                .await?
+            }
+            Read::Key(dedup_key) => {
+                sqlx::query_as!(
+                    IdeaRow,
+                    r#"SELECT i.id, i.kind, i.dedup_key, i.title, i.summary, i.importance,
+                              i.categories, i.state, i.state_reason, i.created_at, i.updated_at,
+                              i.state_changed_at,
+                              p.prompt AS "prompt?", p.run_mode AS "run_mode?",
+                              e.action AS "action?",
+                              r.routine_suggestion_id AS "routine_suggestion_id?"
+                       FROM idea i
+                       LEFT JOIN idea_prompt p ON p.idea_id = i.id
+                       LEFT JOIN idea_entity e ON e.idea_id = i.id
+                       LEFT JOIN idea_routine r ON r.idea_id = i.id
+                       WHERE i.user_id = $1 AND i.dedup_key = $2"#,
+                    user.as_ref(),
+                    dedup_key,
+                )
+                .fetch_all(&mut *tx)
+                .await?
+            }
+        };
         let ids: Vec<Uuid> = rows.iter().map(|row| row.id).collect();
         let targets = sqlx::query!(
             r#"SELECT idea_id, role, entity_type, entity_id, part_id
@@ -76,8 +186,9 @@ impl PgIdeaRepo {
                ORDER BY idea_id, role, position"#,
             &ids,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *tx)
         .await?;
+        tx.commit().await?;
         type Decoded = Result<(TargetRole, Target), PgIdeaRepoError>;
         let mut by_idea: HashMap<Uuid, Vec<Decoded>> = HashMap::new();
         for row in targets {
@@ -263,10 +374,12 @@ async fn log(
 impl IdeaRepo for PgIdeaRepo {
     type Err = PgIdeaRepoError;
 
-    async fn kept_by(&self, session: Uuid) -> Result<u32, Self::Err> {
+    async fn kept_by(&self, generation: Uuid, session: Uuid) -> Result<u32, Self::Err> {
+        // By generation first: its index bounds the scan to one generation.
         let count = sqlx::query_scalar!(
             r#"SELECT count(*) AS "count!" FROM suggestion_change
-               WHERE session_id = $1 AND subject = 'idea'"#,
+               WHERE generation_id = $1 AND session_id = $2 AND subject = 'idea'"#,
+            generation,
             session,
         )
         .fetch_one(&self.pool)
@@ -274,12 +387,30 @@ impl IdeaRepo for PgIdeaRepo {
         Ok(u32::try_from(count).unwrap_or(u32::MAX))
     }
 
-    async fn ideas(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<Idea>, Self::Err> {
-        self.load(user, None, None).await
+    async fn shown(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        done_since: DateTime<Utc>,
+    ) -> Result<Vec<Idea>, Self::Err> {
+        self.load(user, Read::Shown { done_since }).await
+    }
+
+    async fn for_review(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        closed: u32,
+    ) -> Result<Vec<Idea>, Self::Err> {
+        self.load(
+            user,
+            Read::Review {
+                closed: i64::from(closed),
+            },
+        )
+        .await
     }
 
     async fn idea(&self, user: &MacroUserIdStr<'_>, id: Uuid) -> Result<Option<Idea>, Self::Err> {
-        Ok(self.load(user, Some(id), None).await?.into_iter().next())
+        Ok(self.load(user, Read::Id(id)).await?.into_iter().next())
     }
 
     async fn by_dedup_key(
@@ -288,7 +419,7 @@ impl IdeaRepo for PgIdeaRepo {
         dedup_key: &str,
     ) -> Result<Option<Idea>, Self::Err> {
         Ok(self
-            .load(user, None, Some(dedup_key))
+            .load(user, Read::Key(dedup_key))
             .await?
             .into_iter()
             .next())
