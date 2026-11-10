@@ -49,6 +49,8 @@ export type IdeaSuggestion =
       prompt: string;
       /** `composer`: opened prefilled for the user to send. `background`: run in a hidden session, the user sees the result. */
       runMode: RunMode;
+      /** Only for `background`: what the run posts or sends, and where, in one plain sentence ("Posts the weekly status summary in #ops"). The card shows it, and running the idea approves exactly that; leave it out when the run posts and sends nothing. */
+      sends?: string;
     })
   | (IdeaBase & {
       kind: 'entity';

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT i.id, i.kind, i.dedup_key, i.title, i.summary, i.importance,\n                      i.categories, i.state, i.state_reason, i.created_at, i.updated_at,\n                      i.state_changed_at,\n                      p.prompt AS \"prompt?\", p.run_mode AS \"run_mode?\",\n                      e.action AS \"action?\",\n                      r.routine_suggestion_id AS \"routine_suggestion_id?\"\n               FROM idea i\n               LEFT JOIN idea_prompt p ON p.idea_id = i.id\n               LEFT JOIN idea_entity e ON e.idea_id = i.id\n               LEFT JOIN idea_routine r ON r.idea_id = i.id\n               WHERE i.user_id = $1\n                 AND ($2::uuid IS NULL OR i.id = $2)\n                 AND ($3::text IS NULL OR i.dedup_key = $3)",
+  "query": "SELECT i.id, i.kind, i.dedup_key, i.title, i.summary, i.importance,\n                      i.categories, i.state, i.state_reason, i.created_at, i.updated_at,\n                      i.state_changed_at,\n                      p.prompt AS \"prompt?\", p.run_mode AS \"run_mode?\", p.sends,\n                      e.action AS \"action?\",\n                      r.routine_suggestion_id AS \"routine_suggestion_id?\"\n               FROM idea i\n               LEFT JOIN idea_prompt p ON p.idea_id = i.id\n               LEFT JOIN idea_entity e ON e.idea_id = i.id\n               LEFT JOIN idea_routine r ON r.idea_id = i.id\n               WHERE i.user_id = $1\n                 AND ($2::uuid IS NULL OR i.id = $2)\n                 AND ($3::text IS NULL OR i.dedup_key = $3)",
   "describe": {
     "columns": [
       {
@@ -75,11 +75,16 @@
       },
       {
         "ordinal": 14,
-        "name": "action?",
+        "name": "sends",
         "type_info": "Text"
       },
       {
         "ordinal": 15,
+        "name": "action?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
         "name": "routine_suggestion_id?",
         "type_info": "Uuid"
       }
@@ -106,9 +111,10 @@
       false,
       false,
       false,
+      true,
       false,
       false
     ]
   },
-  "hash": "e5f7e21f866e4d971d83775dfdcec1202e2ecdc9baad4cc6f5a347d26ca3cca7"
+  "hash": "dd5eeaadf56a89d54d133e55e3928f6747a618a66492e01e5e9571580379bf08"
 }

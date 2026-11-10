@@ -49,6 +49,7 @@ fn content(key: &str) -> IdeaContent {
         categories: Vec::new(),
         about: Vec::new(),
         prompt: Some("Compare them.".to_owned()),
+        sends: None,
     }
 }
 

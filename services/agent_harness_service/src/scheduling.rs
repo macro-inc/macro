@@ -182,7 +182,8 @@ impl ideas::domain::ports::RequestSessions for CorrelationSessions {
 }
 
 /// Background runs of ideas: hidden sessions of the person's, with the full
-/// toolset and approvals on, billed as their agent usage.
+/// toolset, billed as their agent usage. The in-process agent takes no
+/// permission prompts; the run's prompt says what, if anything, it sends.
 struct IdeaRunSessions<Stored> {
     sessions: Arc<AgentSessionClient>,
     creations: ActivityCreations,

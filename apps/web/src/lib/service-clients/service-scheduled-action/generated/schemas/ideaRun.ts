@@ -9,7 +9,7 @@ import type { RunProgress } from './runProgress';
 
 /**
  * A run of a background prompt idea: a hidden agent session of the
-person's, with the full toolset and approvals on.
+person's, with the full toolset, that never stops to ask.
  */
 export interface IdeaRun {
   /** How it is going, read from the session. */

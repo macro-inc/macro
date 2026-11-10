@@ -71,11 +71,12 @@ person. Served by the harness under the scheduler's gateway prefix
 
 - Background runs: accepting a `prompt` idea with `runMode` `background`
   starts an `idea_run` (`RunSessions`, wired in the harness): a hidden session
-  of the person's with the full toolset and approvals on, billed as their
-  agent usage. Its progress (`running`, `needs_approval`, `needs_input`,
+  of the person's with the full toolset, billed as their agent usage.
+  Clicking Run is the approval: the run is told never to stop to ask or wait
+  (`run_prompt`), and posts or sends only what the idea's `sends` says (shown
+  on the card, approved by running it), or nothing. Its progress (`running`,
   `finished`, `failed`) is read from the session on every feed read, never
-  stored; the idea's `run.sessionId` is where the UI shows the result and
-  answers approvals (hidden sessions notify nobody). `settle_runs` (every 30 s
+  stored; the idea's `run.sessionId` is where the UI shows the result. `settle_runs` (every 30 s
   in the harness) makes a finished run's idea done with the session and what
   it created as `produced`; a failed run leaves the idea accepted, and
   accepting it again retries. Retiring or dismissing an idea never stops its

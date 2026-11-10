@@ -47,7 +47,7 @@ pub struct Idea {
 }
 
 /// A run of a background prompt idea: a hidden agent session of the
-/// person's, with the full toolset and approvals on.
+/// person's, with the full toolset, that never stops to ask.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct IdeaRun {
@@ -176,6 +176,11 @@ pub enum IdeaKind {
         prompt: String,
         /// How it runs.
         run_mode: RunMode,
+        /// For a background run that posts or sends something: what, and
+        /// where, in plain words. The card shows it before Run, and running
+        /// it approves exactly that. None when the run posts and sends
+        /// nothing.
+        sends: Option<String>,
     },
     /// A note about specific items, with what to do about them.
     #[serde(rename_all = "camelCase")]
@@ -418,6 +423,9 @@ pub struct SuggestIdea {
     /// A prompt idea's run mode.
     #[serde(default)]
     pub run_mode: Option<RunMode>,
+    /// A background prompt idea that posts or sends: what, and where.
+    #[serde(default)]
+    pub sends: Option<String>,
     /// An entity idea's action.
     #[serde(default)]
     pub action: Option<EntityAction>,
@@ -449,6 +457,10 @@ pub struct RewriteIdea {
     /// Only on prompt ideas.
     #[serde(default)]
     pub prompt: Option<String>,
+    /// Only on background prompt ideas: what the run posts or sends, and
+    /// where.
+    #[serde(default)]
+    pub sends: Option<String>,
     /// Why, for the change log.
     pub reason: String,
 }
@@ -511,6 +523,8 @@ pub struct IdeaContent {
     pub about: Vec<Target>,
     /// A prompt idea's prompt.
     pub prompt: Option<String>,
+    /// A background prompt idea's [`IdeaKind::Prompt::sends`].
+    pub sends: Option<String>,
 }
 
 impl IdeaContent {
@@ -525,6 +539,10 @@ impl IdeaContent {
             about: idea.about.clone(),
             prompt: match &idea.kind {
                 IdeaKind::Prompt { prompt, .. } => Some(prompt.clone()),
+                IdeaKind::Entity { .. } | IdeaKind::Routine { .. } => None,
+            },
+            sends: match &idea.kind {
+                IdeaKind::Prompt { sends, .. } => sends.clone(),
                 IdeaKind::Entity { .. } | IdeaKind::Routine { .. } => None,
             },
         }

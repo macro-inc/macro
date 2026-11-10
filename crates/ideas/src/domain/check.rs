@@ -26,6 +26,8 @@ pub const MAX_SUMMARY_CHARS: usize = 400;
 pub const MAX_PROMPT_CHARS: usize = 2000;
 /// Longest change-log reason, in characters.
 pub const MAX_REASON_CHARS: usize = 300;
+/// Most characters in what a background run posts or sends.
+pub const MAX_SENDS_CHARS: usize = 200;
 /// Most items one idea is about.
 pub const MAX_TARGETS: usize = 5;
 /// Longest item or part id, in characters.

@@ -52,7 +52,7 @@ impl PgIdeaRepo {
             r#"SELECT i.id, i.kind, i.dedup_key, i.title, i.summary, i.importance,
                       i.categories, i.state, i.state_reason, i.created_at, i.updated_at,
                       i.state_changed_at,
-                      p.prompt AS "prompt?", p.run_mode AS "run_mode?",
+                      p.prompt AS "prompt?", p.run_mode AS "run_mode?", p.sends,
                       e.action AS "action?",
                       r.routine_suggestion_id AS "routine_suggestion_id?"
                FROM idea i
@@ -118,6 +118,7 @@ impl PgIdeaRepo {
                     ("prompt", Some(prompt), Some(run_mode), None, None) => IdeaKind::Prompt {
                         prompt,
                         run_mode: parse(&run_mode)?,
+                        sends: row.sends,
                     },
                     ("entity", None, None, Some(action), None) => IdeaKind::Entity {
                         action: parse(&action)?,
@@ -521,10 +522,11 @@ impl IdeaRepo for PgIdeaRepo {
         match kind {
             NewKind::Prompt { run_mode } => {
                 sqlx::query!(
-                    "INSERT INTO idea_prompt (idea_id, prompt, run_mode) VALUES ($1, $2, $3)",
+                    "INSERT INTO idea_prompt (idea_id, prompt, run_mode, sends) VALUES ($1, $2, $3, $4)",
                     id,
                     content.prompt.as_deref().unwrap_or_default(),
                     run_mode.as_ref(),
+                    content.sends.as_deref(),
                 )
                 .execute(&mut *tx)
                 .await?;
@@ -589,9 +591,10 @@ impl IdeaRepo for PgIdeaRepo {
         }
         if let Some(prompt) = &content.prompt {
             sqlx::query!(
-                "UPDATE idea_prompt SET prompt = $2 WHERE idea_id = $1",
+                "UPDATE idea_prompt SET prompt = $2, sends = $3 WHERE idea_id = $1",
                 id,
                 prompt,
+                content.sends.as_deref(),
             )
             .execute(&mut *tx)
             .await?;

@@ -691,6 +691,13 @@ export type IdeaKind = {
      * How it runs.
      */
     runMode: RunMode;
+    /**
+     * For a background run that posts or sends something: what, and
+     * where, in plain words. The card shows it before Run, and running
+     * it approves exactly that. None when the run posts and sends
+     * nothing.
+     */
+    sends?: string | null;
 } | {
     /**
      * What to do about the items.
@@ -732,7 +739,7 @@ export type IdeaReview = {
 
 /**
  * A run of a background prompt idea: a hidden agent session of the
- * person's, with the full toolset and approvals on.
+ * person's, with the full toolset, that never stops to ask.
  */
 export type IdeaRun = {
     /**
@@ -927,6 +934,11 @@ export type RewriteIdea = {
      * Why, for the change log.
      */
     reason: string;
+    /**
+     * Only on background prompt ideas: what the run posts or sends, and
+     * where.
+     */
+    sends?: string | null;
     /**
      * A new summary.
      */
@@ -1476,6 +1488,10 @@ export type SuggestIdea = {
      */
     reason?: string | null;
     runMode?: null | RunMode;
+    /**
+     * A background prompt idea that posts or sends: what, and where.
+     */
+    sends?: string | null;
     /**
      * Why, in a line or two.
      */

@@ -7,4 +7,4 @@
  */
 import type { Target } from './target';
 
-export type IdeaKindOneOfThreeDraft = null | Target;
+export type IdeaKindOneOfFourDraft = null | Target;

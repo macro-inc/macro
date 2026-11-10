@@ -39,6 +39,8 @@ export interface IdeaChanges {
   about?: IdeaItem[];
   /** Only on prompt ideas. */
   prompt?: string;
+  /** Only on background prompt ideas: what the run posts or sends, and where. */
+  sends?: string;
   /** Why, for the change log. */
   reason: string;
 }
@@ -146,10 +148,22 @@ export class Idea {
   }
 
   /**
+   * What a background prompt idea's run posts or sends, and where, as its
+   * card shows it before Run; running the idea approves exactly that.
+   * Undefined when the run posts and sends nothing.
+   */
+  get sends(): string | undefined {
+    return this.record.kind === 'prompt'
+      ? (this.record.sends ?? undefined)
+      : undefined;
+  }
+
+  /**
    * A background prompt idea's latest run: its hidden agent `session`
-   * (open it to see the result or answer an approval it waits for), when it
-   * started, and its `progress` (`running`, `needs_approval`, `needs_input`,
-   * `finished`, `failed`, or `unknown` when the session couldn't be read).
+   * (open it to see the result), when it started, and its `progress`
+   * (`running`, `finished`, `failed`, or `unknown` when the session
+   * couldn't be read; `needs_approval` and `needs_input` only if it ever
+   * waits, which a run is told never to).
    */
   get run():
     | { session: AgentSession; startedAt: string; progress: RunProgress }

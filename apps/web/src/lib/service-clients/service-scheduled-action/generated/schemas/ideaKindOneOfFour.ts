@@ -6,15 +6,15 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { EntityAction } from './entityAction';
-import type { IdeaKindOneOfThreeDraft } from './ideaKindOneOfThreeDraft';
-import type { IdeaKindOneOfThreeKind } from './ideaKindOneOfThreeKind';
+import type { IdeaKindOneOfFourDraft } from './ideaKindOneOfFourDraft';
+import type { IdeaKindOneOfFourKind } from './ideaKindOneOfFourKind';
 
 /**
  * A note about specific items, with what to do about them.
  */
-export type IdeaKindOneOfThree = {
+export type IdeaKindOneOfFour = {
   /** What to do about the items. */
   action: EntityAction;
-  draft?: IdeaKindOneOfThreeDraft;
-  kind: IdeaKindOneOfThreeKind;
+  draft?: IdeaKindOneOfFourDraft;
+  kind: IdeaKindOneOfFourKind;
 };

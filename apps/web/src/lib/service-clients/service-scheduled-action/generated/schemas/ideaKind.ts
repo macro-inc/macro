@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { IdeaKindOneOf } from './ideaKindOneOf';
-import type { IdeaKindOneOfSix } from './ideaKindOneOfSix';
-import type { IdeaKindOneOfThree } from './ideaKindOneOfThree';
+import type { IdeaKindOneOfFour } from './ideaKindOneOfFour';
+import type { IdeaKindOneOfSeven } from './ideaKindOneOfSeven';
 
 /**
  * What kind of idea it is, with that kind's data. A kind never changes.
  */
-export type IdeaKind = IdeaKindOneOf | IdeaKindOneOfThree | IdeaKindOneOfSix;
+export type IdeaKind = IdeaKindOneOf | IdeaKindOneOfFour | IdeaKindOneOfSeven;

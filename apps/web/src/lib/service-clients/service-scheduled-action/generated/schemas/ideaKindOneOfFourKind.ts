@@ -6,10 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type IdeaKindOneOfThreeKind =
-  (typeof IdeaKindOneOfThreeKind)[keyof typeof IdeaKindOneOfThreeKind];
+export type IdeaKindOneOfFourKind =
+  (typeof IdeaKindOneOfFourKind)[keyof typeof IdeaKindOneOfFourKind];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const IdeaKindOneOfThreeKind = {
+export const IdeaKindOneOfFourKind = {
   entity: 'entity',
 } as const;

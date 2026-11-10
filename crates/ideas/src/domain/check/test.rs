@@ -65,6 +65,7 @@ fn a_new_ideas_kind_has_its_own_fields_only() {
         about: Vec::new(),
         prompt: None,
         run_mode: None,
+        sends: None,
         action: None,
         reason: None,
     };

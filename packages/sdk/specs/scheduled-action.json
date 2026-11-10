@@ -3341,6 +3341,10 @@
               "runMode": {
                 "$ref": "#/components/schemas/RunMode",
                 "description": "How it runs."
+              },
+              "sends": {
+                "type": ["string", "null"],
+                "description": "For a background run that posts or sends something: what, and\nwhere, in plain words. The card shows it before Run, and running\nit approves exactly that. None when the run posts and sends\nnothing."
               }
             }
           },
@@ -3423,7 +3427,7 @@
       },
       "IdeaRun": {
         "type": "object",
-        "description": "A run of a background prompt idea: a hidden agent session of the\nperson's, with the full toolset and approvals on.",
+        "description": "A run of a background prompt idea: a hidden agent session of the\nperson's, with the full toolset, that never stops to ask.",
         "required": ["sessionId", "startedAt", "progress"],
         "properties": {
           "progress": {
@@ -3740,6 +3744,10 @@
           "reason": {
             "type": "string",
             "description": "Why, for the change log."
+          },
+          "sends": {
+            "type": ["string", "null"],
+            "description": "Only on background prompt ideas: what the run posts or sends, and\nwhere."
           },
           "summary": {
             "type": ["string", "null"],
@@ -4662,6 +4670,10 @@
                 "description": "A prompt idea's run mode."
               }
             ]
+          },
+          "sends": {
+            "type": ["string", "null"],
+            "description": "A background prompt idea that posts or sends: what, and where."
           },
           "summary": {
             "type": "string",

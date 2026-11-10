@@ -12,6 +12,7 @@ import type { SuggestIdeaAction } from './suggestIdeaAction';
 import type { SuggestIdeaPrompt } from './suggestIdeaPrompt';
 import type { SuggestIdeaReason } from './suggestIdeaReason';
 import type { SuggestIdeaRunMode } from './suggestIdeaRunMode';
+import type { SuggestIdeaSends } from './suggestIdeaSends';
 import type { Target } from './target';
 
 /**
@@ -39,6 +40,8 @@ export interface SuggestIdea {
 dismissed. */
   reason?: SuggestIdeaReason;
   runMode?: SuggestIdeaRunMode;
+  /** A background prompt idea that posts or sends: what, and where. */
+  sends?: SuggestIdeaSends;
   /** Why, in a line or two. */
   summary: string;
   /** What to do, in a few words. */

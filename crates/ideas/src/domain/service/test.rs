@@ -169,6 +169,7 @@ fn prompt_idea(key: &str, title: &str) -> SuggestIdea {
         }],
         prompt: Some("Compare the supplier quotes in my inbox and list the cheapest.".to_owned()),
         run_mode: Some(RunMode::Background),
+        sends: None,
         action: None,
         reason: None,
     }
@@ -189,6 +190,7 @@ fn entity_idea(key: &str) -> SuggestIdea {
         }],
         prompt: None,
         run_mode: None,
+        sends: None,
         action: Some(EntityAction::Reply),
         reason: None,
     }
@@ -294,6 +296,7 @@ async fn an_ideas_session_adds_an_idea_the_person_sees(pool: PgPool) {
         IdeaKind::Prompt {
             prompt: "Compare the supplier quotes in my inbox and list the cheapest.".to_owned(),
             run_mode: RunMode::Background,
+            sends: None,
         }
     );
     assert_eq!(
@@ -891,10 +894,15 @@ async fn accepting_a_background_prompt_idea_runs_it_and_its_session_finishes_it(
     h.service.accept(&user(OWNER), idea.id).await.unwrap();
     let started = runs.started.lock().unwrap().clone();
     assert_eq!(started.len(), 1);
-    assert_eq!(
-        started[0].1,
-        "Compare the supplier quotes in my inbox and list the cheapest."
+    assert!(
+        started[0]
+            .1
+            .starts_with("Compare the supplier quotes in my inbox and list the cheapest.\n\n"),
+        "{}",
+        started[0].1
     );
+    assert!(started[0].1.contains("never stop to ask"));
+    assert!(started[0].1.contains("Post, send or share nothing:"));
     // A run going can't be started twice.
     assert!(matches!(
         h.service.accept(&user(OWNER), idea.id).await,
@@ -1208,4 +1216,49 @@ async fn the_feed_keeps_ideas_done_in_the_last_day(pool: PgPool) {
         feed.done.iter().map(|idea| idea.id).collect::<Vec<_>>(),
         [ids[0]]
     );
+}
+
+/// A background prompt idea may say what its run posts or sends; running it
+/// approves exactly that, and other ideas can't carry it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_background_idea_says_what_it_sends_and_running_it_approves_that(pool: PgPool) {
+    let mut h = harness(pool, true).await;
+    let runs = Arc::new(FakeRuns::default());
+    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
+    let session = h.session(OWNER, "ideas").await;
+    let mut posting = prompt_idea("ops:weekly-status", "Post the weekly status summary");
+    posting.sends = Some("Posts the weekly status summary in #ops".to_owned());
+    let idea = h.suggest(session, posting).await.idea.unwrap();
+    assert!(matches!(
+        &idea.kind,
+        IdeaKind::Prompt { sends: Some(sends), .. } if sends == "Posts the weekly status summary in #ops"
+    ));
+    let mut composer = prompt_idea("ops:draft", "Draft the status summary");
+    composer.run_mode = Some(RunMode::Composer);
+    composer.sends = Some("Posts it in #ops".to_owned());
+    let refused = h.suggest(session, composer).await;
+    assert!(!refused.ok);
+    assert!(refused.problems[0].contains("only for background prompt ideas"));
+    let rewritten = h
+        .service
+        .rewrite(
+            &principal(OWNER),
+            Some(session),
+            idea.id,
+            RewriteIdea {
+                sends: Some("Posts the weekly status summary in #ops-leads".to_owned()),
+                reason: "The leads channel took over".to_owned(),
+                ..RewriteIdea::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(rewritten.ok, "{:?}", rewritten.problems);
+    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    let prompt = runs.started.lock().unwrap()[0].1.clone();
+    assert!(
+        prompt.contains("this run will: Posts the weekly status summary in #ops-leads."),
+        "{prompt}"
+    );
+    assert!(prompt.contains("sendConfirmed"));
 }

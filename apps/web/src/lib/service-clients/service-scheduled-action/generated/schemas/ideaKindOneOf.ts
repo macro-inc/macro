@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { IdeaKindOneOfKind } from './ideaKindOneOfKind';
+import type { IdeaKindOneOfSends } from './ideaKindOneOfSends';
 import type { RunMode } from './runMode';
 
 /**
@@ -18,4 +19,9 @@ export type IdeaKindOneOf = {
   prompt: string;
   /** How it runs. */
   runMode: RunMode;
+  /** For a background run that posts or sends something: what, and
+where, in plain words. The card shows it before Run, and running
+it approves exactly that. None when the run posts and sends
+nothing. */
+  sends?: IdeaKindOneOfSends;
 };

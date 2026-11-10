@@ -442,9 +442,12 @@ where
         if let IdeaKind::Prompt {
             prompt,
             run_mode: RunMode::Background,
+            sends,
         } = &idea.kind
         {
-            return self.start_run(user, &idea, prompt).await;
+            return self
+                .start_run(user, &idea, &run_prompt(prompt, sends.as_deref()))
+                .await;
         }
         let moved = self
             .repo
@@ -699,6 +702,14 @@ where
             Some(None) => return Ok(rejected(&span, problems)),
             None => None,
         };
+        let sends = match &request.sends {
+            Some(_) if request.run_mode != Some(RunMode::Background) => {
+                problems.push("`sends` is only for background prompt ideas".to_owned());
+                None
+            }
+            Some(sends) => check::text(sends, "`sends`", check::MAX_SENDS_CHARS, &mut problems),
+            None => None,
+        };
         self.inaccessible(&user, &about, &mut problems).await?;
         if !problems.is_empty() {
             return Ok(rejected(&span, problems));
@@ -711,6 +722,7 @@ where
             categories: check::categories(request.categories),
             about,
             prompt,
+            sends,
         };
         let now = Utc::now();
         let existing = self
@@ -862,6 +874,16 @@ where
         if request.prompt.is_some() && existing.kind.name() != KindName::Prompt {
             problems.push("`prompt` is only for prompt ideas".to_owned());
         }
+        let background = matches!(
+            existing.kind,
+            IdeaKind::Prompt {
+                run_mode: RunMode::Background,
+                ..
+            }
+        );
+        if request.sends.is_some() && !background {
+            problems.push("`sends` is only for background prompt ideas".to_owned());
+        }
         let reason = check::text(
             &request.reason,
             "`reason`",
@@ -899,6 +921,9 @@ where
         }
         if let Some(prompt) = request.prompt {
             content.prompt = check::prompt(&prompt, &mut problems);
+        }
+        if let Some(sends) = request.sends.filter(|_| background) {
+            content.sends = check::text(&sends, "`sends`", check::MAX_SENDS_CHARS, &mut problems);
         }
         if !problems.is_empty() {
             return Ok(rejected(&span, problems));
@@ -1019,4 +1044,25 @@ fn rejected(span: &tracing::Span, problems: Vec<String>) -> IdeaWriteOutcome {
     span.record("idea.outcome", "rejected");
     span.record("idea.problems", problems.len());
     IdeaWriteOutcome::rejected(problems)
+}
+
+/// What a background run is told: the idea's prompt, then that nobody is
+/// watching, so it never stops to ask; clicking Run approved exactly what
+/// the card said it posts or sends, and nothing else.
+fn run_prompt(prompt: &str, sends: Option<&str>) -> String {
+    let approval = match sends {
+        Some(sends) => format!(
+            "The card told them this run will: {sends}. Starting it approved exactly that: do \
+             it, and for an email call `macro.email.sendConfirmed` with `userConfirmation` set \
+             to that sentence. Post, send or share nothing else."
+        ),
+        None => "Post, send or share nothing: leave whatever would reach other people as a \
+                 draft for them to review."
+            .to_owned(),
+    };
+    format!(
+        "{prompt}\n\nThe user started this run from an idea card and isn't watching: never stop \
+         to ask a question or wait for an approval; decide from what you can read, and say in \
+         your last message what you assumed. {approval}"
+    )
 }
