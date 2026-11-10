@@ -11,7 +11,7 @@ import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { deepEqual } from '@core/util/compareUtils';
 import { getNativeMobilePlatform } from '@core/util/platform';
 import { getWebOrigin } from '@core/util/webOrigin';
-import { useNavigate, useSearchParams } from '@solidjs/router';
+import { useLocation, useNavigate, useSearchParams } from '@solidjs/router';
 import { createMemo, onMount } from 'solid-js';
 import { match } from 'ts-pattern';
 import { AuthProvider, type AuthUser } from './context/auth-context';
@@ -32,6 +32,10 @@ import { MobileWebSignupView } from './views/mobile-web-signup-view';
  */
 export function Login(props: { signupMode?: boolean }) {
   const [params] = useSearchParams();
+  const location = useLocation();
+  const requireFreshLogin = requiresReauthentication(
+    new URLSearchParams(location.search)
+  );
   const navigate = useNavigate();
   const email = typeof params.email === 'string' ? params.email : undefined;
   const desktopSignup = () =>
@@ -39,9 +43,7 @@ export function Login(props: { signupMode?: boolean }) {
   return (
     <AuthProvider
       value={createAppAuthContext({
-        requireFreshLogin: requiresReauthentication(
-          new URL(window.location.href)
-        ),
+        requireFreshLogin,
       })}
     >
       <AuthView

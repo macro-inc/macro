@@ -7,6 +7,7 @@ import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import EyeIcon from '@icon/system/regular/eye.svg';
 import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
+import { A } from '@solidjs/router';
 import { Button, Dropdown, Input } from '@ui';
 import { err } from 'neverthrow';
 import {
@@ -365,11 +366,11 @@ export function VaultView(props: {
                     : t('passwords.failed')}
                 </p>
                 <Show when={vault.failure() === 'reauth'}>
-                  <a
-                    href={`/app/login?redirect=${encodeURIComponent('/passwords')}&prompt=login&max_age=0`}
+                  <A
+                    href={`/login?redirect=${encodeURIComponent('/passwords')}&prompt=login&max_age=0`}
                   >
                     {t('passwords.signIn')}
-                  </a>
+                  </A>
                 </Show>
               </div>
             </Show>

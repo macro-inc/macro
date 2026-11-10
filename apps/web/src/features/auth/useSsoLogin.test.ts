@@ -360,3 +360,16 @@ describe('useSsoLogin', () => {
     expect(mocks.reloadHolds).toBe(0);
   });
 });
+
+it('preserves native hash-route fresh-login intent and destination in the desktop SSO handoff', async () => {
+  mocks.platform = 'desktop';
+  window.location.href =
+    'tauri://localhost/#/login?prompt=login&max_age=0&redirect=%2Fpasswords';
+  await useSsoLogin()('google');
+  const request = new URL(mocks.openDesktopAuthSession.mock.calls[0][0]);
+  expect(request.searchParams.get('reauthenticate')).toBe('true');
+  const callback = new URL(request.searchParams.get('original_url')!);
+  expect(decodeURIComponent(callback.searchParams.get('redirect')!)).toBe(
+    '/passwords'
+  );
+});

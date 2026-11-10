@@ -23,8 +23,8 @@ with length control and Use password.
 Usernames appear with Copy username without revealing the password. Copying a
 username uses a dedicated audited endpoint that returns no other field values.
 Reveal password and Copy password require a sign-in within the server's recent
-reauthentication window. Sign in again renews that proof. Revealed values clear
-when selection changes, on Lock Passwords, after a minute, when the app loses focus or becomes hidden, or on unmount.
+reauthentication window. Sign in again opens the login route on web and native
+apps and renews that proof. Revealed values clear when selection changes, on Lock Passwords, after a minute, when the app loses focus or becomes hidden, or on unmount.
 Explicit lock also discards editor drafts and pending verification-code seeds.
 Unsaved plaintext drafts also clear on loss of focus or visibility. Values
 are never kept in the query cache or browser storage. Password history lists

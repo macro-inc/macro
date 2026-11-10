@@ -22,6 +22,7 @@ import { useLocation } from '@solidjs/router';
 import { DEVELOPMENT_PROXY_PREFIX } from '../../lib/core/constant/developmentProxy';
 import { desktopAuthCallbackUrl } from './core/post-auth-target';
 import {
+  authenticationParams,
   reauthenticationReturnUrl,
   requiresReauthentication,
 } from './core/reauthentication';
@@ -48,7 +49,7 @@ async function startDesktopSso(
     'original_url',
     desktopAuthCallbackUrl(
       DESKTOP_AUTH_CALLBACK_URL,
-      new URL(window.location.href).searchParams.get('redirect')
+      authenticationParams(new URL(window.location.href)).get('redirect')
     )
   );
 
