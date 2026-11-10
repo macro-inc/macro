@@ -6819,6 +6819,12 @@ type GraphqlNotification {
 	"""
 	state: NotificationState!
 	"""
+	The lane the notification was routed into. A noise notification is
+	stored and listed in the Noise inbox, and never counts as unread
+	anywhere else.
+	"""
+	lane: NotificationLane!
+	"""
 	The notification creation time in RFC 3339 format.
 	"""
 	createdAt: String!

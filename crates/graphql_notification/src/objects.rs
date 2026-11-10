@@ -5,7 +5,7 @@ use graphql_common::{GraphqlEntityType, GraphqlSoupEntityType};
 use model_notifications::NotifEvent;
 use notification::domain::models::UserNotificationRow;
 
-use notification_state::graphql::GraphqlNotificationState;
+use notification_state::graphql::{GraphqlNotificationLane, GraphqlNotificationState};
 
 #[cfg(test)]
 mod test;
@@ -95,6 +95,13 @@ impl GraphqlNotification {
     /// The authoritative lifecycle state, independent of viewing timestamps.
     async fn state(&self) -> GraphqlNotificationState {
         self.as_ref().state.into()
+    }
+
+    /// The lane the notification was routed into. A noise notification is
+    /// stored and listed in the Noise inbox, and never counts as unread
+    /// anywhere else.
+    async fn lane(&self) -> GraphqlNotificationLane {
+        self.as_ref().lane.into()
     }
 
     /// The notification creation time in RFC 3339 format.

@@ -101,6 +101,29 @@ async fn group_access_notifications_retain_the_canonical_entity_identity() {
     assert!(graphql_common::GraphqlSoupEntityType::try_new(EntityType::ExternalChat).is_none());
 }
 
+#[tokio::test]
+async fn a_notification_names_its_lane() {
+    let metadata = TaskAssignedMetadata {
+        task_id: "task-1".to_string(),
+        task_name: None,
+        sub_type: None,
+        assigned_by: MacroUserIdStr::parse_from_str("macro|assigner@example.com").unwrap(),
+        sender_profile_picture_url: None,
+    };
+    let mut row = raw_notification(serde_json::to_value(metadata).unwrap());
+    row.lane = notification::domain::models::NotificationLane::Noise;
+    let notification = GraphqlNotification::try_from(row).unwrap();
+    let schema = Schema::new(Query { notification }, EmptyMutation, EmptySubscription);
+
+    let response = schema.execute("{ notification { lane } }").await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap(),
+        json!({ "notification": { "lane": "NOISE" } })
+    );
+}
+
 #[test]
 fn malformed_metadata_is_rejected_before_graphql_resolution() {
     let error = GraphqlNotification::try_from(raw_notification(json!({"secret": "do not expose"})))
