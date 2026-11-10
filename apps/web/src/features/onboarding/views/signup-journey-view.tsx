@@ -73,6 +73,7 @@ export function SignupJourneyView(props: {
         journey.step() === 'security' || journey.step() === 'work' ? (
           <OnboardingTrustDetails
             topic={journey.step() === 'security' ? 'security' : 'google'}
+            microsoft={journey.step() === 'work' && !!props.onMicrosoft}
             legal={
               journey.step() === 'work' ? (
                 <>

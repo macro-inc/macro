@@ -1164,6 +1164,7 @@ describe('after a Microsoft sign-up', () => {
     await waitFor(() =>
       expect(connects(fake.calls())).toEqual(['connectInbox:microsoft'])
     );
+    expect(screen.getByText('Continuing with Microsoft')).toBeTruthy();
   });
 
   it('stays on the work step with Skip when Outlook is not available', async () => {
@@ -1179,6 +1180,7 @@ describe('after a Microsoft sign-up', () => {
       screen.queryByRole('button', { name: 'Continue with Microsoft' })
     ).toBeNull();
     expect(screen.getByRole('button', { name: 'Skip for now' })).toBeTruthy();
+    expect(screen.queryByText('Continuing with Microsoft')).toBeNull();
   });
 
   it('leaves a Google sign-up to choose, with both providers offered', async () => {
