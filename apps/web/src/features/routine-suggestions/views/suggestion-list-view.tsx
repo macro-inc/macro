@@ -2,8 +2,8 @@ import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
-import { cn } from '@ui';
-import { For, type JSX, onMount, Show } from 'solid-js';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
+import { createSignal, For, type JSX, onMount, Show } from 'solid-js';
 import { withKnobValue } from '../../routines/core/knobs';
 import {
   RoutineSuggestionList,
@@ -11,7 +11,6 @@ import {
 } from '../components/routine-suggestion-list';
 import {
   type SuggestionCardModel,
-  SuggestionCompactCard,
   SuggestionDialogCard,
   SuggestionDiscoverCard,
   SuggestionMoreCell,
@@ -198,10 +197,7 @@ export function SuggestionDiscoverGrid(props: {
       }
     >
       {(items) => (
-        <ul
-          class="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-2.5"
-          aria-label={t('routineSuggestions.listLabel')}
-        >
+        <CardGrid>
           <For each={items()}>
             {(item, index) => {
               const handlers = cardHandlers(
@@ -218,27 +214,60 @@ export function SuggestionDiscoverGrid(props: {
               );
             }}
           </For>
-        </ul>
+        </CardGrid>
       )}
     </RoutineSuggestionList>
   );
 }
 
+/** Cards as Discover lays them out: as many columns of at least 15rem as fit. */
+function CardGrid(props: {
+  ref?: (element: HTMLUListElement) => void;
+  children: JSX.Element;
+}) {
+  return (
+    <ul
+      ref={props.ref}
+      class="grid min-w-0 grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-2.5"
+      aria-label={t('routineSuggestions.listLabel')}
+    >
+      {props.children}
+    </ul>
+  );
+}
+
+/** Columns a row starts with, until it is measured. */
+const ROW_COLUMNS = 4;
+
 /**
- * The one row above the routines list: the first few cards, then how many
- * more Discover has. Nothing while loading, failed or empty, so the list
- * never waits on it.
+ * The one row above the routines list: Discover's cards, at Discover's
+ * size, as many as fit in one row with how many more Discover has in the
+ * last column. Nothing while loading, failed or empty, so the list never
+ * waits on it.
  */
 export function SuggestionRow(props: {
   items: SuggestionItem[];
-  /** How many cards the row shows. */
-  shown: number;
   actions: SuggestionActions;
   onOpenDiscover(): void;
   onOpenRoutine(routineId: string): void;
 }): JSX.Element {
-  const visible = () => props.items.slice(0, props.shown);
-  const more = () => Math.max(0, props.items.length - visible().length);
+  const [columns, setColumns] = createSignal(ROW_COLUMNS);
+  let grid: HTMLUListElement | undefined;
+  // The grid decides how many columns fit; the row fills one row of them.
+  createResizeObserver(
+    () => grid,
+    () => {
+      if (!grid) return;
+      const count = getComputedStyle(grid)
+        .gridTemplateColumns.split(' ')
+        .filter(Boolean).length;
+      if (count > 0) setColumns(count);
+    }
+  );
+  const fits = () => props.items.length <= columns();
+  const visible = () =>
+    fits() ? props.items : props.items.slice(0, columns() - 1);
+  const more = () => props.items.length - visible().length;
   return (
     <section
       aria-labelledby="routine-suggestions-row-heading"
@@ -253,14 +282,7 @@ export function SuggestionRow(props: {
           {t('routineSuggestions.suggestedForYou')}
         </h2>
       </div>
-      <ul
-        class={cn(
-          'grid min-w-0 gap-2',
-          more() > 0
-            ? 'grid-cols-[repeat(3,minmax(0,1fr))_minmax(0,0.62fr)]'
-            : 'grid-cols-3'
-        )}
-      >
+      <CardGrid ref={(element) => (grid = element)}>
         <For each={visible()}>
           {(item, index) => {
             const handlers = cardHandlers(
@@ -270,10 +292,9 @@ export function SuggestionRow(props: {
               props.onOpenRoutine
             );
             return (
-              <SuggestionCompactCard
+              <SuggestionDiscoverCard
                 model={cardModel(item, props.actions)}
-                onOpen={handlers.onOpen}
-                onTurnOn={handlers.onTurnOn}
+                {...handlers}
               />
             );
           }}
@@ -281,7 +302,7 @@ export function SuggestionRow(props: {
         <Show when={more() > 0}>
           <SuggestionMoreCell count={more()} onOpen={props.onOpenDiscover} />
         </Show>
-      </ul>
+      </CardGrid>
     </section>
   );
 }

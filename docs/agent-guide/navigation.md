@@ -1139,11 +1139,9 @@ New routine's start screen. A card opens New routine already filled in from that
 template. The strip hides while searching and on **On**; on phones the cards
 scroll sideways. With `enable-routine-suggestions` and
 `enable-routine-code-steps` on (not on touch devices), suggestions take the
-strip's place: **Suggested for you** above the rows on **All** shows the first
-three of them as compact cards (icon with a violet sparkle for AI's picks,
-name, trigger → first step, and **Turn on** for AI's picks or a **Review →** /
-**Use →** label; the whole card opens it), then
-**N more · In Discover**, which opens a third tab, **Discover**. Discover
+strip's place: **Suggested for you** above the rows on **All** shows one row
+of Discover's cards, at Discover's size (as many as fit, three at most desktop
+widths), and in the last column **N more · In Discover**, which opens a third tab, **Discover**. Discover
 replaces the list with every suggestion (AI's first, then Macro's) followed by
 the templates no suggestion already offers, four cards to a row (the knob
 sentence in two lines, the chain and the action; **On** once turned on), with

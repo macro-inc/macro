@@ -354,33 +354,7 @@ export function SuggestionDiscoverCard(
   );
 }
 
-/** A compact card for the one row above the routines list. */
-export function SuggestionCompactCard(
-  props: Pick<CardHandlers, 'onOpen' | 'onTurnOn'> & {
-    model: SuggestionCardModel;
-  }
-) {
-  return (
-    <li class="group/card min-w-0 list-none">
-      <RoutineSurface class="flex h-full items-center gap-3 py-2.5 pr-2.5 pl-3.5">
-        <SuggestionGlyph look={props.model.look} picked={props.model.picked} />
-        <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-          <h3 class="flex min-w-0">
-            <CardTarget model={props.model} onOpen={props.onOpen} />
-          </h3>
-          <RoutineChain
-            surface={props.model.surface}
-            {...props.model.chain}
-            triggerIcon={false}
-          />
-        </div>
-        <CardAction model={props.model} onTurnOn={props.onTurnOn} />
-      </RoutineSurface>
-    </li>
-  );
-}
-
-/** The last cell of the row: how many more there are, opening Discover. */
+/** The row's last cell, as tall as its cards: how many more there are, opening Discover. */
 export function SuggestionMoreCell(props: {
   count: number;
   onOpen(): void;
@@ -392,7 +366,7 @@ export function SuggestionMoreCell(props: {
         aria-label={t('routineSuggestions.moreInDiscover', {
           count: props.count,
         })}
-        class="flex size-full min-h-[58px] min-w-0 items-center gap-2 rounded-xl border border-dashed border-edge-frame px-3.5 text-left outline-none not-touch:hover:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
+        class="flex size-full min-w-0 items-center gap-2 rounded-xl border border-dashed border-edge-frame px-3.5 text-left outline-none not-touch:hover:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
         onClick={() => props.onOpen()}
       >
         <span class="flex min-w-0 flex-1 flex-col gap-0.5">

@@ -188,9 +188,14 @@ describe('suggestion cards', () => {
 });
 
 describe('the row above the routines list', () => {
-  it('counts each card it shows as shown, and says how many more Discover has', () => {
+  it('shows one row of Discover’s cards, counts each as shown, and says how many more Discover has', () => {
     vi.mocked(analytics.track).mockClear();
     const onOpenDiscover = vi.fn();
+    // Five cards for four columns: three, then the cell for two more.
+    const many = [
+      ...items,
+      ...items.slice(0, 2).map((item, n) => ({ ...item, id: `more-${n}` })),
+    ];
     render(() => {
       const actions = createSuggestionActions({
         placement: () => ({ kind: 'routines' }),
@@ -201,8 +206,7 @@ describe('the row above the routines list', () => {
       });
       return (
         <SuggestionRow
-          items={items}
-          shown={2}
+          items={many}
           actions={actions}
           onOpenDiscover={onOpenDiscover}
           onOpenRoutine={vi.fn()}
@@ -213,8 +217,12 @@ describe('the row above the routines list', () => {
       .mocked(analytics.track)
       .mock.calls.filter(([event]) => event === 'routine_suggestion_shown')
       .map(([, props]) => (props as { suggestionId: string }).suggestionId);
-    expect(shown).toEqual(['pick-1', 'template-1']);
-    fireEvent.click(screen.getByRole('button', { name: '1 more in Discover' }));
+    expect(shown).toEqual(['pick-1', 'template-1', 'drafted-1']);
+    // Discover's card: the sentence, not a one-line chain.
+    expect(
+      screen.getByRole('button', { name: 'Reply tag: Respond. Change it' })
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '2 more in Discover' }));
     expect(onOpenDiscover).toHaveBeenCalledOnce();
   });
 });

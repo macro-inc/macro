@@ -72,9 +72,6 @@ import {
   suggestionListView,
 } from './views/suggestion-list-view';
 
-/** Cards in the row above the routines list, before its "more" cell. */
-const ROW_CARDS = 3;
-
 /**
  * The suggestions as cards, with the routine each saves, and Macro's
  * templates; each undefined until it loads.
@@ -408,7 +405,6 @@ function RoutinesSuggestionRow(props: { onOpenDiscover(): void }) {
       {(current) => (
         <SuggestionRow
           items={current()}
-          shown={ROW_CARDS}
           actions={list.actions}
           onOpenDiscover={props.onOpenDiscover}
           onOpenRoutine={list.openRoutine}
