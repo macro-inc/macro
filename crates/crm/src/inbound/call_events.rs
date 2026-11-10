@@ -73,9 +73,10 @@ impl<Q: CallRecordQueryService, L: CallRecordLinkStore> CallLinkConsumer<Q, L> {
         }
     }
 
-    /// Applies one call event: archived and imported records are linked
-    /// (each import revision again, as it may name more people), every
-    /// other event is ignored.
+    /// Applies one call event: archived and imported records are linked,
+    /// every other event is ignored. Each import revision links again, but
+    /// links already written stay, so a revision only fills a Companies or
+    /// Contacts link still missing and teaches matched contacts new numbers.
     async fn apply(&self, event: &CallTopicEvent) -> Result<(), Report> {
         match linked_call(event) {
             Some(call_id) => self.linker.link_call(call_id).await,

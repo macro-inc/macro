@@ -14,9 +14,10 @@ in-call chat.
 - `src/domain/service/guest_chat.rs`: active guest authorization for the shared
   call discussion; message storage and delivery belong to `messages`.
 - `src/domain/imports.rs`: the provider-neutral import port (Granola).
-  Each import is a full snapshot; re-imports keep participant ids stable by
-  matching email and phone together, then email, then phone, reserving stronger
-  matches before shared identity hints can take another attendee's id.
+  Each import is a full snapshot; `src/outbound/pg_imported_call_repo.rs` keeps
+  participant ids stable across re-imports by matching email and phone
+  together, then email, then phone, reserving stronger matches before shared
+  identity hints can take another attendee's id.
 - `src/domain/meetings.rs`: scheduled-meeting ↔ call association (used by
   `calendar_events`/`calendar_scheduling` meeting links).
 - `src/domain/notification_events.rs`: public call event contract for
