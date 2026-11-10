@@ -16,7 +16,9 @@ was extracted from the page's `<head>` (title, description, image,
 favicon).
  */
 export interface GetUnfurlResponse {
-  /** The page description (from `og:description`), if any. */
+  /** What the page says it is about: its Open Graph, Twitter card, or
+`<meta>` description, else its first paragraph. On one line, cut to a
+length a preview can show. */
   description?: GetUnfurlResponseDescription;
   /** The type of embeddable content, if the URL supports iframe embedding. */
   embed_type?: UnfurlEmbedType;

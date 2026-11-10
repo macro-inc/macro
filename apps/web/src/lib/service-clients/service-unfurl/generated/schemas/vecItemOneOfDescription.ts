@@ -6,6 +6,8 @@
  */
 
 /**
- * The page description (from `og:description`), if any.
+ * What the page says it is about: its Open Graph, Twitter card, or
+`<meta>` description, else its first paragraph. On one line, cut to a
+length a preview can show.
  */
 export type VecItemOneOfDescription = string | null;
