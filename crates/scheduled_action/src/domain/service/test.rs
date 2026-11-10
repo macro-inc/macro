@@ -5,11 +5,11 @@ mod sub_routines;
 mod user_cleanup;
 
 use super::*;
-use crate::domain::models::ListScope;
 use crate::domain::event_runs::ClaimToken;
+use crate::domain::models::ListScope;
 use crate::domain::models::{
-    ActionExecutionRecord, ActionConfigurationUpdate, ActionKind, ExecutionResource, ExecutionResourceType, ListedAction,
-    MAX_ACTION_TIME, RunVisibility,
+    ActionConfigurationUpdate, ActionExecutionRecord, ActionKind, ExecutionResource,
+    ExecutionResourceType, ListedAction, MAX_ACTION_TIME, RunVisibility,
 };
 use crate::domain::{
     execution::ExecutionHandle,
@@ -49,7 +49,10 @@ pub(crate) struct FakeRepo {
 impl SubRoutines for FakeRepo {
     async fn running_run(&self, routine: &Uuid) -> Result<Option<RunningRun>> {
         let running = self.running.lock().unwrap();
-        Ok(running.iter().find(|run| run.routine_id == *routine).cloned())
+        Ok(running
+            .iter()
+            .find(|run| run.routine_id == *routine)
+            .cloned())
     }
 
     async fn running_run_of_session(&self, session: &Uuid) -> Result<Option<RunningRun>> {
@@ -72,8 +75,7 @@ impl SubRoutines for FakeRepo {
             .iter()
             .filter(|action| {
                 let parent = action.parent_id();
-                parent.is_some_and(|parent| parents.contains(&parent))
-                    && !action.is_finished_once()
+                parent.is_some_and(|parent| parents.contains(&parent)) && !action.is_finished_once()
             })
             .cloned()
             .collect())
@@ -98,9 +100,10 @@ impl SubRoutines for FakeRepo {
         Ok(actions
             .iter()
             .find(|action| {
-                action.sub_routine.as_ref().is_some_and(|link| {
-                    link.parent_id == *parent && link.key.as_ref() == Some(key)
-                })
+                action
+                    .sub_routine
+                    .as_ref()
+                    .is_some_and(|link| link.parent_id == *parent && link.key.as_ref() == Some(key))
             })
             .cloned())
     }
@@ -752,18 +755,40 @@ async fn list_is_cron_only_by_default_but_id_operations_reach_events() {
         .await
         .unwrap();
     assert_eq!(
-        svc.get_actions(user(), false, ListScope::TopLevel).await.unwrap()[0].action.id,
+        svc.get_actions(user(), false, ListScope::TopLevel)
+            .await
+            .unwrap()[0]
+            .action
+            .id,
         cron.id
     );
-    assert_eq!(svc.get_actions(user(), false, ListScope::TopLevel).await.unwrap().len(), 1);
-    assert_eq!(svc.get_actions(user(), true, ListScope::TopLevel).await.unwrap().len(), 2);
+    assert_eq!(
+        svc.get_actions(user(), false, ListScope::TopLevel)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        svc.get_actions(user(), true, ListScope::TopLevel)
+            .await
+            .unwrap()
+            .len(),
+        2
+    );
     svc.get_execution_records(view_receipt(event.id.unwrap()))
         .await
         .unwrap();
     svc.delete_action(owner_receipt(event.id.unwrap()))
         .await
         .unwrap();
-    assert_eq!(svc.get_actions(user(), true, ListScope::TopLevel).await.unwrap().len(), 1);
+    assert_eq!(
+        svc.get_actions(user(), true, ListScope::TopLevel)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -793,7 +818,10 @@ async fn lists_each_routine_with_its_latest_run() {
         .unwrap()
         .extend([record(30, true), record(5, false)]);
 
-    let listed = svc.get_actions(user(), true, ListScope::TopLevel).await.unwrap();
+    let listed = svc
+        .get_actions(user(), true, ListScope::TopLevel)
+        .await
+        .unwrap();
     let last_run = |id: Option<Uuid>| {
         listed
             .iter()
@@ -845,7 +873,12 @@ async fn nonowners_can_read_but_not_manage_routines() {
             ActionPolicyError::NotFound,
         );
     }
-    assert!(svc.get_actions(user(), true, ListScope::TopLevel).await.unwrap().is_empty());
+    assert!(
+        svc.get_actions(user(), true, ListScope::TopLevel)
+            .await
+            .unwrap()
+            .is_empty()
+    );
     assert!(
         svc.repo
             .actions
@@ -1250,11 +1283,19 @@ async fn read_service_keeps_both_triggers_for_the_owner_in_stable_order() {
             .collect::<Vec<_>>()
     };
     assert_eq!(
-        listed(svc.get_actions(user(), true, ListScope::TopLevel).await.unwrap()),
+        listed(
+            svc.get_actions(user(), true, ListScope::TopLevel)
+                .await
+                .unwrap()
+        ),
         expected
     );
     assert_eq!(
-        listed(svc.get_actions(user(), false, ListScope::TopLevel).await.unwrap()),
+        listed(
+            svc.get_actions(user(), false, ListScope::TopLevel)
+                .await
+                .unwrap()
+        ),
         vec!["early-cron", "low-id", "first-equal", "second-equal"]
     );
 }

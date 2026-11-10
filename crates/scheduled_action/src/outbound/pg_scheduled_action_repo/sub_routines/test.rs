@@ -144,11 +144,19 @@ async fn deleting_a_parent_removes_its_sub_routines_and_their_registrations(pool
 
     let detached = repo.detach(&kept.id.unwrap()).await.unwrap().unwrap();
     assert_eq!(detached.sub_routine, None);
-    assert_eq!(repo.detach(&kept.id.unwrap()).await.unwrap().map(|a| a.id), None);
+    assert_eq!(
+        repo.detach(&kept.id.unwrap()).await.unwrap().map(|a| a.id),
+        None
+    );
 
     repo.delete_action(&parent.id.unwrap()).await.unwrap();
 
-    assert!(repo.get_action(&parent.id.unwrap()).await.unwrap().is_none());
+    assert!(
+        repo.get_action(&parent.id.unwrap())
+            .await
+            .unwrap()
+            .is_none()
+    );
     assert!(repo.get_action(&child.id.unwrap()).await.unwrap().is_none());
     assert!(!registered(&pool, child.id.unwrap()).await);
     let grants = sqlx::query_scalar!(

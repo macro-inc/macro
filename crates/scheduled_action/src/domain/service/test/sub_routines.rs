@@ -51,7 +51,10 @@ async fn top_level(service: &TestService, name: &str) -> ScheduledAction {
 
 async fn names(service: &TestService, scope: ListScope) -> Vec<String> {
     let listed = service.get_actions(user(), true, scope).await.unwrap();
-    listed.into_iter().map(|listed| listed.action.name).collect()
+    listed
+        .into_iter()
+        .map(|listed| listed.action.name)
+        .collect()
 }
 
 fn stored(service: &TestService, id: Uuid) -> ScheduledAction {
@@ -166,9 +169,14 @@ async fn the_same_key_updates_the_sub_routine_instead_of_adding_another() {
     let first = create(&service, "follow up", from_code(&parent), Some("task-1"))
         .await
         .unwrap();
-    let second = create(&service, "follow up, renamed", from_code(&parent), Some("task-1"))
-        .await
-        .unwrap();
+    let second = create(
+        &service,
+        "follow up, renamed",
+        from_code(&parent),
+        Some("task-1"),
+    )
+    .await
+    .unwrap();
     let other = create(&service, "another", from_code(&parent), Some("task-2"))
         .await
         .unwrap();
@@ -288,7 +296,10 @@ async fn deleting_a_routine_deletes_its_sub_routines_but_not_one_kept_as_the_own
         .await
         .unwrap();
     assert_eq!(detached.sub_routine, None);
-    assert_eq!(names(&service, ListScope::TopLevel).await, ["parent", "kept"]);
+    assert_eq!(
+        names(&service, ListScope::TopLevel).await,
+        ["parent", "kept"]
+    );
     // It is top-level now, so there is nothing left to detach.
     assert_policy(
         service.detach_action(edit_receipt(kept.id.unwrap())).await,

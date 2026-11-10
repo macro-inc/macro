@@ -52,7 +52,10 @@ where
         let parent_id = run.parent_id.unwrap_or(run.routine_id);
         let span = tracing::Span::current();
         span.record("routine.parent_id", tracing::field::display(parent_id));
-        span.record("routine.created_by_run_id", tracing::field::display(run.run_id));
+        span.record(
+            "routine.created_by_run_id",
+            tracing::field::display(run.run_id),
+        );
         span.record(
             "routine.creating_routine_id",
             tracing::field::display(run.routine_id),
@@ -158,7 +161,11 @@ where
                     Ok(_) => changed += 1,
                     Err(error) => {
                         failed += 1;
-                        tracing::warn!(?error, ?child_id, "a sub-routine could not follow its parent");
+                        tracing::warn!(
+                            ?error,
+                            ?child_id,
+                            "a sub-routine could not follow its parent"
+                        );
                     }
                 }
             }
