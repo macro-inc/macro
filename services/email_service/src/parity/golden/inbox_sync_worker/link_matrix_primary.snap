@@ -1,0 +1,1421 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: cross-link identity 0
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A2>\",\"operation\":{\"gmail_message\":{\"history_id\":200}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A2>, operation: GmailMessage(GmailMessagePayload { history_id: 200 }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A2>"}
+    INFO gmail_message {"link":"Link { id: <link:A2>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"GmailMessagePayload { history_id: 200 }"}
+      INFO fetch_history_id_for_link {"provider":"Gmail"}
+  INFO handle_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A2>, operation: GmailMessage(GmailMessagePayload { history_id: 200 }) }","e":"DetailedError { reason: DatabaseQueryFailed, source: gmail_message: Failed to fetch history id from db }"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "gmail_message",
+        "fetch_history_id_for_link"
+      ],
+      "message": null,
+      "fields": {
+        "error": "error occurred while decoding column 0: unexpected null; try decoding as an `Option`"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  56a84a77a1bd rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A2>\",\"operation\":{\"gmail_message\":{\"history_id\":200}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing link 0
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<uuid:1>\",\"operation\":{\"gmail_message\":{\"history_id\":200}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <uuid:1>, operation: GmailMessage(GmailMessagePayload { history_id: 200 }) }"}
+    INFO fetch_link_by_id {"link_id":"<uuid:1>"}
+  INFO handle_non_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <uuid:1>, operation: GmailMessage(GmailMessagePayload { history_id: 200 }) }","e":"DetailedError { reason: LinkNotFound, source: No link found for id <uuid:1> }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing inbox sync message. The message will be deleted.",
+      "fields": {
+        "error": "LinkNotFound: No link found for id <uuid:1>",
+        "payload": "GmailMessage(GmailMessagePayload { history_id: 200 })"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<uuid:1>\",\"operation\":{\"gmail_message\":{\"history_id\":200}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: cross-link identity 1
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A2>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/contacts",
+        "body": "{\"connections\":[{\"first\":\"<user:A>\",\"second\":\"macro|alice@example.org\"}]}",
+        "delay_seconds": 0
+      },
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"populate_crm_contact\":{\"link_id\":\"<link:A2>\",\"contact_email\":\"alice@example.org\",\"contact_name\":\"Alice Sender\",\"first_at\":\"<time:provider>\",\"last_at\":\"<time:provider>\",\"is_sent\":false}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A2>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A2>"}
+    INFO upsert_message {"link":"Link { id: <link:A2>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A2>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A2>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A2>"}
+            INFO fetch_link_by_id {"link_id":"<link:A2>"}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+      INFO get_threads_by_link_id_and_provider_ids {"link_id":"<link:A2>","provider_ids":"{\"t1\"}"}
+      INFO fetch_and_insert_thread {"link_id":"<link:A2>","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }","provider_thread_id":"t1"}
+        INFO get_thread {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A2>","provider_thread_id":"t1","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A2>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A2>"}
+              INFO fetch_link_by_id {"link_id":"<link:A2>"}
+          INFO get_thread {"thread_id":"t1"}
+            INFO get_thread {"thread_id":"t1"}
+        INFO process_threads_pre_insert {}
+          INFO clean_message_subject_snippet {}
+          INFO clean_message_subject_snippet {}
+          INFO clean_message_subject_snippet {}
+          INFO remove_trailing_br_tags {}
+          INFO remove_trailing_br_tags {}
+          INFO remove_trailing_br_tags {}
+        INFO insert_thread_and_messages {"link_id":"<link:A2>","thread_provider_id":"t1"}
+          INFO parse_and_upsert_message_contacts {"link_id":"<link:A2>"}
+            INFO upsert_message_contacts {}
+              INFO fetch_contacts_by_emails {"link_id":"<link:A2>"}
+              INFO insert_new_contacts {}
+          INFO parse_and_upsert_message_contacts {"link_id":"<link:A2>"}
+            INFO upsert_message_contacts {}
+              INFO fetch_contacts_by_emails {"link_id":"<link:A2>"}
+              INFO update_missing_contact_names {}
+          INFO parse_and_upsert_message_contacts {"link_id":"<link:A2>"}
+            INFO upsert_message_contacts {}
+              INFO fetch_contacts_by_emails {"link_id":"<link:A2>"}
+              INFO update_missing_contact_names {}
+          INFO insert_thread {"link_id":"<link:A2>"}
+            INFO lock_provider_thread {"link_id":"<link:A2>","provider_thread_id":"t1"}
+            INFO map_service_thread_to_db {"link_id":"<link:A2>"}
+          INFO lock_provider_thread {"link_id":"<link:A2>","provider_thread_id":"t1"}
+          INFO insert_db_message {"from_contact_id":"Some(<uuid:2>)","thread_id":"<uuid:3>","update_thread_metadata":false}
+          INFO pending_provider_label_ids {"message_id":"<uuid:4>"}
+          INFO insert_attachments {}
+          INFO lock_provider_thread {"link_id":"<link:A2>","provider_thread_id":"t1"}
+          INFO insert_db_message {"from_contact_id":"Some(<uuid:2>)","thread_id":"<uuid:3>","update_thread_metadata":false}
+          INFO pending_provider_label_ids {"message_id":"<uuid:5>"}
+          INFO insert_attachments {}
+          INFO lock_provider_thread {"link_id":"<link:A2>","provider_thread_id":"t1"}
+          INFO insert_db_message {"from_contact_id":"Some(<uuid:2>)","thread_id":"<uuid:3>","update_thread_metadata":false}
+          INFO pending_provider_label_ids {"message_id":"<uuid:6>"}
+          INFO insert_attachments {}
+          INFO update_thread_messages_replying_to {"link_id":"<link:A2>","thread_db_id":"<uuid:3>"}
+            INFO get_simple_messages_for_thread {"link_id":"<link:A2>","thread_id":"<uuid:3>"}
+            INFO update_db_messages_replying_to_ids {"link_id":"<link:A2>","updates":"[]"}
+      INFO get_message_and_thread_id_by_provider_id {"link_id":"<link:A2>","provider_id":"m1a"}
+      INFO handle_attachment_upload {"link":"Link { id: <link:A2>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO handle_contacts_sync {"is_sent":false}
+        INFO publish_connections {}
+      INFO enqueue_email_backfill_message {}
+        INFO enqueue_backfill_message {}
+      INFO refresh_email {"user_id":"<user:A>"}
+      INFO notify_for_new_message {"message_db_id":"<uuid:4>","thread_id":"<uuid:3>"}
+        INFO send_notifications {"new_message_provider_id":"m1a"}
+      INFO kafka.publish {"key":"<link:A2>","messaging.destination.name":"macro.email","messaging.operation.name":"publish","messaging.operation.type":"send","messaging.system":"kafka","otel.kind":"producer","topic":"macro.email"}
+  INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+    INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  a8d04a7b6e88 rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  6077ad41cbf5 rows_affected=0 rows_returned=0
+  ce599bbf83fe rows_affected=2 rows_returned=2
+  6077ad41cbf5 rows_affected=2 rows_returned=2
+  1825ab3c230b rows_affected=0 rows_returned=0
+  6077ad41cbf5 rows_affected=2 rows_returned=2
+  1825ab3c230b rows_affected=0 rows_returned=0
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  b15912e5b3b7 rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  bd52d423712d rows_affected=1 rows_returned=1
+  312980cf5478 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  00c1122a3bd0 rows_affected=1 rows_returned=0
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  5727c56045ae rows_affected=2 rows_returned=2
+  a5366b9d91c4 rows_affected=2 rows_returned=0
+  32acf65c4e94 rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  bd52d423712d rows_affected=1 rows_returned=1
+  00c1122a3bd0 rows_affected=1 rows_returned=0
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  5727c56045ae rows_affected=2 rows_returned=2
+  a5366b9d91c4 rows_affected=2 rows_returned=0
+  32acf65c4e94 rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  bd52d423712d rows_affected=1 rows_returned=1
+  00c1122a3bd0 rows_affected=1 rows_returned=0
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  5727c56045ae rows_affected=1 rows_returned=1
+  a5366b9d91c4 rows_affected=1 rows_returned=0
+  32acf65c4e94 rows_affected=1 rows_returned=1
+  ef90aa156eea rows_affected=3 rows_returned=3
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=0 rows_returned=0
+  ad640ecb32fd rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  1acdbc09424a rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/threads/t1?format=full",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/message/send/user/<user:A>",
+      "body": {
+        "message": {
+          "event": "upsert_message",
+          "link_id": "<link:A2>"
+        },
+        "message_type": "refresh_email"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A2>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/contacts",
+        "MessageBody": {
+          "connections": [
+            {
+              "first": "<user:A>",
+              "second": "macro|alice@example.org"
+            }
+          ]
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-1"
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "populate_crm_contact": {
+              "link_id": "<link:A2>",
+              "contact_email": "alice@example.org",
+              "contact_name": "Alice Sender",
+              "first_at": "<time:provider>",
+              "last_at": "<time:provider>",
+              "is_sent": false
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-2"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  [
+    {
+      "topic": "macro.email",
+      "key": "<link:A2>",
+      "payload": {
+        "event_id": "<uuid:7>",
+        "schema_version": 1,
+        "event_type": "email.message_received",
+        "metadata": {
+          "link_id": "<link:A2>",
+          "owner": "<user:A>",
+          "message_id": "<uuid:4>",
+          "provider_message_id": "m1a",
+          "thread_id": "<uuid:3>",
+          "provider_thread_id": "t1",
+          "is_new_thread": true,
+          "subject": "Thread t1",
+          "from_email": "alice@example.org",
+          "from_name": "Alice Sender",
+          "to_emails": [
+            "sim@example.com"
+          ],
+          "attachment_count": 0,
+          "is_spam_or_trash": false,
+          "received_at": "<time:provider>"
+        }
+      }
+    }
+  ]
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000013504}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "15"
+      }
+    }
+  }
+db:
+  {
+    "email_contacts": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:2>",
+          "name": "Alice Sender",
+          "link_id": "<link:A2>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "email_address": "alice@example.org",
+          "sfs_photo_url": null,
+          "original_photo_url": null
+        },
+        {
+          "id": "<uuid:8>",
+          "name": "Sim Owner",
+          "link_id": "<link:A2>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "email_address": "sim@example.com",
+          "sfs_photo_url": null,
+          "original_photo_url": null
+        }
+      ],
+      "changed": []
+    },
+    "email_message_labels": {
+      "removed": [],
+      "added": [
+        {
+          "label_id": "<label:A2/INBOX>",
+          "message_id": "<uuid:4>"
+        },
+        {
+          "label_id": "<label:A2/INBOX>",
+          "message_id": "<uuid:5>"
+        },
+        {
+          "label_id": "<label:A2/INBOX>",
+          "message_id": "<uuid:6>"
+        },
+        {
+          "label_id": "<label:A2/STARRED>",
+          "message_id": "<uuid:5>"
+        },
+        {
+          "label_id": "<label:A2/UNREAD>",
+          "message_id": "<uuid:4>"
+        }
+      ],
+      "changed": []
+    },
+    "email_message_recipients": {
+      "removed": [],
+      "added": [
+        {
+          "name": "Sim Owner",
+          "contact_id": "<uuid:8>",
+          "message_id": "<uuid:4>",
+          "recipient_type": "TO"
+        },
+        {
+          "name": "Sim Owner",
+          "contact_id": "<uuid:8>",
+          "message_id": "<uuid:5>",
+          "recipient_type": "TO"
+        },
+        {
+          "name": "Sim Owner",
+          "contact_id": "<uuid:8>",
+          "message_id": "<uuid:6>",
+          "recipient_type": "TO"
+        }
+      ],
+      "changed": []
+    },
+    "email_messages": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:4>",
+          "is_read": false,
+          "is_sent": false,
+          "link_id": "<link:A2>",
+          "sent_at": "<time:provider>",
+          "snippet": "Body of m1a",
+          "subject": "Thread t1",
+          "is_draft": false,
+          "body_text": "Body of m1a",
+          "from_name": "Alice Sender",
+          "global_id": "<m1a@example.org>",
+          "thread_id": "<uuid:3>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": false,
+          "updated_at": "<ts>",
+          "provider_id": "m1a",
+          "headers_jsonb": [
+            {
+              "name": "From",
+              "value": "Alice Sender <alice@example.org>"
+            },
+            {
+              "name": "To",
+              "value": "Sim Owner <sim@example.com>"
+            },
+            {
+              "name": "Subject",
+              "value": "Thread t1"
+            },
+            {
+              "name": "Date",
+              "value": "Mon, 21 Sep 2026 14:13:20 +0000"
+            },
+            {
+              "name": "Message-ID",
+              "value": "<m1a@example.org>"
+            }
+          ],
+          "mailbox_state": null,
+          "size_estimate": 100,
+          "replying_to_id": null,
+          "from_contact_id": "<uuid:2>",
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<time:provider>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t1",
+          "body_html_sanitized": null,
+          "provider_history_id": "100",
+          "remote_draft_revision": null
+        },
+        {
+          "id": "<uuid:5>",
+          "is_read": true,
+          "is_sent": false,
+          "link_id": "<link:A2>",
+          "sent_at": "<ts>",
+          "snippet": "Body of m1b",
+          "subject": "Thread t1",
+          "is_draft": false,
+          "body_text": "Body of m1b",
+          "from_name": "Alice Sender",
+          "global_id": "<m1b@example.org>",
+          "thread_id": "<uuid:3>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": true,
+          "updated_at": "<ts>",
+          "provider_id": "m1b",
+          "headers_jsonb": [
+            {
+              "name": "From",
+              "value": "Alice Sender <alice@example.org>"
+            },
+            {
+              "name": "To",
+              "value": "Sim Owner <sim@example.com>"
+            },
+            {
+              "name": "Subject",
+              "value": "Thread t1"
+            },
+            {
+              "name": "Date",
+              "value": "Mon, 21 Sep 2026 14:14:20 +0000"
+            },
+            {
+              "name": "Message-ID",
+              "value": "<m1b@example.org>"
+            }
+          ],
+          "mailbox_state": null,
+          "size_estimate": 100,
+          "replying_to_id": null,
+          "from_contact_id": "<uuid:2>",
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<ts>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t1",
+          "body_html_sanitized": null,
+          "provider_history_id": "100",
+          "remote_draft_revision": null
+        },
+        {
+          "id": "<uuid:6>",
+          "is_read": true,
+          "is_sent": false,
+          "link_id": "<link:A2>",
+          "sent_at": "<ts>",
+          "snippet": "Body of m1c",
+          "subject": "Thread t1",
+          "is_draft": false,
+          "body_text": "Body of m1c",
+          "from_name": "Alice Sender",
+          "global_id": "<m1c@example.org>",
+          "thread_id": "<uuid:3>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": false,
+          "updated_at": "<ts>",
+          "provider_id": "m1c",
+          "headers_jsonb": [
+            {
+              "name": "From",
+              "value": "Alice Sender <alice@example.org>"
+            },
+            {
+              "name": "To",
+              "value": "Sim Owner <sim@example.com>"
+            },
+            {
+              "name": "Subject",
+              "value": "Thread t1"
+            },
+            {
+              "name": "Date",
+              "value": "Mon, 21 Sep 2026 14:15:20 +0000"
+            },
+            {
+              "name": "Message-ID",
+              "value": "<m1c@example.org>"
+            }
+          ],
+          "mailbox_state": null,
+          "size_estimate": 100,
+          "replying_to_id": null,
+          "from_contact_id": "<uuid:2>",
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<ts>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t1",
+          "body_html_sanitized": null,
+          "provider_history_id": "100",
+          "remote_draft_revision": null
+        }
+      ],
+      "changed": []
+    },
+    "email_threads": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:3>",
+          "is_read": false,
+          "link_id": "<link:A2>",
+          "is_signal": true,
+          "created_at": "<ts>",
+          "project_id": null,
+          "updated_at": "<ts>",
+          "provider_id": "t1",
+          "inbox_visible": true,
+          "has_received_mail": true,
+          "reminder_returned_at": null,
+          "has_calendar_attachment": false,
+          "latest_inbound_message_ts": "<ts>",
+          "latest_non_spam_message_ts": "<ts>",
+          "latest_outbound_message_ts": null
+        }
+      ],
+      "changed": []
+    }
+  }
+
+step: missing link 1
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<uuid:1>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <uuid:1>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<uuid:1>"}
+  INFO handle_non_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <uuid:1>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: LinkNotFound, source: No link found for id <uuid:1> }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing inbox sync message. The message will be deleted.",
+      "fields": {
+        "error": "LinkNotFound: No link found for id <uuid:1>",
+        "payload": "UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" })"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<uuid:1>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: cross-link identity 2
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A2>\",\"operation\":{\"delete_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A2>, operation: DeleteMessage(DeleteMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A2>"}
+    INFO delete_message {"link":"Link { id: <link:A2>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"DeleteMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO get_simple_message_by_provider_and_link_for_update {"link_id":"<link:A2>","provider_id":"m1a"}
+      INFO get_sender_by_message_id {"message_id":"<uuid:4>"}
+      INFO delete_message_with_tx {"link_id":"<link:A2>"}
+        INFO delete_db_message {"message_id":"<uuid:4>"}
+        INFO delete_thread_if_empty {"thread_id":"<uuid:3>"}
+        INFO sync_thread_calendar_flag {"thread_db_id":"<uuid:3>"}
+      INFO insert_candidates {"link_id":"<link:A2>"}
+      INFO refresh_email {"user_id":"<user:A>"}
+      INFO kafka.publish {"key":"<link:A2>","messaging.destination.name":"macro.email","messaging.operation.name":"publish","messaging.operation.type":"send","messaging.system":"kafka","otel.kind":"producer","topic":"macro.email"}
+  INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+    INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  5d95a20f6782 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  6fb5173b413b rows_affected=1 rows_returned=1
+  6eee12dbed54 rows_affected=1 rows_returned=0
+  39b9a4e3da26 rows_affected=1 rows_returned=1
+  dc2f6fecc871 rows_affected=1 rows_returned=1
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=1 rows_returned=0
+  ad640ecb32fd rows_affected=0 rows_returned=0
+  712224a670a9 rows_affected=0 rows_returned=0
+  d1c567f058bb rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "POST",
+      "path": "/message/send/user/<user:A>",
+      "body": {
+        "message": {
+          "event": "delete_message",
+          "link_id": "<link:A2>"
+        },
+        "message_type": "refresh_email"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A2>\",\"operation\":{\"delete_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  [
+    {
+      "topic": "macro.email",
+      "key": "<link:A2>",
+      "payload": {
+        "event_id": "<uuid:9>",
+        "schema_version": 1,
+        "event_type": "email.message_deleted",
+        "metadata": {
+          "link_id": "<link:A2>",
+          "owner": "<user:A>",
+          "message_id": "<uuid:4>",
+          "provider_message_id": "m1a",
+          "thread_id": "<uuid:3>"
+        }
+      }
+    }
+  ]
+redis:
+  {}
+db:
+  {
+    "crm_cleanup_candidates": {
+      "removed": [],
+      "added": [
+        {
+          "id": 1,
+          "link_id": "<link:A2>",
+          "created_at": "<ts>",
+          "contact_email": "alice@example.org"
+        }
+      ],
+      "changed": []
+    },
+    "email_message_labels": {
+      "removed": [
+        {
+          "label_id": "<label:A2/INBOX>",
+          "message_id": "<uuid:4>"
+        },
+        {
+          "label_id": "<label:A2/UNREAD>",
+          "message_id": "<uuid:4>"
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "email_message_recipients": {
+      "removed": [
+        {
+          "name": "Sim Owner",
+          "contact_id": "<uuid:8>",
+          "message_id": "<uuid:4>",
+          "recipient_type": "TO"
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "email_messages": {
+      "removed": [
+        {
+          "id": "<uuid:4>",
+          "is_read": false,
+          "is_sent": false,
+          "link_id": "<link:A2>",
+          "sent_at": "<time:provider>",
+          "snippet": "Body of m1a",
+          "subject": "Thread t1",
+          "is_draft": false,
+          "body_text": "Body of m1a",
+          "from_name": "Alice Sender",
+          "global_id": "<m1a@example.org>",
+          "thread_id": "<uuid:3>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": false,
+          "updated_at": "<ts>",
+          "provider_id": "m1a",
+          "headers_jsonb": [
+            {
+              "name": "From",
+              "value": "Alice Sender <alice@example.org>"
+            },
+            {
+              "name": "To",
+              "value": "Sim Owner <sim@example.com>"
+            },
+            {
+              "name": "Subject",
+              "value": "Thread t1"
+            },
+            {
+              "name": "Date",
+              "value": "Mon, 21 Sep 2026 14:13:20 +0000"
+            },
+            {
+              "name": "Message-ID",
+              "value": "<m1a@example.org>"
+            }
+          ],
+          "mailbox_state": null,
+          "size_estimate": 100,
+          "replying_to_id": null,
+          "from_contact_id": "<uuid:2>",
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<time:provider>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t1",
+          "body_html_sanitized": null,
+          "provider_history_id": "100",
+          "remote_draft_revision": null
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "email_threads": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<uuid:3>",
+          "is_read": {
+            "before": false,
+            "after": true
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: missing link 2
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<uuid:1>\",\"operation\":{\"delete_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <uuid:1>, operation: DeleteMessage(DeleteMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<uuid:1>"}
+  INFO handle_non_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <uuid:1>, operation: DeleteMessage(DeleteMessagePayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: LinkNotFound, source: No link found for id <uuid:1> }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing inbox sync message. The message will be deleted.",
+      "fields": {
+        "error": "LinkNotFound: No link found for id <uuid:1>",
+        "payload": "DeleteMessage(DeleteMessagePayload { provider_message_id: \"m1a\" })"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<uuid:1>\",\"operation\":{\"delete_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: cross-link identity 3
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A2>\",\"operation\":{\"update_labels\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/gmail-webhook",
+        "body": "{\"linkId\":\"<link:A2>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A2>, operation: UpdateLabels(UpdateLabelsPayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A2>"}
+    INFO update_labels {"link":"Link { id: <link:A2>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpdateLabelsPayload { provider_message_id: \"m1a\" }"}
+      INFO enqueue_gmail_inbox_sync_notification {"message":"InboxSyncPubsubMessage { link_id: <link:A2>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+        INFO enqueue_notification {"queue_url":"<sqs>/000000000000/gmail-webhook"}
+  INFO handle_non_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A2>, operation: UpdateLabels(UpdateLabelsPayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: MessageNotFoundInDatabase, source: remove_labels: Message m1a not found in database. Upsert message queued. }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing inbox sync message. The message will be deleted.",
+      "fields": {
+        "error": "MessageNotFoundInDatabase: remove_labels: Message m1a not found in database. Upsert message queued.",
+        "payload": "UpdateLabels(UpdateLabelsPayload { provider_message_id: \"m1a\" })"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A2>\",\"operation\":{\"update_labels\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageBody": {
+          "linkId": "<link:A2>",
+          "operation": {
+            "upsert_message": {
+              "provider_message_id": "m1a"
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-3"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing link 3
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<uuid:1>\",\"operation\":{\"update_labels\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <uuid:1>, operation: UpdateLabels(UpdateLabelsPayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<uuid:1>"}
+  INFO handle_non_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <uuid:1>, operation: UpdateLabels(UpdateLabelsPayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: LinkNotFound, source: No link found for id <uuid:1> }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing inbox sync message. The message will be deleted.",
+      "fields": {
+        "error": "LinkNotFound: No link found for id <uuid:1>",
+        "payload": "UpdateLabels(UpdateLabelsPayload { provider_message_id: \"m1a\" })"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<uuid:1>\",\"operation\":{\"update_labels\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

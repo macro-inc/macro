@@ -1,0 +1,94 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: admission and token
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook-retry",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"gmail_message\":{\"history_id\":200}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook-retry","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: GmailMessage(GmailMessagePayload { history_id: 200 }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO gmail_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"GmailMessagePayload { history_id: 200 }"}
+      INFO fetch_history_id_for_link {"provider":"Gmail"}
+      INFO list_labels {"link_id":"<link:A>","retry_count":0}
+  INFO handle_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: GmailMessage(GmailMessagePayload { history_id: 200 }) }","e":"DetailedError { reason: GmailApiRateLimited, source: gmail_message: email provider rate limit exceeded }"}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "inner_process_message",
+        "gmail_message",
+        "list_labels"
+      ],
+      "message": "Gmail request admission is unavailable",
+      "fields": {
+        "error": "\"WRONGTYPE\": Operation against a key holding the wrong kind of value script: b8006bfa9e3917df5cf64e7e862dd6694b9f8d78, on @user_script:36.",
+        "link_id": "<link:A>"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  56a84a77a1bd rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"gmail_message\":{\"history_id\":200}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

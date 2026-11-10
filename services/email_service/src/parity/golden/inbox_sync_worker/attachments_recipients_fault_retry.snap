@@ -1,0 +1,369 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: attachment import
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook-retry",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"attachment-message\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook-retry","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"attachment-message\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"attachment-message\" }"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"attachment-message","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"attachment-message"}
+          INFO get_message {"message_provider_id":"attachment-message"}
+      INFO get_threads_by_link_id_and_provider_ids {"link_id":"<link:A>","provider_ids":"{\"t1\"}"}
+      INFO process_and_insert_message {"link_id":"<link:A>","message_provider_id":"Some(\"attachment-message\")","thread_db_id":"<thread:t1>"}
+        INFO process_message_pre_insert {"message_id":"attachment-message"}
+          INFO clean_message {}
+            INFO clean_message_subject_snippet {}
+            INFO remove_trailing_br_tags {}
+        INFO insert_message {"link_id":"<link:A>","resync":"None","thread_id":"<thread:t1>","update_thread_metadata":true}
+          INFO parse_and_upsert_message_contacts {"link_id":"<link:A>"}
+            INFO upsert_message_contacts {}
+              INFO fetch_contacts_by_emails {"link_id":"<link:A>"}
+              INFO insert_new_contacts {}
+          INFO lock_provider_thread {"link_id":"<link:A>","provider_thread_id":"t1"}
+          INFO insert_db_message {"from_contact_id":"Some(<uuid:1>)","thread_id":"<thread:t1>","update_thread_metadata":true}
+          INFO pending_provider_label_ids {"message_id":"<uuid:2>"}
+          INFO insert_attachments {}
+            INFO map_service_attachments_to_db {"message_db_id":"<uuid:2>"}
+          INFO update_message_replying_to_from_headers {"link_id":"<link:A>","message_db_id":"<uuid:2>"}
+      INFO get_message_and_thread_id_by_provider_id {"link_id":"<link:A>","provider_id":"attachment-message"}
+      INFO handle_attachment_upload {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"attachment-message\" }"}
+        INFO new_email_document_atts {"link_id":"<link:A>","message_provider_id":"attachment-message"}
+        INFO fetch_db_recipients_in_bulk {"message_ids":"[<uuid:2>]"}
+      INFO kafka.publish {"key":"<link:A>","messaging.destination.name":"macro.email","messaging.operation.name":"publish","messaging.operation.type":"send","messaging.system":"kafka","otel.kind":"producer","topic":"macro.email"}
+  INFO handle_non_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"attachment-message\" }) }","e":"DetailedError { reason: DatabaseQueryFailed, source: upsert_message: Failed to fetch db recipients for thread attachment backfill }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "process_and_insert_message",
+        "insert_message"
+      ],
+      "message": "Some message labels not found in database, skipping them",
+      "fields": {
+        "link_id": "<link:A>",
+        "message_id": "<uuid:2>",
+        "missing_provider_label_ids": "[\"IMPORTANT\"]"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "handle_attachment_upload",
+        "fetch_db_recipients_in_bulk"
+      ],
+      "message": null,
+      "fields": {
+        "error": "attempted to acquire a connection on a closed pool"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "handle_attachment_upload"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Non-retryable error occurred"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing inbox sync message. The message will be deleted.",
+      "fields": {
+        "error": "DatabaseQueryFailed: upsert_message: Failed to fetch db recipients for thread attachment backfill",
+        "payload": "UpsertMessage(UpsertMessagePayload { provider_message_id: \"attachment-message\" })"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  a8d04a7b6e88 rows_affected=1 rows_returned=1
+  6077ad41cbf5 rows_affected=0 rows_returned=0
+  ce599bbf83fe rows_affected=2 rows_returned=2
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  bd52d423712d rows_affected=1 rows_returned=1
+  312980cf5478 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  00c1122a3bd0 rows_affected=1 rows_returned=0
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  5727c56045ae rows_affected=2 rows_returned=2
+  a5366b9d91c4 rows_affected=2 rows_returned=0
+  32acf65c4e94 rows_affected=1 rows_returned=1
+  32539674eb96 rows_affected=0 rows_returned=0
+  de24caefb0ca rows_affected=1 rows_returned=0
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=0 rows_returned=0
+  ad640ecb32fd rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  1acdbc09424a rows_affected=1 rows_returned=1
+  e1330b351948 rows_affected=1 rows_returned=1
+  f60f74272719 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/attachment-message",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"attachment-message\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  [
+    {
+      "topic": "macro.email",
+      "key": "<link:A>",
+      "payload": {
+        "event_id": "<uuid:3>",
+        "schema_version": 1,
+        "event_type": "email.message_received",
+        "metadata": {
+          "link_id": "<link:A>",
+          "owner": "<user:A>",
+          "message_id": "<uuid:2>",
+          "provider_message_id": "attachment-message",
+          "thread_id": "<thread:t1>",
+          "provider_thread_id": "t1",
+          "is_new_thread": false,
+          "subject": "Fixture subject",
+          "from_email": "sender@example.com",
+          "from_name": "Sender",
+          "to_emails": [
+            "recipient@example.com"
+          ],
+          "attachment_count": 1,
+          "is_spam_or_trash": false,
+          "received_at": "<time:provider>"
+        }
+      }
+    }
+  ]
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000012d13}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {
+    "email_attachments": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:4>",
+          "filename": "file.pdf",
+          "mime_type": "application/pdf",
+          "content_id": null,
+          "created_at": "<ts>",
+          "message_id": "<uuid:2>",
+          "size_bytes": 4,
+          "reference_url": null,
+          "upload_claimed_at": "<ts>",
+          "provider_attachment_id": "attachment-1"
+        }
+      ],
+      "changed": []
+    },
+    "email_contacts": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:5>",
+          "name": "Recipient",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "email_address": "recipient@example.com",
+          "sfs_photo_url": null,
+          "original_photo_url": null
+        },
+        {
+          "id": "<uuid:1>",
+          "name": "Sender",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "email_address": "sender@example.com",
+          "sfs_photo_url": null,
+          "original_photo_url": null
+        }
+      ],
+      "changed": []
+    },
+    "email_message_labels": {
+      "removed": [],
+      "added": [
+        {
+          "label_id": "<label:A/INBOX>",
+          "message_id": "<uuid:2>"
+        },
+        {
+          "label_id": "<label:A/UNREAD>",
+          "message_id": "<uuid:2>"
+        }
+      ],
+      "changed": []
+    },
+    "email_message_recipients": {
+      "removed": [],
+      "added": [
+        {
+          "name": "Recipient",
+          "contact_id": "<uuid:5>",
+          "message_id": "<uuid:2>",
+          "recipient_type": "TO"
+        }
+      ],
+      "changed": []
+    },
+    "email_messages": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:2>",
+          "is_read": false,
+          "is_sent": false,
+          "link_id": "<link:A>",
+          "sent_at": "<time:provider>",
+          "snippet": "fixture preview",
+          "subject": "Fixture subject",
+          "is_draft": false,
+          "body_text": "body",
+          "from_name": "Sender",
+          "global_id": "<attachment-message@example.com>",
+          "thread_id": "<thread:t1>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": false,
+          "updated_at": "<ts>",
+          "provider_id": "attachment-message",
+          "headers_jsonb": [
+            {
+              "name": "From",
+              "value": "Sender <sender@example.com>"
+            },
+            {
+              "name": "To",
+              "value": "Recipient <recipient@example.com>"
+            },
+            {
+              "name": "Subject",
+              "value": "Fixture subject"
+            },
+            {
+              "name": "Message-ID",
+              "value": "<attachment-message@example.com>"
+            },
+            {
+              "name": "Date",
+              "value": "Mon, 21 Sep 2026 14:13:20 +0000"
+            }
+          ],
+          "mailbox_state": null,
+          "size_estimate": 20,
+          "replying_to_id": null,
+          "from_contact_id": "<uuid:1>",
+          "has_attachments": true,
+          "draft_generation": 0,
+          "internal_date_ts": "<time:provider>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t1",
+          "body_html_sanitized": null,
+          "provider_history_id": "200",
+          "remote_draft_revision": null
+        }
+      ],
+      "changed": []
+    }
+  }

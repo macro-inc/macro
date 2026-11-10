@@ -26,7 +26,7 @@ the gateway `/email` prefix.
   queue send behind the email domain backfill-job service.
 - `src/parity/`: HTTP and queue-worker characterization lab and its golden suites
   (message labels, message/thread reads, internal reads, inbox routes, backfill API,
-  inbox initialization, Gmail ingress, and Gmail operations); see its
+  inbox initialization, Gmail ingress, Gmail operations, and inbox-sync delivery); see its
   README for recording, normalization, and the providers it cannot isolate.
 - `src/pubsub/`: SQS pubsub workers, one module per concern — `inbox_sync`,
   `link_manager` (Gmail re-subscribe, health checks, inbox deletion),

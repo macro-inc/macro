@@ -1,0 +1,136 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: label synchronization
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook-retry",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"update_labels\":{\"provider_message_id\":\"missing\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook-retry","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpdateLabels(UpdateLabelsPayload { provider_message_id: \"missing\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO update_labels {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpdateLabelsPayload { provider_message_id: \"missing\" }"}
+      INFO enqueue_gmail_inbox_sync_notification {"message":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"missing\" }) }"}
+        INFO enqueue_notification {"queue_url":"<sqs>/000000000000/gmail-webhook"}
+  INFO handle_non_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpdateLabels(UpdateLabelsPayload { provider_message_id: \"missing\" }) }","e":"DetailedError { reason: SqsEnqueueFailed, source: remove_labels: Failed to enqueue upsert message \"missing\" for missing message on label update }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "inner_process_message",
+        "update_labels",
+        "enqueue_gmail_inbox_sync_notification",
+        "enqueue_notification"
+      ],
+      "message": "Connection encountered an issue and should not be re-used. Marking it for closure",
+      "fields": {
+        "see_for_more_info": "https://smithy-lang.github.io/smithy-rs/design/client/detailed_error_explanations.html"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing inbox sync message. The message will be deleted.",
+      "fields": {
+        "error": "SqsEnqueueFailed: remove_labels: Failed to enqueue upsert message \"missing\" for missing message on label update",
+        "payload": "UpdateLabels(UpdateLabelsPayload { provider_message_id: \"missing\" })"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"update_labels\":{\"provider_message_id\":\"missing\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageBody": {
+          "linkId": "<link:A>",
+          "operation": {
+            "upsert_message": {
+              "provider_message_id": "missing"
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 500,
+      "response": {
+        "__type": "com.amazonaws.sqs#InternalError",
+        "message": "injected outage"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

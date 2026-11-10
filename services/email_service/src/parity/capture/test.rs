@@ -97,3 +97,37 @@ async fn background_drain_waits_for_the_last_request_span_owner() {
     stop();
     assert_eq!(recording.lock().expect("recording").open_requests, 0);
 }
+
+#[tokio::test]
+async fn debug_events_are_coverage_only() {
+    if !crate::parity::process_per_test() {
+        return;
+    }
+    let _guard = exclusive_lab().await;
+    let (recording, root) = start();
+    tracing::dispatcher::with_default(&dispatch(), || {
+        let _root = root.enter();
+        tracing::debug!(target: "email_service::pubsub::inbox_sync::coverage", "debug branch");
+        tracing::debug!(target: "third_party_debug", "elapsed 123 microseconds");
+    });
+    stop();
+    let (_, logs, _, sidecar, _) = recording.lock().expect("recording").sections();
+    assert!(logs.as_array().expect("logs").is_empty());
+    assert!(
+        !sidecar["callsites"]
+            .as_array()
+            .expect("callsites")
+            .iter()
+            .any(|entry| entry[1] == "third_party_debug")
+    );
+    assert!(
+        sidecar["callsites"]
+            .as_array()
+            .expect("callsites")
+            .contains(&json!([
+                "event",
+                "email_service::pubsub::inbox_sync::coverage",
+                "debug branch"
+            ]))
+    );
+}

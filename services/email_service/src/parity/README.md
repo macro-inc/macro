@@ -404,3 +404,33 @@ and disconnections, local admission refusal, primary-to-retry sends, retained
 deliveries, malformed bodies, missing links/receipts, SQS failures, marker turns,
 mid-send turn changes, partial and whole-write reversion, duplicates, and query
 and transaction failures. Fixtures and fault installation run outside capture.
+
+
+The `inbox_sync_worker` suite drives primary and retry delivery through the same
+contexts. Its operation files cover envelope/admission, history and recovery,
+message resync, labels, deletion, notifications, attachments, and calendar
+extraction. `Lab::inbox_notifications` changes only the two inbox-sync test
+contexts. Fixtures lowercase inbox addresses and reseed their token keys because
+the history lookup normalizes its email argument. The production worker is not
+modified. Contacts, CRM, and lifecycle outbox work are recorded; only explicitly
+selected queue sends become follow-up deliveries.
+
+Inbox-sync scenarios use a separate single-worker Tokio runtime so the production
+spawned delivery is polled on a runtime worker, outside SQLx's current-thread
+fixture stack. This preserves production's task boundary for large unoptimized
+attachment/authentication futures. Fake Gmail's opt-in `pause_next_http` can hold
+an exact scripted endpoint before or after its response is chosen. The older
+request-kind pause behavior remains available. Neither pause sleeps or polls.
+Kafka can reject one produce through the in-process broker to pin best-effort
+event failures. Fixed provider timestamps have explicit symbols so their relative
+ordering remains observable. DEBUG event identities are included in the diagnostic callsite sidecar for line
+coverage; INFO+ log and golden transcript content are unchanged.
+
+Use canonical Gmail system-label names in worker catalog fixtures: the mailbox
+projection uses those names when classifying Primary versus category mail.
+For deterministic multi-recipient row output, seed and name the contact IDs;
+for catalog reconciliation, use one deletion per case so HashMap iteration does
+not introduce an undefined order into the recorded span. An SDK error that
+retains response headers can opt into the fake SQS `fixed_date`; other scenarios
+retain the default wire behavior. These are fixture choices, not production
+ordering or clock guarantees.

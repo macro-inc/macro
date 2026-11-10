@@ -1,0 +1,266 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: label synchronization
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"update_labels\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpdateLabels(UpdateLabelsPayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO update_labels {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpdateLabelsPayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message_label_ids {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message_label_ids {"message_provider_id":"m1a"}
+          INFO get_message_label_ids {"message_provider_id":"m1a"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+  INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+    INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "inner_process_message",
+        "update_labels"
+      ],
+      "message": "Kept local labels with a pending Gmail write over the provider's labels",
+      "fields": {
+        "db_message_id": "<msg:m1a>",
+        "kept_labels": "[\"Label_work\"]",
+        "link_id": "<link:A>"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a?format=minimal",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"update_labels\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011588}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: duplicate delivery
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-2",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"update_labels\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "2"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpdateLabels(UpdateLabelsPayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO update_labels {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpdateLabelsPayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message_label_ids {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message_label_ids {"message_provider_id":"m1a"}
+          INFO get_message_label_ids {"message_provider_id":"m1a"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+  INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-2"}
+    INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "inner_process_message",
+        "update_labels"
+      ],
+      "message": "Kept local labels with a pending Gmail write over the provider's labels",
+      "fields": {
+        "db_message_id": "<msg:m1a>",
+        "kept_labels": "[\"Label_work\"]",
+        "link_id": "<link:A>"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a?format=minimal",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"update_labels\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "2"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011588}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}

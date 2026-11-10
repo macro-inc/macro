@@ -1,0 +1,113 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: delivery
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook-retry",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "not-json",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Err": "Failed to deserialize message body to InboxSyncOperation: expected ident at line 1 column 2"
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook-retry","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+    INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [],
+      "message": "Failed to extract message, this is non-retryable.",
+      "fields": {
+        "error": "Failed to deserialize message body to InboxSyncOperation"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "cleanup_message",
+        "delete_message"
+      ],
+      "message": "Connection encountered an issue and should not be re-used. Marking it for closure",
+      "fields": {
+        "see_for_more_info": "https://smithy-lang.github.io/smithy-rs/design/client/detailed_error_explanations.html"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [],
+      "message": "Failed to clean up message after extraction error",
+      "fields": {
+        "error": "service error"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "not-json",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 500,
+      "response": {
+        "__type": "com.amazonaws.sqs#InternalError",
+        "message": "injected delete failure"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

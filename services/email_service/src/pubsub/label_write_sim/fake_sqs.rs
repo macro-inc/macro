@@ -45,6 +45,8 @@ pub struct SqsState {
     /// Explicit one-message receives; the caller owns redelivery and virtual time.
     pub deliveries: std::collections::BTreeMap<String, std::collections::VecDeque<Value>>,
     pub fail_delete: bool,
+    /// Optional wire Date for scenarios recording an SDK error response.
+    pub fixed_date: Option<String>,
     send_attempts: u64,
     next_id: u64,
     /// Holds the next SendMessage until released.
@@ -133,7 +135,12 @@ pub fn client(endpoint: &str, retries: bool) -> aws_sdk_sqs::Client {
 
 async fn handle(State(sqs): State<FakeSqs>, headers: HeaderMap, body: Bytes) -> Response {
     let response = reply(State(sqs.clone()), headers.clone(), body.clone()).await;
-    let (parts, response_body) = response.into_parts();
+    let (mut parts, response_body) = response.into_parts();
+    if let Some(date) = &sqs.lock().fixed_date {
+        parts
+            .headers
+            .insert("date", date.parse().expect("fixture HTTP Date"));
+    }
     let response_body = response_body
         .collect()
         .await

@@ -1,0 +1,1 @@
+SELECT t.id, t.provider_id, t.link_id, t.inbox_visible, t.is_read, t.latest_inbound_message_ts, t.latest_outbound_message_ts, t.latest_non_spam_message_ts, t.created_at, t.updated_at FROM email_threads t WHERE t.id = $1 AND t.link_id = $2

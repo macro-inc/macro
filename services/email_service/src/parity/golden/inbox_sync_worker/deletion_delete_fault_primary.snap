@@ -1,0 +1,112 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: delete delivery
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"delete_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: DeleteMessage(DeleteMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO delete_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"DeleteMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO get_simple_message_by_provider_and_link_for_update {"link_id":"<link:A>","provider_id":"m1a"}
+      INFO get_sender_by_message_id {"message_id":"<msg:m1a>"}
+      INFO delete_message_with_tx {"link_id":"<link:A>"}
+        INFO delete_db_message {"message_id":"<msg:m1a>"}
+  INFO handle_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: DeleteMessage(DeleteMessagePayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: DatabaseQueryFailed, source: delete_message: Failed to delete message with transaction }"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "delete_message",
+        "delete_message_with_tx",
+        "delete_db_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "error returned from database: parity injected inbox failure"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "delete_message",
+        "delete_message_with_tx"
+      ],
+      "message": null,
+      "fields": {
+        "error": "error returned from database: parity injected inbox failure"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  5d95a20f6782 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  6fb5173b413b rows_affected=1 rows_returned=1
+  6eee12dbed54 rows_affected=0 rows_returned=0
+  3faad9faa047 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"delete_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

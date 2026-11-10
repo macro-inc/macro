@@ -212,6 +212,21 @@ fn ordered_debug_string_set(text: &str) -> Option<String> {
 }
 
 fn without_backtrace(text: &str) -> Cow<'_, str> {
+    // A combined transaction error embeds one Debug report before the rollback
+    // error. Its backtrace is not the end of the application message.
+    for marker in ["\\n\\nStack backtrace:", "\n\nStack backtrace:"] {
+        if let Some((message, trace)) = text.split_once(marker)
+            && let Some((frames, rollback)) = trace.split_once(", Rollback error:")
+        {
+            let frames = frames.trim_end();
+            let closing = &frames[frames.trim_end_matches([')', '}', ']', ' ', '"']).len()..];
+            let continuation = format!(", Rollback error:{rollback}");
+            return Cow::Owned(format!(
+                "{message}{closing}{}",
+                without_backtrace(&continuation)
+            ));
+        }
+    }
     // Some domain errors hold an anyhow Debug report inside a String. Their
     // outer Debug rendering escapes the backtrace's newlines and adds a quote.
     if let Some((message, backtrace)) = text.split_once("\\n\\nStack backtrace:") {

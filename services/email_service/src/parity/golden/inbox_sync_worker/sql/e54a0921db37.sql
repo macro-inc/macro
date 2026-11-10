@@ -1,0 +1,1 @@
+SELECT l.id, l.link_id, l.provider_label_id, l.name, l.created_at, l.message_list_visibility as "message_list_visibility: _", l.label_list_visibility as "label_list_visibility: _", l.type as "type_: _" FROM email_effective_message_labels ml JOIN email_labels l ON ml.label_id = l.id WHERE ml.message_id = $1 ORDER BY l.name

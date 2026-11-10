@@ -261,17 +261,26 @@ impl<S: tracing::Subscriber + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<
         if metadata.target() == "sqlx::query" {
             // Statement logging is separate from normal logs, including DEBUG statements.
             recording.sql.push(json!(fields.0));
-        } else if *metadata.level() <= tracing::Level::INFO {
+        } else if *metadata.level() <= tracing::Level::INFO
+            || (*metadata.level() == tracing::Level::DEBUG
+                && metadata
+                    .target()
+                    .starts_with("email_service::pubsub::inbox_sync::"))
+        {
+            // Worker DEBUG identities prove branch coverage without recording
+            // third-party messages containing timing or connection-pool noise.
             let message = fields.0.remove("message").unwrap_or(Value::Null);
             recording.callsites.insert((
                 "event".into(),
                 metadata.target().into(),
                 message.as_str().unwrap_or("").into(),
             ));
-            recording
-                .logs
-                .push(json!({"level": metadata.level().to_string(),
-                "span": location.index, "message": message, "fields": fields.0}));
+            if *metadata.level() <= tracing::Level::INFO {
+                recording
+                    .logs
+                    .push(json!({"level": metadata.level().to_string(),
+                    "span": location.index, "message": message, "fields": fields.0}));
+            }
         }
     }
 }

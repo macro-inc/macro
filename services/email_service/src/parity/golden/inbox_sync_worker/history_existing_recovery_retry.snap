@@ -1,0 +1,326 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: history notification
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook-retry",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"gmail_message\":{\"history_id\":200}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<uuid:1>\"}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook-retry","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: GmailMessage(GmailMessagePayload { history_id: 200 }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO gmail_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"GmailMessagePayload { history_id: 200 }"}
+      INFO fetch_history_id_for_link {"provider":"Gmail"}
+      INFO list_labels {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO fetch_user_labels {}
+          INFO fetch_user_labels {}
+      INFO sync_labels {"link_id":"<link:A>"}
+        INFO fetch_labels_by_link_id {"link_id":"<link:A>"}
+      INFO list_changes {"cursor":"Gmail(\"100\")","gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_history_page {"start_history_id":"100"}
+          INFO get_history_page {"start_history_id":"100"}
+      INFO get_active_backfill_job {"link_id":"<link:A>"}
+      INFO enqueue_email_backfill_message {}
+        INFO enqueue_backfill_message {}
+      INFO upsert_gmail_history {"history_id":"200","link_id":"<link:A>"}
+  INFO handle_non_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: GmailMessage(GmailMessagePayload { history_id: 200 }) }","e":"DetailedError { reason: OutdatedHistoryId, source: gmail_message: email synchronization cursor is outdated }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "gmail_message",
+        "list_changes",
+        "get_history_page",
+        "get_history_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 404 Not Found: {\"error\":{\"code\":404,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "gmail_message",
+        "list_changes",
+        "get_history_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 404 Not Found: {\"error\":{\"code\":404,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "gmail_message",
+        "list_changes"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email synchronization cursor is outdated"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing inbox sync message. The message will be deleted.",
+      "fields": {
+        "error": "OutdatedHistoryId: gmail_message: email synchronization cursor is outdated",
+        "payload": "GmailMessage(GmailMessagePayload { history_id: 200 })"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  56a84a77a1bd rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  81bbbe533b76 rows_affected=7 rows_returned=7
+  f680d1b52474 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  1cc3d18ab8fe rows_affected=1 rows_returned=1
+  1a19255d9513 rows_affected=1 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/labels",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/history?startHistoryId=100&maxResults=500",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 404
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"gmail_message\":{\"history_id\":200}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "init": {
+              "link_id": "<link:A>",
+              "job_id": "<uuid:1>"
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-1"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011973}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "3"
+      }
+    }
+  }
+db:
+  {
+    "email_gmail_histories": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "history_id": {
+            "before": "100",
+            "after": "200"
+          },
+          "link_id": "<link:A>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: duplicate delivery
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook-retry",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-2",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"gmail_message\":{\"history_id\":200}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "2"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook-retry","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: GmailMessage(GmailMessagePayload { history_id: 200 }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO gmail_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"GmailMessagePayload { history_id: 200 }"}
+      INFO fetch_history_id_for_link {"provider":"Gmail"}
+  INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-2"}
+    INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  56a84a77a1bd rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"gmail_message\":{\"history_id\":200}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "2"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

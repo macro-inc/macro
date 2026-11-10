@@ -1,0 +1,1 @@
+INSERT INTO email_contacts (id, link_id, email_address, name) SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::text[], $4::text[]) ON CONFLICT (link_id, email_address) DO NOTHING RETURNING id, email_address

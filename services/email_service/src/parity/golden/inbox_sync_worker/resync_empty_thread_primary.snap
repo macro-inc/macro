@@ -1,0 +1,193 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: resync edge
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"resync-new\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"resync-new\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"resync-new\" }"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"resync-new","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"resync-new"}
+          INFO get_message {"message_provider_id":"resync-new"}
+      INFO get_threads_by_link_id_and_provider_ids {"link_id":"<link:A>","provider_ids":"{\"resync-thread\"}"}
+      INFO fetch_and_insert_thread {"link_id":"<link:A>","payload":"UpsertMessagePayload { provider_message_id: \"resync-new\" }","provider_thread_id":"resync-thread"}
+        INFO get_thread {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_thread_id":"resync-thread","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_thread {"thread_id":"resync-thread"}
+            INFO get_thread {"thread_id":"resync-thread"}
+        INFO process_threads_pre_insert {}
+        INFO insert_thread_and_messages {"link_id":"<link:A>","thread_provider_id":"resync-thread"}
+          INFO insert_thread {"link_id":"<link:A>"}
+            INFO lock_provider_thread {"link_id":"<link:A>","provider_thread_id":"resync-thread"}
+            INFO map_service_thread_to_db {"link_id":"<link:A>"}
+      INFO get_message_and_thread_id_by_provider_id {"link_id":"<link:A>","provider_id":"resync-new"}
+  INFO handle_non_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"resync-new\" }) }","e":"DetailedError { reason: DatabaseQueryFailed, source: upsert_message: Failed to get new message db id }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message_and_thread_id_by_provider_id"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Message not found for link_id=<link:A> provider_id=resync-new"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing inbox sync message. The message will be deleted.",
+      "fields": {
+        "error": "DatabaseQueryFailed: upsert_message: Failed to get new message db id",
+        "payload": "UpsertMessage(UpsertMessagePayload { provider_message_id: \"resync-new\" })"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  a8d04a7b6e88 rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  b15912e5b3b7 rows_affected=1 rows_returned=1
+  ca6b0d1b5889 rows_affected=1 rows_returned=0
+  8eb20757c433 rows_affected=0 rows_returned=0
+  ad640ecb32fd rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  1acdbc09424a rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/resync-new",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/threads/resync-thread?format=full",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"resync-new\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000138b6}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "15"
+      }
+    }
+  }
+db:
+  {
+    "email_threads": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:1>",
+          "is_read": true,
+          "link_id": "<link:A>",
+          "is_signal": false,
+          "created_at": "<ts>",
+          "project_id": null,
+          "updated_at": "<ts>",
+          "provider_id": "resync-thread",
+          "inbox_visible": false,
+          "has_received_mail": false,
+          "reminder_returned_at": null,
+          "has_calendar_attachment": false,
+          "latest_inbound_message_ts": null,
+          "latest_non_spam_message_ts": null,
+          "latest_outbound_message_ts": null
+        }
+      ],
+      "changed": []
+    }
+  }

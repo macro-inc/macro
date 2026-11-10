@@ -105,6 +105,17 @@ pub(in crate::parity) struct StepOutcome {
 }
 
 impl Lab {
+    pub fn reject_next_kafka_publish(&self) {
+        self.kafka.reject_next_publish();
+    }
+
+    pub fn inbox_notifications(&mut self, enabled: bool) {
+        self.workers
+            .as_mut()
+            .expect("worker contexts")
+            .inbox_notifications(enabled);
+    }
+
     pub async fn start_workers(&mut self) {
         assert!(self.workers.is_none(), "workers composed once per lab");
         self.workers = Some(WorkerContexts::new(self).await);

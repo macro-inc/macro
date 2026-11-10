@@ -1,0 +1,170 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: delivery
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook-retry",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"update_labels\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook-retry","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpdateLabels(UpdateLabelsPayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+  INFO handle_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpdateLabels(UpdateLabelsPayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: DatabaseQueryFailed, source: Failed to fetch link from database\n\nCaused by:\n    0: error returned from database: relation \"email_links\" does not exist\n    1: relation \"email_links\" does not exist }"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "fetch_link_by_id"
+      ],
+      "message": null,
+      "fields": {
+        "error": "error returned from database: relation \"email_links\" does not exist"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"update_labels\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: last receive before redrive
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook-retry",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-2",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"update_labels\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "100"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook-retry","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpdateLabels(UpdateLabelsPayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+  INFO handle_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpdateLabels(UpdateLabelsPayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: DatabaseQueryFailed, source: Failed to fetch link from database\n\nCaused by:\n    0: error returned from database: relation \"email_links\" does not exist\n    1: relation \"email_links\" does not exist }"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "fetch_link_by_id"
+      ],
+      "message": null,
+      "fields": {
+        "error": "error returned from database: relation \"email_links\" does not exist"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"update_labels\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "100"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

@@ -52,6 +52,14 @@ impl Kafka {
         }
     }
 
+    /// Make the next broker produce fail permanently, without retrying or sleeping.
+    pub fn reject_next_publish(&self) {
+        self._cluster.request_errors(
+            rdkafka::types::RDKafkaApiKey::Produce,
+            &[rdkafka::types::RDKafkaRespErr::RD_KAFKA_RESP_ERR_MSG_SIZE_TOO_LARGE],
+        );
+    }
+
     pub async fn take(&mut self) -> Vec<Value> {
         self.tracker.close();
         tokio::time::timeout(Duration::from_secs(15), self.tracker.wait())

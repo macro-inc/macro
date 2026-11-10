@@ -114,6 +114,7 @@ pub struct GmailState {
     /// Ordered, opt-in HTTP replies for worker characterization.
     pub scripted_http: VecDeque<(String, String, HttpReply)>,
     pause: Option<Pause>,
+    http_pause: Option<(String, Pause)>,
 }
 
 #[derive(Clone)]
@@ -204,6 +205,26 @@ impl FakeGmail {
         PauseHandle {
             arrived: arrived_rx,
             release: release_tx,
+        }
+    }
+
+    /// Pause a selected HTTP response, including explicitly scripted endpoints.
+    pub fn pause_next_http(&self, path: &str, at: PauseAt) -> PauseHandle {
+        let (arrived, receiver) = oneshot::channel();
+        let (release, resume) = oneshot::channel();
+        self.lock().http_pause = Some((
+            path.to_owned(),
+            Pause {
+                kind: Kind::Other,
+                message: None,
+                at,
+                arrived,
+                release: resume,
+            },
+        ));
+        PauseHandle {
+            arrived: receiver,
+            release,
         }
     }
 
@@ -415,6 +436,26 @@ async fn handle(State(gmail): State<FakeGmail>, method: Method, uri: Uri, body: 
         );
         Some(index)
     });
+    let http_pause = {
+        let mut state = gmail.lock();
+        if state
+            .http_pause
+            .as_ref()
+            .is_some_and(|(path, _)| path == uri.path())
+        {
+            state.http_pause.take().map(|(_, pause)| pause)
+        } else {
+            None
+        }
+    };
+    let after_pause = match http_pause {
+        Some(pause) if pause.at == PauseAt::BeforeApply => {
+            let _ = pause.arrived.send(());
+            let _ = pause.release.await;
+            None
+        }
+        other => other,
+    };
     let endpoint_headers = gmail.lock().endpoint_headers.get(uri.path()).cloned();
     let mut response = reply(State(gmail.clone()), method, uri, body).await;
     if let Some(headers) = endpoint_headers {
@@ -424,6 +465,10 @@ async fn handle(State(gmail): State<FakeGmail>, method: Method, uri: Uri, body: 
                 axum::http::HeaderValue::from_str(&value).expect("provider header value"),
             );
         }
+    }
+    if let Some(pause) = after_pause {
+        let _ = pause.arrived.send(());
+        let _ = pause.release.await;
     }
     dropped |= response.extensions().get::<Disconnected>().is_some();
     if let (Some(recording), Some(index)) = (recording, entry) {

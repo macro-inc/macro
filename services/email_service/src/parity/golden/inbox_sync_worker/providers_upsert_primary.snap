@@ -1,0 +1,3338 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: provider status 200 success
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/contacts",
+        "body": "{\"connections\":[{\"first\":\"<user:A>\",\"second\":\"macro|sender@example.com\"}]}",
+        "delay_seconds": 0
+      },
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"populate_crm_contact\":{\"link_id\":\"<link:A>\",\"contact_email\":\"sender@example.com\",\"contact_name\":\"Sender\",\"first_at\":\"<time:provider>\",\"last_at\":\"<time:provider>\",\"is_sent\":false}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_threads_by_link_id_and_provider_ids {"link_id":"<link:A>","provider_ids":"{\"t1\"}"}
+      INFO process_and_insert_message {"link_id":"<link:A>","message_provider_id":"Some(\"m1a\")","thread_db_id":"<thread:t1>"}
+        INFO process_message_pre_insert {"message_id":"m1a"}
+          INFO clean_message {}
+            INFO clean_message_subject_snippet {}
+            INFO remove_trailing_br_tags {}
+        INFO insert_message {"link_id":"<link:A>","resync":"Some(ResyncSnapshot { stored_labels: [\"INBOX\", \"UNREAD\"], pending_labels: [] })","thread_id":"<thread:t1>","update_thread_metadata":true}
+          INFO parse_and_upsert_message_contacts {"link_id":"<link:A>"}
+            INFO upsert_message_contacts {}
+              INFO fetch_contacts_by_emails {"link_id":"<link:A>"}
+              INFO insert_new_contacts {}
+          INFO lock_provider_thread {"link_id":"<link:A>","provider_thread_id":"t1"}
+          INFO lock_thread_label_writes {}
+          INFO insert_db_message {"from_contact_id":"Some(<uuid:1>)","thread_id":"<thread:t1>","update_thread_metadata":true}
+          INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+          INFO set_flags_from_labels {"message_id":"<msg:m1a>","read":true,"starred":false}
+          INFO insert_attachments {}
+          INFO update_message_replying_to_from_headers {"link_id":"<link:A>","message_db_id":"<msg:m1a>"}
+      INFO get_message_and_thread_id_by_provider_id {"link_id":"<link:A>","provider_id":"m1a"}
+      INFO handle_attachment_upload {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO handle_contacts_sync {"is_sent":false}
+        INFO publish_connections {}
+      INFO enqueue_email_backfill_message {}
+        INFO enqueue_backfill_message {}
+      INFO refresh_email {"user_id":"<user:A>"}
+  INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+    INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  a8d04a7b6e88 rows_affected=1 rows_returned=1
+  6077ad41cbf5 rows_affected=0 rows_returned=0
+  ce599bbf83fe rows_affected=2 rows_returned=2
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  bd52d423712d rows_affected=1 rows_returned=1
+  312980cf5478 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  00c1122a3bd0 rows_affected=1 rows_returned=0
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  346206754dbd rows_affected=2 rows_returned=2
+  5727c56045ae rows_affected=2 rows_returned=2
+  a5366b9d91c4 rows_affected=0 rows_returned=0
+  dc99e1aa2a50 rows_affected=0 rows_returned=0
+  32acf65c4e94 rows_affected=1 rows_returned=1
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=0 rows_returned=0
+  ad640ecb32fd rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  1acdbc09424a rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/message/send/user/<user:A>",
+      "body": {
+        "message": {
+          "event": "upsert_message",
+          "link_id": "<link:A>"
+        },
+        "message_type": "refresh_email"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/contacts",
+        "MessageBody": {
+          "connections": [
+            {
+              "first": "<user:A>",
+              "second": "macro|sender@example.com"
+            }
+          ]
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-1"
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "populate_crm_contact": {
+              "link_id": "<link:A>",
+              "contact_email": "sender@example.com",
+              "contact_name": "Sender",
+              "first_at": "<time:provider>",
+              "last_at": "<time:provider>",
+              "is_sent": false
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-2"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {
+    "email_contacts": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:2>",
+          "name": "Recipient",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "email_address": "recipient@example.com",
+          "sfs_photo_url": null,
+          "original_photo_url": null
+        },
+        {
+          "id": "<uuid:1>",
+          "name": "Sender",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "email_address": "sender@example.com",
+          "sfs_photo_url": null,
+          "original_photo_url": null
+        }
+      ],
+      "changed": []
+    },
+    "email_message_recipients": {
+      "removed": [],
+      "added": [
+        {
+          "name": "Recipient",
+          "contact_id": "<uuid:2>",
+          "message_id": "<msg:m1a>",
+          "recipient_type": "TO"
+        }
+      ],
+      "changed": []
+    },
+    "email_messages": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "body_text": {
+            "before": null,
+            "after": "body"
+          },
+          "from_contact_id": {
+            "before": null,
+            "after": "<uuid:1>"
+          },
+          "from_name": {
+            "before": null,
+            "after": "Sender"
+          },
+          "global_id": {
+            "before": null,
+            "after": "<m1a@example.com>"
+          },
+          "headers_jsonb": {
+            "before": null,
+            "after": [
+              {
+                "name": "From",
+                "value": "Sender <sender@example.com>"
+              },
+              {
+                "name": "To",
+                "value": "Recipient <recipient@example.com>"
+              },
+              {
+                "name": "Subject",
+                "value": "Fixture subject"
+              },
+              {
+                "name": "Message-ID",
+                "value": "<m1a@example.com>"
+              },
+              {
+                "name": "Date",
+                "value": "Mon, 21 Sep 2026 14:13:20 +0000"
+              }
+            ]
+          },
+          "id": "<msg:m1a>",
+          "provider_history_id": {
+            "before": null,
+            "after": "200"
+          },
+          "sent_at": {
+            "before": null,
+            "after": "<time:provider>"
+          },
+          "size_estimate": {
+            "before": null,
+            "after": 20
+          },
+          "snippet": {
+            "before": null,
+            "after": "fixture preview"
+          },
+          "subject": {
+            "before": null,
+            "after": "Fixture subject"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: provider status 400 bad-request
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+  INFO handle_non_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: GmailApiFailed, source: upsert_message: permanent email provider failure: Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}} }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "permanent email provider failure: Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing inbox sync message. The message will be deleted.",
+      "fields": {
+        "error": "GmailApiFailed: upsert_message: permanent email provider failure: Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}",
+        "payload": "UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" })"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 400
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider status 401 auth
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":1}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+        INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO fetch_gmail_access_token_no_cache {}
+              INFO fetch_token_from_auth_service {}
+                INFO get_google_access_token {"email":"<fusion:A>@example.com","fusionauth_user_id":"<fusion:A>"}
+              INFO cache_token_in_redis {}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+  INFO handle_non_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: AccessTokenFetchFailed, source: upsert_message: email provider authorization is required }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider authorization is required"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing inbox sync message. The message will be deleted.",
+      "fields": {
+        "error": "AccessTokenFetchFailed: upsert_message: email provider authorization is required",
+        "payload": "UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" })"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 401
+    },
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=<fusion:A>%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 401
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "10"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider status 401 refresh success
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/contacts",
+        "body": "{\"connections\":[{\"first\":\"<user:A>\",\"second\":\"macro|sender@example.com\"}]}",
+        "delay_seconds": 0
+      },
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"populate_crm_contact\":{\"link_id\":\"<link:A>\",\"contact_email\":\"sender@example.com\",\"contact_name\":\"Sender\",\"first_at\":\"<time:provider>\",\"last_at\":\"<time:provider>\",\"is_sent\":false}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":1}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+        INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO fetch_gmail_access_token_no_cache {}
+              INFO fetch_token_from_auth_service {}
+                INFO get_google_access_token {"email":"<fusion:A>@example.com","fusionauth_user_id":"<fusion:A>"}
+              INFO cache_token_in_redis {}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_threads_by_link_id_and_provider_ids {"link_id":"<link:A>","provider_ids":"{\"t1\"}"}
+      INFO process_and_insert_message {"link_id":"<link:A>","message_provider_id":"Some(\"m1a\")","thread_db_id":"<thread:t1>"}
+        INFO process_message_pre_insert {"message_id":"m1a"}
+          INFO clean_message {}
+            INFO clean_message_subject_snippet {}
+            INFO remove_trailing_br_tags {}
+        INFO insert_message {"link_id":"<link:A>","resync":"Some(ResyncSnapshot { stored_labels: [\"INBOX\", \"UNREAD\"], pending_labels: [] })","thread_id":"<thread:t1>","update_thread_metadata":true}
+          INFO parse_and_upsert_message_contacts {"link_id":"<link:A>"}
+            INFO upsert_message_contacts {}
+              INFO fetch_contacts_by_emails {"link_id":"<link:A>"}
+              INFO update_missing_contact_names {}
+          INFO lock_provider_thread {"link_id":"<link:A>","provider_thread_id":"t1"}
+          INFO lock_thread_label_writes {}
+          INFO insert_db_message {"from_contact_id":"Some(<uuid:1>)","thread_id":"<thread:t1>","update_thread_metadata":true}
+          INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+          INFO set_flags_from_labels {"message_id":"<msg:m1a>","read":true,"starred":false}
+          INFO insert_attachments {}
+          INFO update_message_replying_to_from_headers {"link_id":"<link:A>","message_db_id":"<msg:m1a>"}
+      INFO get_message_and_thread_id_by_provider_id {"link_id":"<link:A>","provider_id":"m1a"}
+      INFO handle_attachment_upload {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO handle_contacts_sync {"is_sent":false}
+        INFO publish_connections {}
+      INFO enqueue_email_backfill_message {}
+        INFO enqueue_backfill_message {}
+      INFO refresh_email {"user_id":"<user:A>"}
+  INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+    INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider rejection\"}}"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  a8d04a7b6e88 rows_affected=1 rows_returned=1
+  6077ad41cbf5 rows_affected=2 rows_returned=2
+  1825ab3c230b rows_affected=0 rows_returned=0
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  bd52d423712d rows_affected=0 rows_returned=0
+  a1012334caf3 rows_affected=1 rows_returned=1
+  00c1122a3bd0 rows_affected=0 rows_returned=0
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  346206754dbd rows_affected=2 rows_returned=2
+  5727c56045ae rows_affected=2 rows_returned=2
+  a5366b9d91c4 rows_affected=0 rows_returned=0
+  dc99e1aa2a50 rows_affected=0 rows_returned=0
+  32acf65c4e94 rows_affected=1 rows_returned=1
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=0 rows_returned=0
+  ad640ecb32fd rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  1acdbc09424a rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 401
+    },
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=<fusion:A>%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/message/send/user/<user:A>",
+      "body": {
+        "message": {
+          "event": "upsert_message",
+          "link_id": "<link:A>"
+        },
+        "message_type": "refresh_email"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/contacts",
+        "MessageBody": {
+          "connections": [
+            {
+              "first": "<user:A>",
+              "second": "macro|sender@example.com"
+            }
+          ]
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-3"
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "populate_crm_contact": {
+              "link_id": "<link:A>",
+              "contact_email": "sender@example.com",
+              "contact_name": "Sender",
+              "first_at": "<time:provider>",
+              "last_at": "<time:provider>",
+              "is_sent": false
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-4"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "10"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider status 403 forbidden
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+  INFO handle_non_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: GmailApiFailed, source: upsert_message: email provider operation is forbidden }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 403 Forbidden: {\"error\":{\"code\":403,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 403 Forbidden: {\"error\":{\"code\":403,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider operation is forbidden"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing inbox sync message. The message will be deleted.",
+      "fields": {
+        "error": "GmailApiFailed: upsert_message: email provider operation is forbidden",
+        "payload": "UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" })"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 403
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider status 404 missing
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+  INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+    INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 404
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider status 409 conflict
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+  INFO handle_non_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: GmailApiFailed, source: upsert_message: email provider state conflict }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 409 Conflict: {\"error\":{\"code\":409,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 409 Conflict: {\"error\":{\"code\":409,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider state conflict"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing inbox sync message. The message will be deleted.",
+      "fields": {
+        "error": "GmailApiFailed: upsert_message: email provider state conflict",
+        "payload": "UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" })"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 409
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider status 429 quota
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/gmail-webhook-retry",
+        "body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+      INFO enqueue_gmail_retry_inbox_sync_notification {"message":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+        INFO enqueue_notification {"queue_url":"<sqs>/000000000000/gmail-webhook-retry"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+  INFO handle_non_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: GmailApiRateLimited, source: upsert_message: email provider rate limit exceeded }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 429 Too Many Requests: {\"error\":{\"code\":429,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 429 Too Many Requests: {\"error\":{\"code\":429,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider rate limit exceeded",
+        "origin": "Provider { concurrency: false }"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 429
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "MessageBody": {
+          "linkId": "<link:A>",
+          "operation": {
+            "upsert_message": {
+              "provider_message_id": "m1a"
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-5"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:backfill_cooldown": {
+      "before": null,
+      "after": "1"
+    },
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:cooldown": {
+      "before": null,
+      "after": "1"
+    },
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: retry delivery from recorded send
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook-retry",
+    "message": {
+      "MessageId": "msg-5",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/contacts",
+        "body": "{\"connections\":[{\"first\":\"<user:A>\",\"second\":\"macro|alice@example.org\"}]}",
+        "delay_seconds": 0
+      },
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"populate_crm_contact\":{\"link_id\":\"<link:A>\",\"contact_email\":\"alice@example.org\",\"contact_name\":\"Alice Sender\",\"first_at\":\"<time:provider>\",\"last_at\":\"<time:provider>\",\"is_sent\":false}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook-retry","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_threads_by_link_id_and_provider_ids {"link_id":"<link:A>","provider_ids":"{\"t1\"}"}
+      INFO process_and_insert_message {"link_id":"<link:A>","message_provider_id":"Some(\"m1a\")","thread_db_id":"<thread:t1>"}
+        INFO process_message_pre_insert {"message_id":"m1a"}
+          INFO clean_message {}
+            INFO clean_message_subject_snippet {}
+            INFO remove_trailing_br_tags {}
+        INFO insert_message {"link_id":"<link:A>","resync":"Some(ResyncSnapshot { stored_labels: [\"INBOX\", \"UNREAD\"], pending_labels: [] })","thread_id":"<thread:t1>","update_thread_metadata":true}
+          INFO parse_and_upsert_message_contacts {"link_id":"<link:A>"}
+            INFO upsert_message_contacts {}
+              INFO fetch_contacts_by_emails {"link_id":"<link:A>"}
+              INFO insert_new_contacts {}
+          INFO lock_provider_thread {"link_id":"<link:A>","provider_thread_id":"t1"}
+          INFO lock_thread_label_writes {}
+          INFO insert_db_message {"from_contact_id":"Some(<uuid:3>)","thread_id":"<thread:t1>","update_thread_metadata":true}
+          INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+          INFO set_flags_from_labels {"message_id":"<msg:m1a>","read":true,"starred":false}
+          INFO insert_attachments {}
+          INFO update_message_replying_to_from_headers {"link_id":"<link:A>","message_db_id":"<msg:m1a>"}
+      INFO get_message_and_thread_id_by_provider_id {"link_id":"<link:A>","provider_id":"m1a"}
+      INFO handle_attachment_upload {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO handle_contacts_sync {"is_sent":false}
+        INFO publish_connections {}
+      INFO enqueue_email_backfill_message {}
+        INFO enqueue_backfill_message {}
+      INFO refresh_email {"user_id":"<user:A>"}
+  INFO cleanup_message {"message_id":"msg-5","message_receipt_handle":"delivery-receipt-1"}
+    INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  a8d04a7b6e88 rows_affected=1 rows_returned=1
+  6077ad41cbf5 rows_affected=0 rows_returned=0
+  ce599bbf83fe rows_affected=2 rows_returned=2
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  bd52d423712d rows_affected=1 rows_returned=1
+  00c1122a3bd0 rows_affected=1 rows_returned=0
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  346206754dbd rows_affected=2 rows_returned=2
+  5727c56045ae rows_affected=2 rows_returned=2
+  a5366b9d91c4 rows_affected=0 rows_returned=0
+  dc99e1aa2a50 rows_affected=0 rows_returned=0
+  32acf65c4e94 rows_affected=1 rows_returned=1
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=0 rows_returned=0
+  ad640ecb32fd rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  1acdbc09424a rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/message/send/user/<user:A>",
+      "body": {
+        "message": {
+          "event": "upsert_message",
+          "link_id": "<link:A>"
+        },
+        "message_type": "refresh_email"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "msg-5",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/contacts",
+        "MessageBody": {
+          "connections": [
+            {
+              "first": "<user:A>",
+              "second": "macro|alice@example.org"
+            }
+          ]
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-6"
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "populate_crm_contact": {
+              "link_id": "<link:A>",
+              "contact_email": "alice@example.org",
+              "contact_name": "Alice Sender",
+              "first_at": "<time:provider>",
+              "last_at": "<time:provider>",
+              "is_sent": false
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-7"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {
+    "email_contacts": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:3>",
+          "name": "Alice Sender",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "email_address": "alice@example.org",
+          "sfs_photo_url": null,
+          "original_photo_url": null
+        },
+        {
+          "id": "<uuid:4>",
+          "name": "Sim Owner",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "email_address": "sim@example.com",
+          "sfs_photo_url": null,
+          "original_photo_url": null
+        }
+      ],
+      "changed": []
+    },
+    "email_message_recipients": {
+      "removed": [
+        {
+          "name": "Recipient",
+          "contact_id": "<uuid:2>",
+          "message_id": "<msg:m1a>",
+          "recipient_type": "TO"
+        }
+      ],
+      "added": [
+        {
+          "name": "Sim Owner",
+          "contact_id": "<uuid:4>",
+          "message_id": "<msg:m1a>",
+          "recipient_type": "TO"
+        }
+      ],
+      "changed": []
+    },
+    "email_messages": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "body_text": {
+            "before": "body",
+            "after": "Body of m1a"
+          },
+          "from_contact_id": {
+            "before": "<uuid:1>",
+            "after": "<uuid:3>"
+          },
+          "from_name": {
+            "before": "Sender",
+            "after": "Alice Sender"
+          },
+          "global_id": {
+            "before": "<m1a@example.com>",
+            "after": "<m1a@example.org>"
+          },
+          "headers_jsonb": {
+            "before": [
+              {
+                "name": "From",
+                "value": "Sender <sender@example.com>"
+              },
+              {
+                "name": "To",
+                "value": "Recipient <recipient@example.com>"
+              },
+              {
+                "name": "Subject",
+                "value": "Fixture subject"
+              },
+              {
+                "name": "Message-ID",
+                "value": "<m1a@example.com>"
+              },
+              {
+                "name": "Date",
+                "value": "Mon, 21 Sep 2026 14:13:20 +0000"
+              }
+            ],
+            "after": [
+              {
+                "name": "From",
+                "value": "Alice Sender <alice@example.org>"
+              },
+              {
+                "name": "To",
+                "value": "Sim Owner <sim@example.com>"
+              },
+              {
+                "name": "Subject",
+                "value": "Thread t1"
+              },
+              {
+                "name": "Date",
+                "value": "Mon, 21 Sep 2026 14:13:20 +0000"
+              },
+              {
+                "name": "Message-ID",
+                "value": "<m1a@example.org>"
+              }
+            ]
+          },
+          "id": "<msg:m1a>",
+          "provider_history_id": {
+            "before": "200",
+            "after": "100"
+          },
+          "size_estimate": {
+            "before": 20,
+            "after": 100
+          },
+          "snippet": {
+            "before": "fixture preview",
+            "after": "Body of m1a"
+          },
+          "subject": {
+            "before": "Fixture subject",
+            "after": "Thread t1"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: provider status 429 concurrency
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/gmail-webhook-retry",
+        "body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+      INFO enqueue_gmail_retry_inbox_sync_notification {"message":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+        INFO enqueue_notification {"queue_url":"<sqs>/000000000000/gmail-webhook-retry"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+  INFO handle_non_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: GmailApiRateLimited, source: upsert_message: email provider rate limit exceeded }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 429 Too Many Requests: {\"error\":{\"code\":429,\"message\":\"Too many concurrent requests for user.\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 429 Too Many Requests: {\"error\":{\"code\":429,\"message\":\"Too many concurrent requests for user.\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider rate limit exceeded",
+        "origin": "Provider { concurrency: true }"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 429
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "MessageBody": {
+          "linkId": "<link:A>",
+          "operation": {
+            "upsert_message": {
+              "provider_message_id": "m1a"
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-8"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:backfill_cooldown": {
+      "before": null,
+      "after": "1"
+    },
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:cooldown": {
+      "before": null,
+      "after": "1"
+    },
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:limit": {
+      "before": null,
+      "after": {
+        "at": "<timestamp>",
+        "cap": "3"
+      }
+    },
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: retry delivery from recorded send
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook-retry",
+    "message": {
+      "MessageId": "msg-8",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/contacts",
+        "body": "{\"connections\":[{\"first\":\"<user:A>\",\"second\":\"macro|alice@example.org\"}]}",
+        "delay_seconds": 0
+      },
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"populate_crm_contact\":{\"link_id\":\"<link:A>\",\"contact_email\":\"alice@example.org\",\"contact_name\":\"Alice Sender\",\"first_at\":\"<time:provider>\",\"last_at\":\"<time:provider>\",\"is_sent\":false}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook-retry","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_threads_by_link_id_and_provider_ids {"link_id":"<link:A>","provider_ids":"{\"t1\"}"}
+      INFO process_and_insert_message {"link_id":"<link:A>","message_provider_id":"Some(\"m1a\")","thread_db_id":"<thread:t1>"}
+        INFO process_message_pre_insert {"message_id":"m1a"}
+          INFO clean_message {}
+            INFO clean_message_subject_snippet {}
+            INFO remove_trailing_br_tags {}
+        INFO insert_message {"link_id":"<link:A>","resync":"Some(ResyncSnapshot { stored_labels: [\"INBOX\", \"UNREAD\"], pending_labels: [] })","thread_id":"<thread:t1>","update_thread_metadata":true}
+          INFO parse_and_upsert_message_contacts {"link_id":"<link:A>"}
+            INFO upsert_message_contacts {}
+              INFO fetch_contacts_by_emails {"link_id":"<link:A>"}
+              INFO update_missing_contact_names {}
+          INFO lock_provider_thread {"link_id":"<link:A>","provider_thread_id":"t1"}
+          INFO lock_thread_label_writes {}
+          INFO insert_db_message {"from_contact_id":"Some(<uuid:3>)","thread_id":"<thread:t1>","update_thread_metadata":true}
+          INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+          INFO set_flags_from_labels {"message_id":"<msg:m1a>","read":true,"starred":false}
+          INFO insert_attachments {}
+          INFO update_message_replying_to_from_headers {"link_id":"<link:A>","message_db_id":"<msg:m1a>"}
+      INFO get_message_and_thread_id_by_provider_id {"link_id":"<link:A>","provider_id":"m1a"}
+      INFO handle_attachment_upload {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO handle_contacts_sync {"is_sent":false}
+        INFO publish_connections {}
+      INFO enqueue_email_backfill_message {}
+        INFO enqueue_backfill_message {}
+      INFO refresh_email {"user_id":"<user:A>"}
+  INFO cleanup_message {"message_id":"msg-8","message_receipt_handle":"delivery-receipt-1"}
+    INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  a8d04a7b6e88 rows_affected=1 rows_returned=1
+  6077ad41cbf5 rows_affected=2 rows_returned=2
+  1825ab3c230b rows_affected=0 rows_returned=0
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  bd52d423712d rows_affected=0 rows_returned=0
+  a1012334caf3 rows_affected=1 rows_returned=1
+  00c1122a3bd0 rows_affected=0 rows_returned=0
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  346206754dbd rows_affected=2 rows_returned=2
+  5727c56045ae rows_affected=2 rows_returned=2
+  a5366b9d91c4 rows_affected=0 rows_returned=0
+  dc99e1aa2a50 rows_affected=0 rows_returned=0
+  32acf65c4e94 rows_affected=1 rows_returned=1
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=0 rows_returned=0
+  ad640ecb32fd rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  1acdbc09424a rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/message/send/user/<user:A>",
+      "body": {
+        "message": {
+          "event": "upsert_message",
+          "link_id": "<link:A>"
+        },
+        "message_type": "refresh_email"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "msg-8",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/contacts",
+        "MessageBody": {
+          "connections": [
+            {
+              "first": "<user:A>",
+              "second": "macro|alice@example.org"
+            }
+          ]
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-9"
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "populate_crm_contact": {
+              "link_id": "<link:A>",
+              "contact_email": "alice@example.org",
+              "contact_name": "Alice Sender",
+              "first_at": "<time:provider>",
+              "last_at": "<time:provider>",
+              "is_sent": false
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-10"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider status 500 internal
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+  INFO handle_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: GmailApiFailed, source: upsert_message: transient email provider failure: Gmail API returned 500 Internal Server Error: {\"error\":{\"code\":500,\"message\":\"scripted provider rejection\"}} }"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 500 Internal Server Error: {\"error\":{\"code\":500,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 500 Internal Server Error: {\"error\":{\"code\":500,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "transient email provider failure: Gmail API returned 500 Internal Server Error: {\"error\":{\"code\":500,\"message\":\"scripted provider rejection\"}}"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 500
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider status 503 unavailable
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+  INFO handle_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: GmailApiFailed, source: upsert_message: transient email provider failure: Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}} }"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "transient email provider failure: Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 503
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider status 0 disconnect
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+  INFO handle_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: GmailApiFailed, source: upsert_message: transient email provider failure: Gmail API transport error: error sending request }"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API transport error: error sending request"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API transport error: error sending request"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "transient email provider failure: Gmail API transport error: error sending request"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": null,
+      "connection_dropped": true
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider status 200 malformed
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+  INFO handle_non_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: GmailApiFailed, source: upsert_message: permanent email provider failure: Gmail API response decode error: error decoding response body }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API response decode error: error decoding response body"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API response decode error: error decoding response body"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "permanent email provider failure: Gmail API response decode error: error decoding response body"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing inbox sync message. The message will be deleted.",
+      "fields": {
+        "error": "GmailApiFailed: upsert_message: permanent email provider failure: Gmail API response decode error: error decoding response body",
+        "payload": "UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" })"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: retry publication failure
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"m1a"}
+          INFO get_message {"message_provider_id":"m1a"}
+      INFO enqueue_gmail_retry_inbox_sync_notification {"message":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+        INFO enqueue_notification {"queue_url":"<sqs>/000000000000/gmail-webhook-retry"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+  INFO handle_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: SqsEnqueueFailed, source: upsert_message: Failed to enqueue inbox sync retry message }"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 429 Too Many Requests: {\"error\":{\"code\":429,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 429 Too Many Requests: {\"error\":{\"code\":429,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider rate limit exceeded",
+        "origin": "Provider { concurrency: false }"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "enqueue_gmail_retry_inbox_sync_notification",
+        "enqueue_notification"
+      ],
+      "message": "Connection encountered an issue and should not be re-used. Marking it for closure",
+      "fields": {
+        "see_for_more_info": "https://smithy-lang.github.io/smithy-rs/design/client/detailed_error_explanations.html"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 429
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "MessageBody": {
+          "linkId": "<link:A>",
+          "operation": {
+            "upsert_message": {
+              "provider_message_id": "m1a"
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 500,
+      "response": {
+        "__type": "com.amazonaws.sqs#InternalError",
+        "message": "injected outage"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:backfill_cooldown": {
+      "before": null,
+      "after": "1"
+    },
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:cooldown": {
+      "before": null,
+      "after": "1"
+    },
+    "gmail:{51000000-0000-0000-0000-0000000124fe}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: local request gate refused
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/gmail-webhook-retry",
+        "body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message {"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+      INFO enqueue_gmail_retry_inbox_sync_notification {"message":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }"}
+        INFO enqueue_notification {"queue_url":"<sqs>/000000000000/gmail-webhook-retry"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+  INFO handle_non_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"m1a\" }) }","e":"DetailedError { reason: GmailApiRateLimited, source: upsert_message: email provider rate limit exceeded }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  8eb884f88b7c rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "MessageBody": {
+          "linkId": "<link:A>",
+          "operation": {
+            "upsert_message": {
+              "provider_message_id": "m1a"
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-12"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

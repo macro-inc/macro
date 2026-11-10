@@ -105,3 +105,37 @@ async fn scripted_send_as_disconnect_cannot_complete_a_response() {
         assert!(response.bytes().await.is_err());
     }
 }
+
+#[tokio::test]
+async fn scripted_http_pause_keeps_the_response_chosen_before_the_barrier() {
+    let gmail = FakeGmail::start(GmailState::default()).await;
+    let path = "/gmail/v1/users/me/history";
+    gmail
+        .lock()
+        .endpoint_replies
+        .insert(path.into(), [(200, json!({"historyId":"100"}))].into());
+    let pause = gmail.pause_next_http(path, PauseAt::AfterApply);
+    let endpoint = format!("{}/users/me/history", gmail.url);
+    let next = endpoint.clone();
+    let request = tokio::spawn(async move { reqwest::get(next).await.expect("fake request") });
+    pause.arrived.await.expect("response chosen");
+    gmail
+        .lock()
+        .endpoint_replies
+        .insert(path.into(), [(503, json!({"error":"later"}))].into());
+    pause.release.send(()).expect("release");
+    let response = request.await.expect("request task");
+    assert_eq!(response.status().as_u16(), 200);
+    assert_eq!(
+        response.json::<Value>().await.expect("body"),
+        json!({"historyId":"100"})
+    );
+    assert_eq!(
+        reqwest::get(endpoint)
+            .await
+            .expect("later response")
+            .status()
+            .as_u16(),
+        503
+    );
+}

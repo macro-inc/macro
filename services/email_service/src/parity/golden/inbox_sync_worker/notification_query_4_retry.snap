@@ -1,0 +1,116 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: new mail notification path
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook-retry",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"notifiable\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook-retry","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"notifiable\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO upsert_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"notifiable\" }"}
+      INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"notifiable","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message {"message_provider_id":"notifiable"}
+          INFO get_message {"message_provider_id":"notifiable"}
+      INFO get_threads_by_link_id_and_provider_ids {"link_id":"<link:A>","provider_ids":"{\"t1\"}"}
+  INFO handle_retryable_error {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpsertMessage(UpsertMessagePayload { provider_message_id: \"notifiable\" }) }","e":"DetailedError { reason: DatabaseQueryFailed, source: upsert_message: Failed to get threads by link id and provider ids }"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "upsert_message",
+        "get_threads_by_link_id_and_provider_ids"
+      ],
+      "message": null,
+      "fields": {
+        "error": "attempted to acquire a connection on a closed pool"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/notifiable",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook-retry",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"upsert_message\":{\"provider_message_id\":\"notifiable\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000130cb}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}

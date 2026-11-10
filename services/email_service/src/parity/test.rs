@@ -9,6 +9,47 @@ static SCENARIO_PATTERN: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock
         .expect("scenario declarations")
 });
 
+fn scenario_names(source: &str) -> std::collections::BTreeSet<String> {
+    static CASE_BLOCK: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"(?s)cases!\s*\{[^;]*;(.*?)\}").expect("case blocks")
+    });
+    static CASE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"\b([a-zA-Z0-9_]+),\s*[0-9]+,\s*(?:true|false),")
+            .expect("case declarations")
+    });
+    let mut names: std::collections::BTreeSet<_> = SCENARIO_PATTERN
+        .captures_iter(source)
+        .map(|capture| capture[1].to_owned())
+        .collect();
+    for block in CASE_BLOCK.captures_iter(source) {
+        names.extend(
+            CASE.captures_iter(&block[1])
+                .map(|capture| capture[1].to_owned()),
+        );
+    }
+    names
+}
+
+#[test]
+fn scenario_inventory_includes_explicit_worker_case_declarations() {
+    let source = r#"
+        #[sqlx::test(migrator = "migrations")]
+        async fn ordinary(pool: PgPool) {}
+        cases! { runner;
+            primary_case, 100, false, Case::Example;
+            retry_case, 103, true, Case::Example;
+        }
+        cases! { runner; inline_case, 109, true, Case::Example; }
+        not_a_case, 106, false, Case::Example;
+    "#;
+    assert_eq!(
+        scenario_names(source),
+        ["inline_case", "ordinary", "primary_case", "retry_case"]
+            .map(str::to_owned)
+            .into()
+    );
+}
+
 #[test]
 fn normalization_preserves_behavior_and_reuses_runtime_id_names() {
     if !crate::parity::process_per_test() {
@@ -102,10 +143,7 @@ fn no_orphan_goldens() {
         let mut source = std::fs::read_to_string(source_root.join(format!("{name}.rs")))
             .expect("a source module for every golden suite");
         collect_sources(&source_root.join(name), &mut source);
-        let scenarios: std::collections::BTreeSet<String> = SCENARIO_PATTERN
-            .captures_iter(&source)
-            .map(|capture| capture[1].to_owned())
-            .collect();
+        let scenarios = scenario_names(&source);
         let mut snapshots = std::collections::BTreeSet::new();
         let mut referenced = std::collections::BTreeSet::new();
         for entry in std::fs::read_dir(&suite).expect("suite goldens") {

@@ -20,6 +20,11 @@ pub(in crate::parity::lab) struct WorkerContexts {
 }
 
 impl WorkerContexts {
+    pub fn inbox_notifications(&mut self, enabled: bool) {
+        self.sync.notifications_enabled = enabled;
+        self.sync_retry.notifications_enabled = enabled;
+    }
+
     pub async fn new(lab: &Lab) -> Self {
         let api = &lab.api;
         let sdk = pubsub::label_write_sim::fake_sqs::client(&lab.sqs.url, false);

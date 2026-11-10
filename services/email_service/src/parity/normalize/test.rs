@@ -171,3 +171,32 @@ fn sfs_source_set_order_is_opt_in_and_limited_to_its_span() {
     let malformed = json!({"name":"fetch_sfs_mappings","fields":{"sources":"not a set"}});
     assert_eq!(normalizer.value("spans", malformed.clone()), malformed);
 }
+
+#[test]
+fn embedded_transaction_backtrace_keeps_the_rollback_error() {
+    if !crate::parity::process_per_test() {
+        return;
+    }
+    for (captured, expected) in [
+        (
+            "DetailedError { source: Original error: Retryable(DetailedError { source: database unavailable\n\nStack backtrace:\n   0: frame\n             at source.rs:1:2 }), Rollback error: Io(UnexpectedEof)\n\nStack backtrace:\n   0: outer frame }",
+            "DetailedError { source: Original error: Retryable(DetailedError { source: database unavailable }), Rollback error: Io(UnexpectedEof) }",
+        ),
+        (
+            r#"Outer(Transient("unavailable\n\nStack backtrace:\n   0: frame")), Rollback error: Io(UnexpectedEof))"#,
+            r#"Outer(Transient("unavailable")), Rollback error: Io(UnexpectedEof))"#,
+        ),
+        (
+            "Original error: Retryable(database unavailable), Rollback error: Io(UnexpectedEof)",
+            "Original error: Retryable(database unavailable), Rollback error: Io(UnexpectedEof)",
+        ),
+    ] {
+        let mut normalizer = Normalizer::default();
+        assert_eq!(normalizer.value("logs", json!(captured)), json!(expected));
+        assert_eq!(normalizer.value("spans", json!(captured)), json!(expected));
+        assert_eq!(
+            normalizer.value("response", json!(captured)),
+            json!(captured)
+        );
+    }
+}

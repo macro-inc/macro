@@ -1,0 +1,389 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: label synchronization
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"update_labels\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: UpdateLabels(UpdateLabelsPayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO update_labels {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpdateLabelsPayload { provider_message_id: \"m1a\" }"}
+      INFO fetch_message_labels {"message_db_id":"<msg:m1a>"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO get_message_label_ids {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO get_message_label_ids {"message_provider_id":"m1a"}
+          INFO get_message_label_ids {"message_provider_id":"m1a"}
+      INFO pending_provider_label_ids {"message_id":"<msg:m1a>"}
+      INFO add_message_labels {"message_db_id":"<msg:m1a>","provider_label_ids":"[\"Label_work\"]","thread_db_id":"<thread:t1>"}
+      INFO remove_message_labels {"message_db_id":"<msg:m1a>","provider_label_ids":"[\"INBOX\"]","thread_db_id":"<thread:t1>"}
+        INFO delete_db_message_labels {"link_id":"<link:A>","message_id":"<msg:m1a>","provider_label_ids":"[\"INBOX\"]"}
+      INFO get_thread_by_id_and_link_id {"link_id":"<link:A>","thread_id":"<thread:t1>"}
+      INFO refresh_email {"user_id":"<user:A>"}
+      INFO kafka.publish {"key":"<link:A>","messaging.destination.name":"macro.email","messaging.operation.name":"publish","messaging.operation.type":"send","messaging.system":"kafka","otel.kind":"producer","topic":"macro.email"}
+      INFO kafka.publish {"key":"<link:A>","messaging.destination.name":"macro.email","messaging.operation.name":"publish","messaging.operation.type":"send","messaging.system":"kafka","otel.kind":"producer","topic":"macro.email"}
+  INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+    INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  5727c56045ae rows_affected=1 rows_returned=1
+  a5366b9d91c4 rows_affected=1 rows_returned=0
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=0 rows_returned=0
+  ad640ecb32fd rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  626d4a93439a rows_affected=1 rows_returned=0
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=0 rows_returned=0
+  ad640ecb32fd rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  b8c692990d4e rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a?format=minimal",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/message/send/user/<user:A>",
+      "body": {
+        "message": {
+          "event": "update_labels",
+          "link_id": "<link:A>"
+        },
+        "message_type": "refresh_email"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"update_labels\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  [
+    {
+      "topic": "macro.email",
+      "key": "<link:A>",
+      "payload": {
+        "event_id": "<uuid:1>",
+        "schema_version": 1,
+        "event_type": "email.thread_archived",
+        "metadata": {
+          "link_id": "<link:A>",
+          "owner": "<user:A>",
+          "actor": null,
+          "thread_id": "<thread:t1>",
+          "archived": true,
+          "origin": "provider_sync"
+        }
+      }
+    },
+    {
+      "topic": "macro.email",
+      "key": "<link:A>",
+      "payload": {
+        "event_id": "<uuid:2>",
+        "schema_version": 1,
+        "event_type": "email.thread_labels_updated",
+        "metadata": {
+          "link_id": "<link:A>",
+          "owner": "<user:A>",
+          "actor": null,
+          "thread_id": "<thread:t1>",
+          "added": [
+            {
+              "label_id": null,
+              "provider_label_id": "Label_work",
+              "name": null
+            }
+          ],
+          "removed": [],
+          "origin": "provider_sync"
+        }
+      }
+    }
+  ]
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000115e2}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {
+    "email_message_labels": {
+      "removed": [
+        {
+          "label_id": "<label:A/INBOX>",
+          "message_id": "<msg:draft>"
+        },
+        {
+          "label_id": "<label:A/INBOX>",
+          "message_id": "<msg:m1a>"
+        },
+        {
+          "label_id": "<label:A/INBOX>",
+          "message_id": "<msg:m1b>"
+        },
+        {
+          "label_id": "<label:A/INBOX>",
+          "message_id": "<msg:m1c>"
+        },
+        {
+          "label_id": "<label:A/STARRED>",
+          "message_id": "<msg:m1b>"
+        },
+        {
+          "label_id": "<label:A/UNREAD>",
+          "message_id": "<msg:m1a>"
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "email_messages": {
+      "removed": [
+        {
+          "id": "<msg:draft>",
+          "is_read": true,
+          "is_sent": false,
+          "link_id": "<link:A>",
+          "sent_at": null,
+          "snippet": null,
+          "subject": null,
+          "is_draft": true,
+          "body_text": null,
+          "from_name": null,
+          "global_id": null,
+          "thread_id": "<thread:t1>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": false,
+          "updated_at": "<ts>",
+          "provider_id": null,
+          "headers_jsonb": null,
+          "mailbox_state": null,
+          "size_estimate": null,
+          "replying_to_id": null,
+          "from_contact_id": null,
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<ts>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t1",
+          "body_html_sanitized": null,
+          "provider_history_id": null,
+          "remote_draft_revision": null
+        },
+        {
+          "id": "<msg:m1a>",
+          "is_read": false,
+          "is_sent": false,
+          "link_id": "<link:A>",
+          "sent_at": null,
+          "snippet": null,
+          "subject": null,
+          "is_draft": false,
+          "body_text": null,
+          "from_name": null,
+          "global_id": null,
+          "thread_id": "<thread:t1>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": false,
+          "updated_at": "<ts>",
+          "provider_id": "m1a",
+          "headers_jsonb": null,
+          "mailbox_state": null,
+          "size_estimate": null,
+          "replying_to_id": null,
+          "from_contact_id": null,
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<time:provider>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t1",
+          "body_html_sanitized": null,
+          "provider_history_id": null,
+          "remote_draft_revision": null
+        },
+        {
+          "id": "<msg:m1b>",
+          "is_read": true,
+          "is_sent": false,
+          "link_id": "<link:A>",
+          "sent_at": null,
+          "snippet": null,
+          "subject": null,
+          "is_draft": false,
+          "body_text": null,
+          "from_name": null,
+          "global_id": null,
+          "thread_id": "<thread:t1>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": true,
+          "updated_at": "<ts>",
+          "provider_id": "m1b",
+          "headers_jsonb": null,
+          "mailbox_state": null,
+          "size_estimate": null,
+          "replying_to_id": null,
+          "from_contact_id": null,
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<ts>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t1",
+          "body_html_sanitized": null,
+          "provider_history_id": null,
+          "remote_draft_revision": null
+        },
+        {
+          "id": "<msg:m1c>",
+          "is_read": true,
+          "is_sent": false,
+          "link_id": "<link:A>",
+          "sent_at": null,
+          "snippet": null,
+          "subject": null,
+          "is_draft": false,
+          "body_text": null,
+          "from_name": null,
+          "global_id": null,
+          "thread_id": "<thread:t1>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": false,
+          "updated_at": "<ts>",
+          "provider_id": "m1c",
+          "headers_jsonb": null,
+          "mailbox_state": null,
+          "size_estimate": null,
+          "replying_to_id": null,
+          "from_contact_id": null,
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<ts>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t1",
+          "body_html_sanitized": null,
+          "provider_history_id": null,
+          "remote_draft_revision": null
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "email_threads": {
+      "removed": [
+        {
+          "id": "<thread:t1>",
+          "is_read": false,
+          "link_id": "<link:A>",
+          "is_signal": true,
+          "created_at": "<ts>",
+          "project_id": null,
+          "updated_at": "<ts>",
+          "provider_id": "t1",
+          "inbox_visible": true,
+          "has_received_mail": true,
+          "reminder_returned_at": null,
+          "has_calendar_attachment": false,
+          "latest_inbound_message_ts": "<ts>",
+          "latest_non_spam_message_ts": "<ts>",
+          "latest_outbound_message_ts": null
+        }
+      ],
+      "added": [],
+      "changed": []
+    }
+  }

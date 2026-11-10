@@ -1,0 +1,215 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: delete delivery
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-webhook",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"delete_message\":{\"provider_message_id\":\"m1a\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-webhook","wait_time_seconds":0}
+  INFO extract_inbox_sync_message {}
+  INFO inner_process_message {"data":"InboxSyncPubsubMessage { link_id: <link:A>, operation: DeleteMessage(DeleteMessagePayload { provider_message_id: \"m1a\" }) }"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO delete_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"DeleteMessagePayload { provider_message_id: \"m1a\" }"}
+      INFO get_simple_message_by_provider_and_link_for_update {"link_id":"<link:A>","provider_id":"m1a"}
+      INFO delete_message_with_tx {"link_id":"<link:A>"}
+        INFO delete_db_message {"message_id":"<msg:m1a>"}
+        INFO delete_thread_if_empty {"thread_id":"<thread:t1>"}
+      INFO refresh_email {"user_id":"<user:A>"}
+      INFO kafka.publish {"key":"<link:A>","messaging.destination.name":"macro.email","messaging.operation.name":"publish","messaging.operation.type":"send","messaging.system":"kafka","otel.kind":"producer","topic":"macro.email"}
+  INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+    INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  5d95a20f6782 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  6eee12dbed54 rows_affected=1 rows_returned=0
+  39b9a4e3da26 rows_affected=1 rows_returned=1
+  dc2f6fecc871 rows_affected=1 rows_returned=1
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=1 rows_returned=0
+  ad640ecb32fd rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "POST",
+      "path": "/message/send/user/<user:A>",
+      "body": {
+        "message": {
+          "event": "delete_message",
+          "link_id": "<link:A>"
+        },
+        "message_type": "refresh_email"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"delete_message\":{\"provider_message_id\":\"m1a\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  [
+    {
+      "topic": "macro.email",
+      "key": "<link:A>",
+      "payload": {
+        "event_id": "<uuid:1>",
+        "schema_version": 1,
+        "event_type": "email.message_deleted",
+        "metadata": {
+          "link_id": "<link:A>",
+          "owner": "<user:A>",
+          "message_id": "<msg:m1a>",
+          "provider_message_id": "m1a",
+          "thread_id": "<thread:t1>"
+        }
+      }
+    }
+  ]
+redis:
+  {}
+db:
+  {
+    "email_message_labels": {
+      "removed": [
+        {
+          "label_id": "<label:A/INBOX>",
+          "message_id": "<msg:m1a>"
+        },
+        {
+          "label_id": "<label:A/UNREAD>",
+          "message_id": "<msg:m1a>"
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "email_message_recipients": {
+      "removed": [
+        {
+          "name": null,
+          "contact_id": "<uuid:2>",
+          "message_id": "<msg:m1a>",
+          "recipient_type": "TO"
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "email_messages": {
+      "removed": [
+        {
+          "id": "<msg:m1a>",
+          "is_read": false,
+          "is_sent": true,
+          "link_id": "<link:A>",
+          "sent_at": null,
+          "snippet": null,
+          "subject": null,
+          "is_draft": true,
+          "body_text": null,
+          "from_name": null,
+          "global_id": null,
+          "thread_id": "<thread:t1>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": false,
+          "updated_at": "<ts>",
+          "provider_id": "m1a",
+          "headers_jsonb": null,
+          "mailbox_state": null,
+          "size_estimate": null,
+          "replying_to_id": null,
+          "from_contact_id": "<uuid:2>",
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<time:provider>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t1",
+          "body_html_sanitized": null,
+          "provider_history_id": null,
+          "remote_draft_revision": null
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "email_threads": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<thread:t1>",
+          "is_read": {
+            "before": false,
+            "after": true
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }

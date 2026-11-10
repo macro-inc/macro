@@ -1,0 +1,1 @@
+INSERT INTO crm_cleanup_candidates (link_id, contact_email) SELECT $1, contact_email FROM unnest($2::text[]) AS contact_email ORDER BY contact_email ON CONFLICT (link_id, contact_email) DO UPDATE SET created_at = now()

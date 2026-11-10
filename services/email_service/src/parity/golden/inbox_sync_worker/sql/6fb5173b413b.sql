@@ -1,0 +1,1 @@
+SELECT c.id, c.link_id, c.email_address, COALESCE(m.from_name, c.name) as "name", -- name from message overrides contact name c.original_photo_url, c.sfs_photo_url, c.created_at, c.updated_at FROM email_messages m INNER JOIN email_contacts c ON c.id = m.from_contact_id WHERE m.id = $1 AND m.from_contact_id IS NOT NULL
