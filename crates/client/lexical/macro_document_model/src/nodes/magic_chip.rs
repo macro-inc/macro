@@ -20,10 +20,30 @@ pub struct MagicChipNode {
         skip_serializing_if = "Option::is_none",
         with = "serde_with::rust::double_option"
     )]
-    pub prompted_message: Option<Option<MagicChipMessage>>,
+    pub prompted_message: Option<Option<OrderedMagicChipMessage>>,
     /// Stored status payload.
     #[serde(default, skip_serializing_if = "Maybe::is_missing")]
     pub status: Maybe<MagicChipStatus>,
+}
+/// A validated message retaining its actual raw JSON ordering and extra fields.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(transparent)]
+pub struct OrderedMagicChipMessage(Value);
+impl OrderedMagicChipMessage {
+    /// Canonically serialize typed input that has no original JSON order witness.
+    pub fn from_typed(message: MagicChipMessage) -> crate::ModelResult<Self> {
+        Ok(Self(serde_json::to_value(message)?))
+    }
+}
+impl<'de> Deserialize<'de> for OrderedMagicChipMessage {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        let raw = Value::deserialize(deserializer)?;
+        let _: MagicChipMessage =
+            serde_json::from_value(raw.clone()).map_err(serde::de::Error::custom)?;
+        Ok(Self(raw))
+    }
 }
 impl NodeType for MagicChipNode {
     const TYPE: &'static str = "magic-chip";
@@ -68,3 +88,6 @@ impl lexical_markdown::MarkdownText for MagicChipNode {
         self.status.as_ref().map(|value| value.as_str())
     }
 }
+
+#[cfg(test)]
+mod test;
