@@ -20,6 +20,7 @@ function guestCallThreadOptions(
       ),
     enabled: open,
     refetchInterval: open ? 3000 : false,
+    reconcile: 'id',
     retry: false,
     gcTime: 0,
   });
