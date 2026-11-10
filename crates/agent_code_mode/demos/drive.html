@@ -37,6 +37,8 @@
   .when, .snippet { color: var(--muted); }
   .snippet { font-size: 12px; font-weight: 400; margin-top: 2px; }
   .empty { padding: 32px; text-align: center; color: var(--muted); }
+  .status { color: var(--muted); margin: 0 0 12px; }
+  .status:empty { display: none; }
   @media (max-width: 560px) { .when-col { display: none; } }
 </style>
 </head>
@@ -47,6 +49,7 @@
     <input id="query" type="search" placeholder="Search documents" aria-label="Search documents">
     <button id="new">New note</button>
   </header>
+  <p class="status" id="status" role="status"></p>
   <div id="list"><p class="empty">Loading…</p></div>
 </div>
 
@@ -106,6 +109,7 @@
   const list = document.getElementById('list')!;
   const queryInput = document.getElementById('query') as HTMLInputElement;
   const newButton = document.getElementById('new') as HTMLButtonElement;
+  const status = document.getElementById('status')!;
 
   function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
     const node = document.createElement(tag);
@@ -160,8 +164,11 @@
 
   async function load() {
     const query = queryInput.value.trim();
-    const rows = query ? await search({ query }) : await recent();
-    render(rows, query);
+    try {
+      render(query ? await search({ query }) : await recent(), query);
+    } catch (error) {
+      list.replaceChildren(el('p', 'empty', `Couldn't load documents: ${String(error)}`));
+    }
   }
 
   let debounce: ReturnType<typeof setTimeout> | undefined;
@@ -171,10 +178,17 @@
   });
   newButton.addEventListener('click', async () => {
     newButton.disabled = true;
+    status.textContent = '';
     const stamp = new Date().toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-    await createNote({ name: `Note ${stamp}` });
-    queryInput.value = '';
-    newButton.disabled = false;
+    try {
+      await createNote({ name: `Note ${stamp}` });
+      queryInput.value = '';
+    } catch (error) {
+      status.textContent = `Couldn't create a note: ${String(error)}`;
+      return;
+    } finally {
+      newButton.disabled = false;
+    }
     await reload();
   });
   on(['document.created', 'document.updated', 'document.deleted'], reload);

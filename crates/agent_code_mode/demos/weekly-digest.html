@@ -227,6 +227,8 @@
   const postButton = document.getElementById('post') as HTMLButtonElement;
   const posted = document.getElementById('posted')!;
   let edited = false;
+  // A reload re-renders the button; this keeps it off while a post is under way.
+  let posting = false;
 
   function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
     const node = document.createElement(tag);
@@ -296,7 +298,7 @@
       option.selected = channel.id === selected;
       return option;
     }));
-    postButton.disabled = data.targets.length === 0;
+    postButton.disabled = posting || data.targets.length === 0;
     if (!edited) draft.value = summary(data);
   }
 
@@ -336,7 +338,8 @@
   });
   postButton.addEventListener('click', async () => {
     const text = draft.value.trim();
-    if (!text || !target.value) return;
+    if (!text || !target.value || posting) return;
+    posting = true;
     postButton.disabled = true;
     try {
       await postDigest({ channelId: target.value, text });
@@ -344,6 +347,7 @@
     } catch (error) {
       posted.textContent = `Couldn't post: ${String(error)}`;
     }
+    posting = false;
     postButton.disabled = false;
   });
   on(['document.created', 'document.updated', 'document.deleted', 'message.posted'], reload);

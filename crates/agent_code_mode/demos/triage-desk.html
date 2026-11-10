@@ -301,14 +301,16 @@
         li.style.opacity = '.4';
         try {
           await act({ kind: item.kind, id: item.id });
-          data.items = data.items.filter((other) => other.id !== item.id);
-          render();
         } catch (error) {
           li.style.opacity = '';
           button.disabled = false;
+          // No reload here: its success would replace this message.
           status.textContent = `Couldn't ${actions[item.kind].toLowerCase()}: ${String(error)}`;
+          return;
         }
-        reload();
+        data.items = data.items.filter((other) => other.id !== item.id);
+        render();
+        await reload();
       });
       li.append(el('span', `kind ${item.kind}`, kindLabels[item.kind]), body, el('span', 'when', relative(item.at)), button);
       list.append(li);

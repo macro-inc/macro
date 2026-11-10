@@ -191,6 +191,8 @@
 
   const root = document.getElementById('projects')!;
   const status = document.getElementById('status')!;
+  // Projects with a nudge under way: a reload re-renders their buttons.
+  const nudging = new Set<string>();
   const channelSelect = document.getElementById('channel') as HTMLSelectElement;
   const labels = { risk: 'At risk', watch: 'Watch', ok: 'On track' };
 
@@ -249,8 +251,10 @@
         const actions = el('div', 'actions');
         const result = el('span', 'muted');
         const button = el('button', '', 'Nudge channel');
-        button.disabled = channels.length === 0;
+        button.disabled = channels.length === 0 || nudging.has(project.id);
         button.addEventListener('click', async () => {
+          if (nudging.has(project.id)) return;
+          nudging.add(project.id);
           button.disabled = true;
           try {
             const sent = await nudge({ projectId: project.id, channelId: channelSelect.value });
@@ -259,8 +263,10 @@
               : 'Nothing overdue now.';
           } catch (error) {
             result.textContent = `Couldn't post: ${String(error)}`;
+          } finally {
+            nudging.delete(project.id);
+            button.disabled = false;
           }
-          button.disabled = false;
         });
         actions.append(result, button);
         card.append(actions);

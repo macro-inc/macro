@@ -37,6 +37,8 @@
   .progress { display: flex; justify-content: space-between; color: var(--muted);
     font-size: 12px; margin-top: 6px; }
   .empty { padding: 32px; text-align: center; color: var(--muted); }
+  .status { color: var(--muted); margin: 0 0 12px; }
+  .status:empty { display: none; }
 </style>
 </head>
 <body>
@@ -54,6 +56,7 @@
     <input id="name" placeholder="New project name" aria-label="New project name">
     <button id="create">Create</button>
   </header>
+  <p class="status" id="status" role="status"></p>
   <div id="list"><p class="empty">Loading…</p></div>
 </div>
 
@@ -96,6 +99,7 @@
   const filter = document.getElementById('filter') as HTMLSelectElement;
   const nameInput = document.getElementById('name') as HTMLInputElement;
   const createButton = document.getElementById('create') as HTMLButtonElement;
+  const status = document.getElementById('status')!;
 
   function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
     const node = document.createElement(tag);
@@ -124,8 +128,14 @@
   }
 
   async function load() {
-    const status = (filter.value || undefined) as Status | undefined;
-    const rows = await projects({ status });
+    const selected = (filter.value || undefined) as Status | undefined;
+    let rows: Awaited<ReturnType<typeof projects>>;
+    try {
+      rows = await projects({ status: selected });
+    } catch (error) {
+      list.replaceChildren(el('p', 'empty', `Couldn't load projects: ${String(error)}`));
+      return;
+    }
     if (rows.length === 0) {
       list.replaceChildren(el('p', 'empty', 'No projects match.'));
       return;
@@ -157,13 +167,24 @@
     list.replaceChildren(grid);
   }
 
+  // One create at a time, so repeated Enter presses can't add duplicates.
+  let creating = false;
   async function create() {
     const name = nameInput.value.trim();
-    if (!name) return;
+    if (!name || creating) return;
+    creating = true;
     createButton.disabled = true;
-    await createProject({ name });
-    nameInput.value = '';
-    createButton.disabled = false;
+    status.textContent = '';
+    try {
+      await createProject({ name });
+      nameInput.value = '';
+    } catch (error) {
+      status.textContent = `Couldn't create the project: ${String(error)}`;
+      return;
+    } finally {
+      creating = false;
+      createButton.disabled = false;
+    }
     await reload();
   }
 

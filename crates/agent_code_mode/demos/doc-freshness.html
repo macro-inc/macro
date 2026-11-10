@@ -159,6 +159,8 @@
   const status = document.getElementById('status')!;
   const daysSelect = document.getElementById('days') as HTMLSelectElement;
   const reminded = new Map<string, string>();
+  // Documents with a reminder under way: a reload re-renders their buttons.
+  const asking = new Set<string>();
 
   function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
     const node = document.createElement(tag);
@@ -212,7 +214,10 @@
         button.disabled = true;
       }
       button.setAttribute('aria-label', `${label}: ${doc.name}`);
+      if (asking.has(doc.id)) button.disabled = true;
       button.addEventListener('click', async () => {
+        if (asking.has(doc.id)) return;
+        asking.add(doc.id);
         button.disabled = true;
         try {
           const sent = await remind({ documentId: doc.id });
@@ -223,6 +228,8 @@
         } catch (error) {
           button.disabled = false;
           status.textContent = `Couldn't send the reminder: ${String(error)}`;
+        } finally {
+          asking.delete(doc.id);
         }
       });
       action.append(button);

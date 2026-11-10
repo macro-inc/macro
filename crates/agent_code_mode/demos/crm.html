@@ -38,6 +38,8 @@
     display: grid; place-items: center; font-size: 12px; color: var(--muted); }
   .muted { color: var(--muted); }
   .empty { padding: 32px; text-align: center; color: var(--muted); }
+  .status { color: var(--muted); margin: 0 0 12px; }
+  .status:empty { display: none; }
   @media (max-width: 560px) { .optional { display: none; } }
 </style>
 </head>
@@ -52,6 +54,7 @@
     <input id="email" type="email" placeholder="Email" aria-label="New contact email">
     <button id="create">Add contact</button>
   </div>
+  <p class="status" id="status" role="status"></p>
   <div id="list"><p class="empty">Loading…</p></div>
 </div>
 
@@ -96,6 +99,7 @@
   const nameInput = document.getElementById('name') as HTMLInputElement;
   const emailInput = document.getElementById('email') as HTMLInputElement;
   const createButton = document.getElementById('create') as HTMLButtonElement;
+  const status = document.getElementById('status')!;
 
   function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
     const node = document.createElement(tag);
@@ -122,7 +126,15 @@
   }
 
   async function load() {
-    const { inTeam, contacts: rows } = await contacts({ query: queryInput.value.trim() });
+    const query = queryInput.value.trim();
+    let result: Awaited<ReturnType<typeof contacts>>;
+    try {
+      result = await contacts({ query });
+    } catch (error) {
+      list.replaceChildren(el('p', 'empty', `Couldn't load contacts: ${String(error)}`));
+      return;
+    }
+    const { inTeam, contacts: rows } = result;
     if (!inTeam) {
       createButton.disabled = true;
       list.replaceChildren(el('p', 'empty', 'Contacts belong to a team. Create or join a team to keep contacts here.'));
@@ -159,13 +171,24 @@
     debounce = setTimeout(reload, 250);
   });
   createButton.addEventListener('click', async () => {
+  // One add at a time, so repeated clicks can't add duplicates.
+  let adding = false;
     const name = nameInput.value.trim();
-    if (!name) return;
+    if (!name || adding) return;
+    adding = true;
     createButton.disabled = true;
-    await addContact({ name, email: emailInput.value.trim() });
-    nameInput.value = '';
-    emailInput.value = '';
-    createButton.disabled = false;
+    status.textContent = '';
+    try {
+      await addContact({ name, email: emailInput.value.trim() });
+      nameInput.value = '';
+      emailInput.value = '';
+    } catch (error) {
+      status.textContent = `Couldn't add “${name}”: ${String(error)}`;
+      return;
+    } finally {
+      adding = false;
+      createButton.disabled = false;
+    }
     await reload();
   });
   await reload();

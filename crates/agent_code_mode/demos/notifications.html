@@ -40,6 +40,7 @@
   .toast[hidden] { display: none; }
   .toast button { border: 0; background: transparent; color: inherit; font-weight: 600; padding: 4px 8px; }
   .empty { padding: 40px 16px; text-align: center; color: var(--muted); }
+  .toast button[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -114,12 +115,11 @@
   export default async function (_args: {}, { macro }: ProgramContext) {
     // The feed holds unseen and seen notifications; done ones are left out.
     const rows = [];
-    for await (const notification of macro.notifications.list({ pageSize: 30 })) {
     const mentioned = new Map<string, Promise<string | undefined>>();
+    for await (const notification of macro.notifications.list({ pageSize: 30 })) {
       const metadata = await notification.metadata();
       const sender = await notification.sender();
       const kind = metadata.tag.replaceAll('_', ' ');
-      rows.push({
       // A sender without a Macro profile, such as an outside contact, has no name to load.
       const from = sender
         ? ((await sender.name().catch(() => undefined)) ?? sender.email() ?? null)
@@ -130,6 +130,7 @@
         'documentName', 'entityName', 'taskName', 'channelName', 'subject', 'title', 'name',
       ]);
       const snippet = pick(metadata.content, ['messageContent', 'snippet', 'body', 'message', 'content']);
+      rows.push({
         id: notification.id,
         kind,
         title: (direct ? from : named) ?? kind.replace(/^./, (first) => first.toUpperCase()),
@@ -195,8 +196,20 @@
     return reloading;
   }
 
+  function showToast(text: string, canUndo: boolean) {
+    toastText.textContent = text;
+    undo.hidden = !canUndo;
+    toast.hidden = false;
+  }
+
   async function load() {
-    const rows = await feed();
+    let rows: Awaited<ReturnType<typeof feed>>;
+    try {
+      rows = await feed();
+    } catch (error) {
+      list.replaceChildren(el('p', 'empty', `Couldn't load notifications: ${String(error)}`));
+      return;
+    }
     count.textContent = rows.length ? String(rows.length) : '';
     if (rows.length === 0) {
       list.replaceChildren(el('p', 'empty', "You're all caught up."));
@@ -214,10 +227,16 @@
       button.addEventListener('click', async () => {
         button.disabled = true;
         li.style.opacity = '.4';
-        await setDone({ id: row.id, done: true });
+        try {
+          await setDone({ id: row.id, done: true });
+        } catch (error) {
+          button.disabled = false;
+          li.style.opacity = '';
+          showToast(`Couldn't mark “${row.title}” done: ${String(error)}`, false);
+          return;
+        }
         lastDone = row.id;
-        toastText.textContent = 'Marked done';
-        toast.hidden = false;
+        showToast('Marked done', true);
         await reload();
       });
       li.append(el('span', 'dot'), text, button);
@@ -229,10 +248,16 @@
   undo.addEventListener('click', async () => {
     if (!lastDone) return;
     undo.disabled = true;
-    await setDone({ id: lastDone, done: false });
+    try {
+      await setDone({ id: lastDone, done: false });
+    } catch (error) {
+      toastText.textContent = `Couldn't undo: ${String(error)}`;
+      return;
+    } finally {
+      undo.disabled = false;
+    }
     lastDone = null;
     toast.hidden = true;
-    undo.disabled = false;
     await reload();
   });
   // Notifications have no live event of their own; a mention, message or

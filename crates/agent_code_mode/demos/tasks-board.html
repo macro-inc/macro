@@ -153,8 +153,15 @@
         select.addEventListener('change', async () => {
           select.disabled = true;
           status.textContent = `Moving “${task.name}”…`;
-          await setStatus({ taskId: task.id, optionId: select.value });
-          await load();
+          try {
+            await setStatus({ taskId: task.id, optionId: select.value });
+          } catch (error) {
+            select.value = option.id;
+            select.disabled = false;
+            status.textContent = `Couldn't move “${task.name}”: ${String(error)}`;
+            return;
+          }
+          await reload();
         });
         const meta = el('div', 'meta');
         // Only open work can be overdue: the last two statuses are Completed and Canceled.
@@ -195,13 +202,23 @@
     }
   }
 
+  // One create at a time, so repeated Enter presses can't add duplicates.
+  let adding = false;
   async function add() {
     const name = nameInput.value.trim();
-    if (!name) return;
+    if (!name || adding) return;
+    adding = true;
     addButton.disabled = true;
-    await createTask({ name });
-    nameInput.value = '';
-    addButton.disabled = false;
+    try {
+      await createTask({ name });
+      nameInput.value = '';
+    } catch (error) {
+      status.textContent = `Couldn't add “${name}”: ${String(error)}`;
+      return;
+    } finally {
+      adding = false;
+      addButton.disabled = false;
+    }
     await reload();
   }
 

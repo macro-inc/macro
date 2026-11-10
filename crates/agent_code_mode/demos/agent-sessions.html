@@ -35,6 +35,8 @@
   .meta { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
   .archive { border: 0; background: var(--chip); border-radius: 8px; padding: 6px 10px; }
   .empty { padding: 32px; text-align: center; color: var(--muted); }
+  .status { color: var(--muted); margin: 0 0 12px; }
+  .status:empty { display: none; }
 </style>
 </head>
 <body>
@@ -46,6 +48,7 @@
       <button id="show-archived" aria-pressed="false">Archived</button>
     </div>
   </header>
+  <p class="status" id="status" role="status"></p>
   <div id="list"><p class="empty">Loading…</p></div>
 </div>
 
@@ -92,6 +95,7 @@
   const list = document.getElementById('list')!;
   const activeTab = document.getElementById('show-active')!;
   const archivedTab = document.getElementById('show-archived')!;
+  const status = document.getElementById('status')!;
   let archived = false;
 
   function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
@@ -152,7 +156,15 @@
       button.addEventListener('click', async () => {
         button.disabled = true;
         li.style.opacity = '.4';
-        await setArchived({ id: row.id, archived: !wanted });
+        status.textContent = '';
+        try {
+          await setArchived({ id: row.id, archived: !wanted });
+        } catch (error) {
+          button.disabled = false;
+          li.style.opacity = '';
+          status.textContent = `Couldn't ${wanted ? 'restore' : 'archive'} “${row.name}”: ${String(error)}`;
+          return;
+        }
         await reload();
       });
       const dot = el('span', stateClass(row.status, row.turnState));

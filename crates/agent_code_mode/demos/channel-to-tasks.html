@@ -253,6 +253,8 @@
   const mine = document.getElementById('mine') as HTMLInputElement;
   const create = document.getElementById('create') as HTMLButtonElement;
   const picked = new Set<string>();
+  // Reloads during a create re-render the bar; this keeps Create off until it ends.
+  let converting = false;
 
   function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
     const node = document.createElement(tag);
@@ -263,7 +265,7 @@
 
   function updateBar() {
     count.textContent = picked.size ? `${picked.size} selected` : 'Pick messages to track';
-    create.disabled = picked.size === 0;
+    create.disabled = picked.size === 0 || converting;
   }
 
   function render(rows: Row[]) {
@@ -331,8 +333,11 @@
 
   create.addEventListener('click', async () => {
     const ids = [...picked];
+    if (ids.length === 0 || converting) return;
+    converting = true;
     create.disabled = true;
     status.textContent = `Creating ${ids.length} task${ids.length === 1 ? '' : 's'}…`;
+    let outcome: string;
     try {
       const made = await convert({
         channelId: channelSelect.value,
@@ -341,21 +346,34 @@
         assignToMe: mine.checked,
       });
       picked.clear();
-      status.textContent = `Created ${made.map((task) => `“${task.name}”`).join(', ')}.`;
+      outcome = `Created ${made.map((task) => `“${task.name}”`).join(', ')}.`;
     } catch (error) {
-      status.textContent = `Couldn't create tasks: ${String(error)}`;
+      outcome = `Couldn't create tasks: ${String(error)}`;
+    } finally {
+      converting = false;
     }
+    // Reload to show what was tracked (a failed run may have made some tasks),
+    // then put the outcome back: the reload's own status would replace it.
     await reload();
+    status.textContent = outcome;
   });
   channelSelect.addEventListener('change', () => {
     picked.clear();
     reload();
   });
 
-  const list = await channels();
-  if (list.length === 0) {
-    status.textContent = 'Join a channel to turn its messages into tasks.';
-  } else {
+  async function loadChannels() {
+    let list: Awaited<ReturnType<typeof channels>>;
+    try {
+      list = await channels();
+    } catch (error) {
+      status.textContent = `Couldn't load channels: ${String(error)}`;
+      return;
+    }
+    if (list.length === 0) {
+      status.textContent = 'Join a channel to turn its messages into tasks.';
+      return;
+    }
     channelSelect.replaceChildren(...list.map((channel) => {
       const option = el('option', '', `#${channel.name}`);
       option.value = channel.id;
@@ -364,6 +382,8 @@
     on(['message.posted', 'message.patched', 'message.deleted'], reload);
     await reload();
   }
+
+  await loadChannels();
 </script>
 </body>
 </html>

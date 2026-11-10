@@ -182,7 +182,11 @@
       try {
         await reassign({ taskId: task.id, from: ownerId, to: select.value || null });
       } catch (error) {
-        status.textContent = `Couldn't reassign: ${String(error)}`;
+        select.value = ownerId ?? '';
+        select.disabled = false;
+        // No reload here: its success would replace this message.
+        status.textContent = `Couldn't reassign “${task.name}”: ${String(error)}`;
+        return;
       }
       await reload();
     });

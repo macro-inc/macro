@@ -32,12 +32,15 @@
   .actions button { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 5px 10px; }
   .switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
   .empty { padding: 32px; text-align: center; color: var(--muted); }
+  .status { color: var(--muted); margin: 0 0 12px; }
+  .status:empty { display: none; }
   @media (max-width: 480px) { .routine { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>Routines</h1>
+  <p class="status" id="status" role="status"></p>
   <div id="list"><p class="empty">Loading…</p></div>
 </div>
 
@@ -88,6 +91,7 @@
   import { routines, runNow, setEnabled } from 'macro:programs';
 
   const list = document.getElementById('list')!;
+  const status = document.getElementById('status')!;
 
   function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
     const node = document.createElement(tag);
@@ -117,7 +121,13 @@
   }
 
   async function load() {
-    const rows = await routines();
+    let rows: Awaited<ReturnType<typeof routines>>;
+    try {
+      rows = await routines();
+    } catch (error) {
+      list.replaceChildren(el('p', 'empty', `Couldn't load routines: ${String(error)}`));
+      return;
+    }
     if (rows.length === 0) {
       list.replaceChildren(el('p', 'empty', 'No routines yet. Ask the agent to “remind me every Monday…”.'));
       return;
@@ -135,15 +145,29 @@
       toggle.setAttribute('aria-label', `${row.name} enabled`);
       toggle.addEventListener('click', async () => {
         toggle.disabled = true;
-        await setEnabled({ id: row.id, enabled: !row.enabled });
+        status.textContent = '';
+        try {
+          await setEnabled({ id: row.id, enabled: !row.enabled });
+        } catch (error) {
+          toggle.disabled = false;
+          status.textContent = `Couldn't turn “${row.name}” ${row.enabled ? 'off' : 'on'}: ${String(error)}`;
+          return;
+        }
         await reload();
       });
       const run = el('button', '', 'Run now');
       run.addEventListener('click', async () => {
         run.disabled = true;
         run.textContent = 'Starting…';
-        const { started } = await runNow({ id: row.id });
-        run.textContent = started ? 'Started' : 'Queued';
+        status.textContent = '';
+        try {
+          const { started } = await runNow({ id: row.id });
+          run.textContent = started ? 'Started' : 'Queued';
+        } catch (error) {
+          run.disabled = false;
+          run.textContent = 'Run now';
+          status.textContent = `Couldn't run “${row.name}”: ${String(error)}`;
+        }
       });
       actions.append(run, toggle);
 

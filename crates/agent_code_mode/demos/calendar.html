@@ -82,7 +82,14 @@
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     const end = new Date(start.getTime() + 7 * 24 * 3600 * 1000);
-    const { connected, events } = await agenda({ start: start.toISOString(), end: end.toISOString() });
+    let result: Awaited<ReturnType<typeof agenda>>;
+    try {
+      result = await agenda({ start: start.toISOString(), end: end.toISOString() });
+    } catch (error) {
+      root.replaceChildren(el('p', 'empty', `Couldn't load your agenda: ${String(error)}`));
+      return;
+    }
+    const { connected, events } = result;
     if (!connected) {
       root.replaceChildren(el('p', 'empty', 'No calendar is connected. Connect Google or Outlook in Settings to see your agenda.'));
       return;

@@ -227,7 +227,9 @@
             result.textContent = 'Task created';
           } catch (error) {
             button.disabled = false;
+            // No reload here: it re-renders this card and would drop the message.
             result.textContent = `Couldn't plan it: ${String(error)}`;
+            return;
           }
           await reload();
         });

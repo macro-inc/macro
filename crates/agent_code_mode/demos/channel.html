@@ -43,6 +43,8 @@
   .composer button { padding: 9px 14px; border: 0; border-radius: 10px; background: var(--accent);
     color: #fff; cursor: pointer; }
   .muted { color: var(--muted); }
+  .status { color: var(--muted); margin: 0; padding: 0 16px 8px; }
+  .status:empty { display: none; }
   @media (max-width: 640px) {
     body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
     nav { border-right: 0; border-bottom: 1px solid var(--line); display: flex; gap: 4px;
@@ -57,6 +59,7 @@
 <main>
   <header id="title">Loading…</header>
   <div id="messages" aria-live="polite"></div>
+  <p class="status" id="status" role="status"></p>
   <div class="composer">
     <input id="draft" placeholder="Write a message" aria-label="Message">
     <button id="send">Send</button>
@@ -130,10 +133,10 @@
     }
 
     const names = new Map<string, Promise<string>>();
+    const mentioned = new Map<string, Promise<string | undefined>>();
     const rows = await Promise.all(recent.map(async (message) => {
       const author = await message.author();
       if (!names.has(author.id)) {
-    const mentioned = new Map<string, Promise<string | undefined>>();
         // People without a profile name show their email's local part.
         const fallback = author.email()?.split('@')[0] ?? 'Someone';
         names.set(author.id, author.name().then((name) => name ?? fallback, () => fallback));
@@ -168,6 +171,7 @@
   const list = document.getElementById('messages')!;
   const draft = document.getElementById('draft') as HTMLInputElement;
   const sendButton = document.getElementById('send') as HTMLButtonElement;
+  const status = document.getElementById('status')!;
   let current: string | null = null;
 
   function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
@@ -205,8 +209,15 @@
   async function load() {
     const id = current;
     if (!id) return;
-    const { name, messages: rows } = await messages({ channelId: id });
+    let result: Awaited<ReturnType<typeof messages>>;
+    try {
+      result = await messages({ channelId: id });
+    } catch (error) {
+      if (current === id) list.replaceChildren(el('p', 'muted', `Couldn't load messages: ${String(error)}`));
+      return;
+    }
     if (current !== id) return;
+    const { name, messages: rows } = result;
     title.textContent = `# ${name}`;
     if (rows.length === 0) {
       list.replaceChildren(el('p', 'muted', 'No messages yet. Say hello.'));
@@ -227,18 +238,35 @@
     list.scrollTop = list.scrollHeight;
   }
 
+  // One send at a time, so repeated Enter presses can't post twice. The draft
+  // is cleared only once the message is posted, so a failed send keeps it.
+  let sending = false;
   async function send() {
     const text = draft.value.trim();
-    if (!text || !current) return;
+    if (!text || !current || sending) return;
+    sending = true;
     sendButton.disabled = true;
-    draft.value = '';
-    await post({ channelId: current, text });
-    sendButton.disabled = false;
+    status.textContent = '';
+    try {
+      await post({ channelId: current, text });
+      if (draft.value.trim() === text) draft.value = '';
+    } catch (error) {
+      status.textContent = `Couldn't send: ${String(error)}`;
+      return;
+    } finally {
+      sending = false;
+      sendButton.disabled = false;
+    }
     await reload();
   }
 
-  const channels = await channelList();
-  if (channels.length === 0) title.textContent = 'You are not in any channels yet.';
+  let channels: Awaited<ReturnType<typeof channelList>> = [];
+  try {
+    channels = await channelList();
+    if (channels.length === 0) title.textContent = 'You are not in any channels yet.';
+  } catch (error) {
+    title.textContent = `Couldn't load channels: ${String(error)}`;
+  }
   for (const channel of channels) {
     const button = el('button', '', channel.name);
     button.dataset.id = channel.id;

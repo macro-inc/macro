@@ -33,6 +33,8 @@
   .snippet { color: var(--muted); font-weight: 400; }
   .archive { border: 0; background: var(--chip); border-radius: 8px; padding: 6px 10px; }
   .empty { padding: 40px 16px; text-align: center; color: var(--muted); }
+  .status { color: var(--muted); margin: 0 0 12px; }
+  .status:empty { display: none; }
   @media (max-width: 560px) {
     li { grid-template-columns: minmax(0, 1fr) auto; }
     .from { grid-column: 1; }
@@ -51,6 +53,7 @@
       <button data-view="sent" aria-pressed="false">Sent</button>
     </div>
   </header>
+  <p class="status" id="status" role="status"></p>
   <div id="list"><p class="empty">Loading…</p></div>
 </div>
 
@@ -90,6 +93,7 @@
   type View = 'inbox' | 'important' | 'sent';
 
   const list = document.getElementById('list')!;
+  const status = document.getElementById('status')!;
   const tabs = [...document.querySelectorAll<HTMLButtonElement>('.tabs button')];
   let view: View = 'inbox';
 
@@ -119,8 +123,15 @@
 
   async function load() {
     const wanted = view;
-    const { connected, threads: rows } = await threads({ view: wanted });
+    let result: Awaited<ReturnType<typeof threads>>;
+    try {
+      result = await threads({ view: wanted });
+    } catch (error) {
+      if (wanted === view) list.replaceChildren(el('p', 'empty', `Couldn't load mail: ${String(error)}`));
+      return;
+    }
     if (wanted !== view) return;
+    const { connected, threads: rows } = result;
     if (!connected) {
       list.replaceChildren(el('p', 'empty', 'No email account is connected. Connect Gmail or Outlook in Settings to see mail here.'));
       return;
@@ -138,7 +149,15 @@
       button.addEventListener('click', async () => {
         button.disabled = true;
         li.style.opacity = '.4';
-        await archive({ id: row.id });
+        status.textContent = '';
+        try {
+          await archive({ id: row.id });
+        } catch (error) {
+          button.disabled = false;
+          li.style.opacity = '';
+          status.textContent = `Couldn't archive “${row.subject}”: ${String(error)}`;
+          return;
+        }
         await reload();
       });
       li.append(el('div', 'from', row.from), subject, button);

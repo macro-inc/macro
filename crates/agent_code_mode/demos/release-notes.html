@@ -279,16 +279,28 @@
     publishButton.disabled = false;
   });
 
-  const start = await projects();
-  options(projectSelect, start.projects);
-  options(channelSelect, start.channels, '#');
-  publishButton.disabled = start.projects.length === 0 || start.channels.length === 0;
-  if (start.projects.length === 0) {
-    status.textContent = 'Create a project with tasks to write its release notes.';
-  } else {
-    on(['document.created', 'document.updated', 'document.deleted'], reload);
+  async function loadChoices() {
+    let start: Awaited<ReturnType<typeof projects>>;
+    try {
+      start = await projects();
+    } catch (error) {
+      publishButton.disabled = true;
+      status.textContent = `Couldn't load projects and channels: ${String(error)}`;
+      return;
+    }
+    options(projectSelect, start.projects);
+    options(channelSelect, start.channels, '#');
+    publishButton.disabled = start.projects.length === 0 || start.channels.length === 0;
+    if (start.projects.length === 0) {
+      status.textContent = 'Create a project with tasks to write its release notes.';
+      return;
+    }
     await reload();
   }
+
+  // Registered before the first load, so a failed one leaves the page listening.
+  on(['document.created', 'document.updated', 'document.deleted'], reload);
+  await loadChoices();
 </script>
 </body>
 </html>

@@ -182,7 +182,10 @@
       try {
         await act();
       } catch (error) {
+        node.disabled = false;
+        // No reload here: its success would replace this message.
         status.textContent = `${label} failed: ${String(error)}`;
+        return;
       }
       await reload();
     });

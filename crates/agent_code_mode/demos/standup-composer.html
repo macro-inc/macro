@@ -164,6 +164,8 @@
   const note = document.getElementById('note')!;
   const stateLabels = { done: 'done', doing: 'doing', todo: 'to do', canceled: 'canceled' };
   let edited = false;
+  // A reload re-renders the button; this keeps it off while a post is under way.
+  let posting = false;
   let latest: Work | null = null;
 
   function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
@@ -213,7 +215,7 @@
       option.selected = channel.id === selected;
       return option;
     }));
-    postButton.disabled = work.channels.length === 0;
+    postButton.disabled = posting || work.channels.length === 0;
     if (!edited) draft.value = compose(work);
   }
 
@@ -257,7 +259,8 @@
   });
   postButton.addEventListener('click', async () => {
     const text = draft.value.trim();
-    if (!text || !channelSelect.value) return;
+    if (!text || !channelSelect.value || posting) return;
+    posting = true;
     postButton.disabled = true;
     try {
       await post({ channelId: channelSelect.value, text });
@@ -265,6 +268,7 @@
     } catch (error) {
       note.textContent = `Couldn't post: ${String(error)}`;
     }
+    posting = false;
     postButton.disabled = false;
   });
   on(['document.created', 'document.updated', 'document.deleted'], reload);
