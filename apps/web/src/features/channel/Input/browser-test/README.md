@@ -40,3 +40,10 @@ Markdown used to lose its syntax.
 The CRM mention regression uses the real menu and contact query with controlled
 pages. It selects a CRM contact whose email also belongs to a Macro user,
 verifies the stored contact link, and pages CRM results on desktop and phone.
+
+The attach regression taps the add drawer's Attach files on a phone. A phone
+browser opens the file picker within the tap. With the iOS app's Tauri bridge
+stubbed and its photo library picker failing, the composer opens no picker by
+itself, since WKWebView ignores a file input click once the native round trip
+has outlived the tap. It shows a toast whose Choose files button opens the
+picker instead.
