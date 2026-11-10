@@ -254,7 +254,7 @@ async fn docker_rebuild_recreates_the_container_on_its_volumes_and_destroy_remov
         ["ps", "inspect", "ps", "stop", "rm", "create", "start"]
     );
     let create = &calls[5];
-    assert!(create.contains(&format!("macro.image=macro-box:2026-11-10")));
+    assert!(create.contains(&"macro.image=macro-box:2026-11-10".to_owned()));
     assert!(create.contains(&"macro.enrollment_generation=1".to_owned()));
     assert!(create.contains(&"macro.created_at=2026-11-05T10:00:00+00:00".to_owned()));
     assert!(create.iter().any(|arg| arg.starts_with(&format!(

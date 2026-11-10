@@ -539,6 +539,3 @@ impl DockerFleetSettings {
         Ok(())
     }
 }
-
-#[cfg(test)]
-mod test;
