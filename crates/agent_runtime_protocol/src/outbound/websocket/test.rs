@@ -392,11 +392,104 @@ async fn a_socket_that_stops_answering_pings_is_closed() {
     // The pump dropping its sender is what every layer above reads as the
     // connection ending, so awaiting that is awaiting the teardown itself -
     // no polling for a state change.
-    let ended = timeout(SILENCE_TIMEOUT * 2, incoming_rx.recv())
-        .await
-        .expect("a silent socket should be given up on, not waited on forever");
+    let ended = timeout(
+        PING_INTERVAL * (UNANSWERED_PING_LIMIT + 2),
+        incoming_rx.recv(),
+    )
+    .await
+    .expect("a silent socket should be given up on, not waited on forever");
     assert!(
         ended.is_none(),
         "the pump should close its inbound channel when the peer goes quiet"
+    );
+}
+
+/// A peer that answers every ping it receives with a pong, which this side
+/// reads back on its next poll - however late that poll comes.
+struct AnsweringSocket {
+    pongs: futures::channel::mpsc::UnboundedSender<TungsteniteMessage>,
+    answers: futures::channel::mpsc::UnboundedReceiver<TungsteniteMessage>,
+}
+
+impl futures::Sink<TungsteniteMessage> for AnsweringSocket {
+    type Error = futures::channel::mpsc::SendError;
+
+    fn poll_ready(
+        self: std::pin::Pin<&mut Self>,
+        _context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn start_send(
+        self: std::pin::Pin<&mut Self>,
+        item: TungsteniteMessage,
+    ) -> Result<(), Self::Error> {
+        if matches!(item, TungsteniteMessage::Ping(_)) {
+            self.pongs
+                .unbounded_send(TungsteniteMessage::Pong(Default::default()))
+                .map_err(|error| error.into_send_error())?;
+        }
+        Ok(())
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        _context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn poll_close(
+        self: std::pin::Pin<&mut Self>,
+        _context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+}
+
+impl futures::Stream for AnsweringSocket {
+    type Item = Result<TungsteniteMessage, futures::channel::mpsc::SendError>;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        self.get_mut()
+            .answers
+            .poll_next_unpin(context)
+            .map(|answer| answer.map(Ok))
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_pump_starved_by_its_own_runtime_keeps_a_peer_that_answered() {
+    let (pongs, answers) = futures::channel::mpsc::unbounded();
+    let (_outgoing, outgoing_rx) = mpsc::unbounded_channel();
+    let (incoming, mut incoming_rx) = mpsc::unbounded_channel::<ToServerMessage>();
+    // Polled by hand rather than spawned, so the test decides when the pump
+    // runs: in between, it is as starved as a pump on a saturated runtime.
+    let mut pump = std::pin::pin!(run_pump(
+        AnsweringSocket { pongs, answers },
+        outgoing_rx,
+        incoming
+    ));
+
+    for _ in 0..5 {
+        assert!(futures::poll!(pump.as_mut()).is_pending());
+        // Far past any wall-clock silence deadline, with the peer's pong to
+        // the last ping already waiting unread.
+        tokio::time::advance(Duration::from_secs(30)).await;
+    }
+
+    assert!(
+        futures::poll!(pump.as_mut()).is_pending(),
+        "a peer that answered every ping should not be closed for this side's stalls"
+    );
+    assert!(
+        incoming_rx
+            .try_recv()
+            .is_err_and(|error| error == mpsc::error::TryRecvError::Empty),
+        "the connection should still be open"
     );
 }
