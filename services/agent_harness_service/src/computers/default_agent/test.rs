@@ -1,6 +1,7 @@
 use super::*;
 use crate::computers::HostedHarnesses;
 use bots::domain::models::BotOwner;
+use bots::domain::ports::{BotRepo, HarnessRemoved};
 use bots::domain::service::BotServiceImpl;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use harnesses::domain::models::CreateHostedPairing;
@@ -10,13 +11,16 @@ use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use hosted_runtimes::domain::ids::{ComputerId, HostId};
 use hosted_runtimes::domain::lifecycle::ComputerState;
 use hosted_runtimes::domain::models::{Computer, ComputerName};
+use hosted_runtimes::domain::ports::ComputerRepo;
 use hosted_runtimes::domain::ports::Harnesses;
 use hosted_runtimes::domain::size::{
     CatalogEntryId, ComputerResources, ComputerSize, DiskGib, MemoryGib, Vcpus,
 };
+use hosted_runtimes::outbound::pg::PgComputerRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::NoopMacroEventBroker;
 use sqlx::PgPool;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 const BUYER: &str = "macro|buyer@example.com";
@@ -249,13 +253,19 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
         service: Arc::new(HarnessServiceImpl::new(PgHarnessRepo::new(pool.clone()))),
         default_agents: Arc::new(agents),
     };
+    let computers = PgComputerRepo::new(pool.clone());
+    // What the release dialog warns about: the default agent and the private one.
+    assert_eq!(
+        computers.agent_counts(&[computer_id]).await.unwrap(),
+        HashMap::from([(computer_id, 2)])
+    );
 
     harnesses.revoke(&computer).await.unwrap();
     // A redelivered effect finds nothing left to do.
     harnesses.revoke(&computer).await.unwrap();
 
     let handles: Vec<String> = bots(&pool)
-        .list_agents(teammate)
+        .list_agents(teammate.clone())
         .await
         .unwrap()
         .into_iter()
@@ -277,6 +287,42 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
             .await
             .unwrap();
     assert_eq!(live, 0);
+    assert!(
+        computers
+            .agent_counts(&[computer_id])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+
+    // A bind that lost the race to the release finds the harness gone.
+    let late = CreateAgentRequest {
+        team_id: None,
+        harness_id: Some(harness_id),
+        name: "Late".to_owned(),
+        handle: "late".to_owned(),
+        description: None,
+        avatar_url: None,
+        instructions: String::new(),
+        harness: "macrod".to_owned(),
+        default_model: "default".to_owned(),
+        channel_scope: AgentChannelScope::All,
+        channel_ids: Vec::new(),
+        mcp: AgentMcpServers::OwnerConnections,
+        auto_accept_permissions: None,
+        is_coding: true,
+    };
+    let refused = PgBotsRepo::new(pool.clone())
+        .create_agent(
+            BotOwner::User {
+                user_id: TEAMMATE.to_owned(),
+            },
+            teammate,
+            late,
+        )
+        .await
+        .unwrap_err();
+    assert!(refused.is::<HarnessRemoved>());
 }
 
 /// The computer shows up in every teammate's "Where it runs", and any of

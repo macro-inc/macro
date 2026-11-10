@@ -210,9 +210,12 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   It never runs again, so a deleted or rebound agent stays gone; a failure is
   recorded on the `computer.default_agent` span and enrollment carries on.
 - **Agents go with the computer**: `Harnesses::revoke(&Computer)` (the
-  `RevokeHarness` effect of release and retention expiry) deletes every agent
-  bound to the harness before deleting the harness, inside the one effect, so a
-  retry still finds them; none is left offline in the composer.
+  `RevokeHarness` effect of release and retention expiry) deletes the harness,
+  then every agent bound to it, inside the one effect. The harness delete locks
+  its row `FOR UPDATE` and agent binds hold it `FOR SHARE`, so a concurrent
+  bind is either deleted too or refused. `ComputerStatus.agentCount` counts the
+  live agents on the computer's live harness, teammates' private ones included
+  (`ComputerRepo::agent_counts`), for the release warning.
 - **Guided setup**: `POST /team/computers/{computer_id}/setup-complete` →
   `ComputerStatus`, `ComputerService::complete_setup`, records
   `setupCompletedAt` once (idempotent). Allowed to the computer's buyer and the

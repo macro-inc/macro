@@ -395,7 +395,8 @@ impl<
         computer_id: ComputerId,
     ) -> Result<ComputerStatus, ComputerError> {
         self.require_attached().await?;
-        Ok(self.team_record(team_id, computer_id).await?.status())
+        let record = self.team_record(team_id, computer_id).await?;
+        self.status_of(&record).await
     }
 
     /// The team's computers, oldest first.
@@ -403,7 +404,12 @@ impl<
     pub async fn list(&self, team_id: Uuid) -> Result<Vec<ComputerStatus>, ComputerError> {
         self.require_attached().await?;
         let computers = self.repo.list_for_team(team_id).await.map_err(internal)?;
-        Ok(computers.iter().map(ComputerRecord::status).collect())
+        let ids: Vec<ComputerId> = computers.iter().map(ComputerRecord::id).collect();
+        let counts = self.repo.agent_counts(&ids).await.map_err(internal)?;
+        Ok(computers
+            .iter()
+            .map(|computer| computer.status(counts.get(&computer.id()).copied().unwrap_or(0)))
+            .collect())
     }
 
     /// Apply the team-requested power state.
@@ -437,7 +443,7 @@ impl<
             .await
             .map_err(internal)?
             .ok_or(ComputerError::NotFound)?;
-        Ok(computer.status())
+        self.status_of(&computer.into()).await
     }
 
     /// Record that the team finished the guided setup after buying the
@@ -467,7 +473,7 @@ impl<
             .await
             .map_err(internal)?
             .ok_or(ComputerError::NotFound)?;
-        Ok(computer.status())
+        self.status_of(&computer).await
     }
 
     /// Stop billing at the end of the current period; undo is allowed until then.
@@ -744,6 +750,16 @@ impl<
         Ok(())
     }
 
+    /// A computer's status, with the agents bound to its harness counted.
+    async fn status_of(&self, record: &ComputerRecord) -> Result<ComputerStatus, ComputerError> {
+        let counts = self
+            .repo
+            .agent_counts(&[record.id()])
+            .await
+            .map_err(internal)?;
+        Ok(record.status(counts.get(&record.id()).copied().unwrap_or(0)))
+    }
+
     async fn team_record(
         &self,
         team_id: Uuid,
@@ -783,7 +799,7 @@ impl<
             .await
             .map_err(internal)?
             .ok_or(ComputerError::NotFound)?;
-        Ok(computer.status())
+        self.status_of(&computer.into()).await
     }
 }
 
@@ -849,7 +865,8 @@ impl<
                 .attachment(self.clock.now())
                 .await
                 .map_err(internal)?;
-            let status = self.team_record(team_id, computer_id).await?.status();
+            let record = self.team_record(team_id, computer_id).await?;
+            let status = self.status_of(&record).await?;
             Ok(RosterComputerStatus {
                 status,
                 availability,

@@ -62,9 +62,9 @@ Pulumi stacks; they do not host extra agent processes.
   channels, owner connections, the bots default of bypassing permissions on a
   computer), skipping a harness `HarnessAssignments::bots_on_harness` already
   lists; the handle is the settings editor's slug, suffixed past handles the
-  buyer sees. `HostedHarnesses::revoke` deletes every agent bound to the
-  computer's harness (`HarnessAgentDeletion`) before revoking the harness,
-  since the revoke's trigger unbinds them and a retry could no longer find them.
+  buyer sees. `HostedHarnesses::revoke` revokes the harness, then deletes every
+  agent bound to any harness the computer had (`HarnessAgentDeletion`); computer
+  harnesses keep their agents bound when deleted, so a retry still finds them.
 - Computer lifecycle and gateway adapters carry canonical `ComputerId` and
   `HarnessId`; unwrap only at the harness/storage boundary.
 - `src/computers/claude.rs`: Claude sign-in on Macro computers. All routes

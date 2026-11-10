@@ -717,7 +717,7 @@ async fn successful_charge_with_lost_write_is_confirmed_once_by_the_outbox() {
         }
     );
     assert_eq!(
-        computer.status().setup.unwrap().step,
+        computer.status(0).setup.unwrap().step,
         crate::domain::models::SetupStep::Creating
     );
     assert_eq!(service.run_billing_effects().await.unwrap(), 0);

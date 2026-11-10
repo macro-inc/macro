@@ -60,6 +60,7 @@ pub struct FakeRepo {
     pub corrupt_ids: Mutex<Vec<ComputerId>>,
     pub effects: Mutex<Vec<PendingEffect>>,
     pub events: Mutex<Vec<(ComputerId, Event)>>,
+    pub agent_counts: Mutex<HashMap<ComputerId, u32>>,
 }
 
 impl FakeRepo {
@@ -299,6 +300,18 @@ impl ComputerRepo for FakeRepo {
             computer.enrolled_at.get_or_insert(now);
         }
         Ok(())
+    }
+
+    async fn agent_counts(
+        &self,
+        computer_ids: &[ComputerId],
+    ) -> Result<HashMap<ComputerId, u32>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let counts = self.agent_counts.lock().unwrap();
+        Ok(computer_ids
+            .iter()
+            .filter_map(|id| counts.get(id).map(|count| (*id, *count)))
+            .collect())
     }
 
     async fn set_default_agent(

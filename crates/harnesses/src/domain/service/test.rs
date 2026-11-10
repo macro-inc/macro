@@ -174,6 +174,13 @@ impl HarnessRepo for FakeRepo {
         Ok(self.harness.as_ref().map(|harness| harness.id))
     }
 
+    async fn computer_harness_ids(
+        &self,
+        _computer_id: ComputerId,
+    ) -> Result<Vec<HarnessId>, Self::Err> {
+        Ok(self.harness.iter().map(|harness| harness.id).collect())
+    }
+
     async fn harness_computer(
         &self,
         _harness_id: HarnessId,

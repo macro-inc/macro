@@ -6,6 +6,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::domain::ids::ComputerId;
@@ -660,6 +661,36 @@ impl ComputerRepo for PgComputerRepo {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    async fn agent_counts(
+        &self,
+        computer_ids: &[ComputerId],
+    ) -> Result<HashMap<ComputerId, u32>, PgComputerError> {
+        let ids: Vec<Uuid> = computer_ids.iter().map(|id| id.as_uuid()).collect();
+        let rows = sqlx::query!(
+            r#"
+            SELECT h.computer_id AS "computer_id!", count(*) AS "agents!"
+            FROM harnesses h
+            JOIN agent_configs a ON a.harness_id = h.id
+            JOIN bots b ON b.id = a.bot_id
+            WHERE h.computer_id = ANY($1)
+              AND h.deleted_at IS NULL
+              AND b.deleted_at IS NULL
+            GROUP BY h.computer_id
+            "#,
+            &ids,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(|row| {
+                Ok((
+                    ComputerId::new_from_uuid(row.computer_id),
+                    u32::try_from(row.agents)?,
+                ))
+            })
+            .collect()
     }
 
     async fn set_default_agent(

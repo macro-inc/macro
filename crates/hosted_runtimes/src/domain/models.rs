@@ -488,11 +488,15 @@ pub struct ComputerStatus {
     /// first connects. It can name an agent the team since deleted.
     #[cfg_attr(feature = "inbound", schema(value_type = Option<Uuid>))]
     pub default_agent_id: Option<BotId>,
+    /// Agents bound to the computer's live harness, teammates' private ones
+    /// included: the ones releasing it deletes.
+    pub agent_count: u32,
 }
 
 impl Computer {
-    /// Project lifecycle state into the team-facing status.
-    pub fn status(&self) -> ComputerStatus {
+    /// Project lifecycle state into the team-facing status, with the number
+    /// of agents bound to its harness.
+    pub fn status(&self, agent_count: u32) -> ComputerStatus {
         let waiting_for_capacity = self.state.waiting_for_capacity();
         let setup_step = match self.state.phase {
             _ if waiting_for_capacity => None,
@@ -552,15 +556,16 @@ impl Computer {
             created_at: self.created_at,
             setup_completed_at: self.setup_completed_at,
             default_agent_id: self.default_agent_id,
+            agent_count,
         }
     }
 }
 
 impl ComputerRecord {
     /// Expose quarantine without inventing metadata from an invalid payload.
-    pub fn status(&self) -> ComputerStatus {
+    pub fn status(&self, agent_count: u32) -> ComputerStatus {
         match self {
-            Self::Healthy(computer) => computer.status(),
+            Self::Healthy(computer) => computer.status(agent_count),
             Self::NeedsAttention { id, display, .. } => ComputerStatus {
                 id: *id,
                 status: ComputerStatusKind::NeedsAttention,
@@ -580,6 +585,7 @@ impl ComputerRecord {
                 created_at: display.created_at,
                 setup_completed_at: None,
                 default_agent_id: None,
+                agent_count,
             },
         }
     }

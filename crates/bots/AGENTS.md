@@ -48,8 +48,12 @@ for bot mutations that channel bots, agent triggers, and memory build on.
   configuration writes; mention dispatch gates on this flag for every harness.
 - Soft-deleting a harness unbinds its agents (a trigger nulls
   `agent_configs.harness_id`), leaving `macrod` agents unbound. A Macro
-  computer's harness instead has its agents deleted first, through the trusted
-  `HarnessAgentDeletion::delete_harness_agents` (no caller check; never a route).
+  computer's harness keeps them bound, and its release then deletes them through
+  the trusted `HarnessAgentDeletion::delete_harness_agents` (no caller check;
+  never a route).
+- Agent create and update hold a chosen harness's row `FOR SHARE` in their
+  transaction and refuse a deleted one (`HarnessRemoved`, a 400), so no bind
+  slips past a concurrent harness delete.
 - An agent created on a Macro computer's harness without a permission choice
   gets `auto_accept_permissions = Some(true)` when the harness allows bypass. The
   `macrod`⇔`harness_id` pairing is checked only for a runtime the request

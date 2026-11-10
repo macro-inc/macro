@@ -12,7 +12,7 @@ use super::{
         CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessFacts, HarnessId,
         MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
     },
-    ports::{BotError, BotRepo, BotService, McpAppCatalog},
+    ports::{BotError, BotRepo, BotService, HarnessRemoved, McpAppCatalog},
     tokens,
 };
 use bot_token::HashedBotToken;
@@ -444,7 +444,7 @@ where
             .repo
             .update_agent(current.id, owner, req)
             .await
-            .map_err(|err| BotError::Repo(err.into()))?
+            .map_err(binding_error)?
             .ok_or_else(|| BotError::NotFound("agent not found".to_string()))?;
 
         self.publish_bot_event(&BotMacroEvent::updated(BotUpdatedMetadata {
@@ -532,7 +532,7 @@ where
             .repo
             .create_agent(owner, caller, req)
             .await
-            .map_err(|err| BotError::Repo(err.into()))?;
+            .map_err(binding_error)?;
 
         self.publish_bot_event(&BotMacroEvent::created(BotCreatedMetadata {
             bot_id: agent.bot.id,
@@ -1015,6 +1015,16 @@ async fn reject_unknown_mcp_apps<C: McpAppCatalog>(
 }
 
 /// A persona cannot override its harness operator's permission policy.
+/// A failed agent write, as a bad request when its harness was deleted while
+/// it was being bound.
+fn binding_error(err: impl Into<anyhow::Error>) -> BotError {
+    let err = err.into();
+    if err.is::<HarnessRemoved>() {
+        return BotError::BadRequest(HarnessRemoved.to_string());
+    }
+    BotError::Repo(err)
+}
+
 fn validate_permission_bypass(allowed: bool, requested: Option<bool>) -> Result<(), BotError> {
     if requested == Some(true) && !allowed {
         return Err(BotError::BadRequest(

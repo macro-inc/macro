@@ -603,13 +603,13 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn computer_harness(
+    async fn computer_harnesses(
         &self,
         computer_id: ComputerId,
-    ) -> Result<Option<HarnessId>, HarnessError> {
+    ) -> Result<Vec<HarnessId>, HarnessError> {
         Ok(self
             .repo
-            .computer_harness(computer_id)
+            .computer_harness_ids(computer_id)
             .await
             .map_err(Into::into)?)
     }

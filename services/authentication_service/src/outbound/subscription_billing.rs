@@ -231,7 +231,7 @@ impl<Teams: TeamRepository, Computers: ComputerRepo> StripeBillingReader<Teams, 
                     {
                         continue;
                     }
-                    let status = computer.status().status;
+                    let status = computer.status(0).status;
                     computers.push(BillingComputer {
                         id: computer.id,
                         catalog_entry: CatalogEntry {

@@ -6,6 +6,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use bot_id::BotId;
 use harness_id::HarnessId;
+use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -163,6 +164,13 @@ pub trait ComputerRepo: Send + Sync + 'static {
         computer_id: ComputerId,
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// How many live agents are bound to each computer's live harness;
+    /// computers without any are absent.
+    fn agent_counts(
+        &self,
+        computer_ids: &[ComputerId],
+    ) -> impl Future<Output = Result<HashMap<ComputerId, u32>, Self::Err>> + Send;
 
     /// Record the coding agent the computer came with.
     fn set_default_agent(
@@ -475,8 +483,7 @@ pub trait Harnesses: Send + Sync + 'static {
 
     /// Delete the computer's harness, its credential and every agent bound
     /// to it, so no agent is left on a machine that is gone; absent is fine.
-    /// The agents go first: deleting the harness unbinds them, and a retry
-    /// after that could no longer find them.
+    /// Safe to repeat: a retry still finds agents bound to a deleted harness.
     fn revoke(&self, computer: &Computer) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Give the team a coding agent on the computer's harness, created by the

@@ -476,6 +476,12 @@ pub trait TeamBotRoster: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<BotId>, Report>> + Send;
 }
 
+/// The harness an agent was being bound to was deleted first, e.g. by its
+/// Macro computer's release. Repositories return it inside their error.
+#[derive(Debug, thiserror::Error)]
+#[error("that runtime was removed; choose another one")]
+pub struct HarnessRemoved;
+
 /// Bot service error.
 #[derive(Debug, thiserror::Error)]
 pub enum BotError {

@@ -518,7 +518,7 @@ async fn the_first_connection_gives_the_team_a_default_agent_once() {
         .into_healthy()
         .unwrap();
     assert_eq!(ready.default_agent_id, Some(DEFAULT_AGENT));
-    assert_eq!(ready.status().default_agent_id, Some(DEFAULT_AGENT));
+    assert_eq!(ready.status(0).default_agent_id, Some(DEFAULT_AGENT));
 }
 
 /// The agent is a convenience: failing to create it never holds up setup,
