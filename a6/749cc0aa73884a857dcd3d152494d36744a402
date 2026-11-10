@@ -1,0 +1,19 @@
+apps/web/src/features/channel/Channel/tests/create-channel-unread-navigation.test.tsx
+  s_53d062c3c967c7::t_312437860bbfb5 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a6749cc0aa73884a857dcd3d152494d36744a402",
+  "prompts": {},
+  "sessions": {
+    "s_53d062c3c967c7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c786-6832-7031-9aa4-2832ea167753",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
