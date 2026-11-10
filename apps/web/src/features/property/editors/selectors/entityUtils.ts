@@ -211,6 +211,7 @@ export function getEntityType(entity: CombinedEntity): EntityType | undefined {
           'channel_thread',
           'database',
           'form',
+          'harness',
           'routine',
           'foreign'
         ),

@@ -694,7 +694,7 @@ function getSupportedHandler(
 }
 
 /** Settings → Runtimes, where a runtime's sharing and access live. */
-function openRuntimesSettings(
+export function openRuntimesSettings(
   layoutManager: SplitManager,
   options: OpenOptions
 ) {
