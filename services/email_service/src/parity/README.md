@@ -331,12 +331,14 @@ in workers. FakeGmail supports profile/watch and optional endpoint reply sequenc
 without changing its label/history behavior. The service stub's optional reply
 sequence can succeed for watch credentials, then deny token discovery.
 
-The direct token-info request in `api/email/init.rs:924` cannot be redirected.
+The direct token-info request (`fetch_token_scopes` in
+`src/outbound/inbox_connection/provider/token_scopes.rs`) cannot be redirected.
 Scenarios reach its preceding branches using recorded grant generations, failed
 grant lookups, and local token acquisition failures. They never call the fixed
 Google URL. Consequently `fetch_token_scopes` and the discovery-success/error
-handling after its call (`init.rs:882`, `888–904`, `909–935`) remain outside this
-HTTP lab. Calendar grants supplied by completed consent use the real database
+handling after its call (`discover` in
+`crates/email/src/domain/mailbox/connection/grants.rs`) remain outside this HTTP
+lab; domain tests on a fake port cover each outcome. Calendar grants supplied by completed consent use the real database
 service and its durable outbox; they do not contact Google Calendar or Graph.
 Shared-mailbox promotion generates a customer-ID string containing its generated
 UUID. Only `inbox_init` enables `normalize_embedded_uuids`, retaining the
