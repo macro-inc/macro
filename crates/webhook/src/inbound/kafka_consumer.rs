@@ -24,7 +24,7 @@ mod test;
 use crate::domain::ingestion::{WebhookEventIngestionError, WebhookEventIngestionService};
 use crate::topics::DeclaredMacroEvent;
 use anyhow::Context as _;
-use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
+use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, consumer_span};
 use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection as _, MacroEventConsumerService,
 };
@@ -33,6 +33,7 @@ use rdkafka::message::{BorrowedMessage, Message};
 use std::future::Future;
 use std::time::Duration;
 use tokio_retry::{RetryIf, strategy::ExponentialBackoff};
+use tracing::Instrument as _;
 
 /// Consumer group for webhook event ingestion. Offsets are committed under
 /// this group, so restarts resume where the previous run left off.
@@ -229,35 +230,46 @@ where
                     }
                 };
                 let kafka_message = message.inner();
-                match message.decode_payload() {
-                    Ok(event) => {
-                        tracing::trace!(
+                // Parent on the publisher's trace context so one trace runs
+                // from the producing request through ingestion.
+                let span = consumer_span(
+                    kafka_message,
+                    WebhookEventIngestionConsumerGroup::GROUP_NAME,
+                );
+                async {
+                    match message.decode_payload() {
+                        Ok(event) => {
+                            tracing::trace!(
+                                partition = kafka_message.partition(),
+                                offset = kafka_message.offset(),
+                                "decoded broker event"
+                            );
+                            ingest_with_retry(
+                                &service,
+                                &event,
+                                kafka_message.partition(),
+                                kafka_message.offset(),
+                            )
+                            .await?;
+                        }
+                        // Undecodable messages are logged and skipped rather than
+                        // wedging the partition on a poison message.
+                        Err(e) => tracing::error!(
+                            error = ?e,
+                            topic = kafka_message.topic(),
                             partition = kafka_message.partition(),
                             offset = kafka_message.offset(),
-                            "decoded broker event"
-                        );
-                        ingest_with_retry(
-                            &service,
-                            &event,
-                            kafka_message.partition(),
-                            kafka_message.offset(),
-                        )
-                        .await?;
+                            "failed to decode broker event"
+                        ),
                     }
-                    // Undecodable messages are logged and skipped rather than
-                    // wedging the partition on a poison message.
-                    Err(e) => tracing::error!(
-                        error = ?e,
-                        topic = kafka_message.topic(),
-                        partition = kafka_message.partition(),
-                        offset = kafka_message.offset(),
-                        "failed to decode broker event"
-                    ),
-                }
 
-                // Commit only after the event was ingested or permanently
-                // rejected: at-least-once, retried across restarts.
-                commit_logged(&consumer, kafka_message);
+                    // Commit only after the event was ingested or permanently
+                    // rejected: at-least-once, retried across restarts.
+                    commit_logged(&consumer, kafka_message);
+                    anyhow::Ok(())
+                }
+                .instrument(span)
+                .await?;
             }
         }
     }

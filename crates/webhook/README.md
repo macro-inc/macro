@@ -372,7 +372,10 @@ example:
 RUST_LOG=info,webhook=trace,webhook::outbound::sqs_queue=trace
 ```
 
-Ingestion spans expose event ID/name, entity type/ID, accessor count, workspace
+Each consumed record opens a `kafka.process` span parented on the record's
+propagated trace context, so ingestion joins the publishing request's trace.
+Delivery starts its own trace per queue message; correlate it by webhook or
+event ID. Ingestion spans expose event ID/name, entity type/ID, accessor count, workspace
 count, match count, and webhook ID. Worker and delivery spans expose queue
 message ID, webhook/event/delivery/attempt IDs, attempt number, delivery status,
 HTTP status, duration, and retry delay. Queue polling and acknowledgment errors
