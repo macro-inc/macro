@@ -1,5 +1,5 @@
 /**
- * Typed surface of the generated wasm package (`illustrator_engine`), loaded
+ * Typed surface of the generated wasm package (`ai_engine`), loaded
  * dynamically so the repo type-checks without the generated artifacts.
  *
  * Build the package with:
@@ -95,16 +95,13 @@ export function loadAiEngineWasm(): Promise<AiEngineWasmModule> {
   if (!modulePromise) {
     modulePromise = (async () => {
       try {
-        const base = new URL('./wasm/illustrator_engine.js', import.meta.url);
+        const base = new URL('./wasm/ai_engine.js', import.meta.url);
         const mod = (await import(
           /* @vite-ignore */ base.href
         )) as AiEngineWasmModule;
         // The generated JS's own relative wasm URL 404s in production; a static
         // `new URL` makes vite emit and rewrite the binary.
-        const wasmUrl = new URL(
-          './wasm/illustrator_engine_bg.wasm',
-          import.meta.url
-        );
+        const wasmUrl = new URL('./wasm/ai_engine_bg.wasm', import.meta.url);
         await mod.default({ module_or_path: wasmUrl });
         return mod;
       } catch (error) {

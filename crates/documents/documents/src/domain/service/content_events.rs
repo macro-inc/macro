@@ -15,7 +15,7 @@ impl<
     S: DocumentSyncPort,
 > DocumentContentEventService for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
 {
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, document_id), fields(document_id = %document_id))]
     async fn publish_content_uploaded(
         &self,
         document_id: &DocumentId,
@@ -43,7 +43,7 @@ impl<
             .map_err(|error| DocumentError::Internal(error.into()))
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, document_id), fields(document_id = %document_id))]
     async fn publish_sync_content_updated(
         &self,
         document_id: &DocumentId,

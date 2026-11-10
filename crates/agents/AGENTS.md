@@ -2,7 +2,7 @@
 
 ## What it is
 
-Agent sessions: sessions and their realtime fan-out, the harness that runs agents, triggers, bots and harness registrations, Codex and Cursor cloud agents, routines and scheduled actions, skills, prompts, code execution and code mode, dynamic UI, and the transcript folds (`agent_fold`, `claude_fold`, `codex_fold`). The macrod daemon (`crates/agents/macrod`) stays at the top level: its directory is part of the public install URL.
+Agent sessions: sessions and their realtime fan-out, the harness that runs agents, triggers, bots and harness registrations, Codex and Cursor cloud agents, routines and scheduled actions, skills, prompts, code execution and code mode, dynamic UI, and the transcript folds (`agent_fold`, `claude_fold`, `codex_fold`). The macrod daemon is `crates/agents/macrod`; `crates/coding_agent_worker/install` keeps forwarders for the old public install URLs.
 
 Layer: `domain` in [`.config/layers.toml`](../../.config/layers.toml), which
 lists what this group may depend on. `cargo x deps` reports edges that break it.

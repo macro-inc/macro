@@ -956,7 +956,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, channel_id), fields(channel_id = %channel_id.0))]
     async fn get_channel_attachments(
         &self,
         channel_id: ChannelId,
@@ -982,7 +982,7 @@ where
         Ok(page)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, channel_id), fields(channel_id = %channel_id.0))]
     async fn get_channel_participants(
         &self,
         channel_id: ChannelId,
@@ -1011,7 +1011,7 @@ where
         Ok(names)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, channel_id), fields(channel_id = %channel_id.0))]
     async fn get_channel_metadata(
         &self,
         channel_id: ChannelId,

@@ -917,7 +917,7 @@ where
     }
 
     /// Release the open seat `member` held on `team_id`.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(name = "release", skip(self), err)]
     pub async fn release_seat(&self, team_id: Uuid, member: &MacroUserIdStr<'_>) -> Result<()> {
         self.release_at(team_id, member, Utc::now()).await
     }

@@ -1,5 +1,5 @@
 /**
- * Typed surface of the `database_sql_engine` wasm package, loaded on first use.
+ * Typed surface of the `database_sql` wasm package, loaded on first use.
  * `just build-database-sql-wasm` builds it into the gitignored `./wasm/`.
  */
 
@@ -70,17 +70,13 @@ export function loadDatabaseSqlWasm(): Promise<DatabaseSqlWasmModule> {
   if (!modulePromise) {
     modulePromise = (async () => {
       try {
-        const url = new URL('./wasm/database_sql_engine.js', import.meta.url)
-          .href;
+        const url = new URL('./wasm/database_sql.js', import.meta.url).href;
         const wasm = (await import(
           /* @vite-ignore */ url
         )) as DatabaseSqlWasmModule;
         // The generated JS's own relative wasm URL 404s in production; a static
         // `new URL` makes vite emit and rewrite the binary.
-        const wasmUrl = new URL(
-          './wasm/database_sql_engine_bg.wasm',
-          import.meta.url
-        );
+        const wasmUrl = new URL('./wasm/database_sql_bg.wasm', import.meta.url);
         await wasm.default({ module_or_path: wasmUrl });
         return wasm;
       } catch (error) {
