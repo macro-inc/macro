@@ -138,21 +138,54 @@ fn every_inventory_row_has_a_recorded_transcript() {
                 path.ends_with(".jsonl") || path.ends_with(".jsonl.gz"),
                 "{id} must link to a recording"
             );
-            let transcript = if path.ends_with(".gz") {
-                use std::io::Read;
-                let file = std::fs::File::open(root.join(path))
-                    .unwrap_or_else(|error| panic!("missing {id} transcript {path}: {error}"));
-                let mut text = String::new();
-                flate2::read::GzDecoder::new(file)
-                    .read_to_string(&mut text)
-                    .unwrap_or_else(|error| panic!("invalid {id} gzip {path}: {error}"));
-                text
-            } else {
-                std::fs::read_to_string(root.join(path))
-                    .unwrap_or_else(|error| panic!("missing {id} transcript {path}: {error}"))
-            };
+            let transcript = read_inventory_transcript(&root.join(path))
+                .unwrap_or_else(|error| panic!("invalid {id} transcript {path}: {error}"));
             assert!(transcript.contains("\"in\":"), "{id} has no input");
             assert!(transcript.contains("\"out\":"), "{id} has no output");
         }
     }
+}
+
+fn read_inventory_transcript(path: &std::path::Path) -> std::io::Result<String> {
+    if path.extension().is_some_and(|extension| extension == "gz") {
+        use std::io::Read;
+        let mut text = String::new();
+        flate2::read::MultiGzDecoder::new(std::fs::File::open(path)?).read_to_string(&mut text)?;
+        Ok(text)
+    } else {
+        std::fs::read_to_string(path)
+    }
+}
+
+#[test]
+fn inventory_gzip_reads_all_members_and_rejects_trailing_corruption() {
+    use std::io::Write;
+    let path = std::env::temp_dir().join(format!(
+        "sync-inventory-gzip-{}.jsonl.gz",
+        std::process::id()
+    ));
+    let mut file = std::fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&path)
+        .unwrap();
+    struct Cleanup(std::path::PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            std::fs::remove_file(&self.0).unwrap();
+        }
+    }
+    let _cleanup = Cleanup(path.clone());
+    let mut bytes = Vec::new();
+    for text in ["first\n", "second\n"] {
+        let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
+        encoder.write_all(text.as_bytes()).unwrap();
+        bytes.extend(encoder.finish().unwrap());
+    }
+    file.write_all(&bytes).unwrap();
+    drop(file);
+    assert_eq!(read_inventory_transcript(&path).unwrap(), "first\nsecond\n");
+    bytes.push(1);
+    std::fs::write(&path, bytes).unwrap();
+    assert!(read_inventory_transcript(&path).is_err());
 }

@@ -148,7 +148,7 @@ impl Transcript {
             let file =
                 std::fs::File::open(path).map_err(|e| ReplayError::Invalid(e.to_string()))?;
             let mut text = String::new();
-            flate2::read::GzDecoder::new(file)
+            flate2::read::MultiGzDecoder::new(file)
                 .read_to_string(&mut text)
                 .map_err(|e| ReplayError::Invalid(e.to_string()))?;
             text

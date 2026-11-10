@@ -84,3 +84,6 @@ socket membership. Read-only Room diagnostics expose no mutable Loro handle.
 
 The server encoder uses the vendored Loro1.16.2 dependency (`loro_server`),
 separate from editor/session Loro1.17.1. Preserve the unchanged Worker corpus.
+
+Decode every gzip member and reject corrupt tails when loading fixtures or
+following inventory links; never silently accept only the first member.
