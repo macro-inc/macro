@@ -975,11 +975,16 @@ legacy `retryable: true` metadata), then perform an unrelated queued action: the
 failed save must release the queue. Reload and reopen the draft; verify subject,
 recipients, body, and pending file contents. Retry and check that exactly one
 server draft exists. If per-mutation recovery preparation fails or times out,
-the mutation must fail and release the queue too, including legacy drafts that
+the queue asks again a second later, twice, and sends the mutation once
+preparation succeeds: a stalled or reopening local store must not fail a save
+or a discard. Preparation that fails a third time fails the mutation and
+releases the queue, including legacy drafts that
 have not been copied into recovery storage. Existing local working copies remain;
 an unmigrated legacy edit can be lost if the queue held its only durable copy.
 Verify that an unrelated queued action still completes in both cases. With
-browser OTel enabled, the failure appears once per draft as
+browser OTel enabled, a retried preparation appears once per draft as
+`graphql.mutation_queue.retry_scheduled` with `mutation_queue.failure: local`,
+and the final failure as
 `graphql.mutation_queue.recovery_failed` (or `graphql.mutation_queue.skipped` with a
 `mutation_queue.skip_reason`), never as a line per poll. A working copy that
 then needs **Retry** logs `email_draft.sync_failed` with its status and cause.
