@@ -99,6 +99,10 @@ impl NativeEditorSession {
             }),
         }))
     }
+    /// Observe current effective access; later inputs still require normal admission.
+    pub fn effective_access(&self) -> Result<Access, FfiSessionError> {
+        Ok(lock(&self.inner)?.session.effective_access())
+    }
     /// Admit exactly one input and return every owned host effect. Never performs I/O.
     pub fn handle(&self, now: FfiNow, input: FfiInput) -> Result<FfiOutput, FfiSessionError> {
         lock(&self.inner)?.handle(now, input)
@@ -233,6 +237,10 @@ impl NativeDocSession {
                 application,
             }),
         }))
+    }
+    /// Observe current effective access; later inputs still require normal admission.
+    pub fn effective_access(&self) -> Result<Access, FfiSessionError> {
+        Ok(lock(&self.inner)?.session.effective_access())
     }
     /// Admit one input; storage completions re-enter as later calls from the host.
     pub fn handle(&self, now: FfiNow, input: FfiInput) -> Result<FfiOutput, FfiSessionError> {

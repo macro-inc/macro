@@ -679,6 +679,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_document_session_ffi_checksum_func_sync_defaults(
     ): Int
+    external fun uniffi_document_session_ffi_checksum_method_nativedocsession_effective_access(
+    ): Int
     external fun uniffi_document_session_ffi_checksum_method_nativedocsession_handle(
     ): Int
     external fun uniffi_document_session_ffi_checksum_method_nativedocsession_read(
@@ -686,6 +688,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_document_session_ffi_checksum_method_nativeeditorsession_application_command(
     ): Int
     external fun uniffi_document_session_ffi_checksum_method_nativeeditorsession_application_query(
+    ): Int
+    external fun uniffi_document_session_ffi_checksum_method_nativeeditorsession_effective_access(
     ): Int
     external fun uniffi_document_session_ffi_checksum_method_nativeeditorsession_handle(
     ): Int
@@ -727,6 +731,8 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_document_session_ffi_fn_constructor_nativedocsession_new(`configValue`: RustBuffer.ByValue,`storePath`: RustBuffer.ByValue,`now`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
+    external fun uniffi_document_session_ffi_fn_method_nativedocsession_effective_access(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_document_session_ffi_fn_method_nativedocsession_handle(`ptr`: Long,`now`: RustBuffer.ByValue,`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_document_session_ffi_fn_method_nativedocsession_read(`ptr`: Long,`path`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -740,6 +746,8 @@ internal object UniffiLib {
     external fun uniffi_document_session_ffi_fn_method_nativeeditorsession_application_command(`ptr`: Long,`now`: RustBuffer.ByValue,`name`: RustBuffer.ByValue,`payload`: RustBuffer.ByValue,`generation`: Int,`selection`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_document_session_ffi_fn_method_nativeeditorsession_application_query(`ptr`: Long,`name`: RustBuffer.ByValue,`payload`: RustBuffer.ByValue,`generation`: Int,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_document_session_ffi_fn_method_nativeeditorsession_effective_access(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_document_session_ffi_fn_method_nativeeditorsession_handle(`ptr`: Long,`now`: RustBuffer.ByValue,`input`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -880,6 +888,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_document_session_ffi_checksum_func_sync_defaults() and 0xFFFF) != 56654) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_document_session_ffi_checksum_method_nativedocsession_effective_access() and 0xFFFF) != 34455) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_document_session_ffi_checksum_method_nativedocsession_handle() and 0xFFFF) != 23845) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -890,6 +901,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_document_session_ffi_checksum_method_nativeeditorsession_application_query() and 0xFFFF) != 8084) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_document_session_ffi_checksum_method_nativeeditorsession_effective_access() and 0xFFFF) != 16849) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_document_session_ffi_checksum_method_nativeeditorsession_handle() and 0xFFFF) != 52845) {
@@ -1417,6 +1431,11 @@ public object FfiConverterByteArray: FfiConverterRustBuffer<ByteArray> {
 public interface NativeDocSessionInterface {
     
     /**
+     * Observe current effective access; later inputs still require normal admission.
+     */
+    fun `effectiveAccess`(): Access
+    
+    /**
      * Admit one input; storage completions re-enter as later calls from the host.
      */
     fun `handle`(`now`: FfiNow, `input`: FfiInput): FfiOutput
@@ -1546,6 +1565,23 @@ open class NativeDocSession: Disposable, AutoCloseable, NativeDocSessionInterfac
             UniffiLib.uniffi_document_session_ffi_fn_clone_nativedocsession(handle, status)
         }
     }
+
+    
+    /**
+     * Observe current effective access; later inputs still require normal admission.
+     */
+    @Throws(FfiSessionException::class)override fun `effectiveAccess`(): Access {
+            return FfiConverterTypeAccess.lift(
+    callWithHandle {
+    uniffiRustCallWithError(FfiSessionException) { _status ->
+    UniffiLib.uniffi_document_session_ffi_fn_method_nativedocsession_effective_access(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
 
     
     /**
@@ -1734,6 +1770,11 @@ public interface NativeEditorSessionInterface {
     fun `applicationQuery`(`name`: kotlin.String, `payload`: JsonValue, `generation`: kotlin.UInt): JsonValue
     
     /**
+     * Observe current effective access; later inputs still require normal admission.
+     */
+    fun `effectiveAccess`(): Access
+    
+    /**
      * Admit exactly one input and return every owned host effect. Never performs I/O.
      */
     fun `handle`(`now`: FfiNow, `input`: FfiInput): FfiOutput
@@ -1918,6 +1959,23 @@ open class NativeEditorSession: Disposable, AutoCloseable, NativeEditorSessionIn
         FfiConverterString.lower(`name`),
         FfiConverterTypeJsonValue.lower(`payload`),
         FfiConverterUInt.lower(`generation`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Observe current effective access; later inputs still require normal admission.
+     */
+    @Throws(FfiSessionException::class)override fun `effectiveAccess`(): Access {
+            return FfiConverterTypeAccess.lift(
+    callWithHandle {
+    uniffiRustCallWithError(FfiSessionException) { _status ->
+    UniffiLib.uniffi_document_session_ffi_fn_method_nativeeditorsession_effective_access(
+        it,
+        _status)
 }
     }
     )

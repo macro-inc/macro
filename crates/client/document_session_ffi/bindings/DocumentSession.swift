@@ -655,6 +655,11 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
 public protocol NativeDocSessionProtocol: AnyObject, Sendable {
     
     /**
+     * Observe current effective access; later inputs still require normal admission.
+     */
+    func effectiveAccess() throws  -> Access
+    
+    /**
      * Admit one input; storage completions re-enter as later calls from the host.
      */
     func handle(now: FfiNow, input: FfiInput) throws  -> FfiOutput
@@ -734,6 +739,18 @@ public convenience init(configValue: FfiSessionConfig, storePath: String?, now: 
 
     
 
+    
+    /**
+     * Observe current effective access; later inputs still require normal admission.
+     */
+open func effectiveAccess()throws  -> Access  {
+    return try  FfiConverterTypeAccess_lift(try rustCallWithError(FfiConverterTypeFfiSessionError_lift) {
+        uniffiCallStatus in
+    uniffi_document_session_ffi_fn_method_nativedocsession_effective_access(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+})
+}
     
     /**
      * Admit one input; storage completions re-enter as later calls from the host.
@@ -826,6 +843,11 @@ public protocol NativeEditorSessionProtocol: AnyObject, Sendable {
      * Query the shared application catalog without changing model state.
      */
     func applicationQuery(name: String, payload: JsonValue, generation: UInt32) throws  -> JsonValue
+    
+    /**
+     * Observe current effective access; later inputs still require normal admission.
+     */
+    func effectiveAccess() throws  -> Access
     
     /**
      * Admit exactly one input and return every owned host effect. Never performs I/O.
@@ -954,6 +976,18 @@ open func applicationQuery(name: String, payload: JsonValue, generation: UInt32)
         FfiConverterString.lower(name),
         FfiConverterTypeJsonValue_lower(payload),
         FfiConverterUInt32.lower(generation),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * Observe current effective access; later inputs still require normal admission.
+     */
+open func effectiveAccess()throws  -> Access  {
+    return try  FfiConverterTypeAccess_lift(try rustCallWithError(FfiConverterTypeFfiSessionError_lift) {
+        uniffiCallStatus in
+    uniffi_document_session_ffi_fn_method_nativeeditorsession_effective_access(
+            self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
 }
@@ -15631,6 +15665,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_document_session_ffi_checksum_func_sync_defaults() != 56654) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_document_session_ffi_checksum_method_nativedocsession_effective_access() != 34455) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_document_session_ffi_checksum_method_nativedocsession_handle() != 23845) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15641,6 +15678,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_document_session_ffi_checksum_method_nativeeditorsession_application_query() != 8084) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_document_session_ffi_checksum_method_nativeeditorsession_effective_access() != 16849) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_document_session_ffi_checksum_method_nativeeditorsession_handle() != 52845) {

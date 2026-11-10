@@ -7,6 +7,10 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class NativeEditorInputTest {
+    @Test fun effectiveAccessTracksServerDowngradeAndRegrant() {
+        NativeAccessScenario.run()
+    }
+
     @Test fun snippetsKeepTheConfirmedSourceExtractionCache() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         instrumentation.runOnMainSync { NativeSnippetScenario.sourceCache(instrumentation.targetContext) }

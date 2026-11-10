@@ -42,3 +42,5 @@ Resolve snippets through the typed source-state API and return every effect; kee
 Keep production native FFI dependencies on explicit default-features=false with application policy only; never enable session compatibility or foreign nodes in native builds.
 
 Enable model-segmentation explicitly for a feature-stable exhaustive ModifyTarget mirror; never substitute it for a missing required host layout answer.
+
+Observe live authorization through effective_access on either session object; never treat the returned Access as a token for a later input or infer it from construction config or UI locks.
