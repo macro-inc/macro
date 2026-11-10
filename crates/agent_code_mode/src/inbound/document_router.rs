@@ -7,7 +7,7 @@ use crate::inbound::axum_router::CodeExecutionApiError;
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
@@ -18,6 +18,7 @@ use entity_access::domain::{
 };
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOnly,
+    is_agent_run,
 };
 use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
@@ -250,6 +251,19 @@ async fn admit<Access: EntityAccessService, Auth: MacroAuthorizationService>(
         })
 }
 
+/// Only a person in the app starts a run: a token minted for an agent's run,
+/// or any program's request (a document program's token carries no agent),
+/// may not start another run through here.
+fn refuse_program_caller(
+    agent_attributed: bool,
+    headers: &HeaderMap,
+) -> Result<(), DocumentProgramApiError> {
+    if is_agent_run(agent_attributed, headers) {
+        return Err(DocumentProgramApiError(CodeModeError::Forbidden.into()));
+    }
+    Ok(())
+}
+
 #[utoipa::path(get, path = "/documents/{document_id}/build", tag = "documents", operation_id = "get_document_build",
     params(("document_id" = Uuid, Path, description = "A stored HTML document")),
     responses((status = 200, body = DocumentBuildResponse), (status = 401), (status = 403), (status = 404), (status = 413), (status = 422), (status = 500), (status = 503)))]
@@ -277,13 +291,10 @@ pub async fn run_document_program<Access: EntityAccessService, Auth: MacroAuthor
     caller: MacroAuthorizationExtractor<Auth, UserOnly>,
     State(state): State<DocumentProgramRouterState<Access, Auth>>,
     Path(document_id): Path<Uuid>,
+    headers: HeaderMap,
     Json(body): Json<RunDocumentProgram>,
 ) -> Result<Json<UserExecutionReceipt>, DocumentProgramApiError> {
-    // Only a directly signed-in user: a token minted for an agent's run may
-    // not start another run through here.
-    if caller.authorization.agent_id.is_some() {
-        return Err(DocumentProgramApiError(CodeModeError::Forbidden.into()));
-    }
+    refuse_program_caller(caller.authorization.agent_id.is_some(), &headers)?;
     let document = admit(&caller, &state, document_id).await?;
     let receipt = state
         .service
@@ -301,3 +312,6 @@ pub async fn run_document_program<Access: EntityAccessService, Auth: MacroAuthor
         .await?;
     Ok(Json(receipt))
 }
+
+#[cfg(test)]
+mod test;
