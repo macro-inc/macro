@@ -32,7 +32,9 @@ mod test;
 const INCUS_SOCKET: &str = "/dev/incus/sock";
 /// How long the claim keeps retrying a network that is not up yet.
 const CLAIM_DEADLINE: Duration = Duration::from_secs(300);
-const CLAIM_RETRY: Duration = Duration::from_secs(5);
+/// The pairing is pre-approved, so a claim only waits for the network or
+/// service to come up: retry quickly.
+const CLAIM_RETRY: Duration = Duration::from_millis(250);
 const INCUS_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Where the enrollment JSON comes from.

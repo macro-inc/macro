@@ -200,6 +200,8 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   avoid lock inversion. Power-off, successful wake and release clear the wait.
   Runtimes and Billing show "Waiting for space on the host" with a hint to turn
   off or release another computer. Waiting computers remain power-manageable.
+- A bought computer's harness starts with "Don't ask before acting" on: the
+  harnesses service creates every hosted harness with `allow_permission_bypass`.
 - **Default agent**: the first macrod connection (`enrolled_at` unset) calls
   `Harnesses::create_default_agent`, which gives the team a coding agent on the
   computer's harness unless one is already bound (`DefaultAgent::{Created, AlreadyBound}`).

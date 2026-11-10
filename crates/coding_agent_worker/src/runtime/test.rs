@@ -146,3 +146,28 @@ fn retry_policy_distinguishes_temporary_refusals_from_invalid_credentials() {
         assert!(!worth_redialing(&tungstenite::Error::Url(error)));
     }
 }
+
+#[test]
+fn a_healthy_connection_is_redialed_at_once_and_failures_back_off() {
+    let mut backoff = reconnect_strategy();
+    assert_eq!(
+        redial_delay(None, &mut backoff),
+        std::time::Duration::from_secs(1)
+    );
+    assert_eq!(
+        redial_delay(None, &mut backoff),
+        std::time::Duration::from_secs(2)
+    );
+    assert_eq!(
+        redial_delay(Some(std::time::Duration::from_secs(1)), &mut backoff),
+        std::time::Duration::from_secs(4)
+    );
+    assert_eq!(
+        redial_delay(Some(HEALTHY_CONNECTION), &mut backoff),
+        std::time::Duration::ZERO
+    );
+    assert_eq!(
+        redial_delay(None, &mut backoff),
+        std::time::Duration::from_secs(1)
+    );
+}
