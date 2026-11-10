@@ -1,6 +1,7 @@
 import { startEditorScrollTelemetry } from '@app/observability/editor';
 import { useFlow } from '@app/observability/flow';
 import { allocateEditorNamespace } from '@core/component/LexicalMarkdown/context/editor-namespace';
+import { installNativeMarkdownOverlays } from '@core/component/LexicalMarkdown/editing/installNativeMarkdownOverlays';
 import { theme } from '@core/component/LexicalMarkdown/theme';
 import { loadDocumentSession } from '@core/document-session/load';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -26,7 +27,9 @@ import {
   getOwner,
   onCleanup,
   onMount,
+  Show,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createRustEditorSession } from '../primitives/create-rust-editor-session';
 import { createEditorAuthorization } from '../queries/editor-authorization';
@@ -97,6 +100,7 @@ export default function RustMarkdownEditor(props: {
               module,
               root: element,
               registry: registerMacroElementViews(createBuiltinRegistry()),
+              installOverlays: installNativeMarkdownOverlays,
               view: {
                 namespace,
                 owner,
@@ -173,15 +177,20 @@ export default function RustMarkdownEditor(props: {
     );
   });
   return (
-    <div
-      ref={root}
-      role="textbox"
-      aria-multiline="true"
-      aria-readonly={!permissions.canEdit()}
-      aria-label="Document content"
-      data-input-surface="editor"
-      class="ph-no-capture w-full max-w-full min-h-52 md"
-      classList={{ 'select-auto': !permissions.canEdit() }}
-    />
+    <>
+      <div
+        ref={root}
+        role="textbox"
+        aria-multiline="true"
+        aria-readonly={!permissions.canEdit()}
+        aria-label="Document content"
+        data-input-surface="editor"
+        class="ph-no-capture w-full max-w-full min-h-52 md"
+        classList={{ 'select-auto': !permissions.canEdit() }}
+      />
+      <Show when={runtime()?.overlays?.Overlays}>
+        {(Overlays) => <Dynamic component={Overlays()} />}
+      </Show>
+    </>
   );
 }

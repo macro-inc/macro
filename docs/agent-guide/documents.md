@@ -18,6 +18,18 @@ and body loading/placeholder chrome. Copy as markdown and downloads use the
 selected body engine. Verify engine parity before treating the flagged path as
 ready; native menus and anchored comments also require their view installers.
 
+The native body installs its checkbox pointer bridge through `installOverlays`.
+Click or tap a checklist marker, switch the view read-only, then unlock it and
+repeat; revoked Session write access must reject the toggle even if the local UI
+still appears editable. Closing/remounting overlays must retain exactly one
+listener. The isolated native browser check in
+`LexicalMarkdown/editing/browser-test` covers these gestures and raw save/reopen
+state. Click below the editor after leaving it: an empty terminal paragraph is
+reused, otherwise one paragraph is appended and its caret takes typing. A click
+while the editor retains a focused range leaves that range in place. Queued
+focus waits for native completion and rechecks disposal/editability before
+browser focus. These checks do not establish slash-menu or full document-app acceptance.
+
 For native document view performance, run the lexical-wasm-view
 `commit-work.browser.e2e.ts` fixture against a source-matched session artifact.
 Typing in one comment should measure that block's anchors, preserve table cell

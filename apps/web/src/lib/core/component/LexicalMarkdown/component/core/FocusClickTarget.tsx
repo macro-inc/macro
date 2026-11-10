@@ -6,15 +6,12 @@ import {
   type LexicalEditor,
 } from 'lexical';
 import { type Accessor, type JSX, splitProps } from 'solid-js';
+import type { NativeFocusTarget } from '../../editing/overlay-hosts/focus';
 
 export function FocusClickTarget(
   props: {
     editor?: LexicalEditor;
-    native?: {
-      hasSelection(): boolean;
-      editable(): boolean;
-      focusAtEnd(): void;
-    };
+    native?: NativeFocusTarget;
     editorFocus?: Accessor<boolean>;
   } & JSX.HTMLAttributes<HTMLDivElement>
 ) {

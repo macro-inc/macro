@@ -47,13 +47,15 @@ export function dispatchApplicationCommand(
   view: EditorView,
   name: string,
   payload: JsonValue,
-  event?: KeyboardEvent
+  event?: KeyboardEvent,
+  after?: (handled: boolean) => void
 ): boolean | undefined {
   const input = applicationInput(view, name, payload, event);
   if (!input) return false;
   let handled: boolean | undefined;
   view.port.input(input, (result) => {
     handled = result;
+    after?.(result);
   });
   return handled;
 }

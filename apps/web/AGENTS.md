@@ -1,5 +1,7 @@
 ## Development Commands
 
+- Install native body pointer capabilities through the additive `installOverlays` hook; verify checkbox gestures, current Session admission and listener remount with `LexicalMarkdown/editing/browser-test`.
+
 - Keep dev response middleware single-install per response across reloads, and parse terminal inline source-map comments without a regular expression over the complete generated module.
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
