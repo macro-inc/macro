@@ -117,18 +117,30 @@ function createDefaultEffects(): ChannelMessageActionEffects {
 
 const emptyReplyHandler: MessageActionHandler = () => undefined;
 
-/** Removes a message's link previews once its sender confirms. */
+/**
+ * Removes a message's link previews once its sender confirms. `undefined`
+ * where the host shows no link preview cards.
+ */
 function removeLinkPreviewsHandler(
-  input: RemoveLinkPreviewsInput,
-  removeLinkPreviews: (input: RemoveLinkPreviewsInput) => void,
+  message: MessageData,
+  options: CreateChannelMessageActionsOptions,
   confirm: () => Promise<boolean>
-): MessageActionHandler {
+): MessageActionHandler | undefined {
+  const removeLinkPreviews = options.removeLinkPreviews;
+  if (!removeLinkPreviews) return;
+
   return async (ctx) => {
     // Shift skips the question, for removing several in a row.
     const skipConfirmation = ctx.event?.shiftKey ?? false;
     if (!skipConfirmation && !(await confirm())) return;
 
-    removeLinkPreviews(input);
+    removeLinkPreviews({
+      parent: message.parent ?? options.parent(),
+      messageID: message.id,
+      threadID:
+        (message as MessageData & { thread_id?: string | null }).thread_id ??
+        undefined,
+    });
   };
 }
 
@@ -240,20 +252,13 @@ export function createChannelMessageActions(
           }
         : undefined,
       // The sender's alone, like editing: a moderator can't decide it.
-      onRemoveLinkPreviews:
-        canEdit && options.removeLinkPreviews
-          ? removeLinkPreviewsHandler(
-              {
-                parent: message.parent ?? options.parent(),
-                messageID: message.id,
-                threadID:
-                  (message as MessageData & { thread_id?: string | null })
-                    .thread_id ?? undefined,
-              },
-              options.removeLinkPreviews,
-              effects.confirmRemoveLinkPreviews
-            )
-          : undefined,
+      onRemoveLinkPreviews: canEdit
+        ? removeLinkPreviewsHandler(
+            message,
+            options,
+            effects.confirmRemoveLinkPreviews
+          )
+        : undefined,
       onCreateTask: options.onCreateTask,
       onChat: !isDeleted ? options.onChat : undefined,
     };
