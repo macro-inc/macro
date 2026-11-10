@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -137,6 +137,7 @@ describe('HtmlPreview', () => {
   afterEach(() => {
     cleanup();
     harness.getDocumentBuild.mockReset();
+    harness.runDocumentProgram.mockReset();
   });
 
   it('builds only once the editor’s save has landed, and again after the next', async () => {
@@ -192,5 +193,91 @@ describe('HtmlPreview', () => {
     await vi.waitFor(() =>
       expect(frameToken().frame.getAttribute('srcdoc')).toBe('<p>raw</p>')
     );
+  });
+
+  const renderPreview = (text: string) => {
+    const client = new QueryClient();
+    render(() => (
+      <QueryClientProvider client={client}>
+        <HtmlPreview text={text} documentId="doc" />
+      </QueryClientProvider>
+    ));
+    return client;
+  };
+
+  it('keeps the frame when a refetch returns the same build', async () => {
+    const built: DocumentBuildResponse = {
+      status: 'built',
+      sourceHash: 'same',
+      html: '<p>page</p>',
+      programs: ['tasks'],
+    };
+    harness.getDocumentBuild.mockResolvedValue(ok({ ...built }));
+    const client = renderPreview('<p>raw</p>');
+    await vi.waitFor(() => expect(frameToken().token).toBeDefined());
+    const { frame, token } = frameToken();
+
+    await client.refetchQueries();
+
+    expect(harness.getDocumentBuild).toHaveBeenCalledTimes(2);
+    expect(frameToken().frame).toBe(frame);
+    expect(frameToken().token).toBe(token);
+  });
+
+  it('says why a page with programs over the build’s size doesn’t run', async () => {
+    harness.getDocumentBuild.mockResolvedValue(
+      err([{ code: 'BUILD_TOO_LARGE', message: 'too large' }])
+    );
+    renderPreview(
+      '<script type="text/macro" id="tasks" lang="ts">export default () => 1;</script>'
+    );
+
+    expect((await screen.findByRole('alert')).textContent).toContain(
+      'over 2 MiB'
+    );
+    expect(screen.queryByTitle('HTML preview')).toBeNull();
+  });
+
+  it('shows a plain page over the build’s size as it is', async () => {
+    harness.getDocumentBuild.mockResolvedValue(
+      err([{ code: 'BUILD_TOO_LARGE', message: 'too large' }])
+    );
+    renderPreview('<p>raw</p>');
+
+    await vi.waitFor(() =>
+      expect(frameToken().frame.getAttribute('srcdoc')).toBe('<p>raw</p>')
+    );
+  });
+
+  it('tells the viewer to retry after a stale run reloads the page', async () => {
+    const build = (sourceHash: string): DocumentBuildResponse => ({
+      status: 'built',
+      sourceHash,
+      html: `<p>${sourceHash}</p>`,
+      programs: ['tasks'],
+    });
+    harness.getDocumentBuild
+      .mockResolvedValueOnce(ok(build('before')))
+      .mockResolvedValueOnce(ok(build('after')));
+    harness.runDocumentProgram.mockResolvedValueOnce(
+      err([{ code: 'DOCUMENT_CHANGED', message: 'This page changed.' }])
+    );
+    renderPreview('<p>raw</p>');
+    await vi.waitFor(() =>
+      expect(frameToken().frame.getAttribute('srcdoc')).toContain('before')
+    );
+
+    postFromPage((token) => ({
+      type: 'macro:run',
+      token,
+      id: 1,
+      program: 'tasks',
+      arguments: {},
+    }));
+
+    await vi.waitFor(() =>
+      expect(frameToken().frame.getAttribute('srcdoc')).toContain('after')
+    );
+    expect(screen.getByRole('alert').textContent).toContain('Try that again');
   });
 });

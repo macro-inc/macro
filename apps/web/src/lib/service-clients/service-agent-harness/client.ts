@@ -73,17 +73,20 @@ const documentProgramError: ErrorResponseHandler<'DOCUMENT_CHANGED'> = async (
 
 /**
  * A document build's errors. `BUILD_UNAVAILABLE` means the document can't
- * be built for this viewer (outside the rollout, gone, too large, not HTML),
- * so the preview shows the file as it is; `SERVER_ERROR` is worth retrying.
+ * be built for this viewer (outside the rollout, gone, not HTML), so the
+ * preview shows the file as it is; `BUILD_TOO_LARGE` that it is over the
+ * size a build takes, so its programs can't run; `SERVER_ERROR` is worth
+ * retrying.
  */
 const documentBuildError: ErrorResponseHandler<
-  'BUILD_UNAVAILABLE' | 'SERVER_ERROR'
+  'BUILD_UNAVAILABLE' | 'BUILD_TOO_LARGE' | 'SERVER_ERROR'
 > = async (response) => {
-  if (
-    response.status === 404 ||
-    response.status === 413 ||
-    response.status === 422
-  )
+  if (response.status === 413)
+    return {
+      code: 'BUILD_TOO_LARGE',
+      message: 'This page is too large to build.',
+    };
+  if (response.status === 404 || response.status === 422)
     return { code: 'BUILD_UNAVAILABLE', message: 'This page can’t be built.' };
   if (response.status >= 500)
     return {
@@ -443,7 +446,7 @@ export const agentHarnessServiceClient = {
   getDocumentBuild(documentId: string, signal?: AbortSignal) {
     return fetchWithToken<
       DocumentBuildResponse,
-      'BUILD_UNAVAILABLE' | 'SERVER_ERROR'
+      'BUILD_UNAVAILABLE' | 'BUILD_TOO_LARGE' | 'SERVER_ERROR'
     >(`${agentHarnessHost}/documents/${documentId}/build`, {
       method: 'GET',
       signal,

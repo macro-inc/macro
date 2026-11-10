@@ -16,6 +16,7 @@ import {
   onCleanup,
   Show,
   Switch,
+  untrack,
 } from 'solid-js';
 import { attachEventHost } from '../code-mode/event-host';
 import { composeProgramDocument } from '../code-mode/frame-helper';
@@ -93,25 +94,45 @@ function BuiltPreview(props: {
       !props.saving
     )
   );
-  const unavailable = () =>
-    build.isError && thrownResultErrorHasCode(build.error, 'BUILD_UNAVAILABLE');
+  const refused = (code: 'BUILD_UNAVAILABLE' | 'BUILD_TOO_LARGE') =>
+    build.isError && thrownResultErrorHasCode(build.error, code);
+  // A page over the build's size runs nothing; one with programs would
+  // render broken, so it says why instead.
+  const tooLarge = () =>
+    refused('BUILD_TOO_LARGE') && hasProgramBlocks(props.fallbackHtml);
   const page = () => (build.isPending ? undefined : build.data);
-  const built = () => {
-    const current = page();
-    return current?.status === 'built' ? current : undefined;
-  };
+  // Keyed by source: a refetch of the same source (on reconnect or focus)
+  // keeps the frame, its state and its event stream.
+  const built = createMemo(
+    () => {
+      const current = page();
+      return current?.status === 'built' ? current : undefined;
+    },
+    undefined,
+    { equals: (previous, next) => previous?.sourceHash === next?.sourceHash }
+  );
   const failed = () => {
     const current = page();
     return current?.status === 'failed' ? current : undefined;
   };
   const plain = () => page()?.status === 'plain';
+  // The build a run found stale; the frame that replaces it says why the
+  // page reloaded, since the failure shown on the old one goes with it.
+  const [staleBuild, setStaleBuild] = createSignal<string>();
   const refetch = () => {
     fireAndForget(build.refetch(), 'html-preview-build');
   };
 
   return (
     <Switch>
-      <Match when={unavailable() || plain()}>
+      <Match when={tooLarge()}>
+        <PageTooLarge />
+      </Match>
+      <Match
+        when={
+          refused('BUILD_UNAVAILABLE') || refused('BUILD_TOO_LARGE') || plain()
+        }
+      >
         <PlainFrame html={props.fallbackHtml} />
       </Match>
       <Match when={failed()}>
@@ -123,7 +144,15 @@ function BuiltPreview(props: {
             documentId={props.documentId}
             html={current.html}
             sourceHash={current.sourceHash}
-            onStale={refetch}
+            notice={
+              staleBuild() !== undefined && staleBuild() !== current.sourceHash
+                ? t('htmlPreview.pageUpdated')
+                : undefined
+            }
+            onStale={() => {
+              setStaleBuild(current.sourceHash);
+              refetch();
+            }}
           />
         )}
       </Match>
@@ -134,21 +163,35 @@ function BuiltPreview(props: {
   );
 }
 
+/** Whether a page's source has program blocks or a client script to build. */
+function hasProgramBlocks(html: string): boolean {
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  return (
+    parsed.querySelector(
+      'script[type="text/macro"], script[type="module"][lang="ts"]'
+    ) !== null
+  );
+}
+
 /**
  * One build's page, with its own token; a new build gets a new frame. The
  * latest failed run shows above it until dismissed, because a page that
- * doesn't catch its call's rejection otherwise shows nothing. A page that
- * starts to navigate away is closed, with a short notice in its place.
+ * doesn't catch its call's rejection otherwise shows nothing; `notice`
+ * starts it, for a frame that replaced one whose run found it stale. A page
+ * that starts to navigate away is closed, with a short notice in its place.
  */
 export function ProgramFrame(props: {
   documentId: string;
   html: string;
   sourceHash: string;
+  notice?: string;
   onStale: () => void;
 }) {
   const token = crypto.randomUUID();
   const srcdoc = createMemo(() => composeProgramDocument(props.html, token));
-  const [failure, setFailure] = createSignal<string>();
+  const [failure, setFailure] = createSignal<string | undefined>(
+    untrack(() => props.notice)
+  );
   const [left, setLeft] = createSignal(false);
   let frame: HTMLIFrameElement | undefined;
 
@@ -202,7 +245,7 @@ function RunFailure(props: { message: string; onDismiss: () => void }) {
       class="flex shrink-0 items-center gap-2 border-edge-muted border-b bg-inset py-1 pr-1 pl-3 text-ink text-xs touch:min-h-11"
     >
       <WarningCircle class="size-3.5 shrink-0 text-failure" />
-      <p class="max-h-24 min-w-0 flex-1 overflow-y-auto whitespace-pre-wrap wrap-anywhere">
+      <p class="max-h-[40dvh] min-w-0 flex-1 overflow-y-auto overscroll-contain whitespace-pre-wrap wrap-anywhere">
         <span class="font-medium">{t('htmlPreview.programFailed')} </span>
         {props.message}
       </p>
@@ -214,6 +257,16 @@ function RunFailure(props: { message: string; onDismiss: () => void }) {
       >
         <X class="size-3.5 touch:size-5" />
       </Button>
+    </div>
+  );
+}
+
+/** In place of a page with programs that is over the build's size. */
+function PageTooLarge() {
+  return (
+    <div role="alert" class="p-4 text-sm text-ink">
+      <p class="font-medium">{t('htmlPreview.tooLargeTitle')}</p>
+      <p class="mt-1 text-ink-muted">{t('htmlPreview.tooLargeDescription')}</p>
     </div>
   );
 }
