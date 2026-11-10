@@ -359,9 +359,11 @@ directory entries or avoid metadata resolution until that adapter has a seam.
 
 `Lab::worker_step` offers exactly one wire message to fake SQS, calls the real
 `SQSWorker::receive_messages`, then calls the same `process_message` function as
-the selected worker loop. Processing runs in its own Tokio task, as it does in
-the simulation and production worker, so the recorder's future does not add
-stack frames to the legacy reversion path. `delivery` and `outcome` replace `request` and
+the selected worker loop. Processing is polled on a dedicated 16 MiB thread
+that enters the scenario's existing Tokio runtime and carries its tracing scope.
+This keeps the recorder's future off the delivery stack and gives unoptimized
+worker futures enough room without relying on `RUST_MIN_STACK`. `delivery` and
+`outcome` replace `request` and
 `response`; all other sections and sidecars are the same. Delivery includes the
 queue, body (including malformed or absent bodies), identity, receipt handle,
 receive count, system attributes, and message attributes. Outcome independently
@@ -415,10 +417,11 @@ the history lookup normalizes its email argument. The production worker is not
 modified. Contacts, CRM, and lifecycle outbox work are recorded; only explicitly
 selected queue sends become follow-up deliveries.
 
-Inbox-sync scenarios use a separate single-worker Tokio runtime so the production
-spawned delivery is polled on a runtime worker, outside SQLx's current-thread
-fixture stack. This preserves production's task boundary for large unoptimized
-attachment/authentication futures. Fake Gmail's opt-in `pause_next_http` can hold
+Inbox-sync scenarios use a separate single-worker Tokio runtime for the scenario;
+the driver enters that same runtime from the delivery thread described above.
+The shared runtime keeps I/O and background trace capture connected while the
+explicit delivery stack accommodates unoptimized attachment/authentication
+futures. Fake Gmail's opt-in `pause_next_http` can hold
 an exact scripted endpoint before or after its response is chosen. The older
 request-kind pause behavior remains available. Neither pause sleeps or polls.
 Kafka can reject one produce through the in-process broker to pin best-effort

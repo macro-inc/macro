@@ -11,6 +11,35 @@ mod redis_time;
 mod test;
 pub(super) use contexts::WorkerContexts;
 
+// Unoptimized worker futures have large temporary frames even when the entry
+// point itself is boxed. Poll on a bounded, explicit stack while retaining the
+// lab runtime: its I/O drivers and unscoped-child trace capture must stay shared.
+async fn on_delivery_stack<F, Fut, T>(build: F) -> T
+where
+    F: FnOnce() -> Fut + Send + 'static,
+    Fut: Future<Output = T>,
+    T: Send + 'static,
+{
+    let runtime = tokio::runtime::Handle::current();
+    let (send, receive) = tokio::sync::oneshot::channel();
+    let thread = std::thread::Builder::new()
+        .name("parity-delivery".into())
+        .stack_size(16 * 1024 * 1024)
+        .spawn(move || {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                runtime.block_on(async move { Box::pin(build()).await })
+            }));
+            let _ = send.send(result);
+        })
+        .expect("production worker delivery thread");
+    let result = receive.await.expect("production worker delivery result");
+    thread.join().expect("production worker delivery thread");
+    match result {
+        Ok(result) => result,
+        Err(panic) => std::panic::resume_unwind(panic),
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(in crate::parity) enum Queue {
     GmailOps,
@@ -165,19 +194,22 @@ impl Lab {
                     .await
                     .expect("single fake receive");
                 assert_eq!(messages.len(), 1, "exactly one message per step");
-                // As in label_write_sim, poll the production delivery in its own
-                // task rather than under the fixture/recorder's large future.
+                // Keep the recorder's frame off the production delivery and
+                // give unoptimized futures an explicit stack budget.
                 let workers = workers.clone();
                 let message = messages.remove(0);
                 let processing_recording = recording.clone();
-                let result = tokio::spawn(capture::scope(
-                    processing_recording,
-                    async move { workers.process(queue, &message).await }
-                        .instrument(tracing::Span::current())
-                        .with_subscriber(capture::dispatch()),
-                ))
-                .await
-                .expect("production worker delivery task");
+                let parent = tracing::Span::current();
+                let dispatch = capture::dispatch();
+                let result = on_delivery_stack(move || {
+                    capture::scope(
+                        processing_recording,
+                        async move { workers.process(queue, &message).await }
+                            .instrument(parent)
+                            .with_subscriber(dispatch),
+                    )
+                })
+                .await;
                 let kafka = self.kafka.take().await;
                 self.sql_fault.drain().await;
                 (result, kafka)

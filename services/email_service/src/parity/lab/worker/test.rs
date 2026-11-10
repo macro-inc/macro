@@ -140,3 +140,60 @@ async fn changed_body_changes_only_delivery_and_sqs(pool: sqlx::PgPool) {
         .collect();
     assert_eq!(changed, ["delivery:", "sqs:"]);
 }
+
+#[inline(never)]
+#[expect(
+    clippy::large_stack_arrays,
+    reason = "Exercise a poll frame larger than Tokio's default thread stack"
+)]
+fn large_delivery_frame() -> usize {
+    let mut bytes = [0_u8; 3 * 1024 * 1024];
+    std::hint::black_box(&mut bytes).len()
+}
+
+#[tokio::test]
+async fn delivery_stack_preserves_runtime_and_child_span_capture() {
+    if !crate::parity::process_per_test() {
+        return;
+    }
+    let _guard = capture::exclusive_lab().await;
+    let (recording, parent) = capture::start();
+    let processing_recording = recording.clone();
+    let runtime = tokio::runtime::Handle::current().id();
+    let dispatch = capture::dispatch();
+    let result = on_delivery_stack(move || {
+        assert_eq!(tokio::runtime::Handle::current().id(), runtime);
+        capture::scope(
+            processing_recording,
+            async move {
+                let size = large_delivery_frame();
+                tracing::warn!("scoped delivery event");
+                tokio::spawn(async {
+                    tracing::info_span!("unscoped delivery child").in_scope(|| {
+                        tracing::warn!("unscoped delivery child event");
+                    });
+                })
+                .await
+                .expect("child task");
+                (size, tokio::runtime::Handle::current().id())
+            }
+            .instrument(parent)
+            .with_subscriber(dispatch),
+        )
+    })
+    .await;
+    capture::stop();
+    assert_eq!(result, (3 * 1024 * 1024, runtime));
+    let (_, logs, _, _, _) = recording.lock().expect("recording").sections();
+    let logs = logs.as_array().expect("logs");
+    assert_eq!(logs.len(), 2);
+    assert_eq!(logs[0]["message"], "scoped delivery event");
+    assert_eq!(logs[1]["message"], "unscoped delivery child event");
+    assert_eq!(logs[1]["span"], json!(["unscoped delivery child"]));
+}
+
+#[tokio::test]
+#[should_panic(expected = "delivery panic reaches its caller")]
+async fn delivery_stack_forwards_panics() {
+    on_delivery_stack(|| async { panic!("delivery panic reaches its caller") }).await;
+}
