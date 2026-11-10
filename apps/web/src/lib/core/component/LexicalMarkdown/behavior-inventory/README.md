@@ -211,6 +211,11 @@ menu, providers and user decorator over a supplied user list. Its keyboard,
 pointer/touch and Escape controls retain raw open/query/inserted model and DOM
 stages via `OVERLAY_MENTION_CAPTURE`. This scoped user-list fixture does not
 establish remote catalog IO, every mention kind or native binding.
+`emoji-host-capture.browser.e2e.ts` retains raw open/query/inserted JSON and DOM
+for keyboard choice and enclosed-shortcode resolution using the actual loaded
+emoji catalog. `OVERLAY_EMOJI_CAPTURE` writes per-project files for exact host
+comparison alongside the seven existing emoji interaction cases. These controls
+do not establish a native shortcode transform or native picker installation.
 The opt-in `/?controls` route mounts the actual checklist collector/store and
 TaskListControlsRenderer with production query and user providers. Its cases
 exercise plain/task progress, task-only filter availability, status selection
