@@ -3,8 +3,22 @@ import '@app/index.css';
 import { ListViewport } from '@app/components/list/ListViewport';
 import { ChannelsTouchSidebar } from '@app/features/channels-view/components/ChannelsTouchSidebar';
 import { ChannelsViewMain } from '@app/features/channels-view/components/ChannelsViewMain';
+import { driveDestination } from '@app/features/drive-view/drive-route-navigation';
 import { HomeListLayout } from '@app/features/home/components/HomeListLayout';
 import { HomeViewLayout } from '@app/features/home/components/HomeViewLayout';
+import {
+  createMemoryHistory,
+  createMemoryPaneStore,
+  createSplitRouter,
+  routeParams,
+} from '@app/lib/split-router';
+import { createTestPolicy } from '@app/lib/split-router/tests/fixtures';
+import {
+  appRoute,
+  driveRootDocumentRoute,
+  driveSplitRoute,
+  legacyContentRoute,
+} from '@app/routes/routes';
 import { ChannelDetailLayout } from '@channel/Channel/ChannelDetailLayout';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
@@ -15,9 +29,11 @@ import {
   type SplitPanelContextType,
 } from '@components/app/split-layout/context';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { createAppSplitRouterMiddleware } from '@components/app/split-layout/split-router/app-middleware';
 import { SplitPanel } from '@components/app/split-panel';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createWindowSize } from '@solid-primitives/resize-observer';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, onCleanup, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { MobileListLayout } from '../MobileListLayout';
 import { ViewShell } from '../ViewShell';
@@ -192,8 +208,75 @@ function ReaderWorkspaceFixture() {
   );
 }
 
-function CollectionWorkspaceFixture() {
-  const [selected, setSelected] = createSignal<string>();
+function DriveRoutingFixture() {
+  const history = createMemoryHistory('/drive');
+  const router = createSplitRouter({
+    routes: {
+      definitions: [
+        {
+          ...appRoute,
+          children: [
+            { ...driveSplitRoute, children: [driveRootDocumentRoute] },
+            legacyContentRoute,
+          ],
+        },
+      ],
+      defaultRoute: () => ({
+        matches: [
+          { id: 'app', params: {} },
+          { id: 'drive', params: {} },
+        ],
+      }),
+    },
+    history,
+    paneStore: createMemoryPaneStore(),
+    policy: createTestPolicy().policy,
+    middleware: createAppSplitRouterMiddleware({ isTouchDevice: () => true }),
+  });
+  onCleanup(() => router.dispose());
+  const selected = () => {
+    const entry = router.entry(router.panes()[0]!);
+    const id = entry && routeParams(entry.location.route).documentId;
+    return typeof id === 'string' ? id : undefined;
+  };
+  return (
+    <>
+      <output data-testid="drive-route" class="sr-only">
+        {router
+          .entry(router.panes()[0]!)
+          ?.location.route.matches.map((match) => match.id)
+          .join('/')}
+      </output>
+      <output data-testid="drive-pane-count" class="sr-only">
+        {router.panes().length}
+      </output>
+      <CollectionWorkspaceFixture
+        selected={selected}
+        onSelect={(id) =>
+          fireAndForget(
+            router.navigatePane(
+              router.panes()[0]!,
+              driveDestination(
+                { kind: 'tab', tab: 'owned' },
+                { id, type: 'md' }
+              )
+            ),
+            'drive-routing-fixture'
+          )
+        }
+      />
+    </>
+  );
+}
+
+function CollectionWorkspaceFixture(
+  props: {
+    selected?: () => string | undefined;
+    onSelect?: (id: string) => void;
+  } = {}
+) {
+  const [localSelected, setSelected] = createSignal<string>();
+  const selected = props.selected ?? localSelected;
   const [view, setView] = createSignal('all');
   const selectView = (next: string) => {
     setView(next);
@@ -281,7 +364,7 @@ function CollectionWorkspaceFixture() {
                         type="button"
                         data-workspace-row={id}
                         class="block h-18 w-full border-b border-edge p-4 text-left"
-                        onClick={() => setSelected(id)}
+                        onClick={() => (props.onSelect ?? setSelected)(id)}
                       >
                         Item {id}
                       </button>
@@ -448,6 +531,8 @@ function HomeWorkspaceFixture() {
 }
 
 function Fixture() {
+  if (new URLSearchParams(location.search).has('drive-workspace'))
+    return <DriveRoutingFixture />;
   if (new URLSearchParams(location.search).has('reader-workspace'))
     return <ReaderWorkspaceFixture />;
   if (new URLSearchParams(location.search).has('workspace'))

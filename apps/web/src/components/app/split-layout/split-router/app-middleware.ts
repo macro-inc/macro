@@ -17,7 +17,6 @@ import {
   driveDocumentFromContent,
   drivePath,
 } from '@app/features/drive-view/primitives/drive-route';
-import { driveDocumentBlockType } from '@app/features/drive-view/primitives/drive-route-schema';
 import { driveSearch } from '@app/features/drive-view/primitives/drive-search';
 import { composeDraftSearch } from '@app/features/email-compose/compose-route-draft';
 import { URL_PARAMS as EMAIL_URL_PARAMS } from '@app/features/email-thread/core/location';
@@ -80,8 +79,8 @@ function redirectRetiredCrmDatabases({
   return destination ? redirect(destination) : undefined;
 }
 
-/** Upgrade legacy component and block URLs when supported; on touch, keep
- * document details in their full-block routes instead of inline Drive views. */
+/** Upgrade legacy component and block URLs when supported. Drive's host
+ * decides whether selections open inline using its measured pane width. */
 function redirectLegacyRoutes(
   { routes, to, redirect }: SplitRouterMiddlewareContext,
   options: AppMiddlewareState
@@ -90,15 +89,6 @@ function redirectLegacyRoutes(
   const rootId = paneRootMatch(route)?.id;
 
   const isTouch = options.isTouchDevice();
-
-  if (rootId === 'drive' && isTouch) {
-    const { documentType, documentId } = routeParams(route);
-    if (typeof documentType === 'string' && typeof documentId === 'string') {
-      return redirect(
-        `/${driveDocumentBlockType(documentType)}/${encodeURIComponent(documentId)}`
-      );
-    }
-  }
 
   // Touch shows records on their own pages, as the Customers lists open them.
   if (rootId === 'view-companies' && isTouch) {

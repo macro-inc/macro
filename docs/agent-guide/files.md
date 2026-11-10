@@ -70,6 +70,13 @@ again. Databases have no view history and do not appear in **Recent** or
 **Email attachments**. Creation time orders them when the selected sort has no
 corresponding database timestamp.
 
+Above 720px of pane width on touch, Drive keeps its list on the left and opens
+selected files in the right preview. Before selection, that preview is empty.
+Show sidebar opens sub-view navigation in a left sheet over the list. At narrow
+touch widths, selecting a file opens its standalone view. Router middleware
+preserves explicit Drive detail routes so folding an open preview can keep its
+editor mounted.
+
 On touch devices (phones and tablets), the Drive header is a scrollable pill
 strip — **Recent**, **My Files**, **Shared with me**, and **Folders** — with a
 leading filter-drawer button, like Tasks. Opening Files from the mobile dock

@@ -8,6 +8,36 @@ test.beforeEach(({ page }) => {
   });
 });
 
+test('Drive touch selections keep the routed file beside the list', async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  await page.setViewportSize({ width: 1000, height: 844 });
+  await page.goto(
+    '/src/components/view-shell/browser-test/touch-sidebar.html?drive-workspace'
+  );
+  await page.locator('[data-workspace-row="0"]').tap();
+  await expect(page.getByTestId('drive-route')).toHaveText(
+    'app/drive/drive-document'
+  );
+  await expect(page.getByTestId('drive-pane-count')).toHaveText('1');
+  await expect(page.getByTestId('workspace-preview')).toContainText(
+    'Preview 0'
+  );
+  await expect(page.getByTestId('workspace-list')).toBeVisible();
+  const list = await page.locator('[data-view-shell-list]').boundingBox();
+  const preview = await page.locator('[data-view-shell-detail]').boundingBox();
+  expect(preview!.x).toBeGreaterThanOrEqual(list!.x + list!.width);
+  await page.locator('[data-workspace-row="1"]').tap();
+  await expect(page.getByTestId('drive-route')).toHaveText(
+    'app/drive/drive-document'
+  );
+  await expect(page.getByTestId('workspace-preview')).toContainText(
+    'Preview 1'
+  );
+  await expect(page.getByTestId('drive-pane-count')).toHaveText('1');
+});
+
 test('collapses beside the view title and reopens before touch filters', async ({
   page,
 }) => {
