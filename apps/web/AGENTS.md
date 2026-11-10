@@ -144,8 +144,8 @@ beside a scrolling editor whose selection runs past its visible bottom
 (`clipToVisible`), have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/directive/browser-test/playwright.config.ts`.
 
-The runtime Share menu (teammates, team access, access requests, and the warning
-before shutting down a resident) and Settings → Runtimes' Teammates' runtimes
+The machine Share menu (teammates, team access, access requests, and the warning
+before shutting down a resident) and Settings → Machines' Teammates' machines
 section (Request access) have a backend-free desktop/phone regression:
 `bunx playwright test --config src/features/runtime-sharing/browser-test/playwright.config.ts`.
 It runs the real queries and service client over a scripted network. The warning
@@ -420,7 +420,7 @@ the user's newest account for that app from the last fifteen minutes.
 Desktop Home and Agents new-conversation and active-session composers show the shared **Run agents
 on this computer** invitation until this installation is paired or the current
 user dismisses it locally. Keep the invitation tied to bundled macrod support,
-not to account-wide paired runtime count; a user can pair several computers.
+not to account-wide paired machine count; a user can pair several computers.
 
 ### General
 

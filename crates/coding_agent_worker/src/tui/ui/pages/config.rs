@@ -99,7 +99,7 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
 
 /// The runtime settings the web owns, read-only from the server's snapshot.
 fn runtime_lines(app: &App, width: u16) -> Vec<Line<'static>> {
-    let mut lines = vec![section("Runtime", "set on the web", width)];
+    let mut lines = vec![section("Machine", "set on the web", width)];
     let row = |label: &str, value: Span<'static>| {
         Line::from(vec![
             Span::styled(format!("  {label:<14}"), Style::new().fg(DIM)),

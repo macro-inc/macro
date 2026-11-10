@@ -99,11 +99,11 @@ describe('buildAgentRoster', () => {
       label: 'wolf-laptop',
       connected: false,
     });
-    expect(saved[2]?.unavailableReason).toBe('Its runtime is disconnected');
-    expect(saved[2]?.connectLabel).toBe('Reconnect runtime');
+    expect(saved[2]?.unavailableReason).toBe('Its machine is disconnected');
+    expect(saved[2]?.connectLabel).toBe('Reconnect machine');
     expect(saved[2]?.offline).toBe(true);
     expect(saved[1]?.offline).toBeFalsy();
-    expect(saved[3]?.runtime.label).toBe('Disconnected runtime');
+    expect(saved[3]?.runtime.label).toBe('Disconnected machine');
   });
 
   it('can start a saved agent on a connected macrod runtime from here', () => {

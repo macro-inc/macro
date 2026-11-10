@@ -6,7 +6,7 @@
  */
 
 /**
- * What one caller may do with a runtime.
+ * What one caller may do with a machine.
  */
 export type HarnessAccess = (typeof HarnessAccess)[keyof typeof HarnessAccess];
 
