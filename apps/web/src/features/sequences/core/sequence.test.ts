@@ -7,6 +7,7 @@ import type {
 } from '@service-email/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import {
+  defaultStart,
   draftChanges,
   enrollmentActions,
   insertToken,
@@ -76,6 +77,7 @@ describe('draftChanges', () => {
     name: 'Intro',
     linkId: 'link',
     footer: '',
+    weekdaysOnly: true,
     status: 'draft',
     steps: [
       { id: 'a', delayDays: 0, subject: 'Hello', body: 'Hi', asReply: false },
@@ -91,6 +93,9 @@ describe('draftChanges', () => {
     expect(draftChanges(sequence, draft)).toBeUndefined();
     expect(draftChanges(sequence, { ...draft, name: 'Welcome' })).toEqual({
       name: 'Welcome',
+    });
+    expect(draftChanges(sequence, { ...draft, weekdaysOnly: false })).toEqual({
+      weekdaysOnly: false,
     });
   });
 
@@ -114,5 +119,22 @@ it('inserts a token over the selection and puts the caret after it', () => {
   expect(insertToken('Hi there,', 3, 8, '{{firstName}}')).toEqual({
     value: 'Hi {{firstName}},',
     caret: 16,
+  });
+});
+
+describe('defaultStart', () => {
+  // 2026-06-03 is a Wednesday.
+  const at = (day: number, hour: number, minute = 0) =>
+    new Date(2026, 5, day, hour, minute);
+
+  it('starts in a few minutes during working hours', () => {
+    expect(defaultStart(at(3, 10, 2))).toEqual(at(3, 10, 10));
+  });
+
+  it('otherwise starts when the next working day does', () => {
+    expect(defaultStart(at(3, 7))).toEqual(at(3, 9));
+    expect(defaultStart(at(3, 16, 57))).toEqual(at(4, 9));
+    expect(defaultStart(at(5, 18))).toEqual(at(8, 9));
+    expect(defaultStart(at(6, 11))).toEqual(at(8, 9));
   });
 });

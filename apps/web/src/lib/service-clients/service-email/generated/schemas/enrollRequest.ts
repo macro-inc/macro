@@ -11,7 +11,8 @@
 export interface EnrollRequest {
   /** CRM people. */
   crmContactIds: string[];
-  /** When the first step should go; also fixes the local send time. */
+  /** When the first step should go; also fixes the local send time. In a
+weekdays-only sequence, a weekend start goes the Monday after. */
   start: string;
   /** IANA time zone the send time is in. */
   timezone: string;

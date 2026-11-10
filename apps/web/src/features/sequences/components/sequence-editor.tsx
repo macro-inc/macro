@@ -317,6 +317,14 @@ export function SequenceEditor(props: {
             onInput={(event) => change({ footer: event.currentTarget.value })}
           />
         </ComposeFieldRow>
+        <Checkbox
+          class="mt-3 flex items-center gap-2 px-1 text-xs text-ink-muted"
+          checked={props.draft.weekdaysOnly}
+          onChange={(checked: boolean) => change({ weekdaysOnly: checked })}
+        >
+          <Checkbox.Control />
+          <Checkbox.Label>{t('sequences.weekdaysOnly')}</Checkbox.Label>
+        </Checkbox>
       </div>
     </div>
   );

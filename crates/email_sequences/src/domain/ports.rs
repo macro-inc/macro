@@ -312,6 +312,14 @@ pub trait SequenceRepo: Send + Sync + 'static {
         tx: &mut Self::Tx,
         link_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// Steps scheduled from the inbox after `since`, sent or not. Read under
+    /// the inbox's send-slot lock, so the count can't race a new step.
+    fn steps_since(
+        &self,
+        tx: &mut Self::Tx,
+        link_id: Uuid,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<u32, Self::Err>> + Send;
     /// Whether the inbox has any live enrollment.
     fn has_live_enrollments(
         &self,

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT e.id, e.sequence_id, s.user_id AS owner_id, e.team_id, e.link_id, e.email,\n                          e.crm_contact_id, e.contact_name, e.status, e.reason, e.due_at,\n                          e.timezone, e.send_time, e.replies_after\n                   FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id\n                   WHERE e.id = $1\n                   FOR UPDATE OF e",
+  "query": "SELECT e.id, e.sequence_id, s.user_id AS owner_id, e.team_id, e.link_id, e.email,\n                      e.crm_contact_id, e.contact_name, e.status, e.reason, e.due_at,\n                      e.timezone, e.send_time, s.weekdays_only, e.replies_after\n               FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id\n               WHERE e.sequence_id = $1 AND e.status = ANY($2)\n               ORDER BY e.id\n               FOR UPDATE OF e",
   "describe": {
     "columns": [
       {
@@ -70,13 +70,19 @@
       },
       {
         "ordinal": 13,
+        "name": "weekdays_only",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 14,
         "name": "replies_after",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "TextArray"
       ]
     },
     "nullable": [
@@ -93,8 +99,9 @@
       true,
       false,
       false,
+      false,
       true
     ]
   },
-  "hash": "2499f92fc3083daf2b1a77dc3cedea8654a34b933caf9ae6b60627b5a3faf183"
+  "hash": "06ed8aa9e650a845883e4bf6d1db938096e61cd63f193d7111ebfb279180480c"
 }

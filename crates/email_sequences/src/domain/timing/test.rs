@@ -10,11 +10,12 @@ fn clock(timezone: chrono_tz::Tz, h: u32, m: u32) -> SendClock {
     SendClock {
         timezone,
         send_time: NaiveTime::from_hms_opt(h, m, 0).unwrap(),
+        weekdays_only: true,
     }
 }
 
 #[test]
-fn next_due_table() {
+fn calendar_due_table() {
     let long_ago = utc(2026, 1, 1, 0, 0);
     let cases = [
         (
@@ -91,15 +92,62 @@ fn next_due_table() {
         ),
     ];
     for (name, previous, days, clock, now, expected) in cases {
-        assert_eq!(next_due(previous, days, clock, now), expected, "{name}");
+        assert_eq!(calendar_due(previous, days, clock, now), expected, "{name}");
     }
+}
+
+#[test]
+fn weekends_move_to_monday_at_the_send_time() {
+    // 2026-06-05 is a Friday; 09:00 in New York is 13:00 UTC.
+    let friday = utc(2026, 6, 5, 13, 0);
+    let monday = utc(2026, 6, 8, 13, 0);
+    let nine = clock(New_York, 9, 0);
+    let long_ago = utc(2026, 1, 1, 0, 0);
+    assert_eq!(next_due(friday, 1, nine, long_ago), monday, "Saturday");
+    assert_eq!(next_due(friday, 2, nine, long_ago), monday, "Sunday");
+    assert_eq!(next_due(friday, 3, nine, long_ago), monday, "Monday");
+    assert_eq!(
+        next_due(utc(2026, 6, 4, 13, 0), 1, nine, utc(2026, 6, 6, 15, 0)),
+        monday,
+        "a backlog on Saturday waits for Monday"
+    );
+    // The weekend is the local one.
+    let late_friday = utc(2026, 6, 6, 3, 30);
+    assert_eq!(
+        on_weekday(late_friday, clock(New_York, 23, 30)),
+        late_friday,
+        "Friday 23:30 in New York is Saturday in UTC"
+    );
+    assert_eq!(
+        on_weekday(utc(2026, 6, 5, 19, 0), clock(Kolkata, 9, 0)),
+        utc(2026, 6, 8, 3, 30),
+        "Friday 19:00 UTC is Saturday in Kolkata"
+    );
+    let every_day = SendClock {
+        weekdays_only: false,
+        ..nine
+    };
+    assert_eq!(
+        next_due(friday, 1, every_day, long_ago),
+        utc(2026, 6, 6, 13, 0),
+        "a sequence that sends on weekends keeps Saturday"
+    );
 }
 
 #[test]
 fn an_enrollment_starts_when_asked_at_that_local_time() {
     let now = utc(2026, 6, 1, 12, 0);
-    assert_eq!(first_due(utc(2026, 5, 1, 9, 0), now), now);
-    assert_eq!(first_due(utc(2026, 6, 5, 9, 0), now), utc(2026, 6, 5, 9, 0));
-    let clock = send_clock(utc(2026, 6, 1, 13, 15), New_York);
+    let nine = clock(New_York, 9, 0);
+    assert_eq!(first_due(utc(2026, 5, 1, 9, 0), nine, now), now);
+    assert_eq!(
+        first_due(utc(2026, 6, 5, 9, 0), nine, now),
+        utc(2026, 6, 5, 9, 0)
+    );
+    assert_eq!(
+        first_due(utc(2026, 6, 6, 13, 0), nine, now),
+        utc(2026, 6, 8, 13, 0),
+        "a Saturday start waits for Monday"
+    );
+    let clock = send_clock(utc(2026, 6, 1, 13, 15), New_York, true);
     assert_eq!(clock.send_time, NaiveTime::from_hms_opt(9, 15, 0).unwrap());
 }

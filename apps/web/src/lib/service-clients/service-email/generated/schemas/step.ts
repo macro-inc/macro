@@ -15,6 +15,8 @@ export interface Step {
   body: string;
   /**
    * Calendar days after the previous step, at the enrollment's send time.
+In a weekdays-only sequence, a step that lands on a weekend goes the
+Monday after.
    * @minimum 0
    */
   delayDays: number;

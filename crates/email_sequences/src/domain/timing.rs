@@ -1,13 +1,17 @@
 //! When each step comes due: one rule for starting, advancing and resuming.
+//! A weekdays-only sequence's steps never come due on a weekend in the
+//! enrollment's time zone.
 
 #[cfg(test)]
 mod test;
 
 use super::models::SendClock;
-use chrono::{DateTime, Duration, LocalResult, NaiveDateTime, TimeZone, Timelike, Utc};
+use chrono::{
+    DateTime, Datelike, Duration, LocalResult, NaiveDateTime, TimeZone, Timelike, Utc, Weekday,
+};
 
 /// The send clock an enrollment started at `start` in `timezone` keeps.
-pub fn send_clock(start: DateTime<Utc>, timezone: chrono_tz::Tz) -> SendClock {
+pub fn send_clock(start: DateTime<Utc>, timezone: chrono_tz::Tz, weekdays_only: bool) -> SendClock {
     SendClock {
         timezone,
         send_time: start
@@ -15,23 +19,53 @@ pub fn send_clock(start: DateTime<Utc>, timezone: chrono_tz::Tz) -> SendClock {
             .time()
             .with_nanosecond(0)
             .unwrap_or_default(),
+        weekdays_only,
     }
 }
 
-/// When an enrollment's first step comes due: its start, or now if that passed.
-pub fn first_due(start: DateTime<Utc>, now: DateTime<Utc>) -> DateTime<Utc> {
-    start.max(now)
+/// When an enrollment's first step comes due: its start, or now if that
+/// passed, moved to Monday when that is a weekend the sequence skips.
+pub fn first_due(start: DateTime<Utc>, clock: SendClock, now: DateTime<Utc>) -> DateTime<Utc> {
+    on_weekday(start.max(now), clock)
+}
+
+/// `at`, or in a weekdays-only sequence when that falls on a weekend in the
+/// enrollment's time zone, the next Monday at its send time.
+pub fn on_weekday(at: DateTime<Utc>, clock: SendClock) -> DateTime<Utc> {
+    if !clock.weekdays_only {
+        return at;
+    }
+    let date = at.with_timezone(&clock.timezone).date_naive();
+    let days = match date.weekday() {
+        Weekday::Sat => 2,
+        Weekday::Sun => 1,
+        _ => return at,
+    };
+    local_instant(
+        clock.timezone,
+        (date + Duration::days(days)).and_time(clock.send_time),
+    )
 }
 
 /// How far past its send time a step's slot can fall and still count as sent
 /// on the day it was due: the sweep's lead plus spacing behind a batch.
 const SLIP: Duration = Duration::hours(1);
 
-/// When the step after one scheduled at `previous` comes due: that step's
-/// local date plus `delay_days`, at the enrollment's send time. A step due
-/// late in the evening whose slot slipped past midnight keeps its day. A step
-/// that would be due in the past is due now.
+/// When the step after one scheduled at `previous` comes due: its calendar
+/// day, moved to Monday when that is a weekend the sequence skips.
 pub fn next_due(
+    previous: DateTime<Utc>,
+    delay_days: u16,
+    clock: SendClock,
+    now: DateTime<Utc>,
+) -> DateTime<Utc> {
+    on_weekday(calendar_due(previous, delay_days, clock, now), clock)
+}
+
+/// `previous`'s local date plus `delay_days`, at the enrollment's send time.
+/// A step due late in the evening whose slot slipped past midnight keeps its
+/// day. A step that would be due in the past is due now.
+fn calendar_due(
     previous: DateTime<Utc>,
     delay_days: u16,
     clock: SendClock,

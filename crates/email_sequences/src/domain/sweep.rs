@@ -19,6 +19,7 @@ use super::{
     render,
     replies::{self, Enrolled, Incoming, Response, SentIdentity},
     service::{STUCK_AFTER, Sequences, in_flight, internal, next_step, recipient_contact},
+    timing,
 };
 
 /// Rows per sweep page.
@@ -30,6 +31,9 @@ const MIN_LEAD: Duration = Duration::seconds(60);
 const SPACING: Duration = Duration::seconds(30);
 /// A step is created only when its slot is this close; later ones wait.
 const MAX_LEAD: Duration = Duration::seconds(90);
+/// Most steps one inbox sends in any 24 hours, well under Gmail's daily
+/// sending limits; more wait until the earliest of them is a day old.
+pub(crate) const DAILY_LIMIT: u32 = 100;
 
 /// What trying to create a step did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,7 +41,8 @@ pub(super) enum Creation {
     Created,
     Skipped,
     /// Nothing can go from the inbox in this pass: its next slot isn't near,
-    /// it can't send, or its owner lost access. Its enrollments stay due.
+    /// it sent its [`DAILY_LIMIT`], it can't send, or its owner lost access.
+    /// Its enrollments stay due.
     InboxWaits(Uuid),
 }
 
@@ -426,6 +431,26 @@ where
             (latest + SPACING).max(now + MIN_LEAD)
         });
         if slot > now + MAX_LEAD {
+            return Ok(Creation::InboxWaits(inbox.link_id));
+        }
+        // A step held back by the daily limit waits out the weekend.
+        let weekday = timing::on_weekday(slot, row.clock);
+        if weekday != slot {
+            row.due_at = Some(weekday);
+            self.repo
+                .update_enrollment(&mut tx, &row)
+                .await
+                .map_err(internal)?;
+            self.repo.commit(tx).await.map_err(internal)?;
+            return Ok(Creation::Skipped);
+        }
+        if self
+            .repo
+            .steps_since(&mut tx, inbox.link_id, now - Duration::days(1))
+            .await
+            .map_err(internal)?
+            >= DAILY_LIMIT
+        {
             return Ok(Creation::InboxWaits(inbox.link_id));
         }
 

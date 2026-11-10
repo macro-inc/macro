@@ -6,6 +6,7 @@ use crate::domain::{
     models::{CrmPerson, EnrollSkip, EnrollmentAction, SequenceError},
     ports::{NewSequence, OwnerAccess, SequencesApi as _},
     service::{EnrollRequest, SequencePatch, Sequences},
+    sweep::DAILY_LIMIT,
 };
 use email::outbound::PgSequenceSteps;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -114,6 +115,8 @@ async fn active_sequence(svc: &Svc, user: &str, link: Uuid, steps: Vec<Step>) ->
         created.id,
         SequencePatch {
             status: Some(SequenceStatus::Active),
+            // Tests send on any day of the week.
+            weekdays_only: Some(false),
             ..SequencePatch::default()
         },
     )
@@ -1005,6 +1008,53 @@ async fn edits_reach_every_email_not_yet_created(pool: PgPool) {
         .await,
         Err(SequenceError::Invalid(_))
     ));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sequences"))
+)]
+async fn an_inbox_sends_at_most_its_daily_limit(pool: PgPool) {
+    let (svc, _) = service(&pool);
+    let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    // Bob's finished enrollment stands in for a day of sends from the inbox.
+    let bob = enroll(&svc, OWNER, sequence, BOB).await;
+    sqlx::query!(
+        "UPDATE email_sequence_enrollments SET status = 'completed', due_at = NULL, link_id = $2 WHERE id = $1",
+        bob,
+        OWNER_LINK,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let sent: Vec<Uuid> = (0..DAILY_LIMIT).map(|_| Uuid::now_v7()).collect();
+    sqlx::query!(
+        r#"INSERT INTO email_sequence_steps (enrollment_id, step_id, message_id, status, scheduled_at, sent_at)
+           SELECT $1, id, id, 'sent', now() - interval '23 hours', now() - interval '23 hours'
+           FROM unnest($2::uuid[]) AS t(id)"#,
+        bob,
+        &sent,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let ada = enroll(&svc, OWNER, sequence, ADA).await;
+    make_due(&pool, ada).await;
+
+    svc.sweep(Utc::now()).await;
+    assert_eq!(in_flight(&pool, ada).await, None);
+    assert_eq!(status(&pool, ada).await.0, "active");
+
+    // Once the earliest of them is a day old, Ada's step goes.
+    sqlx::query!(
+        "UPDATE email_sequence_steps SET scheduled_at = now() - interval '25 hours' WHERE message_id = $1",
+        sent[0]
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    svc.sweep(Utc::now()).await;
+    assert!(in_flight(&pool, ada).await.is_some());
 }
 
 #[sqlx::test(

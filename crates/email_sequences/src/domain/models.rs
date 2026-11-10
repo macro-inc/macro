@@ -116,6 +116,8 @@ pub struct Step {
     /// fresh UUIDv7.
     pub id: Uuid,
     /// Calendar days after the previous step, at the enrollment's send time.
+    /// In a weekdays-only sequence, a step that lands on a weekend goes the
+    /// Monday after.
     pub delay_days: u16,
     /// Subject line; a reply step uses its thread's instead.
     pub subject: String,
@@ -139,6 +141,9 @@ pub struct Sequence {
     pub link_id: Option<Uuid>,
     /// Line added above the unsubscribe link in every email.
     pub footer: String,
+    /// Steps never go out on a Saturday or Sunday in the time zone people
+    /// were added in; they go the Monday after.
+    pub weekdays_only: bool,
     /// Lifecycle status.
     pub status: SequenceStatus,
     /// Its emails, in order.
@@ -251,6 +256,8 @@ pub struct SendClock {
     pub timezone: chrono_tz::Tz,
     /// Local time of day every step after the first is sent at.
     pub send_time: NaiveTime,
+    /// The sequence skips weekends.
+    pub weekdays_only: bool,
 }
 
 /// The signed-in owner of sequences: a user and the team they act in.

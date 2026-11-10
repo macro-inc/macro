@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE email_sequences\n               SET name = $2, link_id = $3, footer = $4, status = $5, steps = $6, updated_at = now()\n               WHERE id = $1\n               RETURNING id, name, link_id, footer, status, steps AS \"steps: Json<Vec<Step>>\", created_at, updated_at",
+  "query": "UPDATE email_sequences\n               SET name = $2, link_id = $3, footer = $4, status = $5, steps = $6,\n                   weekdays_only = $7, updated_at = now()\n               WHERE id = $1\n               RETURNING id, name, link_id, footer, weekdays_only, status, steps AS \"steps: Json<Vec<Step>>\", created_at, updated_at",
   "describe": {
     "columns": [
       {
@@ -25,21 +25,26 @@
       },
       {
         "ordinal": 4,
+        "name": "weekdays_only",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
         "name": "status",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "steps: Json<Vec<Step>>",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -51,7 +56,8 @@
         "Uuid",
         "Text",
         "Text",
-        "Jsonb"
+        "Jsonb",
+        "Bool"
       ]
     },
     "nullable": [
@@ -62,8 +68,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "ab9d40bdc92c8f8d889b0c66a7490a759aafc52ea4aab5e7cf1aceef6090982c"
+  "hash": "085273b2e416070882265a4c1c79ed6c72312c8c41fc8a82bb9b23daf50ef307"
 }

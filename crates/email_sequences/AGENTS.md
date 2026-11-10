@@ -58,7 +58,12 @@ people. The server owns all state; the browser only calls the API.
   records it whatever the status.
 - An unsubscribe commits before any enrollment stops; a failed stop is caught
   by the sweep before the step sends.
+- One inbox sends at most `DAILY_LIMIT` steps in any 24 hours, counted under
+  its send-slot lock from step history; due steps past it wait. Deleting a
+  sequence deletes its history, so its sends stop counting. A weekdays-only
+  sequence (`weekdays_only`, the default) moves weekend sends to Monday at the
+  send time.
 - `due_at` is when the next step is planned. Only `active` enrollments of an
-  `active` sequence are due; a change to the steps' delays or order re-plans
-  everyone waiting.
+  `active` sequence are due; a change to the steps' delays or order, or to
+  `weekdays_only`, re-plans everyone waiting.
 - Spans and logs carry ids and counts only: never addresses, names or tokens.

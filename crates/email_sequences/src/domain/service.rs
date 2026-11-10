@@ -40,6 +40,8 @@ pub struct SequencePatch {
     pub link_id: Option<Uuid>,
     /// New footer.
     pub footer: Option<String>,
+    /// Whether steps skip weekends.
+    pub weekdays_only: Option<bool>,
     /// New steps.
     pub steps: Option<Vec<Step>>,
 }
@@ -51,7 +53,8 @@ pub struct SequencePatch {
 pub struct EnrollRequest {
     /// CRM people.
     pub crm_contact_ids: Vec<Uuid>,
-    /// When the first step should go; also fixes the local send time.
+    /// When the first step should go; also fixes the local send time. In a
+    /// weekdays-only sequence, a weekend start goes the Monday after.
     pub start: DateTime<Utc>,
     /// IANA time zone the send time is in.
     pub timezone: String,
@@ -96,11 +99,13 @@ fn clean_steps(steps: Vec<Step>) -> Vec<Step> {
 }
 
 /// What decides when each step is due.
-fn timing_of(steps: &[Step]) -> Vec<(Uuid, u16)> {
-    steps
+fn timing_of(sequence: &Sequence) -> (Vec<(Uuid, u16)>, bool) {
+    let steps = sequence
+        .steps
         .iter()
         .map(|step| (step.id, step.delay_days))
-        .collect()
+        .collect();
+    (steps, sequence.weekdays_only)
 }
 
 /// The step still waiting to send, if any.
@@ -138,7 +143,7 @@ pub(super) fn next_due(
         .max_by_key(|step| step.scheduled_at)
     {
         Some(last) => timing::next_due(last.scheduled_at, next.delay_days, row.clock, now),
-        None => timing::first_due(row.due_at.unwrap_or(now), now),
+        None => timing::first_due(row.due_at.unwrap_or(now), row.clock, now),
     }
 }
 
@@ -238,8 +243,8 @@ where
         Ok(())
     }
 
-    /// Re-time everyone waiting for their next email, after the steps'
-    /// delays or order changed.
+    /// Re-time everyone waiting for their next email, after the steps' delays
+    /// or order, or `weekdays_only`, changed.
     async fn replan(&self, tx: &mut R::Tx, sequence: &Sequence) -> Result<(), SequenceError> {
         let now = Utc::now();
         for mut row in self
@@ -584,7 +589,7 @@ where
             .await
             .map_err(internal)?
             .ok_or(SequenceError::NotFound)?;
-        let timing_before = timing_of(&sequence.steps);
+        let timing_before = timing_of(&sequence);
         if let Some(name) = patch.name {
             sequence.name = render::clean_text(&name);
         }
@@ -593,6 +598,9 @@ where
         }
         if let Some(steps) = patch.steps {
             sequence.steps = clean_steps(steps);
+        }
+        if let Some(weekdays_only) = patch.weekdays_only {
+            sequence.weekdays_only = weekdays_only;
         }
         render::check_limits(&sequence.name, &sequence.footer, &sequence.steps)?;
         if let Some(link_id) = patch.link_id {
@@ -620,7 +628,7 @@ where
             .save_sequence(&mut tx, &sequence)
             .await
             .map_err(internal)?;
-        if timing_of(&saved.steps) != timing_before {
+        if timing_of(&saved) != timing_before {
             self.replan(&mut tx, &saved).await?;
         }
         self.repo.commit(tx).await.map_err(internal)?;
@@ -731,8 +739,8 @@ where
             .await
             .map_err(internal)?;
         let now = Utc::now();
-        let clock = timing::send_clock(request.start, timezone);
-        let due_at = timing::first_due(request.start, now);
+        let clock = timing::send_clock(request.start, timezone, sequence.weekdays_only);
+        let due_at = timing::first_due(request.start, clock, now);
         for (crm_contact_id, email, name) in accepted {
             let unsubscribed = recipients
                 .iter()

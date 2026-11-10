@@ -28,4 +28,7 @@ export interface Sequence {
   steps: Step[];
   /** When it last changed. */
   updatedAt: string;
+  /** Steps never go out on a Saturday or Sunday in the time zone people
+were added in; they go the Monday after. */
+  weekdaysOnly: boolean;
 }

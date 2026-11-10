@@ -460,6 +460,7 @@ export * from './updateSequenceRequestLinkId';
 export * from './updateSequenceRequestName';
 export * from './updateSequenceRequestStatus';
 export * from './updateSequenceRequestSteps';
+export * from './updateSequenceRequestWeekdaysOnly';
 export * from './updateThreadLabelRequest';
 export * from './updateThreadLabelsResponse';
 export * from './updateThreadProjectRequest';

@@ -75,6 +75,7 @@ export default {
   addEmail: 'Add email',
   footer: 'Footer',
   footerPlaceholder: 'A line under every email, such as your company address',
+  weekdaysOnly: 'Only send on weekdays',
 
   // Enrollments
   noEnrollments: 'No one added yet',
@@ -123,6 +124,10 @@ export default {
   noMatchingPeople: 'No matching people',
   noEmail: 'No email address',
   startSending: 'Start sending',
+  dailyLimit: {
+    other:
+      'Each inbox sends up to {{count}} sequence emails a day; more wait for the next day.',
+  },
   invalidStart: 'Choose a valid start time.',
   sendsOnceActive: 'Nothing sends until the sequence is active.',
   consent: 'These people agreed to receive email from me.',
