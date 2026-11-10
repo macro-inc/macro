@@ -236,6 +236,10 @@ channel call panel, while `call_chat` opens the call's own chat. Quick and
 scheduled calls use `call_chat` for both signed-in participants and guests.
 Guests can send text, quote replies, react, and edit or delete their own
 messages in the same chat as signed-in participants.
+The guest composer is the shared `ChannelInput`: its text posts and quoted
+replies appear in the same `MessageThread` as signed-in messages. Guests cannot
+add mentions, attachments, or anchors. A guest's reactions and edits appear to
+signed-in participants; a guest can edit or delete only their own messages.
 
 The join screen, in-call participant tiles, and incoming direct-call badges use
 profile pictures; initials are the fallback when no photo is available.

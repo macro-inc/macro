@@ -290,6 +290,11 @@ panel instead of leaving it on "Loading chat…":
 A meeting page has none of `AppProviders`; only `ChannelCallPanel` goes inside
 `MeetingDiscussionHost`, created by the host's render function. `CallChat`
 renders directly for both member and guest access.
+The stored discussion chooses one of two paths: `channel_thread` uses
+`ChannelCallPanel`, while `call_chat` uses the call's own shared message thread.
+Quick and scheduled calls use `call_chat`. Guests use the same `MessageThread`
+and `ChannelInput` composer as members; they can send text, quote replies,
+react, and edit or delete their own messages.
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
