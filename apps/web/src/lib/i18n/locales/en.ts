@@ -11,6 +11,7 @@ import commands from './en/commands';
 import common from './en/common';
 import create from './en/create';
 import crm from './en/crm';
+import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
@@ -45,6 +46,7 @@ export default {
   common,
   create,
   crm,
+  emailViews,
   entityActions,
   localRuntime,
   mobile,

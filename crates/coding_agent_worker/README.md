@@ -24,9 +24,13 @@ sessions into sessions for the other provider.
 
 After macrod restarts or its runtime connection reconnects, the harness service
 initializes the new connection and calls ACP `session/list`. herdr-acp lists
-the sessions whose Herdr agent still runs, and the service loads each one. That
-replays local history Macro missed and resumes forwarding without a Macro
-prompt. Agents closed in Herdr are not reopened.
+the sessions whose Herdr agent still runs, each with `updatedAt` set to its
+transcript's last write. The service loads the ones with recent activity (in
+Herdr or in Macro), an unfinished turn, or queued prompts; that replays local
+history Macro missed and resumes forwarding without a Macro prompt. A session
+idle for longer loads on its next Macro prompt, so local work started in it
+after the reconnect reaches Macro only from then. Agents closed in Herdr are not
+reopened.
 
 Closing a session's agent in Herdr (its tab or pane, by you or the agent) is
 reported to Macro once with the ACP extension notification `_session/closed`.

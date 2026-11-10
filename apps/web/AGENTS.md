@@ -90,6 +90,10 @@ The emoji reaction picker renders only the rows in view (about 1,900 emojis
 otherwise); its backend-free regression opens it, scrolls to the last group,
 searches, and picks by keyboard:
 `bunx playwright test --config src/lib/core/component/Emoji/browser-test/playwright.config.ts`.
+Size its glyphs off the row, never off a cell: a cell's width comes from `1fr`
+track sizing, which its own contents can push out, so a glyph sized off the cell
+feeds that loop and can settle with one emoji filling the picker. The same suite
+checks that widening a cell leaves the glyph alone.
 
 The email reminder menu reads typed times through the real natural-time wasm
 package; its backend-free desktop/phone regression, at a fixed New York clock,
@@ -504,6 +508,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Run desktop/phone controls with `bunx playwright test --config src/features/crm/browser-test/archive/playwright.config.ts`;
   `browser-test/people` and `browser-test/team` additionally cover synthetic query adapters.
 - Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.
+- Email mounts the same saved views (`kind: "email"`, flag `enable-email-saved-views`); read `src/features/email-view/AGENTS.md` before changing its definition, sidebar section, or mobile picker.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.
 - Compose settings pages with `features/settings/primitives.tsx` so section headings,

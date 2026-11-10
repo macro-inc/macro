@@ -483,6 +483,11 @@ position that no longer lands on a connected monitor is ignored and the OS
 places the window. State is written to `.window-state.json` in the app config
 directory on quit; delete that file to reset. Mobile is unaffected.
 
+Launching Macro while it is already running exits the new process in
+`tauri-plugin-single-instance` before it creates a window. The running process
+then unhides the app and shows, unminimizes and focuses its window, rebuilding
+it from the startup config if it no longer exists (`src/desktop/main_window.rs`).
+
 ## Desktop native updates
 
 Release builds for macOS Apple Silicon and Linux AppImage check for native updates

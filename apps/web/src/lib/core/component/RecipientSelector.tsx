@@ -455,10 +455,13 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   };
 
   // The chips container caps its height and scrolls; keep the input's line
-  // visible as chips push it down.
+  // visible as chips push it down. The memo fires only when the count
+  // changes: an owner that rebuilds the same selection must not scroll its
+  // surroundings back to this input.
+  const selectedCount = createMemo(() => props.selectedOptions.length);
   createEffect(
     on(
-      () => props.selectedOptions.length,
+      selectedCount,
       () => {
         requestAnimationFrame(() => {
           inputRef()?.scrollIntoView({ block: 'nearest' });

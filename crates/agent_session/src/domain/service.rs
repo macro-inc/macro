@@ -106,6 +106,9 @@ struct ActiveSession {
     /// agent that cannot resume, or refused, still has its previous list.
     mcp_servers: Vec<McpServer>,
     stopped: watch::Receiver<bool>,
+    /// The actor's handshake outcome: `None` until its ACP session opens or
+    /// fails. Absent until an actor starts.
+    opened: Option<watch::Receiver<Option<bool>>>,
     marker: Arc<()>,
     deleting: bool,
     stopping: bool,
@@ -195,6 +198,16 @@ pub trait AgentSessionService: Send + Sync + 'static {
 
     /// Get a persisted agent session by id.
     fn get_session(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
+
+    /// Whether the session's persisted turn projection says a turn is open,
+    /// as [`AgentSessionRepo::has_unfinished_turn`] answers.
+    fn has_unfinished_turn(&self, id: AgentSessionId) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Wait for the session's live actor to finish opening its ACP session
+    /// (`session/new`, `session/load` or `session/resume`): `true` once it
+    /// is live, `false` when the handshake failed. Errors with
+    /// [`AgentSessionError::Disconnected`] when no actor is attached here.
+    fn wait_opened(&self, id: AgentSessionId) -> impl Future<Output = Result<bool>> + Send;
 
     /// Whether the session's in-process turns are billed to its owner, set
     /// by whoever opened it.
@@ -603,6 +616,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                     commands: None,
                     mcp_servers: Vec::new(),
                     stopped,
+                    opened: None,
                     marker: marker.clone(),
                     deleting: false,
                     stopping: false,
@@ -651,6 +665,8 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         active.commands = Some(commands.clone());
         active.mcp_servers = attachment.mcp_servers.clone();
         active.transport_closed = attachment.closed.clone();
+        let (opened, opened_rx) = watch::channel(None);
+        active.opened = Some(opened_rx);
         drop(active);
         let (marker, stopped_tx) = reservation.commit();
 
@@ -687,7 +703,8 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             }),
             Arc::clone(&self.tool_catalog),
         )
-        .with_initial_model(initial_model);
+        .with_initial_model(initial_model)
+        .with_opened(opened);
         self.tasks.spawn(
             run_session(
                 actor,
@@ -819,6 +836,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                     commands: None,
                     mcp_servers: Vec::new(),
                     stopped: stopped.clone(),
+                    opened: None,
                     marker: marker.clone(),
                     deleting,
                     stopping: true,
@@ -932,6 +950,23 @@ where
 
     async fn get_session(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn has_unfinished_turn(&self, id: AgentSessionId) -> Result<bool> {
+        self.repo.has_unfinished_turn(id).await
+    }
+
+    async fn wait_opened(&self, id: AgentSessionId) -> Result<bool> {
+        let mut opened = self
+            .active
+            .get(&id)
+            .and_then(|active| active.opened.clone())
+            .ok_or(AgentSessionError::Disconnected(id))?;
+        let outcome = opened
+            .wait_for(Option::is_some)
+            .await
+            .map_err(|_| AgentSessionError::Disconnected(id))?;
+        Ok(outcome.unwrap_or(false))
     }
 
     async fn session_billing(
@@ -2138,6 +2173,10 @@ where
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn has_unfinished_turn(&self, id: AgentSessionId) -> Result<bool> {
+        self.repo.has_unfinished_turn(id).await
     }
 
     async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
