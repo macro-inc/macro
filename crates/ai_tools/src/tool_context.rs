@@ -2267,12 +2267,10 @@ impl ToolServiceContext {
             }
             ai_toolset::ToolCaller::McpClient { .. }
             | ai_toolset::ToolCaller::ApiKey
-            | ai_toolset::ToolCaller::Document => {
-                match caller.via() {
-                    Some(client) => self.with_via(client),
-                    None => self,
-                }
-            }
+            | ai_toolset::ToolCaller::Document => match caller.via() {
+                Some(client) => self.with_via(client),
+                None => self,
+            },
         }
     }
 
