@@ -48,7 +48,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::domain::coding_preferences::CodingPreferences;
-use crate::domain::error::AgentSessionError;
+use crate::domain::error::{AgentSessionError, NO_RUNTIME_ACCESS_CODE};
 use crate::domain::model::{
     AgentSession, AgentSessionId, AgentSessionPreview, ArchiveCause, ExternalSession, Message,
     SandboxSize, SessionBot, SessionSource, SessionStatus, SessionVisibility,
@@ -385,6 +385,13 @@ impl IntoResponse for AgentSessionApiError {
             Self::Domain(AgentSessionError::Forbidden) => {
                 (StatusCode::FORBIDDEN, "forbidden").into_response()
             }
+            // Its own code, so a client can tell a stopped agent from a
+            // session it may not touch, and show why.
+            Self::Domain(AgentSessionError::NoRuntimeAccess(reason)) => (
+                StatusCode::FORBIDDEN,
+                Json(serde_json::json!({ "code": NO_RUNTIME_ACCESS_CODE, "error": reason })),
+            )
+                .into_response(),
             Self::Domain(
                 AgentSessionError::InvalidSharing(message)
                 | AgentSessionError::InvalidActivityQuery(message),
@@ -2102,6 +2109,13 @@ impl IntoResponse for CreateSessionApiError {
                 return (StatusCode::CONFLICT, Json(body)).into_response();
             }
             Self::Domain(AgentSessionError::Admission(error)) => return error.into_response(),
+            Self::Domain(AgentSessionError::NoRuntimeAccess(reason)) => {
+                return (
+                    StatusCode::FORBIDDEN,
+                    Json(serde_json::json!({ "code": NO_RUNTIME_ACCESS_CODE, "error": reason })),
+                )
+                    .into_response();
+            }
             Self::Domain(AgentSessionError::ThreadSessionExists) => (
                 StatusCode::CONFLICT,
                 "this bot already has a session for this thread".to_owned(),

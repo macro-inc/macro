@@ -556,6 +556,13 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		entityAccessGrantedFileType: fileType
 		entityAccessGrantedAccessLevel: accessLevel
 	}
+	... on GraphqlRuntimeAccessRemovedMetadata {
+		runtimeAccessRemovedRuntimeName: runtimeName
+		runtimeAccessRemovedAgents: agents {
+			botId
+			name
+		}
+	}
 	... on GraphqlCommentedOnDocumentMetadata {
 		commentedOnDocumentDocumentName: documentName
 		commentedOnDocumentOwner: owner
