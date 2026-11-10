@@ -1880,6 +1880,7 @@ pub(super) async fn run_session_worker<
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
 {
+    let mut deleted = false;
     loop {
         let queued = tokio::select! {
             queued = receiver.recv() => queued,
@@ -1936,9 +1937,10 @@ pub(super) async fn run_session_worker<
         }
         // A deleted session takes no more commands, so its worker goes with
         // it, before the caller hears the delete finished. Anything already
-        // queued behind the delete keeps it running until that is answered.
-        let retired =
-            deletes && result.is_ok() && retire_worker(&workers, session_id, &own, &receiver);
+        // queued behind the delete (its actor's stopped callback) keeps it
+        // running until that is answered, and it retires right after.
+        deleted |= deletes && result.is_ok();
+        let retired = deleted && retire_worker(&workers, session_id, &own, &receiver);
         let _ = completed.send(result);
         if retired {
             return;
