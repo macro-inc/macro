@@ -4,6 +4,10 @@
 -- pointer to a routine suggestion. The base row holds what the feed sorts,
 -- filters and shows; each kind keeps its own data in a child table.
 
+-- The foreign keys to "User" and routine_suggestion lock those tables until
+-- this file commits; don't queue behind a long transaction holding them.
+SET LOCAL lock_timeout = '5s';
+
 -- A run of hidden suggestion sessions for one person: at onboarding, or
 -- nightly. Shared by ideas and routine suggestions.
 CREATE TABLE suggestion_generation (
@@ -43,6 +47,10 @@ CREATE INDEX suggestion_generation_session_generation_idx
     ON suggestion_generation_session (generation_id);
 CREATE INDEX suggestion_generation_session_open_idx ON suggestion_generation_session (opened_at)
     WHERE closed_at IS NULL;
+-- A person's sessions, newest first: whether routines ran this week, and
+-- deleting a person.
+CREATE INDEX suggestion_generation_session_user_idx
+    ON suggestion_generation_session (user_id, opened_at DESC);
 
 -- One idea. `dedup_key` names it across nights: a session proposing the same
 -- key again updates this row. `state` is the person's lifecycle; `retired`
@@ -72,6 +80,9 @@ CREATE TABLE idea (
 );
 
 CREATE INDEX idea_feed_idx ON idea (user_id, state, importance DESC);
+-- A person's ideas by when they last changed state: the ones done lately, and
+-- the latest closed ones a session reviews.
+CREATE INDEX idea_state_changed_idx ON idea (user_id, state_changed_at DESC);
 
 -- One child per kind. The (idea_id, kind) key lets a child attach only to a
 -- base row of its own kind.
@@ -132,3 +143,4 @@ CREATE TABLE suggestion_change (
 
 CREATE INDEX suggestion_change_generation_idx ON suggestion_change (generation_id, action);
 CREATE INDEX suggestion_change_subject_idx ON suggestion_change (subject_id, created_at);
+CREATE INDEX suggestion_change_user_idx ON suggestion_change (user_id);

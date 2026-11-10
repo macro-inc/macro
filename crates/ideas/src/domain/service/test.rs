@@ -18,7 +18,8 @@ fn user(id: &'static str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(id).unwrap()
 }
 
-/// Items the person can open: all but those named in `denied`.
+/// Items the person can open: all but those named in `denied`. A part is
+/// its item's when its id starts with the item's.
 #[derive(Default)]
 struct FakeAccess {
     denied: Mutex<HashSet<String>>,
@@ -29,6 +30,10 @@ impl IdeaAccess for FakeAccess {
 
     async fn can_view(&self, _: &MacroUserIdStr<'_>, target: &Target) -> Result<bool, Self::Err> {
         Ok(!self.denied.lock().unwrap().contains(&target.entity_id))
+    }
+
+    async fn is_part_of(&self, target: &Target, part: &str) -> Result<bool, Self::Err> {
+        Ok(part.starts_with(&target.entity_id))
     }
 }
 
@@ -623,6 +628,37 @@ async fn writes_are_checked_before_they_are_kept(pool: PgPool) {
             .unwrap()
             .ideas
             .is_empty()
+    );
+}
+
+/// A part is kept only with the item it belongs to.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_idea_names_a_part_only_with_its_own_item(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "ideas").await;
+    let with_part = |key: &str, part: &str| {
+        let mut idea = prompt_idea(key, "Compare quotes");
+        idea.about[0].part_id = Some(part.to_owned());
+        idea
+    };
+    let foreign = h
+        .suggest(session, with_part("quotes:foreign", "thread-2:message"))
+        .await;
+    assert!(!foreign.ok);
+    assert!(
+        foreign.problems[0].contains("isn't one of its parts"),
+        "{:?}",
+        foreign.problems
+    );
+    let own = h
+        .suggest(session, with_part("quotes:own", "thread-1:message"))
+        .await;
+    assert!(own.ok, "{:?}", own.problems);
+    let feed = h.service.feed(&user(OWNER), None).await.unwrap();
+    assert_eq!(feed.ideas.len(), 1);
+    assert_eq!(
+        feed.ideas[0].about[0].part_id.as_deref(),
+        Some("thread-1:message")
     );
 }
 

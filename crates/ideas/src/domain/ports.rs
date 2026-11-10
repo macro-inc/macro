@@ -41,10 +41,18 @@ pub trait IdeaRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Every idea the person has, in any state.
-    fn ideas(
+    /// The person's open ideas, and those done since `done_since`.
+    fn shown(
         &self,
         user: &MacroUserIdStr<'_>,
+        done_since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<Idea>, Self::Err>> + Send;
+
+    /// The person's open ideas, and the `closed` most recently closed.
+    fn for_review(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        closed: u32,
     ) -> impl Future<Output = Result<Vec<Idea>, Self::Err>> + Send;
 
     /// The person's idea `id`.
@@ -117,6 +125,14 @@ pub trait IdeaAccess: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'_>,
         target: &Target,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Whether `part` is one of `target`'s item's own parts, such as a
+    /// message of its channel. Parts never move, so writes check this once.
+    fn is_part_of(
+        &self,
+        target: &Target,
+        part: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 

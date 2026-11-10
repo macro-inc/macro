@@ -517,7 +517,10 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let ideas = Arc::new(
         IdeaService::new(
             Arc::new(PgIdeaRepo::new(db.clone())),
-            Arc::new(EntityIdeaAccess(access.as_ref().clone())),
+            Arc::new(EntityIdeaAccess {
+                access: access.as_ref().clone(),
+                pool: db.clone(),
+            }),
             correlation_sessions,
             generations.clone(),
             generations.clone(),
