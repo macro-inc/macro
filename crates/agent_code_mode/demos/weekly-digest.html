@@ -247,7 +247,7 @@
 
     list('channels', 'chan-count', data.channels.map((channel) => {
       const li = el('li');
-      li.append(el('div', '', `#${channel.name}`), el('div', 'meta', `${channel.messages}${channel.messages === 50 ? '+' : ''} messages`));
+      li.append(el('div', '', `#${channel.name}`), el('div', 'meta', `${channel.messages}${channel.messages === 50 ? '+' : ''} message${channel.messages === 1 ? '' : 's'}`));
       if (channel.quote) {
         const reactions = channel.quote.reactions ? ` · ${channel.quote.reactions} reactions` : '';
         li.append(el('div', 'quote', `${channel.quote.author}: ${channel.quote.text}${reactions}`));

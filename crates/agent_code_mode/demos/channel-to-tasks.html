@@ -253,7 +253,7 @@
     if (!channelSelect.value) return;
     try {
       render(await messages({ channelId: channelSelect.value }));
-      status.textContent = 'Each picked message becomes a task, gets a reply linking to it, and a ✅.';
+      status.textContent = 'Each picked message becomes a task, gets a reply linking to it, and a check-mark reaction.';
     } catch (error) {
       status.textContent = `Couldn't load messages: ${String(error)}`;
     }

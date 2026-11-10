@@ -115,7 +115,8 @@
       }];
     });
 
-    const moved = tasks.filter((task) => task.updatedAt >= since && task.state !== 'canceled');
+    // Only tasks that are done or under way count as moved; an edit to a to-do doesn't.
+    const moved = tasks.filter((task) => task.updatedAt >= since && (task.state === 'done' || task.state === 'doing'));
     const open = tasks.filter((task) => task.state === 'doing' || task.state === 'todo');
     const next = open
       .sort((a, b) => {

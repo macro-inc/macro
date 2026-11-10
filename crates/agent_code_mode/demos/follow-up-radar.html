@@ -35,6 +35,7 @@
   .name { font-weight: 600; word-break: break-word; }
   .temp { font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--cold); }
   .temp.frozen { color: var(--frozen); }
+  .temp.warm { color: var(--ok); }
   .meta { color: var(--muted); font-size: 13px; word-break: break-word; }
   .line { display: flex; gap: 6px; font-size: 13px; }
   .line b { flex: 0 0 64px; font-weight: 500; color: var(--muted); }
@@ -71,7 +72,7 @@
   export default async function ({ days }: { days: number }, { macro }: ProgramContext) {
     // CRM contacts belong to the viewer's current team.
     if ((await macro.teams.list()).length === 0) {
-      return { inTeam: false, emailConnected: false, total: 0, contacts: [] };
+      return { inTeam: false, emailConnected: false, total: 0, quiet: 0, contacts: [] };
     }
     const [found, links, taskPage] = await Promise.all([
       macro.crm.searchContacts('', { limit: 100 }),
@@ -110,13 +111,14 @@
         followUpDue: planned.has(name) ? (planned.get(name) ?? 'someday') : null,
       };
     }));
-    const cold = rows
-      .filter((row) => row.quietDays === null || row.quietDays >= days)
+    // Coldest first; contacts heard from recently follow.
+    const sorted = rows
+      .map((row) => ({ ...row, quiet: row.quietDays === null || row.quietDays >= days }))
       .sort((a, b) => (b.quietDays ?? Infinity) - (a.quietDays ?? Infinity));
 
     // The latest thread with each cold contact, when an inbox is connected.
     const connected = links.length > 0;
-    const withEmail = await Promise.all(cold.slice(0, 24).map(async (row) => {
+    const withEmail = await Promise.all(sorted.slice(0, 24).map(async (row) => {
       let lastThread: string | null = null;
       if (connected && row.email) {
         for await (const thread of macro.email.search(row.email, { pageSize: 1 })) {
@@ -126,7 +128,13 @@
       }
       return { ...row, lastThread };
     }));
-    return { inTeam: true, emailConnected: connected, total: rows.length, contacts: withEmail };
+    return {
+      inTeam: true,
+      emailConnected: connected,
+      total: rows.length,
+      quiet: sorted.filter((row) => row.quiet).length,
+      contacts: withEmail,
+    };
   }
 </script>
 
@@ -186,15 +194,18 @@
       return;
     }
     if (data.contacts.length === 0) {
-      root.replaceChildren(el('p', 'empty', data.total ? 'Everyone has heard from you recently.' : 'No CRM contacts yet.'));
+      root.replaceChildren(el('p', 'empty', 'No CRM contacts yet.'));
       return;
     }
     root.replaceChildren(...data.contacts.map((contact) => {
       const card = el('article', 'card');
       const top = el('div', 'top');
-      const frozen = contact.quietDays === null || contact.quietDays >= 90;
-      const temp = contact.quietDays === null ? 'Never contacted' : `Quiet ${contact.quietDays}d`;
-      top.append(el('div', 'name', contact.name), el('span', frozen ? 'temp frozen' : 'temp', temp));
+      let temp = 'In touch';
+      if (contact.quietDays === null) temp = 'Never contacted';
+      else if (contact.quiet) temp = `Quiet ${contact.quietDays}d`;
+      else if (contact.quietDays > 0) temp = `In touch ${contact.quietDays}d ago`;
+      const tone = contact.quietDays === null || (contact.quietDays ?? 0) >= 90 ? 'temp frozen' : contact.quiet ? 'temp' : 'temp warm';
+      top.append(el('div', 'name', contact.name), el('span', tone, temp));
       card.append(top);
       const who = [contact.email, contact.company].filter(Boolean).join(' · ');
       if (who) card.append(el('div', 'meta', who));
@@ -249,7 +260,7 @@
       const data = await radar({ days: Number(daysSelect.value) });
       render(data);
       status.textContent = data.inTeam
-        ? `${data.contacts.length} of ${data.total} contacts have gone quiet${data.emailConnected ? '' : ' · connect an inbox to see last threads'}`
+        ? `${data.quiet} of ${data.total} contacts have gone quiet${data.emailConnected ? '' : ' · connect an inbox to see last threads'}`
         : '';
     } catch (error) {
       status.textContent = `Couldn't load contacts: ${String(error)}`;

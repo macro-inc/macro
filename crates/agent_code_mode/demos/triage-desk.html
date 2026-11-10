@@ -35,7 +35,7 @@
   li { display: flex; gap: 12px; align-items: center; padding: 11px 14px;
     border-top: 1px solid var(--line); }
   li:first-child { border-top: 0; }
-  .kind { flex: 0 0 auto; width: 64px; font-size: 11px; font-weight: 600; text-transform: uppercase;
+  .kind { flex: 0 0 auto; width: 48px; font-size: 11px; font-weight: 600; text-transform: uppercase;
     letter-spacing: .04em; }
   .kind.notification { color: var(--note); }
   .kind.task { color: var(--task); }
@@ -202,6 +202,7 @@
   const tabs = document.getElementById('tabs')!;
   const status = document.getElementById('status')!;
   const actions: Record<Kind, string> = { notification: 'Done', task: 'Take it', email: 'Archive' };
+  const kindLabels: Record<Kind, string> = { notification: 'Alert', task: 'Task', email: 'Email' };
   const kinds: { key: Kind | 'all'; label: string }[] = [
     { key: 'all', label: 'All' },
     { key: 'notification', label: 'Alerts' },
@@ -269,7 +270,7 @@
         }
         reload();
       });
-      li.append(el('span', `kind ${item.kind}`, item.kind), body, el('span', 'when', relative(item.at)), button);
+      li.append(el('span', `kind ${item.kind}`, kindLabels[item.kind]), body, el('span', 'when', relative(item.at)), button);
       list.append(li);
     }
     root.replaceChildren(list);
