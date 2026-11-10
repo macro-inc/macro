@@ -123,13 +123,12 @@ settle, because only counted rows are chargeable.
 A requesting host presents the authentication service's own internal key,
 `AUTHENTICATION_SERVICE_SECRET_KEY`. In deployed Doppler configs this value is
 the Secrets Manager name; services resolve it at startup. Locally it is the
-key itself. The key is optional in the harness and scheduling settlement
-configs while `ENABLE_AI_USAGE_BILLING` is false and mandatory once it is true;
-the cognition config requires it regardless of billing. A host
-enabling billing without the key fails startup rather than quietly recording
-chargeable usage that only the sweep settles. Hosts without the recorder
-(document storage, the standalone trigger service, memory) are covered by the
-sweep alone; memory's usage is exempt and never chargeable.
+key itself. The harness, scheduling, and cognition configs require the key
+regardless of `ENABLE_AI_USAGE_BILLING`; a missing key fails configuration
+loading even when billing is disabled. The billing flag controls settlement
+requests, not whether the authentication client is available. Hosts without
+the recorder (document storage, the standalone trigger service, memory) are
+covered by the sweep alone; memory's usage is exempt and never chargeable.
 
 ### Reconciliation sweep and closed periods
 
@@ -424,11 +423,11 @@ procedure. Operators must approve and record each release gate.
    `AI_USAGE_INCLUDED_ALLOWANCE_CENTS`, `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`,
    and `AI_USAGE_OVERAGE_MARKUP_PERCENT` are mandatory for these same hosts
    whatever the flags say; see [Settlement](#settlement-enable_ai_usage_billing).
-   Before `ENABLE_AI_USAGE_BILLING` is turned on for the agent harness, MCP, or
-   scheduled action service, register `AUTHENTICATION_SERVICE_SECRET_KEY` (the
-   authentication service's Secrets Manager name in deployed configs)
-   in that service's Doppler config; those hosts refuse to start with billing on
-   and the key absent.
+   Before starting the agent harness, MCP, or scheduled action service,
+   register `AUTHENTICATION_SERVICE_SECRET_KEY` (the authentication service's
+   Secrets Manager name in deployed configs)
+   in that service's Doppler config; those hosts refuse to start with the key
+   absent, regardless of billing flags.
    Verify the effective startup value for every replica/worker. Registration and
    hosted access require operator approval; code defaults are not proof of it.
 4. **Validate locally, then in an approved staging environment.** Use the checklist

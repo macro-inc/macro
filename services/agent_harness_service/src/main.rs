@@ -507,7 +507,7 @@ async fn run() -> anyhow::Result<()> {
     // is authorized by the account link instead.
     let mcp_credentials_key = AesKey::try_from(config.mcp_credentials_key_secret_name.as_ref())
         .context("invalid MCP credentials encryption key")?;
-    let linked_github = config.linked_github_tokens()?;
+    let linked_github = Some(config.linked_github_tokens()?);
     let mcp_servers = Arc::new(NativeServerStore::new(
         PgServerRepo::new(pool.clone(), mcp_credentials_key),
         linked_github.clone(),
