@@ -171,6 +171,31 @@ async fn request_span_records_the_matched_route() {
     );
 }
 
+#[tokio::test]
+async fn request_span_keeps_a_path_token_out_of_the_url_path() {
+    let (subscriber, captured) = TracingCapture::new();
+    let _guard = set_default(subscriber);
+    let app = Router::new()
+        .route("/webhooks/{token}", get(|| async {}))
+        .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner());
+
+    app.oneshot(
+        Request::builder()
+            .uri("/webhooks/mrw_secret")
+            .body(Body::empty())
+            .unwrap(),
+    )
+    .await
+    .unwrap();
+
+    let fields = captured.initial_span_fields.lock().unwrap();
+    assert_eq!(fields.get("url.path").unwrap(), "\"/webhooks/{token}\"");
+    assert!(fields.values().all(|value| !value.contains("mrw_secret")));
+    drop(fields);
+    let recorded = captured.recorded_span_fields.lock().unwrap();
+    assert!(recorded.values().all(|value| !value.contains("mrw_secret")));
+}
+
 #[test]
 fn successful_response_records_telemetry_without_completion_event() {
     let (subscriber, captured) = TracingCapture::new();

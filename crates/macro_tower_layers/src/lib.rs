@@ -98,8 +98,30 @@ const HTTP_REQUEST_SPAN_TARGET: &str = "macro_http_request";
 ///
 /// Request and response headers are intentionally excluded. Add
 /// `macro_http_request=info` to `RUST_LOG` when log events should include these span fields.
+///
+/// A route whose path carries a secret names that parameter `{token}`; its
+/// `url.path` is then the route template, so the secret never reaches a span.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct MakeHttpRequestSpan;
+
+/// The path parameter that holds a secret, such as a webhook URL's token.
+const SECRET_PATH_PARAMETER: &str = "{token}";
+
+/// The path to record: the raw path, or the template when it holds a secret.
+fn recorded_path<'request, B>(request: &'request Request<B>) -> &'request str {
+    let route = request.extensions().get::<MatchedPath>();
+    match route {
+        Some(route)
+            if route
+                .as_str()
+                .split('/')
+                .any(|segment| segment == SECRET_PATH_PARAMETER) =>
+        {
+            route.as_str()
+        }
+        _ => request.uri().path(),
+    }
+}
 
 impl<B> MakeSpan<B> for MakeHttpRequestSpan {
     fn make_span(&mut self, request: &Request<B>) -> Span {
@@ -114,7 +136,7 @@ impl<B> MakeSpan<B> for MakeHttpRequestSpan {
             otel.kind = "server",
             "http.request.method" = %request.method(),
             "http.route" = tracing::field::Empty,
-            "url.path" = request.uri().path(),
+            "url.path" = recorded_path(request),
             "request.id" = request_id,
             "http.response.status_code" = tracing::field::Empty,
             latency_ms = tracing::field::Empty,
