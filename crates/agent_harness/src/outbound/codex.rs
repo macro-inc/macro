@@ -179,16 +179,6 @@ impl<
         ExternalSessionRepo::delete(&self.sessions, session).await?;
         Ok(())
     }
-
-    /// Holds nothing in this process for an idle session.
-    async fn release_idle(&self, _session: AgentSessionId) -> Result<()> {
-        Ok(())
-    }
-
-    /// Holds nothing in this process for an idle session.
-    async fn idle_release_is_lossless(&self, _session: AgentSessionId) -> Result<bool> {
-        Ok(true)
-    }
     fn resize_effect(&self, _from: SandboxSize, _to: SandboxSize) -> SandboxResizeEffect {
         SandboxResizeEffect::Unsupported
     }

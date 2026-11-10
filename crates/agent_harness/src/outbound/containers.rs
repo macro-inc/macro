@@ -111,20 +111,6 @@ impl ContainerManager for HarnessContainers {
             Self::Local(manager) => manager.teardown(session).await,
         }
     }
-
-    async fn release_idle(&self, session: AgentSessionId) -> Result<()> {
-        match self {
-            Self::Daytona(manager) => manager.release_idle(session).await,
-            Self::Local(manager) => manager.release_idle(session).await,
-        }
-    }
-
-    async fn idle_release_is_lossless(&self, session: AgentSessionId) -> Result<bool> {
-        match self {
-            Self::Daytona(manager) => manager.idle_release_is_lossless(session).await,
-            Self::Local(manager) => manager.idle_release_is_lossless(session).await,
-        }
-    }
 }
 
 impl Transport<ToRuntimeMessage, ToServerMessage> for HarnessContainer {
