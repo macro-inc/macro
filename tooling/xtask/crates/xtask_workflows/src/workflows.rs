@@ -41,6 +41,7 @@ mod deploy_cla_worker;
 mod deploy_fusionauth_instance;
 mod deploy_observability;
 mod deploy_on_push;
+mod deploy_pulumi_stack;
 mod deploy_sdk_docs;
 mod deploy_sync_service;
 mod deploy_web_app;
@@ -278,6 +279,16 @@ const WORKFLOWS: &[WorkflowFile] = &[
             render_patched(
                 deploy_fusionauth_instance::deploy_fusionauth_instance,
                 deploy_fusionauth_instance::patch,
+            )
+        },
+    },
+    WorkflowFile {
+        slug: "deploy_pulumi_stack",
+        file_name: "deploy-pulumi-stack.yml",
+        render_yaml: || {
+            render_patched(
+                deploy_pulumi_stack::deploy_pulumi_stack,
+                deploy_pulumi_stack::patch,
             )
         },
     },
