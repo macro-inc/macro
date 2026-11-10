@@ -208,6 +208,10 @@ pub struct SyncPageResponse {
 /// One decoded NDJSON line.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "nearly every frame is a page, and frames are handled one at a time"
+)]
 pub enum SyncFrame {
     /// One executed page of a lane.
     #[serde(rename_all = "camelCase")]

@@ -127,6 +127,10 @@ struct SyncPageFrame {
 }
 
 /// How [`Engine::sync_write_page`] handled a page.
+#[expect(
+    clippy::large_enum_variant,
+    reason = "returned once per page and matched at once, never stored"
+)]
 enum SyncPageWritten<F> {
     /// Written with its lane state in one transaction.
     Written(HydrationWriteResult),

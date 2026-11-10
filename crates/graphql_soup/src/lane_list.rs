@@ -153,6 +153,7 @@ impl SoupLaneLists {
         Box::pin(self.page_inner(service, request, key, fields, continuation, team_receipt))
     }
 
+    /// [`Self::page`], before it is boxed.
     async fn page_inner<S: SoupService>(
         &self,
         service: &S,

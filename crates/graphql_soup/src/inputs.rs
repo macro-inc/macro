@@ -336,6 +336,8 @@ impl SoupInput {
         }
     }
 
+    /// Convert either input into the request representation, with its sort
+    /// key when `keyed` and it is a timestamp sort.
     fn convert(
         self,
         macro_user_id: MacroUserIdStr<'static>,
