@@ -2854,6 +2854,8 @@ export type WorkFeedItemType =
   | 'PROJECT'
   /** GitHub pull requests. */
   | 'PULL_REQUEST'
+  /** Paired runtimes, through their access notifications. */
+  | 'RUNTIME'
   /** Tasks. */
   | 'TASK';
 

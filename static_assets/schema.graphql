@@ -12620,6 +12620,10 @@ enum WorkFeedItemType {
 	Agent sessions.
 	"""
 	AGENT_SESSION
+	"""
+	Paired runtimes, through their access notifications.
+	"""
+	RUNTIME
 }
 
 """
