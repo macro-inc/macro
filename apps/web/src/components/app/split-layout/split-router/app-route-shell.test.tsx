@@ -101,39 +101,37 @@ it.each([undefined, 0])(
   }
 );
 
-it.each([390, 1000])(
-  'keeps desktop-only Home details standalone on touch at %spx and after widening',
-  (initialWidth) => {
-    const [width, setWidth] = createSignal(initialWidth);
-    device.width = width;
-    const redirect = vi.fn();
-    function StandaloneDetail() {
-      onMount(redirect);
-      return <p>Standalone Home detail</p>;
-    }
-    render(() => (
-      <AppView
-        id="home"
-        detailDesktopOnly
-        detailRequested={() => true}
-        detailFallback={<StandaloneDetail />}
-      >
-        <p>Home preview</p>
-      </AppView>
-    ));
-    expect(redirect).toHaveBeenCalledOnce();
-    setWidth(1400);
-    expect(redirect).toHaveBeenCalledOnce();
-    expect(screen.queryByText('Home preview')).toBeNull();
+it('keeps wide touch Notifications inline and redirects once when folded', () => {
+  const [width, setWidth] = createSignal(1000);
+  device.width = width;
+  const redirect = vi.fn();
+  function StandaloneDetail() {
+    onMount(redirect);
+    return <p>Standalone Home detail</p>;
   }
-);
+  render(() => (
+    <AppView
+      id="home"
+      detailInlineOnly
+      detailRequested={() => true}
+      detailFallback={<StandaloneDetail />}
+    >
+      <p>Notifications preview</p>
+    </AppView>
+  ));
+  expect(screen.getByText('Notifications preview')).toBeTruthy();
+  expect(redirect).not.toHaveBeenCalled();
+  setWidth(720);
+  expect(screen.getByText('Standalone Home detail')).toBeTruthy();
+  expect(redirect).toHaveBeenCalledOnce();
+});
 
 it('retains desktop Home previews', () => {
   device.touch = false;
   render(() => (
     <AppView
       id="home"
-      detailDesktopOnly
+      detailInlineOnly
       detailRequested={() => true}
       detailFallback={<p>Standalone Home detail</p>}
     >

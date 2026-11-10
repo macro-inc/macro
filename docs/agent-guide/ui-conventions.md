@@ -113,6 +113,10 @@ the Chat/Code switch; the open tray gives the input its multiline layout.
 
 ## Scrolling content
 
+On wide touch layouts, floating composers and page actions stay within the
+preview or detail pane that owns them. Their width follows sidebar collapse and
+resizing, while app navigation retains its global placement.
+
 Desktop Email, Drive, and Tasks lists, email threads, and the Channels thread feed
 and navigation lists use a linear 32px top fade as content scrolls
 beneath the header. The fade grows with the scroll

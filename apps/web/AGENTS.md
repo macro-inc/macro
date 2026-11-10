@@ -42,6 +42,8 @@ After a pre-commit hook restores unstaged frontend files, verify the dev server 
 
 Any user-visible change should be exercised in a browser before you call it fixed — type-check, biome, and vitest all pass on code that still has the interaction bug.
 
+Keep the view-shell browser fixture's Vite cache separate from the native preview so simultaneous servers cannot invalidate each other's optimized modules.
+
 Desktop sidebar and list-header titles, saved-view icon alignment, unclipped
 switcher triggers, and scrolling list controls have a backend-free regression:
 `bunx playwright test --config src/components/view-shell/browser-test/playwright.config.ts sidebar-title.browser.e2e.ts`.
@@ -610,8 +612,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep the floating entity split header 0.5rem below the safe-area edge on touch, matching collection controls; include that gutter in its measured height so content clears the controls.
 - Keep Email's touch filter row inside its list pane with the explicit 0.5rem top gutter used by Drive; reserve the row and its following gap in the list inset.
 - Use `ViewShell`'s shared 720px container breakpoint for workspace sidebars on touch and desktop; place collapse beside the sidebar title and the touch expand pill before filter controls, preserving the saved wide preference across narrow overlays. Chat on touch at 720px or narrower has no sidebar or navigation row; reserve only the safe-area top inset above its full-frame conversation list.
-- Keep Home desktop-only; show the full-frame Notifications feed at every touch width, with standalone item navigation and no sidebar, composer, or inline preview.
+- Keep the Home composer desktop-only; Notifications uses a full-frame feed and standalone item navigation on touch at 720px or narrower, and docks its feed beside inline previews above that breakpoint.
 - Scale docked wide-touch workspace sidebar widths and bounds to 1.375 times their base sizes; preserve the wider navigation while space permits and normalize saved manual widths across desktop and narrow overlays.
+- Anchor mobile floating page chrome to its owning `ViewShell.Main` or `ViewShell.Detail`, including composers and action bars; keep app navigation global and preserve mounted editors while resizing or collapsing navigation.
 - Use `MobileListLayout` for floating touch collection controls and their list-local fade; reserve its measured inset inside the scroller so sidebars stay clear and rows scroll behind the chrome.
 - Limit whole-surface glass press scaling to nearly square controls; give horizontal and vertical navigation pills the bounded paint expansion in `glassPress.ts`.
 - Keep split chrome portal targets reactive so cached views can mount before their header, and clear a retiring header's targets only while it still owns them.

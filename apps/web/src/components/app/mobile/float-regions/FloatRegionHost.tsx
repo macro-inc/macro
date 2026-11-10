@@ -1,9 +1,10 @@
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isPlatform } from '@core/util/platform';
+import { autoUpdate } from '@floating-ui/dom';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn, Layer } from '@ui';
-import { createEffect, createSignal, For, onCleanup } from 'solid-js';
+import { createEffect, createSignal, For, on, onCleanup } from 'solid-js';
 import { FLOAT_REGIONS, FloatRegions } from './float-region-state';
 
 /**
@@ -21,6 +22,46 @@ export function FloatRegionHost(props: {
 }) {
   const [hostRef, setHostRef] = createSignal<HTMLDivElement>();
   const size = createElementSize(hostRef);
+  const [accessoryBounds, setAccessoryBounds] = createSignal<{
+    anchor: HTMLElement;
+    left: number;
+    width: number;
+  }>();
+  const measureAccessory = () => {
+    const host = hostRef();
+    const anchor = FloatRegions.anchor('accessory');
+    if (!host || !anchor) return;
+    const hostBounds = host.getBoundingClientRect();
+    const paneBounds = anchor.getBoundingClientRect();
+    const left = Math.max(hostBounds.left, paneBounds.left);
+    const right = Math.min(hostBounds.right, paneBounds.right);
+    setAccessoryBounds({
+      anchor,
+      left: left - hostBounds.left,
+      width: Math.max(0, right - left),
+    });
+  };
+  createEffect(
+    on(
+      [
+        hostRef,
+        () => FloatRegions.anchor('accessory'),
+        () => props.navigationEdge,
+      ],
+      ([host, anchor]) => {
+        if (!host || !anchor) return;
+        // Pane swaps and sidebar animations can move a pane without resizing it.
+        onCleanup(
+          autoUpdate(anchor, host, measureAccessory, { animationFrame: true })
+        );
+      }
+    )
+  );
+  const accessoryStyle = () => {
+    const bounds = accessoryBounds();
+    if (!bounds || bounds.anchor !== FloatRegions.anchor('accessory')) return;
+    return { 'margin-left': `${bounds.left}px`, width: `${bounds.width}px` };
+  };
 
   createEffect(() => {
     const height = size.height ?? 0;
@@ -71,26 +112,28 @@ export function FloatRegionHost(props: {
                   '[&>div]:h-full [&>div]:min-h-0'
               )}
               style={
-                region === 'dock' &&
-                (props.navigationEdge === 'left' ||
-                  props.navigationEdge === 'right')
-                  ? {
-                      position: 'fixed',
-                      top: 'var(--native-navigation-top, calc(var(--safe-top, 0px) + var(--mobile-chrome-gutter)))',
-                      bottom:
-                        'var(--native-navigation-bottom, calc(var(--safe-bottom, 0px) + var(--mobile-chrome-gutter)))',
-                      left:
-                        props.navigationEdge === 'left'
-                          ? 'var(--native-navigation-left, calc(var(--safe-left, 0px) + var(--mobile-chrome-gutter)))'
-                          : undefined,
-                      right:
-                        props.navigationEdge === 'right'
-                          ? 'var(--native-navigation-right, calc(var(--safe-right, 0px) + var(--mobile-chrome-gutter)))'
-                          : undefined,
-                      width: 'var(--mobile-chrome-button-size)',
-                      'justify-content': 'flex-end',
-                    }
-                  : undefined
+                region === 'accessory'
+                  ? accessoryStyle()
+                  : region === 'dock' &&
+                      (props.navigationEdge === 'left' ||
+                        props.navigationEdge === 'right')
+                    ? {
+                        position: 'fixed',
+                        top: 'var(--native-navigation-top, calc(var(--safe-top, 0px) + var(--mobile-chrome-gutter)))',
+                        bottom:
+                          'var(--native-navigation-bottom, calc(var(--safe-bottom, 0px) + var(--mobile-chrome-gutter)))',
+                        left:
+                          props.navigationEdge === 'left'
+                            ? 'var(--native-navigation-left, calc(var(--safe-left, 0px) + var(--mobile-chrome-gutter)))'
+                            : undefined,
+                        right:
+                          props.navigationEdge === 'right'
+                            ? 'var(--native-navigation-right, calc(var(--safe-right, 0px) + var(--mobile-chrome-gutter)))'
+                            : undefined,
+                        width: 'var(--mobile-chrome-button-size)',
+                        'justify-content': 'flex-end',
+                      }
+                    : undefined
               }
             />
           )}

@@ -2,6 +2,7 @@ import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { onCleanup, type ParentProps, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { useFloatRegionAnchor } from './FloatRegionScope';
 import { type FloatRegionName, FloatRegions } from './float-region-state';
 
 export type FloatRegionProps = ParentProps<{
@@ -28,13 +29,17 @@ export type FloatRegionProps = ParentProps<{
  */
 export function FloatRegion(props: FloatRegionProps) {
   const panel = useSplitPanel();
+  const scope = useFloatRegionAnchor();
 
   const registration = FloatRegions.register({
     region: props.region,
+    anchor: props.region === 'accessory' ? scope?.anchor : undefined,
+    pane: props.region === 'accessory' ? panel?.handle?.id : undefined,
     priority: props.priority ?? 0,
     isActive: () =>
       isTouchDevice() &&
       (panel?.isPanelActive() ?? true) &&
+      (props.region !== 'accessory' || (scope?.isActive() ?? true)) &&
       (props.active?.() ?? true),
   });
   onCleanup(registration.unregister);

@@ -1,22 +1,16 @@
-import { SearchBar } from '@app/components/view-shell';
+import {
+  SearchBar,
+  useViewShell,
+  ViewSidebar,
+} from '@app/components/view-shell';
+import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
-import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tourTarget } from '@ui/components/Tour';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import { useHomeView } from '../home-view-context';
 import { HOME_TOUR } from '../tour';
 import { HomeFilterDropdown } from './HomeFilters';
-
-function MobileHomeHeader(props: ParentProps) {
-  return (
-    <header class="flex shrink-0 flex-col gap-3 px-4 pt-2 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)] touch:absolute touch:inset-x-0 touch:top-0 touch:z-split-panel-chrome touch:pointer-events-none">
-      <div class="flex h-8 min-w-0 items-center touch:h-10 touch:pointer-events-auto">
-        {props.children}
-      </div>
-    </header>
-  );
-}
 
 function DesktopHomeHeader(props: { onNewChat: () => void }) {
   const { state, setState } = useHomeView();
@@ -48,26 +42,39 @@ export function HomeListLayout(
     footer?: JSX.Element;
   }>
 ) {
+  const shell = useViewShell();
   return (
     <div
       ref={tourTarget(HOME_TOUR.list)}
       class="relative flex size-full min-h-0 min-w-0 flex-col"
-      style={{
-        '--mobile-content-inset-top': isTouchDevice()
-          ? 'calc(var(--safe-top, 0px) + 3.75rem)'
-          : '0px',
-      }}
     >
       <Show
         when={isTouchDevice()}
-        fallback={<DesktopHomeHeader onNewChat={props.onNewChat} />}
+        fallback={
+          <>
+            <DesktopHomeHeader onNewChat={props.onNewChat} />
+            {props.children}
+            {props.footer}
+          </>
+        }
       >
-        <MobileHomeHeader>{props.tabs}</MobileHomeHeader>
-      </Show>
-      {props.children}
-      <Show when={!isTouchDevice()}>{props.footer}</Show>
-      <Show when={isTouchDevice()}>
-        <MobileTopEdgeFade />
+        <MobileListLayout
+          header={
+            <div class="flex min-w-0 flex-col gap-2">
+              <Show when={!shell.breakpoints.narrow?.()}>
+                <div class="flex h-10 min-w-0 items-center justify-between gap-2">
+                  <ViewSidebar.Title caret={false}>
+                    Notifications
+                  </ViewSidebar.Title>
+                  <ViewSidebar.Toggle action="collapse" />
+                </div>
+              </Show>
+              {props.tabs}
+            </div>
+          }
+        >
+          {props.children}
+        </MobileListLayout>
       </Show>
     </div>
   );

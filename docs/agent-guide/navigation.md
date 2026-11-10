@@ -403,15 +403,16 @@ start at 256px. Expanded touch panes use 1.375 times the base width and bounds,
 starting at 352px; narrow touch overlays retain the base sizing. Manual resizing
 and available space can change the displayed width. Navigation sidebars use the
 same container-width rule on desktop and touch, including unfolded Duo: docked above 720px, an overlay at 720px or
-below. Home is desktop-only: every touch width shows the Notifications feed,
-without a sidebar or inline preview, and opens items as standalone pages. Chat is
+below. Home's composer is desktop-only. Notifications docks its list beside an inline
+preview above 720px on touch; at narrower widths it fills the pane and opens
+items as standalone pages. Chat is
 another touch exception: at 720px or narrower it shows its full-frame
 conversation list without a sidebar or expand button. **Hide navigation** sits to
 the right of the sidebar title. After hiding,
 **Show navigation** is the first control in the touch filter row, or the main
 header when that view has no filter row. Each workspace retains its wide-layout
 choice across reloads and fold/unfold transitions; closing a narrow overlay does
-not change that preference. Other workspaces on wide touch open selected items
+not change that preference. Workspaces on wide touch open selected items
 in the workspace's inline detail area, as desktop does; modifier actions can still request another
 split. The touch app shell and Duo's navigation strip use the same panel
 background as the surrounding views. Workspace navigation uses shared 32px rows (44px on touch), 16px
@@ -1786,8 +1787,8 @@ detail and navigation history unchanged, focuses the owning view, and shows a
 **Content already open** toast. Close or navigate away
 from the owning view before opening it elsewhere. The same rule applies to mouse
 selection, keyboard preview navigation, and detail breadcrumbs. Wide touch panes
-use the same inline preview and detail routing as desktop, except Home, whose
-Notifications feed always opens standalone pages on touch. At 720px or less,
+use the same inline preview and detail routing as desktop, including the
+Notifications feed. At 720px or less,
 a tap opens the entity in the split; duplicate-content handling still applies.
 
 Split-router ownership checks use the final redirected destination. Concurrent

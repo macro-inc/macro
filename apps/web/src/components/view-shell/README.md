@@ -57,6 +57,11 @@ Wide panes dock navigation; narrow panes open it as an overlay. The title header
 places collapse on the right; collapsed touch navigation uses the leading pill
 control, before filters.
 
+`ViewShell.Main` and `ViewShell.Detail` scope floating mobile accessory chrome
+to their pane through `FloatRegionScope`. The app-wide host follows the winning
+contribution's pane as navigation collapses or resizes; editors remain mounted.
+The navigation dock and app-wide overlays keep their global placement.
+
 `MobileListLayout` owns floating touch collection controls, measures their height,
 and paints the top fade only inside that list pane. Reserve its
 `--mobile-content-inset-top` within the scroller (for `ListViewport`, opt into

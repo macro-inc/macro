@@ -2,6 +2,12 @@ import { expect, test } from '@playwright/test';
 
 test.use({ hasTouch: true });
 
+test.beforeEach(({ page }) => {
+  page.on('pageerror', (error) => {
+    throw error;
+  });
+});
+
 test('collapses beside the view title and reopens before touch filters', async ({
   page,
 }) => {
@@ -129,6 +135,7 @@ for (const { width, nested } of [
         await route.fulfill({ response, body });
       }
     );
+    test.setTimeout(120000);
     await page.setViewportSize({ width, height: 844 });
     await page.goto(
       `/src/components/view-shell/browser-test/touch-sidebar.html?list${nested ? '&nested' : ''}`
@@ -191,14 +198,16 @@ for (const { width, nested } of [
   });
 }
 
-for (const width of [390, 1000]) {
+for (const width of [390, 720]) {
   test(`Notifications stays full frame on touch at ${width}px`, async ({
     page,
   }) => {
+    test.setTimeout(120000);
     await page.setViewportSize({ width, height: 844 });
     await page.goto(
       '/src/components/view-shell/browser-test/touch-sidebar.html?home'
     );
+    await page.waitForSelector('[data-view-shell]', { timeout: 60000 });
     const scroller = page.getByTestId('notifications-scroll');
     await expect(scroller).toBeVisible();
     await expect(
@@ -219,7 +228,9 @@ for (const width of [390, 1000]) {
       const row = document
         .querySelector('[data-notification-row="0"]')!
         .getBoundingClientRect();
-      const header = document.querySelector('header')!.getBoundingClientRect();
+      const header = document
+        .querySelector('[data-mobile-list-header]')!
+        .getBoundingClientRect();
       return {
         main: { x: main.x, y: main.y, width: main.width, height: main.height },
         scroll: {
@@ -233,7 +244,7 @@ for (const width of [390, 1000]) {
       };
     });
     expect(bounds.scroll).toEqual(bounds.main);
-    expect(bounds.rowTop).toBeGreaterThan(bounds.headerBottom);
+    expect(bounds.rowTop).toBeGreaterThanOrEqual(bounds.headerBottom);
     await page.getByRole('button', { name: 'Noise', exact: true }).tap();
     await expect(page.getByText('Selected: noise')).toHaveCount(1);
     await scroller.evaluate((element) => {
@@ -245,3 +256,169 @@ for (const width of [390, 1000]) {
     expect(rowTop).toBeLessThan(bounds.headerBottom);
   });
 }
+
+test('wide Notifications opens beside its feed and preserves collapse across folding', async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  await page.setViewportSize({ width: 1000, height: 844 });
+  await page.goto(
+    '/src/components/view-shell/browser-test/touch-sidebar.html?home'
+  );
+  await page.waitForSelector('[data-view-shell]', { timeout: 60000 });
+  const collapse = page.getByRole('button', { name: 'Hide navigation' });
+  const expand = page.getByRole('button', { name: 'Show navigation' });
+  const list = page.getByTestId('notifications-scroll');
+  const preview = page.getByTestId('notification-preview');
+  await expect(collapse).toBeVisible();
+  await page.getByRole('button', { name: 'Notification 1', exact: true }).tap();
+  await expect(preview).toHaveText('Preview 1');
+  const bounds = await page.evaluate(() => ({
+    listRight: document
+      .querySelector('[data-testid="notifications-scroll"]')!
+      .getBoundingClientRect().right,
+    previewLeft: document
+      .querySelector('[data-testid="notification-preview"]')!
+      .getBoundingClientRect().left,
+  }));
+  expect(bounds.previewLeft).toBeGreaterThanOrEqual(bounds.listRight);
+  await expect(page.getByRole('button', { name: 'New chat' })).toBeHidden();
+  await collapse.tap();
+  await expect(expand).toBeVisible();
+  await page.setViewportSize({ width: 600, height: 844 });
+  await expect(list).toBeVisible();
+  await expect(expand).toBeHidden();
+  await expect(preview).toBeHidden();
+  await page.setViewportSize({ width: 1000, height: 844 });
+  await expect(expand).toBeVisible();
+  await expand.tap();
+  await expect(collapse).toBeVisible();
+  await expect(list).toBeVisible();
+  await expect(preview).toHaveText('Preview 1');
+});
+
+for (const edge of ['bottom', 'right']) {
+  test(`floating preview chrome follows its pane with ${edge} navigation`, async ({
+    page,
+  }) => {
+    test.setTimeout(120000);
+    await page.setViewportSize({ width: 1000, height: 844 });
+    await page.goto(
+      `/src/components/view-shell/browser-test/touch-sidebar.html?chrome&edge=${edge}`
+    );
+    await page.waitForSelector('[data-view-shell]', { timeout: 60000 });
+    const reply = page.getByRole('textbox', { name: 'Preview reply' });
+    await reply.fill('Keep this draft');
+    const originalReply = await reply.elementHandle();
+    const checkBounds = async () => {
+      const bounds = await page.evaluate(async () => {
+        const main = document.querySelector('[data-view-shell-main]')!;
+        const chrome = document.querySelector(
+          '[data-float-region="accessory"]'
+        )!;
+        await new Promise<void>((resolve) => {
+          const resized = new ResizeObserver(check);
+          const moved = new MutationObserver(check);
+          function check() {
+            const pane = main.getBoundingClientRect();
+            const floating = chrome.getBoundingClientRect();
+            if (
+              Math.abs(pane.left - floating.left) < 1 &&
+              Math.abs(pane.width - floating.width) < 1
+            ) {
+              resized.disconnect();
+              moved.disconnect();
+              resolve();
+            }
+          }
+          resized.observe(main);
+          resized.observe(chrome);
+          moved.observe(chrome, {
+            attributes: true,
+            attributeFilter: ['style'],
+          });
+          check();
+        });
+        const pane = main.getBoundingClientRect();
+        const floating = chrome.getBoundingClientRect();
+        return {
+          paneLeft: pane.left,
+          paneWidth: pane.width,
+          chromeLeft: floating.left,
+          chromeWidth: floating.width,
+        };
+      });
+      expect(bounds.chromeLeft).toBeCloseTo(bounds.paneLeft);
+      expect(bounds.chromeWidth).toBeCloseTo(bounds.paneWidth);
+      await expect(reply).toHaveValue('Keep this draft');
+      expect(
+        await reply.evaluate(
+          (element, original) => element === original,
+          originalReply
+        )
+      ).toBe(true);
+    };
+    await checkBounds();
+    await page.locator('[data-view-shell-main]').evaluate((element) => {
+      element.style.transform = 'translateX(-20px)';
+    });
+    await checkBounds();
+    await page.locator('[data-view-shell-main]').evaluate((element) => {
+      element.style.transform = '';
+    });
+    await checkBounds();
+    await page.getByRole('button', { name: 'Hide navigation' }).tap();
+    await checkBounds();
+    await page.getByRole('button', { name: 'Show navigation' }).tap();
+    await checkBounds();
+    await page.setViewportSize({ width: 600, height: 844 });
+    await checkBounds();
+    await expect(
+      page.getByRole('button', { name: 'App navigation' })
+    ).toBeVisible();
+  });
+}
+
+test('floating chrome hands ownership back when a detail closes', async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  await page.setViewportSize({ width: 1200, height: 844 });
+  await page.goto(
+    '/src/components/view-shell/browser-test/touch-sidebar.html?chrome'
+  );
+  await page.waitForSelector('[data-view-shell]', { timeout: 60000 });
+  const mainReply = page.getByRole('textbox', { name: 'Preview reply' });
+  await mainReply.fill('Main draft');
+  await page.getByRole('button', { name: 'Open detail' }).tap();
+  const detailReply = page.getByRole('textbox', { name: 'Detail reply' });
+  await detailReply.fill('Detail draft');
+  const detail = page.locator('[data-view-shell-detail-placement="inline"]');
+  await expect(detail).toBeVisible();
+  const detailWidth = await detail.evaluate(
+    (element) => element.getBoundingClientRect().width
+  );
+  await expect(page.locator('[data-float-region="accessory"]')).toHaveCSS(
+    'width',
+    `${detailWidth}px`
+  );
+  const bounds = await page.evaluate(() => ({
+    detail: document
+      .querySelector('[data-view-shell-detail]')!
+      .getBoundingClientRect().left,
+    chrome: document
+      .querySelector('[data-float-region="accessory"]')!
+      .getBoundingClientRect().left,
+  }));
+  expect(bounds.chrome).toBeCloseTo(bounds.detail);
+  await page.getByRole('button', { name: 'Close detail' }).tap();
+  await expect(detailReply).toBeHidden();
+  await expect(mainReply).toHaveValue('Main draft');
+  const width = await page
+    .locator('[data-view-shell-main]')
+    .evaluate((element) => element.getBoundingClientRect().width);
+  await expect(page.locator('[data-float-region="accessory"]')).toHaveCSS(
+    'width',
+    `${width}px`
+  );
+});

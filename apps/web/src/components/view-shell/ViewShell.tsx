@@ -5,6 +5,7 @@ import {
   type BreakpointThresholds,
   createSizeBreakpoints,
 } from '@app/util/create-size-breakpoints';
+import { FloatRegionScope } from '@components/app/mobile/float-regions/FloatRegionScope';
 import { SplitHeaderContextMenu } from '@components/app/split-layout/components/SplitHeaderContextMenu';
 import { SplitPanelContext } from '@components/app/split-layout/context';
 import { SplitPanel } from '@components/app/split-panel';
@@ -33,6 +34,7 @@ import {
   type JSX,
   Match,
   on,
+  onCleanup,
   Show,
   Switch,
   splitProps,
@@ -840,6 +842,7 @@ function Main(props: ViewShellMainProps) {
     'onWidthChangeEnd',
   ]);
   const ws = useViewShellInternal();
+  const [frame, setFrame] = createSignal<HTMLElement>();
   const layout = ws.main.layout;
   const target = () => {
     const width = layout().width;
@@ -858,16 +861,21 @@ function Main(props: ViewShellMainProps) {
       target={target()}
       onSizeChangeEnd={local.onWidthChangeEnd}
     >
-      <main
-        {...rest}
-        ref={mergeRefs(local.ref, tourTarget(VIEW_SHELL_TOUR.main))}
-        class={cn('flex size-full min-h-0 min-w-0 flex-col', local.class)}
-        data-view-shell-main=""
-        inert={ws.narrowList() === 'list'}
-        aria-hidden={ws.narrowList() === 'list'}
+      <FloatRegionScope
+        anchor={frame}
+        active={() => ws.narrowList() !== 'list'}
       >
-        {local.children}
-      </main>
+        <main
+          {...rest}
+          ref={mergeRefs(setFrame, local.ref, tourTarget(VIEW_SHELL_TOUR.main))}
+          class={cn('flex size-full min-h-0 min-w-0 flex-col', local.class)}
+          data-view-shell-main=""
+          inert={ws.narrowList() === 'list'}
+          aria-hidden={ws.narrowList() === 'list'}
+        >
+          {local.children}
+        </main>
+      </FloatRegionScope>
     </Resize.Panel>
   );
 }
@@ -926,8 +934,15 @@ function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
 }
 
 function Detail(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class']);
+  const [local, rest] = splitProps(props, ['children', 'class', 'ref']);
   const ws = useViewShellInternal();
+  const [frame, setFrame] = createSignal<HTMLElement>();
+  const setDetailFrame = (element: HTMLDivElement) => {
+    setFrame(element);
+    onCleanup(() =>
+      setFrame((current) => (current === element ? undefined : current))
+    );
+  };
   const layout = ws.detail.layout;
   const target = () => {
     const initialWidth = layout().initialWidth;
@@ -939,50 +954,58 @@ function Detail(props: JSX.HTMLAttributes<HTMLDivElement>) {
   };
 
   return (
-    <Switch>
-      <Match when={ws.detail.placement() === 'inline'}>
-        <Resize.Panel
-          id={`${ws.id}-detail`}
-          index={2}
-          minSize={layout().min}
-          maxSize={layout().max}
-          target={target()}
-        >
+    <FloatRegionScope
+      anchor={frame}
+      active={() => ws.detail.placement() !== 'hidden'}
+    >
+      <Switch>
+        <Match when={ws.detail.placement() === 'inline'}>
+          <Resize.Panel
+            id={`${ws.id}-detail`}
+            index={2}
+            minSize={layout().min}
+            maxSize={layout().max}
+            target={target()}
+          >
+            <div
+              {...rest}
+              ref={mergeRefs(setDetailFrame, local.ref)}
+              class={cn('size-full min-h-0 min-w-0', local.class)}
+              data-view-shell-detail=""
+              data-view-shell-detail-placement="inline"
+            >
+              {local.children}
+            </div>
+          </Resize.Panel>
+        </Match>
+        <Match when={ws.detail.placement() === 'overlay'}>
           <div
             {...rest}
-            class={cn('size-full min-h-0 min-w-0', local.class)}
+            ref={mergeRefs(setDetailFrame, local.ref)}
+            class={cn(
+              'absolute inset-y-0 right-0 z-10 min-h-0 border-l border-edge-frame bg-panel shadow-menu',
+              local.class
+            )}
+            style={{ width: `${layout().width}px`, 'max-width': '100%' }}
             data-view-shell-detail=""
-            data-view-shell-detail-placement="inline"
+            data-view-shell-detail-placement="overlay"
           >
             {local.children}
           </div>
-        </Resize.Panel>
-      </Match>
-      <Match when={ws.detail.placement() === 'overlay'}>
-        <div
-          {...rest}
-          class={cn(
-            'absolute inset-y-0 right-0 z-10 min-h-0 border-l border-edge-frame bg-panel shadow-menu',
-            local.class
-          )}
-          style={{ width: `${layout().width}px`, 'max-width': '100%' }}
-          data-view-shell-detail=""
-          data-view-shell-detail-placement="overlay"
-        >
-          {local.children}
-        </div>
-      </Match>
-      <Match when={ws.detail.placement() === 'replace'}>
-        <div
-          {...rest}
-          class={cn('absolute inset-0 z-10 min-h-0 min-w-0', local.class)}
-          data-view-shell-detail=""
-          data-view-shell-detail-placement="replace"
-        >
-          {local.children}
-        </div>
-      </Match>
-    </Switch>
+        </Match>
+        <Match when={ws.detail.placement() === 'replace'}>
+          <div
+            {...rest}
+            ref={mergeRefs(setDetailFrame, local.ref)}
+            class={cn('absolute inset-0 z-10 min-h-0 min-w-0', local.class)}
+            data-view-shell-detail=""
+            data-view-shell-detail-placement="replace"
+          >
+            {local.children}
+          </div>
+        </Match>
+      </Switch>
+    </FloatRegionScope>
   );
 }
 
