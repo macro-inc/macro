@@ -12,11 +12,15 @@ import { authKeys, type UserInfoData } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
 import { Router } from '@solidjs/router';
 import { QueryClientProvider } from '@tanstack/solid-query';
+import { ErrorBoundary } from 'solid-js';
 import { render } from 'solid-js/web';
 import { CallProvider } from '../../CallContext';
 import { CallDiscussionContent } from '../../discussion/CallDiscussionContent';
+import CallChat from '../CallChat';
 
-const access = new URLSearchParams(window.location.search).get('access');
+const params = new URLSearchParams(window.location.search);
+const access = params.get('access');
+const direct = params.get('surface') === 'direct';
 if (access === 'member') {
   queryClient.setQueryData(authKeys.userInfo.queryKey, {
     authenticated: true,
@@ -65,22 +69,36 @@ function MeetingPanel() {
         class="mx-auto flex min-h-0 w-full max-w-[372px] flex-1 flex-col bg-surface-2"
         data-testid="call-chat"
       >
-        <CallDiscussionContent
-          discussion={() => ({ kind: 'call_chat', call_id: CALL_ID })}
-          panel={{ open: true, focusOnOpen: false, onClose: () => {} }}
-          onViewChannel={() => {}}
-          access={
-            access === 'guest'
-              ? {
-                  kind: 'guest',
-                  session: {
-                    token: 'fixture-guest-token',
-                    participantId: 'guest-1',
-                  },
-                }
-              : { kind: 'member' }
-          }
-        />
+        {direct ? (
+          <ErrorBoundary
+            fallback={(error) => <p role="alert">{String(error)}</p>}
+          >
+            <CallChat
+              callId={CALL_ID}
+              access={{ kind: 'member' }}
+              open
+              focusOnOpen={false}
+              onClose={() => {}}
+            />
+          </ErrorBoundary>
+        ) : (
+          <CallDiscussionContent
+            discussion={() => ({ kind: 'call_chat', call_id: CALL_ID })}
+            panel={{ open: true, focusOnOpen: false, onClose: () => {} }}
+            onViewChannel={() => {}}
+            access={
+              access === 'guest'
+                ? {
+                    kind: 'guest',
+                    session: {
+                      token: 'fixture-guest-token',
+                      participantId: 'guest-1',
+                    },
+                  }
+                : { kind: 'member' }
+            }
+          />
+        )}
       </div>
     </main>
   );

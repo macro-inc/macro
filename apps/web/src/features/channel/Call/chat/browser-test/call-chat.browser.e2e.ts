@@ -6,6 +6,7 @@ const MEMBER = 'macro|me@example.com';
 const GUEST = 'guest:guest-1';
 const OPAQUE = 'participant:00000000-0000-5000-8000-000000000001';
 const PATH = '/src/features/channel/Call/chat/browser-test/call-chat.html';
+const LINK = 'https://example.com/shared-page';
 
 type Message = ReturnType<typeof makeMessage>;
 function makeMessage(id: string, sender: string, content: string) {
@@ -220,6 +221,49 @@ async function action(page: Page, id: string, name: string) {
   await row.hover({ force: true });
   await row.getByRole('button', { name, exact: true }).click({ force: true });
 }
+
+test('first member message renders on a meeting page without app providers', async ({
+  context,
+  page,
+}) => {
+  const fake = fakeServer(context, []);
+  await fake.ready;
+  page.on('pageerror', (error) => fake.errors.push(error.message));
+  await page.goto(`${PATH}?access=member&surface=direct`);
+  const chat = page.getByTestId('call-chat');
+  await expect(chat.getByText(/Start the conversation/)).toBeVisible({
+    timeout: 60_000,
+  });
+
+  await send(page, LINK);
+  await expect.poll(() => fake.messages.length).toBe(1);
+  await expect(chat.locator(`a[href="${LINK}"]`)).toBeVisible();
+  await expect(chat.getByText('Loading chat…')).toHaveCount(0);
+  expect(fake.errors).toEqual([]);
+});
+
+test('guest message renders for a member on a meeting page', async ({
+  context,
+  page,
+}) => {
+  const fake = fakeServer(context, [
+    makeMessage(CALL, GUEST, 'Hello from the guest'),
+    makeMessage(GUEST_MESSAGE, MEMBER, 'Welcome to the call'),
+  ]);
+  await fake.ready;
+  page.on('pageerror', (error) => fake.errors.push(error.message));
+  await page.goto(`${PATH}?access=member&surface=direct`);
+  const chat = page.getByTestId('call-chat');
+
+  await expect(chat.getByText('Hello from the guest')).toBeVisible({
+    timeout: 60_000,
+  });
+  await expect(chat.getByText('Casey (Guest)')).toBeVisible();
+  await expect(chat.getByText('Welcome to the call')).toBeVisible();
+  await expect(chat.getByRole('alert')).toHaveCount(0);
+  await expect(chat.getByText(/GlobalAppStateContext/)).toHaveCount(0);
+  expect(fake.errors).toEqual([]);
+});
 
 test('guest and member render the same rows with redacted identity', async ({
   context,

@@ -233,7 +233,11 @@ export function HomeList(props: HomeListProps) {
     options?: { activate?: boolean }
   ) {
     if (entity) markRowNotificationsSeenOnOpen(entity, notificationSource);
-    props.onPreviewEntityChange(entity, options);
+    // A runtime opens in Settings → Machines; it has no preview.
+    props.onPreviewEntityChange(
+      entity?.type === 'harness' ? undefined : entity,
+      options
+    );
   }
 
   const previewAfterNavigation = debounce(showPreview, 150);
