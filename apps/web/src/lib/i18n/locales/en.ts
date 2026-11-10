@@ -22,6 +22,7 @@ import markdownEditor from './en/markdown-editor';
 import mobile from './en/mobile';
 import nav from './en/nav';
 import notificationSounds from './en/notification-sounds';
+import notificationStacks from './en/notification-stacks';
 import notificationsInbox from './en/notifications-inbox';
 import passwords from './en/passwords';
 import routineDrafts from './en/routine-drafts';
@@ -67,6 +68,7 @@ export default {
   mobile,
   nav,
   notificationSounds,
+  notificationStacks,
   notificationsInbox,
   passwords,
   routineDrafts,
