@@ -13,7 +13,7 @@ let
   home = config.users.users.macro.home;
   workspace = "${home}/work";
   macrodConfig = "${home}/.macrod/macrod.toml";
-  # macrod writes this marker when enrollment succeeds.
+  # macrod writes "<computer id>\n<generation>" here when enrollment succeeds.
   enrolledMarker = "/var/lib/macrod/enrolled";
   # /var/lib/macrod links here when there is a data disk.
   persistentMacrodState = if cfg.dataDisk == null then "/var/lib/macrod" else "/home/.system/macrod";
@@ -327,16 +327,26 @@ in
         "incus-agent.service"
       ];
       before = [ "macrod.service" ];
-      unitConfig.ConditionPathExists = "!${enrolledMarker}";
+      # Runs on every boot: `macrod enroll` re-enrolls for a newer
+      # generation and keeps the existing enrollment otherwise.
+      unitConfig = {
+        # A retry that succeeds still starts macrod.
+        OnSuccess = "macrod.service";
+        StartLimitIntervalSec = 0;
+      };
       path = systemPath;
       # Agent discovery records adapter paths usable by the daemon user.
       environment = {
         HOME = home;
         MACRO_ENROLL_FROM = cfg.enrollFrom;
+        MACRO_ENROLLED_MARKER = enrolledMarker;
       };
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
+        # macrod requires it; keep trying until the source shows up.
+        Restart = "on-failure";
+        RestartSec = 10;
         ExecStartPre = lib.getExe (
           pkgs.writeShellApplication {
             name = "check-enrollment-source";

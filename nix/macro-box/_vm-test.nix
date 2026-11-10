@@ -109,15 +109,17 @@ pkgs.testers.runNixOSTest {
         machine.succeed("findmnt --noheadings --output SOURCE /home | grep -F /dev/vd")
         machine.succeed("su - macro -c 'echo token > ~/.claude/.credentials.json && echo notes > ~/work/notes.txt'")
         # What a successful enrollment leaves behind.
-        machine.succeed("echo enrolled > /var/lib/macrod/enrolled")
+        machine.succeed("printf 'mc-01900000000070008000000000000001\\n1\\n' > /var/lib/macrod/enrolled")
         machine.shutdown()
 
         updated.wait_for_unit("multi-user.target")
         updated.succeed("grep -Fx v2 /etc/macro-box-image")
         updated.succeed("su - macro -c 'grep -Fx token ~/.claude/.credentials.json && grep -Fx notes ~/work/notes.txt'")
-        updated.succeed("grep -Fx enrolled /var/lib/macrod/enrolled")
-        updated.succeed("[ $(systemctl show macrod-enroll.service --property=ConditionResult --value) = no ]")
-        updated.succeed("[ $(systemctl show macrod.service --property=ConditionResult --value) = yes ]")
+        updated.succeed("grep -Fx mc-01900000000070008000000000000001 /var/lib/macrod/enrolled")
+        # Enrollment runs on every boot; with a marker and no source the
+        # check passes and leaves `macrod enroll` to keep the enrollment.
+        updated.wait_until_succeeds("systemctl show macrod-enroll.service --property=ExecStartPre | grep -F 'status=0/0'")
+        updated.fail("journalctl -b -u macrod-enroll.service | grep -F 'macrod-enroll: '")
         updated.succeed("systemctl cat docker.service | grep -o -- '--config-file=[^ ]*' | cut -d= -f2 | xargs jq --exit-status '.\"data-root\" == \"/home/.system/docker\"'")
   '';
 }
