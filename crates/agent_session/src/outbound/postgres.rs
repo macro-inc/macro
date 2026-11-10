@@ -1868,8 +1868,10 @@ impl<B: BotFacts + 'static> AgentSessionLogRepo for PgAgentSessionRepo<B> {
                 UPDATE agent_session
                 SET turn_state = $2,
                     turn_interrupted = CASE
-                        WHEN $2 = 'disconnected' THEN turn_interrupted
-                            OR turn_state IN ('starting', 'running', 'stopping', 'blocked')
+                        WHEN $2 = 'disconnected' THEN COALESCE(
+                            turn_state IN ('starting', 'running', 'stopping', 'blocked'),
+                            false
+                        )
                         ELSE false
                     END,
                     modified_at = CASE WHEN $3 THEN now() ELSE modified_at END
