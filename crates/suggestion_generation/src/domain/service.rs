@@ -321,7 +321,7 @@ where
                     user.id = tracing::field::Empty,
                     otel.status_code = tracing::field::Empty,
                 );
-                span.follows_from(&tracing::Span::current());
+                span.follows_from(tracing::Span::current());
                 span
             }
         };
