@@ -1478,3 +1478,28 @@ async fn issues_are_stored_as_stable_codes(pool: PgPool) {
     .unwrap();
     assert_eq!(stored.as_deref(), Some("needs_reauth"));
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn one_unreadable_sync_does_not_hold_up_the_others(pool: PgPool) {
+    let service = service(pool, GrantState::Active, Arc::new(Calls::default()));
+    for user in [user(), other_user()] {
+        service.connect(&user, Backfill::Week).await.unwrap();
+        service.complete(&user).await.unwrap();
+    }
+    // A row this build cannot read, as after a rollback across a new issue.
+    let unreadable = user();
+    sqlx::query!(
+        "UPDATE dialpad_sync_connections SET last_error = 'from a newer build' WHERE user_id = $1",
+        unreadable.as_ref()
+    )
+    .execute(&service.repo.pool)
+    .await
+    .unwrap();
+
+    service.reconcile().await.unwrap();
+    let other = service.repo.by_user(&other_user()).await.unwrap().unwrap();
+    assert_eq!(other.backfill, BackfillState::Done);
+}

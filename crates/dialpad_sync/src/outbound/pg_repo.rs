@@ -41,8 +41,14 @@ impl PgSyncRepository {
     async fn ids(&self, ids: Vec<Uuid>) -> Result<Vec<Connection>> {
         let mut connections = Vec::with_capacity(ids.len());
         for id in ids {
-            if let Some(connection) = self.by_id(id).await? {
-                connections.push(connection);
+            // A row this build cannot read must not hold up everyone else's
+            // setup and backfill. Its error can quote the row, so log its id.
+            match self.by_id(id).await {
+                Ok(Some(connection)) => connections.push(connection),
+                Ok(None) => {}
+                Err(_) => {
+                    tracing::warn!(connection_id = %id, "skipped a Dialpad sync that could not be read")
+                }
             }
         }
         Ok(connections)
