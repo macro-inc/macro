@@ -94,7 +94,7 @@ async fn a_session_counts_what_it_kept_and_every_keep_and_retire_is_logged(pool:
     let repo = PgSuggestionRepo::new(pool.clone());
     let a = user(USER_A);
     let session = Uuid::now_v7();
-    assert_eq!(repo.kept_by(session).await.unwrap(), 0);
+    assert_eq!(repo.kept_by(&a, session).await.unwrap(), 0);
     let picked = stored(
         repo.add(&a, session, generation, &catalog("email_tags"), Utc::now())
             .await
@@ -105,7 +105,7 @@ async fn a_session_counts_what_it_kept_and_every_keep_and_retire_is_logged(pool:
             .await
             .unwrap(),
     );
-    assert_eq!(repo.kept_by(session).await.unwrap(), 2);
+    assert_eq!(repo.kept_by(&a, session).await.unwrap(), 2);
 
     assert!(
         repo.retire(
@@ -296,3 +296,4 @@ async fn a_drafted_suggestion_past_the_ideas_limit_keeps_nothing(pool: PgPool) {
         usize::try_from(ideas::domain::service::NEW_PER_GENERATION).unwrap()
     );
 }
+

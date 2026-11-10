@@ -68,6 +68,7 @@ use scheduled_action::outbound::pg_routine_template_repo::PgRoutineTemplateRepo;
 use scheduled_action::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use scheduled_action::outbound::pg_suggestion_repo::PgSuggestionRepo;
 use scheduled_action::swagger::ApiDoc;
+use suggestion_generation::domain::audience::PaidAudience;
 use suggestion_generation::domain::model::GenerationAgent;
 use suggestion_generation::domain::service::GenerationService;
 use suggestion_generation::inbound::router::{GenerationRouterState, generation_router};
@@ -521,6 +522,9 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // routines sessions through `macro.routines.suggest`, reading the newest
     // mail through email_service, which reads it from the provider.
     let generations = Arc::new(PgGenerationRepo::new(db.clone()));
+    let plans: Arc<dyn suggestion_generation::domain::ports::Plans> = Arc::new(EntitlementPlans(
+        ai_billing::composition::pg_entitlement_source(db.clone()),
+    ));
     let suggestions = Arc::new(RoutineSuggestionService::new(
         Arc::clone(&service),
         suggestion_repo,
@@ -546,10 +550,14 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     let ideas = Arc::new(
         IdeaService::new(
             Arc::new(PgIdeaRepo::new(db.clone())),
-            Arc::new(EntityIdeaAccess(access.as_ref().clone())),
+            Arc::new(EntityIdeaAccess {
+                access: access.as_ref().clone(),
+                pool: db.clone(),
+            }),
             correlation_sessions,
             generations.clone(),
-            generations.clone(),
+            // Reading the feed counts paid readers in for nightly runs.
+            Arc::new(PaidAudience::new(generations.clone(), Arc::clone(&plans))),
             Arc::new(SuggestionDismissal(Arc::clone(&suggestions))),
             template_flags.clone(),
         )
@@ -573,9 +581,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             lifecycle.stop_workers.clone(),
         )
         // Nightly runs are for paid plans; onboarding runs for everyone.
-        .with_plans(Arc::new(EntitlementPlans(
-            ai_billing::composition::pg_entitlement_source(db.clone()),
-        ))),
+        .with_plans(plans),
     );
     // Generation sessions a stopped process left behind lose their session;
     // once ready, people in their night get their nightly generation.

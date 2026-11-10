@@ -19766,10 +19766,12 @@ dependencies = [
  "chrono-tz",
  "feature_flags",
  "futures",
+ "http 1.4.0",
  "http-body-util",
  "ideas",
  "macro_authorization",
  "macro_db_migrator",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "model_owner",
@@ -19787,6 +19789,7 @@ dependencies = [
  "tracing",
  "trigger_context",
  "utoipa",
+ "uuid",
  "workspace-hack",
 ]
 

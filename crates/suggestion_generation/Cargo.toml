@@ -13,11 +13,13 @@ axum = { workspace = true }
 bot_id = { path = "../bot_id" }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
+http = { workspace = true }
 feature_flags = { path = "../feature_flags" }
 futures = { workspace = true }
 ideas = { path = "../ideas" }
 macro_authorization = { path = "../macro_authorization", features = ["postgres"] }
 macro_user_id = { path = "../macro_user_id" }
+macro_tower_layers = { path = "../macro_tower_layers" }
 macro_uuid = { path = "../macro_uuid" }
 rootcause = { workspace = true }
 routine_program = { path = "../routine_program" }
@@ -40,3 +42,4 @@ tower = { workspace = true }
 model_owner = { path = "../model_owner" }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
+uuid = { workspace = true }
