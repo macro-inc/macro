@@ -38,7 +38,7 @@ import {
   type SuggestionPlacement,
 } from './primitives/suggestion-actions';
 import {
-  useDismissRoutineSuggestionMutation,
+  dismissRoutineSuggestion,
   useRoutineSuggestions,
   useRoutineSuggestionsEnabled,
 } from './queries/routine-suggestions';
@@ -62,7 +62,6 @@ function useSuggestionList(
   const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
   const create = useCreateScheduleMutation();
   const ensureTagSet = useEnsureTagSetMutation();
-  const dismiss = useDismissRoutineSuggestionMutation();
 
   const items = createMemo(() => {
     const suggestions = source.suggestions();
@@ -101,7 +100,7 @@ function useSuggestionList(
       openAgentsPage(layout, 'routines', { routineId: 'new' });
     },
     async dismiss(item) {
-      await dismiss.mutateAsync(item.id);
+      await dismissRoutineSuggestion(item.id);
     },
     notify: (message) => toast.alert(message),
   });

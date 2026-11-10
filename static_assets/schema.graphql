@@ -7841,11 +7841,6 @@ enum GraphqlRoutineSuggestionState {
 	The user turned it down; it is never suggested again.
 	"""
 	DISMISSED
-	"""
-	The user saved a routine from it. Never served: a client that saves
-	a routine from a suggestion writes it, so its lists drop it.
-	"""
-	SAVED
 }
 
 """

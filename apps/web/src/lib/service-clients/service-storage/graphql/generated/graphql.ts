@@ -2095,12 +2095,7 @@ export type GraphqlRoutineSuggestionState =
   /** The user turned it down; it is never suggested again. */
   | 'DISMISSED'
   /** Shown. */
-  | 'OPEN'
-  /**
-   * The user saved a routine from it. Never served: a client that saves
-   * a routine from a suggestion writes it, so its lists drop it.
-   */
-  | 'SAVED';
+  | 'OPEN';
 
 /** The part of the app a routine is about, where it is offered. */
 export type GraphqlRoutineSurface =

@@ -287,9 +287,6 @@ pub enum GraphqlRoutineSuggestionState {
     Open,
     /// The user turned it down; it is never suggested again.
     Dismissed,
-    /// The user saved a routine from it. Never served: a client that saves
-    /// a routine from a suggestion writes it, so its lists drop it.
-    Saved,
 }
 
 /// What starting a generation did.

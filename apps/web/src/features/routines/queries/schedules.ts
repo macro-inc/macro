@@ -190,8 +190,7 @@ export function useCreateScheduleMutation(
             targetKind: routineTargetKind(schedule),
           });
           upsertSchedule(schedule);
-          if (request.suggestionId)
-            await removeAcceptedSuggestion(request.suggestionId);
+          if (request.suggestionId) await removeAcceptedSuggestion();
           await invalidateSchedules();
         },
       },
