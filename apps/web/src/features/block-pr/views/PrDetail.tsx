@@ -218,7 +218,7 @@ export function PrDetailActions(props: {
   );
 
   return (
-    <div class="ml-auto flex shrink-0 items-center gap-2">
+    <div class="ml-auto flex shrink-0 items-center gap-2 touch:max-w-full touch:flex-wrap">
       <Show when={props.detail}>
         {(detail) => (
           <>
