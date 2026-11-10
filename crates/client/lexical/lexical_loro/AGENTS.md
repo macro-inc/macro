@@ -12,6 +12,7 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 - `src/policy.rs`: synced editor view and application exclusions.
 - `src/schema.rs`: fresh/existing container inference and text splicing.
 - `src/local.rs`, `child_index.rs`: dirty projection, stable direct-child insertion anchors and corrected list moves; local_commit_without_events suppresses materialization only at the final commit, and its owner must checkpoint undo from local operations.
+- Move paired old/new JSON capacities out of the projection before invoking model exports; keep callback order and apply the same storage normalization/undefined-field policy on every export.
 - `src/remote.rs`: buffered Loro events and id-keyed raw editor changes.
 - `src/cursor.rs`: Unicode/UTF-16 conversion and awareness cursor codec.
 

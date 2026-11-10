@@ -256,6 +256,7 @@ impl LoroProjection {
             child_index.remember(state.view(), key, &index.map(doc, key)?, &index, policy)?;
         }
         Ok(Self {
+            own_exports: Default::default(),
             child_index,
             indexed_state: state.clone(),
             indexed_vv: doc.oplog_vv(),

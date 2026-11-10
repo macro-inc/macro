@@ -10,6 +10,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/lib.rs` exposes the model API.
 - `build.rs` derives ForeignHook IDs from ForeignHooks; keep upstream aliases on the trait and syn optional behind foreign-nodes.
 - `src/node.rs` defines node kinds, inheritance and dispatch.
+- `src/read/export.rs` owns ordered JSON export and moved `JsonExportBuffer` capacities; reuse storage only, invoke every serializer on each export, and never retain a scratch borrow through callbacks.
 - `src/read/record.rs` owns borrowed records and ephemeral copies; `src/foreign/` owns runtime hooks, registration and state codecs.
 - `src/foreign/render.rs` captures raw base/links and typed native payloads for a separate render metadata batch; never route installed instance hosts through public exportJSON/getters or NodeState serialization in flat Diff. Keep owner registry entries weak and validate exact captured record identities; record_keys includes detached pending records, and snapshot selection identities retain their exact scope. Use foreign_dirty_keys for update deltas instead of scanning all records.
 - `src/foreign/instances.rs` stages semantic JS instance clones with editor-owner namespaces and opaque IDs; validate every base/payload/link acknowledgement before installing the record. Track writable instance updates separately from Rust Arc sharing so read captures never run additional JS constructors.

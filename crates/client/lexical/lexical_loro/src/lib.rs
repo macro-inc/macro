@@ -2,8 +2,8 @@
 #![deny(missing_docs)]
 use indexmap::{IndexMap, IndexSet};
 use lexical_model::{
-    Commit, EditorState, LocalNode, NodeChange, NodeKey, SerializedEditorState, SerializedNode,
-    StateRef,
+    Commit, EditorState, JsonExportBuffer, LocalNode, NodeChange, NodeKey, SerializedEditorState,
+    SerializedNode, StateRef,
 };
 use loro::{Container, ContainerID, ContainerTrait, LoroDoc, LoroMap, ValueOrContainer};
 use rustc_hash::{FxBuildHasher, FxHashMap};
@@ -95,6 +95,7 @@ pub struct LoroProjection {
     index: NodeIndex,
     events: Arc<Mutex<Vec<remote::PendingBatch>>>,
     child_index: child_index::ChildIndex,
+    own_exports: (JsonExportBuffer, JsonExportBuffer),
     indexed_state: EditorState,
     indexed_vv: loro::VersionVector,
     indexed_frontiers: loro::Frontiers,

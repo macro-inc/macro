@@ -1,5 +1,7 @@
 //! Borrowed views over committed and pending node maps.
 mod api;
+mod export;
+pub use export::JsonExportBuffer;
 mod record;
 pub use record::{NodeRecord, NodeRef};
 mod selection;
@@ -834,87 +836,6 @@ impl<'state> StateRef<'state> {
         let before = previous.get_state(key, state_key)?;
         let after = self.get_state(key, state_key)?;
         Ok((!state_key.is_equal(&before, &after)).then_some((after, before)))
-    }
-    /// Export json.
-    pub fn export_json(self, key: impl Into<NodeKey>) -> Result<SerializedNode, Error> {
-        let key = key.into();
-        let slot = self.slot(key).ok_or(Error::NodeNotFound(key))?;
-        let v = self.state.registry.vtable(slot.type_index);
-        let mut json = self.export_framework_json(key)?;
-        if let Some(json) = crate::opaque::export(slot, &json) {
-            return Ok(json);
-        }
-        let own_fields = slot.base.kind() != NodeKind::LineBreak;
-        #[cfg(feature = "foreign-nodes")]
-        let own_fields = own_fields || self.foreign_data(key).is_some();
-        if own_fields {
-            json.extend(slot.data.to_json()?);
-        }
-        (v.adjust_export_json)(slot.data.as_any(), NodeView { key, state: self }, &mut json)?;
-        Ok(json)
-    }
-    pub(crate) fn export_framework_json(self, key: NodeKey) -> Result<SerializedNode, Error> {
-        let slot = self.slot(key).ok_or(Error::NodeNotFound(key))?;
-        let registration = self.state.registry.registered(slot.type_index);
-        let v = self.state.registry.vtable(slot.type_index);
-        let mut json = SerializedNode::new();
-        match &slot.base {
-            BaseData::Element(data) => {
-                json.insert("children".into(), serde_json::json!([]));
-                json.insert("direction".into(), serde_json::to_value(data.direction)?);
-                json.insert("format".into(), serde_json::to_value(data.format)?);
-                json.insert("indent".into(), serde_json::json!(self.indent(key)));
-            }
-            BaseData::Text(data) => {
-                json.insert("detail".into(), serde_json::json!(data.detail.bits()));
-                json.insert("format".into(), serde_json::json!(data.format.bits()));
-                json.insert("mode".into(), serde_json::to_value(data.mode)?);
-                json.insert("style".into(), serde_json::json!(data.style));
-                json.insert("text".into(), serde_json::json!(data.text.as_str()));
-            }
-            _ => {}
-        }
-        match &slot.base {
-            BaseData::Element(data) => data.absent.omit(&mut json),
-            BaseData::Text(data) => data.absent.omit(&mut json),
-            _ => {}
-        }
-        json.insert("type".into(), serde_json::json!(registration.type_name));
-        json.insert(
-            "version".into(),
-            serde_json::json!((v.json_version)(slot.data.as_any())),
-        );
-        if let Some(state) = &slot.state {
-            #[cfg(feature = "foreign-nodes")]
-            state.export(
-                &self
-                    .state
-                    .registry
-                    .foreign_states
-                    .layout(&registration.state_layout),
-                &mut json,
-            );
-            #[cfg(not(feature = "foreign-nodes"))]
-            state.export(&registration.state_layout, &mut json);
-        }
-        if let BaseData::Element(data) = &slot.base
-            && !self.is_root_or_shadow_root(key)
-            && (crate::opaque::raw(slot.data.as_ref()).is_some()
-                || !self
-                    .children(key)
-                    .any(|child| self.kind(child) == Some(NodeKind::Text)))
-        {
-            if !data.text_format.is_empty() {
-                json.insert(
-                    "textFormat".into(),
-                    serde_json::json!(data.text_format.bits()),
-                );
-            }
-            if !data.text_style.is_empty() {
-                json.insert("textStyle".into(), serde_json::json!(data.text_style));
-            }
-        }
-        Ok(json)
     }
     /// Export a text slice through an ephemeral clone and its custom export hooks.
     /// The containing snapshot, node key and all other framework fields remain unchanged.

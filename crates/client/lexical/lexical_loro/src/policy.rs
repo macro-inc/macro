@@ -83,10 +83,13 @@ pub(crate) fn own(
     policy: &dyn SyncPolicy,
 ) -> Result<SerializedNode> {
     let mut json = view.export_json(key)?;
+    prepare_own(&mut json, policy);
+    Ok(json)
+}
+fn prepare_own(json: &mut SerializedNode, policy: &dyn SyncPolicy) {
     json.remove("children");
     json.values_mut().for_each(schema::normalize_numbers);
-    mask_local(&mut json, policy);
-    Ok(json)
+    mask_local(json, policy);
 }
 /// Encode source own-undefined fields only for persisted Loro node maps.
 pub(crate) fn storage_fields(json: &mut SerializedNode, policy: &dyn SyncPolicy) {
@@ -105,6 +108,19 @@ pub(crate) fn storage_own(
     let mut json = own(view, key, policy)?;
     storage_fields(&mut json, policy);
     Ok(json)
+}
+/// Reuse owned capacities while running every export hook in ordinary order.
+pub(crate) fn storage_own_reusing(
+    view: StateRef<'_>,
+    key: NodeKey,
+    policy: &dyn SyncPolicy,
+    buffer: lexical_model::JsonExportBuffer,
+) -> Result<lexical_model::JsonExportBuffer> {
+    let mut buffer = view.export_json_reusing(key, buffer)?;
+    let json = buffer.json_mut();
+    prepare_own(json, policy);
+    storage_fields(json, policy);
+    Ok(buffer)
 }
 pub(crate) fn storage_tree(json: &mut SerializedNode, policy: &dyn SyncPolicy) {
     storage_fields(json, policy);

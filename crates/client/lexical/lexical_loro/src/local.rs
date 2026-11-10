@@ -68,7 +68,11 @@ impl LoroProjection {
         now: loro::Timestamp,
         suppress_events: bool,
     ) -> Result<LocalProjected> {
-        let result = self.project_local_commit(doc, commits, origin, now, suppress_events);
+        // Move capacities out before any model hook can reenter an export.
+        let mut exports = std::mem::take(&mut self.own_exports);
+        let result =
+            self.project_local_commit(doc, commits, origin, now, suppress_events, &mut exports);
+        self.own_exports = exports;
         if result.is_err() {
             // Partial projection writes cannot leave reusable insertion anchors.
             self.child_index = crate::child_index::ChildIndex::default();
@@ -82,6 +86,7 @@ impl LoroProjection {
         origin: &'static str,
         now: loro::Timestamp,
         suppress_events: bool,
+        exports: &mut (JsonExportBuffer, JsonExportBuffer),
     ) -> Result<LocalProjected> {
         if !matches!(origin, LOCAL_ORIGIN | FIXUP_ORIGIN) {
             return Err(diverged("unsupported projection origin"));
@@ -339,17 +344,32 @@ impl LoroProjection {
             }
             stats.nodes_visited += 1;
             let map = self.index.map(doc, key)?;
-            let mut before = if prev.contains(key) {
-                storage_own(prev, key, self.policy)?
+            if prev.contains(key) {
+                exports.0 = policy::storage_own_reusing(
+                    prev,
+                    key,
+                    self.policy,
+                    std::mem::take(&mut exports.0),
+                )?;
             } else {
-                SerializedNode::new()
-            };
+                exports.0 = JsonExportBuffer::default();
+            }
             if origin == FIXUP_ORIGIN
                 && let Some(text) = map.get("text")
             {
-                before.insert("text".into(), schema::read_value(&text)?);
+                exports
+                    .0
+                    .json_mut()
+                    .insert("text".into(), schema::read_value(&text)?);
             }
-            let new = storage_own(next, key, self.policy)?;
+            exports.1 = policy::storage_own_reusing(
+                next,
+                key,
+                self.policy,
+                std::mem::take(&mut exports.1),
+            )?;
+            let before = exports.0.json();
+            let new = exports.1.json();
             if origin == FIXUP_ORIGIN {
                 let mut current = schema::own_map(&map, self.policy)?;
                 mask_local_state(&mut current, self.policy);
@@ -372,7 +392,7 @@ impl LoroProjection {
                 return Err(diverged(format!("type changed in place at {key}")));
             }
             let count = stats.containers_written;
-            schema::diff_map(&map, &before, &new, schema::MapSchema::Node, &mut stats)?;
+            schema::diff_map(&map, before, new, schema::MapSchema::Node, &mut stats)?;
             if count != stats.containers_written {
                 written.insert(key);
             }
