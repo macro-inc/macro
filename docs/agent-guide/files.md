@@ -72,8 +72,9 @@ corresponding database timestamp.
 
 Above 720px of pane width on touch, Drive keeps its list on the left and opens
 selected files in the right preview. Before selection, that preview is empty.
-Show sidebar opens sub-view navigation in a left sheet over the list. At narrow
-touch widths, selecting a file opens its standalone view. Router middleware
+Show sidebar opens sub-view navigation in a left sheet over the list. At every
+touch width, this sheet covers floating list controls and app navigation chrome.
+At narrow touch widths, selecting a file opens its standalone view. Router middleware
 preserves explicit Drive detail routes so folding an open preview can keep its
 editor mounted.
 

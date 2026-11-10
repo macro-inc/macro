@@ -8,6 +8,44 @@ test.beforeEach(({ page }) => {
   });
 });
 
+for (const width of [390, 1000]) {
+  test(`the navigation sheet covers mobile chrome and owns taps at ${width}px`, async ({
+    page,
+  }) => {
+    test.setTimeout(120000);
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto(
+      '/src/components/view-shell/browser-test/touch-sidebar.html?workspace&sheet-chrome'
+    );
+    const opener = page.getByRole('button', { name: 'Show sidebar' });
+    const dock = page.getByTestId('background-dock');
+    const points = [await opener.boundingBox(), await dock.boundingBox()];
+    await opener.tap();
+    const sheet = page.getByRole('dialog', { name: 'Sidebar' });
+    await expect(sheet).toBeInViewport({ ratio: 1 });
+    await expect(sheet).not.toHaveAttribute('data-transitioning');
+    for (const bounds of points) {
+      const point = {
+        x: bounds!.x + bounds!.width / 2,
+        y: bounds!.y + bounds!.height / 2,
+      };
+      expect(
+        await sheet.evaluate(
+          (element, point) =>
+            element.contains(document.elementFromPoint(point.x, point.y)),
+          point
+        )
+      ).toBe(true);
+    }
+    await sheet.getByRole('button', { name: 'Recent items' }).tap();
+    await expect(sheet).toBeHidden();
+    await expect(opener).toBeFocused();
+    await expect(dock).toHaveAttribute('data-presses', '0');
+    await dock.tap();
+    await expect(dock).toHaveAttribute('data-presses', '1');
+  });
+}
+
 test('Drive touch selections keep the routed file beside the list', async ({
   page,
 }) => {

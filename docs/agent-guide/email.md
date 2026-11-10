@@ -1,6 +1,6 @@
 # Email
 
-Email paints its touch top fade within the email-list pane only. Above 720px on touch, the list stays left of an empty or selected reading pane; Show sidebar opens mailbox/sub-view navigation in a sheet that slides from the left over the email list, keeping the preview in place. Desktop reading-pane preferences and narrow-touch navigation are unchanged.
+Email paints its touch top fade within the email-list pane only. Above 720px on touch, the list stays left of an empty or selected reading pane; Show sidebar opens mailbox/sub-view navigation in a sheet that slides from the left over the email list, keeping the preview in place. Desktop reading-pane preferences and narrow-touch item navigation are unchanged.
 
 ## Thread motion
 
@@ -312,13 +312,15 @@ that supplemental metadata appears without replacing the rows or thread body.
 On the first mobile Mail visit, its filter button and Signal/Noise pills must
 also appear. Navigate Home → Mail → a thread → Mail and verify those controls
 survive header replacement, including with the network still blocked.
-The touch pill row is contained within the email-list pane, beside an expanded
-sidebar. It has an explicit 0.5rem top gutter below the safe-area boundary,
+The touch pill row is contained within the email-list pane. It has an explicit
+0.5rem top gutter below the safe-area boundary,
 matching Drive even when Duo has no top safe-area inset.
 The email list reserves the pill row and a 0.75rem gap beneath it. Email
-navigation docks above 720px and opens as an overlay at narrower widths; Hide
-navigation sits beside Email, and Show navigation precedes the filter button.
-Wide touch opens threads inline and follows the reading-pane preference like desktop.
+navigation opens in a left sheet at every touch width, above the floating list
+controls and app chrome. Hide sidebar sits beside Email in the sheet, and Show
+sidebar precedes the filter button in the list.
+Wide touch keeps the list beside an empty or selected thread preview; desktop
+retains its reading-pane preference.
 
 Opening an email shows loading while its local draft identity and thread data
 resolve. Verify a cold open and switching directly between threads with delayed

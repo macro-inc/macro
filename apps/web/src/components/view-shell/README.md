@@ -81,8 +81,11 @@ The sheet occupies no resize track and does not resize or remount the list or
 preview. Each detail header owns safe-area clearance without another sidebar
 trigger; floating channel headers keep their measured local chrome.
 
-Narrow touch navigation is unchanged, including Chat's full-frame feed without a
-sidebar control. Wide touch retains the desktop 1px list/detail dividers.
+Touch collection navigation uses the global modal sheet at every width so its
+surface and backdrop cover floating list controls and app chrome. On narrow
+layouts it retains the configured navigation width, capped by the workspace.
+Narrow touch item routing is unchanged, including Chat's full-frame feed without
+a sidebar control. Wide touch retains the desktop 1px list/detail dividers.
 
 `ViewShell.Main`, `ViewShell.Detail`, and `CollectionPanes` frames scope floating
 mobile accessory chrome to their pane through `FloatRegionScope`. The app-wide host follows the winning

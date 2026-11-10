@@ -278,13 +278,15 @@ function CollectionWorkspaceFixture(
   const [localSelected, setSelected] = createSignal<string>();
   const selected = props.selected ?? localSelected;
   const [view, setView] = createSignal('all');
+  const [dockPresses, setDockPresses] = createSignal(0);
+  const sheetChrome = new URLSearchParams(location.search).has('sheet-chrome');
   const selectView = (next: string) => {
     setView(next);
     setSelected(undefined);
   };
   return (
     <div
-      class="relative h-dvh bg-panel text-ink"
+      class="relative isolate h-dvh bg-panel text-ink"
       style={{
         '--safe-top': '24px',
         'padding-left': new URLSearchParams(location.search).has('offset')
@@ -395,6 +397,19 @@ function CollectionWorkspaceFixture(
         </ViewShell.Root>
       </SplitPanel.Root>
       <FloatRegionHost navigationEdge="bottom" />
+      <Show when={sheetChrome}>
+        <FloatRegion region="dock">
+          <button
+            type="button"
+            class="pointer-events-auto island mx-3 h-10 w-32 rounded-full"
+            data-testid="background-dock"
+            data-presses={dockPresses()}
+            onClick={() => setDockPresses((count) => count + 1)}
+          >
+            App navigation
+          </button>
+        </FloatRegion>
+      </Show>
     </div>
   );
 }

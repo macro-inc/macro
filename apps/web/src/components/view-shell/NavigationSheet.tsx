@@ -25,6 +25,7 @@ export function NavigationSheet(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const list = createMemo(() => {
     if (!ws.aside.isOverlay()) return;
     const root = ws.root();
+    if (!ws.collectionLayout()) return root;
     return (
       root?.querySelector<HTMLElement>('[data-view-shell-list]') ??
       root?.querySelector<HTMLElement>('[data-view-shell-main]')
@@ -34,7 +35,14 @@ export function NavigationSheet(props: JSX.HTMLAttributes<HTMLDivElement>) {
     const frame = list();
     if (!frame) return;
     const { left, top, width, height } = frame.getBoundingClientRect();
-    setBounds({ left, top, width, height });
+    setBounds({
+      left,
+      top,
+      width: ws.collectionLayout()
+        ? width
+        : Math.min(width, ws.aside.layout().width),
+      height,
+    });
   };
   createEffect(
     on([list, sheet], ([frame, content]) => {
@@ -51,7 +59,7 @@ export function NavigationSheet(props: JSX.HTMLAttributes<HTMLDivElement>) {
       restoreFocus
       finalFocusEl={ws.navigationTrigger()}
     >
-      <MobileDrawer.Portal>
+      <MobileDrawer.Portal mount={document.body}>
         <MobileDrawer.Overlay />
         <MobileDrawer.Content
           ref={(element: HTMLDivElement) => {

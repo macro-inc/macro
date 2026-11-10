@@ -219,10 +219,9 @@ function Root(props: ViewShellRootProps) {
     };
   };
 
-  const collectionLayout = () =>
-    local.contentLayout === 'collection' &&
-    isTouchDevice() &&
-    !atLayoutBreakpoint();
+  const navigationSheet = () =>
+    local.contentLayout === 'collection' && isTouchDevice();
+  const collectionLayout = () => navigationSheet() && !atLayoutBreakpoint();
   // Custom reading panes declare a root Detail; CollectionPanes owns its
   // nested columns so its list and editor can survive breakpoint changes.
   const collectionColumns = () =>
@@ -427,7 +426,7 @@ function Root(props: ViewShellRootProps) {
     width,
     breakpoints,
     atLayoutBreakpoint,
-    asideHost: () => (collectionLayout() ? 'sheet' : asideHost()),
+    asideHost: () => (navigationSheet() ? 'sheet' : asideHost()),
     collectionLayout,
     navigationTrigger,
     registerNavigationTrigger: (element) => {
@@ -451,7 +450,7 @@ function Root(props: ViewShellRootProps) {
         !asidePinned() &&
         !narrowList(),
       isOverlay: asideOverlay,
-      isSheet: collectionLayout,
+      isSheet: navigationSheet,
       collapse: () => setAsideOpen(false),
       expand: () => setAsideOpen(true),
       toggle: () => {
