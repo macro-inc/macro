@@ -1,5 +1,6 @@
 pub mod chat_history;
 pub mod chat_history_batch_messages;
+mod retired;
 
 use super::context::{ApiContext, DcsAuthorizationService};
 use axum::{
@@ -68,8 +69,11 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     let require_user =
         axum::middleware::from_fn_with_state(state.clone(), require_authenticated_user);
 
-    // Legacy chats are read-only: there is no create, copy, or tool-call route.
+    // Legacy chats are read-only: create and copy only refuse stale clients,
+    // and there is no tool-call route.
     Router::new()
+        .route("/", post(retired::create_chat))
+        .route("/{chat_id}/copy", post(retired::copy_chat))
         // Read-only view route — ensure_chat_exists only. No auth gate:
         // ChatAccessLevelExtractor<ViewAccessLevel, ..> permits anonymous
         // callers when the chat has public-view link sharing enabled.

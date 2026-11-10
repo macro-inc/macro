@@ -25,6 +25,16 @@ pub struct ChatMessageError {
     pub code: ChatMessageErrorCode,
 }
 
+impl ChatMessageError {
+    /// The refusal every legacy chat write gets.
+    pub fn chat_read_only() -> Self {
+        Self {
+            error: "AI chats are read-only. Start an agent session instead.".to_owned(),
+            code: ChatMessageErrorCode::ChatReadOnly,
+        }
+    }
+}
+
 impl IntoResponse for ChatMessageError {
     fn into_response(self) -> axum::response::Response {
         let status = match self.code {
@@ -47,10 +57,7 @@ impl IntoResponse for ChatMessageError {
 )]
 #[tracing::instrument]
 pub async fn send_chat_message() -> ChatMessageError {
-    ChatMessageError {
-        error: "AI chats are read-only. Start an agent session instead.".to_owned(),
-        code: ChatMessageErrorCode::ChatReadOnly,
-    }
+    ChatMessageError::chat_read_only()
 }
 
 #[cfg(test)]
