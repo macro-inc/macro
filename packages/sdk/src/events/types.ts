@@ -1,22 +1,22 @@
-// Event names and payloads come from the backend's OpenAPI spec
-// (`WebhookEvent` in generated/storage/schemas), so this file stays in
-// lockstep with what the backend actually delivers. On top of the raw
-// `metadata`, handlers get ORM handles for every entity the payload names.
+// Event names and payloads come from the backend's OpenAPI `WebhookEvent`
+// union, which also includes internal events that are never delivered.
+// Handlers receive the raw `metadata` and the handles defined for each event.
 
 import type { WebhookEvent } from '../../generated/storage/types.gen';
 import type { hydrateAgentSessionEvent } from './hydrate/agentSession';
 import type { hydrateCallEvent } from './hydrate/call';
 import type { hydrateChannelEvent } from './hydrate/channel';
 import type { hydrateDocumentEvent } from './hydrate/document';
+import type { hydrateEmailEvent } from './hydrate/email';
 import type { hydrateMessageEvent } from './hydrate/message';
 
-/** A webhook delivery body, exactly as Macro serializes it. */
+/** The webhook event envelope, including internal event variants. */
 export type MacroEvent = WebhookEvent;
 
-/** Every entity event name Macro can deliver. */
+/** Every event name in the backend's webhook union. */
 export type EventName = MacroEvent['event_type'];
 
-/** The raw `metadata` payload delivered with a given event. */
+/** The raw `metadata` payload for a given event. */
 export type EventPayload<E extends EventName> = Extract<
   MacroEvent,
   { event_type: E }
@@ -34,11 +34,11 @@ type HydratedEvent =
   | ReturnType<typeof hydrateChannelEvent>
   | ReturnType<typeof hydrateCallEvent>
   | ReturnType<typeof hydrateDocumentEvent>
+  | ReturnType<typeof hydrateEmailEvent>
   | ReturnType<typeof hydrateMessageEvent>;
 
 /**
- * What a handler receives, per event: the raw `metadata` plus the ORM handles
- * named by that event's ids.
+ * What a handler receives, per event: the raw `metadata` plus its entity handles.
  *
  * Handles are free to construct and load lazily, so hydrating every event costs
  * nothing until a handler reads a field or calls a method on one.

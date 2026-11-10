@@ -118,6 +118,12 @@ enforced by the ordinary backend APIs.
   `@macro-inc/sdk/calls/node` and `@macro-inc/sdk/calls/browser`. Keep them out of
   `src/macro.ts` and its dependency graph; LiveKit runtimes stay optional peers.
 - `src/entities/calls/`: live and recorded call handles; token-bearing `CallConnection` never serializes its token.
+- `src/events/hydrate/email.ts`: email events hydrate inbox, owner and related
+  handles. The generated union includes internal sync signals, but delivery
+  skips those and spam or trash `email.message_received` events. Delivery goes
+  only to the owner's `scope=user` stream or personal-workspace webhook;
+  subscribing or setting email filters requires a `UserOrInternal` credential.
+  Bot and harness credentials receive HTTP 403 for those requests.
 
 ## Boundaries
 
