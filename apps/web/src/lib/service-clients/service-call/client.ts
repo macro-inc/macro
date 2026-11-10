@@ -11,7 +11,9 @@ import type { CreateMeetingRequest } from '@service-storage/generated/schemas/cr
 import type { EditCallRecordRequest } from '@service-storage/generated/schemas/editCallRecordRequest';
 import type { GuestChatMessage } from '@service-storage/generated/schemas/guestChatMessage';
 import type { GuestChatPage } from '@service-storage/generated/schemas/guestChatPage';
+import type { GuestChatPatch } from '@service-storage/generated/schemas/guestChatPatch';
 import type { GuestChatPost } from '@service-storage/generated/schemas/guestChatPost';
+import type { GuestChatThread as ApiGuestChatThread } from '@service-storage/generated/schemas/guestChatThread';
 import type { InviteMeetingUsersRequest } from '@service-storage/generated/schemas/inviteMeetingUsersRequest';
 import type { LeaveCallResponse } from '@service-storage/generated/schemas/leaveCallResponse';
 import type { Meeting as ApiMeeting } from '@service-storage/generated/schemas/meeting';
@@ -19,22 +21,19 @@ import type { MeetingPreparation } from '@service-storage/generated/schemas/meet
 import type { ReactionInput } from '@service-storage/generated/schemas/reactionInput';
 import type { UpdateMeetingRequest } from '@service-storage/generated/schemas/updateMeetingRequest';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
-import type { Message, MessageThread } from '@service-storage/messages';
+import type { Message } from '@service-storage/messages';
 
 export type {
   CallRecord,
   CreateMeetingRequest,
   GuestChatMessage,
   GuestChatPage,
+  GuestChatPatch,
   UpdateMeetingRequest,
 };
 
-// Replace these local wire types with generated schemas when the guest routes are generated.
-export type GuestChatThread = {
-  viewer_id: string;
-  thread: MessageThread | null;
-};
-export type GuestChatPatch = { content: string };
+// Rust serializes the nullable thread field explicitly; Orval marks Option<T> optional.
+export type GuestChatThread = Required<ApiGuestChatThread>;
 
 // Rust serializes these nullable fields explicitly; Orval marks Option<T> optional.
 export type CallTokenResponse = Required<ApiCallTokenResponse>;
