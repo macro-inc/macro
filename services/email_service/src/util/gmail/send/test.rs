@@ -37,7 +37,7 @@ async fn reply_to_an_unsynced_sent_parent_uses_its_delivery_identity(
     .await?;
 
     assert_eq!(
-        generate_email_threading_headers(&pool, Some(PARENT), LINK).await,
+        generate_email_threading_headers(&pool, Some(PARENT)).await,
         (
             Some("parent.1@example.com".to_owned()),
             Some(vec!["parent.1@example.com".to_owned()])
