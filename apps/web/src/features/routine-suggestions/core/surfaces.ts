@@ -1,3 +1,4 @@
+import type { TranslationKey } from '@app/lib/i18n';
 import type { Surface } from '@service-scheduled-action/generated/schemas';
 
 /**
@@ -18,28 +19,15 @@ export const ROUTINE_SURFACES: readonly RoutineSurface[] = [
   'agents',
 ];
 
-type SurfaceCopy = {
-  /** Names the surface in the dialog title and filter chips. */
-  label: string;
-  /** The sidebar card's line before a suggestion has loaded. */
-  pitch: string;
-};
-
-/** Sidebar promotions aren't translated yet; this copy matches them. */
-export const SURFACE_COPY: Record<RoutineSurface, SurfaceCopy> = {
-  email: {
-    label: 'Email',
-    pitch: 'Let AI triage, tag, and follow up on your mail',
-  },
-  calendar: { label: 'Calendar', pitch: 'Prep for meetings before they start' },
-  tasks: { label: 'Tasks', pitch: 'Keep tasks moving without the busywork' },
-  files: { label: 'Files', pitch: 'Keep your documents organized and current' },
-  crm: {
-    label: 'CRM',
-    pitch: 'Keep every company and deal in the right place',
-  },
-  chat: { label: 'Chat', pitch: 'Never miss what matters in your channels' },
-  calls: { label: 'Calls', pitch: 'Turn every call into next steps' },
-  reviews: { label: 'Reviews', pitch: 'Stay on top of pull requests' },
-  agents: { label: 'Agents', pitch: 'Put your recurring work on autopilot' },
-};
+/** Each surface's name, as a translation key. */
+export const SURFACE_LABEL_KEYS = {
+  email: 'routineSuggestions.surfaceEmail',
+  calendar: 'routineSuggestions.surfaceCalendar',
+  tasks: 'routineSuggestions.surfaceTasks',
+  files: 'routineSuggestions.surfaceFiles',
+  crm: 'routineSuggestions.surfaceCrm',
+  chat: 'routineSuggestions.surfaceChat',
+  calls: 'routineSuggestions.surfaceCalls',
+  reviews: 'routineSuggestions.surfaceReviews',
+  agents: 'routineSuggestions.surfaceAgents',
+} as const satisfies Record<RoutineSurface, TranslationKey>;

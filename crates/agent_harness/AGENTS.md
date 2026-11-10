@@ -87,8 +87,22 @@ and ACP `session/list`, and `AgentHarnessService::reattach_live_sessions` runs
 `HarnessCommand::Reattach` for the listed sessions bound to that harness,
 restoring each (`session/load` or `session/resume`) without a prompt, then
 dispatching whatever its durable queue still holds when no turn is running;
-attached, archived and managed sessions are skipped. macrod's herdr-acp lists native
-sessions whose Herdr agent still runs.
+attached, archived and managed sessions are skipped. A dial restores only sessions
+with a command in flight here, an unfinished turn (`has_unfinished_turn`: open, or
+open when the session disconnected, from `agent_session.turn_interrupted`), a
+durable queue, or activity in the last hour (`modified_at`, or the listing's
+`updatedAt`); idle ones bind on their next prompt or delivery
+(`service/reattach.rs`). Every dial on a replica shares `REATTACH_CONCURRENCY`
+permits, each held until the session's `session/load` or `session/resume`
+finishes; a harness dialing again stops its previous dial from starting more.
+Permanent errors are not retried; others are, with jittered backoff, while the
+runtime stays connected. A session whose load keeps failing stays disconnected
+with its turn unfinished, so every dial tries it again (three attempts, under a
+permit). The `agent.runtime.reattach` span counts eager, lazy,
+skipped, failed and abandoned sessions and retries. macrod's herdr-acp lists
+native sessions whose Herdr agent still runs, each with `updatedAt` from its
+transcript's last write, so a session worked on in its Herdr pane within the
+hour is restored at dial time.
 
 Durable system events use the `agent_session` outbox, distinct from the user
 push notifications planned in `domain/notifications.rs`. The serialized session

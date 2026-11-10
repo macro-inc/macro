@@ -20,6 +20,7 @@ import {
   useQuickAccess,
 } from '@core/context/quickAccess';
 import { deduplicateContactItems } from '@core/context/quickAccess/crm-contacts';
+import { exclude } from '@core/context/quickAccess/types';
 import { useUserId } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
@@ -37,6 +38,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -120,23 +122,29 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     }))
   );
 
-  const allItems = props.entities ?? quickAccess!.useList().items;
+  const allItems =
+    props.entities ?? quickAccess!.useList(...exclude('person')).items;
 
   const { isKeypressActive } = useIsKeyPressActive();
 
   const legacyBlockId = useMaybeBlockId();
   const blockId = props.sourceDocumentId ?? legacyBlockId;
 
+  const userMention = useUsersMention({
+    users: props.users,
+    transformUsers: props.transformUsers,
+    searchTerm,
+    isChannelBlock: props.block === 'channel',
+    enabled: () =>
+      props.menu.isOpen() &&
+      (!props.sources || props.sources.includes('users')),
+  });
   const {
     usersAndGroups,
     groups,
     isLoading: isLoadingUsers,
     error: errorUsers,
-  } = useUsersMention({
-    users: props.users,
-    searchTerm,
-    isChannelBlock: props.block === 'channel',
-  });
+  } = userMention;
 
   const customDocs = props.entities
     ? useEntityMentionFromList({
@@ -197,14 +205,19 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     !contactSearchDisabled().enabled;
   const contactMention = isFeatureEnabled(enableCrm)
     ? props.entities
-      ? useEntityMentionFromList({
-          items: props.entities,
-          buckets: ['crm_contact'],
-          searchTerm,
-        })
+      ? {
+          ...useEntityMentionFromList({
+            items: props.entities,
+            buckets: ['crm_contact'],
+            searchTerm,
+          }),
+          users: () => [],
+          windowKey: () => undefined,
+        }
       : useCrmContactMentionSource(
           activeSearchTerm,
-          () => props.menu.isOpen() && contactsEnabled()
+          () => props.menu.isOpen() && contactsEnabled(),
+          () => false
         )
     : undefined;
 
@@ -386,6 +399,25 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     (usersAndGroups() ?? []).filter(
       (item) => props.includeGroups !== false || item.kind !== 'group'
     );
+  const peopleWindowKey = () => {
+    if (userMention.isLoading()) return;
+    return userMention.windowKey();
+  };
+  let previousPeopleWindow: string | undefined;
+  let previousPeopleQuery = '';
+  createEffect(
+    on(peopleWindowKey, (key) => {
+      if (key === undefined) return;
+      if (
+        previousPeopleWindow !== undefined &&
+        key !== previousPeopleWindow &&
+        previousPeopleQuery === searchTerm()
+      )
+        controller.selectItem(0);
+      previousPeopleWindow = key;
+      previousPeopleQuery = searchTerm();
+    })
+  );
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
     const users = sourceEnabled('users') ? mentionUsers() : [];
     const combined: MentionItem[] = [
@@ -414,6 +446,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         {
           id: 'all',
           label: 'All',
+          windowKey: peopleWindowKey,
           getData: mobileAllItems,
           getFullCount: () =>
             (sourceEnabled('bookingLinks') ? bookingLinks().length : 0) +
@@ -428,17 +461,20 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             (sourceEnabled('calendarEvents') ? calendarEvents().length : 0) +
             (sourceEnabled('dates') ? (dates()?.length ?? 0) : 0),
           hasMore: () =>
+            (sourceEnabled('users') && userMention.hasMore()) ||
             (sourceEnabled('documents') && docsMention.hasMore()) ||
             (sourceEnabled('channels') && channelsMention.hasMore()) ||
             (sourceEnabled('crm') && crmMention.hasMore()) ||
             (sourceEnabled('emails') && hasMoreEmails()),
           isLoadingMore: () =>
+            (sourceEnabled('users') && userMention.isLoadingMore()) ||
             (sourceEnabled('documents') && docsMention.isLoadingMore()) ||
             (sourceEnabled('channels') && channelsMention.isLoadingMore()) ||
             (sourceEnabled('crm') && crmMention.isLoadingMore()) ||
             (sourceEnabled('emails') && isLoadingMoreEmails()),
           loadMore: async () => {
             await Promise.all([
+              sourceEnabled('users') && userMention.loadMore(),
               sourceEnabled('documents') && docsMention.loadMore(),
               sourceEnabled('channels') && channelsMention.loadMore(),
               sourceEnabled('crm') && crmMention.loadMore(),
@@ -458,12 +494,16 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       },
       {
         id: 'users',
+        windowKey: peopleWindowKey,
         label:
           props.includeGroups !== false && groups().length > 0
             ? 'People & Groups'
             : 'People',
         getData: mentionUsers,
         getFullCount: () => mentionUsers().length,
+        hasMore: userMention.hasMore,
+        isLoadingMore: userMention.isLoadingMore,
+        loadMore: userMention.loadMore,
       },
       {
         id: 'documents',
@@ -547,7 +587,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ? buckets.filter((bucket) => sourcesFilter.includes(bucket.id))
       : buckets;
 
-    return filtered.filter((bucket) => bucket.getFullCount() > 0);
+    return filtered.filter(
+      (bucket) => bucket.getFullCount() > 0 || bucket.hasMore?.()
+    );
   });
 
   const controller = useMentionsMenuController(bucketConfigs, {
@@ -744,7 +786,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     let cumulativeIndex = 0;
 
     return bucketConfigs()
-      .filter((config) => (currentBins[config.id] || 0) > 0)
+      .filter(
+        (config) => (currentBins[config.id] || 0) > 0 || config.hasMore?.()
+      )
       .map((config) => {
         const bucketLimit = currentBins[config.id] || 0;
         const bucketItems: ReturnType<typeof config.getData> = [];
@@ -898,7 +942,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
               when={controller.viewAllMode()}
               fallback={
                 <Show
-                  when={controller.combinedItems().length > 0}
+                  when={visibleBuckets().length > 0}
                   fallback={
                     <div class="px-2 text-ink-extra-muted">No results</div>
                   }
@@ -987,6 +1031,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 setIndex={setSelectedIndexFromMouse}
                 setOpen={setMenuOpen}
                 maxHeight={contentMaxHeight()}
+                windowKey={activeViewAllBucket()?.windowKey?.()}
                 hasMore={activeViewAllBucket()?.hasMore?.() ?? false}
                 isLoadingMore={
                   activeViewAllBucket()?.isLoadingMore?.() ?? false

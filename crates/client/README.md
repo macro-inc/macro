@@ -75,7 +75,9 @@ projections keep their unframed postcard encoding, so a format upgrade never
 re-encodes them.
 
 Only the immediately prior cache format version is migratable
-(`MIGRATABLE_CACHE_FORMAT_VERSIONS`). Opening one drops records, search
+(`MIGRATABLE_CACHE_FORMAT_VERSIONS`), and only while the storage schema still
+matches. A storage-schema mismatch instead follows physical reset. Opening a
+migratable format drops records, search
 projections, index facts, and calendar ranges — all refetchable — and keeps
 queued mutations, optimistic layers, and their projections, then rewrites the
 namespace in the same transaction. An interrupted migration therefore retries on
@@ -243,20 +245,142 @@ sent as network revalidations. Callers should supply an explicit targeted query
 for recovery when the parent/field is missing; the exchange can then enqueue
 entity-only optimism and retain that recovery query for eventual commit/replay.
 
-## Text search catalogs
+## Streaming text search
 
-Text search loads compact rows lazily per `(profile, bucket)` through the existing
-`search_documents_browse_idx`. Searching documents does not load cached emails;
-changing categories loads only newly requested buckets, including caching empty
-buckets. Empty bucket selection still means every bucket in the profile.
+Text search binds normalized subsequence patterns to Turso queries scoped by
+`(profile, bucket)` through `search_documents_browse_idx`. Every query token must
+match: `abc` becomes `%a%b%c%`, with literal SQL wildcards and escapes quoted in
+the bound value. Rows containing NUL pass the SQL prefilter because SQLite LIKE
+stops at NUL; Rust verifies them without truncation. Searching documents does not
+read cached email buckets. Empty bucket selection still means every profile bucket.
+The index includes `search_text` and `source_hash` after its existing browse keys,
+so filtering and result reads use an index-only scan without table lookups.
 
-Ranking borrows catalog and optimistic entries, normalizes the query once, and
-retains at most `limit + 1` references in a heap. Only the final returned rows are
-cloned. Fuzzy/freshness scoring, DM priority, recency/key tie breaks and browse
-cursors are unchanged. Write-through updates remove old bucket membership before
-updating already-loaded buckets; unopened buckets stay lazy. Optimistic shadows
-replace durable hits without mutating the catalogs, so rollback restores them.
-No storage schema, projection version, or database migration changes are needed.
+The driver borrows each Turso row directly instead of collecting or copying it.
+The adapter validates every row and reuses one canonical-key buffer; only winning
+rows become owned documents. One Rust ranker retains at most `limit + 1` owned
+documents across all requested buckets; there is no retained text-search catalog. Do not limit SQL matches before
+ranking. Fuzzy/freshness scoring, DM priority and recency/key tie breaks remain
+unchanged. Optimistic shadows suppress their durable counterparts before ranking,
+including deleted and nonmatching replacements. Empty-query browsing retains its
+indexed recent path and cursors. Leading-wildcard matching still scans the selected
+buckets: this bounds application search memory, not search work or database page
+cache memory. The existing SQL telemetry includes streamed processing and cleanup.
+Storage schema 12 introduces this covering index through an intentionally
+incompatible cutover, not a migration. Native `open_or_reset` replaces a schema-11
+cache, including its records, queued mutations, and optimistic layers. Browsers
+open a fresh `s4.v4.t12` database; existing cleanup still keeps older files with
+pending mutations, but the new engine does not replay those queues. Backfill
+restarts against the new storage generation. That index cutover kept the GraphQL
+schema epoch and record format unchanged. Native binaries
+must be rebuilt to gain the new index; an OTA frontend update alone cannot add it.
+
+The same unpublished schema-12 cutover now includes `records_contacts_cover_idx`,
+a partial covering index on `records(__typename, id, value)` for `GraphqlContact`.
+Ranked reads explicitly seek this index after the text prefilter instead of also
+fetching the record table. They still decode one row at a time and apply membership,
+exclusions, ranking and DM dedup before limiting. Exact schema validation protects
+the predicate/collation; older local schema-12 shapes without it are incompatible,
+not silently upgraded. No additional format/version cutover or contacts store was
+introduced.
+
+`cargo test -p cache-turso --test search` checks matching/ranking parity, including
+Unicode, escapes, NUL, and late high-ranking matches. Run the ignored 100k-row
+measurement with `cargo test -p cache-turso --test search -- --ignored --nocapture`.
+The `web` test target exercises the same parity contract over real browser OPFS;
+its ignored `search_100k_rows_over_opfs` measurement runs with
+`-- --include-ignored --nocapture` under the browser runner.
+The ignored native `compare_search_scan_options` test separately compares prepared
+statement reuse, covering-index scans, and borrowed-row decoding against the same
+100k rows (release build, alternating order, seven warm samples). Its disposable
+fixture adds a legacy non-covering index for comparison with the production
+covering index. Statement reuse has not shown a material benefit and is not
+enabled in production. See [search performance](search-performance.md) for
+measured costs, memory boundaries, and the schema-12 reset behavior.
+
+### Contact projection and page retention
+
+Projection version 6 indexes viewer-scoped `GraphqlContact` names/emails (including
+the visible local-part fallback) into
+`person`, not public profiles. Search responses expose `projectionVersion` so
+contact consumers can detect older native engines. The derived-index rebuild
+preserves normalized data, mutations, and storage generation.
+
+Hydration omits contact page and exact-lookup wrappers from the viewer while
+retaining normalized contacts. Foreground contact variants share Soup's bounded
+64-page / 2 MiB snapshot budget shared with Soup and database view pages. `cache-turso/tests/contacts.rs` and the OPFS
+suite hydrate the real client operation, reopen, search, materialize bounded
+fragments with target `userId` intact, and reset account identity. The background
+runner now shares Soup's leadership and commits pages through `HydrationScope`:
+expected/response identity and durable generation must still match under the
+engine lock. Contact writes additionally capture a single-owner engine admission
+fence before fetching. Accepted responses consume it even when values are identical;
+old hydration cannot resurrect verified removals, and old absence evidence cannot
+delete a newer positive observation. Unfenced network/optimistic contact writes reject.
+The same backfill then verifies existing membership in bounded raw-key windows using
+the existing exact lookup. Only successful requested-ID omissions permit deletion;
+scan omissions do not. Checkpoint v2 tracks hydration/verification and completes
+only after an exhaustive, non-malformed verification pass. Context-only stubs,
+explicit selections and shared name labels do not establish membership. See the
+[contacts plan](../../docs/design/disk-backed-contacts.md) for remaining acceptance.
+
+### Context-aware person ranking
+
+`cache-core::people` defines scoped local context updates and a separate person
+search policy. Begin compares the previous epoch, patches cap at 500 and never
+write public contact identity/name fields, and commit publishes readiness. Full
+snapshot epochs expire omitted old facts without deleting membership records.
+Search uses indexed exact-name/word-prefix/contains stages over the existing
+owned facts, with recent-first ordering and canonical identity ties. Core applies
+membership, secondary-inbox/explicit exclusions and DM deduplication before the
+bounded result window. Generic title search keeps its separate scoring path.
+This uses schema 12 without adding a database or physical table; native/browser
+hosts now expose state/update/search through dedicated commands. Rust-derived
+transport schemas are checked in `src/people/schema.json` and regenerated from
+`apps/web` with `bun run gen-cache-people-schema --rust`. The frontend now publishes
+channel/inbox context under Soup's leader in bounded snapshot/delta batches;
+Quick Access and all migrated personal pickers now preserve policy-5 windows
+instead of applying the old fuzzy/brevity scores. Empty property browsing pins self;
+recipient mode excludes automated addresses unless explicitly addressed. Interactive
+reads stay local, including partial hydration; unsupported hosts remain unavailable.
+Refresh requests the existing sync lane. Continuations bind scope/policy/layout,
+epoch and live contact/context tokens. Same-epoch patches invalidate them; unrelated
+cache writes do not. Prior DM aliases use bounded target lookups without a history
+catalog; a short/empty page may still continue. Frontend contact invalidations also
+fence pending replies and restart paging.
+
+`CacheHost.people.resolveReferences` exposes a separate read for inferred labels.
+It scans the existing contact projection while retaining at most two distinct
+witnesses per label (500 raw labels, 512 UTF-8 bytes each), preserving exact-name
+and first-name ambiguity. The bound viewer and generation are checked without
+binding an unowned cache; foreign-viewer keys are ignored before private-name
+matching. Inbox exclusions additionally require ready context. Callers still
+check hydration completeness before assuming uniqueness; cached absence is not
+an authoritative server omission. Coordinator protocol 17 and a dedicated native
+command carry the generated contract. Missing reference support is independently
+unsupported, and captured reads become unsupported after host retirement.
+
+`CacheHost.people.readSql` exposes parameterized local SQL over a disposable profile
+in the existing predicate index. Only viewer-scoped normalized contacts supply facts;
+public profiles and context stubs do not. Counts, grouping, DISTINCT and ordering
+run in Turso before the 500-row/64-column/512-KiB result window is materialized.
+The host checks account/generation under its engine lock. Callers still require a
+complete backfill checkpoint; unsupported/incomplete reads never fetch a directory
+or execute SQL on a server. Browser queries now use this capability directly;
+ordinary joins request only bounded identity keys. Completion notifications and
+cache changes refresh visible queries, with one physical read and one replaceable
+pending input per observer.
+
+The owned people fact layout now also supplies the approved name-first search
+foundation: bounded name-word postings, explicit overflow, stable recent-first
+keys and sparse epoch-scoped context overrides. Derived layout version 2 rebuilds
+older facts in bounded batches without resetting records, queues or generation.
+Fact deltas preserve name postings during activity updates, and rank facts during
+name edits. `search_people` executes the indexed reader under the same scope
+admission, using core's name/recency collector and one storage snapshot. Native/OPFS
+tests compare it with a complete streaming reference, including continuations and
+reset fencing. Suggestion policy is 5; reference inference keeps its independent
+policy-4 floor and exact/first-name evidence. No server suggestion fallback remains.
 
 ## Browser OPFS writes
 

@@ -18,8 +18,9 @@ export type MentionsMenuProps = {
   /** Uses these exact providers/controller without mounting the DOM menu. */
   nativePresentation?: NativeMentionPresentation;
   menu: MenuOperations;
-  /** pass in a custom users list if necessary */
-  users?: Accessor<IUser[]>;
+  /** Undefined delegates to personal search; an empty list stays scoped empty. */
+  users?: Accessor<IUser[] | undefined>;
+  transformUsers?: (users: readonly IUser[]) => IUser[];
   /** pass in custom entity items to replace quickAccess data (e.g. sandbox data for onboarding) */
   entities?: Accessor<EntityItem[]>;
   /** whether the menu checks against block boundary in floating middleware. uses floating-ui default if false. */

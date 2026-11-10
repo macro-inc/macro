@@ -538,6 +538,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "pipedream_mcp",
+ "rand 0.9.4",
  "redis",
  "reqwest 0.13.4",
  "rootcause",
@@ -3820,16 +3821,20 @@ dependencies = [
  "apollo-compiler",
  "apollo-parser",
  "chrono",
+ "database_sql",
  "lru 0.16.4",
+ "macro_user_id",
  "maybe_send",
  "miniz_oxide",
  "pollster",
  "postcard",
  "predicate-index",
  "proptest",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "subsequence_match",
  "thiserror 2.0.18",
  "uuid",
 ]
@@ -4955,6 +4960,7 @@ dependencies = [
  "bots",
  "calendar_events",
  "chrono",
+ "contacts",
  "crm",
  "databases",
  "databases_sql",
@@ -4966,6 +4972,7 @@ dependencies = [
  "graphql_calendar",
  "graphql_channel",
  "graphql_common",
+ "graphql_contacts",
  "graphql_crm",
  "graphql_databases",
  "graphql_email",
@@ -5271,8 +5278,10 @@ dependencies = [
  "futures",
  "http-body-util",
  "macro_authorization",
+ "macro_db_client",
  "macro_db_migrator",
  "macro_user_id",
+ "non_empty",
  "rate_limit",
  "reqwest 0.13.4",
  "rootcause",
@@ -5280,6 +5289,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "sqs_worker",
+ "subsequence_match",
  "tokio",
  "tower 0.5.3",
  "tracing",
@@ -6893,6 +6903,7 @@ dependencies = [
  "github_pull_requests",
  "gmail_client",
  "graphql_calendar",
+ "graphql_contacts",
  "graphql_crm",
  "graphql_databases",
  "graphql_initiative",
@@ -9485,6 +9496,22 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_contacts"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "contacts",
+ "graphql_common",
+ "macro_user_id",
+ "models_pagination",
+ "rootcause",
+ "serde_json",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -18096,6 +18123,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "macro_db_migrator",
  "macro_uuid",
  "rootcause",
  "serde",
@@ -20307,6 +20335,10 @@ dependencies = [
  "quote",
  "syn 2.0.117",
 ]
+
+[[package]]
+name = "subsequence_match"
+version = "0.1.0"
 
 [[package]]
 name = "subtle"

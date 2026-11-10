@@ -920,6 +920,21 @@ async fn session_list_names_stored_sessions_whose_herdr_agent_still_runs() {
             })
             .unwrap();
     }
+    // Someone has been working in this one's pane: its transcript was
+    // written at a known time.
+    let transcript = root.path().join("worked.jsonl");
+    std::fs::write(&transcript, "{}\n").unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&transcript)
+        .unwrap()
+        .set_modified(
+            std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_794_330_300),
+        )
+        .unwrap();
+    let mut worked = store.load("11111111-1111-4111-8111-111111111111").unwrap();
+    worked.transcript = Some(transcript);
+    store.save(&worked).unwrap();
     let (mut adapter, mut output) = test_adapter(root.path());
     Arc::get_mut(&mut adapter).unwrap().herdr = Some(HerdrCli::new(script, None));
 
@@ -934,7 +949,11 @@ async fn session_list_names_stored_sessions_whose_herdr_agent_still_runs() {
             "id": "macro-connection-1",
             "result": {"sessions": [
                 {"sessionId": "22222222-2222-4222-8222-222222222222", "cwd": root.path()},
-                {"sessionId": "11111111-1111-4111-8111-111111111111", "cwd": root.path()},
+                {
+                    "sessionId": "11111111-1111-4111-8111-111111111111",
+                    "cwd": root.path(),
+                    "updatedAt": "2026-11-10T17:05:00Z",
+                },
             ]},
         })
     );
