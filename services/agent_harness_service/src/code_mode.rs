@@ -1,7 +1,6 @@
 //! Composition of code execution credentials with the harness's owner approval gate.
 use agent_code_mode::domain::{
-    CodeModeError, DocumentProgramGate, ExecutionCredentials, ExecutionIdentity,
-    UserExecutionCredentials,
+    CodeModeError, ExecutionCredentials, ExecutionIdentity, UserExecutionCredentials,
 };
 use agent_correlation::domain::CorrelationRepository;
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
@@ -71,8 +70,9 @@ impl ExecutionCredentials for RunCredentials {
 /// tools give. The MCP client asks the user before each tool call, so there is
 /// no owner gate.
 ///
-/// A document's embedded program runs as the user with no agent: the person
-/// opened the file and the app asks them before it writes.
+/// A document's embedded program runs as the user with no agent, whoever
+/// wrote the page: opening it runs its programs with the viewer's full
+/// access, and nothing asks them before a program writes.
 pub struct UserRunCredentials {
     pub signer: MacroApiTokenSigner,
     pub correlations: agent_correlation::outbound::PgCorrelationRepository,
@@ -133,36 +133,6 @@ impl UserExecutionCredentials for UserRunCredentials {
     }
 }
 
-/// Document programs roll out per user through
-/// [`agent_code_mode::domain::DOCUMENT_PROGRAMS_FLAG`]. A local stack always
-/// runs them, matching the web flag's dev default: its PostHog key is often a
-/// placeholder that PostHog refuses. Elsewhere they need the flag, and without
-/// a flag provider (no PostHog key) or a flag read that fails they are off.
-pub struct FlaggedDocumentPrograms {
-    pub flags: Option<feature_flags::outbound::posthog::PostHogFeatureFlags>,
-    pub local: bool,
-}
-
-#[async_trait]
-impl DocumentProgramGate for FlaggedDocumentPrograms {
-    async fn allows(&self, user: &MacroUserIdStr<'static>) -> bool {
-        use feature_flags::FeatureFlags;
-        if self.local {
-            return true;
-        }
-        let Some(flags) = &self.flags else {
-            return false;
-        };
-        match flags.load(user).await {
-            Ok(snapshot) => snapshot.is_enabled(agent_code_mode::domain::DOCUMENT_PROGRAMS_FLAG),
-            Err(error) => {
-                tracing::warn!(?error, "could not read document program rollout; refusing");
-                false
-            }
-        }
-    }
-}
-
 /// The current trace context, for the SDK to forward on authenticated requests.
 pub(crate) fn trace_headers() -> BTreeMap<String, String> {
     let mut headers = axum::http::HeaderMap::new();
@@ -218,6 +188,7 @@ pub fn sdk_endpoints() -> anyhow::Result<SdkEndpoints> {
 }
 
 pub mod connected_apps;
+pub mod document_rollout;
 pub mod document_sources;
 pub mod reviews;
 

@@ -1854,10 +1854,10 @@ async fn run() -> anyhow::Result<()> {
             agent_code_mode::inbound::document_router::document_program_router(
                 agent_code_mode::inbound::document_router::DocumentProgramRouterState::new(
                     Arc::new(service),
-                    Arc::new(code_mode::FlaggedDocumentPrograms {
-                        flags: feature_flags.clone(),
-                        local: matches!(config.environment, Environment::Local),
-                    }),
+                    Arc::new(code_mode::document_rollout::FlaggedDocumentPrograms::new(
+                        feature_flags.clone(),
+                        matches!(config.environment, Environment::Local),
+                    )),
                     entity_access.clone(),
                     MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
                 ),
