@@ -6,7 +6,6 @@
 //! say which of them grows with it. Every gauge is one number per process,
 //! with no per-session attribute.
 
-use opentelemetry::KeyValue;
 use opentelemetry::metrics::Gauge;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
@@ -19,10 +18,9 @@ pub(crate) struct RuntimeReadings {
     pub(crate) command_workers: usize,
     /// Sessions whose durable queue is loaded.
     pub(crate) hydrated_sessions: usize,
-    /// Live actors on the session service for sandboxed and external runtimes.
-    pub(crate) external_actors: usize,
-    /// Live actors on the session service for in-process sessions.
-    pub(crate) inmem_actors: usize,
+    /// Live `agent_session` actors, every runtime's: they all run on the
+    /// harness's session service.
+    pub(crate) session_actors: usize,
     /// In-process conversations held in memory.
     pub(crate) inmem_conversations: usize,
     /// In-process agent tasks running.
@@ -52,7 +50,7 @@ impl RuntimeGauges {
                 .build(),
             active_sessions: meter
                 .u64_gauge("ahs.agent_session.active")
-                .with_description("Live agent_session actors, by session service instance")
+                .with_description("Live agent_session actors, of every runtime")
                 .build(),
             inmem_conversations: meter
                 .u64_gauge("ahs.inmem.store_sessions")
@@ -74,14 +72,8 @@ impl RuntimeGauges {
             .record(count(readings.command_workers), &[]);
         self.hydrated_sessions
             .record(count(readings.hydrated_sessions), &[]);
-        self.active_sessions.record(
-            count(readings.external_actors),
-            &[KeyValue::new("instance", "external")],
-        );
-        self.active_sessions.record(
-            count(readings.inmem_actors),
-            &[KeyValue::new("instance", "inmem")],
-        );
+        self.active_sessions
+            .record(count(readings.session_actors), &[]);
         self.inmem_conversations
             .record(count(readings.inmem_conversations), &[]);
         self.inmem_live_agents

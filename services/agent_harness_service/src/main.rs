@@ -1019,7 +1019,6 @@ async fn run() -> anyhow::Result<()> {
         replica,
     )
     .with_tool_catalog(Arc::clone(&tool_catalog));
-    let inmem_session_actors = inmem_sessions.clone();
     let sandbox_and_inmem = RoutedContainers::new(sandbox, Some(inmem), inmem_sessions);
 
     // Cursor sessions run on their owner's own Cursor account, so there is no
@@ -1395,7 +1394,7 @@ async fn run() -> anyhow::Result<()> {
         )
         .with_turns(conversation_turns.clone()),
     );
-    let external_session_actors = sessions.clone();
+    let session_actors = sessions.clone();
     let harness = Arc::new(
         AgentHarnessService::new(
             Some(conversations_service.clone()),
@@ -2020,8 +2019,7 @@ async fn run() -> anyhow::Result<()> {
         move || runtime_gauges::RuntimeReadings {
             command_workers: gauge_harness.command_workers(),
             hydrated_sessions: gauge_harness.hydrated_sessions(),
-            external_actors: external_session_actors.active_sessions(),
-            inmem_actors: inmem_session_actors.active_sessions(),
+            session_actors: session_actors.active_sessions(),
             inmem_conversations: inmem_manager.conversations(),
             inmem_live_agents: inmem_manager.live_agents(),
         },

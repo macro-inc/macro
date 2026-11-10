@@ -22,7 +22,7 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/containers.rs`: Daytona sandbox lifecycle; local Docker opt-in.
 - `src/runtime_gauges.rs`: one task recording, every minute, what the process
   holds per session as OTel gauges (`ahs.harness.workers`,
-  `ahs.harness.hydrated`, `ahs.agent_session.active{instance}`,
+  `ahs.harness.hydrated`, `ahs.agent_session.active` (every runtime's actors),
   `ahs.inmem.store_sessions`, `ahs.inmem.live_agents`,
   `ahs.tokio.alive_tasks`); no per-session attributes.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
