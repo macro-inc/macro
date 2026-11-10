@@ -491,8 +491,9 @@ impl IdeaRepo for PgIdeaRepo {
         )
         .fetch_all(&self.pool)
         .await?;
-        rows.into_iter()
-            .map(|row| {
+        let targets = rows.into_iter().filter_map(|row| {
+            let id = row.id;
+            let target = (|| -> Result<OpenTarget, PgIdeaRepoError> {
                 let action = row
                     .action
                     .as_deref()
@@ -506,8 +507,15 @@ impl IdeaRepo for PgIdeaRepo {
                     reply: action == Some(EntityAction::Reply),
                     part_id: row.part_id,
                 })
-            })
-            .collect()
+            })();
+            // One broken row must not keep the item's other ideas open.
+            target
+                .inspect_err(|error| {
+                    tracing::warn!(idea_id = %id, error = %error, "skipped an undecodable idea row");
+                })
+                .ok()
+        });
+        Ok(targets.collect())
     }
 
     async fn resolve(
