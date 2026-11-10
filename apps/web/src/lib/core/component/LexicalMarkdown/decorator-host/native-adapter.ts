@@ -10,6 +10,7 @@ import {
   type MergeProps,
   mergeProps,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import {
   type DecoratorHostCapabilities,
   DecoratorHostContext,
@@ -39,10 +40,25 @@ export function createNativeDecoratorAdapter<
     return (props) => {
       context.bindView(props.view);
       const current = createMemo(() => project(props.node(), context));
+      // Source decorate() publishes a new component closure for an uncached
+      // node update. Revision-bearing nodes retain their captured view snapshot
+      // in EditorView, so they do not reach this projection until remount.
+      const render = createMemo(() => {
+        const captured = current();
+        return () =>
+          createComponent(
+            component,
+            mergeProps(() => captured)
+          );
+      });
       return createComponent(DecoratorHostContext.Provider, {
         value: context.host,
         get children() {
-          return createComponent(component, mergeProps(current));
+          return createComponent(Dynamic, {
+            get component() {
+              return render();
+            },
+          });
         },
       });
     };
