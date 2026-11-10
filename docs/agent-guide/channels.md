@@ -1166,41 +1166,41 @@ Keyboard navigation scrolls immediately, without animation, only when the
 highlighted row enters the viewport's two-row context margin, leaving neighboring
 rows visible above and below. The margin shrinks in short sections.
 Section jumps also reveal the heading with surrounding context.
-Sections normally scroll independently. When All channels is last and has no
-manually saved height, it expands to its full content height and uses the sidebar's
-scroll area. Moving another section below it restores the usual height cap,
-without discarding a saved manual height. Lists with more than two items have a
-resize grip; drag it to choose a height between two rows (68px) and the end of the list,
-capped by the section's maximum. Shorter lists fit their content and have no
-resize grip. Favorites and Direct messages default to four visible rows;
-other sections default to their maximum height within the pane. Focus the grip
-and use Up/Down to resize by 20px (100px with Shift), or double-click to restore
-the default.
-Section heights persist as personal preferences alongside sorting and sidebar
-width. Heights adapt to filtered content and smaller panes without discarding
-the saved preference. Search covers channels and DMs regardless of section
+Sections default to their natural content height and scroll together in the sidebar.
+There are no vertical resize handles or per-section scroll areas by default. Saved
+section heights remain stored but do not constrain the lists.
+
+`enable-chat-sidebar-section-resize` opts into vertical resizing on desktop. It is
+off by default, including development; `VITE_ENABLE_CHAT_SIDEBAR_SECTION_RESIZE`
+overrides it locally. When enabled, sections scroll independently. All channels
+uses the sidebar scroll area when last and without a saved height. Lists with more
+than two items offer a resize grip, bounded by content and pane height. Favorites
+and Direct messages default to four rows. Focus a resize grip and use Up/Down to
+resize by 20px (100px with Shift), or double-click to restore the default. Heights
+remain personal and survive turning the flag off and back on.
+
+Search covers channels and DMs regardless of section
 placement. It lists **Not joined** channels first, then **Recent** when empty or
 **Channels** for a typed query. Join uses the existing channel join action.
 There is no separate Browse channels row. Closing search restores the sectioned
 list. Collapsed sections retain unread rows by default; **Display → Unread when
 collapsed** turns those rows off without changing expanded membership.
 
-Drag a section heading, its name, or the grip in the left gutter to reorder
-sections, or focus the grip and use Up/Down. Pointer dragging starts only after
-more than 8px of movement, never from holding still. A normal heading click still
-toggles the section; releasing a drag does not. Add and menu buttons never start
-a drag. The bare grip appears only on header hover or keyboard focus and stays
-fixed when pressed, without its own button background. The drag highlight includes
-both the grip and section name without shifting the header's text or controls.
+Drag a section heading or its name to reorder sections. There is no drag-handle
+icon. Keyboard focus reveals an icon-free **Reorder** control; use Up/Down to move
+the section. Pointer dragging starts only after more than 8px of movement, never
+from holding still. A normal heading click toggles the section; releasing a drag
+does not. Add and menu buttons never start a drag. The drag highlight covers the
+section name without shifting its text or controls.
 An insertion line shows the destination. Section order is a personal
 preference, including for shared sections, and survives reloads. The dragged
 section appears as a card preview while its source is subdued. Other sections
 animate into their new positions on drop or keyboard reorder, except with reduced
 motion enabled. Dragging near the sidebar's top or bottom uses the same edge-scroll
-mechanism as Gantt; wheel scrolling remains available during a drag. Resizing near
-the sidebar's top or bottom also scrolls the sidebar, including while the pointer
-stays still. Resize drags compensate for that movement, and the rounded resize
-grips retain pointer capture until release or cancellation.
+mechanism as Gantt; wheel scrolling remains available during a drag. With vertical
+resizing enabled, dragging a resize grip near the sidebar's top or bottom also
+scrolls the sidebar, including while the pointer stays still. Resize drags
+compensate for that movement and retain pointer capture until release or cancellation.
 
 Section membership comes from the server's complete visible channel-ID lists.
 The sidebar shows available channel rows immediately. One shared by-ID query
@@ -1286,7 +1286,8 @@ offer **Unmute all channels**. These actions affect only the viewer's current
 complete membership, including unloaded and filtered rows, never later additions.
 Built-in lists include joined channels only; Favorites targets channel favorites.
 Bulk writes retain successful chunks on partial failures. Channel row menus use
-the same durations under **Mute channel**.
+the same durations under **Mute channel**, without a leading mute icon. Preset
+end dates and times align with the menu's right content edge.
 
 **Add to section** lists eligible sections with checked membership, then New
 section. Rule-only matches stay checked and read-only; edit the rule to remove

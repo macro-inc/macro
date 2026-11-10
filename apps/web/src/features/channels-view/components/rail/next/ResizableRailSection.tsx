@@ -18,6 +18,7 @@ export function ResizableRailSection(props: {
   section: ChannelSectionKey;
   label: string;
   open: boolean;
+  resizingEnabled: boolean;
   showCollapsedRows?: boolean;
   maxHeight: number;
   itemCount: number;
@@ -46,6 +47,7 @@ export function ResizableRailSection(props: {
         : Math.max(1, props.itemCount) * CHANNEL_SECTION_ROW_HEIGHT
     );
   const resizable = () =>
+    props.resizingEnabled &&
     props.open &&
     props.itemCount > CHANNEL_SECTION_MIN_ITEMS &&
     maximum() > CHANNEL_SECTION_MIN_HEIGHT;
@@ -166,8 +168,11 @@ export function ResizableRailSection(props: {
             setViewport(element);
             props.scrollRef(element);
           }}
-          class="min-h-0 overflow-y-auto"
-          style={{ height: `${height()}px` }}
+          class="min-h-0"
+          classList={{ 'overflow-y-auto': props.resizingEnabled }}
+          style={{
+            height: props.resizingEnabled ? `${height()}px` : undefined,
+          }}
         >
           <div ref={setContent} data-section-content>
             {props.children}

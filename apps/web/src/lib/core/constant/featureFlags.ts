@@ -829,6 +829,13 @@ export const enableChatSidebarSections = defineFlag({
   default: onInDev,
 });
 
+// Opt-in vertical resizing for desktop Chat sections. Keep it off in development
+// too so sections use their natural height unless PostHog or a local override enables it.
+export const enableChatSidebarSectionResize = defineFlag({
+  key: 'enable-chat-sidebar-section-resize',
+  env: 'ENABLE_CHAT_SIDEBAR_SECTION_RESIZE',
+});
+
 // Manual and smart channel labels, including their queries and drag/drop UI.
 // Off until PostHog enables them; override with VITE_ENABLE_CHANNEL_TAGS.
 export const enableChannelTags = defineFlag({

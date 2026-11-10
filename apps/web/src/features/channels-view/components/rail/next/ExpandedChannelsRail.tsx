@@ -4,7 +4,9 @@ import type { ListScrollHandle } from '@app/components/list';
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { SlackImportSidebar } from '@app/features/slack-import/slack-import-sidebar';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { enableChatSidebarSectionResize } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -324,6 +326,7 @@ function BrowseSection(props: {
   sectionKey: ChannelSectionKey;
   section: ChannelRailSectionRows;
   maxHeight: number;
+  resizingEnabled: boolean;
   outerScrollRoot: HTMLDivElement | undefined;
   layoutVersion: number;
   sectionOrder: readonly ChannelSectionKey[];
@@ -344,9 +347,10 @@ function BrowseSection(props: {
   const [resizing, setResizing] = createSignal(false);
   const [startMargin, setStartMargin] = createSignal(0);
   const outerScroll = () =>
-    props.maxHeight === Number.POSITIVE_INFINITY &&
-    rail.sectionPreferences(props.sectionKey).height === undefined &&
-    !resizing();
+    !props.resizingEnabled ||
+    (props.maxHeight === Number.POSITIVE_INFINITY &&
+      rail.sectionPreferences(props.sectionKey).height === undefined &&
+      !resizing());
   const rowsScrollRoot = () =>
     outerScroll() ? props.outerScrollRoot : scrollRoot();
   const droppable = createDroppable(
@@ -516,6 +520,7 @@ function BrowseSection(props: {
       label={label()}
       open={open()}
       showCollapsedRows={!open() && itemCount() > 0}
+      resizingEnabled={props.resizingEnabled}
       maxHeight={props.maxHeight}
       dropEdge={props.sectionReorder.dropEdge(props.sectionKey)}
       dragging={props.sectionReorder.isDragging(props.sectionKey)}
@@ -613,6 +618,7 @@ function BrowseSection(props: {
 
 function ExpandedBrowse() {
   const rail = useChannelsRail();
+  const resizeFlag = useFeatureFlag(enableChatSidebarSectionResize);
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const [stackContent, setStackContent] = createSignal<HTMLDivElement>();
   const [scrollVersion, setScrollVersion] = createSignal(0);
@@ -884,6 +890,7 @@ function ExpandedBrowse() {
                     sectionKey={key}
                     section={section()}
                     maxHeight={maximumHeight(key)}
+                    resizingEnabled={resizeFlag().enabled}
                     outerScrollRoot={scrollRoot()}
                     layoutVersion={stackSize.height ?? 0}
                     sectionOrder={keys()}

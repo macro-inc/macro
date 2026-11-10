@@ -1,6 +1,7 @@
 import { formatLocale, t } from '@app/lib/i18n';
 import {
   ContextMenuContent,
+  MENU_ITEM_CLASS,
   MenuItem,
   MenuSeparator,
   SubTrigger,
@@ -10,7 +11,6 @@ import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isMutedItem } from '@entity/utils/notification';
 import BellIcon from '@icon/system/regular/bell.svg';
-import BellSlashIcon from '@icon/system/regular/bell-slash.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import {
   formatSnoozeDeadline,
@@ -63,11 +63,7 @@ export function ChannelMuteMenu(props: {
       }
     >
       <ContextMenu.Sub>
-        <SubTrigger
-          icon={BellSlashIcon}
-          text={props.label}
-          disabled={props.disabled}
-        />
+        <SubTrigger text={props.label} disabled={props.disabled} />
         <ContextMenuContent submenu class="min-w-64">
           <MenuItem
             text={t('channelSections.muteIndefinitely')}
@@ -76,21 +72,18 @@ export function ChannelMuteMenu(props: {
           <MenuSeparator />
           <For each={snoozePresets(new Date())}>
             {(preset) => {
-              const label = (
-                <span class="flex items-center gap-4">
-                  <span class="flex-1">
+              return (
+                <ContextMenu.Item
+                  class={MENU_ITEM_CLASS}
+                  onSelect={() => props.onSnooze(preset.until)}
+                >
+                  <span class="min-w-0 flex-1 truncate">
                     {t(presetTranslationKey(preset.id))}
                   </span>
-                  <span class="text-xs text-ink-extra-muted">
+                  <span class="ml-auto shrink-0 text-right text-xs whitespace-nowrap text-ink-extra-muted">
                     {formatSnoozeDeadline(preset.until, formatLocale())}
                   </span>
-                </span>
-              );
-              return (
-                <MenuItem
-                  text={label}
-                  onClick={() => props.onSnooze(preset.until)}
-                />
+                </ContextMenu.Item>
               );
             }}
           </For>
