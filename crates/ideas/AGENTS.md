@@ -106,8 +106,8 @@ person. Served by the harness under the scheduler's gateway prefix
   a definite refusal (the prompted session deleted) settles it failed at once.
   `settle_runs` checks runs in turn (`checked_at`) and gives a run up only on
   what is known: past a 10 minute start window, a session confirmed missing
-  (`SessionReadError::Missing`, from the stored sessions) or one still waiting
-  for its prompt once it is deleted. A session that can't be read is never
+  (`SessionReadError::Missing`, from the stored sessions), or one still waiting
+  for its prompt or cut off by a restart (`Disconnected`) once it is deleted. A session that can't be read is never
   given up.
 
 ## Gotchas
