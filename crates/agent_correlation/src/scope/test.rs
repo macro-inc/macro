@@ -12,6 +12,7 @@ fn a_generation_session_reads_and_writes_only_its_own_tools() {
         ("PATCH", "/scheduled-action/ideas/01a1"),
         ("POST", "/dss/search"),
         ("POST", "/ideas/01a1/retire"),
+        ("PUT", "/ideas/01a1/draft"),
         ("POST", "/scheduled-actions/suggestions"),
         ("POST", "/scheduled-actions/suggestions/01a1/retire"),
         ("POST", "/email/drafts"),

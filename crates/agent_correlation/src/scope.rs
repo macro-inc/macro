@@ -133,6 +133,7 @@ const GENERATION_WRITES: &[(&str, &str)] = &[
     ("POST", "/ideas"),
     ("PATCH", "/ideas/{id}"),
     ("POST", "/ideas/{id}/retire"),
+    ("PUT", "/ideas/{id}/draft"),
     ("POST", "/scheduled-actions/suggestions"),
     ("POST", "/scheduled-actions/suggestions/{id}/retire"),
     ("POST", "/email/drafts"),

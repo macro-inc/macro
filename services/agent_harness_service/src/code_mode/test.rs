@@ -301,6 +301,7 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "email.updateThreadState",
         "storage.setCrmContactEmail",
         "storage.setEmailSync",
+        "scheduled-action.attachIdeaDraft",
     ];
     let looks_like_a_send = |key: &str, path: &str| {
         let text = format!("{key} {path}").to_lowercase();
