@@ -1241,7 +1241,12 @@ fn extract_project_filter(ast: &Expr<EmailLiteral>) -> Vec<String> {
     clippy::too_many_arguments,
     reason = "the query's parts plus the access-source port it reads through"
 )]
-#[tracing::instrument(skip(pool, source_ids, view, query, user_id), fields(view = view.span_value()), err)]
+#[tracing::instrument(
+    name = "dynamic_email_thread_cursor",
+    skip(pool, source_ids, view, query, user_id),
+    fields(view = view.span_value()),
+    err
+)]
 pub(crate) async fn dynamic_email_thread_cursor_with_sources(
     pool: &PgPool,
     source_ids: &dyn UserSourceIds,
