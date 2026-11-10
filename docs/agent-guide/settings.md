@@ -171,9 +171,9 @@ phones the editor is a bottom sheet and each picker opens as a full-height
 picker sheet with **Done**.
 
 A channel's menu (rail, list row or title) offers **Add to stack…** beside
-**Mute notifications**: it ticks the stacks that capture the channel, saving each
-tick at once, and **New stack with this channel** opens the editor with the
-channel chosen. Only conversation is capturable (channel messages, mentions,
+**Mute notifications**: it ticks the stacks that list the channel, saving each
+tick at once, and notes any stack that already captures it by its name.
+**New stack with this channel** opens the editor with the channel chosen. Only conversation is capturable (channel messages, mentions,
 replies and reactions, comments, project discussion); assignments, invites,
 reminders and the like always arrive as Signal.
 

@@ -476,7 +476,14 @@ export function createSoupEntityActions(
       middleItems.push({
         id: 'add-to-stack',
         label: t('entityActions.addToStack'),
-        onClick: () => openAddChannelToStack(channel.id),
+        onClick: () =>
+          openAddChannelToStack({
+            id: channel.id,
+            name:
+              channel.channelType === 'direct_message'
+                ? undefined
+                : channel.name,
+          }),
       });
     }
 

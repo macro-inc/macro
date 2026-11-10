@@ -13,6 +13,7 @@ import { createMemo, For, getOwner, Match, Show, Switch } from 'solid-js';
 import { useNotificationStacksContext } from '../context/notification-stacks-context';
 import {
   capturesChannel,
+  capturesChannelName,
   captureWithChannel,
   NEW_STACK_DRAFT,
   type Stack,
@@ -25,7 +26,11 @@ import { openStackEditor } from './stack-editor-dialog';
  * stack with it. Each tick is saved at once.
  */
 export function AddToStackDialog(
-  props: ManagedDialogProps & { channelId: string }
+  props: ManagedDialogProps & {
+    channelId: string;
+    /** The channel's name; left out for a direct message, which has none. */
+    channelName?: string;
+  }
 ) {
   const context = useNotificationStacksContext();
   const owner = getOwner();
@@ -36,6 +41,11 @@ export function AddToStackDialog(
   });
   const stackIds = createMemo(() => stacks().map((stack) => stack.id));
   const stackOf = (id: string) => stacks().find((stack) => stack.id === id);
+
+  // A name rule captures the channel whether or not the stack lists it.
+  const capturedByName = (stack: Stack) =>
+    props.channelName !== undefined &&
+    capturesChannelName(stack, props.channelName);
 
   const setCaptured = async (stack: Stack, captured: boolean) => {
     try {
@@ -125,8 +135,13 @@ export function AddToStackDialog(
                           }
                         >
                           <Checkbox.Control />
-                          <Checkbox.Label class="min-w-0 flex-1 truncate text-sm">
-                            {stack().name}
+                          <Checkbox.Label class="flex min-w-0 flex-1 flex-col text-sm">
+                            <span class="truncate">{stack().name}</span>
+                            <Show when={capturedByName(stack())}>
+                              <span class="text-xs leading-5 text-ink-muted">
+                                {t('notificationStacks.capturesByName')}
+                              </span>
+                            </Show>
                           </Checkbox.Label>
                         </Checkbox>
                       )}

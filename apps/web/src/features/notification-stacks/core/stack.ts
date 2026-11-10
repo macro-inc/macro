@@ -224,6 +224,24 @@ export function capturesChannel(stack: Stack, channelId: string): boolean {
 }
 
 /**
+ * Whether a capture rule matches the channel by its name, so the stack
+ * captures it without naming it. A direct message has no name to match.
+ */
+export function capturesChannelName(
+  stack: Stack,
+  channelName: string
+): boolean {
+  const name = channelName.toLowerCase();
+  return stack.capture.some((rule) =>
+    rule.sources.some(
+      (source) =>
+        source.type === 'channelNameContains' &&
+        name.includes(source.text.toLowerCase())
+    )
+  );
+}
+
+/**
  * The stack's capture rules with the channel added to, or taken out of, the
  * first one. A stack always has a capture rule.
  */

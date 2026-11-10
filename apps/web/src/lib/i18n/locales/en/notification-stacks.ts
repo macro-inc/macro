@@ -101,6 +101,7 @@ export default {
   addToStackDescription:
     'Notifications from this channel go to Noise, except what the stack lets through.',
   addToStackEmpty: 'You have no stacks yet.',
+  capturesByName: 'Already captures this channel by its name',
   newStackForChannel: 'New stack with this channel',
   done: 'Done',
 };

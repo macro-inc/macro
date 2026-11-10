@@ -101,7 +101,7 @@ export function NotificationStacksSection() {
 }
 
 function AddChannelToStackDialog(
-  props: ManagedDialogProps & { channelId: string }
+  props: ManagedDialogProps & { channelId: string; channelName?: string }
 ) {
   return (
     <NotificationStacksProvider value={createAppNotificationStacksContext()}>
@@ -112,8 +112,12 @@ function AddChannelToStackDialog(
 
 /** Choose which stacks capture a channel. Menus call `openAddChannelToStack`. */
 export function openAddChannelToStackDialog(
-  channelId: string,
+  channel: { id: string; name?: string },
   options?: OpenDialogOptions
 ) {
-  openDialog(AddChannelToStackDialog, { channelId }, options);
+  openDialog(
+    AddChannelToStackDialog,
+    { channelId: channel.id, channelName: channel.name },
+    options
+  );
 }

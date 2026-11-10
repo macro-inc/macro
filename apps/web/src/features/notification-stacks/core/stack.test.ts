@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   capturesChannel,
+  capturesChannelName,
   captureWithChannel,
   draftFromStack,
   draftProblem,
@@ -151,6 +152,22 @@ describe('adding a channel to a stack', () => {
   const stack = stackOf({
     ...supportDraft,
     kinds: ['newMessage'],
+  });
+
+  it('knows a channel its name rule already captures, whatever the case', () => {
+    expect(capturesChannelName(stack, 'Macro Support: Acme')).toBe(true);
+    expect(capturesChannelName(stack, 'engineering')).toBe(false);
+    // A stack that only lists channels matches none by name.
+    const listed = { ...stack, capture: captureWithChannel(stack, 'c', true) };
+    expect(
+      capturesChannelName(
+        {
+          ...listed,
+          capture: [rule({ sources: [{ type: 'channel', id: 'c' }] })],
+        },
+        'Macro Support: Acme'
+      )
+    ).toBe(false);
   });
 
   it('adds the channel to the first capture rule and keeps its other conditions', () => {
