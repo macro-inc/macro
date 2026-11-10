@@ -1,0 +1,23 @@
+apps/web/src/features/block-agent/component/ToolApprovalRequest.tsx
+  s_e8b34339741e18::t_5995a1534529ff 42-45
+apps/web/src/features/block-agent/ui/ToolApprovalCard.test.tsx
+  s_e8b34339741e18::t_9a83e6d36d9498 60-79
+apps/web/src/features/block-agent/ui/ToolApprovalCard.tsx
+  s_e8b34339741e18::t_639bdb301c9b2e 15-16,36-37,54-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5b27528572fe2f166accb46a5d3e5cbbea708f84",
+  "prompts": {},
+  "sessions": {
+    "s_e8b34339741e18": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7afbb266-33ee-4abd-968b-6bd9e3280d5b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
