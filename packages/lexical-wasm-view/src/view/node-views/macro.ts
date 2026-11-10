@@ -102,26 +102,8 @@ function decoratorProperties(node: ViewNode, dom: HTMLElement): void {
     );
   if (node.type === 'paste') dom.setAttribute('data-paste-node', 'true');
   if (node.type === 'agent-context') dom.hidden = true;
-  if (node.type === 'await') dom.className = 'macro-await-node';
-  if (node.type === 'equation') dom.className = 'md-editor-equation';
-  if (node.type === 'image' || node.type === 'video') {
-    const width = typeof props.width === 'number' ? props.width : 0;
-    const height = typeof props.height === 'number' ? props.height : 0;
-    const maxWidth =
-      typeof props.constrainedWidth === 'number' && props.constrainedWidth
-        ? props.constrainedWidth
-        : width;
-    const maxHeight =
-      typeof props.constrainedHeight === 'number' && props.constrainedHeight
-        ? props.constrainedHeight
-        : height;
-    const scale =
-      width > 0 && height > 0
-        ? Math.min(1, maxWidth / width, maxHeight / height)
-        : 1;
-    if (height > 0) dom.style.height = `${Math.round(height * scale)}px`;
-    if (width > 0) dom.style.width = `${Math.round(width * scale)}px`;
-  }
+  if (node.type === 'await') dom.classList.add('macro-await-node');
+  if (node.type === 'equation') dom.classList.add('md-editor-equation');
 }
 function elementTag(node: ViewNode): string {
   const tag = node.props().tag;
@@ -186,6 +168,10 @@ export function registerMacroDecoratorViews(
     if (!component) continue;
     registry.register(type, {
       decorator: component,
+      createDecoratorHost(mount, context) {
+        mount.classList.add('__decorator-mount-ref');
+        return context.document.createElement('div');
+      },
       flags: (node) => ({
         isInline:
           type === 'agent-session-mention'

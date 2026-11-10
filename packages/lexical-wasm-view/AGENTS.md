@@ -13,10 +13,12 @@ tests are separate from Rust-backed production compatibility acceptance.
 
 - Capture ViewOptions.owner before asynchronous mounts so native decorator roots inherit application providers; dispose each decorator root when its keyed node is removed.
 - Install common Macro element views once; register group-owned decorators through registerMacroDecoratorViews and keep full registerMacroViews completeness checks strict.
+- Let NodeView.createDecoratorHost preserve application mount wrappers; Macro uses the Source Portal div and mount class while portable views retain their default host.
 - The Diff applier owns mirror writes; renderers and view plugins read it.
 - A successful flags=0 TextFromView may acknowledge exactly the submitted edit
   through that applier. Authoritative Rust corrections take precedence.
 - Resolve terminal element carets before the managed line break; it is DOM scaffolding, not a model child.
+- Read managed terminators through managedLineBreak and the dynamic slot.before getter; preserve BR identity and resolve deferred insertion anchors after cleanup.
 - Cache authoritative selection feedback while honoring skip-dom-selection commit tags before DOM writes.
 - Debug builds compare mirror text with Rust node text after every TextFromView.
 - Keep Android timing/native deletion in events.ts and composition clearing in Rust.

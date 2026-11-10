@@ -56,6 +56,8 @@ export interface NodeView {
   ): boolean;
   getDOMSlot?(node: ViewNode, dom: HTMLElement): ElementDOMSlot;
   readonly decorator?: Component<DecoratorProps>;
+  /** Application rendering may supply the same mount wrapper as its source renderer. */
+  createDecoratorHost?(mount: HTMLElement, context: RenderContext): HTMLElement;
   readonly importDOM?: DraftConversionMap;
 }
 export class NodeViewRegistry {

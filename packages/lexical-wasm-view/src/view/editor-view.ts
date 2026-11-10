@@ -28,6 +28,10 @@ import type {
 } from './commands';
 import { textLeaf } from './dom';
 import { registerEvents } from './events';
+import {
+  managedLineBreak,
+  reconcileManagedLineBreak,
+} from './managed-line-break';
 import { MarkGeometry } from './mark-geometry';
 import { Mirror } from './mirror';
 import {
@@ -103,7 +107,11 @@ export class EditorView implements ViewSink {
   private readonly keys = new WeakMap<Node, NodeKey>();
   private readonly decorators = new Map<
     NodeKey,
-    { dispose: () => void; update: (node: ViewNode) => void; host: HTMLElement }
+    {
+      dispose: () => void;
+      update: (node: ViewNode) => void;
+      host: HTMLElement;
+    }
   >();
   private readonly commits = new Set<(info: CommitInfo) => void>();
   private readonly mutations = new Map<
@@ -308,9 +316,18 @@ export class EditorView implements ViewSink {
     const node = this.node(key),
       dom = this.dom.get(key);
     if (!node || !dom) return null;
-    return (
-      this.registry.get(node.type).getDOMSlot?.(node, dom) ?? { element: dom }
-    );
+    const slot = this.registry.get(node.type).getDOMSlot?.(node, dom) ?? {
+      element: dom,
+    };
+    return {
+      element: slot.element,
+      get after() {
+        return slot.after;
+      },
+      get before() {
+        return managedLineBreak(slot.element) ?? slot.before;
+      },
+    };
   }
   recentSelectionMark(): ViewSelectionInfo | null {
     return performance.now() < this.selectionMarkedAt + 200
@@ -651,8 +668,8 @@ export class EditorView implements ViewSink {
     this.keys.set(dom, node.key);
     Reflect.set(dom, `__lexicalKey_${this.options.namespace}`, node.key);
     if (node.kind === 'decorator') {
-      dom.contentEditable = 'false';
       dom.setAttribute('data-lexical-decorator', 'true');
+      dom.contentEditable = 'false';
     }
   }
   private replace(
@@ -694,24 +711,11 @@ export class EditorView implements ViewSink {
       current.remove();
       current = next;
     }
-    const last = this.node(node.children[node.children.length - 1]);
-    const needsBreak =
-      node.kind !== 'root' &&
-      !this.flags(node)?.isInline &&
-      node.type !== 'table' &&
-      node.type !== 'tablerow' &&
-      (!last || last.kind === 'linebreak');
-    const existing = slot.element.querySelector(
-      ':scope > br[data-lexical-managed-linebreak]'
-    );
-    if (needsBreak && !existing) {
-      const br = this.root.ownerDocument.createElement('br');
-      br.setAttribute('data-lexical-managed-linebreak', 'true');
-      slot.element.insertBefore(br, slot.before ?? null);
-    } else if (!needsBreak) existing?.remove();
+    reconcileManagedLineBreak(this, node, slot);
   }
   private updateDecorator(key: NodeKey, node: ViewNode): void {
-    const component = this.registry.get(node.type).decorator;
+    const renderer = this.registry.get(node.type);
+    const component = renderer.decorator;
     if (!component) return;
     const existing = this.decorators.get(key);
     if (existing) {
@@ -721,8 +725,13 @@ export class EditorView implements ViewSink {
     const dom = this.dom.get(key);
     if (!dom) throw new Error('Decorator mount DOM missing');
     const [value, set] = createSignal(node);
-    const host = this.root.ownerDocument.createElement('span');
-    host.style.display = 'contents';
+    let host: HTMLElement;
+    if (renderer.createDecoratorHost) {
+      host = renderer.createDecoratorHost(dom, this.context);
+    } else {
+      host = this.root.ownerDocument.createElement('span');
+      host.style.display = 'contents';
+    }
     dom.appendChild(host);
     const dispose = render(
       () => createComponent(component, { node: value, view: this }),
