@@ -7,6 +7,7 @@ mod lifecycle;
 mod presence;
 mod recovery;
 mod recovery_history;
+mod replay_fixups;
 mod seed_adoption;
 mod stop;
 mod wal;
@@ -58,6 +59,13 @@ struct Doc {
     faults: VecDeque<Result<Imported, ImportFailure>>,
     replace_fails: bool,
     probe_result: Option<Result<Imported, ImportFailure>>,
+    replay_edit: Option<ReplayEdit>,
+    export_fails: bool,
+}
+enum ReplayEdit {
+    Before(&'static str),
+    After(&'static str),
+    AfterThenError(&'static str),
 }
 impl Doc {
     fn new(peer: u64) -> Self {
@@ -69,6 +77,8 @@ impl Doc {
             faults: VecDeque::new(),
             replace_fails: false,
             probe_result: None,
+            replay_edit: None,
+            export_fails: false,
         }
     }
     fn edit(&self, s: &str) {
@@ -104,7 +114,21 @@ impl SyncDoc for Doc {
             return result;
         }
         let old = self.oplog_vv();
+        let edit = if origin == ImportOrigin::WalReplay {
+            self.replay_edit.take()
+        } else {
+            None
+        };
+        if let Some(ReplayEdit::Before(text)) = edit {
+            self.edit(text);
+        }
         let status = self.loro.import(bytes).map_err(ImportFailure::Loro)?;
+        if let Some(ReplayEdit::After(text) | ReplayEdit::AfterThenError(text)) = edit {
+            self.edit(text);
+        }
+        if matches!(edit, Some(ReplayEdit::AfterThenError(_))) {
+            return Err(corrupt());
+        }
         Ok(Imported {
             changed: old != self.oplog_vv(),
             new_ops: old != self.oplog_vv(),
@@ -113,6 +137,11 @@ impl SyncDoc for Doc {
     }
     fn export_local(&self, since: &loro::VersionVector) -> Result<Option<Vec<u8>>, ExportFailure> {
         self.calls.borrow_mut().exports.push(since.clone());
+        if self.export_fails {
+            return Err(ExportFailure::Loro(
+                loro::LoroError::DecodeDataCorruptionError,
+            ));
+        }
         let peer = self.peer_id();
         let end = self.oplog_vv().get(&peer).copied().unwrap_or(0);
         let start = since.get(&peer).copied().unwrap_or(0);

@@ -338,19 +338,37 @@ impl SyncCore {
             .map(|e| (e.seq, e.bytes.clone()))
             .collect();
         let mut replayed = 0u32;
+        let mut own_fixups = false;
         for (seq, bytes) in rows {
+            let metadata = loro::LoroDoc::decode_import_blob_meta(&bytes, true).ok();
             // A shallow snapshot already contains these acknowledged operations.
             // Re-importing their collected history can return Outdated forever;
             // checksum-verified metadata and the snapshot VV prove this is an
             // idempotent replay, without exempting any unacknowledged row.
             if self.is_delivered(seq)
-                && loro::LoroDoc::decode_import_blob_meta(&bytes, true)
-                    .is_ok_and(|meta| doc.oplog_vv().includes_vv(&meta.partial_end_vv))
+                && metadata
+                    .as_ref()
+                    .is_some_and(|meta| doc.oplog_vv().includes_vv(&meta.partial_end_vv))
             {
                 replayed = replayed.saturating_add(1);
                 continue;
             }
-            match doc.import_remote(&bytes, ImportOrigin::WalReplay) {
+            let peer = doc.peer_id();
+            let before = doc.oplog_vv().get(&peer).copied().unwrap_or(0);
+            let result = doc.import_remote(&bytes, ImportOrigin::WalReplay);
+            let after = doc.oplog_vv().get(&peer).copied().unwrap_or(0);
+            // Import hooks can author local repairs, including before an importer
+            // returns an error. Only the encoded interval is already in the WAL;
+            // a new prefix before its start needs delivery just like a suffix.
+            if after > before
+                && !metadata.as_ref().is_some_and(|meta| {
+                    meta.partial_start_vv.get(&peer).copied().unwrap_or(0) <= before
+                        && meta.partial_end_vv.get(&peer).copied().unwrap_or(0) >= after
+                })
+            {
+                own_fixups = true;
+            }
+            match result {
                 Ok(imported) => {
                     replayed = replayed.saturating_add(1);
                     self.pending_import = imported.pending;
@@ -378,6 +396,16 @@ impl SyncCore {
                     out,
                 ),
             }
+        }
+        if own_fixups {
+            self.last_local = Some(now.mono);
+            self.snapshot_dirty_since.get_or_insert(now.mono);
+            self.wal
+                .append_due
+                .get_or_insert(now.mono.after(self.config.wal.coalesce));
+            // Capture repairs before a checkpoint can treat them as imported
+            // baseline. Writing/Unlogged rows retain the ordinary durability gate.
+            self.append_local(now, doc, out);
         }
         // Adoption may finish inside the current peer's coalesce window.
         // Importing another owner's rows cannot make that local edit logged.
@@ -766,7 +794,6 @@ impl SyncCore {
                     }
                 }
                 self.replay(now, doc, out);
-                self.wal.logged_vv = doc.oplog_vv();
                 if self.connection.synced() {
                     self.send(
                         sync_protocol::FromPeer::PeerRegisterId { peerid: peer },
@@ -831,6 +858,7 @@ impl SyncCore {
 
     pub(super) fn save_snapshot(&mut self, now: Now, doc: &mut impl SyncDoc, out: &mut SyncOutput) {
         if self.config.persistence != Persistence::Durable
+            || self.wal.append_due.is_some()
             || matches!(self.wal.health, StorageHealth::Failed { .. })
             || self.wal.entries.iter().any(|e| {
                 !e.foreign

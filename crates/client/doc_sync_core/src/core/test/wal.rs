@@ -596,6 +596,14 @@ fn adoption_inside_coalesce_window_keeps_local_edit_for_append() {
         id,
         result: Ok(1),
     }));
+    assert_eq!(h.core.wal.append_due, Some(Millis(25)));
+    assert!(h.out.io.iter().all(|effect| !matches!(
+        effect,
+        IoEffect::Storage {
+            op: StorageOp::WalAppend { .. } | StorageOp::SnapshotSave { .. },
+            ..
+        }
+    )));
     h.at(25, SyncInput::Tick);
     let record = h
         .out
