@@ -72,3 +72,28 @@ fn initial_followups_still_run_without_upgrading_metadata() -> Result<(), Box<dy
     assert_eq!(editor.state().to_json()?, edited);
     Ok(())
 }
+
+#[test]
+fn initialization_exports_source_canonical_metadata_and_state_order()
+-> Result<(), Box<dyn std::error::Error>> {
+    for (input, expected) in [
+        (
+            include_str!("testdata/root-order.input.json"),
+            include_str!("testdata/root-order.output.json"),
+        ),
+        (
+            include_str!("testdata/equation-metadata.input.json"),
+            include_str!("testdata/equation-metadata.output.json"),
+        ),
+    ] {
+        let editor = crate::surface::preset_builder_with_mode(
+            crate::EditorType::MarkdownSync,
+            EditorMode::ViewAttached,
+        )
+        .initial_state(serde_json::from_str(input)?)
+        .build()?;
+        let actual = serde_json::to_value(editor.state().to_json()?)?;
+        assert_eq!(lexical_model::to_js_json_string(&actual), expected);
+    }
+    Ok(())
+}
