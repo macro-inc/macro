@@ -31,7 +31,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Preserve settings for unavailable fields when editing a template.
 - Keep No template as the default, and retain the selected template across Create More.
 - Label task submission Create another while Create More is enabled.
-- Reapply saved defaults to fresh tasks while preserving launch-context property presets, not task-specific edits.
+- Reapply saved defaults, including task sharing, to fresh tasks while preserving launch-context property presets, not task-specific edits.
 - Open New template and Edit as a separate template editing session; keep the underlying task draft unchanged until saving.
 - Return to the unchanged task draft on Back or Cancel; save only the template, then return with it applied.
 - Preserve existing task title, prose, and attachments after saving a template; fill title and description only when blank.
@@ -43,7 +43,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Keep template visibility in the name strip separate from the footer's task-sharing switch.
 - Capture and apply the optional task-sharing default; leave the switch unchanged when absent and ignore it without a team.
 - Include task sharing in changed-field dots, Reset, and Update template; preserve task title and description during those actions.
-- Preserve task sharing through template cancellation, draft recovery, and Create another; keep template edits out of global sharing defaults.
+- Preserve task sharing through template cancellation and draft recovery; keep template edits out of global sharing defaults.
 
 ## Boundaries
 

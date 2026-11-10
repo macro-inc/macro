@@ -492,7 +492,7 @@ export function createTaskComposer(
         new Set(available.map((definition) => definition.id)),
         contextualPropertyIds
       );
-      replaceTemplateState({ ...fresh, shareWithTeam: shareWithTeam() });
+      replaceTemplateState(fresh);
       setTemplateBaseline({
         ...currentTemplateState(),
         shareWithTeam: team() ? fresh.shareWithTeam : shareWithTeam(),

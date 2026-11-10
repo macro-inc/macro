@@ -888,12 +888,12 @@ tasks and the preserved draft unchanged; deleting the selected template only
 detaches its selection.
 
 Create More uses Create another and reapplies the selected saved defaults,
-including task title and description, to each fresh task, discarding task-specific
-field edits while retaining launch presets. The current task-sharing switch
-survives Create another, including overrides; the changed-field dot stays when it
-differs from the saved default. A template without a sharing value leaves the
-switch alone. Test a team template with sharing off
-and a personal template with sharing on. Confirm the switch is hidden without a
+including task title, description, and sharing, to each fresh task, discarding
+task-specific edits while retaining launch presets. Change the sharing switch
+before submission: that task uses the override, while the next draft restores
+the saved default without a changed-field dot. A template without a sharing value
+leaves the switch alone. Test both shared and private defaults, including a team
+template with sharing off and a personal template with sharing on. Confirm the switch is hidden without a
 team and stored sharing is ignored. Reopen task and template-editor drafts to
 check each switch value; Cancel restores the underlying draft's switch. Verify personal/team creation, draft
 preservation, field-only update

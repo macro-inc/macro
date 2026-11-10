@@ -14,7 +14,11 @@ import {
   restoreTemplateFields,
   taskTemplateSharing,
 } from '@app/features/task-composer/core/template-state';
-import type { TaskComposerHost } from '@app/features/task-composer/primitives/task-composer';
+import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
+import {
+  createTaskComposer,
+  type TaskComposerHost,
+} from '@app/features/task-composer/primitives/task-composer';
 import { createTemplateWorkflow } from '@app/features/task-composer/primitives/template-workflow';
 import {
   captureTaskTemplate,
@@ -28,6 +32,7 @@ import {
 } from '@app/features/task-templates/queries/template-mapping';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { TaskTemplateConfiguration } from '@service-storage/generated/schemas/taskTemplateConfiguration';
+import { QueryClient } from '@tanstack/solid-query';
 import { createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -39,6 +44,87 @@ import {
   type TaskComposerDraft,
   taskComposerContextStorage,
 } from './taskComposerStorage';
+
+// Only external composer ports are replaced; template and sharing behavior stays real.
+vi.mock('@tanstack/solid-query', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tanstack/solid-query')>()),
+  useQueryClient: () => new QueryClient(),
+}));
+vi.mock('@queries/team/teams', () => ({
+  useUserTeamsQuery: () => ({
+    isPending: false,
+    isSuccess: true,
+    data: [{ id: 'team' }],
+  }),
+}));
+vi.mock('@queries/history/history', () => ({
+  useUpsertToHistoryMutation: () => ({ mutate: vi.fn() }),
+}));
+vi.mock('@core/hotkey/hotkeys', () => ({
+  useHotkeyDOMScope: () => [vi.fn(), 'test-composer'],
+  registerHotkey: vi.fn(),
+}));
+vi.mock('@block-md/util/taskComposerProperties', async () => {
+  const { createStore } = await import('solid-js/store');
+  const { createSignal } = await import('solid-js');
+  return {
+    DEFAULT_TASK_COMPOSER_PROPERTY_IDS: [],
+    defaultTaskPropertyValues: () => ({}),
+    createTaskComposerProperties: (options: {
+      initialValues: Record<string, unknown>;
+    }) => {
+      const [propertyValues, setPropertyValues] = createStore(
+        options.initialValues
+      );
+      const [selectedPropertyIds, setVisiblePropertyIds] = createSignal<
+        string[]
+      >([]);
+      return {
+        propertyValues,
+        setPropertyValues,
+        selectedPropertyIds,
+        setVisiblePropertyIds,
+        writableProperties: () => [],
+        definitionsReady: () => true,
+        createDefinitions: () => new Map(),
+        properties: [],
+        availableProperties: [],
+        addProperty: vi.fn(),
+        saveHandler: vi.fn(),
+        clearComposerTags: vi.fn(),
+        composerTags: { appliedTags: () => [], isApplied: () => false },
+      };
+    },
+  };
+});
+vi.mock(
+  '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder',
+  () => ({
+    buildConfig: () => {
+      const config = new Proxy(
+        {},
+        {
+          get: (_target, key) =>
+            key === 'buildHandle'
+              ? () => ({ lexical: undefined })
+              : () => config,
+        }
+      );
+      return config;
+    },
+  })
+);
+vi.mock('@core/component/LexicalMarkdown/plugins/media', () => ({
+  addMediaFromFile: vi.fn(),
+}));
+vi.mock('@core/component/LexicalMarkdown/utils', () => ({
+  initializeEditorEmpty: vi.fn(),
+  initializeEditorWithState: vi.fn(),
+}));
+vi.mock('@app/features/task-composer/primitives/template-editor', () => ({
+  applyTemplateToEditor: (template: TaskTemplateContents) => template,
+  removeTemplateAttachments: () => undefined,
+}));
 
 const DEFAULT_KEY = 'task-composer-draft';
 
@@ -1202,4 +1288,86 @@ it('opens a personal template with entity defaults from the reactive query cache
   } finally {
     session.dispose();
   }
+});
+
+describe('repeated task sharing', () => {
+  it.each([true, false, undefined])(
+    'reapplies saved sharing %s after task-specific overrides',
+    async (defaultSharing) => {
+      localStorage.clear();
+      const createTask = vi.fn<NonNullable<ComposeTaskProps['createTask']>>(
+        async (
+          _title,
+          _content,
+          _properties,
+          _definitions,
+          _upsert,
+          options
+        ) => {
+          options?.onMutate?.();
+          const created = {
+            documentId: crypto.randomUUID(),
+            initialSnapshot: new Uint8Array(),
+          };
+          options?.onCreated?.(created);
+          return created;
+        }
+      );
+      const host: TaskComposerHost = {
+        userId: () => 'viewer',
+        templatesEnabled: () => true,
+        resolveAppLink: undefined,
+        createTemplate: vi.fn(),
+        updateTemplate: vi.fn(),
+        isPopover: () => false,
+        fillSheet: vi.fn(),
+        setDisplayName: vi.fn(),
+        close: vi.fn(),
+        openComposer: vi.fn(),
+        openTask: vi.fn(),
+        openPendingTask: () => ({ show: vi.fn(), cancel: vi.fn() }),
+      };
+      const dispose = createRoot((dispose) => {
+        const composer = createTaskComposer(
+          { createTask, onSuccess: vi.fn() },
+          host
+        );
+        return { composer, dispose };
+      });
+      const { composer } = dispose;
+      try {
+        const initialChoice =
+          defaultSharing === undefined ? false : !defaultSharing;
+        composer.setShareWithTeam(initialChoice);
+        composer.selectTemplate({
+          id: 'saved',
+          name: 'Reusable',
+          teamId: null,
+          revision: 1,
+          contents: {
+            title: 'Repeated task',
+            shareWithTeam: defaultSharing,
+            propertyIds: [],
+            propertyDefaults: {},
+            descriptionMarkdown: '',
+          },
+        });
+        const expected = defaultSharing ?? initialChoice;
+        expect(composer.shareWithTeam()).toBe(expected);
+        composer.setCreateMore(true);
+        for (let index = 0; index < 2; index++) {
+          composer.setTitle(`Task ${index}`);
+          composer.setShareWithTeam(!expected);
+          await composer.createTask();
+          expect(createTask.mock.calls[index][5]?.shareWithTeam).toBe(
+            !expected
+          );
+          expect(composer.shareWithTeam()).toBe(defaultSharing ?? !expected);
+        }
+        expect(createTask).toHaveBeenCalledTimes(2);
+      } finally {
+        dispose.dispose();
+      }
+    }
+  );
 });
