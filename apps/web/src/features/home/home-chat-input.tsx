@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
@@ -10,6 +11,7 @@ import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { createMentionAttachmentCallbacks } from '@core/component/AI/signal/mention-attachment-callbacks';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
+import { toast } from '@core/component/Toast/Toast';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -106,7 +108,9 @@ export const LegacyHomeChatInput = (props: HomeChatInputProps) => {
     hide: true,
   });
 
-  const renameMutation = createRenameDssEntityMutation();
+  const renameMutation = createRenameDssEntityMutation({
+    onError: () => toast.failure(t('entityActions.toastRenameFailed')),
+  });
 
   const restoreDraft = (request: ChatSendInput) => {
     input.attachments.setAttached(request.attachments);

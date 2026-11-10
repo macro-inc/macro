@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
@@ -68,7 +69,9 @@ function SoupChatInputInner() {
     },
   });
 
-  const renameMutation = createRenameDssEntityMutation();
+  const renameMutation = createRenameDssEntityMutation({
+    onError: () => toast.failure(t('entityActions.toastRenameFailed')),
+  });
 
   const handleSend = async (request: ChatSendInput) => {
     const backgroundSend = request.metaKey;

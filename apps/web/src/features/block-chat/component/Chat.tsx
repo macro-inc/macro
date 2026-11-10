@@ -1,4 +1,5 @@
 import { showAiUsageLimit } from '@app/features/paywall/ai-usage-limit-handling';
+import { t } from '@app/lib/i18n';
 import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
@@ -44,6 +45,7 @@ import {
   storeChatStateImmediate,
 } from '@core/component/AI/util/storage';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { toast } from '@core/component/Toast/Toast';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -200,7 +202,9 @@ function ChatInner(props: {
   });
 
   const sendChatMessage = useSendChatMessage();
-  const renameMutation = createRenameDssEntityMutation();
+  const renameMutation = createRenameDssEntityMutation({
+    onError: () => toast.failure(t('entityActions.toastRenameFailed')),
+  });
 
   const onSend = createCallback(async (request: ChatSendInput) => {
     const isFirstMessage = chat.messages().length === 0;

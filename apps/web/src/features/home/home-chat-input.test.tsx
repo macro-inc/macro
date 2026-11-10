@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   sendStreamChatMessage: vi.fn(),
   showPaywall: vi.fn(),
   rename: vi.fn(),
+  renameFails: false,
+  failureToast: vi.fn(),
   replace: vi.fn(),
   pendingSend: vi.fn(),
   invalidateSoup: vi.fn(),
@@ -67,7 +69,17 @@ vi.mock('@core/constant/PaywallState', () => ({
 }));
 vi.mock('@core/hotkey/hotkeys', () => ({ registerHotkey: vi.fn() }));
 vi.mock('@entity', () => ({
-  createRenameDssEntityMutation: () => ({ mutate: mocks.rename }),
+  createRenameDssEntityMutation: (callbacks?: {
+    onError?: (error: Error) => void;
+  }) => ({
+    mutate: (variables: unknown) => {
+      mocks.rename(variables);
+      if (mocks.renameFails) callbacks?.onError?.(new Error('Rename failed'));
+    },
+  }),
+}));
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: mocks.failureToast },
 }));
 vi.mock('@queries/soup/normalized-cache', () => ({
   invalidateAllSoup: mocks.invalidateSoup,
@@ -93,6 +105,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.sendStreamChatMessage.mockResolvedValue(ok({}));
   mocks.agentsEnabled = false;
+  mocks.renameFails = false;
   // ChatInput clears the editor and attachments before invoking onSend.
   mocks.draft = '';
   mocks.attached = [];
@@ -139,6 +152,15 @@ describe('Home chat creation', () => {
       expect(mocks.sendStreamChatMessage).not.toHaveBeenCalled();
     }
   );
+
+  it('says when naming the new chat fails', async () => {
+    mocks.renameFails = true;
+    mocks.createChat.mockResolvedValue(ok({ id: 'new-chat' }));
+
+    await mocks.onSend?.(request);
+
+    expect(mocks.failureToast).toHaveBeenCalledWith('Failed to rename');
+  });
 
   it('restores an attachment-only submission', async () => {
     mocks.createChat.mockResolvedValue(

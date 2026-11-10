@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   pending: vi.fn(),
   rename: vi.fn(),
+  renameFails: false,
   storeModel: vi.fn(),
   sendBackground: vi.fn(),
   setMarkdown: vi.fn(),
@@ -101,7 +102,14 @@ vi.mock('@core/util/handlePaymentError', () => ({
   isPaymentError: () => false,
 }));
 vi.mock('@entity', () => ({
-  createRenameDssEntityMutation: () => ({ mutate: mocks.rename }),
+  createRenameDssEntityMutation: (callbacks?: {
+    onError?: (error: Error) => void;
+  }) => ({
+    mutate: (variables: unknown) => {
+      mocks.rename(variables);
+      if (mocks.renameFails) callbacks?.onError?.(new Error('Rename failed'));
+    },
+  }),
 }));
 vi.mock('@queries/soup/cache', () => ({ invalidateAllSoup: vi.fn() }));
 vi.mock('@service-cognition/client', () => ({
@@ -121,6 +129,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.sendBackground.mockResolvedValue({ isErr: () => false });
   mocks.background = false;
+  mocks.renameFails = false;
   mocks.agentsEnabled = false;
   mocks.agentsLoading = () => false;
 });
@@ -183,6 +192,18 @@ describe('SoupChatInput', () => {
     });
     expect(mocks.storeModel.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.rename.mock.invocationCallOrder[0]
+    );
+  });
+  it('says when naming the new chat fails', async () => {
+    mocks.renameFails = true;
+    mocks.createChat.mockResolvedValue({
+      isErr: () => false,
+      value: { id: 'new-chat' },
+    });
+    render(() => <SoupChatInput />);
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() =>
+      expect(mocks.failureToast).toHaveBeenCalledWith('Failed to rename')
     );
   });
   it('records the selected provider for a background send without opening the chat', async () => {
