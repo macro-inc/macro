@@ -240,7 +240,7 @@ pub async fn fetch_inbox_details_for_macro_id(
                    CASE WHEN NOT EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder'))
                        THEN 'Init'::email_backfill_job_status
                    WHEN EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder') AND NOT ss.initial_complete)
-                       OR EXISTS (SELECT 1 FROM email_message_reconciliation mr WHERE mr.link_id = l.id AND mr.generation = l.sync_generation AND mr.is_import)
+                       OR EXISTS (SELECT 1 FROM email_message_reconciliation mr WHERE mr.link_id = l.id AND mr.generation = l.sync_generation AND mr.is_import AND mr.available_at <> 'infinity')
                        THEN 'InProgress'::email_backfill_job_status
                    ELSE 'Complete'::email_backfill_job_status END
                ELSE bj.status END as "latest_backfill_status?: _",
@@ -441,4 +441,56 @@ pub async fn fetch_link_by_id(pool: &PgPool, link_id: Uuid) -> anyhow::Result<Op
     .await?;
 
     Ok(db_link.map(link::Link::try_from).transpose()?)
+}
+
+/// One of a user's own inboxes, with the credential generations a provider
+/// read is bound to.
+#[derive(Debug, Clone)]
+pub struct ReadableInbox {
+    /// The link id.
+    pub id: Uuid,
+    /// The inbox address.
+    pub email_address: String,
+    /// Gmail or Outlook.
+    pub provider: service::link::UserProvider,
+    /// The link's sync generation.
+    pub sync_generation: i64,
+    /// The link's grant generation.
+    pub grant_generation: i64,
+}
+
+/// The inboxes `macro_id` owns (not delegated ones) that are syncing and whose
+/// credentials still work, newest first, for reading straight from the
+/// provider.
+#[tracing::instrument(skip_all, err)]
+pub async fn fetch_readable_owned_inboxes(
+    pool: &PgPool,
+    macro_id: &MacroUserIdStr<'_>,
+) -> anyhow::Result<Vec<ReadableInbox>> {
+    let rows = sqlx::query!(
+        r#"
+        SELECT id, email_address, provider as "provider: DbUserProvider",
+               sync_generation, grant_generation
+        FROM email_links
+        WHERE macro_id = $1 AND is_sync_active AND NOT needs_reauth
+        ORDER BY created_at DESC
+        "#,
+        macro_id.as_ref()
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| ReadableInbox {
+            id: row.id,
+            email_address: row.email_address,
+            provider: match row.provider {
+                DbUserProvider::Gmail => service::link::UserProvider::Gmail,
+                DbUserProvider::Outlook => service::link::UserProvider::Outlook,
+            },
+            sync_generation: row.sync_generation,
+            grant_generation: row.grant_generation,
+        })
+        .collect())
 }

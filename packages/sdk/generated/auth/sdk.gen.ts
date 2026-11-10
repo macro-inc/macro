@@ -243,13 +243,16 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Choose the model this user's `@cursor` sessions start on.
+     * Choose the model, and optionally the effort, this user's `@cursor` sessions
+     * start on.
      *
-     * Stores the id only; its parameters are resolved from Cursor's own default
-     * variant at session start. Not validated against the live model list here —
-     * the settings dropdown offers only real ids, and a stale id degrades to the
-     * deployment default at spawn rather than failing, so a round trip to Cursor
-     * on every save would buy nothing.
+     * Stores the id and effort value only; the other parameters are resolved from
+     * Cursor's own variants at session start. Saving a model without an effort
+     * clears the previous effort, which belonged to the previous model. Not
+     * validated against the live model list here — the settings controls offer
+     * only real values, and a stale id or effort degrades to the deployment or
+     * model default at spawn rather than failing, so a round trip to Cursor on
+     * every save would buy nothing.
      */
     public putCursorDefaultModel<ThrowOnError extends boolean = false>(options: Options<PutCursorDefaultModelData, ThrowOnError>): RequestResult<PutCursorDefaultModelResponses, PutCursorDefaultModelErrors, ThrowOnError> {
         return (options.client ?? this.client).put<PutCursorDefaultModelResponses, PutCursorDefaultModelErrors, ThrowOnError>({
@@ -805,15 +808,10 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Enables or disables CRM for the team. On enable with `backfill`
-     * (the default), kicks off a best-effort backfill that enqueues a
-     * `PopulateCrmForUser` message per team member (no-op if CRM is
-     * already enabled); without `backfill` the CRM starts empty and fills
-     * from new activity only. On disable,
-     * flips the flag and purges the team's CRM data (cascading through
-     * `crm_companies` → `crm_domains` / `crm_contacts` /
-     * `crm_contact_sources`). Requires the caller to be an Admin or
-     * Owner of the team.
+     * Legacy compatibility endpoint for team admins and owners. Enabling
+     * is a no-op; disabling is rejected. CRM records remain available.
+     * Each member manages mailbox contribution through `/crm/email-privacy`;
+     * this endpoint does not enroll mailboxes, backfill emails, or purge records.
      */
     public patchTeamCrmSettings<ThrowOnError extends boolean = false>(options: Options<PatchTeamCrmSettingsData, ThrowOnError>): RequestResult<PatchTeamCrmSettingsResponses, PatchTeamCrmSettingsErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<PatchTeamCrmSettingsResponses, PatchTeamCrmSettingsErrors, ThrowOnError>({

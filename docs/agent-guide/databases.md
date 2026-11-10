@@ -64,6 +64,13 @@ require edit access. Pass returned `readVersions` as `baseVersions` to guard a
 follow-up write, check `truncatedTables` before reporting aggregate totals, and
 never automatically retry a write statement.
 
+`POST /databases/queries` saves a question; the service compiles it against the
+caller's databases, refuses anything but one `SELECT`, and, when the request names
+chart columns, refuses columns the `SELECT` does not return. The SDK's
+`database.saveQuery({ sql, title, display })` (or `table.saveQuery`) returns a
+`SavedQuery` whose `toBlock()` is the `<m-db-query>` block to put in a document,
+and whose `withView()` restyles the answer without saving a new question.
+
 ## Feature flag
 
 Databases is behind the `enable-databases` PostHog flag. A deployed app reads it
@@ -181,7 +188,9 @@ The current type has a checkmark in **Change type**; selecting it leaves the col
 
 The header arrow menu groups schema and view actions. **Change type** checks the
 column's values against Text, Number, Select, Multi-select, Date, Time range,
-Checkbox, URL, People, Documents, Tasks, and relations to tables in this database, showing
+Checkbox, URL, People, Documents, Tasks, and relations to tables in this database
+(**Related table**) or in any other database you can see (**Other databases**, one
+submenu per database, by name), showing
 "Checking values…" meanwhile, then lists only the types the column can become (a
 checkbox can only become text; only an empty column can become People or a
 relation). A type some values would not survive shows how many, such
@@ -195,7 +204,9 @@ option does. Plain number strings can become numbers; padding, leading zeros and
 ambiguous values count as values that don't fit. A date becomes its `YYYY-MM-DD`
 text, or a one-day range. Text and single selects become ranges when each value
 is `start/end` or one date; a range can only become text. Changing a placement never changes another table that uses the same property.
-A relation can hold multiple records.
+A relation can hold multiple records. A relation into another database reads,
+searches and opens that database's records (in a split when the grid is a full
+database), and people who can't see that database see its cells as unavailable.
 
 **Formula columns.** **Change type → Formula** opens the formula editor under the
 header. On a new, never-filled column the formula column takes its place and name;

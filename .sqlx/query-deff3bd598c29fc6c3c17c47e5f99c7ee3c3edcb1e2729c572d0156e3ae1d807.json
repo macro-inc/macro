@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO crm_blocked_domains (team_id, domain)\n                               SELECT $1, lower(d.domain) FROM crm_domains d JOIN crm_companies c ON c.id = d.company_id\n                               WHERE c.team_id = $1 AND NOT c.email_sync AND lower(d.domain) <> $2\n                                 AND EXISTS (SELECT 1 FROM crm_domains target WHERE target.company_id = c.id AND lower(target.domain) = $2)\n                               ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "deff3bd598c29fc6c3c17c47e5f99c7ee3c3edcb1e2729c572d0156e3ae1d807"
+}

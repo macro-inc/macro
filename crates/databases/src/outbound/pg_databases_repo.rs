@@ -239,6 +239,30 @@ pub(crate) async fn insert_column(
     Ok(())
 }
 
+/// The databases filed in folders, for a folder trash to return to the root.
+#[derive(Debug, Clone)]
+pub struct PgDatabaseFolders {
+    pool: PgPool,
+}
+
+impl PgDatabaseFolders {
+    /// Unfile databases over the pool.
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+
+    /// Return the databases filed directly in any of `project_ids` to the
+    /// root, without the grants those folders passed down. A database is not
+    /// trashed with its folder, so trashing the folder files it at the root,
+    /// as purging the folder does.
+    pub async fn unfile_from_projects(
+        &self,
+        project_ids: &[String],
+    ) -> Result<(), PgDatabasesRepoError> {
+        folders::unfile_from_projects(&self.pool, project_ids).await
+    }
+}
+
 /// [`DatabasesRepo`] backed by MacroDB; a new database's title definition is
 /// written through the properties domain, in the same transaction.
 #[derive(Debug, Clone)]

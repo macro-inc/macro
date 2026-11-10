@@ -30,8 +30,8 @@ maybe_env_vars! {
     pub struct LexicalServiceUrl;
     /// internal auth key shared by sync/lexical locally
     pub struct InternalApiSecretKey;
-    /// frontend dev server port, for the per-persona URLs apply prints
-    pub struct FrontendPort;
+    /// HTTPS proxy port, for the per-persona URLs apply prints
+    pub struct ProxyPort;
     /// Google OAuth client id for the gmail entity (local Internal client)
     pub struct GoogleClientId;
     /// Google OAuth client secret for the gmail entity (in local mode this

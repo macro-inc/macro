@@ -1,3 +1,5 @@
+pub mod trace_context;
+
 use crate::SQS;
 use models_email::email::service::backfill::BackfillPubsubMessage;
 use models_email::email::service::crm_cleanup::CrmCleanupPubsubMessage;
@@ -128,7 +130,7 @@ impl SQS {
     }
 
     /// Sends a message to the email backfill queue
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip_all, err)]
     pub async fn enqueue_email_backfill_message(
         &self,
         message: BackfillPubsubMessage,
@@ -143,7 +145,7 @@ impl SQS {
     /// that becomes visible after `delay_seconds`. Unlike waiting out the
     /// visibility timeout, the wait uses none of the operation's deliveries.
     /// `deferrals` is recorded in [`BACKFILL_DEFERRALS_ATTRIBUTE`].
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err, fields(delay_seconds = i64::from(delay_seconds), deferrals = i64::from(deferrals)))]
     pub async fn defer_email_backfill_message(
         &self,
         message: &BackfillPubsubMessage,
@@ -157,14 +159,17 @@ impl SQS {
             .data_type("Number")
             .string_value(deferrals.to_string())
             .build()?;
-        self.inner
+        let mut request = self
+            .inner
             .send_message()
             .queue_url(email_backfill_queue)
             .message_body(serde_json::to_string(&message)?)
             .delay_seconds(delay_seconds)
-            .message_attributes(BACKFILL_DEFERRALS_ATTRIBUTE, deferrals)
-            .send()
-            .await?;
+            .message_attributes(BACKFILL_DEFERRALS_ATTRIBUTE, deferrals);
+        if let Some(context) = trace_context::attribute() {
+            request = request.message_attributes(trace_context::ATTRIBUTE, context);
+        }
+        request.send().await?;
         Ok(())
     }
 
@@ -246,7 +251,7 @@ pub async fn enqueue_link_manager_notification(
     Ok(())
 }
 
-#[tracing::instrument(skip(sqs_client))]
+#[tracing::instrument(skip_all, err)]
 pub async fn enqueue_backfill_message(
     sqs_client: &aws_sdk_sqs::Client,
     queue_url: &str,
@@ -255,12 +260,14 @@ pub async fn enqueue_backfill_message(
     let message_str = serde_json::to_string(&message)?;
 
     // Send the message with the serialized body
-    sqs_client
+    let mut request = sqs_client
         .send_message()
         .queue_url(queue_url)
-        .message_body(message_str)
-        .send()
-        .await?;
+        .message_body(message_str);
+    if let Some(context) = trace_context::attribute() {
+        request = request.message_attributes(trace_context::ATTRIBUTE, context);
+    }
+    request.send().await?;
 
     Ok(())
 }

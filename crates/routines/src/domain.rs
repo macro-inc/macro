@@ -170,6 +170,15 @@ pub struct RoutineConfiguration {
     /// current apps; a list replaces them, and an empty list removes them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub required_apps: Option<Vec<RoutineApp>>,
+    /// Dangerous: true makes its code steps post, comment and email as the
+    /// user, with no agent badge, as if the user wrote them. Set it only
+    /// when the user explicitly asks for the routine to act, send or post as
+    /// them; never infer it. By default, and when false, code steps' writes
+    /// are attributed to Macro's agent acting for the user. Ask AI steps are
+    /// always attributed to their agent. On update, omit it to keep the
+    /// routine's current setting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dangerously_operate_as_user: Option<bool>,
 }
 /// A Pipedream app a routine requires.
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
@@ -272,6 +281,7 @@ impl RoutineConfiguration {
                     })
                     .collect(),
             ),
+            dangerously_operate_as_user: program.dangerously_operate_as_user.then_some(true),
         })
     }
 
@@ -286,7 +296,10 @@ impl RoutineConfiguration {
             .flatten()
             .map(|app| serde_json::json!({ "app_slug": app.app_slug, "server_name": app.name }))
             .collect();
-        let program = serde_json::json!({ "steps": self.steps, "mcp_servers": apps });
+        let mut program = serde_json::json!({ "steps": self.steps, "mcp_servers": apps });
+        if self.dangerously_operate_as_user == Some(true) {
+            program["dangerously_operate_as_user"] = true.into();
+        }
         RoutineProgram::from_task(&program)
             .map_err(|error| anyhow::anyhow!("Invalid steps: {error}."))?
             .validate()
@@ -296,6 +309,7 @@ impl RoutineConfiguration {
 
     /// The scheduler's task, replacing `saved` when updating. Apps are always
     /// stated: the listed ones, or the saved ones when the caller omitted them.
+    /// Operating as the user is kept from `saved` when the caller omitted it.
     /// A lone agent step is stored as the single agent task routines had
     /// before steps, as the app does, so every scheduler version can run it;
     /// a saved program stays a program.
@@ -327,7 +341,18 @@ impl RoutineConfiguration {
             }
             return task;
         }
-        serde_json::json!({ "steps": self.steps, "mcp_servers": mcp_servers })
+        let mut task = serde_json::json!({ "steps": self.steps, "mcp_servers": mcp_servers });
+        let operate_as_user = match self.dangerously_operate_as_user {
+            Some(operate_as_user) => operate_as_user,
+            None => saved
+                .and_then(|task| task.get("dangerously_operate_as_user"))
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        };
+        if operate_as_user {
+            task["dangerously_operate_as_user"] = true.into();
+        }
+        task
     }
 
     /// The scheduler's trigger: schedules as they are, activity filters combined.

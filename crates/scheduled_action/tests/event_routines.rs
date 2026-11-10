@@ -459,6 +459,7 @@ fn incoming(name: &str, actor: &str) -> IncomingEvent {
     IncomingEvent {
         event_id: generate_uuid_v7(),
         schema_version: 1,
+        routine_id: None,
         payload: if name.starts_with("document.") {
             EventPayload::Document(serde_json::from_value(envelope).unwrap())
         } else if name == "channel.message_posted" {
