@@ -8,9 +8,9 @@ const contact = (email: string, name = email) => ({
   data: { id: email, email, name },
 });
 
-vi.mock('@core/signal/useCombinedRecipient', () => ({
-  useCombinedRecipients: () => ({
-    users: () => [
+vi.mock('@queries/contacts/recipient-source', () => ({
+  useContactRecipientSource: () => ({
+    items: () => [
       contact('a@example.org', 'Zed'),
       contact('b@example.org', 'Amy'),
       contact('c@example.net'),

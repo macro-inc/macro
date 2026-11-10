@@ -78,6 +78,8 @@ export function useEntitySearch(
         : buckets,
       searchTerm: scopedSearchTerm,
       enabled: searchActive,
+      peopleMode: 'command',
+      excludeSelf: true,
     });
   });
   const contactsActive = () =>
@@ -87,7 +89,12 @@ export function useEntitySearch(
     contactsActive
   );
   const people = {
-    users: quickAccess.useList('person').items,
+    users: () => [
+      ...(activeList()
+        ?.items()
+        .filter((item) => item.kind === 'user') ?? []),
+      ...(contacts?.users?.() ?? []),
+    ],
     directMessages: quickAccess.useList('dm').items,
     viewerId: useUserId(),
   };
@@ -154,6 +161,18 @@ export function useEntitySearch(
       (!!activeList()?.isLoading() && activeList()?.items().length === 0) ||
       (contactsActive() && (contacts?.isLoading() ?? false)),
     pagination: {
+      windowKey: () => {
+        if (
+          activeList()?.isLoading() ||
+          (contactsActive() && contacts?.isLoading())
+        )
+          return;
+        const people = activeList()?.windowKey?.();
+        const aliases = contactsActive() ? contacts?.windowKey?.() : undefined;
+        return people || aliases
+          ? `${people ?? ''}:${aliases ?? ''}`
+          : undefined;
+      },
       hasMore: () =>
         (activeList()?.hasMore() ?? false) ||
         (contactsActive() && (contacts?.hasMore() ?? false)),
