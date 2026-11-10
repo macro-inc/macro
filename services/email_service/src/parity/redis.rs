@@ -1,5 +1,6 @@
 use redis::AsyncCommands;
 use serde_json::{Value, json};
+use sha2::Digest;
 use std::collections::BTreeMap;
 
 pub(super) async fn snapshot(
@@ -43,7 +44,22 @@ pub(super) async fn snapshot(
                     .await
                     .expect("Redis hash")
             ),
-            other => json!({"type": other}),
+            "list" => json!(
+                connection
+                    .lrange::<_, Vec<String>>(&key, 0, -1)
+                    .await
+                    .expect("Redis list")
+            ),
+            // Any other type is fingerprinted, so a write to it still shows up
+            // as a change even though its value is not rendered.
+            other => {
+                let dump: Vec<u8> = redis::cmd("DUMP")
+                    .arg(&key)
+                    .query_async(connection)
+                    .await
+                    .expect("Redis dump");
+                json!({"type": other, "sha256": format!("{:x}", sha2::Sha256::digest(&dump))})
+            }
         };
         state.insert(key, value);
     }
