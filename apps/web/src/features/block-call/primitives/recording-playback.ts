@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { type Accessor, createEffect, onCleanup } from 'solid-js';
+import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 
 type RecordingPlaybackState = {
@@ -10,6 +10,7 @@ type RecordingPlaybackState = {
   rate: number;
   volume: number;
   isFullscreen: boolean;
+  fullscreenSession: number;
 };
 
 export const RECORDING_PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2] as const;
@@ -27,56 +28,63 @@ export function createRecordingPlayback(
     rate: 1,
     volume: 1,
     isFullscreen: false,
+    fullscreenSession: 0,
   });
   const target = () => fullscreenTarget?.() ?? video()?.parentElement;
-  createEffect(() => {
-    const element = target();
-    const update = () =>
-      setState(
-        'isFullscreen',
-        !!element && document.fullscreenElement === element
-      );
-    update();
-    document.addEventListener('fullscreenchange', update);
-    onCleanup(() => {
-      document.removeEventListener('fullscreenchange', update);
-      if (element && document.fullscreenElement === element)
-        fireAndForget(document.exitFullscreen(), 'call-recording');
-    });
-  });
-  let audibleVolume = 1;
-  createEffect(() => {
-    const element = video();
-    if (!element) return;
-    const update = () => {
-      setState({
-        time: Number.isFinite(element.currentTime) ? element.currentTime : 0,
-        duration: Number.isFinite(element.duration) ? element.duration : 0,
-        paused: element.paused,
-        muted: element.muted,
-        volume: element.volume,
-        rate: element.playbackRate,
+  createEffect(
+    on(target, (element) => {
+      const update = () => {
+        const active = !!element && document.fullscreenElement === element;
+        setState((previous) => ({
+          isFullscreen: active,
+          fullscreenSession:
+            previous.fullscreenSession +
+            Number(active && !previous.isFullscreen),
+        }));
+      };
+      update();
+      document.addEventListener('fullscreenchange', update);
+      onCleanup(() => {
+        document.removeEventListener('fullscreenchange', update);
+        if (element && document.fullscreenElement === element)
+          fireAndForget(document.exitFullscreen(), 'call-recording');
       });
-      if (element.volume > 0) audibleVolume = element.volume;
-    };
-    const events = [
-      'timeupdate',
-      'durationchange',
-      'loadedmetadata',
-      'play',
-      'pause',
-      'ended',
-      'volumechange',
-      'ratechange',
-      'seeking',
-      'emptied',
-    ];
-    for (const event of events) element.addEventListener(event, update);
-    update();
-    onCleanup(() => {
-      for (const event of events) element.removeEventListener(event, update);
-    });
-  });
+    })
+  );
+  let audibleVolume = 1;
+  createEffect(
+    on(video, (element) => {
+      if (!element) return;
+      const update = () => {
+        setState({
+          time: Number.isFinite(element.currentTime) ? element.currentTime : 0,
+          duration: Number.isFinite(element.duration) ? element.duration : 0,
+          paused: element.paused,
+          muted: element.muted,
+          volume: element.volume,
+          rate: element.playbackRate,
+        });
+        if (element.volume > 0) audibleVolume = element.volume;
+      };
+      const events = [
+        'timeupdate',
+        'durationchange',
+        'loadedmetadata',
+        'play',
+        'pause',
+        'ended',
+        'volumechange',
+        'ratechange',
+        'seeking',
+        'emptied',
+      ];
+      for (const event of events) element.addEventListener(event, update);
+      update();
+      onCleanup(() => {
+        for (const event of events) element.removeEventListener(event, update);
+      });
+    })
+  );
   const seek = (seconds: number) => {
     const element = video();
     if (!element || !Number.isFinite(seconds)) return;
@@ -92,6 +100,7 @@ export function createRecordingPlayback(
     rate: () => state.rate,
     volume: () => state.volume,
     isFullscreen: () => state.isFullscreen,
+    fullscreenSession: () => state.fullscreenSession,
     seek,
     toggle: () => {
       const element = video();

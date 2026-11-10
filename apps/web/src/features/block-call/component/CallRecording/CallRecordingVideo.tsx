@@ -1,11 +1,7 @@
 import { t } from '@app/lib/i18n';
-import { isModality } from '@core/mobile/inputModality';
-import { fireAndForget } from '@core/util/fireAndForget';
-import type { JSX } from 'solid-js';
-import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
-
-import { createRecordingControlsVisibility } from '../../primitives/recording-controls';
+import { type JSX, Show } from 'solid-js';
 import type { RecordingPlayback } from '../../primitives/recording-playback';
+import { createRecordingVideo } from '../../primitives/recording-video';
 import { CallRecordingControls } from './CallRecordingControls';
 export function CallRecordingVideo(props: {
   url: string;
@@ -18,97 +14,8 @@ export function CallRecordingVideo(props: {
   ) => void;
   setVideoRef?: (el: HTMLVideoElement) => void;
 }): JSX.Element {
-  const [isLoaded, setIsLoaded] = createSignal(false);
-  const controls = createRecordingControlsVisibility(
-    () => props.playback?.paused() ?? true
-  );
-  const [playbackError, setPlaybackError] = createSignal(false);
-  const [posterBlobUrl, setPosterBlobUrl] = createSignal<string>();
-  const hasVisibleVideo = () =>
-    isLoaded() || !!posterBlobUrl() || playbackError();
-  let rafId: number | null = null;
-  let videoRef: HTMLVideoElement | undefined;
-  let revealOnlyTap = false;
-
-  createEffect<string | undefined>((previousUrl) => {
-    const url = props.url;
-    if (url !== previousUrl) {
-      setIsLoaded(false);
-      setPlaybackError(false);
-    }
-    return url;
-  });
-
-  createEffect(() => {
-    const posterUrl = props.posterUrl;
-    setPosterBlobUrl(undefined);
-    if (!posterUrl) return;
-
-    const abortController = new AbortController();
-    let objectUrl: string | undefined;
-
-    onCleanup(() => {
-      abortController.abort();
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    });
-
-    fireAndForget(
-      (async () => {
-        try {
-          const response = await fetch(posterUrl, {
-            mode: 'cors',
-            signal: abortController.signal,
-          });
-          if (!response.ok) {
-            throw new Error(`Failed to fetch poster: ${response.status}`);
-          }
-
-          const blob = await response.blob();
-          if (abortController.signal.aborted) return;
-
-          objectUrl = URL.createObjectURL(blob);
-          setPosterBlobUrl(objectUrl);
-        } catch (error) {
-          if (abortController.signal.aborted) return;
-          console.error('Failed to load call recording preview poster', error);
-        }
-      })(),
-      'call-recording'
-    );
-  });
-
-  const stopTicking = () => {
-    if (rafId !== null) {
-      cancelAnimationFrame(rafId);
-      rafId = null;
-    }
-  };
-
-  const startTicking = (video: HTMLVideoElement) => {
-    stopTicking();
-    const tick = () => {
-      props.onTimeUpdate?.(video.currentTime, 'playback');
-      if (!video.paused && !video.ended) {
-        rafId = requestAnimationFrame(tick);
-      } else {
-        rafId = null;
-      }
-    };
-    rafId = requestAnimationFrame(tick);
-  };
-
-  function markPlaybackReady(): void {
-    setIsLoaded(true);
-    setPlaybackError(false);
-  }
-
-  function handlePlaybackError(): void {
-    stopTicking();
-    setPlaybackError(true);
-  }
-
-  onMount(() => videoRef?.load());
-  onCleanup(stopTicking);
+  const media = createRecordingVideo(props);
+  const { controls, hasVisibleVideo, playbackError, posterBlobUrl } = media;
 
   return (
     <div
@@ -117,37 +24,10 @@ export function CallRecordingVideo(props: {
       role="group"
       aria-label={t('calls.detailPlayback')}
       tabIndex={props.playback ? 0 : undefined}
-      onPointerMove={(event) => {
-        controls.setHovered(
-          event.pointerType !== 'touch' &&
-            event.target instanceof Element &&
-            event.target.closest('[data-recording-controls]') !== null
-        );
-        controls.show();
-      }}
-      onPointerLeave={() => controls.setHovered(false)}
-      onPointerDown={() => {
-        controls.setFocused(false);
-        controls.show();
-      }}
-      onFocusIn={() => {
-        controls.setFocused(isModality('keyboard'));
-        controls.show();
-      }}
-      onKeyDown={() => controls.setFocused(true)}
-      onFocusOut={(event) => {
-        if (
-          !(event.relatedTarget instanceof Node) ||
-          !event.currentTarget.contains(event.relatedTarget)
-        )
-          controls.setFocused(false);
-      }}
+      {...media.surfaceEvents}
     >
       <video
-        ref={(element) => {
-          videoRef = element;
-          props.setVideoRef?.(element);
-        }}
+        ref={media.setVideoRef}
         class="aspect-video w-full object-contain transition-opacity duration-200"
         classList={{
           'opacity-0': !hasVisibleVideo(),
@@ -158,39 +38,8 @@ export function CallRecordingVideo(props: {
         preload="metadata"
         crossorigin="anonymous"
         poster={posterBlobUrl()}
-        onPointerDown={(event) => {
-          revealOnlyTap = event.pointerType === 'touch' && !controls.visible();
-        }}
-        onClick={() => {
-          if (!revealOnlyTap && !playbackError()) props.playback?.toggle();
-          revealOnlyTap = false;
-        }}
         src={props.url}
-        onError={handlePlaybackError}
-        onLoadedData={markPlaybackReady}
-        onCanPlay={markPlaybackReady}
-        onPlaying={(event) => {
-          markPlaybackReady();
-          startTicking(event.currentTarget);
-        }}
-        onPlay={(event) => startTicking(event.currentTarget)}
-        onPause={() => stopTicking()}
-        onSeeking={(event) =>
-          props.onTimeUpdate?.(event.currentTarget.currentTime, 'seeking')
-        }
-        onSeeked={(event) =>
-          props.onTimeUpdate?.(event.currentTarget.currentTime, 'seeked')
-        }
-        onEnded={(event) => {
-          stopTicking();
-          props.onTimeUpdate?.(event.currentTarget.duration, 'playback');
-        }}
-        onTimeUpdate={(event) =>
-          props.onTimeUpdate?.(event.currentTarget.currentTime, 'playback')
-        }
-        onLoadedMetadata={(event) =>
-          props.onTimeUpdate?.(event.currentTarget.currentTime, 'playback')
-        }
+        {...media.videoEvents}
       />
       <Show when={!playbackError() && props.playback}>
         {(playback) => (

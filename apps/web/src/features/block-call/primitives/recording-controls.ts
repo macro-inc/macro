@@ -1,22 +1,26 @@
 import { debounce } from '@core/util/debounce';
-import {
-  type Accessor,
-  createEffect,
-  createSignal,
-  on,
-  onCleanup,
-} from 'solid-js';
+import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
+import { createStore } from 'solid-js/store';
+
+type ControlsState = {
+  idle: boolean;
+  hovered: boolean;
+  focused: boolean;
+  menuOpen: boolean;
+};
 
 /** Keep controls reachable during interactions, without obscuring idle playback. */
 export function createRecordingControlsVisibility(paused: Accessor<boolean>) {
-  const [idle, setIdle] = createSignal(false);
-  const [hovered, setHovered] = createSignal(false);
-  const [focused, setFocused] = createSignal(false);
-  const [menuOpen, setMenuOpen] = createSignal(false);
-  const held = () => hovered() || focused() || menuOpen();
-  const dismiss = debounce(() => setIdle(true), 2500);
+  const [state, setState] = createStore<ControlsState>({
+    idle: false,
+    hovered: false,
+    focused: false,
+    menuOpen: false,
+  });
+  const held = () => state.hovered || state.focused || state.menuOpen;
+  const dismiss = debounce(() => setState('idle', true), 2500);
   const show = () => {
-    setIdle(false);
+    setState('idle', false);
     dismiss.clear();
     if (!paused() && !held()) dismiss();
   };
@@ -26,11 +30,11 @@ export function createRecordingControlsVisibility(paused: Accessor<boolean>) {
   onCleanup(() => dismiss.clear());
 
   return {
-    visible: () => paused() || held() || !idle(),
+    visible: () => paused() || held() || !state.idle,
     show,
-    setHovered,
-    setFocused,
-    setMenuOpen,
+    setHovered: (value: boolean) => setState('hovered', value),
+    setFocused: (value: boolean) => setState('focused', value),
+    setMenuOpen: (value: boolean) => setState('menuOpen', value),
   };
 }
 

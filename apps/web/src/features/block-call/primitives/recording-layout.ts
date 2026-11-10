@@ -15,6 +15,7 @@ import type { RecordingPlayback } from './recording-playback';
 type RecordingLayoutState = {
   scrollingDown: boolean;
   playerOffscreen: boolean;
+  hiddenTranscriptSession: number | undefined;
 };
 
 // 520px player + 480px transcript + 28px gap + 80px page insets.
@@ -24,27 +25,29 @@ const TRANSCRIPT_LAYOUT_MIN_PX = 1108;
 export function createRecordingLayout(options: {
   playback: RecordingPlayback;
   hasRecording: Accessor<boolean>;
+  columnRef: Accessor<HTMLDivElement | undefined>;
 }) {
   const playback = options.playback;
   const [state, setState] = createStore<RecordingLayoutState>({
     scrollingDown: false,
     playerOffscreen: false,
+    hiddenTranscriptSession: undefined,
   });
-  const [columnRef, setColumnRef] = createSignal<HTMLDivElement>();
+  const columnRef = options.columnRef;
   const columnSize = createElementSize(columnRef);
   const wideTranscript = () =>
     !isMobile() && (columnSize.width ?? 0) >= TRANSCRIPT_LAYOUT_MIN_PX;
-  const [fullscreenTranscript, setFullscreenTranscript] = createSignal(true);
+  const fullscreenTranscript = () =>
+    !playback.isFullscreen() ||
+    state.hiddenTranscriptSession !== playback.fullscreenSession();
   const transcriptPanel = () => playback.isFullscreen() || wideTranscript();
-  createEffect(
-    on(playback.isFullscreen, (active) => {
-      if (!active) setFullscreenTranscript(true);
-    })
-  );
   const toggleFullscreenTranscript = () => {
     const interaction = beginInteraction('call.recording.transcript');
     try {
-      setFullscreenTranscript((visible) => !visible);
+      setState(
+        'hiddenTranscriptSession',
+        fullscreenTranscript() ? playback.fullscreenSession() : undefined
+      );
     } finally {
       interaction.end();
     }
@@ -54,7 +57,6 @@ export function createRecordingLayout(options: {
   const scrollRef = () =>
     transcriptPanel() ? leftScrollRef() : pageScrollRef();
 
-  const [manualScrollGeneration, setManualScrollGeneration] = createSignal(0);
   const [syncTarget, setSyncTarget] = createSignal<HTMLDivElement>();
   const registerSyncTarget = (element: HTMLDivElement) => {
     setSyncTarget(element);
@@ -83,20 +85,23 @@ export function createRecordingLayout(options: {
   };
   reducedMotion.addEventListener('change', motionChanged);
   onCleanup(() => reducedMotion.removeEventListener('change', motionChanged));
-  createEffect(() => {
-    const column = columnRef();
-    const player = playerRef();
-    if (!column) return;
-    const observer = new ResizeObserver(() => {
-      if (layoutAnimations.length && column.clientWidth !== animationPaneWidth)
-        cancelLayoutAnimations();
-      if (player && !wideTranscript() && !playback.isFullscreen())
-        narrowPlayerRect = player.getBoundingClientRect();
-    });
-    observer.observe(column);
-    if (player) observer.observe(player);
-    onCleanup(() => observer.disconnect());
-  });
+  createEffect(
+    on([columnRef, playerRef], ([column, player]) => {
+      if (!column) return;
+      const observer = new ResizeObserver(() => {
+        if (
+          layoutAnimations.length &&
+          column.clientWidth !== animationPaneWidth
+        )
+          cancelLayoutAnimations();
+        if (player && !wideTranscript() && !playback.isFullscreen())
+          narrowPlayerRect = player.getBoundingClientRect();
+      });
+      observer.observe(column);
+      if (player) observer.observe(player);
+      onCleanup(() => observer.disconnect());
+    })
+  );
   createEffect(
     on(wideTranscript, (wide, previous) => {
       cancelLayoutAnimations();
@@ -168,7 +173,6 @@ export function createRecordingLayout(options: {
   );
 
   return {
-    setColumnRef,
     setPageScrollRef,
     setLeftScrollRef,
     setPlayerRef,
@@ -182,11 +186,8 @@ export function createRecordingLayout(options: {
     scrollIntent,
     scrollingDown: () => state.scrollingDown,
     floatingPlayback,
-    manualScrollGeneration,
-    setManualScrollGeneration,
     syncTarget,
     registerSyncTarget,
-    columnRef,
     showVideo: () =>
       playerRef()?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
   };

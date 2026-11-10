@@ -2,12 +2,28 @@ import { createEffect, createSignal, on, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 
 type TranscriptScrollState = { following: boolean; activeVisible: boolean };
+
+/** Share explicit follow actions with the enclosing page's custom scrollbar. */
+export function createTranscriptFollow() {
+  const [state, setState] = createStore<TranscriptScrollState>({
+    following: true,
+    activeVisible: true,
+  });
+  return {
+    following: () => state.following,
+    activeVisible: () => state.activeVisible,
+    setFollowing: (value: boolean) => setState('following', value),
+    setActiveVisible: (value: boolean) => setState('activeVisible', value),
+    stopFollowing: () => setState('following', false),
+  };
+}
+export type TranscriptFollow = ReturnType<typeof createTranscriptFollow>;
 type TranscriptScrollOptions = {
   active?: boolean;
   activeSequenceNum?: number | null;
   scrollElement?: HTMLElement;
   videoSeekGeneration?: number;
-  manualScrollGeneration?: number;
+  follow?: TranscriptFollow;
 };
 
 /** Own transcript follow, manual scroll intent and active-row visibility. */
@@ -17,14 +33,8 @@ export function createTranscriptScroll(options: TranscriptScrollOptions) {
     options.active === false
       ? undefined
       : (options.scrollElement ?? scrollRef());
-  const [state, setState] = createStore<TranscriptScrollState>({
-    following: true,
-    activeVisible: true,
-  });
-  const following = () => state.following;
-  const activeVisible = () => state.activeVisible;
-  const setFollowing = (value: boolean) => setState('following', value);
-  const setActiveVisible = (value: boolean) => setState('activeVisible', value);
+  const { following, activeVisible, setFollowing, setActiveVisible } =
+    options.follow ?? createTranscriptFollow();
   const rows = new Map<number, HTMLDivElement>();
   let ignoreScrollUntil = 0;
   const updateVisibility = () => {
@@ -95,61 +105,52 @@ export function createTranscriptScroll(options: TranscriptScrollOptions) {
   );
 
   createEffect(
-    on(
-      () => options.manualScrollGeneration ?? 0,
-      (generation, previous) => {
-        if (previous !== undefined && generation !== previous)
-          setFollowing(false);
-      }
-    )
-  );
-
-  createEffect(() => {
-    const element = viewport();
-    if (!element) return;
-    const stopFollowing = () => setFollowing(false);
-    const onScroll = () => {
-      if (!following() || performance.now() >= ignoreScrollUntil)
+    on(viewport, (element) => {
+      if (!element) return;
+      const stopFollowing = () => setFollowing(false);
+      const onScroll = () => {
+        if (!following() || performance.now() >= ignoreScrollUntil)
+          updateVisibility();
+      };
+      const onPointerDown = (event: PointerEvent) => {
+        // Scrollbar presses target the viewport; content presses target a row.
+        if (event.target === element && event.pointerType !== 'touch')
+          stopFollowing();
+      };
+      const onKeyDown = (event: KeyboardEvent) => {
+        if (
+          [
+            'ArrowUp',
+            'ArrowDown',
+            'PageUp',
+            'PageDown',
+            'Home',
+            'End',
+            ' ',
+          ].includes(event.key)
+        )
+          stopFollowing();
+      };
+      element.addEventListener('wheel', stopFollowing, { passive: true });
+      element.addEventListener('touchmove', stopFollowing, { passive: true });
+      element.addEventListener('scroll', onScroll, { passive: true });
+      element.addEventListener('pointerdown', onPointerDown);
+      element.addEventListener('keydown', onKeyDown);
+      const observer = new ResizeObserver(() => {
+        if (following()) scrollActiveIntoView(false, 'auto');
         updateVisibility();
-    };
-    const onPointerDown = (event: PointerEvent) => {
-      // Scrollbar presses target the viewport; content presses target a row.
-      if (event.target === element && event.pointerType !== 'touch')
-        stopFollowing();
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (
-        [
-          'ArrowUp',
-          'ArrowDown',
-          'PageUp',
-          'PageDown',
-          'Home',
-          'End',
-          ' ',
-        ].includes(event.key)
-      )
-        stopFollowing();
-    };
-    element.addEventListener('wheel', stopFollowing, { passive: true });
-    element.addEventListener('touchmove', stopFollowing, { passive: true });
-    element.addEventListener('scroll', onScroll, { passive: true });
-    element.addEventListener('pointerdown', onPointerDown);
-    element.addEventListener('keydown', onKeyDown);
-    const observer = new ResizeObserver(() => {
-      if (following()) scrollActiveIntoView(false, 'auto');
-      updateVisibility();
-    });
-    observer.observe(element);
-    onCleanup(() => {
-      observer.disconnect();
-      element.removeEventListener('wheel', stopFollowing);
-      element.removeEventListener('touchmove', stopFollowing);
-      element.removeEventListener('scroll', onScroll);
-      element.removeEventListener('pointerdown', onPointerDown);
-      element.removeEventListener('keydown', onKeyDown);
-    });
-  });
+      });
+      observer.observe(element);
+      onCleanup(() => {
+        observer.disconnect();
+        element.removeEventListener('wheel', stopFollowing);
+        element.removeEventListener('touchmove', stopFollowing);
+        element.removeEventListener('scroll', onScroll);
+        element.removeEventListener('pointerdown', onPointerDown);
+        element.removeEventListener('keydown', onKeyDown);
+      });
+    })
+  );
   return {
     scrollRef,
     setScrollRef,

@@ -1,7 +1,7 @@
 import './recording-layout.css';
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { t } from '@app/lib/i18n';
-import { beginInteraction, usePending } from '@app/observability/flow';
+import { usePending } from '@app/observability/flow';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CallDiscussionHistory } from '@channel/Call/chat/CallChatHistory';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
@@ -14,22 +14,21 @@ import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import type { CallRecord } from '@service-call/client';
 import { Button, Layer, Tabs } from '@ui';
 import {
-  createEffect,
   createMemo,
   createSignal,
   type JSX,
   Match,
-  on,
   Show,
   Switch,
 } from 'solid-js';
 import type { CallTranscriptTarget } from '../../constants';
-import { useRecordingView } from '../../context/recording-view';
 import { recordingChatMessages } from '../../core/recording-chat';
 import { createRecordingIdentity } from '../../primitives/recording-identity';
 import { createRecordingLayout } from '../../primitives/recording-layout';
+import { createRecordingNavigation } from '../../primitives/recording-navigation';
 import { createRecordingPlayback } from '../../primitives/recording-playback';
 import { createRecordingTimeline } from '../../primitives/recording-timeline';
+import { createTranscriptFollow } from '../../primitives/transcript-scroll';
 import { CallTranscript } from '../CallTranscript';
 import { useCallAgain } from '../use-call-again';
 import { CallRecordingChat } from './CallRecordingChat';
@@ -52,18 +51,14 @@ export function CallRecordingBody(props: {
 }) {
   const record = () => props.record;
   const panel = useSidePanel();
-  const { contentTab, setContentTab } = useRecordingView();
   const [videoRef, setVideoRef] = createSignal<HTMLVideoElement>();
   const [columnRef, setColumnRef] = createSignal<HTMLDivElement>();
   const playback = createRecordingPlayback(videoRef, columnRef);
   const layout = createRecordingLayout({
     playback,
+    columnRef,
     hasRecording: () => !!record().recordingUrl,
   });
-  const setWorkspace = (element: HTMLDivElement) => {
-    setColumnRef(element);
-    layout.setColumnRef(element);
-  };
   const {
     wideTranscript,
     transcriptPanel,
@@ -73,8 +68,6 @@ export function CallRecordingBody(props: {
     scrollIntent,
     scrollingDown,
     floatingPlayback,
-    manualScrollGeneration,
-    setManualScrollGeneration,
     syncTarget,
     registerSyncTarget,
     setPageScrollRef,
@@ -83,8 +76,7 @@ export function CallRecordingBody(props: {
     setPlayerRef,
     setTranscriptCardRef,
   } = layout;
-  const selectedTab = () =>
-    !isMobile() && contentTab() === 'chat' ? 'summary' : contentTab();
+  const transcriptFollow = createTranscriptFollow();
   const recordingDuration = () => playback.duration() || undefined;
   const mobilePlaybackActive = () =>
     selectedTab() === 'transcript' && floatingPlayback() && !panel?.isOpen();
@@ -96,25 +88,21 @@ export function CallRecordingBody(props: {
     goToTranscriptSegment,
     videoSeekGeneration,
   } = createRecordingTimeline(record, videoRef);
-  createEffect(
-    on(
-      () =>
-        [
-          props.transcriptTarget,
-          props.messageTarget,
-          props.messageTargetRequestKey,
-        ] as const,
-      ([target, messageTarget]) => {
-        if (messageTarget) {
-          setContentTab(isMobile() ? 'chat' : 'summary');
-          return;
-        }
-        if (!target) return;
-        setContentTab('transcript');
-        goToTranscriptSegment(target.transcriptId);
-      }
-    )
-  );
+  const { selectedTab, selectTab } = createRecordingNavigation({
+    get callId() {
+      return props.callId;
+    },
+    get transcriptTarget() {
+      return props.transcriptTarget;
+    },
+    get messageTarget() {
+      return props.messageTarget;
+    },
+    get messageTargetRequestKey() {
+      return props.messageTargetRequestKey;
+    },
+    goToTranscriptSegment,
+  });
 
   const { title: callTitle, currentSpeaker } = createRecordingIdentity(
     record,
@@ -151,7 +139,7 @@ export function CallRecordingBody(props: {
                 floating
               >
                 <div
-                  ref={setWorkspace}
+                  ref={setColumnRef}
                   class="recording-workspace relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden @container/call-column"
                   data-fullscreen-transcript={fullscreenTranscript()}
                 >
@@ -274,22 +262,7 @@ export function CallRecordingBody(props: {
                                       : []),
                                   ]}
                                   value={selectedTab()}
-                                  onChange={(tab) => {
-                                    const interaction = beginInteraction(
-                                      'call.detail.tab',
-                                      {
-                                        attributes: {
-                                          'call.id': props.callId,
-                                          'call.tab': tab,
-                                        },
-                                      }
-                                    );
-                                    try {
-                                      setContentTab(tab);
-                                    } finally {
-                                      interaction.end();
-                                    }
-                                  }}
+                                  onChange={selectTab}
                                 />
                               </div>
                               <div class="flex min-w-0 flex-col gap-7">
@@ -342,9 +315,8 @@ export function CallRecordingBody(props: {
                               scrollIntent.markUserIntent(
                                 delta > 0 ? 'down' : 'up'
                               );
-                              setManualScrollGeneration(
-                                (generation) => generation + 1
-                              );
+                              if (!transcriptPanel())
+                                transcriptFollow.stopFollowing();
                             }}
                           />
                           <Show when={!isMobile()}>
@@ -397,11 +369,7 @@ export function CallRecordingBody(props: {
                               scrollElement={
                                 transcriptPanel() ? undefined : scrollRef()
                               }
-                              manualScrollGeneration={
-                                transcriptPanel()
-                                  ? undefined
-                                  : manualScrollGeneration()
-                              }
+                              follow={transcriptFollow}
                               syncTarget={
                                 transcriptPanel() ? undefined : syncTarget()
                               }

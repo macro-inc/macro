@@ -4,18 +4,9 @@
 
 import type { CallRecord } from '@service-call/client';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { type ComponentProps, createSignal, type JSX } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { RecordingViewProvider } from '../../context/recording-view';
-import { CallRecordingBody as RecordingBody } from './CallRecordingBody';
-
-function CallRecordingBody(props: ComponentProps<typeof RecordingBody>) {
-  return (
-    <RecordingViewProvider>
-      <RecordingBody {...props} />
-    </RecordingViewProvider>
-  );
-}
+import { CallRecordingBody } from './CallRecordingBody';
 
 const mocks = vi.hoisted(() => ({
   callAgain: vi.fn(),

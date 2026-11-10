@@ -14,7 +14,10 @@ import type { CallRecordTranscriptSegment } from '@service-storage/generated/sch
 import { Avatar, Button, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { createTranscriptScroll } from '../primitives/transcript-scroll';
+import {
+  createTranscriptScroll,
+  type TranscriptFollow,
+} from '../primitives/transcript-scroll';
 import { createTranscriptTimeline } from '../primitives/transcript-timeline';
 
 export function CallTranscript(props: {
@@ -32,8 +35,8 @@ export function CallTranscript(props: {
   messages?: MessageData[];
   /** Inline transcripts share the page scroller; cards own one. */
   scrollElement?: HTMLElement;
-  /** Changes only when the enclosing page's custom scrollbar is dragged. */
-  manualScrollGeneration?: number;
+  /** Share follow actions with the enclosing page's custom scrollbar. */
+  follow?: TranscriptFollow;
   /** Place resynchronization immediately above the host's playback bar. */
   syncTarget?: HTMLElement;
   syncSurface?: 'surface' | 'inset';

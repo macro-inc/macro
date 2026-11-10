@@ -1,6 +1,5 @@
 import { t } from '@app/lib/i18n';
 import { isMobile } from '@core/mobile/isMobile';
-import { debounce } from '@core/util/debounce';
 import { formatVideoTimestamp } from '@core/util/duration';
 import ForwardIcon from '@icon/system/regular/arrow-clockwise.svg';
 import BackIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
@@ -13,12 +12,14 @@ import MutedVolumeIcon from '@icon/system/regular/speaker-slash.svg';
 import TranscriptIcon from '@icon/system/regular/text-align-left.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Button, Dropdown, Slider } from '@ui';
-import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
+import { createRecordingControlMenus } from '../../primitives/recording-control-menus';
 import type { RecordingControlsVisibility } from '../../primitives/recording-controls';
 import {
   RECORDING_PLAYBACK_RATES,
   type RecordingPlayback,
 } from '../../primitives/recording-playback';
+import { createRecordingVolume } from '../../primitives/recording-volume';
 
 const CONTROL_MOTION =
   'transition-[transform,opacity] duration-[240ms] ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transform-none';
@@ -31,30 +32,10 @@ function DesktopRecordingControls(props: {
   transcript?: TranscriptControl;
 }) {
   const state = () => props.playback;
-  let controlsRef!: HTMLDivElement;
-  let fullscreenRef: HTMLButtonElement | undefined;
-  const [menuMount, setMenuMount] = createSignal<HTMLElement>();
-  const [speedOpen, setSpeedOpen] = createSignal(false);
-  const [volumeOpen, setVolumeOpen] = createSignal(false);
-  onCleanup(() => props.visibility.setMenuOpen(false));
-  onMount(() => {
-    const updateMenuMount = () => {
-      const fullscreen = document.fullscreenElement;
-      setMenuMount(
-        fullscreen instanceof HTMLElement && fullscreen.contains(controlsRef)
-          ? fullscreen
-          : undefined
-      );
-    };
-    updateMenuMount();
-    document.addEventListener('fullscreenchange', updateMenuMount);
-    onCleanup(() =>
-      document.removeEventListener('fullscreenchange', updateMenuMount)
-    );
-  });
+  const menus = createRecordingControlMenus(() => props.visibility);
   return (
     <div
-      ref={controlsRef}
+      ref={menus.setControlsRef}
       data-recording-controls
       class={`${CONTROL_MOTION} absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-surface/95 px-3 pb-2 pt-1`}
       classList={{
@@ -105,13 +86,7 @@ function DesktopRecordingControls(props: {
             / {formatVideoTimestamp(state().duration())}
           </span>
         </span>
-        <Dropdown
-          placement="top-end"
-          onOpenChange={(open) => {
-            setSpeedOpen(open);
-            props.visibility.setMenuOpen(open || volumeOpen());
-          }}
-        >
+        <Dropdown placement="top-end" onOpenChange={menus.setSpeedOpen}>
           <Dropdown.Trigger
             variant="ghost"
             size="sm"
@@ -120,7 +95,7 @@ function DesktopRecordingControls(props: {
           >
             {state().rate()}×
           </Dropdown.Trigger>
-          <Dropdown.Content mount={menuMount()} class="min-w-40">
+          <Dropdown.Content mount={menus.mount()} class="min-w-40">
             <Dropdown.Group>
               <Dropdown.RadioGroup
                 value={String(state().rate())}
@@ -156,16 +131,13 @@ function DesktopRecordingControls(props: {
         </Show>
         <RecordingVolume
           playback={props.playback}
-          mount={menuMount()}
-          open={volumeOpen()}
-          onTabForward={() => fullscreenRef?.focus()}
-          onOpenChange={(open) => {
-            setVolumeOpen(open);
-            props.visibility.setMenuOpen(open || speedOpen());
-          }}
+          mount={menus.mount()}
+          open={menus.volumeOpen()}
+          onTabForward={menus.focusFullscreen}
+          onOpenChange={menus.setVolumeOpen}
         />
         <Button
-          ref={fullscreenRef}
+          ref={menus.setFullscreenRef}
           variant="ghost"
           size="icon-sm"
           aria-label={t('calls.detailFullscreen')}
@@ -187,22 +159,11 @@ function RecordingVolume(props: {
   onTabForward: () => void;
 }) {
   const silent = () => props.playback.muted() || props.playback.volume() === 0;
-  let trigger!: HTMLButtonElement;
-  let content: HTMLDivElement | undefined;
-  let thumb: HTMLSpanElement | undefined;
-  let restoringFocus = false;
-  const close = debounce(() => {
-    if (
-      trigger !== document.activeElement &&
-      !content?.contains(document.activeElement)
-    )
-      props.onOpenChange(false);
-  }, 150);
-  const open = () => {
-    close.clear();
-    props.onOpenChange(true);
-  };
-  onCleanup(() => close.clear());
+  const volume = createRecordingVolume({
+    onOpenChange: (open) => props.onOpenChange(open),
+    onTabForward: () => props.onTabForward(),
+    toggleMute: () => props.playback.toggleMute(),
+  });
 
   return (
     <Popover
@@ -214,33 +175,18 @@ function RecordingVolume(props: {
     >
       <Popover.Anchor
         as={Button}
-        ref={trigger}
+        ref={volume.setTrigger}
         aria-haspopup="dialog"
         aria-expanded={props.open}
         variant="ghost"
         size="icon-sm"
         aria-label={silent() ? t('calls.detailUnmute') : t('calls.detailMute')}
-        onPointerEnter={open}
-        onPointerLeave={close}
-        onFocus={() => {
-          if (!restoringFocus) open();
-        }}
-        onBlur={close}
-        onClick={() => {
-          props.playback.toggleMute();
-          open();
-        }}
-        onKeyDown={(event: KeyboardEvent) => {
-          if (
-            event.key === 'ArrowUp' ||
-            event.key === 'ArrowDown' ||
-            (event.key === 'Tab' && !event.shiftKey)
-          ) {
-            event.preventDefault();
-            open();
-            queueMicrotask(() => thumb?.focus());
-          }
-        }}
+        onPointerEnter={volume.open}
+        onPointerLeave={volume.close}
+        onFocus={volume.onFocus}
+        onBlur={volume.close}
+        onClick={volume.onClick}
+        onKeyDown={volume.onTriggerKeyDown}
       >
         <Show when={silent()} fallback={<VolumeIcon class="size-4" />}>
           <MutedVolumeIcon class="size-4" />
@@ -248,26 +194,15 @@ function RecordingVolume(props: {
       </Popover.Anchor>
       <Popover.Portal mount={props.mount}>
         <Popover.Content
-          ref={content}
+          ref={volume.setContent}
           class="menu-surface z-action-menu p-3 outline-none"
-          onPointerEnter={open}
-          onPointerLeave={close}
-          onFocusIn={() => close.clear()}
-          onFocusOut={close}
-          onInteractOutside={(event) => {
-            if (
-              event.target instanceof Node &&
-              trigger.contains(event.target)
-            ) {
-              event.preventDefault();
-            }
-          }}
+          onPointerEnter={volume.open}
+          onPointerLeave={volume.close}
+          onFocusIn={volume.onContentFocus}
+          onFocusOut={volume.close}
+          onInteractOutside={volume.onInteractOutside}
           onOpenAutoFocus={(event) => event.preventDefault()}
-          onEscapeKeyDown={() => {
-            restoringFocus = true;
-            trigger.focus({ preventScroll: true });
-            restoringFocus = false;
-          }}
+          onEscapeKeyDown={volume.onEscape}
           onCloseAutoFocus={(event) => event.preventDefault()}
         >
           <Popover.Title class="sr-only">
@@ -282,21 +217,12 @@ function RecordingVolume(props: {
             step={0.05}
             value={[silent() ? 0 : props.playback.volume()]}
             onChange={(values) => props.playback.setVolume(values[0])}
-            onKeyDown={(event: KeyboardEvent) => {
-              if (event.key !== 'Tab') return;
-              event.preventDefault();
-              if (event.shiftKey) {
-                trigger.focus({ preventScroll: true });
-              } else {
-                props.onTabForward();
-                props.onOpenChange(false);
-              }
-            }}
+            onKeyDown={volume.onSliderKeyDown}
           >
             <Slider.Track class="my-0">
               <Slider.Fill class="h-auto" />
               <Slider.Thumb
-                ref={thumb}
+                ref={volume.setThumb}
                 aria-label={t('calls.detailVolume')}
                 class="bg-[white] border-border-secondary"
               >
