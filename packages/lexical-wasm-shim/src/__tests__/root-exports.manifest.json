@@ -1077,6 +1077,206 @@
       "name": "DOMConversionTagNameMap",
       "typeOnly": true,
       "source": "./nodes/dom-types"
+    },
+    {
+      "name": "$createNodeSelection",
+      "typeOnly": false,
+      "source": "./selection"
+    },
+    {
+      "name": "$createPoint",
+      "typeOnly": false,
+      "source": "./selection"
+    },
+    {
+      "name": "$createRangeSelection",
+      "typeOnly": false,
+      "source": "./selection"
+    },
+    {
+      "name": "$generateNodesFromRawText",
+      "typeOnly": false,
+      "source": "./selection"
+    },
+    {
+      "name": "$getCharacterOffsets",
+      "typeOnly": false,
+      "source": "./selection"
+    },
+    {
+      "name": "$getPreviousSelection",
+      "typeOnly": false,
+      "source": "./selection"
+    },
+    {
+      "name": "$getSelection",
+      "typeOnly": false,
+      "source": "./selection"
+    },
+    {
+      "name": "$getTextContent",
+      "typeOnly": false,
+      "source": "./selection"
+    },
+    {
+      "name": "$insertNodes",
+      "typeOnly": false,
+      "source": "./selection"
+    },
+    {
+      "name": "$isBlockElementNode",
+      "typeOnly": false,
+      "source": "./selection"
+    },
+    {
+      "name": "$isNodeSelection",
+      "typeOnly": false,
+      "source": "./selection"
+    },
+    {
+      "name": "$isRangeSelection",
+      "typeOnly": false,
+      "source": "./selection"
+    },
+    {
+      "name": "$normalizeSelection__EXPERIMENTAL",
+      "typeOnly": false,
+      "source": "./selection"
+    },
+    {
+      "name": "$setSelection",
+      "typeOnly": false,
+      "source": "./selection"
+    },
+    {
+      "name": "BaseSelection",
+      "typeOnly": true,
+      "source": "./selection"
+    },
+    {
+      "name": "ElementPoint",
+      "typeOnly": true,
+      "source": "./selection"
+    },
+    {
+      "name": "NodeSelection",
+      "typeOnly": true,
+      "source": "./selection"
+    },
+    {
+      "name": "Point",
+      "typeOnly": true,
+      "source": "./selection"
+    },
+    {
+      "name": "PointType",
+      "typeOnly": true,
+      "source": "./selection"
+    },
+    {
+      "name": "RangeSelection",
+      "typeOnly": true,
+      "source": "./selection"
+    },
+    {
+      "name": "TextPoint",
+      "typeOnly": true,
+      "source": "./selection"
+    },
+    {
+      "name": "LexicalEditor",
+      "typeOnly": true,
+      "source": "./editor"
+    },
+    {
+      "name": "EditorState",
+      "typeOnly": true,
+      "source": "./editor"
+    },
+    {
+      "name": "LexicalNode",
+      "typeOnly": true,
+      "source": "./nodes"
+    },
+    {
+      "name": "$isLexicalNode",
+      "typeOnly": false,
+      "source": "./nodes/predicates"
+    },
+    {
+      "name": "$isRootNode",
+      "typeOnly": false,
+      "source": "./nodes/predicates"
+    },
+    {
+      "name": "$isTabNode",
+      "typeOnly": false,
+      "source": "./nodes/predicates"
+    },
+    {
+      "name": "$isDecoratorNode",
+      "typeOnly": false,
+      "source": "./nodes/predicates"
+    },
+    {
+      "name": "$isLeafNode",
+      "typeOnly": false,
+      "source": "./nodes/predicates"
+    },
+    {
+      "name": "$isTokenOrSegmented",
+      "typeOnly": false,
+      "source": "./nodes/predicates"
+    },
+    {
+      "name": "$isTokenOrTab",
+      "typeOnly": false,
+      "source": "./nodes/predicates"
+    },
+    {
+      "name": "$isRootOrShadowRoot",
+      "typeOnly": false,
+      "source": "./nodes/predicates"
+    },
+    {
+      "name": "$isInlineElementOrDecoratorNode",
+      "typeOnly": false,
+      "source": "./nodes/predicates"
+    },
+    {
+      "name": "$findMatchingParent",
+      "typeOnly": false,
+      "source": "./utilities/tree"
+    },
+    {
+      "name": "$hasAncestor",
+      "typeOnly": false,
+      "source": "./utilities/tree"
+    },
+    {
+      "name": "$getNearestRootOrShadowRoot",
+      "typeOnly": false,
+      "source": "./utilities/tree"
+    },
+    {
+      "name": "removeFromParent",
+      "typeOnly": false,
+      "source": "./utilities/tree"
+    },
+    {
+      "name": "$createChildrenArray",
+      "typeOnly": false,
+      "source": "./utilities/tree"
+    },
+    {
+      "name": "setNodeIndentFromDOM",
+      "typeOnly": false,
+      "source": "./utilities/dom-config"
+    },
+    {
+      "name": "$setDirectionFromDOM",
+      "typeOnly": false,
+      "source": "./utilities/dom-config"
     }
   ],
   "existingPublicSingletonGroups": [
@@ -1107,7 +1307,8 @@
     "getDOMNodeConversionFunction",
     "$getAdjacentNodes",
     "$splitTextPointCaret",
-    "widenTagConversionMap"
+    "widenTagConversionMap",
+    "getEditorDOMRenderConfig"
   ],
   "namespaceAcceptance": false,
   "nativeAcceptance": false,

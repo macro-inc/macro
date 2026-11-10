@@ -15,7 +15,10 @@ import type {
   CommandListenerPriority,
   CommandListenerPriorityBefore,
 } from './constants';
-import { DEFAULT_EDITOR_DOM_CONFIG } from './editor-dom-config';
+import {
+  DEFAULT_EDITOR_DOM_CONFIG,
+  getEditorDOMRenderConfig as resolveEditorDOMRenderConfig,
+} from './editor-dom-config';
 import { ElementNode, LexicalNode, nativeNode, RootNode } from './nodes';
 import type {
   EditorConfig,
@@ -366,6 +369,12 @@ export function updateEditorSync(
 
 export function createEditor(config?: CreateEditorArgs): LexicalEditor {
   return new LexicalEditor(config);
+}
+
+export function $getEditorDOMRenderConfig(
+  editor: LexicalEditor = getActiveEditor()
+): EditorDOMRenderConfig {
+  return resolveEditorDOMRenderConfig(editor);
 }
 
 export function $getRoot(): RootNode {

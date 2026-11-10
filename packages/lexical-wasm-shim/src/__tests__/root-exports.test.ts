@@ -11,19 +11,27 @@ import * as root from '../index';
 import * as artificial from '../nodes/artificial';
 import * as importMap from '../nodes/build-import-map';
 import * as css from '../nodes/dom-style';
+import * as predicates from '../nodes/predicates';
 import * as replacement from '../nodes/replacement';
 import * as state from '../nodes/state';
 import * as staticConfig from '../nodes/static-config';
+import * as selection from '../selection';
 import * as selectionHelpers from '../selection/helpers';
 import * as serialization from '../serialization';
 import * as utilities from '../utilities';
+import * as domConfig from '../utilities/dom-config';
+import * as tree from '../utilities/tree';
 import manifest from './root-exports.manifest.json';
 
 const producers: Record<string, object> = {
   './caret': caret,
   './extension-core': extensionCore,
   './utilities': utilities,
+  './utilities/tree': tree,
+  './utilities/dom-config': domConfig,
+  './nodes/predicates': predicates,
   './selection/helpers': selectionHelpers,
+  './selection': selection,
   './editor-dom-config': defaultDOM,
   './nodes/artificial': artificial,
   './nodes/build-import-map': importMap,
