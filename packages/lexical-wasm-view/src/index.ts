@@ -33,6 +33,7 @@ export type {
   ConformancePort,
   EditorPort,
   NativeEnterPort,
+  ProgrammaticApplicationInput,
   TextFromView,
   ViewSink,
 } from './view/port';

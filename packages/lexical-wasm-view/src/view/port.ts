@@ -1,6 +1,7 @@
 import type {
   EditorInputMsg,
   IClipboardMsg,
+  IEditorApplication,
   IQueryMsg,
   IQueryReplyMsg,
   ISelectionChangeMsg,
@@ -11,6 +12,11 @@ import type { ViewCommandPriority } from './commands';
 import type { NativeEnterScope } from './native-enter';
 import type { NativeCallbackFailure } from './native-enter-output';
 import type { NodeKey, TypeRow, ViewSelection } from './types';
+
+/** A deferred application command has no invocation-scoped DOM event. */
+export type ProgrammaticApplicationInput = Readonly<
+  Pick<IEditorApplication, 'name' | 'json' | 'generation' | 'selection'>
+>;
 
 export interface NativeEnterPort {
   register(
@@ -89,6 +95,9 @@ export interface EditorPort {
     after?: (handled: boolean) => void,
     event?: KeyboardEvent
   ): void;
+  inputSettled?(
+    factory: () => ProgrammaticApplicationInput
+  ): Promise<InputSettlement>;
   inputSettled?(
     input: EditorInputMsg,
     event?: KeyboardEvent

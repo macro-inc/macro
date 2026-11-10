@@ -23,6 +23,7 @@ import type {
   EditorPort,
   InputSettlement,
   NativeEnterPort,
+  ProgrammaticApplicationInput,
   TextFromView,
   ViewSink,
 } from './port';
@@ -370,13 +371,42 @@ export class SessionPort implements EditorPort {
   }
   /** Root admission only; a native dispatcher callback must use its issued scope. */
   inputSettled(
+    factory: () => ProgrammaticApplicationInput
+  ): Promise<InputSettlement>;
+  inputSettled(
     editor: EditorInputMsg,
+    event?: KeyboardEvent
+  ): Promise<InputSettlement>;
+  inputSettled(
+    editor: EditorInputMsg | (() => ProgrammaticApplicationInput),
     event?: KeyboardEvent
   ): Promise<InputSettlement> {
     this.assertRootAdmission();
     const run = this.executor.runSettled;
     if (!run) throw new Error('Per-input executor settlement is unavailable');
-    const operation = this.prepareInput(editor, event);
+    if (typeof editor === 'function' && event !== undefined)
+      throw new Error('Deferred application inputs cannot carry DOM events');
+    const operation =
+      typeof editor === 'function'
+        ? {
+            synchronous: false,
+            call: () => {
+              const application = editor();
+              return this.prepareInput(
+                EditorInputMsg.fromEditorApplication({
+                  name: application.name,
+                  json: application.json,
+                  generation: application.generation,
+                  selection: application.selection,
+                  keyboard: false,
+                  key: '',
+                  mods: 0,
+                  code: 0,
+                })
+              ).call();
+            },
+          }
+        : this.prepareInput(editor, event);
     let resolve!: (result: InputSettlement) => void;
     const pending = new Promise<InputSettlement>((complete) => {
       resolve = complete;
