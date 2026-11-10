@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use teams::domain::model::{PriceInfo, SubscriptionTerms};
@@ -74,7 +75,7 @@ impl TeamSubscriptionItems for FakeTeams {
 
     async fn price(
         &self,
-        price_id: &stripe_price_id::StripePriceId,
+        price_id: &stripe::PriceId,
     ) -> Result<PriceInfo, TeamSubscriptionItemsError> {
         let amount = match price_id.as_str() {
             "price_standard_month" => 2000,
@@ -92,11 +93,11 @@ impl TeamSubscriptionItems for FakeTeams {
 fn prices() -> ComputerPrices {
     ComputerPrices {
         standard: IntervalPrices {
-            monthly: Some(stripe_price_id::StripePriceId::parse("price_standard_month").unwrap()),
-            yearly: Some(stripe_price_id::StripePriceId::parse("price_standard_year").unwrap()),
+            monthly: Some(stripe::PriceId::from_str("price_standard_month").unwrap()),
+            yearly: Some(stripe::PriceId::from_str("price_standard_year").unwrap()),
         },
         large: IntervalPrices {
-            monthly: Some(stripe_price_id::StripePriceId::parse("price_large_month").unwrap()),
+            monthly: Some(stripe::PriceId::from_str("price_large_month").unwrap()),
             yearly: None,
         },
         xl: IntervalPrices {
@@ -119,7 +120,7 @@ async fn a_quote_is_the_size_price_at_the_subscription_interval() {
         quote,
         Quote {
             size: ComputerSize::Standard,
-            price_id: StripePriceId::parse("price_standard_year").unwrap(),
+            price_id: stripe::PriceId::from_str("price_standard_year").unwrap(),
             amount: 20000,
             currency: "usd".into(),
             interval: BillingInterval::Year,
@@ -151,9 +152,9 @@ async fn adding_a_computer_joins_its_item_and_the_extra_items_in_one_change() {
     billing
         .add_computer(
             team_id,
-            &StripePriceId::parse("price_standard_month").unwrap(),
+            &stripe::PriceId::from_str("price_standard_month").unwrap(),
             &[SubscriptionItem {
-                price_id: StripePriceId::parse("price_pro").unwrap(),
+                price_id: stripe::PriceId::from_str("price_pro").unwrap(),
                 quantity: 2,
             }],
             "computer-1",
@@ -163,7 +164,7 @@ async fn adding_a_computer_joins_its_item_and_the_extra_items_in_one_change() {
     billing
         .remove_computer(
             team_id,
-            &StripePriceId::parse("price_standard_month").unwrap(),
+            &stripe::PriceId::from_str("price_standard_month").unwrap(),
             "computer-1-release",
         )
         .await
@@ -176,12 +177,11 @@ async fn adding_a_computer_joins_its_item_and_the_extra_items_in_one_change() {
                 team_id,
                 vec![
                     ItemQuantityChange {
-                        price_id: stripe_price_id::StripePriceId::parse("price_standard_month")
-                            .unwrap(),
+                        price_id: stripe::PriceId::from_str("price_standard_month").unwrap(),
                         delta: 1,
                     },
                     ItemQuantityChange {
-                        price_id: stripe_price_id::StripePriceId::parse("price_pro").unwrap(),
+                        price_id: stripe::PriceId::from_str("price_pro").unwrap(),
                         delta: 2,
                     },
                 ],
@@ -190,8 +190,7 @@ async fn adding_a_computer_joins_its_item_and_the_extra_items_in_one_change() {
             (
                 team_id,
                 vec![ItemQuantityChange {
-                    price_id: stripe_price_id::StripePriceId::parse("price_standard_month")
-                        .unwrap(),
+                    price_id: stripe::PriceId::from_str("price_standard_month").unwrap(),
                     delta: -1,
                 }],
                 "computer-1-release".to_string(),
@@ -207,7 +206,7 @@ async fn declines_and_missing_subscriptions_keep_their_meaning() {
     let result = TeamComputerBilling::new(declined, prices())
         .add_computer(
             Uuid::nil(),
-            &StripePriceId::parse("price_standard_month").unwrap(),
+            &stripe::PriceId::from_str("price_standard_month").unwrap(),
             &[],
             "computer-2",
         )
@@ -235,7 +234,7 @@ async fn a_successful_purchase_replays_before_subscription_or_price_lookup() {
     TeamComputerBilling::new(teams.clone(), prices())
         .add_computer(
             team_id,
-            &StripePriceId::parse("price_standard_month").unwrap(),
+            &stripe::PriceId::from_str("price_standard_month").unwrap(),
             &[],
             "computer-add:confirmed",
         )
@@ -248,7 +247,7 @@ async fn a_successful_purchase_replays_before_subscription_or_price_lookup() {
     billing
         .add_computer(
             team_id,
-            &StripePriceId::parse("price_standard_month").unwrap(),
+            &stripe::PriceId::from_str("price_standard_month").unwrap(),
             &[],
             "computer-add:confirmed",
         )

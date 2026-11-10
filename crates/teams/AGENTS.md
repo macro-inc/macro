@@ -72,7 +72,7 @@ event contract (schema, sanitization, delivery semantics).
 
 ## Gotchas
 
-- Carry the canonical `StripePriceId` through generic item changes; validate
+- Carry async-stripe's `stripe::PriceId` through generic item changes; validate
   once at configuration/provider boundaries.
 
 - A trialing subscription that gains its first Max seat ends the trial and
@@ -96,7 +96,7 @@ event contract (schema, sanitization, delivery semantics).
 
 ## Billing identifiers
 
-- Use `stripe_price_id::StripePriceId` for seat price configuration, item quantity changes, and price lookups; convert to provider strings only in the Stripe adapter.
+- Use `stripe::PriceId` for seat price configuration, item quantity changes, and price lookups; its parse accepts any string, so callers validate configured ids before building `SeatPrices`.
 
 ## Checks
 

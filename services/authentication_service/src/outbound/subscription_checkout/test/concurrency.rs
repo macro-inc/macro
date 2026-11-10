@@ -1,6 +1,7 @@
 use super::*;
 use axum::{body::to_bytes, http::StatusCode, response::IntoResponse};
 use std::collections::BTreeMap;
+use std::str::FromStr;
 use tokio::sync::Barrier;
 
 #[derive(Default)]
@@ -150,8 +151,8 @@ async fn setup(
         Arc::new(stripe::Client::from_url(url.as_str(), "sk_test_fixture")),
         Arc::new(()),
         SeatPrices {
-            premium: stripe_price_id::StripePriceId::parse("price_pro").unwrap(),
-            max: Some(stripe_price_id::StripePriceId::parse("price_max").unwrap()),
+            premium: stripe::PriceId::from_str("price_pro").unwrap(),
+            max: Some(stripe::PriceId::from_str("price_max").unwrap()),
         },
     );
     (gateway, provider_state, task)

@@ -1,19 +1,17 @@
 //! Macro computers billed as items on the team subscription: their prices,
 //! and the port that keeps purchased computers in step with what Stripe bills.
 
-use stripe_price_id::StripePriceId;
-
 use hosted_runtimes::domain::{models::BillingInterval, size::ComputerSize};
 
 /// One size's price per billing interval; `None` when not sold at it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IntervalPrices {
-    pub monthly: Option<StripePriceId>,
-    pub yearly: Option<StripePriceId>,
+    pub monthly: Option<stripe::PriceId>,
+    pub yearly: Option<stripe::PriceId>,
 }
 
 impl IntervalPrices {
-    fn price_id(&self, interval: BillingInterval) -> Option<&StripePriceId> {
+    fn price_id(&self, interval: BillingInterval) -> Option<&stripe::PriceId> {
         match interval {
             BillingInterval::Month => self.monthly.as_ref(),
             BillingInterval::Year => self.yearly.as_ref(),
@@ -52,12 +50,12 @@ impl ComputerPrices {
         &self,
         size: ComputerSize,
         interval: BillingInterval,
-    ) -> Option<&StripePriceId> {
+    ) -> Option<&stripe::PriceId> {
         self.of(size).price_id(interval)
     }
 
     /// Recognize an unlinked legacy computer charge without inferring its size.
-    pub fn contains_legacy_price(&self, price_id: &StripePriceId) -> bool {
+    pub fn contains_legacy_price(&self, price_id: &stripe::PriceId) -> bool {
         ComputerSize::ALL.into_iter().any(|size| {
             let prices = self.of(size);
             [prices.monthly.as_ref(), prices.yearly.as_ref()]

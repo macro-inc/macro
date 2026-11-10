@@ -1,5 +1,6 @@
 use super::*;
 use macro_user_id::user_id::MacroUserIdStr;
+use std::str::FromStr;
 
 #[tokio::test]
 async fn catalog_changes_only_apply_to_new_purchases() {
@@ -92,7 +93,7 @@ async fn price_rotation_does_not_cancel_an_existing_paid_computer() {
             ..FakeRepo::default()
         },
         FakeBilling {
-            quote_price: Some(crate::domain::models::StripePriceId::parse("price_old").unwrap()),
+            quote_price: Some(stripe::PriceId::from_str("price_old").unwrap()),
             ..FakeBilling::default()
         },
         FixedClock,
@@ -109,8 +110,7 @@ async fn price_rotation_does_not_cancel_an_existing_paid_computer() {
         })
         .await
         .unwrap();
-    service.billing.quote_price =
-        Some(crate::domain::models::StripePriceId::parse("price_new").unwrap());
+    service.billing.quote_price = Some(stripe::PriceId::from_str("price_new").unwrap());
     let new = service
         .purchase(PurchaseRequest {
             billing: PurchaseBilling::Stripe,
@@ -126,7 +126,7 @@ async fn price_rotation_does_not_cancel_an_existing_paid_computer() {
         .reconcile_billed_counts(
             TEAM,
             &[SubscriptionItem {
-                price_id: crate::domain::models::StripePriceId::parse("price_old").unwrap(),
+                price_id: stripe::PriceId::from_str("price_old").unwrap(),
                 quantity: 1,
             }],
         )

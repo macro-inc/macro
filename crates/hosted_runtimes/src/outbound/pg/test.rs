@@ -1,3 +1,4 @@
+use std::str::FromStr;
 mod quarantine;
 mod redeploy;
 
@@ -62,7 +63,7 @@ fn standard(id: u128) -> NewComputer {
         },
         catalog_entry: crate::domain::size::CatalogEntryId::try_new("standard@2026-11".to_owned())
             .unwrap(),
-        price_id: Some(crate::domain::models::StripePriceId::parse("price_standard").unwrap()),
+        price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
         created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
     }
 }
@@ -336,7 +337,7 @@ async fn reserve_atomically_schedules_confirmation_and_failed_payment_frees_capa
         .unwrap();
     let mut purchase = standard(1);
     purchase.extra_items = vec![crate::domain::models::SubscriptionItem {
-        price_id: crate::domain::models::StripePriceId::parse("price_seat").unwrap(),
+        price_id: stripe::PriceId::from_str("price_seat").unwrap(),
         quantity: 1,
     }];
     let computer = repo.reserve(purchase, now()).await.unwrap();
@@ -382,7 +383,7 @@ async fn reserve_atomically_schedules_confirmation_and_failed_payment_frees_capa
         effects[0].effect,
         Effect::ConfirmPayment {
             extra_items: vec![crate::domain::models::SubscriptionItem {
-                price_id: crate::domain::models::StripePriceId::parse("price_seat").unwrap(),
+                price_id: stripe::PriceId::from_str("price_seat").unwrap(),
                 quantity: 1
             }]
         }

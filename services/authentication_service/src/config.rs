@@ -238,6 +238,17 @@ pub(crate) struct MicrosoftCredentials {
     pub(crate) token_kms_key_id: String,
 }
 
+/// Parse a configured Stripe price id, rejecting anything but `price_` and a safe suffix.
+///
+/// `stripe::PriceId` accepts any string, so malformed configuration fails here instead.
+pub fn configured_price_id(value: &str) -> anyhow::Result<stripe::PriceId> {
+    anyhow::ensure!(
+        lazy_regex::regex_is_match!(r"^price_[A-Za-z0-9_]{1,64}$", value),
+        "Stripe price id {value:?} must match ^price_[A-Za-z0-9_]{{1,64}}$"
+    );
+    Ok(value.parse()?)
+}
+
 impl Config {
     /// The AI pricing every billing component is composed with. Every value
     /// is validated when the configuration loads.
@@ -296,7 +307,7 @@ impl Config {
         &self,
     ) -> anyhow::Result<crate::domain::computer_billing::ComputerPrices> {
         self.validate_computer_config()?;
-        let price = |id: Option<&str>| id.map(stripe_price_id::StripePriceId::parse).transpose();
+        let price = |id: Option<&str>| id.map(configured_price_id).transpose();
         Ok(crate::domain::computer_billing::ComputerPrices {
             standard: crate::domain::computer_billing::IntervalPrices {
                 monthly: price(self.stripe_computer_standard_monthly_price_id.value())?,

@@ -1,3 +1,4 @@
+use std::str::FromStr;
 mod redeploy;
 
 use macro_user_id::user_id::MacroUserIdStr;
@@ -349,9 +350,7 @@ async fn paid_computer(
                     "standard@2026-11".to_owned(),
                 )
                 .unwrap(),
-                price_id: Some(
-                    crate::domain::models::StripePriceId::parse("price_standard").unwrap(),
-                ),
+                price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
                 created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
             },
             now(),

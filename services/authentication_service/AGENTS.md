@@ -46,7 +46,7 @@ key issuance, and account merge/link flows.
 ## Computer billing identifiers
 
 - Treat the six `STRIPE_COMPUTER_*_PRICE_ID` values as an optional all-or-none group: none means computer prices are not configured; any partial group fails startup and Doppler validation independently of physical fleet attachment. Validate configured price syntax in both startup and the Doppler binary.
-- Store computer interval prices as `Option<stripe_price_id::StripePriceId>` and reject malformed configured IDs during configuration loading, including when no fleet is attached. `Config::computer_prices` returns a validation result.
+- Store computer and seat prices as `stripe::PriceId` and reject malformed configured IDs during configuration loading with `config::configured_price_id` (async-stripe's parse accepts any string), including when no fleet is attached. `Config::computer_prices` returns a validation result.
 
 ## Checks
 

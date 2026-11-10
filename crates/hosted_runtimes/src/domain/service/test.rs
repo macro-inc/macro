@@ -1,5 +1,6 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashSet;
+use std::str::FromStr;
 use std::sync::Mutex;
 
 use chrono::{DateTime, Utc};
@@ -20,7 +21,7 @@ mod sold_resources;
 /// Records subscription updates; fails them when `decline` is set.
 #[derive(Default)]
 pub(crate) struct FakeBilling {
-    quote_price: Option<crate::domain::models::StripePriceId>,
+    quote_price: Option<stripe::PriceId>,
     not_sold: bool,
     sales_checks: Mutex<usize>,
     no_subscription: bool,
@@ -29,14 +30,8 @@ pub(crate) struct FakeBilling {
     provider_error: bool,
     charged: Mutex<HashSet<String>>,
     calls: Mutex<Vec<&'static str>>,
-    updates: Mutex<
-        Vec<(
-            crate::domain::models::StripePriceId,
-            Vec<SubscriptionItem>,
-            String,
-        )>,
-    >,
-    removals: Mutex<Vec<(crate::domain::models::StripePriceId, String)>>,
+    updates: Mutex<Vec<(stripe::PriceId, Vec<SubscriptionItem>, String)>>,
+    removals: Mutex<Vec<(stripe::PriceId, String)>>,
 }
 
 impl Billing for FakeBilling {
@@ -53,8 +48,7 @@ impl Billing for FakeBilling {
         Ok(Quote {
             size,
             price_id: self.quote_price.clone().unwrap_or_else(|| {
-                crate::domain::models::StripePriceId::parse(&format!("price_{}", size.as_ref()))
-                    .unwrap()
+                stripe::PriceId::from_str(&format!("price_{}", size.as_ref())).unwrap()
             }),
             amount: 2000
                 * i64::from(match size {
@@ -74,7 +68,7 @@ impl Billing for FakeBilling {
     async fn add_computer(
         &self,
         _team_id: Uuid,
-        price_id: &crate::domain::models::StripePriceId,
+        price_id: &stripe::PriceId,
         extra_items: &[SubscriptionItem],
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
@@ -102,7 +96,7 @@ impl Billing for FakeBilling {
     async fn remove_computer(
         &self,
         _team_id: Uuid,
-        price_id: &crate::domain::models::StripePriceId,
+        price_id: &stripe::PriceId,
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
         self.calls.lock().unwrap().push("remove_computer");
@@ -139,7 +133,7 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
             size: ComputerSize::Standard,
             name: Some("Ada".to_owned()),
             extra_items: vec![SubscriptionItem {
-                price_id: crate::domain::models::StripePriceId::parse("price_agent_seat").unwrap(),
+                price_id: stripe::PriceId::from_str("price_agent_seat").unwrap(),
                 quantity: 1,
             }],
         })
@@ -149,9 +143,9 @@ async fn purchase_bills_the_computer_and_the_seat_in_one_update_then_provisions(
     assert_eq!(
         *service.billing.updates.lock().unwrap(),
         vec![(
-            crate::domain::models::StripePriceId::parse("price_standard").unwrap(),
+            stripe::PriceId::from_str("price_standard").unwrap(),
             vec![SubscriptionItem {
-                price_id: crate::domain::models::StripePriceId::parse("price_agent_seat").unwrap(),
+                price_id: stripe::PriceId::from_str("price_agent_seat").unwrap(),
                 quantity: 1,
             }],
             format!("computer-add:{computer_id}"),
@@ -422,9 +416,7 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
                     "standard@2026-11".to_owned(),
                 )
                 .unwrap(),
-                price_id: Some(
-                    crate::domain::models::StripePriceId::parse("price_standard").unwrap(),
-                ),
+                price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
                 state,
                 harness_id: None,
                 created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
@@ -445,7 +437,7 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
         .reconcile_billed_counts(
             TEAM,
             &[SubscriptionItem {
-                price_id: crate::domain::models::StripePriceId::parse("price_standard").unwrap(),
+                price_id: stripe::PriceId::from_str("price_standard").unwrap(),
                 quantity: 1,
             }],
         )
@@ -494,7 +486,7 @@ async fn retry_failed_computer_restarts_without_billing() {
                 "standard@2026-11".to_owned(),
             )
             .unwrap(),
-            price_id: Some(crate::domain::models::StripePriceId::parse("price_standard").unwrap()),
+            price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
             state: ComputerState {
                 phase: Phase::Failed { host: HOST },
                 power: Power::On,
@@ -580,7 +572,7 @@ async fn retry_running_computer_is_rejected_without_applying_events() {
                 "standard@2026-11".to_owned(),
             )
             .unwrap(),
-            price_id: Some(crate::domain::models::StripePriceId::parse("price_standard").unwrap()),
+            price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
             state: ComputerState {
                 phase: Phase::Running { host: HOST },
                 power: Power::On,
@@ -637,7 +629,7 @@ async fn retry_another_teams_computer_is_not_found() {
                 "standard@2026-11".to_owned(),
             )
             .unwrap(),
-            price_id: Some(crate::domain::models::StripePriceId::parse("price_standard").unwrap()),
+            price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
             state: ComputerState {
                 phase: Phase::Failed { host: HOST },
                 power: Power::On,
@@ -694,7 +686,7 @@ async fn successful_charge_with_lost_write_is_confirmed_once_by_the_outbox() {
             size: ComputerSize::Large,
             name: Some("Build box".to_owned()),
             extra_items: vec![SubscriptionItem {
-                price_id: crate::domain::models::StripePriceId::parse("price_seat").unwrap(),
+                price_id: stripe::PriceId::from_str("price_seat").unwrap(),
                 quantity: 1,
             }],
         })
@@ -740,9 +732,9 @@ async fn successful_charge_with_lost_write_is_confirmed_once_by_the_outbox() {
         }
     );
     let expected = (
-        crate::domain::models::StripePriceId::parse("price_large").unwrap(),
+        stripe::PriceId::from_str("price_large").unwrap(),
         vec![SubscriptionItem {
-            price_id: crate::domain::models::StripePriceId::parse("price_seat").unwrap(),
+            price_id: stripe::PriceId::from_str("price_seat").unwrap(),
             quantity: 1,
         }],
         format!("computer-add:{}", computer.id),
@@ -898,9 +890,7 @@ async fn confirmation_records_a_definite_refusal_without_removing_billing() {
                     "standard@2026-11".to_owned(),
                 )
                 .unwrap(),
-                price_id: Some(
-                    crate::domain::models::StripePriceId::parse("price_standard").unwrap(),
-                ),
+                price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
                 created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
                 extra_items: vec![],
             },

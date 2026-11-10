@@ -41,13 +41,13 @@ impl StripePrices {
     }
 
     /// The same prices, for the teams crate's per-plan seat items.
-    pub fn seat_prices(&self) -> Result<SeatPrices, stripe_price_id::StripePriceIdParseError> {
+    pub fn seat_prices(&self) -> anyhow::Result<SeatPrices> {
         Ok(SeatPrices {
-            premium: stripe_price_id::StripePriceId::parse(&self.premium)?,
+            premium: crate::config::configured_price_id(&self.premium)?,
             max: self
                 .max
                 .as_deref()
-                .map(stripe_price_id::StripePriceId::parse)
+                .map(crate::config::configured_price_id)
                 .transpose()?,
         })
     }

@@ -1,5 +1,6 @@
 use super::*;
 use macro_user_id::user_id::MacroUserIdStr;
+use std::str::FromStr;
 
 struct TeamCompPolicy;
 
@@ -221,7 +222,7 @@ async fn comped_purchase_rejects_subscription_items_before_reserving() {
             size: ComputerSize::Standard,
             name: None,
             extra_items: vec![SubscriptionItem {
-                price_id: crate::domain::models::StripePriceId::parse("price_seat").unwrap(),
+                price_id: stripe::PriceId::from_str("price_seat").unwrap(),
                 quantity: 1,
             }],
         })

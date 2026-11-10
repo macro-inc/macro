@@ -313,7 +313,7 @@ pub trait Billing: Send + Sync + 'static {
     fn add_computer(
         &self,
         team_id: Uuid,
-        price_id: &crate::domain::models::StripePriceId,
+        price_id: &stripe::PriceId,
         extra_items: &[SubscriptionItem],
         idempotency_key: &str,
     ) -> impl Future<Output = Result<(), BillingError>> + Send;
@@ -322,7 +322,7 @@ pub trait Billing: Send + Sync + 'static {
     fn remove_computer(
         &self,
         team_id: Uuid,
-        price_id: &crate::domain::models::StripePriceId,
+        price_id: &stripe::PriceId,
         idempotency_key: &str,
     ) -> impl Future<Output = Result<(), BillingError>> + Send;
 

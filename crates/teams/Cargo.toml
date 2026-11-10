@@ -54,7 +54,6 @@ ports = [
 ]
 
 [dependencies]
-stripe_price_id = { path = "../stripe_price_id" }
 # Core
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true }

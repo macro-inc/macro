@@ -16,7 +16,6 @@ inbound = [
   "macro_authorization/axum",
   "dep:model-error-response",
   "dep:utoipa",
-  "stripe_price_id/schema",
   "computer_id/schema",
   "pairing_id/schema",
   "ports",
@@ -25,6 +24,7 @@ outbound = ["dep:incus_client", "dep:macro_env", "dep:sqlx", "ports", "tokio/fs"
 ports = ["dep:tokio"]
 
 [dependencies]
+async-stripe = { workspace = true, default-features = false }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 computer_id = { workspace = true }
@@ -43,7 +43,6 @@ tracing-opentelemetry = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
-stripe_price_id = { path = "../stripe_price_id", default-features = false, features = ["serde"] }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }

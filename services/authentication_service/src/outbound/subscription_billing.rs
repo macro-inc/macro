@@ -22,7 +22,6 @@ use hosted_runtimes::domain::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
-use stripe_price_id::StripePriceId;
 use teams::domain::{
     model::{SeatPrices, TeamRole},
     team_repo::TeamRepository,
@@ -130,7 +129,7 @@ impl<Teams: TeamRepository, Computers: ComputerRepo> StripeBillingReader<Teams, 
             currency = Some(fixed.currency);
             interval = Some(fixed.interval);
             let unit_amount = fixed.unit_amount;
-            let price_id = StripePriceId::parse(price.id.as_str()).map_err(anyhow::Error::from)?;
+            let price_id = price.id.clone();
             let computer_id = item
                 .metadata
                 .as_ref()

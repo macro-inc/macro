@@ -104,7 +104,7 @@ where
     #[tracing::instrument(skip(self), err)]
     async fn price(
         &self,
-        price_id: &stripe_price_id::StripePriceId,
+        price_id: &stripe::PriceId,
     ) -> Result<PriceInfo, TeamSubscriptionItemsError> {
         Ok(self.customer_repository.price(price_id).await?)
     }

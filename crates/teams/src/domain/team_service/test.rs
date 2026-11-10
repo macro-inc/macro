@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::{
     collections::{HashMap, HashSet},
     future::Future,
@@ -1313,7 +1314,7 @@ impl CustomerRepository for MockCustomerRepository {
 
     async fn price(
         &self,
-        _: &stripe_price_id::StripePriceId,
+        _: &stripe::PriceId,
     ) -> Result<crate::domain::model::PriceInfo, CustomerError> {
         unimplemented!("not exercised by team service tests")
     }
@@ -9121,7 +9122,7 @@ async fn subscription_item_changes_go_to_the_team_subscription() {
         NoOpTeamCrmSettingsRepository,
     );
     let change = ItemQuantityChange {
-        price_id: stripe_price_id::StripePriceId::parse("price_computer").unwrap(),
+        price_id: stripe::PriceId::from_str("price_computer").unwrap(),
         delta: 1,
     };
 
@@ -9158,7 +9159,7 @@ async fn subscription_item_changes_need_a_team_subscription() {
         .change_team_subscription_items(
             &uuid::Uuid::nil(),
             vec![ItemQuantityChange {
-                price_id: stripe_price_id::StripePriceId::parse("price_computer").unwrap(),
+                price_id: stripe::PriceId::from_str("price_computer").unwrap(),
                 delta: 1,
             }],
             "purchase-1",

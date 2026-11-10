@@ -3,7 +3,7 @@
 
 use chrono::{DateTime, Utc};
 use hosted_runtimes::domain::{
-    models::{BillingInterval, Quote, StripePriceId, SubscriptionItem},
+    models::{BillingInterval, Quote, SubscriptionItem},
     ports::{Billing, BillingError, ComputerRepo},
     service::{Clock, ComputerService},
     size::ComputerSize,
@@ -51,7 +51,7 @@ impl<Teams: TeamSubscriptionItems> TeamComputerBilling<Teams> {
         &self,
         team_id: Uuid,
         size: ComputerSize,
-    ) -> Result<(StripePriceId, BillingInterval), BillingError> {
+    ) -> Result<(stripe::PriceId, BillingInterval), BillingError> {
         if self.prices.is_empty() {
             return Err(BillingError::NotAvailable);
         }
@@ -86,7 +86,7 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
     async fn add_computer(
         &self,
         team_id: Uuid,
-        price_id: &stripe_price_id::StripePriceId,
+        price_id: &stripe::PriceId,
         extra_items: &[SubscriptionItem],
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
@@ -117,7 +117,7 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
     async fn remove_computer(
         &self,
         team_id: Uuid,
-        price_id: &stripe_price_id::StripePriceId,
+        price_id: &stripe::PriceId,
         idempotency_key: &str,
     ) -> Result<(), BillingError> {
         if self

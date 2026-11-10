@@ -892,13 +892,7 @@ async fn reconcile_team_computers(ctx: &ApiContext, subscription_id: &str, team_
                 tracing::warn!("subscription item has no price; skipping computer reconcile");
                 return;
             };
-            let price_id = match stripe_price_id::StripePriceId::parse(price.id.as_str()) {
-                Ok(id) => id,
-                Err(error) => {
-                    tracing::warn!(error = ?error, "invalid subscription price; skipping computer reconcile");
-                    return;
-                }
-            };
+            let price_id = price.id.clone();
             let quantity = match u32::try_from(item.quantity.unwrap_or(1)) {
                 Ok(quantity) => quantity,
                 Err(error) => {

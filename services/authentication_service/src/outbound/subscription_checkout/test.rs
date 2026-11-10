@@ -1,3 +1,4 @@
+use std::str::FromStr;
 mod concurrency;
 use super::*;
 use axum::{
@@ -159,7 +160,7 @@ async fn stub_gateway(
         Arc::new(stripe::Client::from_url(url.as_str(), "sk_test_fixture")),
         Arc::new(()),
         SeatPrices {
-            premium: stripe_price_id::StripePriceId::parse("price_test").unwrap(),
+            premium: stripe::PriceId::from_str("price_test").unwrap(),
             max: None,
         },
     );

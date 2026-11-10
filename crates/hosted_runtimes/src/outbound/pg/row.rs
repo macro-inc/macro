@@ -9,7 +9,7 @@ use super::PgComputerRepo;
 use crate::domain::ids::ComputerId;
 use crate::domain::lifecycle::HostId;
 use crate::domain::models::{
-    Computer, ComputerDisplayMetadata, ComputerName, ComputerRecord, SanitizedReason, StripePriceId,
+    Computer, ComputerDisplayMetadata, ComputerName, ComputerRecord, SanitizedReason,
 };
 use crate::domain::size::{
     CatalogEntryId, ComputerResources, ComputerSize, DiskGib, MemoryGib, Vcpus,
@@ -71,7 +71,7 @@ impl TryFrom<ComputerRow> for Computer {
             price_id: row
                 .price_id
                 .map(|id| {
-                    StripePriceId::parse(&id)
+                    id.parse::<stripe::PriceId>()
                         .map_err(|_| invalid_row("price_id must be a Stripe price identifier"))
                 })
                 .transpose()?,

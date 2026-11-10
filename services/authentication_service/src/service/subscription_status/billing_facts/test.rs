@@ -3,6 +3,7 @@ use crate::domain::computer_billing::IntervalPrices;
 use hosted_runtimes::domain::size::{
     CatalogEntryId, ComputerResources, ComputerSize, DiskGib, MemoryGib, Vcpus,
 };
+use std::str::FromStr;
 use uuid::Uuid;
 
 fn billing() -> SubscriptionBillingFacts {
@@ -13,7 +14,7 @@ fn billing() -> SubscriptionBillingFacts {
         items: vec![
             RecurringItem {
                 kind: RecurringItemKind::Seat(SeatPlan::Premium),
-                price_id: StripePriceId::parse("price_premium").unwrap(),
+                price_id: stripe::PriceId::from_str("price_premium").unwrap(),
                 computer_id: None,
                 quantity: 3,
                 unit_amount: 2500,
@@ -21,7 +22,7 @@ fn billing() -> SubscriptionBillingFacts {
             },
             RecurringItem {
                 kind: RecurringItemKind::Other,
-                price_id: StripePriceId::parse("price_large_recorded").unwrap(),
+                price_id: stripe::PriceId::from_str("price_large_recorded").unwrap(),
                 computer_id: None,
                 quantity: 1,
                 unit_amount: 10000,
@@ -29,7 +30,7 @@ fn billing() -> SubscriptionBillingFacts {
             },
             RecurringItem {
                 kind: RecurringItemKind::Other,
-                price_id: StripePriceId::parse("price_unrelated").unwrap(),
+                price_id: stripe::PriceId::from_str("price_unrelated").unwrap(),
                 computer_id: None,
                 quantity: 2,
                 unit_amount: 500,
@@ -56,7 +57,7 @@ fn billing() -> SubscriptionBillingFacts {
                         disk_gib: DiskGib::new(200),
                     },
                 },
-                price_id: Some(StripePriceId::parse("price_large_recorded").unwrap()),
+                price_id: Some(stripe::PriceId::from_str("price_large_recorded").unwrap()),
                 name: ComputerName::try_new("Build box").unwrap(),
                 status: ComputerStatusKind::Ready,
                 included: false,
@@ -143,7 +144,7 @@ fn multiple_prices_for_the_same_plan_do_not_double_allocate_members() {
     let mut facts = billing();
     facts.items.push(RecurringItem {
         kind: RecurringItemKind::Seat(SeatPlan::Premium),
-        price_id: StripePriceId::parse("price_premium").unwrap(),
+        price_id: stripe::PriceId::from_str("price_premium").unwrap(),
         computer_id: None,
         quantity: 2,
         unit_amount: 2750,
@@ -188,14 +189,14 @@ fn typed_computer_billing_fields_keep_the_existing_json_schema() {
 #[test]
 fn changing_configured_prices_never_relabels_a_recorded_computer() {
     let seats = SeatPrices {
-        premium: StripePriceId::parse("price_premium").unwrap(),
+        premium: stripe::PriceId::from_str("price_premium").unwrap(),
         max: None,
     };
     let empty = IntervalPrices {
         monthly: None,
         yearly: None,
     };
-    let old = StripePriceId::parse("price_large_recorded").unwrap();
+    let old = stripe::PriceId::from_str("price_large_recorded").unwrap();
     let original = ComputerPrices {
         standard: empty.clone(),
         large: IntervalPrices {
@@ -210,7 +211,7 @@ fn changing_configured_prices_never_relabels_a_recorded_computer() {
             yearly: None,
         },
         large: IntervalPrices {
-            monthly: Some(StripePriceId::parse("price_large_new").unwrap()),
+            monthly: Some(stripe::PriceId::from_str("price_large_new").unwrap()),
             yearly: None,
         },
         xl: empty,
@@ -240,7 +241,7 @@ fn changing_configured_prices_never_relabels_a_recorded_computer() {
 #[test]
 fn metadata_links_a_computer_without_inferring_its_size_from_a_new_price() {
     let mut facts = billing();
-    facts.items[1].price_id = StripePriceId::parse("price_replaced").unwrap();
+    facts.items[1].price_id = stripe::PriceId::from_str("price_replaced").unwrap();
     facts.items[1].computer_id = Some(ComputerId::new_from_uuid(Uuid::from_u128(1)));
     let result = facts.render().unwrap();
     let row = result
@@ -274,7 +275,7 @@ fn an_unlinked_legacy_charge_has_no_invented_computer_size() {
     let mut facts = billing();
     facts.computers[0].price_id = None;
     let seats = SeatPrices {
-        premium: StripePriceId::parse("price_premium").unwrap(),
+        premium: stripe::PriceId::from_str("price_premium").unwrap(),
         max: None,
     };
     let prices = ComputerPrices {

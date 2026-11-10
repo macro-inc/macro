@@ -409,10 +409,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn price(
-        &self,
-        price_id: &stripe_price_id::StripePriceId,
-    ) -> Result<PriceInfo, CustomerError> {
+    async fn price(&self, price_id: &stripe::PriceId) -> Result<PriceInfo, CustomerError> {
         let id: stripe::PriceId = price_id.as_str().parse().map_err(|error| {
             SubscriptionDataError::Internal(rootcause::Report::new(error).into_dynamic())
         })?;

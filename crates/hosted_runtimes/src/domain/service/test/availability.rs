@@ -1,6 +1,7 @@
 use super::*;
 use crate::domain::models::FleetAttachment;
 use crate::domain::ports::StaticFleetAttachment;
+use std::str::FromStr;
 
 #[tokio::test]
 async fn detached_fleet_precedes_missing_rows_and_all_side_effects() {
@@ -80,7 +81,7 @@ async fn maintenance_can_read_and_release_with_detached_fleet() {
             size: ComputerSize::Standard,
             resources: crate::domain::size::current_catalog()[0].resources,
             catalog_entry: crate::domain::size::current_catalog()[0].id.clone(),
-            price_id: Some(crate::domain::models::StripePriceId::parse("price_standard").unwrap()),
+            price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
             created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
         },
         now(),
@@ -187,7 +188,7 @@ pub(crate) async fn detached_router_service(
             size: entry.size,
             resources: entry.resources,
             catalog_entry: entry.id,
-            price_id: Some(crate::domain::models::StripePriceId::parse("price_standard").unwrap()),
+            price_id: Some(stripe::PriceId::from_str("price_standard").unwrap()),
             created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
         },
         now(),

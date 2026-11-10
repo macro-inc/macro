@@ -2,6 +2,7 @@ use super::*;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
+use std::str::FromStr;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
     matchers::{method, path},
@@ -75,8 +76,8 @@ pub(super) fn repo(server: &MockServer, pool: sqlx::PgPool) -> CustomerRepositor
     CustomerRepositoryImpl::new(
         stripe::Client::from_url(server.uri().as_str(), "sk_test"),
         SeatPrices {
-            premium: stripe_price_id::StripePriceId::parse("price_pro").unwrap(),
-            max: Some(stripe_price_id::StripePriceId::parse("price_max").unwrap()),
+            premium: stripe::PriceId::from_str("price_pro").unwrap(),
+            max: Some(stripe::PriceId::from_str("price_max").unwrap()),
         },
         pool,
     )
@@ -980,7 +981,7 @@ fn subscription_update(requests: &[wiremock::Request]) -> Vec<&wiremock::Request
 
 pub(super) fn computer(delta: i64) -> ItemQuantityChange {
     ItemQuantityChange {
-        price_id: stripe_price_id::StripePriceId::parse("price_computer").unwrap(),
+        price_id: stripe::PriceId::from_str("price_computer").unwrap(),
         delta,
     }
 }
@@ -1061,7 +1062,7 @@ async fn seat_and_computer_changes_join_one_update(pool: sqlx::PgPool) {
             vec![
                 computer(1),
                 ItemQuantityChange {
-                    price_id: stripe_price_id::StripePriceId::parse("price_pro").unwrap(),
+                    price_id: stripe::PriceId::from_str("price_pro").unwrap(),
                     delta: 1,
                 },
             ],
@@ -1197,7 +1198,7 @@ async fn subscription_terms_and_prices_are_read_from_stripe(pool: sqlx::PgPool) 
         }
     );
     assert_eq!(
-        repo.price(&stripe_price_id::StripePriceId::parse("price_computer").unwrap())
+        repo.price(&stripe::PriceId::from_str("price_computer").unwrap())
             .await
             .unwrap(),
         PriceInfo {

@@ -128,9 +128,7 @@ async fn main() -> Result<(), rootcause::Report> {
         catalog_entry: hosted_runtimes::domain::size::CatalogEntryId::try_new(
             "standard@2026-11".to_owned(),
         )?,
-        price_id: Some(hosted_runtimes::domain::models::StripePriceId::parse(
-            "price_standard",
-        )?),
+        price_id: Some("price_standard".parse::<stripe::PriceId>()?),
         state: ComputerState::reserved(HostId::new(Uuid::now_v7()), now),
         harness_id: None,
         created_by: macro_user_id::user_id::MacroUserIdStr::try_from(

@@ -8,7 +8,6 @@ use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-pub use stripe_price_id::StripePriceId;
 use uuid::Uuid;
 
 use crate::domain::ids::ComputerId;
@@ -105,7 +104,7 @@ pub struct Computer {
     /// Versioned catalog entry saved at purchase.
     pub catalog_entry: CatalogEntryId,
     /// Stripe price saved for billing replay.
-    pub price_id: Option<StripePriceId>,
+    pub price_id: Option<stripe::PriceId>,
     /// Persisted lifecycle state.
     pub state: ComputerState,
     /// The harness macrod claims, created when the instance is created.
@@ -245,7 +244,7 @@ pub struct NewComputer {
     /// Versioned catalog entry saved at purchase.
     pub catalog_entry: CatalogEntryId,
     /// Stripe price saved for billing replay.
-    pub price_id: Option<StripePriceId>,
+    pub price_id: Option<stripe::PriceId>,
     /// Macro user who purchased the computer.
     pub created_by: MacroUserIdStr<'static>,
 }
@@ -289,7 +288,7 @@ pub enum PurchaseBilling {
 pub struct SubscriptionItem {
     /// Stripe price saved for billing replay.
     #[cfg_attr(feature = "inbound", schema(value_type = String))]
-    pub price_id: StripePriceId,
+    pub price_id: stripe::PriceId,
     /// Added to the item's current quantity.
     pub quantity: u32,
 }
@@ -314,7 +313,7 @@ pub struct Quote {
     pub size: ComputerSize,
     /// Stripe price saved for billing replay.
     #[cfg_attr(feature = "inbound", schema(value_type = String))]
-    pub price_id: StripePriceId,
+    pub price_id: stripe::PriceId,
     /// In the currency's smallest unit.
     pub amount: i64,
     /// Billing currency code.

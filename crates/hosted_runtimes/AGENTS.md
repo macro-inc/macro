@@ -139,7 +139,7 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   reports `soldOut` per size.
 - **Purchase**: `ComputerService::purchase(PurchaseRequest { team_id, created_by, size, name, extra_items, billing })`
   → `computer_id`. A Stripe purchase adds the computer's item plus
-  every `extra_items` entry in one subscription update (`SubscriptionItem { price_id: StripePriceId, quantity }`, quantity
+  every `extra_items` entry in one subscription update (`SubscriptionItem { price_id: stripe::PriceId, quantity }`, quantity
   added to the item's current quantity), invoiced at once with proration. In-process
   in authentication_service, and on the internal route `POST /internal/computers`.
   For Stripe, persist `PendingPayment` and a delayed `ConfirmPayment` outbox effect

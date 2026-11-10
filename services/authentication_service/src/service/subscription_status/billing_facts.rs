@@ -9,7 +9,6 @@ use hosted_runtimes::domain::{
     models::{BillingInterval, ComputerName, ComputerStatusKind},
     size::CatalogEntry,
 };
-use stripe_price_id::StripePriceId;
 use teams::domain::model::{SeatPlan, SeatPrices, TeamRole};
 
 #[derive(Clone)]
@@ -48,7 +47,7 @@ pub enum RecurringItemKind {
 #[derive(Clone)]
 pub struct RecurringItem {
     pub kind: RecurringItemKind,
-    pub price_id: StripePriceId,
+    pub price_id: stripe::PriceId,
     pub computer_id: Option<ComputerId>,
     pub quantity: u64,
     pub unit_amount: i64,
@@ -64,7 +63,7 @@ pub struct BillingSeat {
 pub struct BillingComputer {
     pub id: ComputerId,
     pub catalog_entry: CatalogEntry,
-    pub price_id: Option<StripePriceId>,
+    pub price_id: Option<stripe::PriceId>,
     pub name: ComputerName,
     pub status: ComputerStatusKind,
     pub included: bool,
@@ -76,7 +75,7 @@ impl RecurringItemKind {
         seats: &SeatPrices,
         configured_prices: &ComputerPrices,
         computers: &[BillingComputer],
-        price_id: &StripePriceId,
+        price_id: &stripe::PriceId,
         computer_id: Option<ComputerId>,
     ) -> Self {
         if computers.iter().any(|computer| {
