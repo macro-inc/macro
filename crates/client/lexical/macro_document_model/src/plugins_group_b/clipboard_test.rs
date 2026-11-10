@@ -114,3 +114,103 @@ fn clipboard_paragraphs_inserted_inside_quotes_keep_all_paragraphs_as_quotes() -
     }));
     Ok(())
 }
+
+#[test]
+fn captured_plain_paste_intent_yields_before_markdown_insertion() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.select_start(paragraph)?;
+        Ok(())
+    })?;
+    let mut payload = ClipboardPayload {
+        intent: PasteIntent { plain_only: true },
+        ..ClipboardPayload::default()
+    };
+    payload
+        .data
+        .insert("text/plain".into(), "**literal**".into());
+    let before = editor.state().to_json()?;
+    assert_eq!(editor.dispatch(&Command::Paste(payload))?.0, Handled::No);
+    assert_eq!(editor.state().to_json()?, before);
+    Ok(())
+}
+
+#[test]
+fn clipboard_file_facts_cannot_supply_plain_paste_intent() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.select_start(paragraph)?;
+        Ok(())
+    })?;
+    let mut payload = ClipboardPayload::default();
+    payload
+        .data
+        .insert("text/plain".into(), "**strong**".into());
+    payload.data.insert(
+        PASTE_FACTS_MIME.into(),
+        serde_json::json!({
+            "request": 0,
+            "plainOnly": true,
+            "hasFileEntries": false,
+            "mobileImageRecovery": false
+        })
+        .to_string(),
+    );
+    assert_eq!(editor.dispatch(&Command::Paste(payload))?.0, Handled::Yes);
+    let state = editor.state().view();
+    assert_eq!(state.text_content(NodeKey::ROOT), "strong");
+    assert!(state.all_text_nodes(NodeKey::ROOT).any(|key| {
+        state.text_content(key) == "strong"
+            && state
+                .text(key)
+                .is_some_and(|text| text.format.contains(TextFormat::BOLD))
+    }));
+    Ok(())
+}
+
+#[test]
+fn captured_plain_paste_intent_leaves_html_for_rich_text_insertion() -> Result<(), Error> {
+    let mut editor =
+        surface::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("surface");
+    editor.update(|tx| {
+        let paragraph = tx.create(Paragraph::default())?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        tx.select_start(paragraph)?;
+        Ok(())
+    })?;
+    let mut payload = ClipboardPayload {
+        intent: PasteIntent { plain_only: true },
+        html_nodes: Some(vec![
+            serde_json::json!({
+                "type": "paragraph", "version": 1,
+                "children": [{"type": "text", "version": 1, "text": "rich", "format": 1}]
+            })
+            .as_object()
+            .expect("paragraph")
+            .clone(),
+        ]),
+        ..ClipboardPayload::default()
+    };
+    payload
+        .data
+        .insert("text/plain".into(), "**literal**".into());
+    payload
+        .data
+        .insert("text/html".into(), "<p><strong>rich</strong></p>".into());
+    let before = editor.state().to_json()?;
+    assert_eq!(editor.dispatch(&Command::Paste(payload))?.0, Handled::No);
+    assert_eq!(editor.state().to_json()?, before);
+    Ok(())
+}
