@@ -1065,7 +1065,7 @@ held, then failed, and with rapid back-navigation while it is pending.
 The sidebar title row's **Hide navigation** control hides the whole rail.
 Reopen it with **Show navigation** before the conversation title on desktop,
 or as the leading header pill on touch. Chat remembers the wide-layout choice
-independently of other workspaces. The rail starts at 256px on desktop and 368px
+independently of other workspaces. The rail starts at 256px on desktop and 388px
 on wide touch,
 docks above 720px. Narrow desktop panes use a navigation overlay. It remains
 collapsible with no conversation selected and while showing Threads. At 720px
