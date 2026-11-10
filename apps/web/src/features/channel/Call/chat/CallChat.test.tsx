@@ -366,3 +366,28 @@ it('shows the guest access message and retries loading', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
   expect(mocks.refresh).toHaveBeenCalledOnce();
 });
+
+it('refetches a member thread when its chat panel reopens', () => {
+  mocks.refresh.mockResolvedValue(undefined);
+  mocks.source = {
+    thread: () => undefined,
+    parent: () => ({ type: 'call', id: 'call-id' }),
+    empty: () => true,
+    loading: () => false,
+    failed: () => false,
+    refresh: mocks.refresh,
+  };
+  const [open, setOpen] = createSignal(true);
+  render(() => (
+    <CallChat
+      access={{ kind: 'member' }}
+      callId="call-id"
+      open={open()}
+      onClose={() => {}}
+    />
+  ));
+  expect(mocks.refresh).not.toHaveBeenCalled();
+  setOpen(false);
+  setOpen(true);
+  expect(mocks.refresh).toHaveBeenCalledOnce();
+});

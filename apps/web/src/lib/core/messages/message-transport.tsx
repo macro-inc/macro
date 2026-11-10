@@ -65,3 +65,20 @@ export function useMessageViewerOverride():
   | undefined {
   return useContext(MessageViewerContext);
 }
+
+const MessageQuoteNameContext =
+  createContext<(messageId: string) => string | undefined>();
+
+export function MessageQuoteNameProvider(
+  props: ParentProps<{ resolve: (messageId: string) => string | undefined }>
+) {
+  return (
+    <MessageQuoteNameContext.Provider value={props.resolve}>
+      {props.children}
+    </MessageQuoteNameContext.Provider>
+  );
+}
+
+export function useMessageQuoteName() {
+  return useContext(MessageQuoteNameContext);
+}

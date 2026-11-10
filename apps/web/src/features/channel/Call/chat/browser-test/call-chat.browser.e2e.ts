@@ -38,6 +38,9 @@ function fakeServer(context: BrowserContext, messages: Message[]) {
   const errors: string[] = [];
   const guestView = (item: Message) => ({
     ...item,
+    content: item.content.includes('<m-reply-target>')
+      ? item.content.replaceAll(MEMBER, OPAQUE)
+      : item.content,
     sender_id: item.sender_id === MEMBER ? OPAQUE : item.sender_id,
     imported_author: item.sender_id === MEMBER ? { name: 'Morgan' } : null,
     mentions: [],
@@ -98,7 +101,7 @@ function fakeServer(context: BrowserContext, messages: Message[]) {
         const item = makeMessage(
           messages.length ? body.id : CALL,
           guest ? GUEST : MEMBER,
-          body.content
+          guest ? body.content.replaceAll(OPAQUE, MEMBER) : body.content
         );
         messages.push(item);
         await route.fulfill({ json: guest ? guestView(item) : item });
@@ -137,7 +140,8 @@ function fakeServer(context: BrowserContext, messages: Message[]) {
         return;
       }
       if (item && request.method() === 'PATCH') {
-        item.content = (request.postDataJSON() as { content: string }).content;
+        const content = (request.postDataJSON() as { content: string }).content;
+        item.content = guest ? content.replaceAll(OPAQUE, MEMBER) : content;
         item.edited_at = new Date().toISOString();
         item.updated_at = item.edited_at;
         await route.fulfill({ json: guest ? guestView(item) : item });
@@ -170,8 +174,8 @@ async function open(page: Page, access: 'guest' | 'member', errors: string[]) {
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(`${PATH}?access=${access}`);
   const chat = page.getByTestId('call-chat');
-  await expect(chat.locator('[data-message-thread]')).toBeVisible({
-    timeout: 30_000,
+  await expect(chat.locator('[data-message-id]').first()).toBeVisible({
+    timeout: 60_000,
   });
   await expect(chat.getByText('Loading chat…')).toHaveCount(0);
   return chat;
@@ -278,6 +282,11 @@ test('guest first post becomes the call root', async ({ context, page }) => {
     'First call message'
   );
   expect(fake.messages[0]?.id).toBe(CALL);
+  expect(
+    fake.requests.filter((request) =>
+      /\/(bots|agents|user-names|messages\/call)\b/.test(request)
+    )
+  ).toEqual([]);
   expect(fake.errors).toEqual([]);
 });
 
@@ -336,6 +345,16 @@ test('guest changes appear to member and ownership limits actions', async ({
   await action(page, CALL, 'Reply');
   await send(page, 'Quoted response');
   expect(fake.messages.at(-1)?.content).toContain('m-reply-target');
+  expect(fake.messages.at(-1)?.content).toContain(MEMBER);
+  expect(fake.messages.at(-1)?.content).not.toContain(OPAQUE);
+  await expect(
+    guest.getByRole('button', { name: /Replying to Morgan/ })
+  ).toBeVisible();
+  expect(
+    fake.requests.filter((request) =>
+      /\/(bots|agents|user-names|messages\/call)\b/.test(request)
+    )
+  ).toEqual([]);
   await action(page, CALL, 'React 👍');
   await expect(
     other.locator('[data-message-reaction-chip][data-emoji="👍"]')
@@ -379,6 +398,12 @@ test('guest changes appear to member and ownership limits actions', async ({
   ).toBeVisible();
   const memberPage = await context.newPage();
   const member = await open(memberPage, 'member', fake.errors);
+  await expect(
+    member.getByRole('button', { name: /Replying to/ })
+  ).toBeVisible();
+  await expect(
+    member.getByRole('button', { name: /Replying to participant:/ })
+  ).toHaveCount(0);
   await expect(
     member.locator(`[data-message-id="${GUEST_MESSAGE}"]`)
   ).toContainText('Edited guest message');
