@@ -89,9 +89,10 @@ fn docs(reference: &str) -> String {
     if reference.is_empty() {
         format!("Start with one ReadCodeDocs call for {}", symbols())
     } else {
-        "The SDK reference at the end lists the methods and fields you need; fields that \
-         load from the server are functions to await (`await message.body()`). Read a symbol \
-         with ReadCodeDocs only when you need a type it names, all such symbols in one call"
+        "The SDK reference at the end lists the methods and fields you need, and this brief \
+         spells out the ideas methods; fields that load from the server are functions to \
+         await (`await message.body()`). Read a symbol with ReadCodeDocs only when you need a \
+         type neither names, all such symbols in one call"
             .to_owned()
     }
 }
