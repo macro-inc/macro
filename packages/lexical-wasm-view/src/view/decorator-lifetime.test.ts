@@ -65,6 +65,8 @@ test('real native media revisions preserve false-setter captures and remount equ
     const element = fixture.view.getElementByKey(image.key);
     const firstHost = element?.firstElementChild;
     if (!element || !firstHost) throw new Error('Missing mounted component');
+    const firstComponent = firstHost.firstElementChild;
+    if (!firstComponent) throw new Error('Missing component contents');
     expect(image.decoratorRevision).toBe(0n);
     expect(element.textContent).toBe('https://example.com/first');
     expect(mounts).toBe(1);
@@ -115,7 +117,9 @@ test('real native media revisions preserve false-setter captures and remount equ
     );
     expect(fixture.session.serializedState()).toBe(beforeTrueSetter);
     expect(fixture.view.node(image.key)?.decoratorRevision).toBe(1n);
-    expect(element.firstElementChild).not.toBe(firstHost);
+    expect(element.firstElementChild).toBe(firstHost);
+    expect(firstHost.firstElementChild).not.toBe(firstComponent);
+    expect(firstComponent.isConnected).toBe(false);
     expect(element.textContent).toBe('https://example.com/second');
     expect(mounts).toBe(2);
     expect(unmounts).toBe(1);
