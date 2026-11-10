@@ -19,7 +19,7 @@ use model_owner::CreationPrincipal;
 use super::check;
 use super::model::{
     Change, ChangeAction, GenerationSession, Idea, IdeaContent, IdeaError, IdeaKind, IdeaReview,
-    IdeaState, IdeaWriteOutcome, Ideas, KindName, RetireIdea, RewriteIdea, SessionKind,
+    IdeaState, IdeaWriteOutcome, Ideas, KindName, RetireIdea, RewriteIdea, RunMode, SessionKind,
     SuggestIdea, Target,
 };
 use super::ports::{IdeaAccess, IdeaApi, IdeaRepo, Limits, RequestSessions, Written};
@@ -274,22 +274,44 @@ where
     #[tracing::instrument(name = "ideas.accept", skip_all, fields(idea.id = %id), err)]
     async fn accept(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), IdeaError> {
         self.require_flag(user).await?;
+        let idea = self
+            .repo
+            .idea(user, id)
+            .await
+            .map_err(IdeaError::internal)?
+            .ok_or(IdeaError::NotFound)?;
+        // A background prompt is taken on and runs; anything else the person
+        // acts on themself (opens the item, the composer, the routine) is
+        // done when they do. Accepting a done idea again changes nothing.
+        let background = matches!(
+            idea.kind,
+            IdeaKind::Prompt {
+                run_mode: RunMode::Background,
+                ..
+            }
+        );
+        let to = if background {
+            IdeaState::Accepted
+        } else {
+            IdeaState::Done
+        };
+        if idea.state == to {
+            return Ok(());
+        }
+        let from: &[IdeaState] = if background {
+            &[IdeaState::Proposed]
+        } else {
+            &[IdeaState::Proposed, IdeaState::Accepted]
+        };
         let moved = self
             .repo
-            .set_state(
-                user,
-                id,
-                &[IdeaState::Proposed],
-                IdeaState::Accepted,
-                None,
-                Utc::now(),
-            )
+            .set_state(user, id, from, to, None, Utc::now())
             .await
             .map_err(IdeaError::internal)?;
         if !moved {
             return Err(IdeaError::NotFound);
         }
-        tracing::info!(event = "ideas.accepted");
+        tracing::info!(event = "ideas.accepted", done = !background);
         Ok(())
     }
 

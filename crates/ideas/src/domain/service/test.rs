@@ -605,18 +605,35 @@ async fn the_person_accepts_and_dismisses_only_their_open_ideas(pool: PgPool) {
         h.service.accept(&user(OTHER), idea.id).await,
         Err(IdeaError::NotFound)
     ));
+    // Acting on an idea that isn't a background run finishes it: it shows
+    // in the feed's done list, and accepting it again changes nothing.
+    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    let feed = h.service.feed(&user(OWNER)).await.unwrap();
+    assert!(feed.ideas.is_empty());
+    assert_eq!(feed.done[0].id, idea.id);
+    assert_eq!(feed.done[0].state, IdeaState::Done);
     h.service.accept(&user(OWNER), idea.id).await.unwrap();
     assert!(matches!(
-        h.service.accept(&user(OWNER), idea.id).await,
+        h.service.dismiss(&user(OWNER), idea.id).await,
         Err(IdeaError::NotFound)
     ));
+    // A background prompt is taken on, not done: it runs.
+    let background = h
+        .suggest(session, prompt_idea("quotes:compare", "Compare quotes"))
+        .await
+        .idea
+        .unwrap();
+    h.service.accept(&user(OWNER), background.id).await.unwrap();
     assert_eq!(
         h.service.feed(&user(OWNER)).await.unwrap().ideas[0].state,
         IdeaState::Accepted
     );
-    h.service.dismiss(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .dismiss(&user(OWNER), background.id)
+        .await
+        .unwrap();
     assert!(matches!(
-        h.service.dismiss(&user(OWNER), idea.id).await,
+        h.service.dismiss(&user(OWNER), background.id).await,
         Err(IdeaError::NotFound)
     ));
 }

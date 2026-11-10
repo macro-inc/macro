@@ -142,13 +142,15 @@ where
     operation_id = "accept_idea",
     params(("id" = String, Path, description = "ID of the idea")),
     responses(
-        (status = 204, description = "Accepted"),
+        (status = 204, description = "Accepted: a background prompt idea is taken on, any other idea is done; accepting a done idea again changes nothing"),
         (status = 401, body = String),
-        (status = 404, body = String, description = "No proposed idea with this id for the caller, or ideas are off"),
+        (status = 404, body = String, description = "No open or done idea with this id for the caller, or ideas are off"),
         (status = 500, body = String),
     )
 )]
-/// The caller acts on a proposed idea.
+/// The caller acts on an idea: a background prompt idea is taken on; any
+/// other is done once they act on it (open its item, the composer, the
+/// routine), and shows in the feed's `done`.
 pub async fn accept_idea<S, Auth>(
     State(state): State<IdeaRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
