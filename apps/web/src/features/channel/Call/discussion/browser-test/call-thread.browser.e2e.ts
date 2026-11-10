@@ -162,15 +162,15 @@ test('a live call is a row with its thread collapsed under it and a way in', asy
     callRow(page).getByRole('button', { name: 'Join' })
   ).toBeVisible();
   await expect(page.getByText('First reply')).toHaveCount(0);
+  await page.getByRole('button', { name: /1 reply/ }).click();
+  await expect(page.getByText('First reply')).toBeVisible();
   // Touch replies through the one floating composer rather than under the row.
   if (testInfo.project.name === 'desktop') {
+    await page.getByRole('button', { name: 'Reply', exact: true }).click();
     await expect(
       page.locator('[data-input-id^="thread-reply-input"]')
     ).toHaveCount(1);
   }
-
-  await page.getByRole('button', { name: /1 reply/ }).click();
-  await expect(page.getByText('First reply')).toBeVisible();
 });
 
 test('an ended call says how long it lasted and offers no way in', async ({
