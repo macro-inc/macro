@@ -17,8 +17,9 @@ pub trait UnfurlFetcher: Send + Sync + 'static {
     /// favicon entries into a flat key/value map.
     ///
     /// Keys follow the conventions used downstream by
-    /// [`GetUnfurlResponse::get_title`] — `property:og:title`,
-    /// `property:og:description`, `property:og:image`, `title`, `favicon`.
+    /// [`GetUnfurlResponse::new`] — `property:<property>` and `name:<name>`
+    /// for `<meta>` tags, `title`, `favicon`, and
+    /// [`FIRST_PARAGRAPH_KEY`](crate::domain::models::FIRST_PARAGRAPH_KEY).
     fn fetch_meta_tags(
         &self,
         url: &str,

@@ -47,14 +47,6 @@ pub(super) enum FetchError {
     /// Upstream returned an unsupported content-type for unfurling.
     #[error("unexpected content-type: {0}")]
     UnexpectedContentType(String),
-    /// Upstream response was larger than the configured size cap.
-    #[error("response exceeds max size of {max} bytes (Content-Length: {content_length})")]
-    ResponseTooLarge {
-        /// The reported `Content-Length` header on the response.
-        content_length: u64,
-        /// The configured maximum allowed size.
-        max: u64,
-    },
     /// Error while reading the upstream response body stream.
     #[error("error reading upstream response: {0}")]
     ResponseRead(String),
@@ -174,27 +166,6 @@ pub(super) fn content_type_of(response: &reqwest::Response) -> String {
         .and_then(|v| v.to_str().ok())
         .unwrap_or("application/octet-stream")
         .to_string()
-}
-
-pub(super) fn check_content_length(
-    response: &reqwest::Response,
-    max: u64,
-    original_url: &str,
-) -> Result<(), FetchError> {
-    if let Some(content_length) = response.content_length() {
-        tracing::info!(
-            content_length,
-            url = original_url,
-            "upstream content length"
-        );
-        if content_length > max {
-            return Err(FetchError::ResponseTooLarge {
-                content_length,
-                max,
-            });
-        }
-    }
-    Ok(())
 }
 
 pub(super) fn build_error_chain(err: &reqwest::Error) -> String {

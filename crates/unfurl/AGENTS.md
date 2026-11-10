@@ -29,7 +29,8 @@ favicon) with SSRF protections.
 
 ## Checks
 
-- `cargo test -p unfurl` (`SQLX_OFFLINE` unset).
+- `cargo test -p unfurl --all-features` (`SQLX_OFFLINE` unset); the fetcher's
+  tests need the `outbound` feature.
 
 ## Gotchas
 
@@ -37,6 +38,16 @@ favicon) with SSRF protections.
   IPs blocked — see `src/outbound/http_safety.rs`'s doc comment.
 - The fetcher's client sends a named `User-Agent`; keep it on any new client.
   Many sites answer 403 to requests without one, and reqwest sends none.
+- A description is the first of `og:description`, `twitter:description`,
+  `<meta name="description">`, and the first paragraph of the page's
+  `<main>`/`<article>` that has text (`GetUnfurlResponse::get_description`),
+  on one line and cut to 500 characters. Encyclopedia articles have only the
+  paragraph.
+- The fetcher reads the first 1 MB of a page and parses that; it does not
+  refuse a longer page. Video pages run past it and still carry their tags
+  within it.
+- `services/unfurl_service`'s bulk route (`src/unfurl.rs`) is a separate, older
+  implementation with neither of the two behaviors above.
 
 ## Related
 
