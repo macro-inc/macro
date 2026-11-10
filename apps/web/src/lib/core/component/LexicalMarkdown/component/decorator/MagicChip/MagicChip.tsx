@@ -1,14 +1,14 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import type { MagicChipData } from '@macro-inc/lexical-core';
 import { $createNodeSelection, $setSelection, type NodeKey } from 'lexical';
 import { type Component, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../../context/LexicalWrapperContext';
 import { createMagicChipModel } from './create-magic-chip-model';
 import { MagicChipView } from './MagicChipView';
+import type { MagicChipUIData } from './types';
 
 /** Shared session response surface, optionally anchored to one turn. */
 export const MagicChip: Component<
-  MagicChipData & { key?: NodeKey; onCollapse?: () => void }
+  MagicChipUIData & { key?: NodeKey; onCollapse?: () => void }
 > = (props) => {
   const { insertSplit } = useSplitLayout();
   const model = createMagicChipModel(props);
