@@ -926,15 +926,20 @@ impl<'editor> Transaction<'editor> {
         }
         Ok(())
     }
-    /// Import a node and recursively append its serialized children.
-    pub fn import_node(&mut self, json: &SerializedNode) -> Result<NodeKey, Error> {
+    /// Import one payload with its complete serialized constructor context.
+    /// Framework children are left to the caller; own-data children remain intact.
+    pub fn import_node_shallow(&mut self, json: &SerializedNode) -> Result<NodeKey, Error> {
         self.guard_write()?;
         let name = json
             .get("type")
             .and_then(serde_json::Value::as_str)
             .ok_or(Error::Invariant("node type missing"))?;
         let index = self.pending.registry.import_index(name, json)?;
-        let key = (self.pending.registry.vtable(index).import)(self, json)?;
+        (self.pending.registry.vtable(index).import)(self, json)
+    }
+    /// Import a node and recursively append its serialized children.
+    pub fn import_node(&mut self, json: &SerializedNode) -> Result<NodeKey, Error> {
+        let key = self.import_node_shallow(json)?;
         if self.kind(key) == Some(NodeKind::Element)
             && let Some(children) = json.get("children").and_then(serde_json::Value::as_array)
         {
