@@ -392,6 +392,7 @@ export class Mirror {
         props.add(key);
       } else if (op === DiffOpcode.State) {
         update(key, { stateJSON: r.string() });
+        props.add(key);
       } else if (op === DiffOpcode.SetDecoratorRevision) {
         const node = get(key);
         if (node.kind !== 'decorator')

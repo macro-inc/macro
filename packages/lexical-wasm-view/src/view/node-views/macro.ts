@@ -102,7 +102,15 @@ function decoratorProperties(node: ViewNode, dom: HTMLElement): void {
     );
   if (node.type === 'paste') dom.setAttribute('data-paste-node', 'true');
   if (node.type === 'agent-context') dom.hidden = true;
-  if (node.type === 'await') dom.classList.add('macro-await-node');
+  if (node.type === 'await') {
+    dom.classList.add('macro-await-node');
+    const state: unknown = node.stateJSON ? JSON.parse(node.stateJSON) : null;
+    const local: unknown =
+      state !== null && typeof state === 'object'
+        ? Reflect.get(state, 'local')
+        : undefined;
+    dom.classList.toggle('local', local !== false);
+  }
   if (node.type === 'equation') dom.classList.add('md-editor-equation');
 }
 function elementTag(node: ViewNode): string {
