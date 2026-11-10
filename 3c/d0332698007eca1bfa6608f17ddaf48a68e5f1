@@ -1,0 +1,19 @@
+infra/stacks/monitoring/monitors/oauth.ts
+  s_977a3c5a93eb37::t_5b54b517d5956c 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3cd0332698007eca1bfa6608f17ddaf48a68e5f1",
+  "prompts": {},
+  "sessions": {
+    "s_977a3c5a93eb37": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c606-7308-7b61-8401-e2c20a6b8bfd",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
