@@ -106,6 +106,7 @@ impl PreparedUpdate {
             full_reconcile: self.full_reconcile(),
             view_text_matches: None,
             ops: vec![],
+            decorator_renders: vec![],
         };
         crate::diff::visit_transition_diff(
             self.previous().view(),
@@ -118,6 +119,17 @@ impl PreparedUpdate {
                 .copied(),
             options,
             |op| diff.ops.push(op),
+        )?;
+        diff.decorator_renders = crate::diff::collect_decorator_renders(
+            self.previous().view(),
+            self.next().view(),
+            self.full_reconcile(),
+            self.changes()
+                .dirty_leaves
+                .iter()
+                .chain(self.changes().dirty_elements.keys())
+                .copied(),
+            &diff.ops,
         )?;
         Ok(diff)
     }
@@ -267,7 +279,7 @@ impl Transaction<'_> {
         }
         let transition = match self.prepared.take() {
             Some(value) => value,
-            None => match self.prepare_transition() {
+            None => match self.prepare_transition(crate::commit::CacheReconciliation::Writable) {
                 Ok(mut transition) => {
                     transition.receipt = Some(PreparedReceipt::new(transition.publication_id));
                     Box::new(transition)

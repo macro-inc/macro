@@ -274,3 +274,5 @@ unpublished work. Preserve it through pre-adoption refusal, and use its job-owne
 publication receipt rather than adoption as evidence of actual installation.
 Ordinary commits share preparation without allocating that receipt. Notify
 publication observers only after real installation and receipt acknowledgement.
+
+Collect decorator policies through the shared pure collector for committed chains and prepared main transitions; retain generated removal keys for clean descendants and advance observation revisions only at actual consuming-view exposure. Preserve Imported cache reconciliation only for builder MAIN; ordinary and prepared transactions use Writable, and sealed admission never reruns cache or pipeline work.

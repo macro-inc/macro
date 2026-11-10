@@ -276,41 +276,20 @@ impl Commit {
             decorator_renders: vec![],
         };
         self.visit_diff(options, |op| diff.ops.push(op))?;
-        let mut keys = IndexSet::default();
-        if diff.full_reconcile {
-            keys.extend(last.next.nodes.keys().copied());
-        } else {
-            for commit in self.chain() {
-                keys.extend(
-                    commit
-                        .changes
-                        .dirty_leaves
-                        .iter()
-                        .chain(commit.changes.dirty_elements.keys())
-                        .copied(),
-                );
-            }
-        }
-        keys.extend(diff.ops.iter().filter_map(|op| match op {
-            DiffOp::Remove { key, .. } => Some(*key),
-            _ => None,
-        }));
-        for key in keys {
-            if last.next.view().contains(key)
-                && let Some(policy) = last.next.view().decorator_render_policy(key)?
-            {
-                diff.decorator_renders.push(DecoratorRenderChange {
-                    key,
-                    policy: Some(policy),
-                });
-            } else if !last.next.view().contains(key)
-                && self.chain().next().unwrap_or(self).prev.view().kind(key)
-                    == Some(NodeKind::Decorator)
-            {
-                diff.decorator_renders
-                    .push(DecoratorRenderChange { key, policy: None });
-            }
-        }
+        diff.decorator_renders = collect_decorator_renders(
+            self.chain().next().unwrap_or(self).prev.view(),
+            last.next.view(),
+            diff.full_reconcile,
+            self.chain().flat_map(|commit| {
+                commit
+                    .changes
+                    .dirty_leaves
+                    .iter()
+                    .chain(commit.changes.dirty_elements.keys())
+                    .copied()
+            }),
+            &diff.ops,
+        )?;
         Ok(diff)
     }
     pub(crate) fn visit_diff(
@@ -343,6 +322,40 @@ impl Commit {
             )
         }
     }
+}
+
+/// Collect pure native policies without advancing a consuming-view observation.
+pub(crate) fn collect_decorator_renders(
+    prev: StateRef<'_>,
+    next: StateRef<'_>,
+    full: bool,
+    dirty: impl Iterator<Item = NodeKey>,
+    ops: &[DiffOp],
+) -> Result<Vec<DecoratorRenderChange>, Error> {
+    let mut keys = IndexSet::default();
+    if full {
+        keys.extend(next.state.nodes.keys().copied());
+    } else {
+        keys.extend(dirty);
+    }
+    keys.extend(ops.iter().filter_map(|op| match op {
+        DiffOp::Remove { key, .. } => Some(*key),
+        _ => None,
+    }));
+    let mut renders = vec![];
+    for key in keys {
+        if next.contains(key)
+            && let Some(policy) = next.decorator_render_policy(key)?
+        {
+            renders.push(DecoratorRenderChange {
+                key,
+                policy: Some(policy),
+            });
+        } else if !next.contains(key) && prev.kind(key) == Some(NodeKind::Decorator) {
+            renders.push(DecoratorRenderChange { key, policy: None });
+        }
+    }
+    Ok(renders)
 }
 
 pub(crate) fn visit_transition_diff(
