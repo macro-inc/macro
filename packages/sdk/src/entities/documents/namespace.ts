@@ -8,6 +8,7 @@ import { Spreadsheet } from '../spreadsheets/spreadsheet';
 import type { Team } from '../teams/team';
 import { User } from '../users/user';
 import { Document } from './document';
+import { type FileContent, toBlob } from './file-content';
 import { SystemSkill } from './system-skill';
 
 /** One skill found by {@link DocumentNamespace.skills}. */
@@ -23,13 +24,6 @@ export interface SkillListing {
   description: string | undefined;
   /** When the skill document was last updated (ISO 8601); built-in skills have none. */
   updatedAt: string | undefined;
-}
-
-/** A file's content: its bytes, or text stored as UTF-8. */
-export type FileContent = Uint8Array<ArrayBuffer> | ArrayBuffer | Blob | string;
-
-function toBlob(content: FileContent): Blob {
-  return content instanceof Blob ? content : new Blob([content]);
 }
 
 /**

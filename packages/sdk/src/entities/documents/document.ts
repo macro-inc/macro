@@ -48,6 +48,7 @@ import {
 } from './ai-edit';
 import { DocumentAnchor } from './anchor';
 import { Comment } from './comment';
+import { type FileContent, toBlob } from './file-content';
 import {
   type DocumentMarkdown,
   type DocumentMarkdownWritten,
@@ -177,11 +178,14 @@ export class Document
     ).data;
   }
 
-  /** Commit a simple file save; to change a markdown document's text, use `edit` or `setContent`. */
-  async simpleSave() {
+  /** Replace an uploaded file's content as a new version of this document; to change a markdown document's text, use `edit` or `setContent`. */
+  async simpleSave(content: FileContent) {
     return (
       await this.mutate((c) =>
-        c.storage.simpleSave({ path: { document_id: this.id } }),
+        c.storage.simpleSave({
+          path: { document_id: this.id },
+          body: { file: toBlob(content) },
+        }),
       )
     ).data;
   }
