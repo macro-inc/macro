@@ -35,15 +35,6 @@ pub(super) enum DialReattach {
     Skip,
 }
 
-/// Whether a [`reconnect`](AgentHarnessInner::reconnect) takes its own
-/// permit from the attach budget.
-pub(super) enum AttachAdmission {
-    /// Take one for this path.
-    Budget(AttachPath),
-    /// The caller already holds one: a dial's restore.
-    HeldByCaller,
-}
-
 /// The attach path a delivery's reconnect is counted under: a prompt someone
 /// sent, or work nobody is waiting on.
 pub(super) fn delivery_path(
@@ -103,11 +94,13 @@ where
     /// Restore the runtime transport without starting a new invocation.
     ///
     /// Binding an external session takes a permit from the attach budget
-    /// under `admission`, held until the runtime has restored it.
+    /// under `path`, held until the runtime has restored it. Only called on
+    /// the session's worker, so a permit is never held while waiting in a
+    /// worker's queue.
     async fn reconnect(
         &self,
         session_id: AgentSessionId,
-        admission: AttachAdmission,
+        path: AttachPath,
     ) -> Result<AgentSession> {
         let session = self.sessions.get_session(session_id).await?;
         let permission_policy = self
@@ -143,10 +136,7 @@ where
             // yet. That is the ordinary case: sessions bind when they
             // are prompted, not when the runtime dials, so the first
             // prompt after a reconnect is what restores the session.
-            let permit = match admission {
-                AttachAdmission::Budget(path) => Some(self.attach_permit(path, &session).await?),
-                AttachAdmission::HeldByCaller => None,
-            };
+            let permit = self.attach_permit(path, &session).await?;
             let Some(mut attachment) = self.runtimes.bind(session.bot_id, session_id).await else {
                 // Kept in the session vocabulary so transports report
                 // it as a disconnect, not an internal error.
@@ -173,12 +163,10 @@ where
                 )
                 .await?;
             self.restore_queue(session_id).await?;
-            if let Some(permit) = permit {
-                // Whether it opened is the next send's to report.
-                let _opened = permit
-                    .hold_until(self.sessions.wait_opened(session_id))
-                    .await;
-            }
+            // Whether it opened is the caller's to report.
+            let _opened = permit
+                .hold_until(self.sessions.wait_opened(session_id))
+                .await;
         }
         Ok(session)
     }
@@ -222,8 +210,7 @@ where
             self.ensure_hydrated(session_id).await?;
             return Ok(true);
         }
-        self.reconnect(session_id, AttachAdmission::HeldByCaller)
-            .await?;
+        self.reconnect(session_id, AttachPath::Dial).await?;
         tracing::Span::current().record("agent.session.reattached", true);
         Ok(true)
     }
@@ -339,9 +326,7 @@ where
                 if !matches!(
                     self.sessions.management(session_id).await?,
                     SessionManagement::Ours
-                ) && let Err(error) = self
-                    .reconnect(session_id, AttachAdmission::Budget(AttachPath::Recovery))
-                    .await
+                ) && let Err(error) = self.reconnect(session_id, AttachPath::Recovery).await
                 {
                     self.notification_batches.remove(&session_id);
                     self.busy.clear(session_id);
@@ -498,9 +483,7 @@ where
             }
             Err(AgentSessionError::Disconnected(_)) => {
                 let path = delivery_path(&action, actor.as_ref());
-                let session = self
-                    .reconnect(session_id, AttachAdmission::Budget(path))
-                    .await?;
+                let session = self.reconnect(session_id, path).await?;
                 if action.occupies_turn() {
                     self.admit_session(&session).await?;
                 }

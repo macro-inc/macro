@@ -3,14 +3,14 @@
 //! A runtime can list hundreds of sessions, and it redials whenever its
 //! socket drops, so a dial must never stampede the replica: idle sessions
 //! wait for their next prompt, every restore takes a permit from the
-//! replica's [`AttachBudget`](crate::domain::attach_budget::AttachBudget),
-//! held until the session's ACP restore finishes or the budget's hold limit
-//! runs out, and a harness dialing again stops its previous dial from
-//! starting more (restores already running keep their permit).
+//! replica's [`AttachBudget`](crate::domain::attach_budget::AttachBudget) on
+//! the session's worker as it reconnects, held until the session's ACP
+//! restore finishes or the budget's hold limit runs out, and a harness
+//! dialing again stops its previous dial from starting more (restores
+//! already handed to a worker still run).
 
 use super::deliver::DialReattach;
 use super::*;
-use crate::domain::attach_budget::AttachPath;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_session::domain::connection::ListedSession;
 use futures::StreamExt as _;
@@ -247,23 +247,10 @@ where
         loop {
             // Cancelling the dial stops it from starting a restore, never
             // from waiting for one: the Reattach runs on the session's worker
-            // whatever happens to this future, so its permit stays held until
-            // the restore is done.
-            let permit = tokio::select! {
-                () = cancelled.cancelled() => return (Outcome::Abandoned, retries),
-                permit = self.inner.attach_budget.acquire(AttachPath::Dial, harness, session_id) => permit,
-            };
-            let Ok(permit) = permit else {
-                return (Outcome::Abandoned, retries);
-            };
-            let attempt = permit
-                .hold_until(self.restore(session_id))
-                .await
-                .unwrap_or_else(|| {
-                    Err(HarnessError::Handshake(
-                        "the runtime did not restore the session in time".to_owned(),
-                    ))
-                });
+            // whatever happens to this future. Its attach permit is taken
+            // there, as the worker reconnects the session, so no permit is
+            // held while the Reattach waits in the worker's queue.
+            let attempt = self.restore(session_id).await;
             let Err(error) = attempt else {
                 return (Outcome::Restored, retries);
             };

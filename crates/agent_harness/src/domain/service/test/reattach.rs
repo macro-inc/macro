@@ -8,6 +8,7 @@ use crate::domain::attach_budget::{
 };
 use agent_client_protocol::schema::v1::LoadSessionResponse;
 use agent_session::domain::connection::ListedSession;
+use agent_session::domain::session::HANDSHAKE_TIMEOUT;
 
 /// A session the runtime had opened before its connection dropped. Its ACP
 /// session id is its own id, which is how [`MirrorBindings`] resolves it.
@@ -430,7 +431,7 @@ async fn a_redial_restores_recent_sessions_and_leaves_idle_ones_to_their_next_pr
 async fn a_redial_restores_only_a_few_sessions_at_a_time() {
     let (service, repo, _containers, _announcer, runtimes) = harness();
     let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
-    let limit = crate::domain::attach_budget::HARNESS_ATTACH_SHARE;
+    let limit = HARNESS_ATTACH_SHARE;
     let total = limit + 4;
     let mut sessions = Vec::new();
     for _ in 0..total {
@@ -490,8 +491,11 @@ async fn a_redial_restores_only_a_few_sessions_at_a_time() {
 async fn a_redial_cancels_the_harness_previous_dial() {
     let (service, repo, _containers, _announcer, runtimes) = harness();
     let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
-    let limit = crate::domain::attach_budget::HARNESS_ATTACH_SHARE;
-    let total = limit + 1;
+    let limit = HARNESS_ATTACH_SHARE;
+    // A dial hands up to this many restores to session workers at once;
+    // those still run after a redial, and only the rest are abandoned.
+    let in_flight = super::super::reattach::REATTACH_CONCURRENCY;
+    let total = in_flight + 1;
     let mut sessions = Vec::new();
     for _ in 0..total {
         sessions.push(native_session(&service, &repo, bot_id).await);
@@ -542,11 +546,11 @@ async fn a_redial_cancels_the_harness_previous_dial() {
     );
     let first = first.await.expect("the first dial's task");
 
-    // The restores the first dial had running finish under their permits;
-    // it starts nothing more.
+    // The restores the first dial handed to workers finish; it starts
+    // nothing more.
     assert_eq!(
         (first.eager, first.abandoned),
-        (limit, 1),
+        (in_flight, 1),
         "the first dial stops starting restores: {first:?}"
     );
     assert_eq!(
@@ -883,4 +887,74 @@ fn only_a_prompt_someone_sent_counts_as_a_user_attach() {
         delivery_path(&AgentAction::Stop, Some(&sender)),
         AttachPath::Delivery
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_delivery_queued_ahead_of_a_dial_restore_never_waits_out_the_hold_limit() {
+    let (service, repo, _containers, _announcer, runtimes) = harness();
+    let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    // Enough sessions for the dial to want the harness's whole share.
+    let mut sessions = Vec::new();
+    for _ in 0..HARNESS_ATTACH_SHARE {
+        sessions.push(native_session(&service, &repo, bot_id).await);
+    }
+    let target = sessions[0];
+    let runtime = ContainerMock::default();
+    runtimes.attach(harness_for_bot(bot_id), runtime.clone());
+    let started = tokio::time::Instant::now();
+
+    let delivery = service.execute(
+        target,
+        HarnessCommand::Deliver(DeliverAction::prompt(
+            AgentAction::prompt("nobody typed this"),
+            None,
+            None,
+        )),
+    );
+    let dial = service.reattach_live_sessions(
+        harness_for_bot(bot_id),
+        sessions
+            .iter()
+            .map(|session| ListedSession {
+                id: SessionId::new(session.to_string()),
+                updated_at: None,
+            })
+            .collect(),
+        tracing::Span::none(),
+    );
+    let drive = async {
+        initializes_loading(&runtime).await;
+        let agent = runtime.agent();
+        let mut answered = Vec::new();
+        // One load per session, then the delivery's prompt: each step needs
+        // a new request, so this only advances while attaches do.
+        for requests in 2..=(1 + sessions.len() + 1) {
+            agent.wait_for_requests(requests).await;
+            for frame in agent.received_frames() {
+                if let RawJsonRpcMessage::Request(request) = frame
+                    && request.method.as_ref() == "session/load"
+                    && !answered.contains(&request.id)
+                {
+                    answered.push(request.id.clone());
+                    agent.sends_reply(request.id, LoadSessionResponse::new());
+                }
+            }
+        }
+    };
+    let (delivered, report, ()) = tokio::join!(delivery, dial, drive);
+
+    delivered.expect("the delivery reaches its session");
+    assert_eq!(report.eager, sessions.len(), "{report:?}");
+    assert!(
+        started.elapsed() < HANDSHAKE_TIMEOUT,
+        "neither side waited for a permit the other held: {:?}",
+        started.elapsed()
+    );
+    assert_eq!(prompts(&runtime.agent()).len(), 1);
+    let mut loaded = loaded(&runtime.agent());
+    loaded.sort();
+    let mut expected: Vec<String> = sessions.iter().map(ToString::to_string).collect();
+    expected.sort();
+    assert_eq!(loaded, expected, "each session is loaded once");
+    assert_eq!(service.inner.attach_budget.available(), ATTACH_CONCURRENCY);
 }

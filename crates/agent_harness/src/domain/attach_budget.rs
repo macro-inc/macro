@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::session::HANDSHAKE_TIMEOUT;
 use dashmap::DashMap;
 use harness_id::HarnessId;
 use tokio::sync::{AcquireError, OwnedSemaphorePermit, Semaphore, SemaphorePermit};
@@ -28,8 +29,11 @@ pub const USER_RESERVED_ATTACHES: usize = 2;
 /// Background attaches one harness may hold at once.
 pub const HARNESS_ATTACH_SHARE: usize = 4;
 /// The longest a permit is held waiting for the runtime to restore the
-/// session, so a `session/load` that never answers cannot leak it.
-pub const ATTACH_PERMIT_HOLD: Duration = Duration::from_secs(60);
+/// session, so a `session/load` that never answers cannot leak it. Longer
+/// than the session actor's own handshake deadline, which starts as the
+/// session attaches, so the actor gives up on a hung restore first and the
+/// permit is normally released by that, not by this bound.
+pub const ATTACH_PERMIT_HOLD: Duration = HANDSHAKE_TIMEOUT.saturating_add(Duration::from_secs(5));
 
 /// Why a session is being attached.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]

@@ -11,6 +11,7 @@ mod types;
 #[cfg(test)]
 mod tests;
 
+pub use actors::HANDSHAKE_TIMEOUT;
 pub use session::SessionMachine;
 pub(crate) use session::initialize_request;
 pub use types::{
