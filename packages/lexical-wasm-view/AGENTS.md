@@ -51,6 +51,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 
 - Resolve text leaves through dom.ts so nested semantic wrappers remain editable.
 - Keep native keys in the namespace-scoped DOM property and WeakMap; omit new empty class/style attributes while preserving upstream class/style clearing behavior.
+- Resolve code aliases through theme.code so Macro custom-code retains the Source block layout and margins.
 - Match pinned link URL formatting and parsed-protocol filtering before painting href.
 - Handle session effect kind 9 before painting: end native composition and suppress
   its redundant synchronous input/end events; Rust already merged the accepted text.

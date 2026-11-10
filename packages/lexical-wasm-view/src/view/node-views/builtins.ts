@@ -153,6 +153,12 @@ function elementProps(
 }
 function elementClasses(node: ViewNode, ctx: RenderContext): string {
   const props = node.props();
+  if (
+    node.type === 'code' ||
+    node.type === 'code-block' ||
+    node.type === 'custom-code'
+  )
+    return themeClass(ctx.theme, 'code');
   if (node.type === 'heading')
     return themeClass(ctx.theme, 'heading', tag(node));
   if (node.type === 'list' || node.type === 'task-list') {
