@@ -18,6 +18,7 @@ use models_soup::{
     comms::{ChannelMessage, ChannelParticipant, ChannelType, SoupChannel, SoupChannelThread},
     crm_company::SoupCrmCompany,
     database_row::SoupDatabaseRow,
+    harness::SoupHarness,
     document::{SoupDocument, SoupDocumentSubType},
     email_thread::{
         SoupAttachment, SoupContact, SoupEnrichedEmailThreadPreview, SoupLabelListVisibility,
@@ -314,6 +315,7 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             Self::CalendarEvent(_) => {}
             Self::AgentSession(entity) => entity.2 = score,
             Self::DatabaseRow(entity) => entity.2 = score,
+            Self::Harness(entity) => entity.2 = score,
             Self::Reminder(entity) => match entity.0 {},
         }
         self
@@ -335,7 +337,8 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             | Self::CrmContact(_)
             | Self::ForeignEntity(_)
             | Self::AgentSession(_)
-            | Self::DatabaseRow(_) => {}
+            | Self::DatabaseRow(_)
+            | Self::Harness(_) => {}
             Self::Reminder(entity) => match entity.0 {},
         }
         self
@@ -468,6 +471,8 @@ pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     AgentSession(GraphqlSoupAgentSession<E>),
     /// Database row entity.
     DatabaseRow(GraphqlSoupDatabaseRow<E>),
+    /// Paired runtime, listed only by attention feeds.
+    Harness(GraphqlSoupHarness<E>),
     /// Removed reminder entity, never constructed.
     Reminder(GraphqlSoupReminder<E>),
 }
@@ -497,6 +502,7 @@ where
                 GraphqlSoupEntityType::CalendarEvent => GraphqlSoupCalendarEvent::<E>::type_name(),
                 GraphqlSoupEntityType::AgentSession => GraphqlSoupAgentSession::<E>::type_name(),
                 GraphqlSoupEntityType::DatabaseRow => GraphqlSoupDatabaseRow::<E>::type_name(),
+                GraphqlSoupEntityType::Harness => GraphqlSoupHarness::<E>::type_name(),
             }
             .into_owned(),
         )
@@ -619,6 +625,12 @@ where
                     model_entity::EntityType::DatabaseRow.with_entity_string(item.id.to_string()),
                 );
                 Self::DatabaseRow(GraphqlSoupDatabaseRow(item, edges, None))
+            }
+            SoupItem::Harness(item) => {
+                let edges = E::from_entity(
+                    model_entity::EntityType::Harness.with_entity_string(item.id.to_string()),
+                );
+                Self::Harness(GraphqlSoupHarness(item, edges, None))
             }
         }
     }
@@ -1157,6 +1169,78 @@ impl<E: SoupEntityEdges> GraphqlSoupDatabaseRow<E> {
     }
 
     /// Common entity edges, including properties and viewer permissions.
+    #[graphql(flatten)]
+    async fn edges(&self) -> E {
+        self.1.clone()
+    }
+
+    /// The viewer's frecency score for this entity, when loaded.
+    async fn frecency_score(&self) -> Option<f64> {
+        self.2
+    }
+}
+
+/// GraphQL paired runtime entity.
+pub struct GraphqlSoupHarness<E: SoupEntityEdges>(SoupHarness, E, Option<f64>);
+
+/// A paired runtime (a macrod machine). Only attention feeds list it, for
+/// the access notifications filed under it; it opens in Settings → Machines.
+#[Object(name = "GraphqlSoupHarness")]
+impl<E: SoupEntityEdges> GraphqlSoupHarness<E> {
+    /// The harness identifier.
+    async fn id(&self) -> ID {
+        ID(self.0.id.to_string())
+    }
+
+    /// Canonical entity kind.
+    async fn entity_type(&self) -> GraphqlSoupEntityType {
+        GraphqlSoupEntityType::Harness
+    }
+
+    /// Server-only projection facts are unavailable for runtimes.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
+    }
+
+    /// The machine's name.
+    async fn display_name(&self) -> Option<String> {
+        Some(self.0.name.clone())
+    }
+
+    /// Common runtime metadata.
+    async fn metadata(&self) -> GraphqlEntityMetadata {
+        GraphqlEntityMetadata {
+            owner_id: Some(self.0.owner_id.principal_id()),
+            owner_type: Some(self.0.owner_id.owner_type().into()),
+            parent: None,
+            created_at: Some(self.0.created_at.to_rfc3339()),
+            updated_at: Some(self.0.updated_at.to_rfc3339()),
+            viewed_at: None,
+            deleted_at: None,
+        }
+    }
+
+    /// The machine's name.
+    async fn name(&self) -> &str {
+        &self.0.name
+    }
+
+    /// The principal identifier of the owner: a user or a team.
+    async fn owner_id(&self) -> String {
+        self.0.owner_id.principal_id()
+    }
+
+    /// The created timestamp in RFC 3339 format.
+    async fn created_at(&self) -> String {
+        self.0.created_at.to_rfc3339()
+    }
+
+    /// The updated timestamp in RFC 3339 format.
+    async fn updated_at(&self) -> String {
+        self.0.updated_at.to_rfc3339()
+    }
+
+    /// Common entity edges.
     #[graphql(flatten)]
     async fn edges(&self) -> E {
         self.1.clone()
@@ -2679,6 +2763,7 @@ impl_common_interface_edges!(
     GraphqlSoupForeignEntity,
     GraphqlSoupAgentSession,
     GraphqlSoupDatabaseRow,
+    GraphqlSoupHarness,
     GraphqlSoupReminder,
 );
 
