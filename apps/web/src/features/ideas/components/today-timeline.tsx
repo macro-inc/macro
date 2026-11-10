@@ -41,7 +41,7 @@ export function TodayTimeline(props: {
           </p>
         }
       >
-        <div class="relative mt-3 h-27">
+        <div class="relative mt-3 h-34">
           <For each={props.strip.hours}>
             {(hour, index) => (
               <div

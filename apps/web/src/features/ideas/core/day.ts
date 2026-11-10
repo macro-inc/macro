@@ -30,7 +30,7 @@ export const WORKING_HOURS = { start: 8, end: 20 };
 
 /** A chip's width as a share of the strip, for spacing neighbours apart. */
 const CHIP_SPAN = 14;
-const LANES = 2;
+const LANES = 3;
 
 /**
  * Today's timed events across working hours. An event that starts before the
