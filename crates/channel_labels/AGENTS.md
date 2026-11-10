@@ -47,8 +47,9 @@ Chat sidebar, following the standard hexagonal crate layout.
 - PATCH `{label_id}` accepts optional `targetScope: "personal" | "team"` with
   the existing `name` and optional `rule`; omission keeps rename behavior.
   Transferring a section preserves its ID and contents, but rejects any member
-  the actor cannot access or the destination cannot label. Conflicting manual
-  destination assignments move to the transferred section atomically.
+  the actor cannot access or the destination cannot label, including unjoined
+  rule matches when moving to personal scope. Conflicting manual destination
+  assignments move to the transferred section atomically.
 
 ## Related
 

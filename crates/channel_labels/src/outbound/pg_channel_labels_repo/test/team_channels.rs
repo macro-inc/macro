@@ -423,6 +423,52 @@ async fn sections_reject_cross_team_and_clear_picks_on_rule_edits_and_transfers(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn rule_section_transfer_rejects_unjoined_matches(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    insert_user(&pool, USER_B).await;
+    let team = insert_team(&pool, USER_B).await;
+    let unjoined = insert_team_channel(&pool, "Roadmap", team, USER_A, &[USER_A]).await;
+    let scope = ChannelLabelsScope::Team(team);
+    let personal = ChannelLabelsScope::User(user(USER_B).into_owned());
+    let sections = PgChannelLabelsRepo::for_sections(pool);
+    let label = written(
+        sections
+            .create_label(
+                &scope,
+                "Planning",
+                &[],
+                &user(USER_B),
+                Some(&ChannelLabelRule::Name {
+                    contains: "Roadmap".into(),
+                }),
+            )
+            .await
+            .unwrap(),
+    );
+    assert_eq!(label.channel_ids, vec![unjoined]);
+    assert_eq!(
+        sections
+            .transfer_label(&scope, &personal, label.id, "Planning", &user(USER_B), None)
+            .await
+            .unwrap(),
+        LabelWriteOutcome::InvalidChannel(SetChannelLabelOutcome::ChannelNotFound)
+    );
+    let unchanged = sections
+        .get_label(&scope, label.id, &user(USER_B))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(unchanged.channel_ids, vec![unjoined]);
+    assert!(
+        sections
+            .get_label(&personal, label.id, &user(USER_B))
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn manual_section_transfer_with_new_rule_replaces_picks_without_moving_matches(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let team = insert_team(&pool, USER_A).await;
