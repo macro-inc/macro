@@ -80,6 +80,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Keep sibling-position ranks local to an immutable diff state; share next-state ranks across creation and child-list ordering, never across snapshots or commits.
 - Preserve the scoped test-only legacy ordering path and same-commit encoded-buffer property across diff refactors; compare words and UTF-8 bytes without sorting operations.
 - EditorCore is sans-IO: host time, layout, clipboard and composition facts arrive as data; effects leave as values.
+- Carry host-captured paste modifiers in ClipboardPayload.intent; default legacy/drop inputs to false, retain MIME precedence, and never infer intent from clipboard MIME entries.
 - Failed hook rounds roll back early publications too; failed main inputs retain and report their early commits. Use IsolatedAfterCommit for speculative follow-ups that must discard declined writes without undoing shared plugin commits; include queued updates and early publications in the round limit.
 
 - `src/staging.rs` owns always-built PendingUpdate suspend/resume/adoption and `core/staging.rs` scopes it on the same core; dropping it discards unpublished work, and wrong-editor or stale-publication resumes reject. Native identity markers stay lazy until staging is used. Feature-gated `foreign-nodes` adds runtime node descriptors, own JSON fields, inherited hooks, conformance peers, seeded-state restoration and foreign identity aliases.

@@ -135,6 +135,12 @@ pub struct KeyEvent {
     /// Keyboard is_composing flag.
     pub is_composing: bool,
 }
+/// Paste policy captured by the host when the paste starts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PasteIntent {
+    /// Yield Markdown conversion while retaining the existing MIME precedence.
+    pub plain_only: bool,
+}
 /// Clipboard data already read by the host.
 #[derive(Clone, PartialEq, Debug, Default)]
 pub struct ClipboardPayload {
@@ -142,6 +148,8 @@ pub struct ClipboardPayload {
     pub data: crate::collections::IndexMap<String, String>,
     /// Host has file attachments.
     pub has_files: bool,
+    /// Host-captured paste policy, independent of clipboard MIME data.
+    pub intent: PasteIntent,
     /// Host-imported HTML nodes.
     pub html_nodes: Option<Vec<SerializedNode>>,
 }

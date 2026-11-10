@@ -99,6 +99,7 @@ fn command_and_event_identity_use_static_keys_and_shared_payloads() {
             .into_iter()
             .collect(),
         has_files: false,
+        intent: PasteIntent::default(),
         html_nodes: None,
     };
     assert_eq!(clipboard.get("text/plain"), Some("paste"));

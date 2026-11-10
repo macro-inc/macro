@@ -414,3 +414,64 @@ fn lower_priority_failure_after_flush_rolls_back_document_and_extension_state() 
     assert!(editor.extension::<Trace>()?.0.is_empty());
     Ok(())
 }
+
+#[derive(Clone, Default)]
+struct ObservedPastes(Vec<ClipboardPayload>);
+struct ObservePaste;
+impl Plugin for ObservePaste {
+    fn name(&self) -> &'static str {
+        "observe-paste"
+    }
+    fn commands(&self) -> &[CommandRegistration] {
+        &[CommandRegistration {
+            command: CommandKind::Paste,
+            priority: CommandPriority::Normal,
+            placement: Placement::After,
+        }]
+    }
+    fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error> {
+        let Command::Paste(payload) = command else {
+            return Ok(Handled::No);
+        };
+        tx.extension_mut::<ObservedPastes>()?
+            .0
+            .push(payload.clone());
+        Ok(Handled::No)
+    }
+}
+#[test]
+fn paste_dispatch_preserves_captured_intent_and_rich_clipboard_data() -> Result<(), Error> {
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .extension_state(ObservedPastes::default())
+        .plugin(ObservePaste)
+        .build()
+        .unwrap();
+    let ordinary = ClipboardPayload {
+        data: [
+            ("text/plain".into(), "**literal**".into()),
+            ("text/html".into(), "<strong>rich</strong>".into()),
+        ]
+        .into_iter()
+        .collect(),
+        has_files: true,
+        ..ClipboardPayload::default()
+    };
+    assert!(!ordinary.intent.plain_only);
+    let mut plain = ordinary.clone();
+    plain.intent = PasteIntent { plain_only: true };
+    assert_eq!(
+        editor.dispatch(&Command::Paste(ordinary.clone()))?.0,
+        Handled::No
+    );
+    assert_eq!(
+        editor.dispatch(&Command::Paste(plain.clone()))?.0,
+        Handled::No
+    );
+    let observed = &editor.extension::<ObservedPastes>()?.0;
+    assert_eq!(observed, &[ordinary, plain]);
+    assert!(!observed[0].intent.plain_only);
+    assert!(observed[1].intent.plain_only);
+    assert_eq!(observed[1].get("text/html"), Some("<strong>rich</strong>"));
+    assert!(observed[1].has_files);
+    Ok(())
+}
