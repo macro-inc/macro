@@ -1,5 +1,7 @@
 import { optimisticResolver } from '@graphql-cache/exchange/optimistic-resolvers';
 import {
+  DismissIdeaDocument,
+  DismissRoutineSuggestionDocument,
   MarkEmailThreadSeenDocument,
   MarkEmailThreadUnreadDocument,
   SetEmailThreadArchivedDocument,
@@ -34,6 +36,16 @@ export const soupOptimisticResolvers = [
       id: String(id),
       inboxVisible: !input.archived,
     })),
+  })),
+  optimisticResolver(DismissRoutineSuggestionDocument, ({ suggestionId }) => ({
+    __typename: 'GraphqlRoutineSuggestion',
+    id: String(suggestionId),
+    state: 'DISMISSED' as const,
+  })),
+  optimisticResolver(DismissIdeaDocument, ({ ideaId }) => ({
+    __typename: 'GraphqlIdea',
+    id: String(ideaId),
+    state: 'DISMISSED' as const,
   })),
   optimisticResolver(UpdateNotificationsDocument, ({ input }) =>
     input.notificationIds.map((id) => ({

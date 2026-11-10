@@ -83,6 +83,13 @@ const policies = {
     'authoritative: irreversible deletion requires server confirmation',
   DuplicateEntities: 'authoritative: server assigns the copy identity',
   SetEntityFavorite: 'inactive: UI uses SetFavorite',
+  DismissRoutineSuggestion: 'resolver',
+  DismissIdea: 'resolver',
+  AcceptIdea:
+    'authoritative: the server decides whether a run starts and its session',
+  RecordIdeasSeen: 'authoritative: boolean response; nothing cached changes',
+  StartSuggestionGeneration:
+    'authoritative: the server decides whether a generation starts',
 } satisfies Record<
   string,
   | 'resolver'

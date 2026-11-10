@@ -1,0 +1,51 @@
+# The user's ideas. Views show the open ones (PROPOSED, ACCEPTED); accepting or
+# dismissing answers with the idea, so each view updates without a refetch.
+fragment IdeaFields on GraphqlIdea {
+	id
+	title
+	summary
+	importance
+	categories
+	state
+	stateReason
+	about { entityType entityId partId }
+	produced { entityType entityId partId }
+	createdAt
+	updatedAt
+	stateChangedAt
+	run { sessionId startedAt progress }
+	kind {
+		__typename
+		... on GraphqlPromptIdea { prompt runMode }
+		... on GraphqlEntityIdea {
+			action
+			draft { entityType entityId partId }
+		}
+		... on GraphqlRoutineIdea { routineSuggestionId }
+	}
+}
+
+query IdeaFeed {
+	user {
+		id
+		ideaFeed {
+			ideas { ...IdeaFields }
+		}
+	}
+}
+
+mutation AcceptIdea($ideaId: ID!) {
+	acceptIdea(ideaId: $ideaId) { ...IdeaFields }
+}
+
+mutation DismissIdea($ideaId: ID!) {
+	dismissIdea(ideaId: $ideaId) {
+		id
+		state
+		stateChangedAt
+	}
+}
+
+mutation RecordIdeasSeen($timezone: String!) {
+	recordIdeasSeen(timezone: $timezone)
+}

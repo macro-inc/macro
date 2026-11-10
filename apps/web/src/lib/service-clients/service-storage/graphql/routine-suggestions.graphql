@@ -1,0 +1,38 @@
+# Routine suggestions on every surface, read once and filtered by each view.
+# Lists serve only OPEN suggestions; a dismissal answers with the suggestion's
+# new state, so views leave it out without a refetch.
+fragment RoutineSuggestionFields on GraphqlRoutineSuggestion {
+	id
+	from
+	surfaces
+	reason
+	keepProbability
+	onByDefault
+	state
+	pick {
+		__typename
+		... on GraphqlCatalogRoutinePick { key knobs }
+		... on GraphqlDraftedRoutinePick { routine }
+	}
+}
+
+query RoutineSuggestions {
+	user {
+		id
+		routineSuggestions {
+			status
+			suggestions { ...RoutineSuggestionFields }
+		}
+	}
+}
+
+mutation DismissRoutineSuggestion($suggestionId: ID!) {
+	dismissRoutineSuggestion(suggestionId: $suggestionId) {
+		id
+		state
+	}
+}
+
+mutation StartSuggestionGeneration($timezone: String!) {
+	startSuggestionGeneration(timezone: $timezone) { started }
+}
