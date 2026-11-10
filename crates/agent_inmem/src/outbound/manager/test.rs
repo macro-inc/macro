@@ -1325,3 +1325,325 @@ async fn a_failed_summary_keeps_the_session_from_rebuilding_identically() {
             .expect("the log reads")
     );
 }
+
+struct FixtureServer;
+impl rmcp::ServerHandler for FixtureServer {}
+
+/// A session that called MCP tools - a connected app's, and code mode's
+/// `ExecuteCode` on Macro's own server - rebuilds from its log exactly as the
+/// live agent recorded it, so the idle release lets it go.
+///
+/// The servers and the toolset are real: each call is named and routed by a
+/// [`mcp_toolset::RemoteMcpToolSet`] over live MCP sessions, the way the agent
+/// loop's hook names and routes the calls a model makes.
+#[tokio::test]
+async fn mcp_tool_calls_rebuild_identically_and_the_session_releases() {
+    let mut servers = Vec::new();
+    let mut listed = Vec::new();
+    for (server_name, tool_name, title) in [
+        ("Google Sheets", "add_row", Some("Add a row")),
+        ("macro_internal", "ExecuteCode", None),
+    ] {
+        let (server_io, client_io) = tokio::io::duplex(4096);
+        let (server, client) = tokio::join!(
+            rmcp::ServiceExt::serve(FixtureServer, server_io),
+            rmcp::ServiceExt::serve(mcp_toolset::client_info(), client_io),
+        );
+        let mut tool = rmcp::model::Tool::new(
+            tool_name.to_owned(),
+            "Fixture tool",
+            Arc::new(
+                serde_json::json!({"type": "object"})
+                    .as_object()
+                    .expect("an object schema")
+                    .clone(),
+            ),
+        );
+        tool.title = title.map(str::to_owned);
+        servers.push(server.expect("the fixture server starts"));
+        listed.push(mcp_toolset::ListedServer {
+            name: server_name.to_owned(),
+            client: Arc::new(client.expect("the client connects")),
+            tools: vec![tool],
+        });
+    }
+    let remote = mcp_toolset::RemoteMcpToolSet::from_listed(listed, None);
+    // The context type is the toolset's caller's; naming and routing ignore it.
+    let names = ai_toolset::ToolSet::<()>::request_schemas(&remote)
+        .expect("the servers list tools")
+        .into_iter()
+        .map(|schema| schema.name)
+        .collect::<Vec<_>>();
+    let mangled = |tool: &str| {
+        names
+            .iter()
+            .find(|name| name.ends_with(tool))
+            .expect("the tool is listed")
+            .clone()
+    };
+    let (sheets, execute_code) = (mangled("add_row"), mangled("ExecuteCode"));
+    assert_eq!(execute_code, "mcp__macro_internal__ExecuteCode");
+    let routed = |name: &str| {
+        ai_toolset::ToolSet::<()>::routing_description(&remote, name).map(
+            |ai_toolset::ToolInfo::ExternalTool {
+                 service_name,
+                 tool_name,
+                 display_name,
+             }| agent::McpInfo {
+                service: service_name,
+                tool_name,
+                display_name,
+            },
+        )
+    };
+
+    let repo = InMemoryAgentSessionRepo::new();
+    let (ended_tx, mut ended) = tokio::sync::mpsc::unbounded_channel();
+    let sessions = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(TurnEnds(ended_tx)),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+    let id = AgentSessionId::new();
+    sessions
+        .create_session(CreateAgentSessionParams {
+            billing: Default::default(),
+            origin: trigger_context::TriggerOrigin::Unknown,
+            purpose: agent_session::domain::model::SessionPurpose::Standalone,
+            repo_branch: None,
+            id,
+            owner_id: Owner::User(owner()),
+            bot_id: BotId::TEST_A,
+            thread_id: None,
+            originating_message_id: None,
+            model: "anthropic/claude-sonnet-5-5".to_owned(),
+            harness: "macro-inmem".to_owned(),
+            repo_url: None,
+            workspace: "/workspace".to_owned(),
+            sandbox_size: agent_session::domain::model::SandboxSize::Default,
+            instructions: None,
+            mcp_servers: Default::default(),
+            egress_token_hash: None,
+        })
+        .await
+        .expect("the session row should create");
+    let engine = Arc::new(ScriptedEngine::new(vec![
+        StreamPart::Thinking("Add the row first.".to_owned()),
+        StreamPart::Content("Adding it".to_owned()),
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-sheets".to_owned(),
+            name: sheets.clone(),
+            json: serde_json::json!({"sheet": "Q4", "values": ["a", "b"]}),
+            mcp: routed(&sheets),
+        }),
+        StreamPart::ToolResponse(agent::ToolResponse::Json {
+            id: "call-sheets".to_owned(),
+            json: serde_json::json!({"row": 7}),
+            name: sheets.clone(),
+        }),
+        StreamPart::ToolCallStarted(agent::ToolCallStart {
+            id: "call-code".to_owned(),
+            name: execute_code.clone(),
+            mcp: routed(&execute_code),
+        }),
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-code".to_owned(),
+            name: execute_code.clone(),
+            json: serde_json::json!({"code": "return 1 + 1"}),
+            mcp: routed(&execute_code),
+        }),
+        StreamPart::ToolResponse(agent::ToolResponse::Json {
+            id: "call-code".to_owned(),
+            json: serde_json::json!({"result": 2}),
+            name: execute_code.clone(),
+        }),
+        StreamPart::Content("Done: ".to_owned()),
+        StreamPart::Thinking("Report it.".to_owned()),
+        StreamPart::Content("row 7".to_owned()),
+    ]));
+    let manager = manager(&repo, Arc::clone(&engine));
+
+    let transport = manager
+        .attach(facts(id), Some("first-token".to_owned()))
+        .await
+        .expect("the conversation starts");
+    sessions
+        .attach_session(id, RuntimeAttachment::solo(transport))
+        .await
+        .expect("the transport attaches");
+    sessions
+        .send_action(
+            id,
+            Some(owner()),
+            AgentAction::prompt("add a row"),
+            AgentActionId::mint(),
+        )
+        .await
+        .expect("the prompt sends");
+    assert_eq!(ended.recv().await, Some(id));
+    let live = manager
+        .store
+        .get(&id)
+        .expect("the conversation is held")
+        .history
+        .clone();
+    assert!(
+        live.iter().any(|entry| matches!(
+            entry,
+            HistoryEntry::Assistant(parts) if parts.iter().any(|part| matches!(
+                part,
+                agent::types::AssistantMessagePart::McpToolCall { name, service, .. }
+                    if name == "ExecuteCode" && service == "macro_internal"
+            ))
+        )),
+        "the live agent recorded ExecuteCode as an MCP call: {live:#?}"
+    );
+
+    let row = sessions.get_session(id).await.expect("the row reads");
+    let row_facts = SessionFacts {
+        acp_session_id: row.acp_session_id.clone(),
+        ..facts(id)
+    };
+    assert!(
+        manager
+            .rebuilds_identically(&row_facts)
+            .await
+            .expect("the log reads"),
+        "the log rebuilds the live conversation exactly"
+    );
+    assert_eq!(
+        sessions
+            .release_session(id)
+            .await
+            .expect("the actor releases"),
+        agent_session::domain::model::SessionRelease::Released
+    );
+    manager.teardown(id);
+
+    let _transport = manager
+        .attach(row_facts, None)
+        .await
+        .expect("the conversation rebuilds from the log");
+    let rebuilt = manager
+        .store
+        .get(&id)
+        .expect("the rebuilt conversation is held")
+        .history
+        .clone();
+    assert_eq!(model_history(&rebuilt), model_history(&live));
+    drop(servers);
+}
+
+/// Says something, then fails the turn.
+struct FailingEngine;
+
+impl TurnEngine for FailingEngine {
+    fn supported_models(&self) -> &[&str] {
+        &["anthropic/claude-sonnet-5-5"]
+    }
+
+    fn run_turn(
+        &self,
+        _request: crate::domain::engine::TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(4);
+        tokio::spawn(async move {
+            let _ = parts
+                .send(Ok(StreamPart::Content("Looking into it".to_owned())))
+                .await;
+            let _ = parts
+                .send(Err(agent::AgentError::Other(anyhow::anyhow!(
+                    "the provider went away"
+                ))))
+                .await;
+        });
+        receiver
+    }
+}
+
+/// A failed turn tells its reader so in a last text chunk the live agent never
+/// keeps. The log rebuilds what the live agent kept, so a session with a
+/// failed turn still releases.
+#[tokio::test]
+async fn a_failed_turn_rebuilds_as_the_live_agent_kept_it() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let (ended_tx, mut ended) = tokio::sync::mpsc::unbounded_channel();
+    let sessions = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(TurnEnds(ended_tx)),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+    let id = AgentSessionId::new();
+    sessions
+        .create_session(CreateAgentSessionParams {
+            billing: Default::default(),
+            origin: trigger_context::TriggerOrigin::Unknown,
+            purpose: agent_session::domain::model::SessionPurpose::Standalone,
+            repo_branch: None,
+            id,
+            owner_id: Owner::User(owner()),
+            bot_id: BotId::TEST_A,
+            thread_id: None,
+            originating_message_id: None,
+            model: "anthropic/claude-sonnet-5-5".to_owned(),
+            harness: "macro-inmem".to_owned(),
+            repo_url: None,
+            workspace: "/workspace".to_owned(),
+            sandbox_size: agent_session::domain::model::SandboxSize::Default,
+            instructions: None,
+            mcp_servers: Default::default(),
+            egress_token_hash: None,
+        })
+        .await
+        .expect("the session row should create");
+    let manager = InMemAgentManager::new(
+        Arc::new(FailingEngine),
+        Arc::new(LogFrameSource::new(repo.clone())),
+        Arc::new(crate::domain::mcp::NoMcpServers),
+        Arc::new(crate::testing::TestModelAccess::paid()),
+    );
+    let transport = manager
+        .attach(facts(id), None)
+        .await
+        .expect("the conversation starts");
+    sessions
+        .attach_session(id, RuntimeAttachment::solo(transport))
+        .await
+        .expect("the transport attaches");
+    let _ = sessions
+        .send_action(
+            id,
+            Some(owner()),
+            AgentAction::prompt("fix it"),
+            AgentActionId::mint(),
+        )
+        .await;
+    assert_eq!(ended.recv().await, Some(id));
+    assert!(
+        logged_frames(&repo, id)
+            .await
+            .iter()
+            .any(|frame| frame.contains(crate::domain::agent::TURN_FAILED_REPLY)),
+        "the reader was told the turn failed"
+    );
+
+    let row = sessions.get_session(id).await.expect("the row reads");
+    assert!(
+        manager
+            .rebuilds_identically(&SessionFacts {
+                acp_session_id: row.acp_session_id,
+                ..facts(id)
+            })
+            .await
+            .expect("the log reads"),
+        "the rebuild keeps what the live agent kept, without the failure reply"
+    );
+}
