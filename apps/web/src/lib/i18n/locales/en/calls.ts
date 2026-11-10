@@ -45,4 +45,12 @@ export default {
   shareFailed: "Couldn't share your screen. Try again.",
   maximizeScreenShare: 'Maximize screen share',
   restoreScreenShare: 'Show participants',
+  microphoneAccessTitle: 'Microphone access is off',
+  microphoneAccessMobile:
+    'Macro needs the microphone for calls. Turn it on in Settings.',
+  microphoneAccessDesktop:
+    'Macro needs the microphone for calls. Turn it on in your system settings.',
+  microphoneAccessBrowser:
+    'Macro needs the microphone for calls. Allow it in your browser’s site settings.',
+  openSettings: 'Open Settings',
 };

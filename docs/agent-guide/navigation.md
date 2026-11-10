@@ -195,7 +195,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/welcome` | Login page (when unauthenticated) |
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
-| `/app/internal/status` | Macro staff only (`@macro.com`): set the system status (Operational, Degraded, Major outage + message), see its history and the `POST /auth/system-status` API. A non-operational status shows a banner across the top of the app for every user; open apps update over the connection gateway |
+| `/app/internal/status` | Macro staff only (`@macro.com`): set the system status (Operational, Degraded, Major outage + message), see its history and the `POST /auth/system-status` API. A non-operational status shows a banner across the top of the app for every user; open apps update over the connection gateway. Its close button hides it until the page reloads (nothing is saved), and a changed level or message shows it again |
 | `/app/home` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
 | `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
 | `/app/mail` | Email client |
@@ -1682,7 +1682,7 @@ restart rules still apply.
 - In any text surface: `@` mentions (bidirectional links), `#` tags, `/` block commands,
   `:` emoji. Clicking a rendered tag opens a Search split filtered to that tag.
 
-Settings → Agents, its Cursor guide, and Runtimes render while their requests are pending.
+Settings → Agents, its Cursor guide, and Machines render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
 Settings → Agents → Agents ends with **Coding sessions**: a **Default repository**

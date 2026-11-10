@@ -14,9 +14,10 @@ in-call chat.
 - `src/domain/service/guest_chat.rs`: active guest authorization for the shared
   call discussion; message storage and delivery belong to `messages`.
 - `src/domain/imports.rs`: the provider-neutral import port (Granola, Dialpad).
-  Each import is a full snapshot; re-imports keep participant ids stable by
-  matching email and phone together, then email, then phone, reserving stronger
-  matches before shared identity hints can take another attendee's id.
+  Each import is a full snapshot; `src/outbound/pg_imported_call_repo.rs` keeps
+  participant ids stable across re-imports by matching email and phone
+  together, then email, then phone, reserving stronger matches before shared
+  identity hints can take another attendee's id.
 - `src/domain/meetings.rs`: scheduled-meeting ↔ call association (used by
   `calendar_events`/`calendar_scheduling` meeting links).
 - `src/domain/notification_events.rs`: public call event contract for
@@ -81,6 +82,8 @@ in-call chat.
   participant events; an archived call's recreated room evicts the bot.
 - `enable-programmatic-calls` fails closed for the explicit start, join, and
   leave routes. Meeting join ignores optional join settings while disabled.
+- Accept bodyless meeting joins even with `Content-Type: application/json`;
+  shipped app clients send that header, while nonempty SDK bodies retain JSON validation and body limits.
 - `GET /call/{channel_id}` remains the shipped get-or-create path. New callers
   start with `POST /call/{channel_id}` and join a specific live session with
   `POST /call/record/{call_id}/join`; the latter never creates a call.

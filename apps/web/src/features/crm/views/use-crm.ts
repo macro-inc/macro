@@ -39,12 +39,6 @@ export const useCreateContactMutation = (
 export const useSetCompanyNameMutation = (
   ...args: Parameters<CrmContext['renameCompany']>
 ) => useCrmContext().renameCompany(...args);
-export const useContactPhonesQuery = (
-  ...args: Parameters<CrmContext['createContactPhones']>
-) => useCrmContext().createContactPhones(...args);
-export const useSetContactPhonesMutation = (
-  ...args: Parameters<CrmContext['setContactPhones']>
-) => useCrmContext().setContactPhones(...args);
 export const useSetContactNameMutation = (
   ...args: Parameters<CrmContext['renameContact']>
 ) => useCrmContext().renameContact(...args);

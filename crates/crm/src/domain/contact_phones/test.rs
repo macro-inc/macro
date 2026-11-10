@@ -18,8 +18,16 @@ fn typed_numbers_are_normalized_deduplicated_and_validated() {
         "{error}"
     );
 
-    let too_many: Vec<String> = (0..=MAX_CONTACT_PHONES)
+    let mut too_many: Vec<String> = (0..=MAX_CONTACT_PHONES)
         .map(|n| format!("+155501{n:02}"))
         .collect();
-    assert!(parse_contact_phones(&too_many).is_err());
+    // The cap stops reading at the first number past it, so a huge request
+    // costs no more than a full one.
+    too_many.push("not a number".to_owned());
+    assert!(
+        matches!(&parse_contact_phones(&too_many),
+            Err(CrmError::InvalidRequest(message)) if message.contains("at most")),
+        "{:?}",
+        parse_contact_phones(&too_many)
+    );
 }

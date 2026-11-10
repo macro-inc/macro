@@ -222,7 +222,7 @@ impl CrmService for FakeCrm {
 
     async fn set_contact_phones(
         &self,
-        _access: &CrmContactReceipt<ViewAccessLevel>,
+        _access: &CrmContactReceipt<EditAccessLevel>,
         _phones: &[String],
     ) -> Result<Vec<crm::domain::contact_phones::ContactPhone>, CrmError> {
         unimplemented!("FakeCrm.set_contact_phones")

@@ -675,6 +675,25 @@ async fn a_contact_csv_saves_phone_columns_on_the_contacts() {
 }
 
 #[tokio::test]
+async fn a_companies_csv_leaves_phone_columns_alone() {
+    let workflows = Workflows::new(overview(PipelineRecordType::Company));
+    let pipeline = workflows.overview.pipeline.pipeline.id;
+    let service =
+        CrmTransferServiceImpl::new(Arc::new(workflows), Records::default(), Files::default());
+    let outcome = service
+        .import_to_pipeline(
+            &viewer(),
+            pipeline,
+            CsvInput::Text("Company,Domain,Phone\nAcme,acme.example,+1555010\n".into()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(outcome.ignored_columns, ["Phone"]);
+    assert_eq!(outcome.phones_saved, 0);
+    assert!(service.records.phones_added.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn a_generic_pipeline_exports_its_fields_and_refuses_a_record_import() {
     let mut generic = overview(PipelineRecordType::Company);
     generic.pipeline.pipeline.record_type = None;

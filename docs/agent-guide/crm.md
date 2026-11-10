@@ -538,7 +538,10 @@ companies or contacts, then returns to Companies.
 CSV** reads the same shape, so an export imports into another team's pipeline.
 Rows match companies by domain and contacts by email, creating missing ones
 (personal domains such as gmail.com cannot be created); other headers fill the
-pipeline columns of the same name, adding missing select options. A record
+pipeline columns of the same name, adding missing select options. On a contact
+pipeline, a Phone, Phone number, Mobile, Mobile phone, Work phone or Telephone
+column with no column of its own saves its numbers to the contact; the result
+counts the numbers saved and the values without a country code. A record
 the pipeline already had is not added again, so retrying an interrupted import
 adds only what is missing; several rows for one new record add separate entries
 (deals), as an export of such a pipeline lists them. Relation and non-person entity columns are skipped,

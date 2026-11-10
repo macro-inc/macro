@@ -9,7 +9,6 @@ import channelSections from './en/channel-sections';
 import commandMenu from './en/command-menu';
 import commands from './en/commands';
 import common from './en/common';
-import contactPhones from './en/contact-phones';
 import create from './en/create';
 import crm from './en/crm';
 import dialpad from './en/dialpad';
@@ -18,6 +17,7 @@ import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
+import runtimeSharing from './en/runtime-sharing';
 import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
@@ -42,7 +42,6 @@ export default {
   commandMenu,
   commands,
   common,
-  contactPhones,
   create,
   crm,
   dialpad,
@@ -51,6 +50,7 @@ export default {
   mobile,
   nav,
   notificationsInbox,
+  runtimeSharing,
   settingsLanguage,
   settingsMobileApp,
   settingsNav,

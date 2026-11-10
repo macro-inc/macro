@@ -69,6 +69,18 @@ Remember successful announcements. After 24 hours, recover replies without a
 persisted completion at most hourly, preserving late answers after lost callbacks.
 Persisted completions bypass this backoff; direct completion handling is immediate.
 
+Prompts to an external runtime pass `authorize_runtime` when accepted and
+`runtime_refusal` again when they dispatch, so a prompt queued before access was
+removed never runs: `RuntimeAccessFacts::may_run` requires a coding agent's
+prompter to have access and a resident's (a bound non-coding agent's) owner to
+have access (`agent_owner_can_run` in SQL), so removing access shuts a resident
+down without touching its binding. A turn nobody prompted runs on the agent
+owner's access. A refused prompt fails its conversation turn, publishes
+`command_rejected` with code `no_runtime_access`, and posts the reason into the
+conversation it came from as a `ReplyOutcome::Refused` reply under an id derived
+from the action, so redelivery finds the same message. The session API answers
+it with a 403 whose JSON `code` is `no_runtime_access`.
+
 External runtimes bind sessions lazily. On each dial `RuntimeRegistry` has the
 connection run `initialize` (shared with every session through its handshake)
 and ACP `session/list`, and `AgentHarnessService::reattach_live_sessions` runs

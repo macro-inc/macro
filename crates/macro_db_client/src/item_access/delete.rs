@@ -76,6 +76,7 @@ pub async fn delete_user_entity_access_bulk(
         | EntityType::CrmPipeline
         | EntityType::Database
         | EntityType::Form
+        | EntityType::Harness
         | EntityType::ExternalChat => {
             sqlx::query!(
                 r#"

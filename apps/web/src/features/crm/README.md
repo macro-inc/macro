@@ -93,6 +93,10 @@ After a desktop email addition, return focus to the read-only value in the
 originating property; it is programmatically focusable without adding a tab stop.
 Only committed responses update contact details, both company lists, address
 lookups and normalized contact fields, with session and stale-response fences.
+Contact headers also show `ContactPhonesField`: each number with a Call link
+(on phones the number itself dials) and an Add/Edit phones pill, keyed by the
+record like the other fields. The numbers are a list, so they are edited in
+one dialog on every device rather than in the property popover.
 
 People, Companies and company Team use an exclusive Visible/Archived filter.
 `people-visibility` keeps the workspace choice local to the account/team/role/view,

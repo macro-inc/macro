@@ -282,10 +282,10 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
 
     /// Replace the contact's phone numbers with `phones`, as typed. Each
     /// must carry its country code ([`CrmError::InvalidRequest`] otherwise);
-    /// they are stored in E.164. Same access as [`CrmService::set_contact_name`].
+    /// they are stored in E.164. Same access as [`CrmService::set_contact_email`].
     fn set_contact_phones(
         &self,
-        access: &CrmContactReceipt<ViewAccessLevel>,
+        access: &CrmContactReceipt<EditAccessLevel>,
         phones: &[String],
     ) -> impl Future<Output = Result<Vec<ContactPhone>, CrmError>> + Send;
 
@@ -1048,7 +1048,7 @@ where
     #[tracing::instrument(skip(self, access, phones), fields(count = phones.len()), err)]
     async fn set_contact_phones(
         &self,
-        access: &CrmContactReceipt<ViewAccessLevel>,
+        access: &CrmContactReceipt<EditAccessLevel>,
         phones: &[String],
     ) -> Result<Vec<ContactPhone>, CrmError> {
         let phones = parse_contact_phones(phones)?;
@@ -1499,7 +1499,7 @@ impl CrmService for NoOpCrmService {
 
     async fn set_contact_phones(
         &self,
-        _access: &CrmContactReceipt<ViewAccessLevel>,
+        _access: &CrmContactReceipt<EditAccessLevel>,
         _phones: &[String],
     ) -> Result<Vec<ContactPhone>, CrmError> {
         unimplemented!("NoOpCrmService.set_contact_phones")

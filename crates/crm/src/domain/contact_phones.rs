@@ -57,14 +57,16 @@ pub fn parse_contact_phones(phones: &[String]) -> Result<Vec<PhoneNumber>, CrmEr
                 index + 1
             ))
         })?;
-        if !parsed.contains(&phone) {
-            parsed.push(phone);
+        if parsed.contains(&phone) {
+            continue;
         }
-    }
-    if parsed.len() > MAX_CONTACT_PHONES {
-        return Err(CrmError::InvalidRequest(format!(
-            "A contact holds at most {MAX_CONTACT_PHONES} phone numbers."
-        )));
+        // Checked as numbers arrive, so a huge request costs no more than a full one.
+        if parsed.len() == MAX_CONTACT_PHONES {
+            return Err(CrmError::InvalidRequest(format!(
+                "A contact holds at most {MAX_CONTACT_PHONES} phone numbers."
+            )));
+        }
+        parsed.push(phone);
     }
     Ok(parsed)
 }

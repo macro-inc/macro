@@ -108,7 +108,7 @@ pub async fn router(
                 "gateway.macro.com".into(),
                 "dev-gateway.macro.com".into(),
             ]);
-            config.stateful_mode = false;
+            config.legacy_session_mode = false;
             config.json_response = true;
             config
         },

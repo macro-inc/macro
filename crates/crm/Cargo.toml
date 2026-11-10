@@ -27,7 +27,8 @@ axum = [
   "entity_access/ports",
   "ports",
 ]
-# Links archived call records to CRM records from the call topic.
+# Links archived and imported call records to CRM records from the call
+# topic, and saves the numbers it learns through the companies repository.
 call_link = [
   "dep:call",
   "dep:kafka_util",
@@ -38,6 +39,7 @@ call_link = [
   "dep:sqlx",
   "dep:tokio",
   "macro_event_broker/outbound",
+  "outbound",
   "ports",
 ]
 default = ["ai_tools", "call_link", "inbound", "lookup", "outbound", "ports"]

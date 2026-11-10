@@ -139,6 +139,12 @@ async fn participants_sharing_a_number_keep_their_own_identities(pool: PgPool) {
     let mut call = snapshot("import-a", now);
     call.participants = vec![caller("Jane"), caller("Ravi")];
     let id = service.ingest(call).await.unwrap();
+    let ids = |call: CallEntityRecord| {
+        let mut ids: Vec<Uuid> = call.participants.iter().map(|p| p.id).collect();
+        ids.sort();
+        ids
+    };
+    let first = ids(service.read(&user("import-a"), id).await.unwrap().unwrap());
 
     let mut again = snapshot("import-a", now + chrono::Duration::seconds(1));
     again.participants = vec![caller("Jane"), caller("Ravi")];
@@ -146,6 +152,7 @@ async fn participants_sharing_a_number_keep_their_own_identities(pool: PgPool) {
     let read = service.read(&user("import-a"), id).await.unwrap().unwrap();
     assert_eq!(read.participants.len(), 2);
     assert_ne!(read.participants[0].id, read.participants[1].id);
+    assert_eq!(ids(read), first, "both keep their ids");
 }
 
 #[sqlx::test(
