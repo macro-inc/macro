@@ -82,3 +82,5 @@ Set CARGO_BUILD_JOBS to limit the shared optimized WASM builder and its instrume
 The indexed host accepts known native package types without kind metadata; unknown names reject as unknown native types. Foreign registrations carry kind and retain JS behavior.
 
 - Run the document-session contract through the explicit web justfile and inspect its native `apps/web/src/lib/core/document-session/wasm` artifact with the shared size policy.
+
+- Install the root workspace dependencies as well as the pinned recorder dependencies before synthetic Macro-node recording; its real node classes resolve through the workspace graph.
