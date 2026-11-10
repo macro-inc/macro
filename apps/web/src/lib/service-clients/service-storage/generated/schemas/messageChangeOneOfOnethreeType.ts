@@ -10,5 +10,5 @@ export type MessageChangeOneOfOnethreeType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const MessageChangeOneOfOnethreeType = {
-  typing: 'typing',
+  thread_updated: 'thread_updated',
 } as const;

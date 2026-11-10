@@ -4,15 +4,16 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { Message } from './message';
 import type { MessageChangeOneOfOneoneType } from './messageChangeOneOfOneoneType';
-import type { ThreadState } from './threadState';
 
 /**
- * Thread resolution, placement, or deletion changed.
+ * The previews of the pages a message links to changed after a post or
+edit. Viewers apply it like an edit; it produces no notifications,
+broker facts, activity, or sharing.
  */
 export type MessageChangeOneOfOneone = {
-  /** Persisted thread state. */
-  state: ThreadState;
+  /** Persisted message with its current previews. */
+  message: Message;
   type: MessageChangeOneOfOneoneType;
 };

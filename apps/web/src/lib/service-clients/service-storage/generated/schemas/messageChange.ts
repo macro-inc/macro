@@ -7,6 +7,7 @@
 import type { MessageChangeOneOf } from './messageChangeOneOf';
 import type { MessageChangeOneOfFive } from './messageChangeOneOfFive';
 import type { MessageChangeOneOfNine } from './messageChangeOneOfNine';
+import type { MessageChangeOneOfOnefive } from './messageChangeOneOfOnefive';
 import type { MessageChangeOneOfOneone } from './messageChangeOneOfOneone';
 import type { MessageChangeOneOfOnethree } from './messageChangeOneOfOnethree';
 import type { MessageChangeOneOfSeven } from './messageChangeOneOfSeven';
@@ -22,4 +23,5 @@ export type MessageChange =
   | MessageChangeOneOfSeven
   | MessageChangeOneOfNine
   | MessageChangeOneOfOneone
-  | MessageChangeOneOfOnethree;
+  | MessageChangeOneOfOnethree
+  | MessageChangeOneOfOnefive;

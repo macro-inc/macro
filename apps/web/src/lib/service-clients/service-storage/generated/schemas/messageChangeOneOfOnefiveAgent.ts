@@ -6,4 +6,4 @@
  */
 import type { AgentTyping } from './agentTyping';
 
-export type MessageChangeOneOfOnethreeAgent = null | AgentTyping;
+export type MessageChangeOneOfOnefiveAgent = null | AgentTyping;
