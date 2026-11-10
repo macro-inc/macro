@@ -37,6 +37,34 @@ the recipient for human DMs, the persona for agent DMs, and the channel picture
 or glyph for named channels. Message and thread breadcrumbs resolve identity
 from their parent channel rather than the message or thread ID.
 
+## Composer focus and Esc
+
+Every way of opening a conversation follows one rule
+(`arrivalFocusesComposer` in `features/channel/composer-arrival-focus.ts`):
+a click, Enter or Cmd+K focuses its composer, whether it opens from the Chat
+sidebar, Home, the Notifications list, search, a link or mention, a
+notification, or in a new split. Arrow keys and `j` / `k` preview conversations
+and keep focus in the list. Back/Forward, switching to a view that restores its
+last conversation (the sidebar or a `g` shortcut), and taps leave focus where
+it is, so the on-screen keyboard stays down. A click or Enter on the
+conversation already open focuses its composer again.
+
+Esc steps back out. In the composer, the first Esc moves focus to the message
+list; anything in the composer that answers Esc first still does (mention and
+emoji menus, dictation, a message being edited, a thread reply). On the message
+list, a selected message or focused thread reply clears first, then Esc returns
+to the list the conversation was opened from, on its row: the Chat sidebar,
+Home, or the Notifications list. A conversation that arrived from elsewhere
+(Cmd+K, a link, search) returns to its row in the Chat sidebar of the same
+split, and a collapsed Chat sidebar opens for it. Without a list, including a
+narrow split that shows the conversation alone, Esc reaches the split as before
+(clearing a selection, leaving spotlight).
+
+To check this, arrow through several conversations (focus stays in the list),
+press Enter (the composer takes focus), press Esc twice (back on the same row),
+then click another conversation and type. Repeat from Home and from the
+Notifications list.
+
 ## Message links
 
 A channel search namespace with `threadId` and no `messageId` targets the thread
