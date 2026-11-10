@@ -238,7 +238,7 @@ test('lists, tables, links, stored code highlights and marks render from real WA
   await page.screenshot({ path: info.outputPath('rich.png') });
 });
 
-test('Solid decorators retain identity by key and reserve stored height on first paint', async ({
+test('Solid decorators retain keyed identity and component-owned height on first paint', async ({
   page,
 }) => {
   const result = await page.evaluate(() => {
@@ -246,7 +246,14 @@ test('Solid decorators retain identity by key and reserve stored height on first
     const before = Array.from(document.querySelectorAll('#editor *')).find(
       (node) => Reflect.get(node, '__lexicalKey_fixture') === 1000000
     );
-    const height = before instanceof HTMLElement ? before.style.height : '';
+    if (!(before instanceof HTMLElement))
+      throw new Error('Missing decorator wrapper');
+    const component = before.querySelector('[data-widget-instance]');
+    if (!(component instanceof HTMLElement))
+      throw new Error('Missing sized widget');
+    const height = component.style.height;
+    const firstPaintHeight = component.getBoundingClientRect().height;
+    const outerStyle = before.getAttribute('style');
     window.fixture.render.updateImage();
     const after = Array.from(document.querySelectorAll('#editor *')).find(
       (node) => Reflect.get(node, '__lexicalKey_fixture') === 1000000
@@ -255,6 +262,8 @@ test('Solid decorators retain identity by key and reserve stored height on first
       same: before === after,
       text: after?.textContent,
       height,
+      firstPaintHeight,
+      outerStyle,
       stats: { ...window.fixture.render.stats },
     };
   });
@@ -262,6 +271,8 @@ test('Solid decorators retain identity by key and reserve stored height on first
     same: true,
     text: 'second',
     height: '240px',
+    firstPaintHeight: 240,
+    outerStyle: null,
     stats: { mounts: 1, unmounts: 0 },
   });
   await page.evaluate(() => window.fixture.render.removeImage());

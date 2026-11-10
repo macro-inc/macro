@@ -34,6 +34,7 @@ import {
 } from './managed-line-break';
 import { MarkGeometry } from './mark-geometry';
 import { Mirror } from './mirror';
+import { NewSubtreeAttachments } from './new-subtrees';
 import {
   type EditorPerformanceOperation,
   startEditorPerformance,
@@ -107,11 +108,7 @@ export class EditorView implements ViewSink {
   private readonly keys = new WeakMap<Node, NodeKey>();
   private readonly decorators = new Map<
     NodeKey,
-    {
-      dispose: () => void;
-      update: (node: ViewNode) => void;
-      host: HTMLElement;
-    }
+    { dispose: () => void; update: (node: ViewNode) => void; host: HTMLElement }
   >();
   private readonly commits = new Set<(info: CommitInfo) => void>();
   private readonly mutations = new Map<
@@ -502,7 +499,21 @@ export class EditorView implements ViewSink {
             this.replace(mutation.before, node, dom);
         }
       }
-      for (const key of diff.children) this.reconcileChildren(key);
+      let created: Set<NodeKey> | undefined;
+      for (const [key, mutation] of diff.mutations)
+        if (mutation.kind === 'created') {
+          created ??= new Set();
+          created.add(key);
+        }
+      const attachments = created
+        ? new NewSubtreeAttachments(
+            created,
+            (key) => this.node(key),
+            (key) => this.dom.get(key),
+            (node) => !this.registry.get(node.type).getDOMSlot
+          )
+        : undefined;
+      for (const key of diff.children) this.reconcileChildren(key, attachments);
       const dirtyTables = new Map<number, Set<number>>();
       for (const key of new Set([...diff.children, ...diff.properties])) {
         const node = this.node(key);
@@ -544,6 +555,7 @@ export class EditorView implements ViewSink {
             next.select(selection.anchorCell, selection.focusCell);
         }
       }
+      attachments?.flush();
       let selectionChanged = false;
       const skipDomSelection = effects.some(
         (effect) =>
@@ -668,8 +680,8 @@ export class EditorView implements ViewSink {
     this.keys.set(dom, node.key);
     Reflect.set(dom, `__lexicalKey_${this.options.namespace}`, node.key);
     if (node.kind === 'decorator') {
-      dom.setAttribute('data-lexical-decorator', 'true');
       dom.contentEditable = 'false';
+      dom.setAttribute('data-lexical-decorator', 'true');
     }
   }
   private replace(
@@ -695,12 +707,21 @@ export class EditorView implements ViewSink {
     if (decorator) next.appendChild(decorator.host);
     previous.replaceWith(next);
   }
-  private reconcileChildren(key: NodeKey): void {
+  private reconcileChildren(
+    key: NodeKey,
+    attachments?: NewSubtreeAttachments
+  ): void {
     const node = this.node(key),
       slot = this.slot(key);
     if (!node || !slot) throw new Error('Missing child DOM slot');
     let current = slot.after ? slot.after.nextSibling : slot.element.firstChild;
-    for (const key of node.children) {
+    for (let index = 0; index < node.children.length; index++) {
+      const end = attachments?.deferRun(slot, node.children, index);
+      if (end !== undefined) {
+        index = end - 1;
+        continue;
+      }
+      const key = node.children[index];
       const child = this.dom.get(key);
       if (!child) throw new Error('Missing child DOM: ' + key);
       if (child === current) current = current.nextSibling;

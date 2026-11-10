@@ -15,6 +15,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 - Install common Macro element views once; register group-owned decorators through registerMacroDecoratorViews and keep full registerMacroViews completeness checks strict.
 - Let NodeView.createDecoratorHost preserve application mount wrappers; Macro uses the Source Portal div and mount class while portable views retain their default host.
 - The Diff applier owns mirror writes; renderers and view plugins read it.
+- Assemble wholly created subtrees off DOM in the existing slot-walk order; keep reused-node moves and trees with DOM-slot hooks on the ordinary path and resolve dynamic slot boundaries when attaching, before selection and commit notifications.
 - A successful flags=0 TextFromView may acknowledge exactly the submitted edit
   through that applier. Authoritative Rust corrections take precedence.
 - Resolve terminal element carets before the managed line break; it is DOM scaffolding, not a model child.
@@ -58,11 +59,13 @@ Keep drag source validity tied to documentRevision; selection-only commits do no
 - `selection-projection.test.ts` compares real Source and native sessions for owned, foreign, initial-null, nested and readonly DOM ranges; image-click browser parity also requires the actual native Click dispatch.
 
 - `bun run check`, `bun run test`, `bun run test:browser`
+- `new-subtrees.test.ts` checks connected insertion work, literal HTML, managed slot boundaries and retained DOM/caret identity across native block splits.
 - `performance.browser.e2e.ts` exercises the real facade exporter and shared browser observer over native paste/reconcile/scroll, current-task long-task delivery, content-free attributes and exact model Undo restoration.
 - `commit-work.browser.e2e.ts` counts real mark measurements and native Highlight range mutations with 8/128 comment/table/code groups, and checks downstream anchors after a block resizes; table observer tests cover merged rows and 8/256-row edit work.
 - `bun run test:browser group-b.browser.e2e.ts` checks native block moves, cross-editor copy, touch swipe, atomic drop paste, nested-editor ownership, one-snapshot table resize/restore and primary-touch long-press selection.
 - `heading-enter.browser.e2e.ts` compares literal heading-shortcut typing, Enter, and successive DOM-first characters against upstream with the app native input configuration; assert model children and model/DOM caret paths, without installing extra key routes.
 - `history-keyboard.browser.e2e.ts` loads the same initial paragraph into both actual engines and clears their real histories before trusted typing, Ctrl-Z and both redo shortcuts; assert DOM, model JSON and model/DOM caret restoration. The three-engine input-parity configuration includes it. Native code-subtree cases repeat deletion and recreation twice and require exact durable IDs, raw JSON and caret offsets without normalization.
+- Let synthetic decorator fixtures own explicitly declared reserved dimensions; assert their component box and keep Macro media outer wrappers plain, matching the source renderer.
 - Compare paste against the app plugin configuration, including trailingParagraphPlugin, and the external Markdown export; keep raw model and DOM evidence even when text matches.
 - Treat managed-browser paste timings as diagnostic; performance acceptance uses stock browsers, and Linux WebKit is an engine proxy.
 - Require a committed WAL write, the matching server acknowledgement and exact warm/fresh reload content before treating a large paste as persisted; visibility or a saved snapshot alone is insufficient.

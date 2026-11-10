@@ -29,6 +29,11 @@ function Widget(props: DecoratorProps) {
   const element = document.createElement('span');
   element.dataset.widgetInstance = String(decoratorStats.mounts);
   createEffect(() => {
+    const reservedHeight = props.node().props().reservedHeight;
+    if (typeof reservedHeight === 'number') {
+      element.style.display = 'block';
+      element.style.height = `${reservedHeight}px`;
+    }
     element.textContent = String(
       props.node().props().alt ??
         props.node().props().label ??
@@ -114,6 +119,7 @@ export function renderFixture(view: EditorView) {
       height: 480,
       constrainedWidth: 320,
       constrainedHeight: 240,
+      reservedHeight: 240,
     });
   function createImage() {
     const strings = new TextEncoder().encode(imageProps('first'));
