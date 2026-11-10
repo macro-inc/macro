@@ -172,7 +172,8 @@ export class DocumentNamespace {
    *   each program as a typed async function from `macro:programs` and `on`
    *   from `macro:client`. `on(events, handler, { ids })` calls the handler
    *   with `{ type, id }` when one of the viewer's entities changes, using
-   *   `macro.events` names (`document.updated`; tasks are documents), and with
+   *   `macro.events` names (`document.updated`; tasks are documents; a
+   *   `message.*` event's id is its channel or document), and with
    *   `{ type: 'macro.resync' }` after a reconnect: call the program again to
    *   read what changed. Other scripts are left as they are and can't call
    *   programs.

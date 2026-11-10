@@ -39,7 +39,10 @@ Pulumi stacks; they do not host extra agent processes.
   2 MiB) for `agent_code_mode`'s document builds through the documents
   service the tools share, which run on the same Deno
   checker as routine steps and run programs on an executor of their own
-  (4 running, 16 queued), so documents can't take public MCP's slots.
+  (4 running, 16 queued, results up to `DOCUMENT_RESULT_BYTES`), so
+  documents can't take public MCP's slots. `src/code_mode/document_rollout.rs`
+  gates them on `enable-html-code-mode`, keeping each user's answer for 60
+  seconds and through a failed PostHog read.
   Code execution's destination list in `src/code_mode.rs` also includes the
   configured editing worker, whose comment-mark endpoint requires a scoped
   document token; this does not grant permission to edit document content.

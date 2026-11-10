@@ -29,7 +29,8 @@ enforced by the ordinary backend APIs.
 - `src/entities/documents/page.ts`: `documents.publishPage` uploads an HTML page
   and `Document.republishPage` replaces it in place (storage `simple_save`);
   both build it through the harness `GET /documents/{id}/build` and return its
-  problems by block. Their TSDoc is the page contract agents read; keep it in
+  `build` status and problems by block, never throwing once the page is saved
+  (a 404 is `unavailable`, a 503 `busy`). Their TSDoc is the page contract agents read; keep it in
   step with `agent_code_mode`'s `page_build.rs`.
 - `src/entities/entity.ts`: lazy detail reads, mutation invalidation and safe JSON.
 - `Document.readPresentation`/`editPresentation`/`copyPresentation`,

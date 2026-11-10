@@ -24,7 +24,9 @@ program up and get the outcome back.
 ## Decisions
 
 - **Who.** The viewer's own session. Only a directly signed-in user runs a
-  program. A token minted for an agent's run is refused, so a program cannot
+  program. A token minted for an agent's run, and any request the code-mode
+  runtime marks as a program's (`x-macro-code-execution`, which a document
+  program's agentless token also carries), is refused, so a program cannot
   start another run; it may still build a page, which runs nothing.
 - **What.** Reads and writes. Writes are the user's own: `ToolCaller::Document`
   mints a token with no agent.
@@ -38,8 +40,15 @@ program up and get the outcome back.
   base-uri 'none'`. A page that runs programs as the viewer can then run only
   its own inline code and show only inline media, so fetch, beacons, remote
   scripts, stylesheets and image URLs can't carry what it read out. CSP does
-  not stop the frame navigating itself (`location = …?leak`); see Consent.
-  The plain fallback frame runs no programs and gets no policy.
+  not stop the frame navigating itself (`location = …?leak`), so the frame
+  helper reports its page unloading, and the host also counts the frame's
+  loads: a frame that leaves its page is closed and replaced by a notice. The
+  request that leaves still goes out; closing the frame stops whatever the
+  page would do next. A page with neither programs nor a client script builds
+  `plain` and renders exactly as with the flag off: the stored text in the
+  plain frame, with no policy and no helper, so CDN scripts, styles, fonts
+  and images keep working. A document the server won't build for the viewer
+  (outside the rollout, too large, not HTML) renders the same way.
 - **How a file calls it.** Only by program id. The client imports its
   programs from `macro:programs` and calls them as typed functions. The
   build compiles those calls into the host transport. `window.macro` and its
@@ -64,25 +73,30 @@ program up and get the outcome back.
   proxy that checks each request, as `agent_egress` does for coding
   sandboxes; that is not built. The accepted risk: a page someone else wrote
   can read the viewer's data and write it where its author can see it (a
-  message, a document), or navigate the frame to carry it out. CSP closes the
-  other network paths.
+  message, a document), or carry some out in the URL of one navigation before
+  the host closes its frame. CSP closes the other network paths.
 - **Limits.** Enforced only on the server: a per-viewer queue in front of a
   document-run pool of its own (4 running, 16 queued), 2 running per viewer,
   30 s each. The page waits in the queue instead of failing; the wait counts
   against the run's deadline, and a run still waiting when it passes gets
-  `503`.
+  `503`. A program returns at most 1000 KB of JSON (`DOCUMENT_RESULT_BYTES`);
+  a larger value fails the run with a message naming the limit.
 - **Rollout.** `enable-html-code-mode`, the same key on web and the harness.
   On in local dev; the harness allows every run on a local stack, whose
-  PostHog key is often a placeholder. Off leaves the preview a plain sandboxed
-  frame.
+  PostHog key is often a placeholder. It keeps each user's answer for 60
+  seconds and through a failed PostHog read, refusing only a user it has never
+  read. Off leaves the preview a plain sandboxed frame.
 - **Live updates.** `macro.on(events, handler, { ids })` pushes the viewer's
   entity events into the frame. The host opens the existing per-user event
   stream (`GET /webhook/events/stream`, the one the SDK's `macro.events`
   reads), filtered and access-checked on the server, one per frame with the
   union of its subscriptions. Only the event name and entity id cross into
   the frame, so every read still goes through `macro.run` as the viewer.
-  Delivery is best-effort: a reconnect sends `macro.resync` and the page
-  refetches. The app's GraphQL live queries were the alternative; the stream
+  `ids` narrow by the entity the server filters on; a message event is about
+  its conversation (channel or document). Delivery is best-effort: every open
+  after the frame's first sends `macro.resync` and the page refetches. A
+  stream the server refuses is not retried; each subscription gets
+  `macro.error`. The app's GraphQL live queries were the alternative; the stream
   was chosen because agents already know its event names from the SDK.
 - **Build.** The agent uploads one readable HTML file, and the backend
   builds it with Deno; there is no Vite and no toolchain on the agent's side.
@@ -154,7 +168,9 @@ if the run is cancelled.
   internal principal for document content. The build uses the routine
   checker; runs use an executor of their own (4 running, 16 queued), not
   public MCP's.
-- Web: `HtmlPreview` renders the build or its problems; `code-mode/` carries
+- Web: `HtmlPreview` waits for the editor's last save, then renders the
+  build, its problems, or after retried server failures an error with Retry;
+  `code-mode/` carries
   `run` by program id and `on`, and puts the strict CSP first in the built
   page's head. The latest failed run shows above the page until dismissed,
   whether or not the page catches its call's rejection. Spans: `document_programs.build`,
@@ -162,8 +178,10 @@ if the run is cancelled.
   `block_code.document_events.stream`.
 - SDK: `documents.publishPage({ name, html, project })` uploads and builds;
   `Document.republishPage(html)` saves a new version through storage's
-  `simple_save` and builds. Both return `{ document, problems }`, the build's
-  diagnostics by block. Their TSDoc carries the page contract agents read.
+  `simple_save` and builds. Both return `{ document, build, problems }`, the
+  build's status and diagnostics by block, and never throw once the page is
+  saved: `busy` (the build timed out) and `unavailable` (outside the rollout)
+  ask for a later republish, never a second publish. Their TSDoc carries the page contract agents read.
   The run route stays app-internal in the SDK coverage list.
 
 ## Left to build

@@ -4,6 +4,7 @@
 
 /**
  * A live event: the event name and the entity it is about, never its data.
+ * A message event is about its conversation (the channel or document).
  * `macro.resync` follows a reconnect that may have missed events, and
  * `macro.error` reports a refused subscription.
  */

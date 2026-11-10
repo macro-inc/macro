@@ -49,8 +49,9 @@ the SSE reconnect delay, so a reconnecting event stream fails the same way.
 
 The bootstrap replaces a result's `data` larger than `Limits::max_result_bytes`
 with an outline and preview, keeping `reviews`; the frame limit stays the backstop.
-An unattended result is never summarized: later routine steps read it whole, so
-one over the limit fails the run with a message saying so.
+An unattended result is never summarized: later routine steps, or the page
+that called a document program, read it whole, so one over the limit fails the
+run with a message naming the reader (`Unattended::output`).
 
 ## Checks
 

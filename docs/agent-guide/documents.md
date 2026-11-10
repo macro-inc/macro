@@ -3150,15 +3150,23 @@ code:
 - Each `<script type="text/macro" id="…" lang="ts">` is a program that runs on
   the server as the viewer. Its default export takes `(args, { macro }:
   ProgramContext)`, where `macro` is the Macro SDK already signed in, and
-  returns plain JSON. The `id` must be a JavaScript identifier, and a document
-  holds at most 16 programs.
+  returns plain JSON, at most 1000 KB of it. Its first parameter, if any, is an
+  object type. The `id` must be a JavaScript identifier, not a reserved word
+  or `run`, and a document holds at most 16 programs.
+- A page with neither kind of block renders as it is, exactly as with the
+  flag off: CDN scripts, styles, fonts and images work there.
 - The one `<script type="module" lang="ts">` is the page's client code. It
   imports each program as a typed function from `macro:programs` and `on` from
-  `macro:client`. Other scripts are left as they are and can't call programs.
+  `macro:client`. A call resolves to the program's value as JSON: a `Date`
+  becomes a string and a handle its `toJSON()`. Other scripts are left as they
+  are and can't call programs.
 
 The server type-checks the programs, then the client with them, so a call with
 the wrong arguments fails the build. A failed build shows its problems by
-block (`program tasks`, `client script`) in place of the page. Program source
+block (`program tasks`, `client script`) in place of the page. Switching from
+Code to Render builds once the editor's save lands, so the preview shows what
+was just typed. A build the server fails is retried, then shows an error with
+a Retry button. Program source
 never reaches the page, the frame never holds a credential and never sends
 code: a run names a program of the build the page shows, and the server
 refuses it with "this page changed" if the saved document has changed since,
@@ -3177,9 +3185,12 @@ same names as the SDK's `macro.events`, such as `document.created`,
 `document.updated` and `message.posted`; tasks are documents) and returns an
 `off` function. The handler gets `{ type, id }`, the event name and the entity
 it is about, never its data: call the program again to read what changed. Pass
-`ids` to hear about specific entities only. After a dropped connection
-reconnects the handler gets `{ type: 'macro.resync' }`, because events in the
-gap are lost; a refused subscription gets `{ type: 'macro.error', message }`.
+`ids` to hear about specific entities only; a message event is about its
+conversation, so narrow `message.*` by channel or document id. After a
+reconnect, or a reopen for changed subscriptions, the handler gets `{ type:
+'macro.resync' }`, because events in the gap are lost; a refused subscription
+(an empty or blank id, or one the server refuses) gets `{ type: 'macro.error',
+message }`, and a refused stream is not retried.
 The app keeps one server event stream per open preview, filtered and
 access-checked on the server, and closes it with the preview. A page may hold
 16 subscriptions.
@@ -3190,7 +3201,9 @@ images, fonts and media only as `data:` or `blob:` URLs, and no `fetch`,
 beacons, remote scripts, stylesheets, fonts or image URLs, so every read and
 write goes through a program. The frame is sandboxed with scripts only, so a
 `<form>` never submits: use buttons and key handlers. Programs have no
-`setTimeout`, so they cannot sleep or poll; the page's own script can.
+`setTimeout`, so they cannot sleep or poll; the page's own script can. A page
+that navigates itself (setting `location`) is closed, and the preview shows
+"This page tried to leave" in its place.
 
 ```html
 <ul id="out"></ul>
@@ -3219,9 +3232,10 @@ write goes through a program. The frame is sandboxed with scripts only, so a
 ```
 
 Agents publish such a page with the SDK's `macro.documents.publishPage({ name,
-html, project })`, which uploads it, builds it and returns `{ document,
-problems }`: each problem names its block, and an empty list means the page
-built. They fix it with `document.republishPage(html)`, which saves the whole
+html, project })`, which uploads it, builds it and returns `{ document, build,
+problems }`: each problem names its block, and `build: 'built'` means the page
+built. Once the page is saved it never throws: `busy` asks for a republish
+later, and `unavailable` means live pages aren't available to the account. They fix it with `document.republishPage(html)`, which saves the whole
 page as a new version of the same document and builds again. Both work inside
 code mode. A plain upload or an edit in Drive builds when the page is first
 opened.
@@ -3230,7 +3244,8 @@ To check it, publish such a page (or upload the file), open it, and confirm the 
 then rename a matching task in another split and watch the list follow without
 a reload. Change `query: 'launch'` to `query: 42`, save, and reopen Render: it
 shows the type error against `client script` instead of the page. With the
-flag off the preview renders the file as plain sandboxed HTML. In traces,
+flag off, or for a page with no program blocks, the preview renders the file
+as plain sandboxed HTML. In traces,
 `document_programs.build` covers a build (with `cached`), `block_code.run_document_program`
 and `document_programs.run` each run (with `queued_ms`, the wait for one of the
 viewer's two slots), and `block_code.document_events.stream`

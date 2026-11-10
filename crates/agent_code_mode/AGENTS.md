@@ -35,8 +35,10 @@ stacks. Process isolation belongs to
   (`DocumentProgramGate`, `enable-html-code-mode`; harness adapter
   `FlaggedDocumentPrograms`) and a signed-in user. Builds accept a token
   minted for an agent's run, so the SDK's `publishPage` works in code mode;
-  runs refuse it, so a program cannot start another run. Runs are `ToolCaller::Document` with the
-  inputs contract and a plain user token (no agent). `DocumentSources` reads
+  runs refuse it and any request marked as a program's (`is_agent_run`), so
+  a program cannot start another run. Runs are `ToolCaller::Document` with the
+  inputs contract and a plain user token (no agent); a value over
+  `DOCUMENT_RESULT_BYTES` (1000 KiB) fails the run. `DocumentSources` reads
   the stored file (harness adapter `code_mode/document_sources.rs`); builds
   are cached by source hash in memory, so a miss only rebuilds. A viewer runs
   `RUNS_PER_VIEWER` (2) programs at once (`document_programs/viewer_runs.rs`);
@@ -49,8 +51,12 @@ stacks. Process isolation belongs to
   out); the one `<script type="module" lang="ts">` imports them typed from
   `macro:programs` and `on` from `macro:client` (`macro_client.ts`). Programs
   check alone, then with the client; each bundles alone and the client
-  bundles without program source. Diagnostics name blocks, not generated
-  files. `demos/` holds pages that recreate built-in features, or combine
+  bundles without program source. A page with neither builds `Plain`, which
+  the preview shows as it is. The build also checks each program's first
+  parameter is an object (`program_<n>_args.ts`), refuses reserved words and
+  `run` as ids and a bundle over the runtime's 64 KiB, and types each
+  `macro:programs` result as its JSON form (`programs_prelude.ts`).
+  Diagnostics name blocks, not generated files. `demos/` holds pages that recreate built-in features, or combine
   several areas, this way; the ignored Deno test `every_demo_page_builds`
   builds each one, so keep them building when the SDK changes.
 - `src/domain/reviews.rs`: review revisions, claims and outcomes.
