@@ -5,6 +5,9 @@ use chrono::{DateTime, SecondsFormat, Utc};
 use super::model::GenerationTrigger;
 use super::service::{NEW_PER_GENERATION, OPEN_LIMIT};
 
+#[cfg(test)]
+mod test;
+
 /// The task, before the run's details.
 const TASK: &str = include_str!("prompt.md");
 
@@ -21,7 +24,12 @@ pub const SYMBOLS: &[&str] = &[
     "TeamNamespace.list",
     "InitiativeNamespace.list",
     "NotificationNamespace.list",
-    "WorkspaceNamespace.page",
+    "WorkspaceNamespace.list",
+    "TaskNamespace.summaries",
+    "DocumentNamespace.byId",
+    "CallRecordNamespace.byId",
+    "EmailNamespace.byId",
+    "ChannelNamespace.byId",
     "EmailNamespace.inbox",
     "EmailNamespace.search",
     "EmailThread.messages",
@@ -74,12 +82,24 @@ pub fn brief(
         .replace("{docs}", &docs(reference))
         .replace("{open_limit}", &OPEN_LIMIT.to_string())
         .replace("{new_per_generation}", &NEW_PER_GENERATION.to_string());
-    let now = now.to_rfc3339_opts(SecondsFormat::Secs, true);
-    let task = format!("{task}\nNow is {now}; the user's time zone is {timezone}.");
+    let task = format!("{task}\n{}", clock(timezone, now));
     if reference.is_empty() {
         task
     } else {
         format!("{task}\n\n## SDK reference\n\n{reference}")
+    }
+}
+
+/// What time it is for the person: the weekday and their local time when
+/// `timezone` is a zone we know, so "today" and "tomorrow" need no arithmetic.
+fn clock(timezone: &str, now: DateTime<Utc>) -> String {
+    let utc = now.to_rfc3339_opts(SecondsFormat::Secs, true);
+    match timezone.parse::<chrono_tz::Tz>() {
+        Ok(zone) => format!(
+            "Now is {} for the user ({timezone}), {utc}.",
+            now.with_timezone(&zone).format("%A %Y-%m-%d %H:%M")
+        ),
+        Err(_) => format!("Now is {utc}; the user's time zone is {timezone}."),
     }
 }
 
