@@ -12,7 +12,12 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { recordedFiles, removeRecordedFiles } from './files';
+import {
+  readFixtureText,
+  recordedFiles,
+  removeRecordedFiles,
+  writeRecordedFile,
+} from './files';
 import { excludePrivateFixtures, privateFixtureNames } from './privacy';
 
 const pkg = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -292,7 +297,7 @@ for (const [name, content] of files) {
   mkdirSync(path.dirname(path.join(replayDirectory, name)), {
     recursive: true,
   });
-  writeFileSync(path.join(replayDirectory, name), content);
+  writeRecordedFile(path.join(replayDirectory, name), content);
 }
 for (const macroScope of [false, true]) {
   if (
@@ -320,14 +325,14 @@ if (check) {
   )
     throw new Error('Fixture file set drift');
   for (const [name, content] of files) {
-    if (readFileSync(path.join(fixtures, name), 'utf8') !== content)
+    if (readFixtureText(path.join(fixtures, name)) !== content)
       throw new Error(`Fixture drift: ${name}`);
   }
 } else {
   removeRecordedFiles(fixtures);
   for (const [name, content] of files) {
     mkdirSync(path.dirname(path.join(fixtures, name)), { recursive: true });
-    writeFileSync(path.join(fixtures, name), content);
+    writeRecordedFile(path.join(fixtures, name), content);
   }
 }
 const recorded = index.filter((row) => row.tier === 'A-rec').length;

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test } from 'vitest';
+import { readFixtureText } from './files';
 import { modules } from './membrane';
 import { replay } from './replay-js';
 import type { Fixture } from './schema';
@@ -56,7 +57,7 @@ if (process.env.LEXICAL_MACRO === '1')
 const reset = utils.resetRandomKey;
 if (typeof reset !== 'function') throw new Error('Missing resetRandomKey');
 const index: { id: string; file: string | null; apis: string[] }[] = JSON.parse(
-  readFileSync(path.join(directory, 'index.json'), 'utf8')
+  readFixtureText(path.join(directory, 'index.json'))
 );
 for (const name of new Set(
   index

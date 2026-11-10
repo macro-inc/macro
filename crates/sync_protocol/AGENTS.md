@@ -29,6 +29,8 @@ Shared, worker-free wire types for document collaboration and sync routing.
 
 ## Checks
 
+- Decode gzip inventory fixtures while preserving every required case ID and input/output assertion.
+
 - `cargo test -p sync_protocol --features owned`
 - `cargo check -p sync_protocol --target wasm32-unknown-unknown`
 - Sync-service's transcript comparison covers the `/schema` response bytes.

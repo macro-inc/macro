@@ -27,7 +27,7 @@ assertion count. Development/production differences are explicit in
 `outcomeDiffers`; the main trace is the production oracle. `--check` regenerates
 in `target/lexical-recording` and compares the complete file set and bytes.
 
-`fixtures/index.json` contains every reported case, its classification and reasons,
+`fixtures/index.json.gz` contains every reported case, its classification and reasons,
 called APIs, V8 source-range hits, and successful transformer hooks. Unsupported
 values and failed self-replays remain visible as B-only cases; they never become
 partial passing fixtures. Cases with mutating callbacks are A-hand, and DOM

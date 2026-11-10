@@ -134,9 +134,23 @@ fn every_inventory_row_has_a_recorded_transcript() {
                 .split_once("](")
                 .unwrap_or_else(|| panic!("no transcript for {id}"));
             let (path, _) = link.split_once(')').unwrap();
-            assert!(path.ends_with(".jsonl"), "{id} must link to a recording");
-            let transcript = std::fs::read_to_string(root.join(path))
-                .unwrap_or_else(|error| panic!("missing {id} transcript {path}: {error}"));
+            assert!(
+                path.ends_with(".jsonl") || path.ends_with(".jsonl.gz"),
+                "{id} must link to a recording"
+            );
+            let transcript = if path.ends_with(".gz") {
+                use std::io::Read;
+                let file = std::fs::File::open(root.join(path))
+                    .unwrap_or_else(|error| panic!("missing {id} transcript {path}: {error}"));
+                let mut text = String::new();
+                flate2::read::GzDecoder::new(file)
+                    .read_to_string(&mut text)
+                    .unwrap_or_else(|error| panic!("invalid {id} gzip {path}: {error}"));
+                text
+            } else {
+                std::fs::read_to_string(root.join(path))
+                    .unwrap_or_else(|error| panic!("missing {id} transcript {path}: {error}"))
+            };
             assert!(transcript.contains("\"in\":"), "{id} has no input");
             assert!(transcript.contains("\"out\":"), "{id} has no output");
         }

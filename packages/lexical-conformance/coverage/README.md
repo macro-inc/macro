@@ -5,7 +5,7 @@
 upstream checkout. `seed-markdown.ts` parses the documents; `seed-plan.ts` resolves
 owners and primary tests; `gen-matrix.ts` emits the normative TSV.
 
-`just lexical-coverage [--check]` writes or verifies `matrix.json` and the
+`just lexical-coverage [--check]` writes or verifies `matrix.json.gz` and the
 spec-cited policy `ledger.json`, and lists **every uncovered P0 symbol**. The
 matrix preserves API-call candidates, qualified fired-transformer candidates,
 observed S2 ranges, source tags and Rust implementation owners. Observed ranges

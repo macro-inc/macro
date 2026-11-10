@@ -1,5 +1,6 @@
 import { createInterface } from 'node:readline';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
 import { join, basename } from 'node:path';
 import type { Readable } from 'node:stream';
 import type { Miniflare, WebSocket } from 'miniflare';
@@ -284,7 +285,12 @@ if (process.env.SYNC_RECORD === '1') {
       if (!entries.length) return;
       const directory = join(process.env.SYNC_TRANSCRIPT_DIR ?? '../../crates/sync_server_sim/tests/transcripts', basename(state.testPath ?? 'unknown', '.ts'));
       mkdirSync(directory, { recursive: true });
-      writeFileSync(join(directory, `${fileName(state.currentTestName ?? 'unknown')}.jsonl`), entries.map(entry => JSON.stringify(entry)).join('\n') + '\n');
+      const file = join(directory, `${fileName(state.currentTestName ?? 'unknown')}.jsonl`);
+      const text = entries.map(entry => JSON.stringify(entry)).join('\n') + '\n';
+      if (existsSync(`${file}.gz`) || Buffer.byteLength(text) > 5_000_000) {
+        writeFileSync(`${file}.gz`, gzipSync(text, { level: 9 }));
+        rmSync(file, { force: true });
+      } else writeFileSync(file, text);
     }, 60_000);
   });
 }

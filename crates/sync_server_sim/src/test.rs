@@ -227,6 +227,7 @@ fn all_golden_fixtures_load_and_enabled_callbacks_replay() {
     assert_eq!(paths.len(), 158);
     for path in paths {
         let name = path.strip_prefix(&root).unwrap().to_str().unwrap();
+        let name = name.strip_suffix(".gz").unwrap_or(name);
         let transcript = Transcript::load(&path, name).unwrap();
         assert!(!transcript.inputs().unwrap().is_empty(), "{name}");
         if ENABLED.contains(&name) {

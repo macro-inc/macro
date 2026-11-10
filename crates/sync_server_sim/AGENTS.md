@@ -29,6 +29,8 @@ Native in-memory room capabilities and the golden Worker transcript corpus.
 
 ## Checks
 
+- Store oversized transcript fixtures as deterministic `.jsonl.gz`; native replay decompresses them and preserves their logical `.jsonl` identity.
+
 - `cargo test -p sync_server_sim -p sync_server_core -p sync_protocol`
 - Run the sync-service suite and compare a fresh recording to the committed corpus.
 - After moving corpus paths, run the PII scanner tests; local test JWT exemptions
