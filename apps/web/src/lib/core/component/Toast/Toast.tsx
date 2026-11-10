@@ -70,6 +70,11 @@ interface ToastOptions {
   dismissStyle?: ToastDismissStyle;
   /** Inline multiple actions on notices without a description; single actions inline automatically. */
   actionLayout?: ToastActionLayout;
+  /**
+   * Runs once the toast closes, however it closes: expiry, its close
+   * control, Escape, a swipe, or `toast.dismiss`.
+   */
+  onDismiss?: () => void;
 }
 
 interface ToastActionOptions extends ToastOptions {
@@ -205,9 +210,12 @@ function dismiss(toastId: number) {
 }
 
 // Tell users that an action has failed, because of us
-function failure(message: string, options?: ToastActionOptions) {
+function failure(
+  message: string,
+  options?: ToastActionOptions
+): number | undefined {
   if (!options?.stack) dismissIfRecent(message, ToastType.FAILURE);
-  createToast(message, ToastType.FAILURE, options);
+  return createToast(message, ToastType.FAILURE, options);
 }
 
 // Tell users that an action has failed, because of them
@@ -546,6 +554,7 @@ function createToast(
     hideOnMobile,
     showCloseButton,
     dismissStyle,
+    onDismiss,
   } = options ?? {};
 
   if (isMobile() && hideOnMobile) return undefined;
@@ -577,6 +586,7 @@ function createToast(
         dismissStyle={dismissStyle}
         onDismiss={() => {
           clearTrackedToast(region, props.toastId);
+          onDismiss?.();
         }}
       />
     ),
