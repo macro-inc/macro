@@ -733,6 +733,14 @@ pub async fn build(
             call::outbound::pg_imported_call_repo::PgImportedCallRepository::new(db.clone()),
             macro_event_broker.clone(),
         ));
+    // One instance for the sync and the import, so both pace each Pipedream
+    // account together and a `Retry-After` holds them both.
+    let notion_connections = Arc::new(
+        import_notion::outbound::pipedream::PipedreamNotionConnections::new(
+            Arc::new(pipedream_repo.clone()),
+            connectors.clone(),
+        ),
+    );
     let database_syncs_service = Arc::new(database_syncs::wiring::build_service(
         db.clone(),
         databases_tool_context.service.clone(),
@@ -742,10 +750,7 @@ pub async fn build(
             granola_accounts: Arc::new(granola_sync::outbound::accounts::ConnectedAccounts(
                 pipedream_repo.clone(),
             )),
-            notion: import_notion::outbound::pipedream::PipedreamNotionConnections::new(
-                Arc::new(pipedream_repo.clone()),
-                connectors.clone(),
-            ),
+            notion: notion_connections.clone(),
             teams: ai_tools::build_team_repository(db.clone()),
         },
     ));
@@ -826,12 +831,7 @@ pub async fn build(
                 ),
             ),
         )
-        .with_notion_connections(Arc::new(
-            import_notion::outbound::pipedream::PipedreamNotionConnections::new(
-                Arc::new(pipedream_repo.clone()),
-                connectors.clone(),
-            ),
-        ))
+        .with_notion_connections(notion_connections.clone())
         .with_admission(admission.clone())
         .with_notifier(import_notify)
         .with_job_shutdown(import_jobs.shutdown.clone(), import_jobs.tracker.clone()),

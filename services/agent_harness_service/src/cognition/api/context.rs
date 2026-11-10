@@ -141,9 +141,11 @@ pub type DcsPipedreamRouterState = pipedream_mcp::inbound::PipedreamRouterState<
 pub type DcsDatabaseSyncsService = database_syncs::wiring::PgDatabaseSyncsService<
     ai_tools::ToolDatabasesService,
     DcsEntityAccessService,
-    import_notion::outbound::pipedream::PipedreamNotionConnections<
-        pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
-        pipedream_mcp::outbound::dispatch::ConnectorBackends,
+    Arc<
+        import_notion::outbound::pipedream::PipedreamNotionConnections<
+            pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo,
+            pipedream_mcp::outbound::dispatch::ConnectorBackends,
+        >,
     >,
     ai_tools::ToolTeamService,
 >;

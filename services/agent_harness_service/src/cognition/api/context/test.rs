@@ -464,13 +464,15 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             granola_accounts: Arc::new(granola_sync::outbound::accounts::ConnectedAccounts(
                 pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool.clone()),
             )),
-            notion: import_notion::outbound::pipedream::PipedreamNotionConnections::new(
-                Arc::new(
-                    pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(
-                        pool.clone(),
+            notion: Arc::new(
+                import_notion::outbound::pipedream::PipedreamNotionConnections::new(
+                    Arc::new(
+                        pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(
+                            pool.clone(),
+                        ),
                     ),
+                    None,
                 ),
-                None,
             ),
             teams: ai_tools::build_team_repository(pool.clone()),
         },
