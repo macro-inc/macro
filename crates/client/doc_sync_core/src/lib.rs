@@ -9,6 +9,8 @@ mod config;
 pub use config::*;
 mod document;
 pub use document::*;
+mod snapshot_stats;
+pub use snapshot_stats::SnapshotStats;
 mod input;
 pub use input::*;
 mod output;

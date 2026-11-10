@@ -113,6 +113,8 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
   private readonly storage: StorageAdapter;
   private storageQueue: Promise<void>;
   private busy = false;
+  private tickSequence = 0;
+  private pendingTickSequence: number | undefined;
   private queue: (() => void)[] = [];
   private readonly settlements = new Map<() => void, SettledEntry>();
   private closed = false;
@@ -317,10 +319,12 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
     if (this.closed) return;
     const execute = () => {
       const flags = call();
+      const tickSequence = this.pendingTickSequence;
+      this.pendingTickSequence = undefined;
       if (entry) entry.flags = flags;
       if (entry) this.options.beforeConsume?.(flags, entry.completion);
       else this.options.beforeConsume?.(flags);
-      this.consume(flags, entry);
+      this.consume(flags, entry, tickSequence);
       after?.(flags);
     };
     const queued = entry
@@ -430,7 +434,11 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
         )
       );
   }
-  private consume(flags: number, entry?: SettledEntry): void {
+  private consume(
+    flags: number,
+    entry?: SettledEntry,
+    tickSequence?: number
+  ): void {
     if (flags & Flag.WakeChanged) {
       this.scheduleWake();
     }
@@ -450,7 +458,7 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
       if (effect.kind === 3) this.options.onStatus?.(effect);
       if (effect.kind === 5 && effect.code === 0) this.stopped?.();
     }
-    for (const effect of out.effects) this.execute(effect);
+    for (const effect of out.effects) this.execute(effect, tickSequence);
     if (flags & Flag.NeedPeerIds) {
       const values = crypto.getRandomValues(new BigUint64Array(4));
       const input = {
@@ -476,7 +484,25 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
             () => {
               this.timer = undefined;
               this.run(
-                () => this.session.tick(this.now(), this.clock.wall()),
+                () => {
+                  const sequence = ++this.tickSequence;
+                  const flags = this.options.telemetry.tick(
+                    sequence,
+                    (span) => {
+                      const start = this.clock.mono();
+                      try {
+                        return this.session.tick(this.now(), this.clock.wall());
+                      } finally {
+                        span.setAttr(
+                          'native.tick.duration_ms',
+                          this.clock.mono() - start
+                        );
+                      }
+                    }
+                  );
+                  this.pendingTickSequence = sequence;
+                  return flags;
+                },
                 () => {
                   // Browser timers may run before Rust's integer-millisecond deadline.
                   // An unchanged deadline must remain armed after that early tick.
@@ -487,7 +513,7 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
             Math.max(0, Math.ceil(at - this.now()))
           );
   }
-  private execute(effect: Effect): void {
+  private execute(effect: Effect, tickSequence?: number): void {
     if (effect.tag === 1) {
       this.launch(async () => {
         try {
@@ -677,7 +703,10 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
       return;
     }
     if (effect.tag === 8) {
-      this.options.telemetry.forward(TelemetryMsg.decode(effect.payload));
+      this.options.telemetry.forward(
+        TelemetryMsg.decode(effect.payload),
+        tickSequence
+      );
       return;
     }
     if (effect.tag === 9) {

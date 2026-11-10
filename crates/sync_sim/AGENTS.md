@@ -5,6 +5,8 @@
 Dev-only deterministic synchronization world: real `doc_sync_core::SyncCore`
 clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports.
 
+Observe snapshot statistics through the same pure real-document port as production sessions; do not supply clocks or normalized vectors.
+
 ## Start here
 
 - `src/client/application.rs`: real application registries, policy and injected constructor ports.

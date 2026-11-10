@@ -709,6 +709,9 @@ impl<S: Surface> SyncDoc for Adapter<'_, S> {
             .export(ExportMode::shallow_snapshot(at))
             .map_err(export_error)
     }
+    fn snapshot_stats(&self, at: &Frontiers) -> doc_sync_core::SnapshotStats {
+        doc_sync_core::SnapshotStats::from_doc(self.doc, at)
+    }
     fn probe_import(
         &mut self,
         snapshot: &[u8],
