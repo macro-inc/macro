@@ -111,7 +111,7 @@ pub enum DocumentProgramError {
     BuildFailed,
     /// Every build slot is busy, or the viewer's other runs held their run
     /// slots past this run's deadline.
-    #[error("the document's programs are busy; try again later")]
+    #[error("too many of your programs are running right now; try again shortly")]
     Busy,
     /// The toolchain failed.
     #[error("building failed to run")]

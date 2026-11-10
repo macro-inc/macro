@@ -5,7 +5,9 @@ use super::{
 };
 use ai_toolset::ToolCaller;
 use async_trait::async_trait;
-use code_execution::domain::{ExecuteRequest, ProgramExecutor, RunEnvironment, Unattended};
+use code_execution::domain::{
+    ExecuteRequest, ProgramExecutor, RunEnvironment, Unattended, UnattendedOutput,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -106,6 +108,9 @@ impl UserCodeMode for UserCodeModeService {
         cancel: CancellationToken,
     ) -> Result<UserExecutionReceipt, CodeModeError> {
         validate_request(&request)?;
+        let page = inputs
+            .as_ref()
+            .is_some_and(|inputs| inputs.output == UnattendedOutput::Page);
         let mut environment = self.credentials.issue(user, caller, session).await?;
         environment.unattended = inputs;
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
@@ -132,7 +137,12 @@ impl UserCodeMode for UserCodeModeService {
             super::activity::observe(&mut activity, &mut truncated, value);
         }
         super::activity::finish(&mut activity);
-        let (status, result, error) = settle(outcome, Reviews::Rejected);
+        let (status, result, mut error) = settle(outcome, Reviews::Rejected);
+        // A page's program is wrapped as `{data}` by its build, so a value
+        // that breaks the contract is one JSON dropped, such as a function.
+        if page && status == ExecutionStatus::Failed && result.is_some() {
+            error = Some(PAGE_VALUE_NOT_JSON.to_owned());
+        }
         let span = tracing::Span::current();
         span.record("status", tracing::field::debug(status));
         span.record("activity", activity.len());
@@ -145,6 +155,9 @@ impl UserCodeMode for UserCodeModeService {
         })
     }
 }
+
+/// Why a page's program failed after returning.
+const PAGE_VALUE_NOT_JSON: &str = "The program returned something JSON can't carry, such as a function; return plain data: objects, arrays, strings, numbers, booleans or null.";
 
 #[cfg(test)]
 mod test;

@@ -926,3 +926,24 @@ async fn the_cpu_limit_stops_a_busy_program() {
     );
     service.shutdown().await;
 }
+
+#[test]
+fn names_a_result_nested_too_deeply() {
+    let deep = format!(
+        r#"{{"type":"result","value":{{"data":{}{}}}}}"#,
+        "[".repeat(5000),
+        "]".repeat(5000)
+    );
+    let Err(error) = serde_json::from_str::<ChildFrame>(&deep) else {
+        panic!("a result nested this deep must not parse");
+    };
+    assert_eq!(
+        child_frame_problem(&error),
+        "the program's result nests too deeply to read; return a flatter value"
+    );
+
+    let Err(error) = serde_json::from_str::<ChildFrame>("{\"type\":") else {
+        panic!("a truncated frame must not parse");
+    };
+    assert_eq!(child_frame_problem(&error), "invalid child frame");
+}
