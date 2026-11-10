@@ -17,14 +17,9 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
     font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  input, button { font: inherit; color: inherit; }
   .wrap { max-width: 760px; margin: 0 auto; padding: 16px; }
   header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
   h1 { font-size: 17px; margin: 0 auto 0 0; }
-  input { padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); min-width: 0; }
-  #title { flex: 1 1 180px; max-width: 260px; }
-  button { padding: 8px 12px; border: 0; border-radius: 10px; background: var(--accent); color: #fff; cursor: pointer; }
-  button:disabled { opacity: .5; cursor: default; }
   .day { margin-bottom: 16px; }
   .day h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 6px; }
   .event { display: grid; grid-template-columns: 96px 1fr; gap: 12px; background: var(--panel);
@@ -41,9 +36,6 @@
 <div class="wrap">
   <header>
     <h1>Next 7 days</h1>
-    <input id="title" placeholder="Event title" aria-label="Event title">
-    <input id="when" type="datetime-local" aria-label="Starts at">
-    <button id="add">Add 30 min</button>
   </header>
   <div id="agenda"><p class="empty">Loading…</p></div>
 </div>
@@ -72,23 +64,10 @@
   }
 </script>
 
-<script type="text/macro" id="addEvent" lang="ts">
-  export default async function (
-    { title, startsAt, endsAt }: { title: string; startsAt: string; endsAt: string },
-    { macro }: ProgramContext,
-  ) {
-    const event = await macro.calendar.createEvent({ title, time: { kind: 'timed', startsAt, endsAt } });
-    return { id: event.id };
-  }
-</script>
-
 <script type="module" lang="ts">
-  import { addEvent, agenda } from 'macro:programs';
+  import { agenda } from 'macro:programs';
 
   const root = document.getElementById('agenda')!;
-  const titleInput = document.getElementById('title') as HTMLInputElement;
-  const whenInput = document.getElementById('when') as HTMLInputElement;
-  const addButton = document.getElementById('add') as HTMLButtonElement;
 
   function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
     const node = document.createElement(tag);
@@ -99,30 +78,12 @@
 
   const clock = (at: string) => new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 
-  // Coalesce reloads: live events arrive in bursts, and a page may run only
-  // two programs at once.
-  let reloading: Promise<void> | null = null;
-  let stale = false;
-  function reload(): Promise<void> {
-    stale = true;
-    reloading ??= (async () => {
-      while (stale) {
-        stale = false;
-        await load();
-      }
-    })().finally(() => {
-      reloading = null;
-    });
-    return reloading;
-  }
-
   async function load() {
     const start = new Date();
     start.setHours(0, 0, 0, 0);
     const end = new Date(start.getTime() + 7 * 24 * 3600 * 1000);
     const { connected, events } = await agenda({ start: start.toISOString(), end: end.toISOString() });
     if (!connected) {
-      addButton.disabled = true;
       root.replaceChildren(el('p', 'empty', 'No calendar is connected. Connect Google or Outlook in Settings to see your agenda.'));
       return;
     }
@@ -150,18 +111,7 @@
     root.replaceChildren(...days.values());
   }
 
-  addButton.addEventListener('click', async () => {
-    const title = titleInput.value.trim();
-    if (!title || !whenInput.value) return;
-    addButton.disabled = true;
-    const startsAt = new Date(whenInput.value);
-    const endsAt = new Date(startsAt.getTime() + 30 * 60 * 1000);
-    await addEvent({ title, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() });
-    titleInput.value = '';
-    addButton.disabled = false;
-    await reload();
-  });
-  await reload();
+  await load();
 </script>
 </body>
 </html>

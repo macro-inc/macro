@@ -18,7 +18,7 @@ doesn't ship. Upload one to Drive and open it in Render to try it.
 | `routines.html` | Routines with their latest runs | `routines.list`, `routine.history` | Enable/disable; Run now | none |
 | `agent-sessions.html` | Agent sessions list | `workspace.page` (agent sessions) | Archive, restore | `agent_session.*` |
 | `email.html` | Mail list with Inbox, Important and Sent | `email.links`, `workspace.page` (email) | Archive a thread | none; refreshes on focus |
-| `calendar.html` | Seven-day agenda | `calendar.calendars`, `calendar.occurrences` | Add a 30-minute event | none |
+| `calendar.html` | Seven-day agenda | `calendar.calendars`, `calendar.occurrences` | none: programs can't create events (below) | none |
 | `crm.html` | CRM contacts | `crm.searchContacts` | Add a contact | none |
 
 Mail and the agenda need a connected account, and contacts need a team; without
