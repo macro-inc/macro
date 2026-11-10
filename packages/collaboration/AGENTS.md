@@ -81,3 +81,5 @@ Run CompatHostReconcile on the real mutable pending state before admission/freez
 The browser history fixture routes real keyboard Enter/undo/redo through keyDown to production EditorSession WASM; assert committed content and durable endpoint identities/offsets after paragraph recreation, with no substitute history or selection model.
 
 Keep complete raw editor JSON, including every durable ID, equal after code-subtree undo/redo; resolving the same caret or matching text alone is insufficient.
+
+Decode SetDecoratorRevision (12) as [key, low32, high32] with full u64 precision; preserve earlier opcodes and reject unsupported stream operations. Enum generation alone does not install decorator lifetime handling.

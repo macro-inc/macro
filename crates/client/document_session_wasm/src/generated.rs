@@ -40,6 +40,7 @@ pub enum DiffOpcode {
     ElementProps = 9,
     NodeProps = 10,
     State = 11,
+    SetDecoratorRevision = 12,
 }
 
 impl ::core::convert::TryFrom<u32> for DiffOpcode {
@@ -58,6 +59,7 @@ impl ::core::convert::TryFrom<u32> for DiffOpcode {
             9 => Ok(DiffOpcode::ElementProps),
             10 => Ok(DiffOpcode::NodeProps),
             11 => Ok(DiffOpcode::State),
+            12 => Ok(DiffOpcode::SetDecoratorRevision),
             d => Err(::bebop::DeserializeError::InvalidEnumDiscriminator(d.into())),
         }
     }
@@ -77,6 +79,7 @@ impl ::core::convert::From<DiffOpcode> for u32 {
             DiffOpcode::ElementProps => 9,
             DiffOpcode::NodeProps => 10,
             DiffOpcode::State => 11,
+            DiffOpcode::SetDecoratorRevision => 12,
         }
     }
 }
