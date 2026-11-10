@@ -1,5 +1,5 @@
 //! Structural view patches between immutable snapshots.
-use crate::collections::IndexSet;
+use crate::collections::{HashMap, IndexSet};
 use crate::*;
 use std::sync::Arc;
 mod encode;
@@ -243,17 +243,68 @@ fn state_props(view: StateRef<'_>, key: NodeKey) -> Result<Option<SerializedNode
         json
     }))
 }
-fn preorder_sort(view: StateRef<'_>, keys: impl IntoIterator<Item = NodeKey>) -> Vec<NodeKey> {
-    let mut nodes = keys
-        .into_iter()
+#[derive(Default)]
+struct ChildPositions {
+    parents: IndexSet<NodeKey>,
+    indices: HashMap<(NodeKey, NodeKey), u32>,
+    #[cfg(test)]
+    scanned_children: usize,
+}
+
+impl ChildPositions {
+    fn index(&mut self, view: StateRef<'_>, parent: NodeKey, key: NodeKey) -> u32 {
+        let Some(element) = view.element(parent) else {
+            return u32::MAX;
+        };
+        if element.first == Some(key) {
+            return 0;
+        }
+        if element.last == Some(key) {
+            return element.size.checked_sub(1).unwrap_or(u32::MAX);
+        }
+        // A diff reads an immutable state. Reuse this parent's ranks across
+        // created-node and child-list ordering instead of walking its siblings
+        // for each descendant. Boundary-only sorts leave the rank tables unallocated.
+        if self.parents.insert(parent) {
+            self.indices
+                .reserve(usize::try_from(element.size).unwrap_or(0));
+            for (index, child) in view.children(parent).enumerate() {
+                #[cfg(test)]
+                {
+                    self.scanned_children += 1;
+                }
+                if let Ok(index) = u32::try_from(index) {
+                    self.indices.entry((parent, child)).or_insert(index);
+                }
+            }
+        }
+        self.indices
+            .get(&(parent, key))
+            .copied()
+            .unwrap_or(u32::MAX)
+    }
+}
+
+fn preorder_sort(
+    view: StateRef<'_>,
+    keys: impl IntoIterator<Item = NodeKey>,
+    positions: &mut ChildPositions,
+) -> Vec<NodeKey> {
+    let mut keys = keys.into_iter();
+    let Some(first) = keys.next() else {
+        return Vec::new();
+    };
+    let Some(second) = keys.next() else {
+        return vec![first];
+    };
+    let mut nodes = std::iter::once(first)
+        .chain(std::iter::once(second))
+        .chain(keys)
         .map(|key| {
             let mut path = vec![];
             let mut current = key;
             while let Some(parent) = view.parent(current) {
-                path.push(
-                    view.index_within_parent(current)
-                        .map_or(u32::MAX, |index| index.0),
-                );
+                path.push(positions.index(view, parent, current));
                 current = parent;
             }
             path.reverse();
@@ -261,7 +312,13 @@ fn preorder_sort(view: StateRef<'_>, keys: impl IntoIterator<Item = NodeKey>) ->
         })
         .collect::<Vec<_>>();
     nodes.sort_by(|(a, ka), (b, kb)| a.cmp(b).then(ka.cmp(kb)));
-    nodes.into_iter().map(|(_, key)| key).collect()
+    let ordered: Vec<_> = nodes.into_iter().map(|(_, key)| key).collect();
+    #[cfg(test)]
+    assert_eq!(
+        ordered,
+        test::legacy_preorder_sort(view, ordered.iter().copied())
+    );
+    ordered
 }
 impl Commit {
     /// Build a patch across preceding, main and follow-up commits.
@@ -366,6 +423,8 @@ pub(crate) fn visit_transition_diff(
     options: &DiffOptions,
     mut emit: impl FnMut(DiffOp),
 ) -> Result<(), Error> {
+    let mut prev_positions = ChildPositions::default();
+    let mut next_positions = ChildPositions::default();
     let mut changed = IndexSet::default();
     if full {
         let mut keys = prev
@@ -401,7 +460,7 @@ pub(crate) fn visit_transition_diff(
         .copied()
         .filter(|key| prev.contains(*key) && !next.contains(*key))
         .collect();
-    for key in preorder_sort(prev, removed.iter().copied()) {
+    for key in preorder_sort(prev, removed.iter().copied(), &mut prev_positions) {
         emit(DiffOp::Remove {
             key,
             subtree_root: prev
@@ -415,6 +474,7 @@ pub(crate) fn visit_transition_diff(
             .iter()
             .copied()
             .filter(|key| !prev.contains(*key) && next.contains(*key)),
+        &mut next_positions,
     );
     for key in &created {
         let key = *key;
@@ -479,7 +539,7 @@ pub(crate) fn visit_transition_diff(
             parents.insert(parent);
         }
     }
-    for parent in preorder_sort(next, parents) {
+    for parent in preorder_sort(next, parents, &mut next_positions) {
         let children = next.children_keys(parent)?;
         if !prev.contains(parent) || prev.children_keys(parent)? != children {
             emit(DiffOp::Children { parent, children });
