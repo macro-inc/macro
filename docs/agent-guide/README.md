@@ -2,7 +2,8 @@
 
 How an automated agent (driving a real browser via the chrome-devtools MCP server, or
 observing via the Grafana MCP server) should operate the Macro web app. Everything here was
-verified live against a local stack (`just run_local`).
+verified live against a local stack (`just run_local`, which needs no terminal: see
+[Run without a terminal](../development/running-locally.md#run-without-a-terminal)).
 
 | File | Contents |
 | --- | --- |

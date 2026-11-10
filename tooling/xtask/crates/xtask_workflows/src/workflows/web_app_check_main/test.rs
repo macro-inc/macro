@@ -344,6 +344,10 @@ fn should_run_includes_fold_wasm_inputs() {
         should_run.contains("crates/database_sql/**"),
         "SQL engine wasm source must rebuild the web artifact: {should_run}"
     );
+    assert!(
+        should_run.contains("crates/natural_time/**"),
+        "date phrase wasm source must rebuild the web artifact: {should_run}"
+    );
 }
 
 #[test]
@@ -415,13 +419,15 @@ fn functional_job(yaml: &str) -> &str {
 fn test_job_shards_vitest_after_building_its_wasm() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let test_job = test_job(&yaml);
-    let wasm = test_job
-        .find("just build-agent-fold-wasm")
-        .expect("build WASM before the test setup hook");
     let vitest = test_job
         .find("bun run test --shard=${{ matrix.shard }}/6")
         .expect("vitest step runs one shard");
-    assert!(wasm < vitest, "cold WASM compilation precedes Vitest");
+    for build in ["just build-agent-fold-wasm", "just build-natural-time-wasm"] {
+        let wasm = test_job
+            .find(build)
+            .unwrap_or_else(|| panic!("{build} runs before the test setup hook"));
+        assert!(wasm < vitest, "cold WASM compilation precedes Vitest");
+    }
     assert!(
         test_job.contains("fail-fast: false"),
         "a failing shard must not hide the others' failures: {test_job}"

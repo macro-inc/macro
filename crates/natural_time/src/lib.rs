@@ -22,7 +22,8 @@
 //! - Numeric dates are month first: `11/12` is November 12.
 //! - A time without am/pm guesses business hours: 1–7 is pm, 8–11 am and 12
 //!   noon. In a range, the side that says am or pm settles the other, so
-//!   `2-3pm` is 2pm to 3pm.
+//!   `2-3pm` is 2pm to 3pm. [`read_other_meridiem`] reads a guessed hour in
+//!   the other half of the day, for callers that offer both.
 //! - Parts of the day: morning 9am, noon and lunch 12pm, afternoon 1pm, end
 //!   of day 5pm, evening 6pm, night and tonight 8pm. Midnight ends its day.
 //! - A time alone, or on a bare weekday, that has already passed today moves
@@ -46,6 +47,9 @@ mod grammar;
 mod phrase;
 mod resolve;
 mod words;
+
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
 
 #[cfg(test)]
 mod test;
@@ -81,6 +85,7 @@ pub enum Moment {
 
 /// Parts of a reading that were guessed rather than written.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg_attr(target_arch = "wasm32", derive(serde::Serialize))]
 pub struct Assumed {
     /// am or pm was guessed from business hours.
     pub meridiem: bool,
@@ -103,6 +108,11 @@ pub struct Reading {
 
 /// Why a phrase couldn't be read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[cfg_attr(
+    target_arch = "wasm32",
+    derive(serde::Serialize),
+    serde(rename_all = "camelCase")
+)]
 pub enum Error {
     /// The phrase isn't a date or time this can read.
     #[error("not a date or time this can read")]
@@ -142,7 +152,37 @@ pub fn read(
     pick: Pick,
     default_time: Option<NaiveTime>,
 ) -> Result<Reading, Error> {
+    read_with(
+        phrase,
+        now,
+        pick,
+        default_time,
+        resolve::Guess::BusinessHours,
+    )
+}
+
+/// Reads `phrase` like [`read`], with a guessed am or pm the other way
+/// round: `at 3` is 3am rather than 3pm, `at 9` 9pm rather than 9am, and
+/// `at 12` midnight rather than noon. It reads the same as [`read`] when
+/// nothing was guessed, so offer it only beside a reading whose
+/// [`Assumed::meridiem`] is set.
+pub fn read_other_meridiem(
+    phrase: &str,
+    now: NaiveDateTime,
+    pick: Pick,
+    default_time: Option<NaiveTime>,
+) -> Result<Reading, Error> {
+    read_with(phrase, now, pick, default_time, resolve::Guess::Opposite)
+}
+
+fn read_with(
+    phrase: &str,
+    now: NaiveDateTime,
+    pick: Pick,
+    default_time: Option<NaiveTime>,
+    guess: resolve::Guess,
+) -> Result<Reading, Error> {
     let items = grammar::items(&grammar::normalize(phrase))?;
     let phrase = phrase::Phrase::from_items(&items)?;
-    resolve::resolve(&phrase, now, pick, default_time)
+    resolve::resolve(&phrase, now, pick, default_time, guess)
 }

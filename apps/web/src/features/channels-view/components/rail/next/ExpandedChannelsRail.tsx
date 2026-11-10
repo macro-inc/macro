@@ -2,6 +2,7 @@ import { createDragAutoScroll } from '@app/components/drag-drop/create-drag-auto
 import { createLayoutAnimation } from '@app/components/drag-drop/create-layout-animation';
 import type { ListScrollHandle } from '@app/components/list';
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { SlackImportSidebar } from '@app/features/slack-import/slack-import-sidebar';
 import { t } from '@app/lib/i18n';
 import { useUserId } from '@core/context/user';
@@ -139,6 +140,10 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
           />
         </div>
       </ViewSidebar.Primary>
+      <SidebarRoutineSuggestions
+        surface="chat"
+        class="mx-(--sidebar-gutter) mt-(--sidebar-gutter)"
+      />
       <Show when={rail.labelsFailed()}>
         <div
           class="flex items-center gap-2 px-3 text-xs text-ink-muted"

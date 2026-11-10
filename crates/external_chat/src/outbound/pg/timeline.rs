@@ -3,16 +3,14 @@ use super::*;
 use crate::domain::{
     ports::ChatRepository,
     rich::RichContent,
-    timeline::{
-        view::{StoredPerson, StoredVote},
-        *,
-    },
+    timeline::{view::StoredVote, *},
 };
 use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2, access_level::AccessLevel,
 };
+use std::collections::HashMap;
 
 fn backfill(state: Option<&str>, imported: i32) -> Option<Backfill> {
     Some(Backfill {
@@ -31,7 +29,7 @@ impl PgExternalChatRepository {
         only: Option<Uuid>,
         limit: i64,
     ) -> ExternalChatResult<StoredPage> {
-        let rows = sqlx::query!(r#"SELECT m.id,m.person_id,p.user_id,p.display_name AS name,
+        let rows = sqlx::query!(r#"SELECT m.id,m.person_id,p.user_id,
             m.body,m.reply_to,m.source_at,m.ingested_at,m.revised_at,m.deleted_at,m.kind,m.rich,m.mentions,m.forwarded,m.view_once
             FROM external_chat_message m JOIN external_chat_person p ON p.id = m.person_id
             WHERE m.chat_id = $1 AND m.message_id IS NOT NULL
@@ -57,7 +55,7 @@ impl PgExternalChatRepository {
             .map(|(row, _)| row.id)
             .collect();
         let votes: Vec<StoredVote> = sqlx::query!(
-            r#"SELECT v.message_id, v.selected, p.user_id, v.person_id, p.display_name AS name
+            r#"SELECT v.message_id, v.selected, v.person_id, p.user_id
             FROM external_chat_poll_vote v JOIN external_chat_person p ON p.id = v.person_id
             WHERE v.message_id = ANY($1) AND cardinality(v.selected) > 0
             ORDER BY v.updated_at"#,
@@ -73,13 +71,40 @@ impl PgExternalChatRepository {
             voter: StoredPerson {
                 person_id: row.person_id,
                 user_id: row.user_id,
-                name: row.name,
             },
         })
         .collect();
-        let reactions=sqlx::query!(r#"SELECT message_id,emoji,count(*) AS "count!",COALESCE(bool_or(user_id=$2),false) AS "mine!"
-            FROM external_chat_reaction WHERE message_id=ANY($1) AND emoji<>'' GROUP BY message_id,emoji ORDER BY message_id,emoji"#,&ids,user)
-            .fetch_all(&self.pool).await.map_err(failure)?;
+        let reaction_rows = sqlx::query!(
+            r#"SELECT r.message_id, r.emoji, r.person_id, p.user_id, r.user_id IS NOT DISTINCT FROM $2 AS "mine!"
+            FROM external_chat_reaction r JOIN external_chat_person p ON p.id = r.person_id
+            WHERE r.message_id = ANY($1) AND r.emoji <> ''
+            ORDER BY r.message_id, r.emoji, r.updated_at, r.person_id"#,
+            &ids,
+            user
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(failure)?;
+        // Rows come grouped by message and emoji, earliest reactor first.
+        let mut reactions: HashMap<Uuid, Vec<StoredReaction>> = HashMap::new();
+        for row in reaction_rows {
+            let reactor = StoredPerson {
+                person_id: row.person_id,
+                user_id: row.user_id,
+            };
+            let grouped = reactions.entry(row.message_id).or_default();
+            match grouped.last_mut() {
+                Some(last) if last.emoji == row.emoji => {
+                    last.reactors.push(reactor);
+                    last.mine |= row.mine;
+                }
+                _ => grouped.push(StoredReaction {
+                    emoji: row.emoji,
+                    reactors: vec![reactor],
+                    mine: row.mine,
+                }),
+            }
+        }
         let mut messages = Vec::with_capacity(ids.len());
         for (row, content) in rows.into_iter().take(limit as usize).zip(rich) {
             let deleted = row.deleted_at.is_some();
@@ -88,7 +113,6 @@ impl PgExternalChatRepository {
                 sender: StoredPerson {
                     person_id: row.person_id,
                     user_id: row.user_id,
-                    name: row.name,
                 },
                 body: if deleted { String::new() } else { row.body },
                 reply_to: row.reply_to,
@@ -96,15 +120,7 @@ impl PgExternalChatRepository {
                 received_at: row.ingested_at,
                 edited_at: row.revised_at,
                 deleted,
-                reactions: reactions
-                    .iter()
-                    .filter(|r| r.message_id == row.id)
-                    .map(|r| ExternalChatReaction {
-                        emoji: r.emoji.clone(),
-                        count: r.count,
-                        mine: r.mine,
-                    })
-                    .collect(),
+                reactions: reactions.remove(&row.id).unwrap_or_default(),
                 attachments: attachments
                     .iter()
                     .find(|a| a.message_id == row.id)

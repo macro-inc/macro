@@ -220,6 +220,13 @@ pub(crate) type DssPipelineState = crm::inbound::pipelines::PipelineRouterState<
     AuthorizationService,
 >;
 
+pub(crate) type DssPipelineWorkflowState =
+    crm::inbound::pipeline_workflows::PipelineWorkflowRouterState<
+        ai_tools::ToolPipelineWorkflows,
+        ai_tools::ToolCrmTransferService,
+        AuthorizationService,
+    >;
+
 pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
     DssCrmService,
     DssCrmStageService,
@@ -833,6 +840,14 @@ pub(crate) type InitiativeServiceType =
 pub(crate) type DssInitiativeState =
     InitiativeRouterState<InitiativeServiceType, EntityAccessService, AuthorizationService>;
 
+/// Type alias for the initiative history router state.
+pub(crate) type DssInitiativeActivityState =
+    initiative::inbound::axum_router::InitiativeActivityRouterState<
+        activity::outbound::pg_activity_repo::PgActivityRepo,
+        EntityAccessService,
+        AuthorizationService,
+    >;
+
 /// Type alias for the collab-surface service.
 pub(crate) type CollabSurfaceServiceType = collab_surface::outbound::PgCollabSurfaceService<
     forms::outbound::collaborative_layout::RepositoryFormIds<
@@ -964,6 +979,7 @@ pub(crate) struct ApiContext {
     pub slack_state: DssSlackState,
     pub external_chat_state: crate::external_chat::State,
     pub initiative_state: DssInitiativeState,
+    pub initiative_activity_state: DssInitiativeActivityState,
     pub graphql_crm_context: graphql_crm::CrmGraphqlContext,
     pub graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext,
     pub graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext,
@@ -1031,6 +1047,7 @@ pub(crate) struct ApiContext {
     pub crm_state: DssCrmState,
     pub owned_purge_state: DssOwnedPurgeState,
     pub pipeline_state: DssPipelineState,
+    pub pipeline_workflow_state: DssPipelineWorkflowState,
 }
 
 env_var! {

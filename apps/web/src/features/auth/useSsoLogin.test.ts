@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   nativeMobile: false,
   platform: 'web' as 'web' | 'desktop' | 'ios' | 'android',
   servers: { 'auth-service': '' },
+  localStackProxy: false,
   location: { state: undefined as RedirectLocation | undefined },
   track: vi.fn(),
   createNativeAuthSession: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock('@solidjs/router', () => ({ useLocation: () => mocks.location }));
 vi.mock('@core/constant/servers', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/servers')>()),
   SERVER_HOSTS: mocks.servers,
+  usesLocalStackProxy: () => mocks.localStackProxy,
 }));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => mocks.nativeMobile,
@@ -95,6 +97,7 @@ beforeEach(() => {
   mocks.platform = 'web';
   mocks.openDesktopAuthSession.mockResolvedValue({ success: true });
   mocks.servers['auth-service'] = proxyAuthHost;
+  mocks.localStackProxy = false;
   mocks.location.state = undefined;
   mocks.reloadHolds = 0;
   mocks.createNativeAuthSession.mockReturnValue({
@@ -112,29 +115,38 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('useSsoLogin', () => {
+  // A local stack's callback runs on the auth service's own port, whose
+  // cookies its proxy ignores, so it redeems a session code instead.
   it.each([
-    { host: proxyAuthHost, mobile: 'true' },
-    { host: 'https://gateway.macro.com/auth', mobile: null },
-  ])('redirects browser SSO through $host', async ({ host, mobile }) => {
-    mocks.servers['auth-service'] = host;
+    { host: proxyAuthHost, localStack: false, mobile: 'true' },
+    { host: 'https://localhost:28009/auth', localStack: true, mobile: 'true' },
+    { host: 'https://gateway.macro.com/auth', localStack: false, mobile: null },
+  ])(
+    'redirects browser SSO through $host',
+    async ({ host, localStack, mobile }) => {
+      mocks.servers['auth-service'] = host;
+      mocks.localStackProxy = localStack;
 
-    await useSsoLogin()('google');
+      await useSsoLogin()('google');
 
-    const redirect = new URL(window.location.href);
-    expect(`${redirect.origin}${redirect.pathname}`).toBe(`${host}/login/sso`);
-    expect(redirect.searchParams.get('is_mobile')).toBe(mobile);
-    expect(redirect.searchParams.get('original_url')).toBe(loginUrl);
-    expect(redirect.searchParams.get('referral_code')).toBe('invite');
-    expect(redirect.searchParams.get('idp_name')).toBe('google');
-    expect(mocks.createNativeAuthSession).not.toHaveBeenCalled();
-    expect(mocks.sessionLogin).not.toHaveBeenCalled();
-    expect(mocks.track).toHaveBeenCalledWith('login', { method: 'google' }, [
-      'posthog',
-    ]);
-    // The hosted return sets only HttpOnly cookies; without this hint the
-    // returning load never checks identity and shows sign-in again.
-    expect(mocks.syncLoginStorage).toHaveBeenCalledWith(true);
-  });
+      const redirect = new URL(window.location.href);
+      expect(`${redirect.origin}${redirect.pathname}`).toBe(
+        `${host}/login/sso`
+      );
+      expect(redirect.searchParams.get('is_mobile')).toBe(mobile);
+      expect(redirect.searchParams.get('original_url')).toBe(loginUrl);
+      expect(redirect.searchParams.get('referral_code')).toBe('invite');
+      expect(redirect.searchParams.get('idp_name')).toBe('google');
+      expect(mocks.createNativeAuthSession).not.toHaveBeenCalled();
+      expect(mocks.sessionLogin).not.toHaveBeenCalled();
+      expect(mocks.track).toHaveBeenCalledWith('login', { method: 'google' }, [
+        'posthog',
+      ]);
+      // The hosted return sets only HttpOnly cookies; without this hint the
+      // returning load never checks identity and shows sign-in again.
+      expect(mocks.syncLoginStorage).toHaveBeenCalledWith(true);
+    }
+  );
 
   it('preserves the original browser destination through proxy SSO', async () => {
     window.location.href = 'https://localhost:3003/app/login';
@@ -167,11 +179,21 @@ describe('useSsoLogin', () => {
   // The desktop shell must not depend on the native navigation plugin
   // rewriting this URL: that only happens for navigations it classifies as
   // external, which the development proxy's same-origin auth host is not.
-  it.each([proxyAuthHost, 'https://gateway.macro.com/auth'])(
-    'sends desktop SSO to the system browser with a deep-link callback through %s',
-    async (host) => {
+  // A local stack's handoff only adds `is_mobile` to the web flow; the
+  // desktop and native shells already redeem a code and must run exactly as
+  // they do against hosted services.
+  const shellHosts = [
+    { host: proxyAuthHost, localStack: false },
+    { host: 'https://gateway.macro.com/auth', localStack: false },
+    { host: 'https://localhost:28009/auth', localStack: true },
+  ];
+
+  it.each(shellHosts)(
+    'sends desktop SSO to the system browser with a deep-link callback through $host',
+    async ({ host, localStack }) => {
       mocks.platform = 'desktop';
       mocks.servers['auth-service'] = host;
+      mocks.localStackProxy = localStack;
 
       await useSsoLogin()('google');
 
@@ -230,20 +252,24 @@ describe('useSsoLogin', () => {
     );
   });
 
-  it.each([proxyAuthHost, 'https://gateway.macro.com/auth'])(
-    'uses native authentication and redeems the session code through %s',
-    async (host) => {
+  it.each(shellHosts)(
+    'uses native authentication and redeems the session code through $host',
+    async ({ host, localStack }) => {
       mocks.nativeMobile = true;
       mocks.servers['auth-service'] = host;
+      mocks.localStackProxy = localStack;
 
       await useSsoLogin()('google');
 
+      expect(mocks.createNativeAuthSession).toHaveBeenCalledOnce();
       expect(mocks.createNativeAuthSession).toHaveBeenCalledWith('login');
+      expect(mocks.authenticate).toHaveBeenCalledOnce();
       const authUrl = new URL(mocks.authenticate.mock.calls[0][0]);
       expect(authUrl.searchParams.get('is_mobile')).toBe('true');
       expect(authUrl.searchParams.get('original_url')).toBe(
         'macro://android-auth/test-attempt'
       );
+      expect(mocks.sessionLogin).toHaveBeenCalledOnce();
       expect(mocks.sessionLogin).toHaveBeenCalledWith({
         session_code: 'session-code',
       });
