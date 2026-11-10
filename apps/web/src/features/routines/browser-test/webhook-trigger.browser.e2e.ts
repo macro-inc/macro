@@ -37,6 +37,8 @@ test('a webhook trigger is added from its own group and gets a URL', async ({
     panel.getByText(/POSTs text to this routine’s secret URL/)
   ).toBeVisible();
   await expect(panel.getByText('Only when the JSON body')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Create URL' })).toBeVisible();
+  await shot(page, 'panel-new');
   await panel.getByRole('button', { name: 'Create URL' }).click();
   const url = panel.getByRole('textbox', { name: 'Webhook URL' });
   await expect(url).toHaveValue(/\/scheduled-actions\/webhooks\/mrw_/);
