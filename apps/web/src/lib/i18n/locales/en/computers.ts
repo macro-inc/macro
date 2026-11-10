@@ -81,6 +81,7 @@ export default {
   waitingForCapacity: 'Waiting for space on the host',
   waitingForCapacityHint:
     'Turn off or release another computer on this host to make room',
+  starting: 'Starting…',
   stopping: 'Turning off',
   stopped: 'Powered off',
   failed: 'Failed',

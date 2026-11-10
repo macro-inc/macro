@@ -76,7 +76,7 @@ export function useClaudeSignInMutation() {
           )
         );
       }),
-    // Starting a sign-in wakes an asleep computer; show it awake.
+    // Starting a sign-in can turn the computer's runtime on; show its state.
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: computerKeys.list.queryKey }),
   }));

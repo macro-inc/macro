@@ -234,7 +234,7 @@ export function Agents(props: {
         return {
           id: target.harnessId ?? '',
           // Offline runtimes stay selectable: binding an agent to a machine
-          // that is merely asleep is normal, and the label says what to expect.
+          // that is turned off is normal, and the label says what to expect.
           name: [
             harness?.name ?? 'macrod',
             harness?.shared_team_ids.length ? 'Team machine' : undefined,

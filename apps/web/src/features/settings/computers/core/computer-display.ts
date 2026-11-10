@@ -103,10 +103,10 @@ export function computerStatusLabel(computer: ComputerStatus): {
         label: t('computers.needsAttention'),
         tone: 'failure',
       }))
-      // Computers no longer sleep; a record still reporting it is running.
-      .with('ready', 'asleep', 'waking', () => ({
-        label: t('computers.ready'),
-        tone: 'success',
+      .with('ready', () => ({ label: t('computers.ready'), tone: 'success' }))
+      .with('starting', () => ({
+        label: t('computers.starting'),
+        tone: 'progress',
       }))
       .with('stopping', () => ({
         label: t('computers.stopping'),
@@ -152,10 +152,10 @@ export function isProvisioning(computer: ComputerStatus): boolean {
 /** Power can change only once a computer is set up and before it is gone. */
 export function canTogglePower(computer: ComputerStatus): boolean {
   return match(computer.status)
-    .with('ready', 'asleep', 'stopped', 'waiting_for_capacity', () => true)
+    .with('ready', 'stopped', 'waiting_for_capacity', () => true)
     .with(
       'setting_up',
-      'waking',
+      'starting',
       'stopping',
       'failed',
       'payment_failed',

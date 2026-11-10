@@ -23,10 +23,8 @@ function sizeLabel(size: ComputerSize): string {
 function computerStatus(status: string | null | undefined): string {
   return (
     match(status)
-      // Computers no longer sleep; a record still reporting it is running.
-      .with('running', 'ready', 'asleep', 'waking', () =>
-        t('settingsBilling.alive')
-      )
+      .with('running', 'ready', () => t('settingsBilling.alive'))
+      .with('starting', () => t('settingsBilling.starting'))
       .with('provisioning', 'setting_up', () => t('settingsBilling.settingUp'))
       .with('failed', 'payment_failed', () => t('settingsBilling.failed'))
       .with('unhealthy', () => t('settingsBilling.dead'))

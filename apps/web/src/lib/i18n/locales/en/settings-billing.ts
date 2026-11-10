@@ -31,6 +31,7 @@ export default {
   settingUp: 'Setting up…',
   failed: 'Failed',
   dead: 'Dead',
+  starting: 'Starting…',
   stopping: 'Stopping',
   stopped: 'Stopped',
   released: 'Released',
