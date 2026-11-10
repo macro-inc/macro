@@ -1128,6 +1128,25 @@ entry moves to **Settings → Routines** (on phones **More views → Settings �
 Routines**): tapping a routine closes the settings sheet and opens it, and
 **Create Routine** opens the composer.
 
+A routine one of another routine's runs created (from a code step or the
+Ask AI step's session, while that run was in progress) is its **sub-routine**
+and is not a row of its own. On desktop the creating routine's row shows a
+caret and **N sub-routines**; the caret expands the active ones under it,
+indented, each with its own switch (a paused-with-parent one's tooltip reads
+**Paused with the routine that created it**). A search that matches only a
+sub-routine shows its parent, expanded. Touch devices list top-level routines
+only. The creating routine's page has a **Created by this routine** section
+after its settings: the active sub-routines (name, trigger, **Active** /
+**Paused** / **Running**), then **Finished: N** with **Show finished** for the
+one-time ones that have run (the newest 200), each row opening that routine,
+whose **Runs** tab has its run. A sub-routine's page reads **Created by
+<name>** under its title (a link to the creator) and its **Routine actions**
+menu has **Keep as my routine**, which moves it to the main list and stops it
+pausing or being deleted with its creator. Switching a creator off pauses its
+sub-routines and switching it on resumes only those; deleting it deletes them,
+and the delete dialog says **The N routines it created will be deleted too.**
+In a run's details, **Created** lists the sub-routines that run created.
+
 The list's top bar has **Routines** with **All** / **On** tabs (each with a
 count) on the left and **New** and search on the right; **Cmd/Ctrl+F** focuses
 search, which matches name, Trigger and Steps. When
