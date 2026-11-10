@@ -3,6 +3,7 @@ import { locks } from 'node:worker_threads';
 import {
   ABI_MAJOR,
   Access,
+  EditorInputMsg,
   SessionConfigMsg,
   SessionInputMsg,
   Transport,
@@ -17,6 +18,7 @@ import { mountSessionView } from './session-view';
 import { EditorView } from './view/editor-view';
 import { createBuiltinRegistry } from './view/node-views/builtins';
 import { registerMacroDecoratorViews } from './view/node-views/macro';
+import { selectionMessage } from './view/session-port';
 import { initializeNativeSurfaceTests } from './view/test/native-surface';
 
 beforeAll(initializeNativeSurfaceTests);
@@ -146,6 +148,73 @@ test('constructor authorization waits for the one synchronous view and detach re
       firstHost
     );
     expect(runtime.view.node(image.key)?.decoratorRevision).toBe(0n);
+    const generation = runtime.view.mirror.keyGeneration;
+    if (generation === null) throw new Error('Missing actual view generation');
+    const normalize = EditorInputMsg.fromEditorApplication({
+      name: 'group-b.media-resize',
+      json: JSON.stringify({
+        key: image.key,
+        kind: 'image',
+        width: 640,
+        height: 480,
+      }),
+      generation,
+      selection: selectionMessage({ kind: 'keep' }),
+      keyboard: false,
+      key: '',
+      mods: 0,
+      code: 0,
+    });
+    const nativeInput = vi.spyOn(runtime.executor.session, 'input');
+    const beforeNormalization = runtime.executor.session.serializedState();
+    // Queue the derived action, then downgrade authority in the enclosing real executor turn.
+    runtime.executor.run(() => {
+      runtime.port.inputIfSessionEdit(normalize);
+      return runtime.executor.session.authorization(
+        true,
+        false,
+        false,
+        runtime.executor.now(),
+        Date.now()
+      );
+    });
+    expect(runtime.port.effectiveAccess()).toBe(Access.Read);
+    expect(nativeInput).not.toHaveBeenCalled();
+    expect(runtime.executor.session.serializedState()).toBe(
+      beforeNormalization
+    );
+    runtime.executor.run(() =>
+      runtime.executor.session.authorization(
+        true,
+        false,
+        true,
+        runtime.executor.now(),
+        Date.now()
+      )
+    );
+    expect(runtime.port.effectiveAccess()).toBe(Access.CommentOnly);
+    runtime.port.inputIfSessionEdit(normalize);
+    expect(nativeInput).not.toHaveBeenCalled();
+    expect(runtime.executor.session.serializedState()).toBe(
+      beforeNormalization
+    );
+    runtime.executor.run(() =>
+      runtime.executor.session.authorization(
+        true,
+        true,
+        true,
+        runtime.executor.now(),
+        Date.now()
+      )
+    );
+    expect(runtime.port.effectiveAccess()).toBe(Access.Edit);
+    runtime.view.setEditable(false);
+    runtime.port.inputIfSessionEdit(normalize);
+    expect(nativeInput).toHaveBeenCalledTimes(1);
+    expect(runtime.view.node(image.key)?.props().width).toBe(640);
+    expect(runtime.view.node(image.key)?.props().height).toBe(480);
+    expect(runtime.view.node(image.key)?.decoratorRevision).toBe(0n);
+    expect(runtime.view.root.contentEditable).toBe('false');
   } finally {
     onDispose = () => {
       reentrantClose = runtime.close();
