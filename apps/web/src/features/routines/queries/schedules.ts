@@ -1,3 +1,4 @@
+import { removeAcceptedSuggestion } from '@app/features/routine-suggestions/queries/routine-suggestions';
 import { analytics } from '@app/lib/analytics';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
@@ -162,27 +163,39 @@ function _invalidateScheduleHistory(scheduleId: string) {
   });
 }
 
+/** A routine to create, and the suggestion it is saved from, if any. */
+export type CreateScheduleRequest = {
+  body: ActionConfiguration;
+  suggestionId?: string;
+};
+
 export function useCreateScheduleMutation(
-  callbacks?: MutationCallbacks<ScheduledAction, Error, ActionConfiguration>,
+  callbacks?: MutationCallbacks<ScheduledAction, Error, CreateScheduleRequest>,
   /** Whether the user created the routine or duplicated one, for analytics. */
   source: 'new' | 'duplicate' = 'new'
 ) {
   return useMutation(() => ({
-    mutationFn: async (request: ActionConfiguration) =>
+    mutationFn: async (request: CreateScheduleRequest) =>
       throwOnErr(
-        async () => await scheduledActionClient.createSchedule(request)
+        async () =>
+          await scheduledActionClient.createSchedule(request.body, {
+            suggestionId: request.suggestionId,
+          })
       ),
     ...withCallbacks(
       {
-        onSuccess: async (schedule) => {
+        onSuccess: async (schedule, request) => {
           // Client-side until scheduled_action reports to PostHog itself.
           analytics.track('routine_created', {
             routineId: schedule.id ?? undefined,
-            source,
+            source: request.suggestionId ? 'suggestion' : source,
+            suggestionId: request.suggestionId,
             triggerType: schedule.trigger.type,
             targetKind: routineTargetKind(schedule),
           });
           upsertSchedule(schedule);
+          if (request.suggestionId)
+            await removeAcceptedSuggestion(request.suggestionId);
           await invalidateSchedules();
         },
       },

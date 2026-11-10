@@ -4,15 +4,16 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ExternalChatPersonRef } from './externalChatPersonRef';
 
 /**
  * Grouped reactions.
  */
 export interface ExternalChatReaction {
-  /** Number of reacting people. */
-  count: number;
   /** Emoji. */
   emoji: string;
   /** Caller has this reaction. */
   mine: boolean;
+  /** The people who reacted with it, earliest first. */
+  reactors: ExternalChatPersonRef[];
 }

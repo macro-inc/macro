@@ -53,7 +53,7 @@ export type SessionOrigin =
       task: Task;
       project: Initiative;
     }
-  /** A person opened the session directly, from the composer. */
+  /** A person opened the session directly: from the composer, or by asking for a routine draft. */
   | { kind: 'requested'; by: User }
   /** A tool handed the agent work, under this user's authority. */
   | { kind: 'dispatched'; onBehalfOf: User }
@@ -75,7 +75,7 @@ type RawLineage = Extract<RawCaller, { type: 'agent' }>['lineage'];
 
 function originLineage(
   client: MacroClient,
-  lineage: RawLineage
+  lineage: RawLineage,
 ): SessionOriginLineage {
   if (lineage.type === 'unattributed') {
     return { type: 'unattributed' };
@@ -96,7 +96,7 @@ function originLineage(
 
 function originCaller(
   client: MacroClient,
-  caller: RawCaller
+  caller: RawCaller,
 ): SessionOriginCaller {
   if (caller.type === 'person') {
     return { type: 'person', user: User.byId(client, caller.user) };
@@ -117,7 +117,7 @@ function originCaller(
 export function sessionOrigin(
   client: MacroClient,
   origin: TriggerOrigin,
-  channelId: string | undefined
+  channelId: string | undefined,
 ): SessionOrigin {
   const message = (id: string) =>
     channelId ? Message.byId(client, channelId, id) : undefined;

@@ -15,6 +15,8 @@ bots = { path = "../bots", features = ["outbound"] }
 activity = { path = "../activity", default-features = false }
 agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
 agent_session = { path = "../agent_session", default-features = false, features = ["admission"] }
+agent_correlation = { path = "../agent_correlation" }
+async-trait = { workspace = true }
 bot_id = { path = "../bot_id" }
 call = { path = "../call", default-features = false, features = ["outbound"] }
 channel_sender = { path = "../channel_sender" }

@@ -34,6 +34,9 @@ pub struct SessionFacts {
     pub id: AgentSessionId,
     /// The session's owner; turns act on their behalf.
     pub owner: Owner,
+    /// Whether the session's turns are billed to its owner, stamped on the
+    /// session row by whoever opened it.
+    pub billing: agent_session::domain::model::SessionBilling,
     /// How the session's replies reach their reader.
     pub delivery: ReplyDelivery,
     /// Model id stamped on the session row.
@@ -201,6 +204,7 @@ impl InMemAgentManager {
         let state = Arc::new(AgentState {
             session_id: facts.id,
             owner: facts.owner,
+            feature: crate::domain::admission::session_feature(facts.billing),
             delivery: facts.delivery,
             engine: Arc::clone(&self.engine),
             admission: Arc::clone(&self.admission),

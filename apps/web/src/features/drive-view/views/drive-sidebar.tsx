@@ -9,6 +9,7 @@ import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadIndicator';
 import { createFolderDropTargets } from '@app/features/next-soup/actions';
+import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { TutorialSidebarItem } from '@app/features/video-tutorials';
 import { t } from '@app/lib/i18n';
 import { useFavoriteDisplayName } from '@app/util/favorites';
@@ -302,6 +303,27 @@ function DriveImportPromotion() {
   );
 }
 
+/**
+ * Drive's tutorials: Docs, and Spreadsheets and Databases where they're
+ * rolled out. Drive's own video is its list's row. Among several, each item
+ * names its block.
+ */
+function DriveTutorials() {
+  const { tutorials } = useDriveView();
+  return (
+    <ViewSidebar.Nav
+      aria-label={t('tutorials.watchTutorial')}
+      class="empty:hidden"
+    >
+      <For each={tutorials()}>
+        {(id) => (
+          <TutorialSidebarItem tutorial={id} named={tutorials().length > 1} />
+        )}
+      </For>
+    </ViewSidebar.Nav>
+  );
+}
+
 export function DriveSidebar() {
   const { state } = useDriveView();
   const [content, setContent] = createSignal<HTMLDivElement>();
@@ -331,13 +353,8 @@ export function DriveSidebar() {
         <DriveCreateMenu />
       </ViewSidebar.Primary>
       <ViewSidebar.Content ref={setContent}>
-        {/* Drive's list carries Drive's tutorial row; Docs, listed in Drive, takes the sidebar. */}
-        <ViewSidebar.Nav
-          aria-label={t('tutorials.watchTutorial')}
-          class="empty:hidden"
-        >
-          <TutorialSidebarItem tutorial="docs" />
-        </ViewSidebar.Nav>
+        <SidebarRoutineSuggestions surface="files" />
+        <DriveTutorials />
         <DriveSidebarContent />
         <DriveImportPromotion />
       </ViewSidebar.Content>

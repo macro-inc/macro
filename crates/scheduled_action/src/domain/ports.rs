@@ -165,6 +165,19 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         input: ActionConfiguration,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
+    /// What saving `input` as `principal`'s routine would find wrong, and the
+    /// routine as it would be stored, without saving anything. A check made
+    /// by a routine draft's session (`correlation`, the code-mode invocation
+    /// the request's credential names) is kept as that draft's answer, with
+    /// the items it says it `created` for the routine.
+    fn check_action(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        created: Vec<super::models::CreatedItem>,
+        correlation: Option<Uuid>,
+    ) -> impl Future<Output = Result<super::models::RoutineCheck>> + Send;
+
     /// `create_action` for a routine activated from `template_id`, recorded
     /// as given: callers check that the template exists.
     fn create_action_from_template(
@@ -172,6 +185,16 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         principal: &CreationPrincipal,
         input: ActionConfiguration,
         template_id: Uuid,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
+    /// `create_action` for a routine saved from routine suggestion
+    /// `suggestion_id`, recorded as given: it only marks that suggestion
+    /// taken for the routine's owner.
+    fn create_action_from_suggestion(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        suggestion_id: Uuid,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Actions `user_id` can access. Legacy clients see cron actions only;
@@ -212,9 +235,9 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
 
-    /// Starter routines whose step is code, to offer when a routine is
-    /// created; none on hosts where code can't be saved.
-    fn code_starters(&self) -> Vec<super::code_check::StarterRoutine>;
+    /// Macro's catalog routines with schedules in `timezone`, without code
+    /// steps on hosts where code can't be saved.
+    fn catalog(&self, timezone: chrono_tz::Tz) -> Vec<super::catalog::CatalogEntry>;
 
     /// How the routine's code steps were brought to new SDKs, newest first.
     fn get_code_upgrades(
@@ -236,34 +259,120 @@ pub trait RoutineDraftService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<super::drafts::Draft>> + Send;
 }
 
-/// The model that drafts routines.
-pub trait DraftModel: Send + Sync + 'static {
-    /// One answer in `completion.schema`'s shape, billed to `owner`; `None`
-    /// when the model gave none, e.g. it failed, timed out or broke the
-    /// schema.
-    fn complete(
+/// What a routine suggestion was, for the log of a routine saved from it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SuggestionOrigin {
+    /// `for_you` (AI's) or `macro` (a template).
+    pub from: &'static str,
+    /// `catalog` or `routine`.
+    pub kind: &'static str,
+    /// The surface it belongs to most.
+    pub surface: Option<&'static str>,
+}
+
+/// Finds what a suggestion was. Object-safe, so the scheduled action service
+/// need not know the suggestion store's type.
+#[async_trait::async_trait]
+pub trait SuggestionOrigins: Send + Sync + 'static {
+    /// What suggestion `suggestion`, made to `owner`, was, if it is one.
+    async fn origin(
         &self,
         owner: &MacroUserIdStr<'static>,
-        completion: DraftCompletion<'_>,
-    ) -> impl Future<Output = Option<serde_json::Value>> + Send;
+        suggestion: Uuid,
+    ) -> Result<Option<SuggestionOrigin>>;
 }
 
-/// One request to the drafting model.
-#[derive(Debug, Clone, Copy)]
-pub struct DraftCompletion<'a> {
-    /// What the model is told before the request.
-    pub instructions: &'a str,
-    /// The person's words, or what to fix.
-    pub prompt: &'a str,
-    pub schema: &'a OutputSchema,
+/// Where a draft's session hands its routine back: one row per draft,
+/// keyed by the draft session's id, so the drafter reads what the session
+/// checked whichever replicas each ran on. Object-safe: the drafter and the
+/// check share one erased store.
+#[async_trait::async_trait]
+pub trait DraftHandBacks: Send + Sync + 'static {
+    /// Start a draft whose session is `session`, run as `agent` for `owner`.
+    async fn begin(
+        &self,
+        session: Uuid,
+        owner: &MacroUserIdStr<'static>,
+        agent: bot_id::BotId,
+    ) -> Result<()>;
+
+    /// Keep `check` as the routine `session`'s draft hands back, and add
+    /// `created` to what it created, if `session` is a draft `owner`
+    /// started. Whether it was.
+    async fn record(
+        &self,
+        session: Uuid,
+        owner: &MacroUserIdStr<'static>,
+        check: &super::models::RoutineCheck,
+        created: &[super::models::CreatedItem],
+    ) -> Result<bool>;
+
+    /// The draft's latest check, and how many checks it made.
+    async fn handed_back(&self, session: Uuid) -> Result<HandedBack>;
+
+    /// Forget the draft.
+    async fn finish(&self, session: Uuid) -> Result<()>;
+
+    /// Drafts started before `before`, oldest first, at most `limit`.
+    async fn stale(&self, before: DateTime<Utc>, limit: u16) -> Result<Vec<StaleDraft>>;
 }
 
-/// A JSON schema the model's answer must match.
+/// What a draft's session handed back so far.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct HandedBack {
+    /// Its latest check; `None` before its first.
+    pub check: Option<super::models::RoutineCheck>,
+    /// Its latest check that passed, kept even when a later one failed.
+    pub passed: Option<super::models::RoutineCheck>,
+    /// How many checks it made.
+    pub checks: u32,
+    /// What it said it created for the routine, across its checks.
+    pub created: Vec<super::models::CreatedItem>,
+}
+
+/// A draft left behind, for the sweep.
 #[derive(Debug, Clone, PartialEq)]
-pub struct OutputSchema {
-    pub name: &'static str,
-    pub description: &'static str,
-    pub schema: serde_json::Value,
+pub struct StaleDraft {
+    pub session: Uuid,
+    pub owner: MacroUserIdStr<'static>,
+    pub agent: bot_id::BotId,
+}
+
+/// What an agent session's programs created, from the activity recorded for
+/// its code-mode invocations. Written asynchronously, so a read right after
+/// a creation can miss it. Object-safe so the drafter holds it erased.
+#[async_trait::async_trait]
+pub trait SessionCreations: Send + Sync + 'static {
+    /// Items `session` created, as its activity records them so far.
+    async fn created_by(&self, session: Uuid) -> Result<Vec<super::models::CreatedItem>>;
+}
+
+/// A host that records no session activity.
+pub struct NoSessionCreations;
+
+#[async_trait::async_trait]
+impl SessionCreations for NoSessionCreations {
+    async fn created_by(&self, _session: Uuid) -> Result<Vec<super::models::CreatedItem>> {
+        Ok(Vec::new())
+    }
+}
+
+/// The agent session a code-mode request came from, by the invocation its
+/// credential names. Object-safe for the same reason.
+#[async_trait::async_trait]
+pub trait RequestSessions: Send + Sync + 'static {
+    /// The session behind `correlation`, if it still exists.
+    async fn session_of(&self, correlation: Uuid) -> Result<Option<Uuid>>;
+}
+
+/// No code-mode requests reach this host.
+pub struct NoRequestSessions;
+
+#[async_trait::async_trait]
+impl RequestSessions for NoRequestSessions {
+    async fn session_of(&self, _correlation: Uuid) -> Result<Option<Uuid>> {
+        Ok(None)
+    }
 }
 
 /// Templates shared from routines, keyed by their source routine's ID.

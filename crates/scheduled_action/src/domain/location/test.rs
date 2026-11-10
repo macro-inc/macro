@@ -91,6 +91,7 @@ async fn store_routine(locations: &TestLocations, owner: &str, trigger: Value) -
         configuration_revision: ConfigurationRevision::INITIAL,
         event_activated_at: None,
         template_id: None,
+        suggestion_id: None,
         description: String::new(),
     };
     locations

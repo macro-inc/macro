@@ -938,6 +938,45 @@
         }
       }
     },
+    "/agent-sessions/updates": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "The caller's coding sessions waiting for their answer, or stalled for over 20 minutes,\nnewest activity first.",
+        "operationId": "list_agent_session_updates",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentUpdates"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/warm": {
       "post": {
         "tags": ["agent-sessions"],
@@ -3276,6 +3315,97 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/task": {
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Link a session the caller owns to a task they can view, replacing any earlier link. The\nsession's pull request, now or later, is linked to the task.",
+        "operationId": "link_agent_session_task",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkTaskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedTaskResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/tool-approvals/{approval_id}": {
       "post": {
         "tags": ["agent-sessions"],
@@ -4743,6 +4873,85 @@
           "model": {
             "type": "string",
             "description": "The model slug the agent should switch to."
+          }
+        }
+      },
+      "AgentUpdate": {
+        "type": "object",
+        "description": "One pending interaction, or one stalled session.",
+        "required": [
+          "sessionId",
+          "sessionName",
+          "harness",
+          "kind",
+          "summary",
+          "since",
+          "options"
+        ],
+        "properties": {
+          "harness": {
+            "type": "string",
+            "description": "The runtime the session runs on."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/AgentUpdateKind",
+            "description": "What the session is waiting for."
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The choices a permission request offers; empty for other kinds."
+          },
+          "pullRequestUrl": {
+            "type": ["string", "null"],
+            "description": "The session's pull request, if it has one."
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session."
+          },
+          "sessionName": {
+            "type": "string",
+            "description": "The session's name."
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the request was made, or the session's last activity."
+          },
+          "summary": {
+            "type": "string",
+            "description": "What is asked, or why the session looks stalled, in at most 240 characters."
+          }
+        }
+      },
+      "AgentUpdateKind": {
+        "type": "string",
+        "description": "A kind of action or inactivity the user should see: `permission` to run a tool, an\n`elicitation` question or form, a `tool_approval` held for the owner, or `stalled` with no\nactivity for over 20 minutes.",
+        "enum": ["permission", "elicitation", "tool_approval", "stalled"]
+      },
+      "AgentUpdates": {
+        "type": "object",
+        "description": "Bounded results; truncation means older qualifying sessions were not folded.",
+        "required": ["items", "truncated"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentUpdate"
+            },
+            "description": "One entry per pending request or stalled session, newest session activity first."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Whether qualifying sessions beyond the 25 most recent were left out."
+          },
+          "truncationNotice": {
+            "type": ["string", "null"],
+            "description": "Says what was left out, when truncated."
           }
         }
       },
@@ -6452,6 +6661,37 @@
         "description": "Defines who can access an item through its share link.",
         "enum": ["PUBLIC", "TEAM"]
       },
+      "LinkTaskRequest": {
+        "type": "object",
+        "description": "The task to link a session to.",
+        "required": ["taskId"],
+        "properties": {
+          "taskId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The task document's id."
+          }
+        }
+      },
+      "LinkedTaskResponse": {
+        "type": "object",
+        "description": "The task a session is now linked to.",
+        "required": ["taskId", "reference"],
+        "properties": {
+          "pullRequestUrl": {
+            "type": ["string", "null"],
+            "description": "The session's pull request, now linked to the task, if it has one."
+          },
+          "reference": {
+            "type": "string",
+            "description": "Put this in the pull request description so GitHub activity reaches the task."
+          },
+          "taskId": {
+            "type": "string",
+            "description": "The task document's id."
+          }
+        }
+      },
       "LoadAgentModelsRequest": {
         "type": "object",
         "description": "HTTP request selecting one provider to probe.",
@@ -7943,7 +8183,7 @@
           },
           {
             "type": "object",
-            "description": "A person opened the session directly, from the composer.",
+            "description": "A person opened the session directly: from the composer, or by asking for a routine draft.",
             "required": ["by", "origin"],
             "properties": {
               "by": {

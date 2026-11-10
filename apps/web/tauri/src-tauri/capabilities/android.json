@@ -36,6 +36,7 @@
     "geofence:allow-device-id",
     "geofence:allow-sync",
     "geofence:allow-clear",
+    "call-kit:allow-open-microphone-settings",
     "network-status:allow-watch-status"
   ]
 }
