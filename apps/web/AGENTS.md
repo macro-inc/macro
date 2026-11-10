@@ -688,6 +688,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Email mounts the same saved views (`kind: "email"`, flag `enable-email-saved-views`); read `src/features/email-view/AGENTS.md` before changing its definition, sidebar section, or mobile picker.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.
+- Show email draft sync failure UI (the composer banner, a failure toast, a **Not synced** row) only when the user has to act: the server refused the write for good, or local storage needs a reload. A write that is in flight, queued, superseded by its own send, or failing in a way that can be retried stays silent and retries itself first; a false alarm costs more trust than a late one.
 - Compose settings pages with `features/settings/primitives.tsx` so section headings,
   raised composer cards (`SettingsSurface`), row spacing, and control shapes stay
   consistent; never hand-build a flat `bg-ink/*` card. Integrations is the one
