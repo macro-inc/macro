@@ -141,7 +141,8 @@
       return;
     }
     if (rows.length === 0) {
-      list.replaceChildren(el('p', 'empty', 'No contacts yet. People you email appear here.'));
+      const empty = query ? `No contacts match “${query}”.` : 'No contacts yet. People you email appear here.';
+      list.replaceChildren(el('p', 'empty', empty));
       return;
     }
     const table = el('table');
@@ -170,9 +171,9 @@
     clearTimeout(debounce);
     debounce = setTimeout(reload, 250);
   });
-  createButton.addEventListener('click', async () => {
   // One add at a time, so repeated clicks can't add duplicates.
   let adding = false;
+  createButton.addEventListener('click', async () => {
     const name = nameInput.value.trim();
     if (!name || adding) return;
     adding = true;
