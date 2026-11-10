@@ -362,6 +362,19 @@ async fn open_routes_pass_with_their_query() {
 }
 
 #[tokio::test]
+async fn only_the_panes_own_search_is_sent() {
+    let harness = harness(Some(typed_in_tab()), true, 1);
+
+    let outcome = harness
+        .open("/channels/c1?channel_message_id=m1&s0.channels.messageId=m1")
+        .await;
+
+    assert!(matches!(outcome, UiCommandOutcome::Sent { .. }));
+    let frames = harness.gateway.frames();
+    assert_eq!(frames[0].1.path, "/channels/c1?s0.channels.messageId=m1");
+}
+
+#[tokio::test]
 async fn a_turn_sends_at_most_three_panes() {
     let harness = harness(Some(typed_in_tab()), true, 1);
 
@@ -467,6 +480,15 @@ fn the_web_apps_table_opens_items_and_keeps_side_effects_closed() {
         route_of("/mail/0190f5a4-0000-7000-8000-000000000003").as_deref(),
         Some("mail-thread")
     );
+    // External stays open, but never with the key that resumes a WhatsApp
+    // pairing.
+    assert_eq!(
+        routes
+            .check("/external?whatsappPairing=0190f5a4-0000-7000-8000-000000000009")
+            .map(AppPath::into_string)
+            .as_deref(),
+        Some("/external")
+    );
 
     for closed in [
         "/mail/new",
@@ -478,6 +500,10 @@ fn the_web_apps_table_opens_items_and_keeps_side_effects_closed() {
         "/settings",
         "/component/settings",
         "/debug/ui",
+        "/component/ui",
+        // Debug views registered only in some builds, left out of the table.
+        "/debug/theme-debug",
+        "/component/document-where-playground",
         "/routines/new",
         "/signup",
         "/inbox-link-callback",

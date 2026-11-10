@@ -1,9 +1,10 @@
 //! The web app's routes agents may open, as the web app ranks them.
 //!
 //! `navigable_routes.json` is generated from the web app's real route table
-//! (`navigableByAgent` on `defineRoute`): every pane route branch in the
-//! order the split router tries them, most specific first, and whether
-//! agents may open it. A web test fails when the file is stale. The tab
+//! (`navigableByAgent` on `defineRoute`): every pane route branch except
+//! debug views (closed, and registered only in some builds) in the order the
+//! split router tries them, most specific first, and whether agents may open
+//! it. A web test fails when the file is stale. The tab
 //! checks again against its live table, so this is the first of two gates,
 //! never the only one.
 
@@ -24,6 +25,10 @@ const MAX_PATH_BYTES: usize = 2048;
 
 /// Separates panes in a layout path.
 const PANE_SEPARATOR: &str = "~";
+
+/// The prefix of the one pane's own search keys, `s0.<namespace>.<field>`:
+/// the view state of what a command opens.
+const PANE_SEARCH_PREFIX: &str = "s0.";
 
 #[derive(Deserialize)]
 struct Table {
@@ -76,7 +81,7 @@ impl AppPath {
         vec![self.route.as_str()]
     }
 
-    /// The path as sent.
+    /// The path to send: as given, with only the pane's own search kept.
     pub fn into_string(self) -> String {
         self.path
     }
@@ -110,12 +115,17 @@ impl NavigableRoutes {
     /// The path, when it names one pane on a route agents may open. A path
     /// with an origin, a fragment, several panes, or a route the web app
     /// keeps closed is refused.
+    ///
+    /// Its query keeps only the pane's own search (`s0.<namespace>.<field>`).
+    /// Other keys are dropped: unprefixed ones are hand-offs a view acts on
+    /// when a link from outside the app arrives (`whatsappPairing` resumes a
+    /// WhatsApp pairing), and a command never starts one.
     pub fn check(&self, path: &str) -> Option<AppPath> {
         if path.len() > MAX_PATH_BYTES {
             return None;
         }
 
-        let (raw_segments, _query) = parse_path(path)?;
+        let (raw_segments, query) = parse_path(path)?;
         let segments = raw_segments
             .into_iter()
             .map(|segment| urlencoding::decode(segment).ok().map(|s| s.into_owned()))
@@ -137,8 +147,20 @@ impl NavigableRoutes {
             return None;
         }
 
+        let segments_end = path.find('?').unwrap_or(path.len());
+        let mut sent = path[..segments_end].to_owned();
+        let pane_search = query
+            .unwrap_or_default()
+            .split('&')
+            .filter(|pair| pair.starts_with(PANE_SEARCH_PREFIX))
+            .collect::<Vec<_>>();
+        if !pane_search.is_empty() {
+            sent.push('?');
+            sent.push_str(&pane_search.join("&"));
+        }
+
         Some(AppPath {
-            path: path.to_owned(),
+            path: sent,
             route: branch.route.clone(),
         })
     }
