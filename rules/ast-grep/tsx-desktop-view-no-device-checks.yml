@@ -1,0 +1,24 @@
+id: tsx-desktop-view-no-device-checks
+language: tsx
+severity: error
+message: A desktop view never checks the device, uses touch variants, or imports a mobile view. The view's entry picks the platform once.
+note: |-
+  Rule FE-70 in docs/development/style-guide.md. `views/desktop-*.tsx` is the
+  desktop composition of a view: its entry already chose it with
+  `isTouchDevice()`, so a device check or a `touch:` / `not-touch:` /
+  `mobile:` class here is dead code or a mobile decision in the wrong file.
+  Put the mobile composition in `views/mobile-*.tsx` and share parts that
+  render what props tell them.
+files:
+  - apps/web/src/**/views/desktop-*.tsx
+ignores:
+  - '**/*.test.tsx'
+rule:
+  any:
+    - kind: string
+      regex: ^['"]((.*/)?mobile/(isTouchDevice|isMobile|mobileWidth)|(.*/)?mobile-[^/]*)['"]$
+      inside:
+        kind: import_statement
+        field: source
+    - kind: string_fragment
+      regex: '(^|\s)(not-touch|touch|mobile):'

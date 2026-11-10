@@ -1,0 +1,27 @@
+id: tsx-mobile-header-only-in-mobile-views
+language: tsx
+severity: error
+message: Only mobile code composes MobileHeader. Import it from a mobile-*.tsx file, not from a shared or desktop one.
+note: |-
+  Rule FE-70 in docs/development/style-guide.md. `MobileHeader` claims a
+  pane's header for the mobile view that renders it. A shared or desktop
+  component that imports it would put mobile chrome on desktop, or let a
+  desktop change reach the mobile header.
+files:
+  - apps/web/src/**
+ignores:
+  - apps/web/src/**/mobile-*.tsx
+  - apps/web/src/components/app/mobile/**
+  - apps/web/src/components/app/mobile-header/**
+  # Legacy pill for headers not yet split; it reuses the island only.
+  - apps/web/src/components/app/split-layout/components/HeaderIsland.tsx
+rule:
+  kind: string
+  regex: ^['"](.*/)?mobile-header(/[^'"]*)?['"]$
+  any:
+    - inside:
+        kind: import_statement
+        field: source
+    - inside:
+        kind: export_statement
+        field: source

@@ -29,8 +29,11 @@ materials while each segment keeps its own interaction states. Standalone Button
 remain independent. Nested shared actions reuse the containing group rather than adding
 another frame, and a group with no visible actions renders nothing. Keep
 tooltips on icon-only controls and collapse labels as a pane narrows (`Tabs
-iconOnly`, then a menu). Preserve specialized editor toolbars and touch
-layouts. Recent, Folders, and Agents lists use the same islands (filters,
+iconOnly`, then a menu). Preserve specialized editor toolbars. A touch header
+belongs to its view's mobile view. Where one exists (the email thread is the
+first), the header shows Back, the title (tap it for the title menu), and Info,
+with other actions in the title menu; other touch headers keep their current
+controls until their views are split. Recent, Folders, and Agents lists use the same islands (filters,
 view options, New, expandable Search) with active filter chips below; Search
 keeps its full-width field with facet chips under it. Inputs, search fields,
 and filter chips are pills on the control frame. The [design system rule](../../.agents/rules/web/design-system.md)

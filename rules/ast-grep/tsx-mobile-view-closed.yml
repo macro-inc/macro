@@ -1,0 +1,31 @@
+id: tsx-mobile-view-closed
+language: tsx
+severity: error
+message: A mobile view is already touch and owns its header. Branch only on phone versus tablet (isMobile(), the mobile variant), and compose the header with MobileHeader.
+note: |-
+  Rule FE-70 in docs/development/style-guide.md. `views/mobile-*.tsx` is the
+  touch composition of a view: `isTouchDevice()` and `touch:` / `not-touch:`
+  are always true or always false here. It never imports a desktop view, and
+  it never renders the open header outlets (`SplitHeaderLeft` /
+  `SplitHeaderRight`, `HeaderIsland`, `ResponsiveBlockToolbar`,
+  `SidePanel.HeaderActions` / `HeaderActionsOutlet`) that let other code put
+  controls in its header.
+files:
+  - apps/web/src/**/views/mobile-*.tsx
+ignores:
+  - '**/*.test.tsx'
+rule:
+  any:
+    - kind: string
+      regex: ^['"]((.*/)?mobile/isTouchDevice|(.*/)?desktop-[^/]*|(.*/)?(ResponsiveBlockToolbar|split-layout/components/(SplitHeader|HeaderIsland)))['"]$
+      inside:
+        kind: import_statement
+        field: source
+    - kind: string_fragment
+      regex: '(^|\s)(not-touch|touch):'
+    - any:
+        - kind: jsx_opening_element
+        - kind: jsx_self_closing_element
+      has:
+        field: name
+        regex: ^SidePanel\.(HeaderActionsOutlet|HeaderActions)$
