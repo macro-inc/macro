@@ -29,17 +29,24 @@ pub trait SessionScopes: Send + Sync + 'static {
 }
 
 /// Suggestion generation sessions read, and write only through their own
-/// tools and email drafts.
-pub struct GenerationScopes(pub Arc<dyn ideas::domain::ports::GenerationSessions>);
+/// tools and email drafts; a background run whose idea sends nothing
+/// reaches nobody.
+pub struct HarnessScopes {
+    pub generations: Arc<dyn ideas::domain::ports::GenerationSessions>,
+    pub runs: Arc<dyn ideas::domain::ports::RunScopes>,
+}
 
 #[async_trait]
-impl SessionScopes for GenerationScopes {
+impl SessionScopes for HarnessScopes {
     async fn scope(&self, session: uuid::Uuid) -> Result<Option<SessionScope>, rootcause::Report> {
+        if self.generations.open_session(session).await?.is_some() {
+            return Ok(Some(SessionScope::Generation));
+        }
         Ok(self
-            .0
-            .open_session(session)
+            .runs
+            .sends_nothing(session)
             .await?
-            .map(|_| SessionScope::Generation))
+            .then_some(SessionScope::NoSend))
     }
 }
 
@@ -58,7 +65,7 @@ async fn scope_of(
 /// through its scoped credential, and finding and reading tools.
 fn native_tool_allowed(scope: SessionScope, tool: &str) -> bool {
     match scope {
-        SessionScope::Generation => matches!(
+        SessionScope::Generation | SessionScope::NoSend => matches!(
             tool,
             "ExecuteCode"
                 | "DescribeCodeTools"

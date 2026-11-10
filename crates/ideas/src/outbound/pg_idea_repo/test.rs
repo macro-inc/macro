@@ -373,3 +373,64 @@ async fn unsettled_runs_take_turns(pool: PgPool) {
     let next = repo.unsettled_runs(1).await.unwrap();
     assert_eq!(next[0].session, sessions[1]);
 }
+
+/// A run's session sends nothing when its idea says nothing about sending;
+/// a session that is no run isn't one.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_run_sends_nothing_unless_its_idea_says_what_it_sends(pool: PgPool) {
+    use crate::domain::ports::RunScopes;
+
+    insert_user(&pool, OWNER).await;
+    let generation = generation(&pool).await;
+    let repo = PgIdeaRepo::new(pool);
+    let user = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    let limits = Limits {
+        open: 30,
+        new_per_generation: 12,
+    };
+    let mut sessions = Vec::new();
+    for (key, sends) in [
+        ("quiet", None),
+        ("loud", Some("Email the supplier the order")),
+    ] {
+        let idea = Uuid::now_v7();
+        let mut content = content(key);
+        content.sends = sends.map(str::to_owned);
+        let change = Change {
+            session: Uuid::now_v7(),
+            generation,
+            action: ChangeAction::Created,
+            old: None,
+            new: None,
+            reason: None,
+            at: Utc::now(),
+        };
+        repo.create(
+            &user,
+            idea,
+            &NewKind::Prompt {
+                run_mode: RunMode::Background,
+            },
+            &content,
+            limits,
+            &change,
+        )
+        .await
+        .unwrap();
+        let run = StoredRun {
+            session: Uuid::now_v7(),
+            idea,
+            user: user.clone(),
+            agent: Uuid::now_v7(),
+            action: Uuid::now_v7(),
+            started_at: Utc::now(),
+            settled: None,
+        };
+        let shown = repo.idea(&user, idea).await.unwrap().unwrap().updated_at;
+        assert!(repo.start_run(&run, shown).await.unwrap());
+        sessions.push(run.session);
+    }
+    assert!(repo.sends_nothing(sessions[0]).await.unwrap());
+    assert!(!repo.sends_nothing(sessions[1]).await.unwrap());
+    assert!(!repo.sends_nothing(Uuid::now_v7()).await.unwrap());
+}

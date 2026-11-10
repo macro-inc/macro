@@ -14,8 +14,12 @@ code, not in its prompt.
 ## Start here
 
 - `src/domain.rs`: repository contract and agent-binding validation.
-- `src/scope.rs`: session scopes and the requests each allows: reads by
-  method, its own writes, and `POST_READS`; the harness test
+- `src/scope.rs`: session scopes and the requests each allows. `generation`:
+  reads by method, its own writes, and `POST_READS`; `no_send` (a background
+  run that sends nothing): anything but `SENDS`, the requests that reach
+  someone else (the harness test
+  `a_run_that_sends_nothing_is_refused_every_send_in_the_sdk` makes every
+  send-like SDK write refused or reviewed); the harness test
   `the_generation_scope_matches_the_sdk_catalog` keeps the lists in step with
   the SDK's operation catalog. A new POST read or session tool route updates
   them.

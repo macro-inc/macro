@@ -204,6 +204,15 @@ pub trait IdeaAccess: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
+/// Whether a session is a background run that may send nothing: its
+/// credential is then minted unable to send or post. Object-safe, for the
+/// harness's credential minting.
+#[async_trait::async_trait]
+pub trait RunScopes: Send + Sync + 'static {
+    /// Whether `session` runs an idea that says it sends nothing.
+    async fn sends_nothing(&self, session: Uuid) -> Result<bool, rootcause::Report>;
+}
+
 /// The agent session behind a code-mode request. Object-safe, so one
 /// adapter serves every crate that asks.
 #[async_trait::async_trait]

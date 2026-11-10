@@ -873,3 +873,20 @@ impl IdeaRepo for PgIdeaRepo {
         Ok(moved == 1)
     }
 }
+
+#[async_trait::async_trait]
+impl crate::domain::ports::RunScopes for PgIdeaRepo {
+    async fn sends_nothing(&self, session: Uuid) -> Result<bool, rootcause::Report> {
+        let sends = sqlx::query_scalar!(
+            r#"SELECT p.sends FROM idea_run r JOIN idea_prompt p ON p.idea_id = r.idea_id
+               WHERE r.session_id = $1"#,
+            session,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|error| rootcause::Report::new(error).into_dynamic())?;
+        Ok(
+            matches!(sends, Some(sends) if sends.as_deref().is_none_or(|sends| sends.trim().is_empty())),
+        )
+    }
+}

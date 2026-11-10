@@ -201,3 +201,153 @@ fn the_generation_scope_matches_the_sdk_catalog() {
         }
     }
 }
+
+/// A run that sends nothing is refused every SDK write that reaches someone
+/// else. Any write whose name or path looks like one is either refused or
+/// listed here as reviewed, so a new one is classified before it ships.
+#[test]
+fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
+    let concrete = |path: &str| {
+        path.split('/')
+            .map(|segment| {
+                if segment.starts_with('{') {
+                    "x"
+                } else {
+                    segment
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("/")
+    };
+    // Send-looking writes that reach nobody else.
+    let reviewed = [
+        "agent-harness.addConnectedMcpServer",
+        "auth.generateEmailLink",
+        "auth.deleteTeamInviteLink",
+        "auth.deleteTeamInviteHandler",
+        "auth.rejectInvitation",
+        "auth.revokeGtmInviteLink",
+        "auth.redeemGtmInviteLink",
+        "auth.joinTeamByInviteLink",
+        "auth.toggleTeamNonAdminInvites",
+        "auth.postProfilePictures",
+        "cognition.sendChatMessage",
+        "cognition.stopChatStream",
+        "cognition.callTool",
+        "email.createDraft",
+        "email.deleteDraft",
+        "email.deleteScheduledDraft",
+        "email.recoverDraftTransfer",
+        "email.addDraftAttachment",
+        "email.removeDraftAttachment",
+        "email.completeDraftAttachment",
+        "email.addForwardedAttachment",
+        "email.removeForwardedAttachment",
+        "email.resolveMessageOperation",
+        "email.addRemoveLabel",
+        "email.threadSeen",
+        "notification.unsubscribeEmail",
+        "notification.unsubscribeItem",
+        "notification.unsubscribeItems",
+        "notification.unsubscribeAll",
+        "scheduled-action.dismissRoutineSuggestion",
+        "scheduled-action.retireRoutineSuggestion",
+        "scheduled-action.suggestRoutine",
+        "scheduled-action.draftRoutine",
+        "scheduled-action.deleteScheduledAction",
+        "scheduled-action.unshareScheduledActionTemplate",
+        "storage.deleteEntityMention",
+        "storage.entityMessageDeleteMessage",
+        "storage.entityMessageDeleteThread",
+        "storage.deleteChannelLabel",
+        "storage.createChannelLabel",
+        "storage.renameChannelLabel",
+        "storage.setChannelLabel",
+        "storage.cancelChannelAccessRequest",
+        "storage.deleteWebhook",
+        "storage.deleteDatabaseWebhook",
+        "storage.patchWebhook",
+        "storage.externalChatRead",
+        "storage.externalChatUpload",
+        "storage.externalChatRemove",
+        "storage.externalChatUpdatePermissions",
+        "storage.removeBotFromChannelByBot",
+        "storage.deleteCallRecord",
+        "storage.editCallRecord",
+        "storage.editCallTranscript",
+        "storage.meetingCancelPreparation",
+        "storage.meetingPrepare",
+        "storage.setEmailFollowup",
+        "calendar.getBookingInsights",
+        "email.addRemoveThreadLabel",
+        "email.archiveThread",
+        "email.archiveThreads",
+        "email.blockSender",
+        "email.unblockSender",
+        "email.cancelBackfillGmail",
+        "email.copyThreadCalendarInvitation",
+        "email.createLabel",
+        "email.deleteLabel",
+        "email.upsertEmailFilter",
+        "email.deleteEmailFilter",
+        "email.deleteLink",
+        "email.disableLinkCalendar",
+        "email.disableSync",
+        "email.healthCheckLinks",
+        "email.initUser",
+        "email.patchSettings",
+        "email.resyncLink",
+        "email.updateThreadProject",
+        "email.updateThreadState",
+        "storage.setCrmContactEmail",
+        "storage.setEmailSync",
+    ];
+    let looks_like_a_send = |key: &str, path: &str| {
+        let text = format!("{key} {path}").to_lowercase();
+        [
+            "send",
+            "message",
+            "share",
+            "invite",
+            "mention",
+            "guest",
+            "rsvp",
+            "webhook",
+            "forward",
+            "post",
+            "comment",
+            "calls",
+            "dm",
+            "booking",
+            "meeting",
+            "/call",
+            "scheduled-actions",
+            "/events",
+            "external-chats",
+            "agent-conversations",
+            "participants",
+            "join",
+            "leave",
+            "channel",
+            "notice",
+            "referral",
+            "welcome",
+            "draft",
+            "email",
+        ]
+        .iter()
+        .any(|word| text.contains(word))
+    };
+    let scope = SessionScope::NoSend;
+    let mut unclassified = Vec::new();
+    for (key, operation) in code_execution::domain::operations() {
+        if !operation.write || !looks_like_a_send(key, &operation.path) {
+            continue;
+        }
+        let refused = !scope.allows(&operation.method, &concrete(&operation.path));
+        if !refused && !reviewed.contains(&key.as_str()) {
+            unclassified.push(format!("{key} {} {}", operation.method, operation.path));
+        }
+    }
+    assert!(unclassified.is_empty(), "unclassified: {unclassified:#?}");
+}

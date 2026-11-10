@@ -756,13 +756,16 @@ async fn run() -> anyhow::Result<()> {
         })
         .transpose()?;
     // Suggestion generation sessions' code and tools are limited to reads
-    // and their own writes, wherever their credential is used.
-    let session_scopes: Arc<dyn code_mode::SessionScopes> =
-        Arc::new(code_mode::GenerationScopes(Arc::new(
+    // and their own writes, and background runs that send nothing to what
+    // reaches nobody, wherever their credential is used.
+    let session_scopes: Arc<dyn code_mode::SessionScopes> = Arc::new(code_mode::HarnessScopes {
+        generations: Arc::new(
             suggestion_generation::outbound::pg_generation_repo::PgGenerationRepo::new(
                 pool.clone(),
             ),
-        )));
+        ),
+        runs: Arc::new(ideas::outbound::pg_idea_repo::PgIdeaRepo::new(pool.clone())),
+    });
     let public_code_mode = match &code_runner {
         Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
