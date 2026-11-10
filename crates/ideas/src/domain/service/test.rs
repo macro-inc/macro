@@ -1827,7 +1827,10 @@ async fn a_restored_idea_starts_no_second_run_while_its_first_is_going(pool: PgP
         .await
         .idea
         .unwrap();
-    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     let run_session = runs.started.lock().unwrap()[0].0;
     runs.set(run_session, SessionState::NeedsApproval);
     let retired = h
@@ -1851,13 +1854,18 @@ async fn a_restored_idea_starts_no_second_run_while_its_first_is_going(pool: PgP
         .await;
     assert!(restored.ok, "{:?}", restored.problems);
     assert!(matches!(
-        h.service.accept(&user(OWNER), idea.id).await,
+        h.service
+            .accept(&user(OWNER), IdeaCaller::User, idea.id)
+            .await,
         Err(IdeaError::NotFound)
     ));
     assert_eq!(runs.started.lock().unwrap().len(), 1);
     // Once the first run settles failed, the restored idea may run.
     runs.set(run_session, SessionState::Failed);
     assert_eq!(h.service.settle_runs().await.unwrap(), 1);
-    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     assert_eq!(runs.started.lock().unwrap().len(), 2);
 }
