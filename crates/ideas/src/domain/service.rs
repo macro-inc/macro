@@ -74,7 +74,8 @@ struct Runs {
 const SETTLE_BATCH: u16 = 50;
 
 /// How long a run's session has to open and take its prompt. Past it, a
-/// session that is missing or still waiting for its prompt never started.
+/// session that is missing or still waiting for its prompt never started,
+/// and one whose in-process runtime went away (a restart) won't resume.
 const START_WINDOW: chrono::Duration = chrono::Duration::minutes(10);
 
 impl<Repo, Access, Flags> IdeaService<Repo, Access, Flags>
@@ -503,12 +504,13 @@ where
                     tracing::warn!(event = "ideas.run_session_missing");
                     (RunSettled::Failed, Vec::new())
                 }
-                Ok(SessionState::AwaitingPrompt) => {
+                // Its runtime went away mid-run (a restart): once its session
+                // is gone it can't resume, and the idea may be tried again.
+                // Its prompt never arrived: likewise.
+                Ok(SessionState::AwaitingPrompt | SessionState::Disconnected) => {
                     if !started_long_ago {
                         continue;
                     }
-                    // Its prompt never arrived: once its session is gone,
-                    // nothing ran and the idea may be tried again.
                     if let Err(error) = runs.sessions.discard(run).await {
                         tracing::warn!(?error, "could not delete a run's unprompted session");
                         continue;
