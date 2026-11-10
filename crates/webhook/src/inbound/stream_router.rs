@@ -7,8 +7,12 @@
 //! envelope persisted webhooks deliver. Delivery is best-effort: disconnected
 //! or slow clients can miss events and must resync out of band when needed.
 
+#[cfg(test)]
+mod test;
+
 use crate::domain::models::{WebhookFilters, WebhookScope};
 use crate::domain::stream::{WebhookEventStreamService, WebhookStreamError};
+use crate::inbound::email_event_access::{EmailEventsForbidden, authorize_email_event_filters};
 use axum::{
     Json, Router,
     extract::{FromRef, Query, State},
@@ -88,8 +92,7 @@ pub struct StreamEventsQuery {
 
 /// Parse the query's filters into the typed filter model.
 fn parse_filters(filters: Option<String>) -> Result<WebhookFilters, WebhookStreamHandlerError> {
-    let bad_request =
-        |message: String| WebhookStreamHandlerError(WebhookStreamError::BadRequest(message));
+    let bad_request = |message: String| WebhookStreamError::BadRequest(message).into();
 
     let Some(filters) = filters else {
         return Err(bad_request("`filters` is required".to_string()));
@@ -120,6 +123,7 @@ pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizati
     WebhookStreamHandlerError,
 > {
     let filters = parse_filters(query.filters)?;
+    authorize_email_event_filters(&authorization.authorization.principal, &filters)?;
 
     let events = state
         .stream_service
@@ -153,25 +157,44 @@ pub async fn stream_events<St: WebhookEventStreamService, Auth: MacroAuthorizati
 }
 
 /// Webhook stream handler error.
-pub struct WebhookStreamHandlerError(WebhookStreamError);
+pub struct WebhookStreamHandlerError(WebhookStreamHandlerErrorKind);
+
+enum WebhookStreamHandlerErrorKind {
+    Stream(WebhookStreamError),
+    EmailEventsForbidden(EmailEventsForbidden),
+}
 
 impl From<WebhookStreamError> for WebhookStreamHandlerError {
     fn from(error: WebhookStreamError) -> Self {
-        Self(error)
+        Self(WebhookStreamHandlerErrorKind::Stream(error))
+    }
+}
+
+impl From<EmailEventsForbidden> for WebhookStreamHandlerError {
+    fn from(error: EmailEventsForbidden) -> Self {
+        Self(WebhookStreamHandlerErrorKind::EmailEventsForbidden(error))
     }
 }
 
 impl IntoResponse for WebhookStreamHandlerError {
     fn into_response(self) -> Response {
-        let status = match self.0 {
-            WebhookStreamError::BadRequest(_) => StatusCode::BAD_REQUEST,
-            WebhookStreamError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-        let message = if status == StatusCode::INTERNAL_SERVER_ERROR {
-            tracing::error!(error = ?self.0, "webhook stream handler error");
-            "internal server error".to_string()
-        } else {
-            self.0.to_string()
+        let (status, message) = match self.0 {
+            WebhookStreamHandlerErrorKind::Stream(error) => {
+                let status = match error {
+                    WebhookStreamError::BadRequest(_) => StatusCode::BAD_REQUEST,
+                    WebhookStreamError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                };
+                let message = if status == StatusCode::INTERNAL_SERVER_ERROR {
+                    tracing::error!(error = ?error, "webhook stream handler error");
+                    "internal server error".to_string()
+                } else {
+                    error.to_string()
+                };
+                (status, message)
+            }
+            WebhookStreamHandlerErrorKind::EmailEventsForbidden(error) => {
+                (StatusCode::FORBIDDEN, error.to_string())
+            }
         };
         (
             status,

@@ -3,6 +3,9 @@
 #[cfg(feature = "inbound")]
 pub mod axum_router;
 
+#[cfg(feature = "inbound")]
+pub(crate) mod email_event_access;
+
 #[cfg(feature = "consumer")]
 pub mod kafka_consumer;
 

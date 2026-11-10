@@ -10,6 +10,7 @@ use crate::domain::{
     },
     ports::{WebhookError, WebhookService},
 };
+use crate::inbound::email_event_access::{EmailEventsForbidden, authorize_email_event_filters};
 use axum::{
     Json, RequestPartsExt, Router,
     extract::{FromRef, FromRequestParts, Path, State},
@@ -233,6 +234,7 @@ pub async fn create_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     authorization: MacroAuthorizationExtractor<Auth, ActingUser>,
     Json(request): Json<CreateWebhookRequest>,
 ) -> Result<(StatusCode, Json<CreateWebhookResponse>), WebhookHandlerError> {
+    authorize_email_event_filters(&authorization.authorization.principal, &request.filters)?;
     let webhook = service
         .create_webhook(authorization.authorization.user.macro_user_id, request)
         .await?;
@@ -310,6 +312,10 @@ pub async fn patch_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     Path(path): Path<WebhookPath>,
     Json(request): Json<PatchWebhookRequest>,
 ) -> Result<Json<Webhook>, WebhookHandlerError> {
+    if let Some(filters) = &request.filters {
+        authorize_email_event_filters(&authorization.authorization.principal, filters)?;
+    }
+
     Ok(Json(
         service
             .patch_webhook(
@@ -378,28 +384,47 @@ pub async fn validate_webhook<S: WebhookService, Auth: MacroAuthorizationService
 }
 
 /// Webhook handler error.
-pub struct WebhookHandlerError(WebhookError);
+pub struct WebhookHandlerError(WebhookHandlerErrorKind);
+
+enum WebhookHandlerErrorKind {
+    Service(WebhookError),
+    EmailEventsForbidden(EmailEventsForbidden),
+}
 
 impl From<WebhookError> for WebhookHandlerError {
     fn from(error: WebhookError) -> Self {
-        Self(error)
+        Self(WebhookHandlerErrorKind::Service(error))
+    }
+}
+
+impl From<EmailEventsForbidden> for WebhookHandlerError {
+    fn from(error: EmailEventsForbidden) -> Self {
+        Self(WebhookHandlerErrorKind::EmailEventsForbidden(error))
     }
 }
 
 impl IntoResponse for WebhookHandlerError {
     fn into_response(self) -> Response {
-        let status = match self.0 {
-            WebhookError::BadRequest(_) => StatusCode::BAD_REQUEST,
-            WebhookError::Conflict(_) => StatusCode::CONFLICT,
-            WebhookError::Unauthorized => StatusCode::FORBIDDEN,
-            WebhookError::NotFound(_) => StatusCode::NOT_FOUND,
-            WebhookError::Repo(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-        let message = if status == StatusCode::INTERNAL_SERVER_ERROR {
-            tracing::error!(error=?self.0, "webhook handler error");
-            "internal server error".to_string()
-        } else {
-            self.0.to_string()
+        let (status, message) = match self.0 {
+            WebhookHandlerErrorKind::Service(error) => {
+                let status = match error {
+                    WebhookError::BadRequest(_) => StatusCode::BAD_REQUEST,
+                    WebhookError::Conflict(_) => StatusCode::CONFLICT,
+                    WebhookError::Unauthorized => StatusCode::FORBIDDEN,
+                    WebhookError::NotFound(_) => StatusCode::NOT_FOUND,
+                    WebhookError::Repo(_) => StatusCode::INTERNAL_SERVER_ERROR,
+                };
+                let message = if status == StatusCode::INTERNAL_SERVER_ERROR {
+                    tracing::error!(error=?error, "webhook handler error");
+                    "internal server error".to_string()
+                } else {
+                    error.to_string()
+                };
+                (status, message)
+            }
+            WebhookHandlerErrorKind::EmailEventsForbidden(error) => {
+                (StatusCode::FORBIDDEN, error.to_string())
+            }
         };
         (
             status,
