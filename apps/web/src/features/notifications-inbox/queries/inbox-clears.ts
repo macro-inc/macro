@@ -16,6 +16,11 @@ import { readInboxClears } from './notification-inbox-mutations';
 
 /** How often a clear still at work is read again, in case a hint was missed. */
 const CLEAR_POLL_MS = 2_000;
+/**
+ * How often a visible inbox asks which clears are at work, in case the hint
+ * that one started on another device was missed.
+ */
+const CLEAR_DISCOVERY_MS = 15_000;
 
 export type InboxClearsOptions = {
   client: Accessor<Client>;
@@ -34,8 +39,9 @@ export type InboxClearsOptions = {
 /**
  * The viewer's clears that the server is still working through, whichever
  * device started them. The server owns a clear, so this only follows it:
- * hints say when one changed, and a clear still at work is read again on a
- * timer and after a reconnect, since hints can be missed.
+ * hints say when one changed. Hints can be missed, so a clear still at work
+ * is read again on a timer, and a visible inbox asks now and then, and after
+ * a reconnect, which clears are at work.
  */
 export function createInboxClears(options: InboxClearsOptions) {
   const [running, setRunning] = createSignal<readonly InboxClearState[]>([]);
@@ -92,6 +98,12 @@ export function createInboxClears(options: InboxClearsOptions) {
   );
   const poll = setInterval(readRunning, CLEAR_POLL_MS);
   onCleanup(() => clearInterval(poll));
+  const discovery = setInterval(() => {
+    if (options.enabled() && document.visibilityState === 'visible') {
+      fireAndForget(read(), 'notifications-inbox');
+    }
+  }, CLEAR_DISCOVERY_MS);
+  onCleanup(() => clearInterval(discovery));
   options.onClearUpdated?.((id) => {
     if (options.enabled()) fireAndForget(read(id), 'notifications-inbox');
   });

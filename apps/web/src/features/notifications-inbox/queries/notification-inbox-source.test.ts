@@ -477,6 +477,23 @@ describe('createNotificationInboxSource', () => {
     expect(fake.queries.length).toBeGreaterThan(refetches);
   });
 
+  it('finds a clear another device started even when its hint was missed', async () => {
+    vi.useFakeTimers();
+    const { rowIds } = await loaded({
+      NotificationInboxClears: clearReads(
+        // Nothing at work when the inbox opens.
+        [],
+        [wireClear('APPLYING')]
+      ),
+    });
+    expect(rowIds()).toContain('document:doc-a#task');
+
+    // No hint arrives; the inbox asks again on its own.
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    expect(rowIds()).not.toContain('document:doc-a#task');
+  });
+
   it('shows the rows again when another device undoes a clear', async () => {
     vi.useFakeTimers();
     const { hintClear, rowIds } = await loaded({
