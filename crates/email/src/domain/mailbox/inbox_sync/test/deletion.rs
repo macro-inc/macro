@@ -59,12 +59,12 @@ async fn deletion_reads_only_the_addresses_for_the_messages_direction() {
 }
 
 #[tokio::test]
-async fn missing_sender_or_null_recipient_skips_cleanup_but_blank_addresses_reach_the_port() {
-    for (sent, address, expected) in [
-        (false, None, None),
-        (true, None, None),
-        (false, Some(""), Some("")),
-        (true, Some(""), Some("")),
+async fn missing_sender_or_null_recipient_skips_cleanup_but_blank_addresses_keep_the_empty_call() {
+    for (sent, address, cleanup_called) in [
+        (false, None, false),
+        (true, None, false),
+        (false, Some(""), true),
+        (true, Some(""), true),
     ] {
         let (service, fake) = make_service(false);
         {
@@ -90,11 +90,64 @@ async fn missing_sender_or_null_recipient_skips_cleanup_but_blank_addresses_reac
             .collect();
         assert_eq!(
             cleanup,
-            expected
-                .map(|email| vec![vec![email.to_string()]])
-                .unwrap_or_default()
+            if cleanup_called {
+                vec![Vec::<String>::new()]
+            } else {
+                vec![]
+            }
         );
     }
+}
+
+#[tokio::test]
+async fn cleanup_selection_normalizes_filters_and_preserves_first_seen_order() {
+    let (service, fake) = make_service(false);
+    {
+        let mut state = fake.0.lock().unwrap();
+        state.message.as_mut().unwrap().is_sent = true;
+        state.link.as_mut().unwrap().email_address =
+            EmailStr::try_from("OWNER@EXAMPLE.COM".to_string()).unwrap();
+        state.recipients = [
+            "\tLater@Example.com \n",
+            "malformed",
+            "@example.com",
+            "missing@",
+            "two@@example.com",
+            " Owner@Example.com ",
+            " FIRST@EXAMPLE.COM ",
+            "later@example.com",
+            "first@example.com",
+            "local@localhost",
+        ]
+        .into_iter()
+        .map(|email| {
+            (
+                contact(Some(email)),
+                models_email::db::address::EmailRecipientType::To,
+            )
+        })
+        .collect();
+    }
+    assert!(matches!(
+        service.process(Ok(input(operation()))).await,
+        InboxSyncDisposition::DoneDelete
+    ));
+    assert_eq!(
+        &fake.calls()[..7],
+        &[
+            Call::Link,
+            Call::Begin("delete"),
+            Call::LockedMessage,
+            Call::Recipients,
+            Call::Delete,
+            Call::Cleanup(vec![
+                "later@example.com".into(),
+                "first@example.com".into(),
+                "local@localhost".into(),
+            ]),
+            Call::Commit,
+        ]
+    );
 }
 
 #[tokio::test]

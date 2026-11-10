@@ -65,11 +65,11 @@ pub trait InboxSyncDeleteTransaction: InboxSyncTransaction {
         message: &service::message::SimpleMessage,
     ) -> impl Future<Output = Result<MessageDeletion, Self::Err>> + Send;
 
-    /// Record the existing normalized CRM cleanup work in this transaction.
+    /// Record the domain-selected, normalized CRM cleanup addresses in this transaction.
+    /// An empty selection still preserves the cleanup call after deletion.
     fn cleanup_contacts(
         &mut self,
         link_id: Uuid,
-        self_email: &str,
         emails: Vec<String>,
     ) -> impl Future<Output = Result<(), ProcessingError>> + Send;
 }

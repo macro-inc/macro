@@ -1,4 +1,5 @@
 use super::*;
+use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::{db, service};
 use sqlx::{Postgres, Transaction};
 
@@ -68,16 +69,18 @@ impl InboxSyncDeleteTransaction for PgInboxSyncTransaction {
     async fn cleanup_contacts(
         &mut self,
         link_id: Uuid,
-        self_email: &str,
         emails: Vec<String>,
     ) -> Result<(), ProcessingError> {
-        crate::pubsub::util::insert_crm_cleanup_candidates(
-            &mut *self.0,
-            link_id,
-            self_email,
-            emails,
-        )
-        .await
+        email_db_client::crm_cleanup::candidates::insert_candidates(&mut *self.0, link_id, &emails)
+            .await
+            .map_err(|e| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context("Failed to insert crm cleanup candidates"),
+                })
+            })?;
+
+        Ok(())
     }
 }
 

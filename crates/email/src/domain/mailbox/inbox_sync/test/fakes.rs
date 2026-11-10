@@ -310,10 +310,9 @@ impl InboxSyncDeleteTransaction for Fake {
     async fn cleanup_contacts(
         &mut self,
         link: Uuid,
-        own: &str,
         emails: Vec<String>,
     ) -> Result<(), ProcessingError> {
-        assert_eq!((link, own), (LINK, "owner@example.com"));
+        assert_eq!(link, LINK);
         self.step("cleanup", Call::Cleanup(emails)).map_err(|e| {
             ProcessingError::Retryable(DetailedError {
                 reason: FailureReason::DatabaseQueryFailed,
