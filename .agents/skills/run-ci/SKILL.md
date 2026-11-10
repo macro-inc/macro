@@ -27,6 +27,8 @@ that commit. `main` requires `CI gate` to pass on the PR's latest commit, so
 every push needs a new run before the PR can merge.
 
 Request CI on a stacked PR's actual base; the gate accepts feature branches too.
+Changing a PR's base resets the gate, so a stacked PR retargeted to `main` needs
+a new run.
 
 ## Run it
 

@@ -110,3 +110,29 @@ fn gate_script_scenarios() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+/// A gate result was for the PR's old base; retargeting a stacked PR to
+/// `main` must not keep it.
+#[test]
+fn a_base_change_resets_the_gate() {
+    let yaml = crate::workflows::ci_gate_reminder::ci_gate_reminder()
+        .to_string()
+        .expect("reminder should render");
+    let workflow: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("reminder should parse");
+
+    let types: Vec<&str> = workflow["on"]["pull_request"]["types"]
+        .as_sequence()
+        .expect("reminder types")
+        .iter()
+        .filter_map(serde_yaml::Value::as_str)
+        .collect();
+    assert!(types.contains(&"edited"));
+
+    let remind = &workflow["jobs"]["remind"];
+    let condition = remind["if"].as_str().expect("remind condition");
+    assert!(condition.contains("github.event.changes.base != null"));
+    assert_eq!(
+        remind["steps"][0]["env"]["BASE_CHANGED"].as_str(),
+        Some("${{ github.event.action == 'edited' }}")
+    );
+}
