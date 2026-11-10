@@ -10062,6 +10062,7 @@
       "crates/sqs_client",
       "crates/sqs_worker",
       "crates/static_file_service_client",
+      "crates/subsequence_match",
       "crates/sync_service",
       "crates/sync_service_client",
       "crates/system_properties",
