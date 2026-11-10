@@ -1,9 +1,7 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import { teamInviteLinkUrl } from '@app/features/settings/TeamInviteLinkSection';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
-import { enableMicrosoftSignup } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { deriveIsAuthenticated } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
@@ -20,7 +18,6 @@ import {
   useGithubLinkStatusQuery,
   useTrialEligibilityQuery,
 } from '@queries/auth';
-import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import { type UserInfoData, useUserInfoQuery } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
@@ -61,6 +58,7 @@ import {
   onboardingToolState,
 } from './queries/connected-tools';
 import { loadableQuery } from './queries/loadable-query';
+import { createAppOutlookAvailability } from './queries/outlook-availability';
 import {
   createAppRoutinesStep,
   generateRoutineSuggestions,
@@ -238,11 +236,7 @@ export function createAppOnboardingContext(): OnboardingContext {
         )
         .exhaustive();
     },
-    createOutlookAvailability: () => {
-      const microsoft = useFeatureFlag(enableMicrosoftSignup);
-      const outlook = useOutlookAvailable();
-      return () => microsoft().enabled && outlook();
-    },
+    createOutlookAvailability: createAppOutlookAvailability,
 
     createToolCatalog: createOnboardingToolCatalog,
     createConnectedTools: ({ poll }) => {
