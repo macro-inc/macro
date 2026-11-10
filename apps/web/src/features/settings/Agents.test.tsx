@@ -982,6 +982,55 @@ describe('Agents', () => {
     });
   });
 
+  it('keeps the revision a memory edit started from when the memory reloads meanwhile', async () => {
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-1',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Bug fixer',
+          handle: 'bug-fixer',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Fix the root cause.',
+        harness: 'in-memory',
+        default_model: Model.sonnet55,
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+    memoryMocks.query.data = {
+      content: '- The team ships on Thursdays.',
+      revision: 3,
+      updated_at: '2026-11-05T12:00:00Z',
+    };
+
+    render(() => <Agents {...agentsPageProps} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+    const dialog = screen.getByRole('region', { name: /^(New|Edit) agent$/ });
+    fireEvent.input(within(dialog).getByLabelText('Memory'), {
+      target: { value: '- The team ships on Fridays.\n' },
+    });
+    memoryMocks.query.data = {
+      content: '- Releases need a changelog.',
+      revision: 4,
+      updated_at: '2026-11-05T12:05:00Z',
+    };
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Save changes' })
+    );
+    await waitFor(() => {
+      expect(memoryMocks.save).toHaveBeenCalledWith(
+        'agent-1',
+        3,
+        '- The team ships on Fridays.'
+      );
+    });
+  });
+
   it('saves no memory when it was not edited', async () => {
     agentMocks.query.data = [
       {

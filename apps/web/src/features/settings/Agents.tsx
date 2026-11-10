@@ -61,6 +61,7 @@ import {
 } from '@queries/team/teams';
 import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
 import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
+import type { AgentMemory } from '@service-storage/generated/schemas/agentMemory';
 import { useSearchParams } from '@solidjs/router';
 import { ApiKeyInput, Avatar, Button, Dialog, Panel } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
@@ -929,12 +930,19 @@ function AgentEditorPage(props: {
   const memory = useAgentMemoryQuery(() => props.agent?.bot.id);
   const loadedMemory = () => (memory.isSuccess ? memory.data : undefined);
   const [memoryDraft, setMemoryDraft] = createSignal<string>();
+  // The memory the draft was started from; a reload while editing must not
+  // move the edit onto a revision the user never saw.
+  const [memoryBase, setMemoryBase] = createSignal<AgentMemory>();
+  const editMemory = (markdown: string) => {
+    if (memoryBase() === undefined) setMemoryBase(loadedMemory());
+    setMemoryDraft(markdown);
+  };
   const saveMemory = async (agentId: string) => {
-    const loaded = loadedMemory();
+    const base = memoryBase();
     const draft = memoryDraft()?.trim();
-    if (!loaded || draft === undefined || draft === loaded.content) return;
+    if (!base || draft === undefined || draft === base.content) return;
     try {
-      await saveAgentMemory(agentId, loaded.revision, draft);
+      await saveAgentMemory(agentId, base.revision, draft);
     } catch (error) {
       toast.failure(
         `The agent was saved, but not its memory: ${
@@ -1320,7 +1328,7 @@ function AgentEditorPage(props: {
                       <AgentInstructionsEditor
                         label="Memory"
                         markdown={memoryDraft() ?? loaded().content}
-                        onChange={setMemoryDraft}
+                        onChange={editMemory}
                         disabled={busy()}
                         class="rounded-lg border border-edge-muted bg-input px-3 py-2.5 focus-within:border-accent"
                         placeholder="Nothing yet. Ask the agent to remember something, or write what it should keep in mind…"

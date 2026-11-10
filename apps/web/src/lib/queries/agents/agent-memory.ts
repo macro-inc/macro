@@ -9,6 +9,10 @@ function agentMemoryQueryOptions(agentId: string | undefined) {
   return queryOptions({
     queryKey: agentKeys.memory(agentId ?? '').queryKey,
     enabled: agentId !== undefined,
+    // The agent rewrites its memory from its own sessions, so an editor
+    // opening on a cached copy would edit a stale revision.
+    staleTime: 0,
+    refetchOnMount: 'always',
     queryFn: () =>
       throwOnErr(() => storageServiceClient.getAgentMemory(agentId ?? '')),
   });
@@ -38,6 +42,11 @@ export async function saveAgentMemory(
       revision,
       content,
     })
-  );
+  ).catch(async (error: unknown) => {
+    await queryClient.invalidateQueries({
+      queryKey: agentKeys.memory(agentId).queryKey,
+    });
+    throw error;
+  });
   queryClient.setQueryData(agentKeys.memory(agentId).queryKey, memory);
 }
