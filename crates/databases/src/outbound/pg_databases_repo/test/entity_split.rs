@@ -18,6 +18,10 @@ const FOLDERS_UP: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../macro_db_client/migrations/20261102210628_databases_in_folders.sql"
 ));
+const SYNCS_DOWN: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../macro_db_client/migrations/20261106084644_database_syncs.down.sql"
+));
 const WEBHOOKS_DOWN: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../macro_db_client/migrations/20261014153433_database_webhooks.down.sql"
@@ -196,7 +200,11 @@ async fn schema_cutover_discards_database_content_and_allows_a_fresh_start(pool:
     let store = PgCellStore::new(pool.clone(), PropertiesPgRepo::new(pool.clone()));
     store.create_storage().await.unwrap();
     let mut transaction = pool.begin().await.unwrap();
-    // Roll back the newer foreign key dependency before the historical cutover.
+    // Roll back the newer foreign key dependencies before the historical cutover.
+    sqlx::raw_sql(SYNCS_DOWN)
+        .execute(&mut *transaction)
+        .await
+        .unwrap();
     sqlx::raw_sql(WEBHOOKS_DOWN)
         .execute(&mut *transaction)
         .await
