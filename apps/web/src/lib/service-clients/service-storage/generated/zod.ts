@@ -2539,6 +2539,112 @@ export const listTeamOutOfOfficeResponse = zod
   .describe('Team out-of-office viewport response.');
 
 /**
+ * @summary Merge the requester's and selected teammates' busy time in a bounded window.
+ */
+export const getTeamAvailabilityBody = zod
+  .object({
+    end: zod.iso.datetime({}).describe('Exclusive instant.'),
+    start: zod.iso.datetime({}).describe('Inclusive instant.'),
+    userIds: zod
+      .array(zod.string())
+      .nullish()
+      .describe(
+        'At most 100 current teammates; the requester is always included.\nOmit for the whole team; an empty list checks only the requester.'
+      ),
+  })
+  .describe('A bounded window and the teammates whose busy time to merge.');
+
+export const getTeamAvailabilityResponse = zod
+  .object({
+    complete: zod
+      .boolean()
+      .describe(
+        'True only when all requested people and source intervals were covered.'
+      ),
+    end: zod.iso.datetime({}).describe('Exclusive requested end.'),
+    freeWindows: zod
+      .array(
+        zod
+          .object({
+            end: zod.iso.datetime({}).describe('Exclusive end.'),
+            start: zod.iso.datetime({}).describe('Inclusive start.'),
+          })
+          .describe(
+            'An exact, half-open interval of UTC instants, without event metadata.'
+          )
+      )
+      .nullish()
+      .describe(
+        'Common calendar gaps for every included person, present only with\ncomplete coverage. These are not working-hours or booking guarantees.'
+      ),
+    members: zod
+      .array(
+        zod
+          .object({
+            busy: zod
+              .array(
+                zod
+                  .object({
+                    end: zod.iso.datetime({}).describe('Exclusive end.'),
+                    start: zod.iso.datetime({}).describe('Inclusive start.'),
+                  })
+                  .describe(
+                    'An exact, half-open interval of UTC instants, without event metadata.'
+                  )
+              )
+              .describe(
+                'Merged known busy intervals clipped to the requested range.'
+              ),
+            coverage: zod
+              .enum(['complete', 'unknown'])
+              .describe(
+                'Whether missing busy blocks can safely be interpreted as free time.'
+              ),
+            unknownReasons: zod
+              .array(
+                zod
+                  .enum([
+                    'hidden',
+                    'unavailable',
+                    'truncated',
+                    'missing_time_zone',
+                    'invalid_time_zone',
+                    'invalid_interval',
+                    'conflicting_copies',
+                  ])
+                  .describe(
+                    "Why a person's unoccupied intervals cannot establish availability."
+                  )
+              )
+              .describe(
+                'Reasons gaps in the busy intervals cannot be called free.'
+              ),
+            userId: zod
+              .string()
+              .describe('Macro identifier of the included person.'),
+          })
+          .describe(
+            'Busy time and confidence for one explicitly included person.'
+          )
+      )
+      .describe('Included people, always including the requester.'),
+    start: zod.iso.datetime({}).describe('Inclusive requested start.'),
+    summary: zod
+      .string()
+      .describe(
+        'A concise explanation that does not overstate incomplete results.'
+      ),
+    unknownUserIds: zod
+      .array(zod.string())
+      .describe(
+        'Requested identifiers without a current team relationship. No profile\nor calendar data about those identifiers is disclosed.'
+      ),
+  })
+  .describe(
+    'Availability for exactly the members selected by the domain service.'
+  );
+
+/**
  * @summary Export an event the requester can see — their own, or one shared with a
 channel they belong to — as an iCalendar file named after its title.
  */
@@ -5885,6 +5991,157 @@ export const createCrmCompanyResponse = zod
   );
 
 /**
+ * @summary Create the companies a CSV lists, and put its Stage, Owner and Revenue
+values on entries of a company pipeline.
+ */
+export const importCrmCompaniesCsvBody = zod
+  .object({
+    csv: zod.string().nullish().describe('The CSV text.'),
+    documentId: zod
+      .uuid()
+      .nullish()
+      .describe('A CSV document the caller can open.'),
+    newPipeline: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .nullish()
+              .describe("Its name; defaults to the file's name."),
+            sharing: zod
+              .enum(['private', 'team'])
+              .optional()
+              .describe(
+                'Initial sharing, or the desired team grant. Individual ownership is preserved.'
+              ),
+          })
+          .describe('A new company pipeline for a companies import.'),
+      ])
+      .optional(),
+    pipelineId: zod
+      .uuid()
+      .nullish()
+      .describe('An existing company pipeline the caller can edit.'),
+  })
+  .describe(
+    'A companies CSV to import: exactly one of its text or a CSV file in\nMacro, and at most one of `pipelineId` or `newPipeline` for its Stage,\nOwner and Revenue values (a new private pipeline when neither is given).'
+  );
+
+export const importCrmCompaniesCsvResponseCreatedMin = 0;
+
+export const importCrmCompaniesCsvResponseExistingMin = 0;
+
+export const importCrmCompaniesCsvResponsePipelineAddedMin = 0;
+
+export const importCrmCompaniesCsvResponsePipelineAlreadyPresentMin = 0;
+
+export const importCrmCompaniesCsvResponsePipelineCreatedRecordsMin = 0;
+
+export const importCrmCompaniesCsvResponsePipelineSkippedRowsMin = 0;
+
+export const importCrmCompaniesCsvResponseSkippedRowsMin = 0;
+
+export const importCrmCompaniesCsvResponse = zod
+  .object({
+    created: zod
+      .number()
+      .min(importCrmCompaniesCsvResponseCreatedMin)
+      .describe('Companies created.'),
+    existing: zod
+      .number()
+      .min(importCrmCompaniesCsvResponseExistingMin)
+      .describe('Companies the team already had.'),
+    failed: zod
+      .array(
+        zod
+          .object({
+            key: zod
+              .string()
+              .describe("The company's domain or the contact's email."),
+            reason: zod.string().describe('What went wrong.'),
+          })
+          .describe('A record an import could not add, and why.')
+      )
+      .describe('Companies that could not be created.'),
+    pipeline: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            added: zod
+              .number()
+              .min(importCrmCompaniesCsvResponsePipelineAddedMin)
+              .describe('Entries added.'),
+            addedOptions: zod
+              .array(
+                zod
+                  .object({
+                    field: zod.string().describe('The field.'),
+                    labels: zod.array(zod.string()).describe('The labels.'),
+                  })
+                  .describe('Labels to add to a select field.')
+              )
+              .describe(
+                "Labels added to select fields so the CSV's values fit."
+              ),
+            alreadyPresent: zod
+              .number()
+              .min(importCrmCompaniesCsvResponsePipelineAlreadyPresentMin)
+              .describe('Rows whose record the pipeline already had.'),
+            createdRecords: zod
+              .number()
+              .min(importCrmCompaniesCsvResponsePipelineCreatedRecordsMin)
+              .describe('Companies or contacts the import created.'),
+            filledFields: zod
+              .array(zod.string())
+              .describe('Pipeline fields the CSV filled.'),
+            ignoredColumns: zod
+              .array(zod.string())
+              .describe('CSV columns matching no field the import can fill.'),
+            invalid: zod
+              .array(
+                zod
+                  .object({
+                    key: zod
+                      .string()
+                      .describe("The company's domain or the contact's email."),
+                    reason: zod.string().describe('What went wrong.'),
+                  })
+                  .describe('A record an import could not add, and why.')
+              )
+              .describe('Rows refused for a value their field cannot hold.'),
+            pipelineId: zod.uuid().describe('The pipeline filled.'),
+            pipelineName: zod.string().describe('Its name.'),
+            skippedRows: zod
+              .number()
+              .min(importCrmCompaniesCsvResponsePipelineSkippedRowsMin)
+              .describe('Rows without a domain or email.'),
+            unresolved: zod
+              .array(
+                zod
+                  .object({
+                    key: zod
+                      .string()
+                      .describe("The company's domain or the contact's email."),
+                    reason: zod.string().describe('What went wrong.'),
+                  })
+                  .describe('A record an import could not add, and why.')
+              )
+              .describe('Records that could not be found or created.'),
+          })
+          .describe('What a pipeline import did.'),
+      ])
+      .optional(),
+    skippedRows: zod
+      .number()
+      .min(importCrmCompaniesCsvResponseSkippedRowsMin)
+      .describe('Rows without a domain like acme.com.'),
+  })
+  .describe('What a companies import did.');
+
+/**
  * @summary Fetch a single CRM company by id, hydrated with its domains, the
 primary domain's directory display metadata (name + description),
 and the company's contacts. Access is enforced by
@@ -6884,6 +7141,359 @@ export const createCrmPipelineResponse = zod
   .describe("Metadata together with the caller's effective grant.");
 
 /**
+ * @summary Entries whose company or contact matches the search, across the caller's
+pipelines; pipelines without a match are left out.
+ */
+export const searchCrmPipelineEntriesQueryLimitMin = 0;
+
+export const searchCrmPipelineEntriesQueryParams = zod.object({
+  search: zod
+    .string()
+    .describe("Text the record's name, domain or email must contain."),
+  limit: zod
+    .number()
+    .min(searchCrmPipelineEntriesQueryLimitMin)
+    .nullish()
+    .describe('Most entries per pipeline, 1 to 5000; defaults to 50.'),
+});
+
+export const searchCrmPipelineEntriesResponseItem = zod
+  .object({
+    entries: zod
+      .array(
+        zod
+          .object({
+            entryId: zod
+              .uuid()
+              .describe("The entry: a row of the pipeline's table."),
+            fields: zod
+              .record(
+                zod.string(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['text']),
+                        value: zod.string().describe('Free text.'),
+                      })
+                      .describe('Free text.'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number().describe('A number.'),
+                      })
+                      .describe('A number.'),
+                    zod
+                      .object({
+                        type: zod.enum(['checkbox']),
+                        value: zod.boolean().describe('True or false.'),
+                      })
+                      .describe('True or false.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}).describe('A date-time.'),
+                      })
+                      .describe('A date-time.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .string()
+                          .describe(
+                            'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                          ),
+                      })
+                      .describe(
+                        'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['labels']),
+                        value: zod
+                          .array(zod.string())
+                          .describe("Option labels, in the cell's order."),
+                      })
+                      .describe("Option labels, in the cell's order."),
+                    zod
+                      .object({
+                        type: zod.enum(['links']),
+                        value: zod.array(zod.string()).describe('URLs.'),
+                      })
+                      .describe('URLs.'),
+                    zod
+                      .object({
+                        type: zod.enum(['references']),
+                        value: zod
+                          .array(zod.string())
+                          .describe(
+                            'Macro ids: people as macro| user ids, records or other items.'
+                          ),
+                      })
+                      .describe(
+                        'Macro ids: people as macro| user ids, records or other items.'
+                      ),
+                  ])
+                  .describe("A stored value in its field's own terms.")
+              )
+              .describe('Its other fields that hold a value, by name.'),
+            record: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
+          })
+          .describe('One pipeline entry.')
+      )
+      .describe('Its matching entries.'),
+    pipeline: zod
+      .object({
+        createdAt: zod.iso.datetime({}).describe('Creation time.'),
+        databaseId: zod.uuid().describe('Dedicated backing database.'),
+        id: zod
+          .uuid()
+          .describe(
+            'Entity identity, used with `CrmPipeline` access receipts.'
+          ),
+        name: zod.string().describe('Pipeline display name.'),
+        primaryColumnId: zod
+          .uuid()
+          .describe(
+            "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
+          ),
+        recordType: zod.union([
+          zod.null(),
+          zod
+            .enum(['company', 'contact'])
+            .describe(
+              'Which CRM entity each row references. Fixed when a pipeline is created.'
+            ),
+        ]),
+        sharing: zod
+          .enum(['private', 'team'])
+          .describe(
+            'Initial sharing, or the desired team grant. Individual ownership is preserved.'
+          ),
+        tableId: zod.uuid().describe('Table of entries.'),
+        teamId: zod
+          .uuid()
+          .describe(
+            'Team owning the pipeline; references retain their own access controls.'
+          ),
+        trashedAt: zod.iso
+          .datetime({})
+          .nullable()
+          .describe('Trashed pipelines are omitted from navigation.'),
+        userId: zod
+          .string()
+          .describe('Owning user; sharing never changes ownership.'),
+      })
+      .describe(
+        'Pipeline metadata; table schema and data are read through the database service.'
+      )
+      .and(
+        zod.object({
+          grant: zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        })
+      )
+      .describe("Metadata together with the caller's effective grant."),
+  })
+  .describe("A pipeline's entries among those asked for.");
+export const searchCrmPipelineEntriesResponse = zod.array(
+  searchCrmPipelineEntriesResponseItem
+);
+
+/**
+ * @summary Every entry tracking one of the records, across the caller's pipelines;
+pipelines without one are left out.
+ */
+export const listCrmRecordPipelineEntriesBody = zod
+  .object({
+    recordIds: zod.array(zod.uuid()).describe('CRM company or contact ids.'),
+  })
+  .describe('The companies or contacts to find entries for, across pipelines.');
+
+export const listCrmRecordPipelineEntriesResponseItem = zod
+  .object({
+    entries: zod
+      .array(
+        zod
+          .object({
+            entryId: zod
+              .uuid()
+              .describe("The entry: a row of the pipeline's table."),
+            fields: zod
+              .record(
+                zod.string(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['text']),
+                        value: zod.string().describe('Free text.'),
+                      })
+                      .describe('Free text.'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number().describe('A number.'),
+                      })
+                      .describe('A number.'),
+                    zod
+                      .object({
+                        type: zod.enum(['checkbox']),
+                        value: zod.boolean().describe('True or false.'),
+                      })
+                      .describe('True or false.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}).describe('A date-time.'),
+                      })
+                      .describe('A date-time.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .string()
+                          .describe(
+                            'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                          ),
+                      })
+                      .describe(
+                        'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['labels']),
+                        value: zod
+                          .array(zod.string())
+                          .describe("Option labels, in the cell's order."),
+                      })
+                      .describe("Option labels, in the cell's order."),
+                    zod
+                      .object({
+                        type: zod.enum(['links']),
+                        value: zod.array(zod.string()).describe('URLs.'),
+                      })
+                      .describe('URLs.'),
+                    zod
+                      .object({
+                        type: zod.enum(['references']),
+                        value: zod
+                          .array(zod.string())
+                          .describe(
+                            'Macro ids: people as macro| user ids, records or other items.'
+                          ),
+                      })
+                      .describe(
+                        'Macro ids: people as macro| user ids, records or other items.'
+                      ),
+                  ])
+                  .describe("A stored value in its field's own terms.")
+              )
+              .describe('Its other fields that hold a value, by name.'),
+            record: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
+          })
+          .describe('One pipeline entry.')
+      )
+      .describe('Its matching entries.'),
+    pipeline: zod
+      .object({
+        createdAt: zod.iso.datetime({}).describe('Creation time.'),
+        databaseId: zod.uuid().describe('Dedicated backing database.'),
+        id: zod
+          .uuid()
+          .describe(
+            'Entity identity, used with `CrmPipeline` access receipts.'
+          ),
+        name: zod.string().describe('Pipeline display name.'),
+        primaryColumnId: zod
+          .uuid()
+          .describe(
+            "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
+          ),
+        recordType: zod.union([
+          zod.null(),
+          zod
+            .enum(['company', 'contact'])
+            .describe(
+              'Which CRM entity each row references. Fixed when a pipeline is created.'
+            ),
+        ]),
+        sharing: zod
+          .enum(['private', 'team'])
+          .describe(
+            'Initial sharing, or the desired team grant. Individual ownership is preserved.'
+          ),
+        tableId: zod.uuid().describe('Table of entries.'),
+        teamId: zod
+          .uuid()
+          .describe(
+            'Team owning the pipeline; references retain their own access controls.'
+          ),
+        trashedAt: zod.iso
+          .datetime({})
+          .nullable()
+          .describe('Trashed pipelines are omitted from navigation.'),
+        userId: zod
+          .string()
+          .describe('Owning user; sharing never changes ownership.'),
+      })
+      .describe(
+        'Pipeline metadata; table schema and data are read through the database service.'
+      )
+      .and(
+        zod.object({
+          grant: zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        })
+      )
+      .describe("Metadata together with the caller's effective grant."),
+  })
+  .describe("A pipeline's entries among those asked for.");
+export const listCrmRecordPipelineEntriesResponse = zod.array(
+  listCrmRecordPipelineEntriesResponseItem
+);
+
+/**
  * @summary Read one pipeline by its entity identity.
  */
 export const getCrmPipelineParams = zod.object({
@@ -6941,6 +7551,1359 @@ export const getCrmPipelineResponse = zod
     })
   )
   .describe("Metadata together with the caller's effective grant.");
+
+/**
+ * @summary Every entry as CSV text: Company and Domain (or Contact and Email), then
+one column per field, people as emails. An import reads the same layout.
+ */
+export const getCrmPipelineCsvParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const getCrmPipelineCsvResponseRowsMin = 0;
+
+export const getCrmPipelineCsvResponse = zod
+  .object({
+    complete: zod
+      .boolean()
+      .describe(
+        'Whether every entry was written; a pipeline beyond 5000 entries is cut.'
+      ),
+    csv: zod.string().describe('The CSV.'),
+    name: zod.string().describe("The pipeline's name."),
+    rows: zod
+      .number()
+      .min(getCrmPipelineCsvResponseRowsMin)
+      .describe('Entries written.'),
+  })
+  .describe(
+    "A pipeline's entries as CSV text: Company and Domain (or Contact and\nEmail), then one column per field, people as emails."
+  );
+
+/**
+ * @summary Rename or share a pipeline, and add, rename or delete its fields and
+options by name, in one change.
+ */
+export const editCrmPipelineParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const editCrmPipelineBody = zod
+  .object({
+    addFields: zod
+      .array(
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe('Its name, unique in the pipeline ignoring case.'),
+            options: zod
+              .array(zod.string())
+              .optional()
+              .describe("A select field's labels, in order."),
+            type: zod
+              .enum([
+                'text',
+                'number',
+                'checkbox',
+                'date',
+                'link',
+                'select',
+                'multi_select',
+                'person',
+                'people',
+              ])
+              .describe('The type of a field to add.'),
+          })
+          .describe('A field to add.')
+      )
+      .optional()
+      .describe('Fields to add.'),
+    addOptions: zod
+      .array(
+        zod
+          .object({
+            field: zod.string().describe('The field.'),
+            labels: zod.array(zod.string()).describe('The labels.'),
+          })
+          .describe('Labels to add to a select field.')
+      )
+      .optional()
+      .describe(
+        'Labels to add to select fields; for Stage, new stages go last.'
+      ),
+    name: zod.string().nullish().describe('A new name.'),
+    removeFields: zod
+      .array(zod.string())
+      .optional()
+      .describe('Fields to delete with their values.'),
+    removeOptions: zod
+      .array(
+        zod
+          .object({
+            field: zod.string().describe('The field.'),
+            label: zod.string().describe('The label.'),
+          })
+          .describe('An option to delete, emptying the entries holding it.')
+      )
+      .optional()
+      .describe('Options to delete.'),
+    renameFields: zod
+      .array(
+        zod
+          .object({
+            from: zod.string().describe('Its current name.'),
+            to: zod.string().describe('Its new name.'),
+          })
+          .describe('A field to rename.')
+      )
+      .optional()
+      .describe('Fields to rename.'),
+    renameOptions: zod
+      .array(
+        zod
+          .object({
+            field: zod.string().describe('The field.'),
+            from: zod.string().describe('The current label.'),
+            to: zod.string().describe('The new label.'),
+          })
+          .describe('An option to relabel.')
+      )
+      .optional()
+      .describe('Options to relabel.'),
+    sharing: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['private', 'team'])
+          .describe(
+            'Initial sharing, or the desired team grant. Individual ownership is preserved.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe(
+    "Changes to a pipeline's name, sharing, fields and options, applied\ntogether."
+  );
+
+export const editCrmPipelineResponse = zod
+  .object({
+    createdAt: zod.iso.datetime({}).describe('Creation time.'),
+    databaseId: zod.uuid().describe('Dedicated backing database.'),
+    id: zod
+      .uuid()
+      .describe('Entity identity, used with `CrmPipeline` access receipts.'),
+    name: zod.string().describe('Pipeline display name.'),
+    primaryColumnId: zod
+      .uuid()
+      .describe(
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
+      ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
+    sharing: zod
+      .enum(['private', 'team'])
+      .describe(
+        'Initial sharing, or the desired team grant. Individual ownership is preserved.'
+      ),
+    tableId: zod.uuid().describe('Table of entries.'),
+    teamId: zod
+      .uuid()
+      .describe(
+        'Team owning the pipeline; references retain their own access controls.'
+      ),
+    trashedAt: zod.iso
+      .datetime({})
+      .nullable()
+      .describe('Trashed pipelines are omitted from navigation.'),
+    userId: zod
+      .string()
+      .describe('Owning user; sharing never changes ownership.'),
+  })
+  .describe(
+    'Pipeline metadata; table schema and data are read through the database service.'
+  )
+  .and(
+    zod.object({
+      grant: zod
+        .enum(['view', 'comment', 'edit', 'owner'])
+        .describe('Ordered from least to most access top -> bottom'),
+    })
+  )
+  .describe("Metadata together with the caller's effective grant.")
+  .and(
+    zod.object({
+      fields: zod
+        .array(
+          zod
+            .object({
+              multiple: zod
+                .boolean()
+                .describe('Whether it holds several values.'),
+              name: zod.string().describe('The name entries and filters use.'),
+              options: zod
+                .array(zod.string())
+                .describe(
+                  "A select or tags field's labels in order: for Stage, the stages from\nfirst to last."
+                ),
+              readOnly: zod
+                .boolean()
+                .describe('Whether the caller cannot write it.'),
+              required: zod
+                .boolean()
+                .describe('Whether every entry must have a value.'),
+              type: zod
+                .enum([
+                  'company',
+                  'contact',
+                  'text',
+                  'number',
+                  'checkbox',
+                  'date',
+                  'date_range',
+                  'link',
+                  'select',
+                  'tags',
+                  'person',
+                  'item',
+                  'relation',
+                  'formula',
+                ])
+                .describe('What a field holds.'),
+            })
+            .describe('One field of a pipeline, named as people see it.')
+        )
+        .describe(
+          "Its fields in column order; a tracked pipeline's first names its record."
+        ),
+      version: zod.number().describe("Its table's version when read."),
+    })
+  )
+  .describe('A pipeline with its fields.');
+
+/**
+ * @summary Add entries, filling fields by name: companies or contacts in a tracked
+pipeline, free-form rows in a generic one. A record already in the
+pipeline is returned in `alreadyPresent` instead, unless `allowDuplicates`.
+ */
+export const addCrmPipelineEntriesParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const addCrmPipelineEntriesBody = zod
+  .object({
+    allowDuplicates: zod
+      .boolean()
+      .optional()
+      .describe('Add a record again although it already has an entry here.'),
+    entries: zod
+      .array(
+        zod
+          .object({
+            email: zod
+              .string()
+              .nullish()
+              .describe(
+                "A contact's email: that contact, or in a company pipeline its company."
+              ),
+            recordId: zod
+              .uuid()
+              .nullish()
+              .describe('A CRM company or contact id.'),
+            set: zod
+              .array(
+                zod
+                  .object({
+                    field: zod
+                      .string()
+                      .describe("The field's name, ignoring case."),
+                    value: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'One value: an option label, a person as \"me\", an email or a macro|\nuser id, a number, true\/false, or a date.'
+                      ),
+                    values: zod
+                      .array(zod.string())
+                      .nullish()
+                      .describe(
+                        'Several values, for a field holding several. A filter matches an entry\nholding any of them.'
+                      ),
+                  })
+                  .describe(
+                    'A field and the text to write into it or match it against. Leave out both\n`value` and `values` to empty the field, or in a filter to match an empty\nfield.'
+                  )
+              )
+              .optional()
+              .describe('Fields to fill in.'),
+          })
+          .describe(
+            "One entry to add: at most one of `recordId` or `email`. A tracked\npipeline's entry names its record; a generic pipeline's names none."
+          )
+      )
+      .describe('The records to add, each with its starting fields.'),
+  })
+  .describe('Entries to add.');
+
+export const addCrmPipelineEntriesResponse = zod
+  .object({
+    added: zod
+      .array(
+        zod
+          .object({
+            entryId: zod
+              .uuid()
+              .describe("The entry: a row of the pipeline's table."),
+            fields: zod
+              .record(
+                zod.string(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['text']),
+                        value: zod.string().describe('Free text.'),
+                      })
+                      .describe('Free text.'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number().describe('A number.'),
+                      })
+                      .describe('A number.'),
+                    zod
+                      .object({
+                        type: zod.enum(['checkbox']),
+                        value: zod.boolean().describe('True or false.'),
+                      })
+                      .describe('True or false.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}).describe('A date-time.'),
+                      })
+                      .describe('A date-time.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .string()
+                          .describe(
+                            'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                          ),
+                      })
+                      .describe(
+                        'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['labels']),
+                        value: zod
+                          .array(zod.string())
+                          .describe("Option labels, in the cell's order."),
+                      })
+                      .describe("Option labels, in the cell's order."),
+                    zod
+                      .object({
+                        type: zod.enum(['links']),
+                        value: zod.array(zod.string()).describe('URLs.'),
+                      })
+                      .describe('URLs.'),
+                    zod
+                      .object({
+                        type: zod.enum(['references']),
+                        value: zod
+                          .array(zod.string())
+                          .describe(
+                            'Macro ids: people as macro| user ids, records or other items.'
+                          ),
+                      })
+                      .describe(
+                        'Macro ids: people as macro| user ids, records or other items.'
+                      ),
+                  ])
+                  .describe("A stored value in its field's own terms.")
+              )
+              .describe('Its other fields that hold a value, by name.'),
+            record: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
+          })
+          .describe('One pipeline entry.')
+      )
+      .describe('The new entries, as saved.'),
+    alreadyPresent: zod
+      .array(
+        zod
+          .object({
+            entryId: zod
+              .uuid()
+              .describe("The entry: a row of the pipeline's table."),
+            fields: zod
+              .record(
+                zod.string(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['text']),
+                        value: zod.string().describe('Free text.'),
+                      })
+                      .describe('Free text.'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number().describe('A number.'),
+                      })
+                      .describe('A number.'),
+                    zod
+                      .object({
+                        type: zod.enum(['checkbox']),
+                        value: zod.boolean().describe('True or false.'),
+                      })
+                      .describe('True or false.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}).describe('A date-time.'),
+                      })
+                      .describe('A date-time.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .string()
+                          .describe(
+                            'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                          ),
+                      })
+                      .describe(
+                        'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['labels']),
+                        value: zod
+                          .array(zod.string())
+                          .describe("Option labels, in the cell's order."),
+                      })
+                      .describe("Option labels, in the cell's order."),
+                    zod
+                      .object({
+                        type: zod.enum(['links']),
+                        value: zod.array(zod.string()).describe('URLs.'),
+                      })
+                      .describe('URLs.'),
+                    zod
+                      .object({
+                        type: zod.enum(['references']),
+                        value: zod
+                          .array(zod.string())
+                          .describe(
+                            'Macro ids: people as macro| user ids, records or other items.'
+                          ),
+                      })
+                      .describe(
+                        'Macro ids: people as macro| user ids, records or other items.'
+                      ),
+                  ])
+                  .describe("A stored value in its field's own terms.")
+              )
+              .describe('Its other fields that hold a value, by name.'),
+            record: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
+          })
+          .describe('One pipeline entry.')
+      )
+      .describe(
+        'Existing entries of requested records that were not added again.'
+      ),
+    version: zod
+      .number()
+      .nullish()
+      .describe(
+        "The table's version after the write; missing when nothing was written."
+      ),
+  })
+  .describe('The entries added.');
+
+/**
+ * @summary Set fields of entries by name, all or nothing; a stage takes its label.
+ */
+export const updateCrmPipelineEntriesParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const updateCrmPipelineEntriesBody = zod
+  .object({
+    baseVersion: zod
+      .number()
+      .nullish()
+      .describe(
+        "Refuse the change if the pipeline's table moved past this version."
+      ),
+    updates: zod
+      .array(
+        zod
+          .object({
+            entryId: zod.uuid().nullish().describe('The entry.'),
+            recordId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'The record whose single entry in the pipeline to change.'
+              ),
+            set: zod
+              .array(
+                zod
+                  .object({
+                    field: zod
+                      .string()
+                      .describe("The field's name, ignoring case."),
+                    value: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'One value: an option label, a person as \"me\", an email or a macro|\nuser id, a number, true\/false, or a date.'
+                      ),
+                    values: zod
+                      .array(zod.string())
+                      .nullish()
+                      .describe(
+                        'Several values, for a field holding several. A filter matches an entry\nholding any of them.'
+                      ),
+                  })
+                  .describe(
+                    'A field and the text to write into it or match it against. Leave out both\n`value` and `values` to empty the field, or in a filter to match an empty\nfield.'
+                  )
+              )
+              .describe('Fields to set.'),
+          })
+          .describe(
+            'The changes to one entry: exactly one of `entryId` or `recordId`.'
+          )
+      )
+      .describe("Each entry's changes."),
+  })
+  .describe('Entries to change.');
+
+export const updateCrmPipelineEntriesResponse = zod
+  .object({
+    updated: zod
+      .array(
+        zod
+          .object({
+            changes: zod
+              .array(
+                zod
+                  .object({
+                    after: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                type: zod.enum(['text']),
+                                value: zod.string().describe('Free text.'),
+                              })
+                              .describe('Free text.'),
+                            zod
+                              .object({
+                                type: zod.enum(['number']),
+                                value: zod.number().describe('A number.'),
+                              })
+                              .describe('A number.'),
+                            zod
+                              .object({
+                                type: zod.enum(['checkbox']),
+                                value: zod.boolean().describe('True or false.'),
+                              })
+                              .describe('True or false.'),
+                            zod
+                              .object({
+                                type: zod.enum(['date']),
+                                value: zod.iso
+                                  .datetime({})
+                                  .describe('A date-time.'),
+                              })
+                              .describe('A date-time.'),
+                            zod
+                              .object({
+                                type: zod.enum(['date_range']),
+                                value: zod
+                                  .string()
+                                  .describe(
+                                    'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                                  ),
+                              })
+                              .describe(
+                                'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                              ),
+                            zod
+                              .object({
+                                type: zod.enum(['labels']),
+                                value: zod
+                                  .array(zod.string())
+                                  .describe(
+                                    "Option labels, in the cell's order."
+                                  ),
+                              })
+                              .describe("Option labels, in the cell's order."),
+                            zod
+                              .object({
+                                type: zod.enum(['links']),
+                                value: zod
+                                  .array(zod.string())
+                                  .describe('URLs.'),
+                              })
+                              .describe('URLs.'),
+                            zod
+                              .object({
+                                type: zod.enum(['references']),
+                                value: zod
+                                  .array(zod.string())
+                                  .describe(
+                                    'Macro ids: people as macro| user ids, records or other items.'
+                                  ),
+                              })
+                              .describe(
+                                'Macro ids: people as macro| user ids, records or other items.'
+                              ),
+                          ])
+                          .describe("A stored value in its field's own terms."),
+                      ])
+                      .optional(),
+                    before: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                type: zod.enum(['text']),
+                                value: zod.string().describe('Free text.'),
+                              })
+                              .describe('Free text.'),
+                            zod
+                              .object({
+                                type: zod.enum(['number']),
+                                value: zod.number().describe('A number.'),
+                              })
+                              .describe('A number.'),
+                            zod
+                              .object({
+                                type: zod.enum(['checkbox']),
+                                value: zod.boolean().describe('True or false.'),
+                              })
+                              .describe('True or false.'),
+                            zod
+                              .object({
+                                type: zod.enum(['date']),
+                                value: zod.iso
+                                  .datetime({})
+                                  .describe('A date-time.'),
+                              })
+                              .describe('A date-time.'),
+                            zod
+                              .object({
+                                type: zod.enum(['date_range']),
+                                value: zod
+                                  .string()
+                                  .describe(
+                                    'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                                  ),
+                              })
+                              .describe(
+                                'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                              ),
+                            zod
+                              .object({
+                                type: zod.enum(['labels']),
+                                value: zod
+                                  .array(zod.string())
+                                  .describe(
+                                    "Option labels, in the cell's order."
+                                  ),
+                              })
+                              .describe("Option labels, in the cell's order."),
+                            zod
+                              .object({
+                                type: zod.enum(['links']),
+                                value: zod
+                                  .array(zod.string())
+                                  .describe('URLs.'),
+                              })
+                              .describe('URLs.'),
+                            zod
+                              .object({
+                                type: zod.enum(['references']),
+                                value: zod
+                                  .array(zod.string())
+                                  .describe(
+                                    'Macro ids: people as macro| user ids, records or other items.'
+                                  ),
+                              })
+                              .describe(
+                                'Macro ids: people as macro| user ids, records or other items.'
+                              ),
+                          ])
+                          .describe("A stored value in its field's own terms."),
+                      ])
+                      .optional(),
+                    field: zod.string().describe('The field.'),
+                  })
+                  .describe("One field's value before and after an update.")
+              )
+              .describe('The fields set, as they were and are.'),
+            entryId: zod.uuid().describe('The entry.'),
+            record: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
+          })
+          .describe('An updated entry.')
+      )
+      .describe('Each entry, in request order.'),
+    version: zod
+      .number()
+      .nullish()
+      .describe(
+        "The table's version after the write; missing when nothing was written."
+      ),
+  })
+  .describe('The entries an update wrote.');
+
+/**
+ * @summary Entries of one pipeline matching filters, records or a search, with
+per-option counts and number totals over every match.
+ */
+export const findCrmPipelineEntriesParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const findCrmPipelineEntriesBodyLimitMin = 0;
+
+export const findCrmPipelineEntriesBody = zod
+  .object({
+    descending: zod.boolean().optional().describe('Put the largest first.'),
+    filters: zod
+      .array(
+        zod
+          .object({
+            field: zod.string().describe("The field's name, ignoring case."),
+            value: zod
+              .string()
+              .nullish()
+              .describe(
+                'One value: an option label, a person as \"me\", an email or a macro|\nuser id, a number, true\/false, or a date.'
+              ),
+            values: zod
+              .array(zod.string())
+              .nullish()
+              .describe(
+                'Several values, for a field holding several. A filter matches an entry\nholding any of them.'
+              ),
+          })
+          .describe(
+            'A field and the text to write into it or match it against. Leave out both\n`value` and `values` to empty the field, or in a filter to match an empty\nfield.'
+          )
+      )
+      .optional()
+      .describe('Every filter must match.'),
+    limit: zod
+      .number()
+      .min(findCrmPipelineEntriesBodyLimitMin)
+      .nullish()
+      .describe(
+        'Most entries to return, 1 to 5000; defaults to 50. Counts and totals\ncover every match regardless.'
+      ),
+    recordIds: zod
+      .array(zod.uuid())
+      .optional()
+      .describe('Only entries tracking one of these companies or contacts.'),
+    search: zod
+      .string()
+      .nullish()
+      .describe("Text the record's name, domain or email must contain."),
+    sortBy: zod
+      .string()
+      .nullish()
+      .describe(
+        'The field to order by; number, date and select fields order by value\nand stage order.'
+      ),
+  })
+  .describe('Which entries to read, and how to order them.');
+
+export const findCrmPipelineEntriesResponseCountsItemCountsItemCountMin = 0;
+
+export const findCrmPipelineEntriesResponseCountsItemEmptyMin = 0;
+
+export const findCrmPipelineEntriesResponseMatchedMin = 0;
+
+export const findCrmPipelineEntriesResponse = zod
+  .object({
+    complete: zod
+      .boolean()
+      .describe(
+        'Whether every entry was read; a pipeline beyond 5000 entries is not,\nso counts and totals cover only the entries read.'
+      ),
+    counts: zod
+      .array(
+        zod
+          .object({
+            counts: zod
+              .array(
+                zod
+                  .object({
+                    count: zod
+                      .number()
+                      .min(
+                        findCrmPipelineEntriesResponseCountsItemCountsItemCountMin
+                      )
+                      .describe('Matched entries holding it.'),
+                    label: zod.string().describe("The option's label."),
+                  })
+                  .describe('How many matched entries hold one option.')
+              )
+              .describe('Every option in order, with its count.'),
+            empty: zod
+              .number()
+              .min(findCrmPipelineEntriesResponseCountsItemEmptyMin)
+              .describe('Matched entries with the field empty.'),
+            field: zod.string().describe('The field.'),
+          })
+          .describe(
+            'Matched entries per option of one single-select field, such as Stage.'
+          )
+      )
+      .describe('Matched entries per option of each single-select field.'),
+    entries: zod
+      .array(
+        zod
+          .object({
+            entryId: zod
+              .uuid()
+              .describe("The entry: a row of the pipeline's table."),
+            fields: zod
+              .record(
+                zod.string(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['text']),
+                        value: zod.string().describe('Free text.'),
+                      })
+                      .describe('Free text.'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number().describe('A number.'),
+                      })
+                      .describe('A number.'),
+                    zod
+                      .object({
+                        type: zod.enum(['checkbox']),
+                        value: zod.boolean().describe('True or false.'),
+                      })
+                      .describe('True or false.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}).describe('A date-time.'),
+                      })
+                      .describe('A date-time.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .string()
+                          .describe(
+                            'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                          ),
+                      })
+                      .describe(
+                        'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['labels']),
+                        value: zod
+                          .array(zod.string())
+                          .describe("Option labels, in the cell's order."),
+                      })
+                      .describe("Option labels, in the cell's order."),
+                    zod
+                      .object({
+                        type: zod.enum(['links']),
+                        value: zod.array(zod.string()).describe('URLs.'),
+                      })
+                      .describe('URLs.'),
+                    zod
+                      .object({
+                        type: zod.enum(['references']),
+                        value: zod
+                          .array(zod.string())
+                          .describe(
+                            'Macro ids: people as macro| user ids, records or other items.'
+                          ),
+                      })
+                      .describe(
+                        'Macro ids: people as macro| user ids, records or other items.'
+                      ),
+                  ])
+                  .describe("A stored value in its field's own terms.")
+              )
+              .describe('Its other fields that hold a value, by name.'),
+            record: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
+          })
+          .describe('One pipeline entry.')
+      )
+      .describe('The first `limit` matches, in the requested order.'),
+    matched: zod
+      .number()
+      .min(findCrmPipelineEntriesResponseMatchedMin)
+      .describe('How many entries matched in all.'),
+    pipeline: zod
+      .object({
+        createdAt: zod.iso.datetime({}).describe('Creation time.'),
+        databaseId: zod.uuid().describe('Dedicated backing database.'),
+        id: zod
+          .uuid()
+          .describe(
+            'Entity identity, used with `CrmPipeline` access receipts.'
+          ),
+        name: zod.string().describe('Pipeline display name.'),
+        primaryColumnId: zod
+          .uuid()
+          .describe(
+            "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
+          ),
+        recordType: zod.union([
+          zod.null(),
+          zod
+            .enum(['company', 'contact'])
+            .describe(
+              'Which CRM entity each row references. Fixed when a pipeline is created.'
+            ),
+        ]),
+        sharing: zod
+          .enum(['private', 'team'])
+          .describe(
+            'Initial sharing, or the desired team grant. Individual ownership is preserved.'
+          ),
+        tableId: zod.uuid().describe('Table of entries.'),
+        teamId: zod
+          .uuid()
+          .describe(
+            'Team owning the pipeline; references retain their own access controls.'
+          ),
+        trashedAt: zod.iso
+          .datetime({})
+          .nullable()
+          .describe('Trashed pipelines are omitted from navigation.'),
+        userId: zod
+          .string()
+          .describe('Owning user; sharing never changes ownership.'),
+      })
+      .describe(
+        'Pipeline metadata; table schema and data are read through the database service.'
+      )
+      .and(
+        zod.object({
+          grant: zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        })
+      )
+      .describe("Metadata together with the caller's effective grant.")
+      .and(
+        zod.object({
+          fields: zod
+            .array(
+              zod
+                .object({
+                  multiple: zod
+                    .boolean()
+                    .describe('Whether it holds several values.'),
+                  name: zod
+                    .string()
+                    .describe('The name entries and filters use.'),
+                  options: zod
+                    .array(zod.string())
+                    .describe(
+                      "A select or tags field's labels in order: for Stage, the stages from\nfirst to last."
+                    ),
+                  readOnly: zod
+                    .boolean()
+                    .describe('Whether the caller cannot write it.'),
+                  required: zod
+                    .boolean()
+                    .describe('Whether every entry must have a value.'),
+                  type: zod
+                    .enum([
+                      'company',
+                      'contact',
+                      'text',
+                      'number',
+                      'checkbox',
+                      'date',
+                      'date_range',
+                      'link',
+                      'select',
+                      'tags',
+                      'person',
+                      'item',
+                      'relation',
+                      'formula',
+                    ])
+                    .describe('What a field holds.'),
+                })
+                .describe('One field of a pipeline, named as people see it.')
+            )
+            .describe(
+              "Its fields in column order; a tracked pipeline's first names its record."
+            ),
+          version: zod.number().describe("Its table's version when read."),
+        })
+      )
+      .describe('A pipeline with its fields.'),
+    totals: zod
+      .array(
+        zod
+          .object({
+            field: zod.string().describe('The field.'),
+            sum: zod.number().describe('The sum.'),
+          })
+          .describe('The sum of a number field over the matched entries.')
+      )
+      .describe('The sum of each number field over the matched entries.'),
+  })
+  .describe('The entries a query matched.');
+
+/**
+ * @summary Delete entries by id, or every entry of the records; the companies and
+contacts stay in the CRM.
+ */
+export const removeCrmPipelineEntriesParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const removeCrmPipelineEntriesBody = zod
+  .object({
+    entryIds: zod.array(zod.uuid()).optional().describe('Entries to delete.'),
+    recordIds: zod
+      .array(zod.uuid())
+      .optional()
+      .describe('Records whose every entry in the pipeline to delete.'),
+  })
+  .describe('Entries to delete; their companies and contacts stay in the CRM.');
+
+export const removeCrmPipelineEntriesResponse = zod
+  .object({
+    removed: zod
+      .array(
+        zod
+          .object({
+            entryId: zod
+              .uuid()
+              .describe("The entry: a row of the pipeline's table."),
+            fields: zod
+              .record(
+                zod.string(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['text']),
+                        value: zod.string().describe('Free text.'),
+                      })
+                      .describe('Free text.'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number().describe('A number.'),
+                      })
+                      .describe('A number.'),
+                    zod
+                      .object({
+                        type: zod.enum(['checkbox']),
+                        value: zod.boolean().describe('True or false.'),
+                      })
+                      .describe('True or false.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}).describe('A date-time.'),
+                      })
+                      .describe('A date-time.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .string()
+                          .describe(
+                            'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                          ),
+                      })
+                      .describe(
+                        'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['labels']),
+                        value: zod
+                          .array(zod.string())
+                          .describe("Option labels, in the cell's order."),
+                      })
+                      .describe("Option labels, in the cell's order."),
+                    zod
+                      .object({
+                        type: zod.enum(['links']),
+                        value: zod.array(zod.string()).describe('URLs.'),
+                      })
+                      .describe('URLs.'),
+                    zod
+                      .object({
+                        type: zod.enum(['references']),
+                        value: zod
+                          .array(zod.string())
+                          .describe(
+                            'Macro ids: people as macro| user ids, records or other items.'
+                          ),
+                      })
+                      .describe(
+                        'Macro ids: people as macro| user ids, records or other items.'
+                      ),
+                  ])
+                  .describe("A stored value in its field's own terms.")
+              )
+              .describe('Its other fields that hold a value, by name.'),
+            record: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
+          })
+          .describe('One pipeline entry.')
+      )
+      .describe('Each entry as it was.'),
+    version: zod
+      .number()
+      .nullish()
+      .describe(
+        "The table's version after the write; missing when nothing was written."
+      ),
+  })
+  .describe('The entries deleted.');
+
+/**
+ * @summary Save every entry as a CSV file in the caller's files, laid out as
+`/csv` returns it.
+ */
+export const exportCrmPipelineCsvParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const exportCrmPipelineCsvResponseRowsMin = 0;
+
+export const exportCrmPipelineCsvResponse = zod
+  .object({
+    complete: zod
+      .boolean()
+      .describe(
+        'Whether every entry was written; a pipeline beyond 5000 entries is cut.'
+      ),
+    documentId: zod.uuid().describe('The CSV document.'),
+    fileName: zod.string().describe('Its name.'),
+    rows: zod
+      .number()
+      .min(exportCrmPipelineCsvResponseRowsMin)
+      .describe('Entries written.'),
+  })
+  .describe("A pipeline saved as a CSV file in the caller's files.");
+
+/**
+ * @summary Add a CSV's rows as entries, matching its columns to fields by name and
+creating the companies or contacts the team lacks. Records already in the
+pipeline are not added again.
+ */
+export const importCrmPipelineCsvParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const importCrmPipelineCsvBody = zod
+  .object({
+    csv: zod.string().nullish().describe('The CSV text.'),
+    documentId: zod
+      .uuid()
+      .nullish()
+      .describe('A CSV document the caller can open.'),
+  })
+  .describe('A CSV to import: exactly one of its text or a CSV file in Macro.');
+
+export const importCrmPipelineCsvResponseAddedMin = 0;
+
+export const importCrmPipelineCsvResponseAlreadyPresentMin = 0;
+
+export const importCrmPipelineCsvResponseCreatedRecordsMin = 0;
+
+export const importCrmPipelineCsvResponseSkippedRowsMin = 0;
+
+export const importCrmPipelineCsvResponse = zod
+  .object({
+    added: zod
+      .number()
+      .min(importCrmPipelineCsvResponseAddedMin)
+      .describe('Entries added.'),
+    addedOptions: zod
+      .array(
+        zod
+          .object({
+            field: zod.string().describe('The field.'),
+            labels: zod.array(zod.string()).describe('The labels.'),
+          })
+          .describe('Labels to add to a select field.')
+      )
+      .describe("Labels added to select fields so the CSV's values fit."),
+    alreadyPresent: zod
+      .number()
+      .min(importCrmPipelineCsvResponseAlreadyPresentMin)
+      .describe('Rows whose record the pipeline already had.'),
+    createdRecords: zod
+      .number()
+      .min(importCrmPipelineCsvResponseCreatedRecordsMin)
+      .describe('Companies or contacts the import created.'),
+    filledFields: zod
+      .array(zod.string())
+      .describe('Pipeline fields the CSV filled.'),
+    ignoredColumns: zod
+      .array(zod.string())
+      .describe('CSV columns matching no field the import can fill.'),
+    invalid: zod
+      .array(
+        zod
+          .object({
+            key: zod
+              .string()
+              .describe("The company's domain or the contact's email."),
+            reason: zod.string().describe('What went wrong.'),
+          })
+          .describe('A record an import could not add, and why.')
+      )
+      .describe('Rows refused for a value their field cannot hold.'),
+    pipelineId: zod.uuid().describe('The pipeline filled.'),
+    pipelineName: zod.string().describe('Its name.'),
+    skippedRows: zod
+      .number()
+      .min(importCrmPipelineCsvResponseSkippedRowsMin)
+      .describe('Rows without a domain or email.'),
+    unresolved: zod
+      .array(
+        zod
+          .object({
+            key: zod
+              .string()
+              .describe("The company's domain or the contact's email."),
+            reason: zod.string().describe('What went wrong.'),
+          })
+          .describe('A record an import could not add, and why.')
+      )
+      .describe('Records that could not be found or created.'),
+  })
+  .describe('What a pipeline import did.');
 
 /**
  * @summary Rename a pipeline.
@@ -21135,6 +23098,231 @@ export const readCanvasSceneResponse = zod
   .describe('The live scene at one revision.');
 
 /**
+ * @summary Start a comment thread anchored to a quoted passage of a markdown or Word
+document, with the caller's comment access. On markdown the passage is
+marked in the live document first, and nothing is posted when the quote is
+ambiguous or missing.
+ */
+export const commentOnDocumentTextParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const commentOnDocumentTextBody = zod
+  .object({
+    content: zod.string().describe('Comment body in macro markdown.'),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .optional()
+      .describe(
+        'The people and items the body mentions, notified as in any comment.'
+      ),
+    occurrence: zod
+      .number()
+      .min(1)
+      .nullish()
+      .describe(
+        'Which appearance of the passage, counting from 1 in document order.\nOnly needed when it appears more than once.'
+      ),
+    quote: zod
+      .string()
+      .min(1)
+      .describe(
+        'The passage to comment on, quoted exactly as the document reads: plain\ntext without markdown syntax, within one paragraph, heading, list item\nor table cell.'
+      ),
+  })
+  .describe('A comment on a quoted passage.');
+
+export const commentOnDocumentTextResponse = zod
+  .object({
+    comment: zod
+      .object({
+        attachments: zod
+          .array(
+            zod
+              .object({
+                created_at: zod.iso
+                  .datetime({})
+                  .describe('When the attachment was added.'),
+                entity_id: zod.string().describe('Attached entity identifier.'),
+                entity_type: zod.string().describe('Attached entity type.'),
+                height: zod
+                  .number()
+                  .nullish()
+                  .describe('Optional media height.'),
+                id: zod.uuid().describe('Attachment UUID.'),
+                width: zod.number().nullish().describe('Optional media width.'),
+              })
+              .describe('An entity attached to a message.')
+          )
+          .describe('Attached entities.'),
+        bot_profile: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+                name: zod.string().describe('Bot display name.'),
+              })
+              .describe(
+                'Public bot profile attached to bot-authored messages.'
+              ),
+          ])
+          .optional(),
+        content: zod.string().describe('Macro Markdown body.'),
+        created_at: zod.iso.datetime({}).describe('Creation time.'),
+        deleted_at: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('Message tombstone, independent of thread deletion.'),
+        edited_at: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('Last content edit, if any.'),
+        guest_name: zod
+          .string()
+          .nullish()
+          .describe(
+            'Display name of a verified call guest, retained after the call ends.'
+          ),
+        id: zod.uuid().describe('Message UUID.'),
+        imported_author: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                name: zod
+                  .string()
+                  .describe(
+                    'Original author text; never interpreted as an authenticated principal.'
+                  ),
+              })
+              .describe(
+                'Display attribution for a comment imported from an external document.'
+              ),
+          ])
+          .optional(),
+        kind: zod
+          .enum(['message', 'call_root'])
+          .optional()
+          .describe(
+            'What a persisted message is. Set by the server, never by a client.'
+          ),
+        mentions: zod
+          .array(
+            zod
+              .object({
+                entity_id: zod
+                  .string()
+                  .describe('Mentioned entity identifier.'),
+                entity_type: zod.string().describe('Mentioned entity type.'),
+              })
+              .describe('A mention tracked in a message body.')
+          )
+          .describe(
+            'Tracked mentions, retained when a caller changes attachments only.'
+          ),
+        parent: zod
+          .union([
+            zod
+              .object({
+                id: zod
+                  .uuid()
+                  .describe('A channel, including direct messages.'),
+                type: zod.enum(['channel']),
+              })
+              .describe('A channel, including direct messages.'),
+            zod
+              .object({
+                id: zod
+                  .string()
+                  .describe(
+                    'A validated document identifier. Historical document ids need not be UUIDs.'
+                  ),
+                type: zod.enum(['document']),
+              })
+              .describe('A document, including tasks and PDFs.'),
+            zod
+              .object({
+                id: zod
+                  .uuid()
+                  .describe(
+                    'An initiative, presented as a project in the application.'
+                  ),
+                type: zod.enum(['initiative']),
+              })
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            zod
+              .object({
+                id: zod.uuid().describe('A CRM company.'),
+                type: zod.enum(['crm_company']),
+              })
+              .describe('A CRM company.'),
+            zod
+              .object({
+                id: zod.uuid().describe('A CRM contact.'),
+                type: zod.enum(['crm_contact']),
+              })
+              .describe('A CRM contact.'),
+            zod
+              .object({
+                id: zod
+                  .uuid()
+                  .describe('A video call and its persistent chat thread.'),
+                type: zod.enum(['call']),
+              })
+              .describe('A video call and its persistent chat thread.'),
+          ])
+          .describe(
+            'The entity whose permissions and lifecycle govern a message.'
+          ),
+        reactions: zod
+          .array(
+            zod
+              .object({
+                emoji: zod.string().describe('Emoji being reacted with.'),
+                users: zod.array(zod.string()).describe('User identifiers.'),
+              })
+              .describe('Reaction emoji and the users who added it.')
+          )
+          .describe('Aggregated reactions.'),
+        sender_id: zod
+          .string()
+          .describe('Authenticated actor or owner of imported content.'),
+        thread_id: zod
+          .uuid()
+          .nullish()
+          .describe('Root message UUID for replies; absent on roots.'),
+        triggered_by: zod
+          .string()
+          .nullish()
+          .describe('User who triggered a bot-authored message.'),
+        triggered_via: zod
+          .string()
+          .nullish()
+          .describe(
+            'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+          ),
+        updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+      })
+      .describe(
+        'Shared message representation for channel timelines and entity discussions.'
+      ),
+    markedText: zod
+      .string()
+      .describe('The text the comment is anchored to, as the document reads.'),
+  })
+  .describe('The thread the comment started.');
+
+/**
  * Copies an existing document, creating a new document with the same content.
 Does not require re-uploading the document file.
  * @summary Handler for `POST /documents/{document_id}/copy`.
@@ -21871,6 +24059,61 @@ export const getDocumentLocationV3Response = zod
       .describe('Sync-service backed content.'),
   ])
   .describe('Location response with content lifecycle metadata.');
+
+/**
+ * @summary Read a markdown document's or task's body with the revision it was read
+at, to write it back with `PUT` without overwriting anyone's edits.
+ */
+export const getDocumentMarkdownParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const getDocumentMarkdownResponse = zod
+  .object({
+    markdown: zod
+      .string()
+      .describe('The body as Markdown, in the format `text-content` returns.'),
+    revision: zod
+      .string()
+      .describe(
+        "The document's version, as sync-service encodes it. Pass it back to\nwrite the body only if nobody has changed the document since."
+      ),
+  })
+  .describe("A markdown document's body and the revision it was read at.");
+
+/**
+ * @summary Replace a markdown document's or task's body, only if the document is still
+at the revision the caller read. Top-level blocks whose Markdown is
+unchanged keep their comments and formatting; changed blocks are replaced.
+ */
+export const writeDocumentMarkdownParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const writeDocumentMarkdownBody = zod
+  .object({
+    expectedRevision: zod
+      .string()
+      .min(1)
+      .describe(
+        'The `revision` from the read this body is based on. The write applies\nonly if the document is still at this revision.'
+      ),
+    markdown: zod.string().describe('The whole new body, as Markdown.'),
+  })
+  .describe('The body to write and the revision it was written against.');
+
+export const writeDocumentMarkdownResponse = zod
+  .object({
+    changed: zod
+      .boolean()
+      .describe(
+        'Whether the body changed; `false` when it already read that way.'
+      ),
+    revision: zod.string().describe("The document's version after the write."),
+  })
+  .describe(
+    'A body write that landed, or found the body already reading that way.'
+  );
 
 /**
  * @summary Permanently deletes a document.
@@ -34460,9 +36703,29 @@ export const externalChatMessagesResponse = zod
               .array(
                 zod
                   .object({
-                    count: zod.number().describe('Number of reacting people.'),
                     emoji: zod.string().describe('Emoji.'),
                     mine: zod.boolean().describe('Caller has this reaction.'),
+                    reactors: zod
+                      .array(
+                        zod
+                          .object({
+                            name: zod
+                              .string()
+                              .describe(
+                                'Display name, never authentication evidence.'
+                              ),
+                            userId: zod
+                              .string()
+                              .nullish()
+                              .describe('Verified Macro user, if any.'),
+                          })
+                          .describe(
+                            'A person named in a message: a Macro user when verified, else their name\nat the provider, else their phone number.'
+                          )
+                      )
+                      .describe(
+                        'The people who reacted with it, earliest first.'
+                      ),
                   })
                   .describe('Grouped reactions.')
               )
@@ -34970,9 +37233,25 @@ export const externalChatMessageResponse = zod
       .array(
         zod
           .object({
-            count: zod.number().describe('Number of reacting people.'),
             emoji: zod.string().describe('Emoji.'),
             mine: zod.boolean().describe('Caller has this reaction.'),
+            reactors: zod
+              .array(
+                zod
+                  .object({
+                    name: zod
+                      .string()
+                      .describe('Display name, never authentication evidence.'),
+                    userId: zod
+                      .string()
+                      .nullish()
+                      .describe('Verified Macro user, if any.'),
+                  })
+                  .describe(
+                    'A person named in a message: a Macro user when verified, else their name\nat the provider, else their phone number.'
+                  )
+              )
+              .describe('The people who reacted with it, earliest first.'),
           })
           .describe('Grouped reactions.')
       )
@@ -42124,6 +44403,96 @@ export const updateInitiativeResponse = zod
   })
   .describe(
     'Full initiative returned to a caller, including members, tasks, and share state.'
+  );
+
+/**
+ * Task references require current view access to the task, so a page can hold
+fewer records than `limit`, even none. Follow `nextCursor` with the same
+window until it is absent.
+ * @summary Read an initiative's creation, edits, property changes and task membership
+changes, newest first.
+ */
+export const getInitiativeActivityParams = zod.object({
+  initiative_id: zod.string().describe('Initiative identifier.'),
+});
+
+export const getInitiativeActivityQueryLimitMin = 0;
+
+export const getInitiativeActivityQueryParams = zod.object({
+  after: zod.iso
+    .datetime({})
+    .optional()
+    .describe('Only changes at or after this time.'),
+  before: zod.iso
+    .datetime({})
+    .optional()
+    .describe('Only changes before this time.'),
+  cursorOccurredAt: zod.iso
+    .datetime({})
+    .optional()
+    .describe(
+      "`occurredAt` of the previous page's `nextCursor`; send with `cursorId`."
+    ),
+  cursorId: zod
+    .uuid()
+    .optional()
+    .describe(
+      "`id` of the previous page's `nextCursor`; send with `cursorOccurredAt`."
+    ),
+  limit: zod
+    .number()
+    .min(getInitiativeActivityQueryLimitMin)
+    .optional()
+    .describe('Events to scan, 1 through 100; defaults to 100.'),
+});
+
+export const getInitiativeActivityResponse = zod
+  .object({
+    nextCursor: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            id: zod.uuid().describe('Tie-breaker within the same timestamp.'),
+            occurredAt: zod.iso
+              .datetime({})
+              .describe('Time of the last scanned activity.'),
+          })
+          .describe('Stable cursor for project history.'),
+      ])
+      .optional(),
+    records: zod
+      .array(
+        zod
+          .object({
+            action: zod.string().describe('Durable activity action tag.'),
+            actionPayload: zod
+              .unknown()
+              .optional()
+              .describe(
+                'Typed payload for known actions. Absent for unknown actions.'
+              ),
+            actorId: zod.string().describe('Principal who acted.'),
+            id: zod
+              .uuid()
+              .describe(
+                'Stable record identifier, also used for realtime deduplication.'
+              ),
+            occurredAt: zod.iso.datetime({}).describe('Time of the change.'),
+            subjectId: zod
+              .string()
+              .describe(
+                "Acting user's feed identity when a bot acted on their behalf."
+              ),
+          })
+          .describe(
+            'One authorized activity row; task names are hydrated through existing authorized task reads.'
+          )
+      )
+      .describe('Visible changes in newest-first order.'),
+  })
+  .describe(
+    'History page. Access filtering can shorten records; follow nextCursor until exhausted.'
   );
 
 /**

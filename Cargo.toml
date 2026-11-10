@@ -328,6 +328,7 @@ jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features
 lambda_runtime = "0.13.0"
 lazy-regex = "3.6.1"
 lazy_static = "1.5.0"
+libc = "0.2"
 # Signal's curve25519 keys and XEdDSA; see crates/whatsmeow_signal/AGENTS.md.
 libsignal-core = { git = "https://github.com/signalapp/libsignal", tag = "v0.105.2" }
 livekit-api = { version = "0.4.16", default-features = false, features = [
@@ -395,7 +396,7 @@ reqwest = { version = "0.13", default-features = false, features = [
   "json",
   "rustls",
 ] }
-rmcp = "1.6.0"
+rmcp = "3.9.0"
 skrifa = { version = "0.48", default-features = false, features = ["std"] }
 sse-stream = "0.2"
 rootcause = { version = "0.12", features = ["compat-anyhow1"] }

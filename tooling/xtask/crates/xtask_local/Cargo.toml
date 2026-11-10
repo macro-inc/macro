@@ -43,16 +43,22 @@ docker-compose-types = { version = "0.24", features = ["indexmap"] }
 indexmap = { workspace = true }
 indoc = { workspace = true }
 serde_yaml = { workspace = true }
-# Parse user-provided `--env-file` overlays. EnumIter derives the port list.
+# Parse user-provided `--env-file` overlays.
 dotenvy = { workspace = true }
-strum = { workspace = true, features = ["derive"] }
 # Signal the frontend dev server's whole process group on shutdown.
-libc = "0.2"
+libc = { workspace = true }
 macro_env_var = { path = "../../../../crates/macro_env_var" }
 xtask_paths = { path = "../xtask_paths" }
+# Port windows, subnets and the machine-wide allocation registry.
+xtask_ports = { path = "../xtask_ports" }
+# Opt-in run_local telemetry (`local/telemetry.rs`); container health times.
+chrono = { workspace = true }
+xtask_local_telemetry = { path = "../xtask_local_telemetry" }
 
 [dev-dependencies]
 jsonwebtoken = { workspace = true }
+regex = { workspace = true }
+tempfile = { workspace = true }
 
 [features]
 # Local Kafka topic provisioning (`run-local` / `kafka-provision`). Off by

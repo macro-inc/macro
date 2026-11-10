@@ -63,6 +63,7 @@ axum = [
   "dep:utoipa",
   "entity_access/axum",
   "entity_registry/axum",
+  "messages?/inbound",
   "schema",
 ]
 backfill_binary = [

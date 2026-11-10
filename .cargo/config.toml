@@ -6,7 +6,6 @@
 #   cargo x nextest-filter <file> <base-revision> # affected packages for changed files
 #   cargo x doppler-bins <file>      # Doppler config-validation bins affected by changed files
 #   cargo x graphql-soup-schema <file> # export GraphQL Soup SDL to a file
-#   cargo x cache-wasm [--force]     # build the browser cache wasm package
 #   cargo x kafka-topics [--check]   # regenerate / verify kafka-cluster-topics.json
 #   cargo x test-targets             # fail on test binaries without tests of their own
 #   (anything else)                  # local/dev orchestration (xtask_local)
@@ -14,7 +13,7 @@
 # `xtask` is a dependency-free launcher: it maps the subcommand to its own
 # command crate under tooling/xtask/crates/ and re-invokes `cargo run -p
 # xtask_<command>`, so each command compiles only its own dependency set
-# (e.g. `cargo x cache-wasm` never builds guppy/hakari/aws-sdk/tokio).
+# (e.g. `cargo x kafka-topics` never builds guppy/hakari/aws-sdk/tokio).
 [alias]
 x = "run -p xtask --"
 

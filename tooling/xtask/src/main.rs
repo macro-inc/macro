@@ -2,7 +2,7 @@
 //!
 //! Each xtask command lives in its own crate under `tooling/xtask/crates/` so
 //! that `cargo x <command>` compiles only that command's dependency set — e.g.
-//! `cargo x cache-wasm` (needs only anyhow) does not drag in guppy/hakari,
+//! `cargo x kafka-topics` does not drag in guppy/hakari,
 //! aws-sdk, tokio, or bollard.
 //!
 //! The cargo alias (`x = "run -p xtask --"`) is static, so it always builds one
@@ -39,7 +39,6 @@ fn main() {
         Some("doppler-bins") => "xtask_doppler_bins",
         Some("graphql-soup-schema") => "xtask_graphql_soup_schema",
         Some("graphql-schema-compat") => "xtask_graphql_schema_compat",
-        Some("cache-wasm") => "xtask_cache_wasm",
         Some("kafka-topics") => "xtask_kafka_topics",
         Some("test-targets") => "xtask_test_targets",
         Some("workflows") => "xtask_workflows",
