@@ -49,12 +49,11 @@ export function shouldRetryGraphqlMutation(
   error: CombinedError,
   mutation?: QueuedMutation
 ): boolean {
-  if (error.graphQLErrors.length > 0) {
-    if (mutation && retriesDraftServerFault(error, mutation)) return true;
-    if (mutation) draftFaults.delete(writeKey(mutation));
-    return false;
-  }
-  // Any other failure ends the run of server faults.
+  const refused = error.graphQLErrors.length > 0;
+  if (refused && mutation && retriesDraftServerFault(error, mutation))
+    return true;
+
+  // Any other failure ends the write's run of server faults.
   if (mutation) draftFaults.delete(writeKey(mutation));
-  return isTransientRequestError(error);
+  return !refused && isTransientRequestError(error);
 }

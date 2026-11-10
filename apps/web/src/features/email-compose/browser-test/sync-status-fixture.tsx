@@ -56,7 +56,7 @@ export function SyncStatusFixture() {
     drafts: {
       saveLocalDraft: async () => local(),
       readDraft: async () => ({ local: local(), persistence: 'queued' }),
-      watchDrafts: (callback) => {
+      watchDrafts: (callback: () => void) => {
         changed = callback;
         return () => {
           changed = () => {};
