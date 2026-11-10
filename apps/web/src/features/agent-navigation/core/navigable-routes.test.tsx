@@ -16,7 +16,7 @@ const UPDATE = process.env.UPDATE_AGENT_ROUTE_TABLE === '1';
  * paths: `debug/<id>` and `component/<id>` fall to the closed `:type/:id`
  * branch.
  */
-const DEBUG_ROUTES = new Set(debugRoutes.map(({ route }) => route.id));
+const DEBUG_ROUTES = new Set<string>(debugRoutes.map(({ route }) => route.id));
 
 const SERVER_TABLE = resolve(
   __dirname,
