@@ -16,8 +16,10 @@ import type { InviteMeetingUsersRequest } from '@service-storage/generated/schem
 import type { LeaveCallResponse } from '@service-storage/generated/schemas/leaveCallResponse';
 import type { Meeting as ApiMeeting } from '@service-storage/generated/schemas/meeting';
 import type { MeetingPreparation } from '@service-storage/generated/schemas/meetingPreparation';
+import type { ReactionInput } from '@service-storage/generated/schemas/reactionInput';
 import type { UpdateMeetingRequest } from '@service-storage/generated/schemas/updateMeetingRequest';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
+import type { Message, MessageThread } from '@service-storage/messages';
 
 export type {
   CallRecord,
@@ -26,6 +28,13 @@ export type {
   GuestChatPage,
   UpdateMeetingRequest,
 };
+
+// Replace these local wire types with generated schemas when the guest routes are generated.
+export type GuestChatThread = {
+  viewer_id: string;
+  thread: MessageThread | null;
+};
+export type GuestChatPatch = { content: string };
 
 // Rust serializes these nullable fields explicitly; Orval marks Option<T> optional.
 export type CallTokenResponse = Required<ApiCallTokenResponse>;
@@ -40,6 +49,65 @@ export type MeetingParticipants = {
 const host: string = SERVER_HOSTS['document-storage-service'];
 
 export const callServiceClient = {
+  getGuestChatThread(callId: string, token: string) {
+    return safeFetch<GuestChatThread>(
+      `${host}/call/guest-chat/${encodeURIComponent(callId)}/thread`,
+      { credentials: 'omit', headers: { Authorization: `Bearer ${token}` } }
+    );
+  },
+  postGuestChatMessage(callId: string, token: string, input: GuestChatPost) {
+    return safeFetch<Message>(
+      `${host}/call/guest-chat/${encodeURIComponent(callId)}/messages`,
+      {
+        method: 'POST',
+        credentials: 'omit',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify(input),
+      }
+    );
+  },
+  patchGuestChatMessage(
+    callId: string,
+    token: string,
+    messageId: string,
+    input: GuestChatPatch
+  ) {
+    return safeFetch<Message>(
+      `${host}/call/guest-chat/${encodeURIComponent(callId)}/messages/${encodeURIComponent(messageId)}`,
+      {
+        method: 'PATCH',
+        credentials: 'omit',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify(input),
+      }
+    );
+  },
+  deleteGuestChatMessage(callId: string, token: string, messageId: string) {
+    return safeFetch<Record<string, never>>(
+      `${host}/call/guest-chat/${encodeURIComponent(callId)}/messages/${encodeURIComponent(messageId)}`,
+      {
+        method: 'DELETE',
+        credentials: 'omit',
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+  },
+  reactGuestChatMessage(
+    callId: string,
+    token: string,
+    messageId: string,
+    input: ReactionInput
+  ) {
+    return safeFetch<Message>(
+      `${host}/call/guest-chat/${encodeURIComponent(callId)}/messages/${encodeURIComponent(messageId)}/reactions`,
+      {
+        method: 'POST',
+        credentials: 'omit',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify(input),
+      }
+    );
+  },
   getGuestChat(callId: string, token: string) {
     return safeFetch<GuestChatPage>(
       `${host}/call/guest-chat/${encodeURIComponent(callId)}`,
