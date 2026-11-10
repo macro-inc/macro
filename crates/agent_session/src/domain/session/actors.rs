@@ -135,6 +135,9 @@ pub(crate) struct SessionActor<Connector: AgentConnector, Logs> {
     mcp_servers: Vec<McpServer>,
     /// Whether the listing has been started; it runs once per connection.
     tools_listed: bool,
+    /// Told once the ACP session opens (`true`) or the handshake fails
+    /// (`false`), for whoever is waiting to know the restore finished.
+    opened: watch::Sender<Option<bool>>,
 }
 
 impl<Connector, Logs> SessionActor<Connector, Logs>
@@ -203,7 +206,14 @@ where
             tool_catalog,
             mcp_servers,
             tools_listed: false,
+            opened: watch::Sender::new(None),
         }
+    }
+
+    /// Report the handshake's outcome to `opened` once it has one.
+    pub(crate) fn with_opened(mut self, opened: watch::Sender<Option<bool>>) -> Self {
+        self.opened = opened;
+        self
     }
 
     /// Apply an explicit starting model before a new session becomes live.
@@ -756,9 +766,17 @@ where
         match self.machine.status() {
             RuntimeStatus::Live { .. } => {
                 self.handshake_span.take();
+                self.opened.send_replace(Some(true));
                 self.list_tools_once();
             }
             RuntimeStatus::Dead => {
+                self.opened.send_if_modified(|opened| {
+                    let first = opened.is_none();
+                    if first {
+                        *opened = Some(false);
+                    }
+                    first
+                });
                 if let Some(span) = self.handshake_span.take() {
                     span.record("otel.status_code", "ERROR");
                     span.record("otel.status_description", "ACP handshake failed");
