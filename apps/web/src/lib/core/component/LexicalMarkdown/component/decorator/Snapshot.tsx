@@ -12,19 +12,16 @@ import { useNativeSplitNavigationHandler } from '@core/util/useSplitNavigationHa
 import EyeSlashDuo from '@icon/system/regular/eye-slash.svg';
 import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import TrashSimple from '@icon/system/regular/trash-simple.svg';
-import {
-  $isSnapshotNode,
-  type SnapshotDecoratorProps,
-} from '@macro-inc/lexical-core';
+import type { SnapshotDecoratorProps } from '@macro-inc/lexical-core';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
-import { COMMAND_PRIORITY_NORMAL, KEY_ENTER_COMMAND } from 'lexical';
 import type { JSX } from 'solid-js';
 import { createMemo, Suspense, useContext } from 'solid-js';
+import { DecoratorHostContext } from '../../context/DecoratorHostContext';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import { createLexicalSnapshotHost } from '../../decorator-host/lexical-snapshot';
 import { autoRegister } from '../../plugins';
-import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
 import { openDocument } from '../core/BlockLink';
 import { MentionTooltip } from './MentionTooltip';
 
@@ -65,8 +62,12 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
   const currentBlockId = useMaybeBlockId();
 
   const lexicalWrapper = useContext(LexicalWrapperContext);
-  const editor = lexicalWrapper?.editor;
-  const selection = () => lexicalWrapper?.selection;
+  const suppliedHost = useContext(DecoratorHostContext);
+  const host = suppliedHost
+    ? suppliedHost.snapshot
+    : createLexicalSnapshotHost(lexicalWrapper);
+  if (!host)
+    throw new Error('Snapshot requested capabilities missing from its host');
 
   const previewType = () =>
     blockNameToItemType(verifyBlockName(props.blockName));
@@ -76,11 +77,7 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
     type: previewType(),
   }));
 
-  const isSelectedAsNode = createMemo(() => {
-    const sel = selection();
-    if (!sel) return false;
-    return sel.type === 'node' && sel.nodeKeys.has(props.key);
-  });
+  const isSelectedAsNode = createMemo(() => host.isSelected(props.key));
 
   const open = createCallback((e: MouseEvent | KeyboardEvent | null) => {
     openDocument(
@@ -91,25 +88,17 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
     );
   });
 
-  if (editor) {
-    autoRegister(
-      editor.registerCommand(
-        KEY_ENTER_COMMAND,
-        (e) => {
-          if (isSelectedAsNode()) {
-            open(e);
-            return true;
-          }
-          return false;
-        },
-        COMMAND_PRIORITY_NORMAL
-      )
-    );
-  }
+  const unregister = host.registerNormalEnter((e) => {
+    if (isSelectedAsNode()) {
+      open(e);
+      return true;
+    }
+    return false;
+  });
+  if (unregister) autoRegister(unregister);
 
   const deleteSnapshot = () => {
-    if (!editor) return;
-    removeNodeAndRestoreSelection(editor, props.key, $isSnapshotNode);
+    host.remove(props.key);
   };
 
   const navHandlers = useNativeSplitNavigationHandler<HTMLSpanElement>((e) => {
@@ -184,7 +173,7 @@ function SnapshotInner(props: SnapshotDecoratorProps) {
         <PopupPreview
           mouseEnter={() => {}}
           mouseLeave={() => {}}
-          delete={editor?.isEditable() ? deleteSnapshot : undefined}
+          delete={host.isEditable() ? deleteSnapshot : undefined}
           documentInfo={{
             id: props.documentId,
             name: props.documentName,

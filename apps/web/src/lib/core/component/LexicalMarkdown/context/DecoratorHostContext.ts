@@ -1,4 +1,5 @@
 import { createContext } from 'solid-js';
+import type { SnapshotHost } from '../decorator-host/snapshot-host';
 
 export interface DecoratorUploadCallbacks {
   start(): void;
@@ -48,6 +49,8 @@ export type HorizontalRuleHost = Pick<
 >;
 
 /** A decorator group supplies its actual capabilities; consumers must request an implemented host. */
-export type DecoratorHostCapabilities = Partial<DecoratorHost>;
+export type DecoratorHostCapabilities = Partial<DecoratorHost> & {
+  readonly snapshot?: SnapshotHost;
+};
 
 export const DecoratorHostContext = createContext<DecoratorHostCapabilities>();
