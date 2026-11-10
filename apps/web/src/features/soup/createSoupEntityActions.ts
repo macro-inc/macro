@@ -34,6 +34,7 @@ import {
   openEntityInSplitFromUnifiedList,
   restoreSoupFocus,
 } from '@app/features/next-soup/utils';
+import { openAddChannelToStack } from '@app/features/notification-stacks/open-add-to-stack';
 import { openProjectEntityAction } from '@app/features/projects/project-entity-actions';
 import { useAllProperties } from '@app/features/property/editor/hooks/useAllProperties';
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
@@ -50,6 +51,7 @@ import {
 import { itemToBlockName } from '@core/constant/allBlocks';
 import {
   enableEntityAppearance,
+  enableNotificationStacks,
   enableProjects,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
@@ -58,7 +60,12 @@ import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
-import { isEmailEntity, isGithubPrEntity, isTaskEntity } from '@entity';
+import {
+  isChannelEntity,
+  isEmailEntity,
+  isGithubPrEntity,
+  isTaskEntity,
+} from '@entity';
 import type { NotificationMuteMenuProps } from '@notifications/components/NotificationMuteMenu';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
@@ -129,6 +136,7 @@ export function createSoupEntityActions(
   const analytics = useAnalytics();
   const projectsFlag = useFeatureFlag(enableProjects);
   const appearanceFlag = useFeatureFlag(enableEntityAppearance);
+  const stacksFlag = useFeatureFlag(enableNotificationStacks);
   const userId = useUserId();
   const changeIcon = useChangeEntityIcon();
   const selectedEntity = () => {
@@ -455,6 +463,20 @@ export function createSoupEntityActions(
           : t('entityActions.muteNotifications'),
         onClick: handle(muteAction.executeWithSoup),
         muteMenu: muteAction.menu(entities),
+      });
+    }
+
+    // One channel only: the dialog ticks the stacks that capture it.
+    const [channel] = entities;
+    if (
+      stacksFlag().enabled &&
+      entities.length === 1 &&
+      isChannelEntity(channel)
+    ) {
+      middleItems.push({
+        id: 'add-to-stack',
+        label: t('entityActions.addToStack'),
+        onClick: () => openAddChannelToStack(channel.id),
       });
     }
 

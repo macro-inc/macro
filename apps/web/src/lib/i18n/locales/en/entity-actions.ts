@@ -41,6 +41,7 @@ export default {
   snoozeNotifications: 'Snooze notifications',
   muteNotifications: 'Mute notifications',
   unmuteNotifications: 'Unmute notifications',
+  addToStack: 'Add to stack…',
   remindMe: 'Remind me',
   addTag: 'Add tag',
   addToProject: 'Add to project…',
