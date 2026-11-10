@@ -92,6 +92,9 @@ cross-tab chatter and seeds a fresh local document before host imports. Supply
 the correct native node/plugin preset; a title, calendar description and full
 document do not share the same allowed nodes.
 
+Pass the actual loaded ordinary module to the app view mount so its ordered Enter
+dispatcher installs receiver guards before the native session factory runs.
+
 The native view mount functions construct synchronously after the module is
 ready. Their explicit root ownership is separate from the compatibility API,
 whose `createEditor` starts with no root. Closing drains terminal I/O.
