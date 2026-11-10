@@ -17,6 +17,7 @@ import {
   NEW_STACK_DRAFT,
   type Stack,
 } from '../core/stack';
+import { traceStackWrite } from '../primitives/stack-telemetry';
 import { openStackEditor } from './stack-editor-dialog';
 
 /**
@@ -38,8 +39,13 @@ export function AddToStackDialog(
 
   const setCaptured = async (stack: Stack, captured: boolean) => {
     try {
-      await context.stacks.update(stack.id, {
-        capture: captureWithChannel(stack, props.channelId, captured),
+      await traceStackWrite('notification_stack.capture_channel', (span) => {
+        span.setAttr('stack.id', stack.id);
+        span.setAttr('channel.id', props.channelId);
+        span.setAttr('stack.captured', captured);
+        return context.stacks.update(stack.id, {
+          capture: captureWithChannel(stack, props.channelId, captured),
+        });
       });
     } catch {
       toast.failure(t('notificationStacks.updateFailed'));

@@ -2,7 +2,6 @@ import { t } from '@app/lib/i18n';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { Telemetry } from '@macro-inc/observability';
 import {
   Button,
   Dialog,
@@ -26,6 +25,7 @@ import {
   type StackEntityKind,
 } from '../core/stack';
 import { createStackEditor } from '../primitives/stack-editor';
+import { traceStackWrite } from '../primitives/stack-telemetry';
 
 type StackEditorDialogProps = ManagedDialogProps & {
   /** The stack being edited; a new one when left out. */
@@ -65,7 +65,7 @@ function StackEditorDialog(props: StackEditorDialogProps) {
   };
 
   const save = () =>
-    Telemetry.span('notification_stack.save', async (span) => {
+    traceStackWrite('notification_stack.save', async (span) => {
       const draft = editor.draft();
       const rules = rulesFromDraft(draft);
       span.setAttr('stack.new', props.stack === undefined);
@@ -73,23 +73,17 @@ function StackEditorDialog(props: StackEditorDialogProps) {
       span.setAttr('stack.senders', draft.senders.length);
       span.setAttr('stack.kinds', draft.kinds.length);
       span.setAttr('stack.release_rules', rules.release.length);
-      try {
-        if (props.stack) {
-          span.setAttr('stack.id', props.stack.id);
-          await context.stacks.update(props.stack.id, {
-            name: draft.name.trim(),
-            ...rules,
-          });
-          props.onSaved?.();
-        } else {
-          const created = await context.stacks.create(draft.name.trim(), rules);
-          span.setAttr('stack.id', created.id);
-          props.onSaved?.(created);
-        }
-        props.onOpenChange(false);
-      } catch (error) {
-        span.error(error);
-        setFailed(true);
+      if (props.stack) {
+        span.setAttr('stack.id', props.stack.id);
+        await context.stacks.update(props.stack.id, {
+          name: draft.name.trim(),
+          ...rules,
+        });
+        props.onSaved?.();
+      } else {
+        const created = await context.stacks.create(draft.name.trim(), rules);
+        span.setAttr('stack.id', created.id);
+        props.onSaved?.(created);
       }
     });
 
@@ -99,8 +93,14 @@ function StackEditorDialog(props: StackEditorDialogProps) {
     if (saving() || editor.problem()) return;
     setFailed(false);
     setSaving(true);
-    await save();
-    setSaving(false);
+    try {
+      await save();
+      props.onOpenChange(false);
+    } catch {
+      setFailed(true);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (

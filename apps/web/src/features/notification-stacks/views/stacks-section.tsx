@@ -14,6 +14,7 @@ import { StackRow } from '../components/stack-row';
 import { useNotificationStacksContext } from '../context/notification-stacks-context';
 import { draftFromStack, type Stack } from '../core/stack';
 import { describeStack } from '../primitives/describe-stack';
+import { traceStackWrite } from '../primitives/stack-telemetry';
 import { openStackEditor } from './stack-editor-dialog';
 
 /**
@@ -36,11 +37,22 @@ export function StacksSection() {
   const stackIds = createMemo(() => stacks().map((stack) => stack.id));
   const stackOf = (id: string) => stacks().find((stack) => stack.id === id);
 
-  const write = (change: Promise<void>, failure: string) =>
+  /** Run a traced write; a failure is rolled back by the source and toasted. */
+  const write = (
+    name: string,
+    attributes: Record<string, string | number | boolean>,
+    change: () => Promise<void>,
+    failure: string
+  ) =>
     fireAndForget(
       (async () => {
         try {
-          await change;
+          await traceStackWrite(name, (span) => {
+            for (const [key, value] of Object.entries(attributes)) {
+              span.setAttr(key, value);
+            }
+            return change();
+          });
         } catch {
           toast.failure(failure);
         }
@@ -54,7 +66,12 @@ export function StacksSection() {
     const to = from + offset;
     if (from < 0 || to < 0 || to >= ids.length) return;
     [ids[from], ids[to]] = [ids[to], ids[from]];
-    write(context.stacks.reorder(ids), t('notificationStacks.reorderFailed'));
+    write(
+      'notification_stack.reorder',
+      { 'stack.id': id, 'stack.count': ids.length },
+      () => context.stacks.reorder(ids),
+      t('notificationStacks.reorderFailed')
+    );
   };
 
   const remove = async (stack: Stack) => {
@@ -69,7 +86,9 @@ export function StacksSection() {
     );
     if (!confirmed) return;
     write(
-      context.stacks.remove(stack.id),
+      'notification_stack.delete',
+      { 'stack.id': stack.id },
+      () => context.stacks.remove(stack.id),
       t('notificationStacks.deleteFailed')
     );
   };
@@ -119,7 +138,9 @@ export function StacksSection() {
                       canMoveDown={index() < stackIds().length - 1}
                       onEnabledChange={(enabled) =>
                         write(
-                          context.stacks.update(id, { enabled }),
+                          'notification_stack.set_enabled',
+                          { 'stack.id': id, 'stack.enabled': enabled },
+                          () => context.stacks.update(id, { enabled }),
                           t('notificationStacks.updateFailed')
                         )
                       }
