@@ -23,6 +23,7 @@ tests are separate from Rust-backed production compatibility acceptance.
   through that applier. Authoritative Rust corrections take precedence.
 - Resolve terminal element carets before the managed line break; it is DOM scaffolding, not a model child.
 - Read managed terminators through managedLineBreak and the dynamic slot.before getter; preserve BR identity and resolve deferred insertion anchors after cleanup.
+- Mark successful own DOM range writes with the module-wide pinned selection-change guard; consume only after anchor-owner routing, before point normalization, preserving boundary and post-delete processing.
 - Cache authoritative selection feedback while honoring skip-dom-selection commit tags before DOM writes.
 - Debug builds compare mirror text with Rust node text after every TextFromView.
 - Keep Android timing/native deletion in events.ts and composition clearing in Rust.
@@ -61,6 +62,7 @@ Keep drag source validity tied to documentRevision; selection-only commits do no
 - Register actual external editor roots from their root-listener lifecycle through `view/editor-roots`, releasing the listener and current registration on disposal; keep stale cleanup from removing a newer owner.
 - `selection-projection.test.ts` compares real Source and native sessions for owned, foreign, initial-null, nested and readonly DOM ranges; image-click browser parity also requires the actual native Click dispatch.
 
+- `selection-change.test.ts` and `selection-change.browser.e2e.ts` preserve the first-event interior-range skip, ordinary next-event admission, boundary/post-delete conditions and actual nested Source root ownership.
 - `bun run check`, `bun run test`, `bun run test:browser`
 - `new-subtrees.test.ts` checks connected insertion work, literal HTML, managed slot boundaries and retained DOM/caret identity across native block splits.
 - `performance.browser.e2e.ts` exercises the real facade exporter and shared browser observer over native paste/reconcile/scroll, current-task long-task delivery, content-free attributes and exact model Undo restoration.

@@ -10,13 +10,15 @@ import {
 } from '@macro-inc/collaboration/session/abi.generated';
 import { textLeaf } from './dom';
 import { DragAccess } from './drag';
-import type { EditorView } from './editor-view';
+import { externalEditorRootOwner } from './editor-roots';
+import { EditorView } from './editor-view';
 import {
   isSelectionWithinEditor,
   readSelection,
   resolvePoint,
   sameSelection,
 } from './selection';
+import { consumeSelectionChangeFromDOMUpdate } from './selection-change';
 import { selectionMessage } from './session-port';
 import type { ViewSelection } from './types';
 
@@ -33,7 +35,12 @@ function registerSelectionChange(
   if (!entry) {
     const listeners = new Map<Node, () => void>();
     const dispatch = () => {
-      for (let node = doc.activeElement; node; node = node.parentElement) {
+      for (
+        let node: Node | null = doc.getSelection()?.anchorNode ?? null;
+        node;
+        node = node.parentNode
+      ) {
+        if (externalEditorRootOwner(node) !== undefined) return;
         const listener = listeners.get(node);
         if (listener) {
           listener();
@@ -682,8 +689,9 @@ export function registerEvents(view: EditorView): {
     );
   });
   const selectionChange = () => {
-    if (!doc.activeElement || !view.ownsSelection(doc.activeElement)) return;
     const dom = doc.getSelection();
+    if (!dom?.anchorNode || EditorView.fromDOM(dom.anchorNode) !== view) return;
+    if (consumeSelectionChangeFromDOMUpdate(dom, postDelete !== null)) return;
     if (
       !isSelectionWithinEditor(
         view,
