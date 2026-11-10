@@ -290,7 +290,6 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
             .plugin(tauri_plugin_android_mobile::init())
             .plugin(tauri_plugin_android_push::init())
             .plugin(tauri_plugin_call_kit::init())
-            .plugin(tauri_plugin_native_editor::init())
             .plugin(tauri_plugin_network_status::init());
     }
 
