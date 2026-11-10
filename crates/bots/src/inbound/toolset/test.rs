@@ -89,6 +89,7 @@ fn sample_agent(handle: &str) -> Agent {
         mcp: AgentMcpServers::OwnerConnections,
         auto_accept_permissions: None,
         is_coding: true,
+        stopped_reason: None,
     }
 }
 

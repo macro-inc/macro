@@ -9,8 +9,8 @@ use super::{
         AgentMemory, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotKind,
         BotOwner, BotOwnerProfile, BotToken, BotTokenCandidate, CreateAgentRequest,
         CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
-        CreateChannelScopedBotResponse, HarnessId, HarnessOwner, MAX_BOT_OWNER_PROFILE_IDS,
-        PatchAgentRequest, PatchBotRequest, UpdateAgentMemoryRequest, UpdateAgentRequest,
+        CreateChannelScopedBotResponse, HarnessId, MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest,
+        PatchBotRequest, UpdateAgentMemoryRequest, UpdateAgentRequest,
     },
     ports::{BotError, BotRepo, BotService, McpAppCatalog},
     tokens,
@@ -306,13 +306,11 @@ where
 
     /// Ensure the resolved agent owner may run agents on a registered harness.
     ///
-    /// A team agent must run on its own team's harness - never on a private
-    /// one, so a teammate's mention can never execute on a machine only one
-    /// person controls. A private agent may run on the caller's own harness
-    /// or on a team harness of a team the caller belongs to.
+    /// A team agent must run on a harness open to its whole team, so a
+    /// teammate's mention can never execute on a machine shared only with some
+    /// of them. A private agent may run on any harness its owner may use.
     async fn ensure_harness_usable(
         &self,
-        caller: MacroUserIdStr<'static>,
         owner: &BotOwner,
         harness_id: Option<HarnessId>,
         auto_accept_permissions: Option<bool>,
@@ -331,28 +329,15 @@ where
             harness_owner.allow_permission_bypass,
             auto_accept_permissions,
         )?;
-        let usable = match (owner, harness_owner.owner) {
-            (
-                BotOwner::Team { team_id },
-                HarnessOwner::Team {
-                    team_id: harness_team,
-                },
-            ) => *team_id == harness_team,
-            (BotOwner::Team { .. }, HarnessOwner::User { .. }) => false,
-            (
-                BotOwner::User { user_id },
-                HarnessOwner::User {
-                    user_id: harness_user,
-                },
-            ) => *user_id == harness_user,
-            (
-                BotOwner::User { .. },
-                HarnessOwner::Team {
-                    team_id: harness_team,
-                },
-            ) => self
+        let usable = match owner {
+            BotOwner::Team { team_id } => self
                 .repo
-                .user_has_team(caller, harness_team)
+                .harness_granted_to_team(harness_id, *team_id)
+                .await
+                .map_err(|err| BotError::Repo(err.into()))?,
+            BotOwner::User { user_id } => self
+                .repo
+                .user_may_use_harness(harness_id, user_id)
                 .await
                 .map_err(|err| BotError::Repo(err.into()))?,
         };
@@ -501,13 +486,8 @@ where
         let owner = self
             .owner_for_agent_update(caller.clone(), current, req.team_id)
             .await?;
-        self.ensure_harness_usable(
-            caller.clone(),
-            &owner,
-            req.harness_id,
-            req.auto_accept_permissions,
-        )
-        .await?;
+        self.ensure_harness_usable(&owner, req.harness_id, req.auto_accept_permissions)
+            .await?;
         let requested_name = req.name.clone();
         let requested_handle = req.handle.clone();
         let requested_description = req.description.clone();
@@ -588,13 +568,8 @@ where
         let owner = self
             .agent_owner_for_request(caller.clone(), req.team_id)
             .await?;
-        self.ensure_harness_usable(
-            caller.clone(),
-            &owner,
-            req.harness_id,
-            req.auto_accept_permissions,
-        )
-        .await?;
+        self.ensure_harness_usable(&owner, req.harness_id, req.auto_accept_permissions)
+            .await?;
         let created_by_user_id = caller.clone();
         let agent = self
             .repo

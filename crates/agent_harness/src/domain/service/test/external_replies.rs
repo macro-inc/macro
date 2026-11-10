@@ -498,7 +498,7 @@ async fn creation_retries_repair_reservation_for_both_primary_key_and_thread_con
         ),
         MockContainerManager::new(),
         AnnouncerMock::new(),
-        TestConnections::new(MirrorBindings, Arc::clone(&runtimes)),
+        TestConnections::new(MirrorBindings::default(), Arc::clone(&runtimes)),
         PromptContextMock::default(),
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),

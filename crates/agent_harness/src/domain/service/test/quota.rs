@@ -765,7 +765,7 @@ async fn rejection_persistence_failure_keeps_work_and_defers_reply_resolution() 
             sessions,
             MockContainerManager::new(),
             AnnouncerMock::new(),
-            TestConnections::new(MirrorBindings, RuntimeRegistry::new()),
+            TestConnections::new(MirrorBindings::default(), RuntimeRegistry::new()),
             PromptContextMock::default(),
             PromptComposerMock::default(),
             EgressProvisionerMock::new(),

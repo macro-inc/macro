@@ -391,6 +391,14 @@ export const listAgentsResponseItem = zod
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
+    stopped_reason: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['no_runtime_access'])
+          .describe('Why an agent cannot run right now.'),
+      ])
+      .optional(),
   })
   .describe('A persisted user- or team-owned AI agent.');
 export const listAgentsResponse = zod.array(listAgentsResponseItem);
@@ -692,6 +700,14 @@ export const updateAgentResponse = zod
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
+    stopped_reason: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['no_runtime_access'])
+          .describe('Why an agent cannot run right now.'),
+      ])
+      .optional(),
   })
   .describe('A persisted user- or team-owned AI agent.');
 
@@ -917,6 +933,14 @@ export const patchAgentResponse = zod
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
+    stopped_reason: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['no_runtime_access'])
+          .describe('Why an agent cannot run right now.'),
+      ])
+      .optional(),
   })
   .describe('A persisted user- or team-owned AI agent.');
 
@@ -5582,6 +5606,7 @@ export const getCollabSurfaceResponse = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -5639,6 +5664,7 @@ export const ensureCollabSurfaceBody = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -5677,6 +5703,7 @@ export const ensureCollabSurfaceResponse = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -35672,6 +35699,7 @@ export const accessRequestsStateParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
 });
@@ -35724,6 +35752,12 @@ export const accessRequestsStateResponse = zod
             id: zod
               .uuid()
               .describe('Stable request identity across revisions.'),
+            requestedByAgent: zod
+              .uuid()
+              .nullish()
+              .describe(
+                "The agent that asked on the requester's behalf, when one did."
+              ),
             requestedLevel: zod
               .enum(['view', 'comment', 'edit', 'owner'])
               .describe('Ordered from least to most access top -> bottom'),
@@ -35781,6 +35815,12 @@ export const accessRequestsStateResponse = zod
             id: zod
               .uuid()
               .describe('Stable request identity across revisions.'),
+            requestedByAgent: zod
+              .uuid()
+              .nullish()
+              .describe(
+                "The agent that asked on the requester's behalf, when one did."
+              ),
             requestedLevel: zod
               .enum(['view', 'comment', 'edit', 'owner'])
               .describe('Ordered from least to most access top -> bottom'),
@@ -35830,6 +35870,7 @@ export const accessRequestsSubmitParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
 });
@@ -35860,6 +35901,12 @@ export const accessRequestsSubmitResponse = zod
       ])
       .optional(),
     id: zod.uuid().describe('Stable request identity across revisions.'),
+    requestedByAgent: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The agent that asked on the requester's behalf, when one did."
+      ),
     requestedLevel: zod
       .enum(['view', 'comment', 'edit', 'owner'])
       .describe('Ordered from least to most access top -> bottom'),
@@ -35896,6 +35943,7 @@ export const accessRequestsCancelParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
 });
@@ -35922,6 +35970,7 @@ export const accessRequestsResolveParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
   request_id: zod.uuid(),
@@ -35953,6 +36002,12 @@ export const accessRequestsResolveResponse = zod
       ])
       .optional(),
     id: zod.uuid().describe('Stable request identity across revisions.'),
+    requestedByAgent: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The agent that asked on the requester's behalf, when one did."
+      ),
     requestedLevel: zod
       .enum(['view', 'comment', 'edit', 'owner'])
       .describe('Ordered from least to most access top -> bottom'),
@@ -35989,6 +36044,7 @@ export const accessRequestsDirectParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
 });
@@ -36021,6 +36077,7 @@ export const accessRequestsSetDirectParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
   user_id: zod.string(),
@@ -36059,6 +36116,7 @@ export const accessRequestsRemoveDirectParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
   user_id: zod.string(),
@@ -37968,6 +38026,7 @@ export const listFavoritesQueryParams = zod.object({
           'crm_contact',
           'crm_pipeline',
           'reminder',
+          'harness',
           'skill',
           'agent_session',
           'scheduled_action',
@@ -38033,6 +38092,7 @@ export const listFavoritesResponse = zod
                 'crm_contact',
                 'crm_pipeline',
                 'reminder',
+                'harness',
                 'skill',
                 'agent_session',
                 'scheduled_action',
@@ -38086,6 +38146,7 @@ export const addFavoriteBody = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -38140,6 +38201,7 @@ export const addFavoriteResponse = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -38191,6 +38253,7 @@ export const reorderFavoritesBody = zod
                 'crm_contact',
                 'crm_pipeline',
                 'reminder',
+                'harness',
                 'skill',
                 'agent_session',
                 'scheduled_action',
@@ -38235,6 +38298,7 @@ export const removeFavoriteByEntityParams = zod.object({
       'crm_contact',
       'crm_pipeline',
       'reminder',
+      'harness',
       'skill',
       'agent_session',
       'scheduled_action',
@@ -43325,12 +43389,18 @@ export const approveHarnessPairingBody = zod
     team_id: zod
       .uuid()
       .nullish()
-      .describe('Owning team. Omit for a private, user-owned harness.'),
+      .describe(
+        'Team to open the harness to. Omit to keep it to the approving user.'
+      ),
   })
   .describe('Request to approve a pairing and register the harness.');
 
 export const approveHarnessPairingResponse = zod
   .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'none'])
+      .optional()
+      .describe('What one caller may do with a machine.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
@@ -43350,22 +43420,19 @@ export const approveHarnessPairingResponse = zod
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
     owner: zod
-      .union([
-        zod
-          .object({
-            type: zod.enum(['user']),
-            user_id: zod.string().describe('Owner user id.'),
-          })
-          .describe('User-owned (private) harness.'),
-        zod
-          .object({
-            team_id: zod.uuid().describe('Owner team id.'),
-            type: zod.enum(['team']),
-          })
-          .describe('Team-owned harness, usable by every team member.'),
-      ])
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose machine this is.')
       .describe(
-        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
       ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
@@ -43397,6 +43464,10 @@ export const claimHarnessPairingResponse = zod
   .object({
     harness: zod
       .object({
+        access: zod
+          .enum(['owner', 'user', 'read', 'none'])
+          .optional()
+          .describe('What one caller may do with a machine.'),
         allow_permission_bypass: zod
           .boolean()
           .optional()
@@ -43416,22 +43487,19 @@ export const claimHarnessPairingResponse = zod
           .describe('When the daemon last attached a runtime connection.'),
         name: zod.string().describe('Display name.'),
         owner: zod
-          .union([
-            zod
-              .object({
-                type: zod.enum(['user']),
-                user_id: zod.string().describe('Owner user id.'),
-              })
-              .describe('User-owned (private) harness.'),
-            zod
-              .object({
-                team_id: zod.uuid().describe('Owner team id.'),
-                type: zod.enum(['team']),
-              })
-              .describe('Team-owned harness, usable by every team member.'),
-          ])
+          .object({
+            type: zod.enum(['user']),
+            user_id: zod.string().describe('Owner user id.'),
+          })
+          .describe('The person whose machine this is.')
           .describe(
-            'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+            "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+          ),
+        shared_team_ids: zod
+          .array(zod.uuid())
+          .optional()
+          .describe(
+            'Teams it is a team machine for: their every member is a user of it.'
           ),
         updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
       })
@@ -43451,6 +43519,10 @@ export const claimHarnessPairingResponse = zod
  */
 export const listHarnessesResponseItem = zod
   .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'none'])
+      .optional()
+      .describe('What one caller may do with a machine.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
@@ -43470,22 +43542,19 @@ export const listHarnessesResponseItem = zod
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
     owner: zod
-      .union([
-        zod
-          .object({
-            type: zod.enum(['user']),
-            user_id: zod.string().describe('Owner user id.'),
-          })
-          .describe('User-owned (private) harness.'),
-        zod
-          .object({
-            team_id: zod.uuid().describe('Owner team id.'),
-            type: zod.enum(['team']),
-          })
-          .describe('Team-owned harness, usable by every team member.'),
-      ])
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose machine this is.')
       .describe(
-        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
       ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
@@ -43495,10 +43564,14 @@ export const listHarnessesResponseItem = zod
 export const listHarnessesResponse = zod.array(listHarnessesResponseItem);
 
 /**
- * @summary Handler for `GET /harnesses/me`.
+ * @summary Handler for `GET /harnesses/directory`.
  */
-export const getSelfHarnessResponse = zod
+export const listHarnessDirectoryResponseItem = zod
   .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'none'])
+      .optional()
+      .describe('What one caller may do with a machine.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
@@ -43518,22 +43591,70 @@ export const getSelfHarnessResponse = zod
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
     owner: zod
-      .union([
-        zod
-          .object({
-            type: zod.enum(['user']),
-            user_id: zod.string().describe('Owner user id.'),
-          })
-          .describe('User-owned (private) harness.'),
-        zod
-          .object({
-            team_id: zod.uuid().describe('Owner team id.'),
-            type: zod.enum(['team']),
-          })
-          .describe('Team-owned harness, usable by every team member.'),
-      ])
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose machine this is.')
       .describe(
-        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe(
+    'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
+  );
+export const listHarnessDirectoryResponse = zod.array(
+  listHarnessDirectoryResponseItem
+);
+
+/**
+ * @summary Handler for `GET /harnesses/me`.
+ */
+export const getSelfHarnessResponse = zod
+  .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'none'])
+      .optional()
+      .describe('What one caller may do with a machine.'),
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
+    connected: zod
+      .boolean()
+      .describe('Whether the daemon currently holds a runtime connection.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().describe('User that registered this harness.'),
+    id: zod.string(),
+    kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
+    last_connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the daemon last attached a runtime connection.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose machine this is.')
+      .describe(
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
       ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
@@ -43610,6 +43731,10 @@ export const patchHarnessBody = zod
 
 export const patchHarnessResponse = zod
   .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'none'])
+      .optional()
+      .describe('What one caller may do with a machine.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
@@ -43629,28 +43754,70 @@ export const patchHarnessResponse = zod
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
     owner: zod
-      .union([
-        zod
-          .object({
-            type: zod.enum(['user']),
-            user_id: zod.string().describe('Owner user id.'),
-          })
-          .describe('User-owned (private) harness.'),
-        zod
-          .object({
-            team_id: zod.uuid().describe('Owner team id.'),
-            type: zod.enum(['team']),
-          })
-          .describe('Team-owned harness, usable by every team member.'),
-      ])
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose machine this is.')
       .describe(
-        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
       ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
     'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
   );
+
+/**
+ * @summary Handler for `GET /harnesses/{harness_id}/residents`.
+ */
+export const listHarnessResidentsParams = zod.object({
+  harness_id: zod.string().describe('Harness ID'),
+});
+
+export const listHarnessResidentsResponseItem = zod
+  .object({
+    bot_id: zod.string(),
+    name: zod.string().describe('Display name.'),
+    owner_user_id: zod
+      .string()
+      .nullish()
+      .describe('The user owning the agent, when a person does.'),
+    team_id: zod
+      .uuid()
+      .nullish()
+      .describe('The team owning the agent, when a team does.'),
+  })
+  .describe(
+    'An agent that lives on a machine, as opposed to a coding agent directed\nthere turn by turn. Anyone who can reach it can talk to it; it stays up only\nwhile its own owner can use the machine.'
+  );
+export const listHarnessResidentsResponse = zod.array(
+  listHarnessResidentsResponseItem
+);
+
+/**
+ * Requires the owner's own session: an agent can ask for access to a machine
+but never open one, since that grants code execution on it.
+ * @summary Handler for `PUT /harnesses/{harness_id}/team-access`.
+ */
+export const setHarnessTeamAccessParams = zod.object({
+  harness_id: zod.string().describe('Harness ID'),
+});
+
+export const setHarnessTeamAccessBody = zod
+  .object({
+    enabled: zod
+      .boolean()
+      .describe('Whether every member of the team may use the machine.'),
+    team_id: zod.uuid().describe('The team, which the owner must belong to.'),
+  })
+  .describe("Request to open or close a machine to one of the owner's teams.");
 
 /**
  * @summary Gets the users history
