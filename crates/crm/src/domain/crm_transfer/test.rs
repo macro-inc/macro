@@ -675,6 +675,31 @@ async fn a_contact_csv_saves_phone_columns_on_the_contacts() {
 }
 
 #[tokio::test]
+async fn a_phone_column_with_a_pipeline_field_fills_only_the_field() {
+    let mut contacts = overview(PipelineRecordType::Contact);
+    contacts.fields[0].name = "Contact".into();
+    contacts.fields.push(field("Phone", FieldKind::Text));
+    let pipeline = contacts.pipeline.pipeline.id;
+    let service = CrmTransferServiceImpl::new(
+        Arc::new(Workflows::new(contacts)),
+        Records::default(),
+        Files::default(),
+    );
+    let outcome = service
+        .import_to_pipeline(
+            &viewer(),
+            pipeline,
+            CsvInput::Text("Contact,Email,Phone\nAna,ana@acme.example,555 010\n".into()),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.filled_fields, ["Phone"]);
+    assert_eq!(outcome.invalid_phones, 0, "the field took the value");
+    assert!(service.records.phones_added.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn a_companies_csv_leaves_phone_columns_alone() {
     let workflows = Workflows::new(overview(PipelineRecordType::Company));
     let pipeline = workflows.overview.pipeline.pipeline.id;

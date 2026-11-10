@@ -117,11 +117,12 @@ async fn bounded<F: Future>(futures: Vec<F>) -> Vec<F::Output> {
         .await
 }
 
-/// The numbers in each contact row's phone columns, for the row's contact,
-/// and how many values were not numbers with a country code.
+/// The numbers in each contact row's `phone_headers` columns, for the row's
+/// contact, and how many values were not numbers with a country code.
 fn row_phones(
     rows: &[RecordRow],
     ids: &HashMap<String, Uuid>,
+    phone_headers: &[&str],
 ) -> (Vec<(Uuid, PhoneNumber)>, usize) {
     let mut phones = Vec::new();
     let mut invalid = 0;
@@ -132,7 +133,7 @@ fn row_phones(
         for (_, value) in row
             .values
             .iter()
-            .filter(|(header, _)| is_phone_header(header))
+            .filter(|(header, _)| phone_headers.contains(&header.as_str()))
         {
             match PhoneNumber::parse(value) {
                 Some(phone) => phones.push((id, phone)),
@@ -480,6 +481,7 @@ where
         let reserved = record_headers(record_type);
         let mut fields: Vec<(String, &PipelineField)> = Vec::new();
         let mut ignored_columns = Vec::new();
+        let mut phone_headers = Vec::new();
         for header in other_headers {
             if reserved
                 .iter()
@@ -491,18 +493,18 @@ where
                 !field.is_record() && importable(field) && field.name.eq_ignore_ascii_case(header)
             }) {
                 Some(field) => fields.push((header.clone(), field)),
-                // A contact's phone columns are saved on the contact itself.
-                None if record_type == PipelineRecordType::Contact && is_phone_header(header) => {}
+                // A contact's phone columns without a field of their own are
+                // saved on the contact itself.
+                None if record_type == PipelineRecordType::Contact && is_phone_header(header) => {
+                    phone_headers.push(header.as_str());
+                }
                 None => ignored_columns.push(header.clone()),
             }
         }
 
         let (ids, created_records, unresolved) =
             self.resolve(viewer, record_type, rows, domains).await?;
-        let (phones, invalid_phones) = match record_type {
-            PipelineRecordType::Contact => row_phones(rows, &ids),
-            PipelineRecordType::Company => (Vec::new(), 0),
-        };
+        let (phones, invalid_phones) = row_phones(rows, &ids, &phone_headers);
         let phones_saved = if phones.is_empty() {
             0
         } else {
