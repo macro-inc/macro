@@ -7,14 +7,16 @@
 
 import type { AgentModelDto } from './agentModelDto';
 import type { AgentModelsStatusDto } from './agentModelsStatusDto';
+import type { LoadAgentModelsResponseCachedAt } from './loadAgentModelsResponseCachedAt';
 import type { LoadAgentModelsResponseCurrentModel } from './loadAgentModelsResponseCurrentModel';
 
 /**
  * Successful model-discovery response.
  */
 export interface LoadAgentModelsResponse {
-  /** When the list was last read from the machine; null when it is live. */
-  cachedAt?: string | null;
+  /** When a paired runtime that is off or unreachable last reported this
+catalog; null when it was probed live. */
+  cachedAt?: LoadAgentModelsResponseCachedAt;
   /** Current provider model, if model selection is available. */
   currentModel?: LoadAgentModelsResponseCurrentModel;
   /** Ordered model catalog. */

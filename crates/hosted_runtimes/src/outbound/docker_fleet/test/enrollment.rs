@@ -60,7 +60,7 @@ impl FleetEnrollment for TestEnrollment {
 #[tokio::test]
 async fn docker_create_replays_refresh_unclaimed_enrollment_without_rebooting() {
     for (exists, claimed, expected_issue_calls, expected_commands) in [
-        (false, false, 1, vec!["ps", "create", "ps", "start"]),
+        (false, false, 1, vec!["ps", "create", "start"]),
         (true, false, 1, vec!["ps", "inspect", "exec"]),
         (true, true, 0, vec!["ps", "inspect"]),
     ] {
@@ -122,6 +122,8 @@ async fn docker_create_replays_refresh_unclaimed_enrollment_without_rebooting() 
             created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
             created_at: Utc::now(),
             enrolled_at: None,
+            setup_completed_at: None,
+            default_agent_id: None,
             enrollment_generation: EnrollmentGeneration::new(if exists { 1 } else { 0 }),
         };
         let source = TestEnrollment {

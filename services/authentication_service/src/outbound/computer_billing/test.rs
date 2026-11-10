@@ -6,7 +6,7 @@ use teams::domain::model::{PriceInfo, SubscriptionTerms};
 use super::*;
 use crate::domain::computer_billing::IntervalPrices;
 
-type Change = (Uuid, Vec<ItemQuantityChange>, String);
+type Change = (Uuid, Vec<ItemQuantityChange>, ItemProration, String);
 
 #[derive(Clone)]
 struct FakeTeams {
@@ -37,13 +37,14 @@ impl TeamSubscriptionItems for FakeTeams {
             .lock()
             .unwrap()
             .iter()
-            .any(|(_, _, applied)| applied == key))
+            .any(|(_, _, _, applied)| applied == key))
     }
 
     async fn change_team_subscription_items(
         &self,
         team_id: &Uuid,
         changes: Vec<ItemQuantityChange>,
+        proration: ItemProration,
         idempotency_key: &str,
     ) -> Result<(), TeamSubscriptionItemsError> {
         if !self.subscribed {
@@ -52,10 +53,12 @@ impl TeamSubscriptionItems for FakeTeams {
         if self.decline {
             return Err(CustomerError::PaymentFailed.into());
         }
-        self.changes
-            .lock()
-            .unwrap()
-            .push((*team_id, changes, idempotency_key.to_string()));
+        self.changes.lock().unwrap().push((
+            *team_id,
+            changes,
+            proration,
+            idempotency_key.to_string(),
+        ));
         Ok(())
     }
 
@@ -144,7 +147,7 @@ async fn a_size_without_a_price_at_the_interval_is_not_sold() {
 }
 
 #[tokio::test]
-async fn adding_a_computer_joins_its_item_and_the_extra_items_in_one_change() {
+async fn adding_invoices_its_items_in_one_change_and_releasing_refunds_nothing() {
     let teams = FakeTeams::new(BillingCadence::Month);
     let billing = TeamComputerBilling::new(teams.clone(), prices());
     let team_id = Uuid::now_v7();
@@ -185,6 +188,7 @@ async fn adding_a_computer_joins_its_item_and_the_extra_items_in_one_change() {
                         delta: 2,
                     },
                 ],
+                ItemProration::InvoiceNow,
                 "computer-1".to_string(),
             ),
             (
@@ -193,6 +197,7 @@ async fn adding_a_computer_joins_its_item_and_the_extra_items_in_one_change() {
                     price_id: stripe::PriceId::from_str("price_standard_month").unwrap(),
                     delta: -1,
                 }],
+                ItemProration::NoProration,
                 "computer-1-release".to_string(),
             ),
         ]

@@ -13,6 +13,9 @@ const waiting: ComputerStatus = {
   status: 'waiting_for_capacity',
   payment: 'paid',
   poweredOn: true,
+  agentCount: 0,
+  canUndoCancel: true,
+  purchasedBy: 'viewer',
   createdAt: '2026-11-01T00:00:00Z',
 };
 

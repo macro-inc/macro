@@ -15,7 +15,9 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
   (authentication_service), `Fleet` effects and timers in agent_harness_service.
 - Keep literal purchase resources in the versioned `domain::size::current_catalog`.
 - Capacity is in units: `max(ceil(memory_gib / 8), ceil(vcpus / 4))`. Purchase
-  reserves sold units on a host; waking checks awake units (`Context::host_has_room`).
+  reserves sold units on a host; starting checks awake units (`Context::host_has_room`).
+- A powered-on computer stays Running until the team turns it off (Stopped).
+  Fleets never pause guests; a paused Docker container is an unknown state.
 
 ## Start here
 
@@ -23,7 +25,7 @@ lifecycle, capacity, purchase/billing orchestration and the fleet ports.
 - `src/domain/service.rs`: the team-facing `ComputerService` (purchase, quote, status, power, retry, cancel, release).
 - `src/domain/enrollment.rs`: the first-boot contract with `macrod enroll`.
 - `src/domain/operator.rs`: the control plane (fleet effects, timers, reconcile,
-  idle sleep, macrod presence, wake on prompt); wired in
+  macrod presence); wired in
   `services/agent_harness_service/src/computers.rs`.
 - `src/inbound/axum_router.rs`: `/team/computers*` and `/internal/computers*`,
   mounted by authentication_service.
@@ -50,7 +52,7 @@ Require image, host reserve and oversell factor for either enabled fleet;
 require Docker memory for Docker, and explicit profile, storage pool,
 request/connect/operation/state-change limits and shutdown grace for Incus.
 See [the required variable list](../../docs/development/running-locally.md#macro-computers).
-Keep lifecycle timings (`IDLE_AFTER`, `SUSPEND_AFTER`, `RETENTION`, backoffs,
+Keep lifecycle timings (`RETENTION`, `MACROD_GRACE`, backoffs,
 leases and polling intervals) as named policy constants, not config defaults.
 Reject invalid stored numeric capacity and retry counts rather than substituting values.
 
@@ -88,8 +90,8 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   `CatalogEntryId` and `price_id` once at purchase. Comped rows have NULL price IDs;
   Stripe retries and removal use the saved price. Use the versioned catalog only
   for new offers and purchases; never infer size from resources. Fleet CPU/RAM/root
-  limits, capacity and reconcile drift checks read recorded resources; Incus state
-  space is memory + 1 GiB. Drift logs an operator error without resizing.
+  limits, capacity and reconcile drift checks read recorded resources.
+  Drift logs an operator error without resizing.
   Docker enforces/checks CPU and RAM only (overlayfs has no disk quota).
   Subscription reconcile compares saved price ids, never current catalog prices.
   `ComputerStatus` exposes `vcpus`, `memoryGib`, `diskGib`, `catalogEntry`.
@@ -185,28 +187,38 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   calls. A comped quote reads the Stripe quote and sets amount to zero, preserving
   price id, currency and interval. Without a subscription the quote returns
   `NoSubscription`; billing errors propagate.
-- **Waiting for capacity**: Preserve stopped/suspended fleet state and project
-  `wake_requested` with power On as `ComputerStatusKind::WaitingForCapacity`
+- **Waiting for capacity**: Preserve stopped fleet state and project
+  `power_on_requested` with power On as `ComputerStatusKind::WaitingForCapacity`
   (also provisioning with `start: false`). Suppress setup progress while waiting.
-  Persist `CapacityWait` after the first MakeRoom: check room after 20, 40, 80,
-  160, 320, then 600 seconds, capped thereafter. Prompts and stale timers do not
-  bypass the deadline or enqueue another MakeRoom. MakeRoom reports
-  `RoomUnavailable` when nothing is frozen; retain the latch until
-  `CapacityChanged`, even across worker restarts. Capped retries recheck room
-  without repeating MakeRoom. Log each new deadline once.
+  Persist `CapacityWait` on the first blocked start: check room after 20, 40,
+  80, 160, 320, then 600 seconds, capped thereafter. A repeated power-on or a
+  stale timer does not bypass the deadline. Log each new deadline once.
   When a computer leaves awake, enqueue immediate `CapacityChanged` timers for
   waiters on its host in the same transaction. Lock the host before computer
-  and timer rows, including timer delivery, to serialize wake reservations and
-  avoid lock inversion. Power-off, successful wake and release clear the wait.
+  and timer rows, including timer delivery, to serialize start reservations and
+  avoid lock inversion. Power-off, a successful start and release clear the wait.
   Runtimes and Billing show "Waiting for space on the host" with a hint to turn
   off or release another computer. Waiting computers remain power-manageable.
 - A bought computer's harness starts with "Don't ask before acting" on: the
   harnesses service creates every hosted harness with `allow_permission_bypass`.
 - **Default agent**: the first macrod connection (`enrolled_at` unset) calls
   `Harnesses::create_default_agent`, which gives the team a coding agent on the
-  computer's harness unless one is already bound (`DefaultAgent::{Created, AlreadyBound}`).
+  computer's harness unless one is already bound (`DefaultAgent::{Created { agent_id }, AlreadyBound}`).
+  A created agent's bot id is stored as `hosted_runtime.default_agent_id` and
+  exposed as `ComputerStatus.defaultAgentId` (it can name a since-deleted agent).
   It never runs again, so a deleted or rebound agent stays gone; a failure is
   recorded on the `computer.default_agent` span and enrollment carries on.
+- **Agents go with the computer**: `Harnesses::revoke(&Computer)` (the
+  `RevokeHarness` effect of release and retention expiry) deletes the harness,
+  then every agent bound to it, inside the one effect. The harness delete locks
+  its row `FOR UPDATE` and agent binds hold it `FOR SHARE`, so a concurrent
+  bind is either deleted too or refused. `ComputerStatus.agentCount` counts the
+  live agents on the computer's live harness, teammates' private ones included
+  (`ComputerRepo::agent_counts`), for the release warning.
+- **Guided setup**: `POST /team/computers/{computer_id}/setup-complete` →
+  `ComputerStatus`, `ComputerService::complete_setup`, records
+  `setupCompletedAt` once (idempotent). Allowed to the computer's buyer and the
+  team owner, the server rule behind the web's `canManageClaude`; others get 403.
 - **Status**: `ComputerService::status(team_id, computer_id)` / `list(team_id)` →
   `ComputerStatus` with `setup: Option<SetupProgress>` (Creating → Booting →
   Connecting → Ready, positions 1–4) until macrod first connects. Pending payment
@@ -218,7 +230,7 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   Applies `OperatorRetry` and never touches billing or purchases. A typed missing
   fleet instance completes its effect and applies `InstanceLost`: recreate on the
   same host, computer row and harness id, starting only with power On and room.
-  Reconcile also detects missing Failed/Stopped/Suspended guests; awake guests
+  Reconcile also detects missing Failed/Stopped guests; awake guests
   first follow crash/restart. Re-enrollment re-keys the harness. A canceled
   computer with no guest becomes Destroyed and revokes its harness without
   removing billing again. Missing stop/destroy are idempotent successes.

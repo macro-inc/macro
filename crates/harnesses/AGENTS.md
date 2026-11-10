@@ -12,8 +12,11 @@ an approved pairing with the buying administrator as human owner and a User
 (`edit`) grant for the computer's team. Retries before
 claim rotate the secret; retries after claim revoke old tokens and re-key the
 same harness. Both preserve owner, grants, agent bindings, and computer identity.
-Claim and re-key serialize on the harness row. `revoke_hosted_harness` and
-`harness_computer` are the other trusted control-plane entry points.
+Claim and re-key serialize on the harness row. `revoke_hosted_harness`,
+`harness_computer` and `computer_harnesses` are the other trusted control-plane
+entry points. `delete_harness` locks the row `FOR UPDATE` first; a Macro
+computer's harness keeps its agents bound when deleted (the unbind trigger
+skips it) so the control plane can delete them after `revoke_hosted_harness`.
 `hosted_pairing_claimed(pairing_id)` reads the durable pairing claim for the
 fleet generation gate, including the interval before macrod connects. Hosted
 claims take the same `hosted-enrollment:<computer UUID>` advisory guard as
@@ -101,7 +104,8 @@ before acting"); paired machines keep it off until their owner turns it on.
   `RUNTIME_CONNECTED_HEADER` and the harness reads offline
   (`infra/stacks/monitoring/monitors/harness-presence.ts` alerts on it).
 - Deleting a harness only stamps `deleted_at`; a database trigger then nulls
-  `agent_configs.harness_id` for its agents, as a hard delete's `SET NULL` would.
+  `agent_configs.harness_id` for its agents, as a hard delete's `SET NULL` would,
+  except on a Macro computer's harness, whose agents the release deletes.
 
 ## Related
 

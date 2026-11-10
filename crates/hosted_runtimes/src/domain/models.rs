@@ -2,6 +2,7 @@
 
 use macro_user_id::user_id::MacroUserIdStr;
 
+use bot_id::BotId;
 use harness_id::HarnessId;
 
 use chrono::{DateTime, Utc};
@@ -115,6 +116,11 @@ pub struct Computer {
     pub created_at: DateTime<Utc>,
     /// When macrod first connected; setup is over from then on.
     pub enrolled_at: Option<DateTime<Utc>>,
+    /// When the team finished the guided setup after buying it.
+    pub setup_completed_at: Option<DateTime<Utc>>,
+    /// The coding agent the computer came with, once created. Bots are
+    /// soft-deleted, so it can name an agent the team since deleted.
+    pub default_agent_id: Option<BotId>,
 }
 
 /// A persisted row, including identities whose payload cannot be trusted.
@@ -154,6 +160,8 @@ pub struct ComputerDisplayMetadata {
     pub catalog_entry: String,
     /// Reservation timestamp.
     pub created_at: DateTime<Utc>,
+    /// The Macro user who bought it.
+    pub purchased_by: String,
 }
 
 impl From<&Computer> for ComputerDisplayMetadata {
@@ -166,6 +174,7 @@ impl From<&Computer> for ComputerDisplayMetadata {
             disk_gib: i64::from(computer.resources.disk_gib.get()),
             catalog_entry: computer.catalog_entry.as_str().to_owned(),
             created_at: computer.created_at,
+            purchased_by: computer.created_by.to_string(),
         }
     }
 }
@@ -388,14 +397,12 @@ pub enum ComputerStatusKind {
     SettingUp,
     /// Stored data requires operator repair.
     NeedsAttention,
-    /// Wake is blocked by the host's awake capacity.
+    /// Power-on is blocked by the host's awake capacity.
     WaitingForCapacity,
     /// Guest is connected and ready.
     Ready,
-    /// Guest is frozen or suspended.
-    Asleep,
-    /// Guest is starting or resuming.
-    Waking,
+    /// Guest is starting.
+    Starting,
     /// Guest is shutting down.
     Stopping,
     /// Guest is powered off.
@@ -469,6 +476,9 @@ pub struct ComputerStatus {
     pub powered_on: bool,
     /// When billing stops, for a computer canceled at period end.
     pub cancels_at: Option<DateTime<Utc>>,
+    /// Whether a cancel at period end can still be undone; false once its
+    /// billing item was removed ahead of the renewal.
+    pub can_undo_cancel: bool,
     /// When the disk is destroyed, for a canceled computer.
     pub retained_until: Option<DateTime<Utc>>,
     /// Harness claimed by this guest.
@@ -476,11 +486,24 @@ pub struct ComputerStatus {
     pub harness_id: Option<HarnessId>,
     /// Time the computer was reserved.
     pub created_at: DateTime<Utc>,
+    /// The Macro user who bought it; with the team owner, the one who may
+    /// finish its setup and manage its Claude account.
+    pub purchased_by: String,
+    /// When the team finished the guided setup; null while it is unfinished.
+    pub setup_completed_at: Option<DateTime<Utc>>,
+    /// Bot id of the coding agent the computer came with; null until macrod
+    /// first connects. It can name an agent the team since deleted.
+    #[cfg_attr(feature = "inbound", schema(value_type = Option<Uuid>))]
+    pub default_agent_id: Option<BotId>,
+    /// Agents bound to the computer's live harness, teammates' private ones
+    /// included: the ones releasing it deletes.
+    pub agent_count: u32,
 }
 
 impl Computer {
-    /// Project lifecycle state into the team-facing status.
-    pub fn status(&self) -> ComputerStatus {
+    /// Project lifecycle state into the team-facing status, with the number
+    /// of agents bound to its harness.
+    pub fn status(&self, agent_count: u32) -> ComputerStatus {
         let waiting_for_capacity = self.state.waiting_for_capacity();
         let setup_step = match self.state.phase {
             _ if waiting_for_capacity => None,
@@ -495,12 +518,8 @@ impl Computer {
             _ if waiting_for_capacity => ComputerStatusKind::WaitingForCapacity,
             _ if setup_step.is_some() => ComputerStatusKind::SettingUp,
             Phase::Running { .. } => ComputerStatusKind::Ready,
-            Phase::Frozen { .. } | Phase::Suspended { .. } if self.state.wake_requested => {
-                ComputerStatusKind::Waking
-            }
-            Phase::Frozen { .. } | Phase::Suspended { .. } => ComputerStatusKind::Asleep,
-            Phase::Booting { .. } | Phase::Restarting { .. } => ComputerStatusKind::Waking,
-            Phase::Stopped { .. } if self.state.wake_requested => ComputerStatusKind::Waking,
+            Phase::Booting { .. } | Phase::Restarting { .. } => ComputerStatusKind::Starting,
+            Phase::Stopped { .. } if self.state.power_on_requested => ComputerStatusKind::Starting,
             Phase::Stopping { .. } => ComputerStatusKind::Stopping,
             Phase::Stopped { .. } => ComputerStatusKind::Stopped,
             Phase::Failed { .. } => ComputerStatusKind::Failed,
@@ -517,7 +536,7 @@ impl Computer {
         });
         let (cancels_at, retained_until) = match self.state.billing {
             Billing::Active => (None, None),
-            Billing::CancelAtPeriodEnd { at } => (Some(at), None),
+            Billing::CancelAtPeriodEnd { at } | Billing::BillingStopped { at } => (Some(at), None),
             Billing::Canceled { retained_until } => (None, Some(retained_until)),
         };
 
@@ -535,18 +554,23 @@ impl Computer {
             setup,
             powered_on: self.state.power == Power::On,
             cancels_at,
+            can_undo_cancel: matches!(self.state.billing, Billing::CancelAtPeriodEnd { .. }),
             retained_until,
             harness_id: self.harness_id,
             created_at: self.created_at,
+            purchased_by: self.created_by.to_string(),
+            setup_completed_at: self.setup_completed_at,
+            default_agent_id: self.default_agent_id,
+            agent_count,
         }
     }
 }
 
 impl ComputerRecord {
     /// Expose quarantine without inventing metadata from an invalid payload.
-    pub fn status(&self) -> ComputerStatus {
+    pub fn status(&self, agent_count: u32) -> ComputerStatus {
         match self {
-            Self::Healthy(computer) => computer.status(),
+            Self::Healthy(computer) => computer.status(agent_count),
             Self::NeedsAttention { id, display, .. } => ComputerStatus {
                 id: *id,
                 status: ComputerStatusKind::NeedsAttention,
@@ -561,9 +585,14 @@ impl ComputerRecord {
                 setup: None,
                 powered_on: false,
                 cancels_at: None,
+                can_undo_cancel: false,
                 retained_until: None,
                 harness_id: None,
                 created_at: display.created_at,
+                purchased_by: display.purchased_by.clone(),
+                setup_completed_at: None,
+                default_agent_id: None,
+                agent_count,
             },
         }
     }

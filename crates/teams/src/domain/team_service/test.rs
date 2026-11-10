@@ -1286,6 +1286,7 @@ impl CustomerRepository for MockCustomerRepository {
         &self,
         subscription_id: &stripe::SubscriptionId,
         changes: Vec<ItemQuantityChange>,
+        _proration: crate::domain::model::ItemProration,
         idempotency_key: &str,
     ) -> Result<(), CustomerError> {
         self.item_change_calls.lock().unwrap().push((
@@ -9238,7 +9239,12 @@ async fn subscription_item_changes_go_to_the_team_subscription() {
     };
 
     service
-        .change_team_subscription_items(&uuid::Uuid::nil(), vec![change.clone()], "purchase-1")
+        .change_team_subscription_items(
+            &uuid::Uuid::nil(),
+            vec![change.clone()],
+            crate::domain::model::ItemProration::InvoiceNow,
+            "purchase-1",
+        )
         .await
         .unwrap();
 
@@ -9273,6 +9279,7 @@ async fn subscription_item_changes_need_a_team_subscription() {
                 price_id: stripe::PriceId::from_str("price_computer").unwrap(),
                 delta: 1,
             }],
+            crate::domain::model::ItemProration::InvoiceNow,
             "purchase-1",
         )
         .await;

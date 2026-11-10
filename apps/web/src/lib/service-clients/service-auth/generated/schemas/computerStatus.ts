@@ -6,32 +6,38 @@
  */
 import type { ComputerStatusCancelsAt } from './computerStatusCancelsAt';
 import type { ComputerStatusCompReason } from './computerStatusCompReason';
+import type { ComputerStatusDefaultAgentId } from './computerStatusDefaultAgentId';
 import type { ComputerStatusHarnessId } from './computerStatusHarnessId';
 import type { ComputerStatusKind } from './computerStatusKind';
 import type { ComputerStatusPayment } from './computerStatusPayment';
 import type { ComputerStatusRetainedUntil } from './computerStatusRetainedUntil';
 import type { ComputerStatusSetup } from './computerStatusSetup';
+import type { ComputerStatusSetupCompletedAt } from './computerStatusSetupCompletedAt';
 
 /**
  * A computer as its team sees it.
  */
 export interface ComputerStatus {
+  /**
+   * Agents bound to the computer's live harness, teammates' private ones
+included: the ones releasing it deletes.
+   * @minimum 0
+   */
+  agentCount: number;
+  /** Whether a cancel at period end can still be undone; false once its
+billing item was removed ahead of the renewal. */
+  canUndoCancel: boolean;
   /** When billing stops, for a computer canceled at period end. */
   cancelsAt?: ComputerStatusCancelsAt;
-  /** Whether a pending cancellation can still be undone; false once billing has stopped. */
-  canUndoCancel?: boolean;
   /** Versioned catalog entry saved at purchase. */
   catalogEntry: string;
   /** Present for a comped purchase, including after release. */
   compReason?: ComputerStatusCompReason;
-  /** The user who bought it; with the team owner, the one who finishes setup. */
-  purchasedBy?: string | null;
   /** Time the computer was reserved. */
   createdAt: string;
-  /** Every agent bound to the computer, including ones the caller can't see. */
-  agentCount?: number;
-  /** Bot id of the coding agent created on it; null until its harness is claimed. */
-  defaultAgentId?: string | null;
+  /** Bot id of the coding agent the computer came with; null until macrod
+first connects. It can name an agent the team since deleted. */
+  defaultAgentId?: ComputerStatusDefaultAgentId;
   /** Root disk limit saved at purchase. */
   diskGib: number;
   /** Harness claimed by this guest. */
@@ -45,11 +51,14 @@ export interface ComputerStatus {
   payment?: ComputerStatusPayment;
   /** Whether validated state requests power on; false for quarantined records. */
   poweredOn: boolean;
+  /** The Macro user who bought it; with the team owner, the one who may
+finish its setup and manage its Claude account. */
+  purchasedBy: string;
   /** When the disk is destroyed, for a canceled computer. */
   retainedUntil?: ComputerStatusRetainedUntil;
   setup?: ComputerStatusSetup;
-  /** When guided setup was finished; absent while it is incomplete. */
-  setupCompletedAt?: string | null;
+  /** When the team finished the guided setup; null while it is unfinished. */
+  setupCompletedAt?: ComputerStatusSetupCompletedAt;
   /** Purchased catalog size. */
   size: string;
   /** Observed guest status. */

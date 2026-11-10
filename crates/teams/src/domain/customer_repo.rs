@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::model::{
-    CustomerError, ItemQuantityChange, PriceInfo, ScheduledSeatPlan, SeatPlan, SubscriptionTerms,
+    CustomerError, ItemProration, ItemQuantityChange, PriceInfo, ScheduledSeatPlan, SeatPlan,
+    SubscriptionTerms,
 };
 
 /// The CustomerRepository defines a set of actions to perform on customer data
@@ -132,8 +133,8 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
         idempotency_key: &str,
     ) -> impl Future<Output = Result<bool, CustomerError>> + Send;
 
-    /// Apply every change to the subscription in ONE update, invoiced now
-    /// with proration (through the schedule, when one is attached, like seat
+    /// Apply every change to the subscription in ONE update, billed as
+    /// `proration` says (through the schedule, when one is attached, like seat
     /// changes). A declined payment fails with [`CustomerError::PaymentFailed`]
     /// and changes nothing. A change that would take a price below zero fails
     /// with [`CustomerError::QuantityBelowZero`] before anything is sent.
@@ -143,6 +144,7 @@ pub trait CustomerRepository: Clone + Send + Sync + 'static {
         &self,
         subscription_id: &stripe::SubscriptionId,
         changes: Vec<ItemQuantityChange>,
+        proration: ItemProration,
         idempotency_key: &str,
     ) -> impl Future<Output = Result<(), CustomerError>> + Send;
 

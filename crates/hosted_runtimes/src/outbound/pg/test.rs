@@ -212,8 +212,8 @@ async fn a_computers_effects_run_one_at_a_time_in_order(pool: PgPool) {
         .unwrap();
     repo.apply(id, Event::InstanceStarted, now()).await.unwrap();
     repo.apply(id, Event::MacrodConnected, now()).await.unwrap();
-    repo.apply(id, Event::SessionsIdle, now()).await.unwrap();
-    repo.apply(id, Event::PromptArrived, now()).await.unwrap();
+    repo.apply(id, Event::PowerOff, now()).await.unwrap();
+    repo.apply(id, Event::PowerOn, now()).await.unwrap();
 
     let first = repo
         .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
@@ -228,7 +228,7 @@ async fn a_computers_effects_run_one_at_a_time_in_order(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(second.len(), 1);
-    assert!(matches!(second[0].effect, Effect::Freeze { .. }));
+    assert!(matches!(second[0].effect, Effect::Stop { .. }));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -305,21 +305,6 @@ async fn lifecycle_selectors_read_the_nested_phase_tag(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(repo.instances_expected(host.id).await.unwrap().len(), 1);
-    repo.apply(id, Event::InstanceStarted, now()).await.unwrap();
-    repo.apply(id, Event::MacrodConnected, now()).await.unwrap();
-    assert_eq!(
-        repo.running()
-            .await
-            .unwrap()
-            .iter()
-            .map(|c| c.id())
-            .collect::<Vec<_>>(),
-        vec![id]
-    );
-    assert_eq!(repo.coldest_frozen(host.id).await.unwrap(), None);
-    repo.apply(id, Event::SessionsIdle, now()).await.unwrap();
-    assert!(repo.running().await.unwrap().is_empty());
-    assert_eq!(repo.coldest_frozen(host.id).await.unwrap(), Some(id));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -406,7 +391,7 @@ async fn reserve_atomically_schedules_confirmation_and_failed_payment_frees_capa
     assert!(!row.awake);
     assert_eq!(row.host_id, None);
     assert_eq!(
-        repo.list_for_team(TEAM).await.unwrap()[0].status().status,
+        repo.list_for_team(TEAM).await.unwrap()[0].status(0).status,
         crate::domain::models::ComputerStatusKind::PaymentFailed
     );
     assert!(repo.instances_expected(host.id).await.unwrap().is_empty());
@@ -544,7 +529,7 @@ async fn payment_provenance_migration_backfills_legacy_rows_and_preserves_resolv
             .into_healthy()
             .unwrap();
         assert_eq!(computer.state.payment, expected);
-        assert_eq!(computer.status().payment.unwrap(), expected);
+        assert_eq!(computer.status(0).payment.unwrap(), expected);
     }
 }
 
@@ -604,7 +589,7 @@ async fn comped_reservation_commits_provisioning_without_payment_recovery(pool: 
             .unwrap()
             .into_healthy()
             .unwrap()
-            .status()
+            .status(0)
             .comp_reason
             .as_deref(),
         Some("internal team")

@@ -12,7 +12,8 @@ use axum::{
 };
 use entity_access::{
     domain::models::{
-        AdminTeamRole, EntityAccessAuth, EntityAccessReceipt, MemberTeamRole, RequiredPermission,
+        AdminTeamRole, EntityAccessAuth, EntityAccessReceipt, MemberTeamRole, OwnerTeamRole,
+        RequiredPermission,
     },
     domain::ports::EntityAccessService,
     inbound::axum_extractors::MacroUserTeamExtractorV2,
@@ -32,7 +33,7 @@ use crate::domain::models::{
 use crate::domain::ports::{
     Billing, BillingError, CompPolicy, ComputerRepo, FleetAttachmentSource, NoComps,
 };
-use crate::domain::service::{Clock, ComputerError, ComputerService};
+use crate::domain::service::{Clock, ComputerError, ComputerService, TeamMemberRole};
 use crate::domain::size::ComputerSize;
 
 /// Router state: the computer service plus what team access checks need.
@@ -126,6 +127,10 @@ where
             "/team/computers/{computer_id}/cancel",
             post(cancel::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>)
                 .delete(undo_cancel::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
+        )
+        .route(
+            "/team/computers/{computer_id}/setup-complete",
+            post(complete_setup::<Repo, Bill, Time, Eas, Auth, Attachment, Policy>),
         )
         .route(
             "/team/computers/{computer_id}/release",
@@ -443,6 +448,49 @@ pub async fn retry<
     Ok(Json(state.service.retry(team_id, computer_id).await?))
 }
 
+/// Mark the guided setup after buying the computer finished. Idempotent;
+/// allowed to the computer's buyer and the team owner.
+#[utoipa::path(
+    post,
+    path = "/team/computers/{computer_id}/setup-complete",
+    operation_id = "complete_team_computer_setup",
+    params(("computer_id" = Uuid, Path)),
+    responses(
+        (status = 200, body = ComputerStatus),
+        (status = 403, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+    ),
+)]
+#[tracing::instrument(skip_all, fields(computer_id = %computer_id), err)]
+pub async fn complete_setup<
+    Repo: ComputerRepo,
+    Bill: Billing,
+    Time: Clock,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+    Attachment: FleetAttachmentSource,
+    Policy: CompPolicy,
+>(
+    access: MacroUserTeamExtractorV2<MemberTeamRole, Eas, Auth>,
+    State(state): State<ComputerRouterState<Repo, Bill, Time, Eas, Auth, Attachment, Policy>>,
+    Path(computer_id): Path<ComputerId>,
+) -> Result<Json<ComputerStatus>, ComputersHttpError> {
+    let receipt = access.entity_access_receipt;
+    let team_id = team_id(&receipt)?;
+    let caller = user_id(&receipt)?;
+    let caller_role = if receipt.try_into_requirement::<OwnerTeamRole>().is_ok() {
+        TeamMemberRole::Owner
+    } else {
+        TeamMemberRole::Other
+    };
+    Ok(Json(
+        state
+            .service
+            .complete_setup(team_id, computer_id, caller, caller_role)
+            .await?,
+    ))
+}
+
 /// Stop billing at the end of the current period.
 #[utoipa::path(
     post,
@@ -731,7 +779,7 @@ impl IntoResponse for ComputersHttpError {
     fn into_response(self) -> Response {
         let status = match &self.0 {
             ComputerError::FleetUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
-            ComputerError::RolloutDisabled => StatusCode::FORBIDDEN,
+            ComputerError::RolloutDisabled | ComputerError::Forbidden => StatusCode::FORBIDDEN,
             ComputerError::NotFound => StatusCode::NOT_FOUND,
             ComputerError::SoldOut | ComputerError::NotFailed => StatusCode::CONFLICT,
             ComputerError::BadRequest(_) | ComputerError::ConfirmationMismatch => {

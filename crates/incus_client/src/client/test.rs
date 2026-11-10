@@ -81,7 +81,6 @@ async fn other_error_envelopes_are_rejected_with_status_and_message() {
         .stop(
             &InstanceName::try_new("mc-01900000000070008000000000000001").unwrap(),
             false,
-            false,
         )
         .await;
 
@@ -110,17 +109,17 @@ async fn instance_decodes_the_sync_envelope() {
                     "limits.memory": "4GiB",
                     "user.macro.enrollment": "token-1"
                 },
-                "devices": {"root": {"size": "100GiB", "size.state": "9GiB"}},
+                "devices": {"root": {"size": "100GiB"}},
                 "ephemeral": false,
                 "profiles": ["default"],
-                "stateful": true,
+                "stateful": false,
                 "description": "",
                 "created_at": "2026-11-04T22:10:03.123456789Z",
                 "expanded_config": {"limits.cpu": "2"},
                 "expanded_devices": {"root": {"path": "/", "pool": "default", "type": "disk"}},
                 "name": "mc-01900000000070008000000000000001",
-                "status": "Frozen",
-                "status_code": 110,
+                "status": "Stopped",
+                "status_code": 102,
                 "last_used_at": "2026-11-04T22:11:00Z",
                 "location": "none",
                 "type": "virtual-machine",
@@ -151,15 +150,11 @@ async fn instance_decodes_the_sync_envelope() {
         InstanceInfo {
             devices: BTreeMap::from([(
                 "root".to_owned(),
-                BTreeMap::from([
-                    ("size".to_owned(), "100GiB".to_owned()),
-                    ("size.state".to_owned(), "9GiB".to_owned())
-                ])
+                BTreeMap::from([("size".to_owned(), "100GiB".to_owned())])
             )]),
             name: "mc-01900000000070008000000000000001".to_owned(),
-            status: InstanceStatus::Frozen,
+            status: InstanceStatus::Stopped,
             kind: InstanceKind::VirtualMachine,
-            stateful: true,
             config: BTreeMap::from([
                 ("limits.cpu".to_owned(), "2".to_owned()),
                 ("limits.memory".to_owned(), "4GiB".to_owned()),
@@ -287,14 +282,14 @@ async fn create_instance_maps_a_failed_operation() {
 }
 
 #[tokio::test]
-async fn stateful_stop_waits_for_the_operation_to_succeed() {
+async fn stop_waits_for_the_operation_to_succeed() {
     let server = MockServer::start().await;
     Mock::given(method("PUT"))
         .and(path(
             "/1.0/instances/mc-01900000000070008000000000000001/state",
         ))
         .and(body_json(
-            json!({"action": "stop", "stateful": true, "force": false, "timeout": 60}),
+            json!({"action": "stop", "force": false, "timeout": 60}),
         ))
         .respond_with(ResponseTemplate::new(202).set_body_json(json!({
             "type": "async",
@@ -365,7 +360,6 @@ async fn stateful_stop_waits_for_the_operation_to_succeed() {
     let result = client
         .stop(
             &InstanceName::try_new("mc-01900000000070008000000000000001").unwrap(),
-            true,
             false,
         )
         .await;

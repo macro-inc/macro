@@ -1,32 +1,24 @@
 //! Macro computers' control plane in this process: the fleet operator and
-//! its loops, macrod presence → lifecycle events, and waking an asleep
-//! computer when a prompt is forwarded to its harness.
+//! its loops, and macrod presence → lifecycle events.
 //!
 //! Purchases, billing and the team routes live in authentication_service,
 //! which owns Stripe; both share the `hosted_runtime*` tables.
 
 use hosted_runtimes::domain::ids::{ComputerId, PairingId};
 
-use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
-use agent_harness::domain::error::{HarnessError as CommandError, Result as HarnessResult};
-use agent_harness::domain::model::{CommandOutcome, HarnessCommand};
-use agent_harness::domain::ports::{
-    CommandForwarder, CommandTarget, HarnessPresence, RuntimeConnectionId,
-};
-use agent_session::domain::model::AgentSessionId;
+use agent_harness::domain::ports::{HarnessPresence, RuntimeConnectionId};
 use anyhow::Context;
-use chrono::{DateTime, Utc};
 use harness_id::HarnessId;
 use harnesses::domain::models::CreateHostedPairing;
 use harnesses::domain::ports::{HarnessError, HarnessService};
 use hosted_runtimes::domain::enrollment::{Deployment, DeploymentSource, DeploymentUnavailable};
 use hosted_runtimes::domain::models::{Computer, ControlPlaneId};
-use hosted_runtimes::domain::operator::{ComputerOperator, SessionActivity};
+use hosted_runtimes::domain::operator::ComputerOperator;
 use hosted_runtimes::domain::ports::{DefaultAgent, Harnesses, HostedPairing};
 use hosted_runtimes::domain::service::SystemClock;
 use hosted_runtimes::outbound::configured_fleet::ConfiguredFleet;
@@ -38,7 +30,6 @@ use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
-use tracing::Instrument;
 
 use crate::config::{ComputerFleetConfig, Config};
 
@@ -47,6 +38,7 @@ pub(crate) mod claude_expiry;
 pub(crate) mod control;
 pub(crate) mod default_agent;
 mod presence;
+pub mod sign_in_ahead;
 
 use default_agent::{DefaultAgentRequest, DefaultAgents};
 
@@ -55,13 +47,9 @@ use presence::PresenceGuard;
 const EFFECT_TICK: Duration = Duration::from_secs(2);
 const TIMER_TICK: Duration = Duration::from_secs(5);
 const RECONCILE_TICK: Duration = Duration::from_secs(60);
-const IDLE_TICK: Duration = Duration::from_secs(60);
 /// macrod reports a rejected sign-in within about a minute; checking as often
 /// keeps that notice prompt.
 const CLAUDE_SIGN_IN_TICK: Duration = Duration::from_secs(60);
-/// A parked prompt is forwarded anyway after this long, so a computer that
-/// connects to another replica still gets it.
-const PARK_LIMIT: Duration = Duration::from_secs(120);
 
 pub type Operator = ComputerOperator<PgComputerRepo, ConfiguredFleet, HostedHarnesses, SystemClock>;
 
@@ -187,7 +175,6 @@ enum Pass {
     Effects,
     Timers,
     Reconcile,
-    SleepIdle,
     ClaudeSignIns,
 }
 
@@ -197,7 +184,6 @@ impl Pass {
             Self::Effects => EFFECT_TICK,
             Self::Timers => TIMER_TICK,
             Self::Reconcile => RECONCILE_TICK,
-            Self::SleepIdle => IDLE_TICK,
             Self::ClaudeSignIns => CLAUDE_SIGN_IN_TICK,
         }
     }
@@ -214,7 +200,6 @@ pub struct ClaudeSignInWatch<Ingress> {
 /// Run the operator's passes until `shutdown`.
 pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
     operator: Arc<Operator>,
-    activity: PgSessionActivity,
     claude_sign_ins: ClaudeSignInWatch<Ingress>,
     tracker: &TaskTracker,
     shutdown: CancellationToken,
@@ -224,13 +209,11 @@ pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
         Pass::Effects,
         Pass::Timers,
         Pass::Reconcile,
-        Pass::SleepIdle,
         Pass::ClaudeSignIns,
     ] {
         tracker.spawn(run_pass(
             pass,
             Arc::clone(&operator),
-            activity.clone(),
             Arc::clone(&claude_sign_ins),
             shutdown.clone(),
         ));
@@ -240,7 +223,6 @@ pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
 async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
     pass: Pass,
     operator: Arc<Operator>,
-    activity: PgSessionActivity,
     claude_sign_ins: Arc<ClaudeSignInWatch<Ingress>>,
     shutdown: CancellationToken,
 ) {
@@ -265,11 +247,6 @@ async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
                     .map(|_| ()),
                 Pass::Reconcile => shutdown
                     .run_until_cancelled(operator.reconcile())
-                    .await
-                    .transpose()
-                    .map(|_| ()),
-                Pass::SleepIdle => shutdown
-                    .run_until_cancelled(operator.sleep_idle(&activity))
                     .await
                     .transpose()
                     .map(|_| ()),
@@ -317,6 +294,11 @@ pub trait HostedHarnessService: Send + Sync + 'static {
         &self,
         harness_id: HarnessId,
     ) -> Pin<Box<dyn Future<Output = Result<Option<ComputerId>, HarnessError>> + Send + '_>>;
+
+    fn computer_harnesses(
+        &self,
+        computer_id: ComputerId,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<HarnessId>, HarnessError>> + Send + '_>>;
 }
 
 impl<Service: HarnessService + Send + Sync + 'static> HostedHarnessService for Service {
@@ -352,6 +334,13 @@ impl<Service: HarnessService + Send + Sync + 'static> HostedHarnessService for S
         harness_id: HarnessId,
     ) -> Pin<Box<dyn Future<Output = Result<Option<ComputerId>, HarnessError>> + Send + '_>> {
         Box::pin(HarnessService::harness_computer(self, harness_id))
+    }
+
+    fn computer_harnesses(
+        &self,
+        computer_id: ComputerId,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<HarnessId>, HarnessError>> + Send + '_>> {
+        Box::pin(HarnessService::computer_harnesses(self, computer_id))
     }
 }
 
@@ -400,8 +389,20 @@ impl Harnesses for HostedHarnesses {
         Ok(self.service.harness_computer(harness_id).await?)
     }
 
-    async fn revoke(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
-        Ok(self.service.revoke_hosted_harness(computer_id).await?)
+    async fn revoke(&self, computer: &Computer) -> Result<(), Self::Err> {
+        // The harness goes first. Its delete locks the row that every agent
+        // bind holds while it writes, so once it commits no new agent can
+        // bind, and a computer's agents stay bound to a deleted harness: the
+        // deletion below finds every one, on a retried effect too.
+        self.service.revoke_hosted_harness(computer.id).await?;
+        for harness_id in self.service.computer_harnesses(computer.id).await? {
+            let deleted = self
+                .default_agents
+                .delete_bound(computer.created_by.clone(), harness_id)
+                .await?;
+            tracing::info!(computer_id = %computer.id, %harness_id, deleted, "deleted the computer's agents");
+        }
+        Ok(())
     }
 
     async fn create_default_agent(
@@ -414,180 +415,34 @@ impl Harnesses for HostedHarnesses {
             .create(DefaultAgentRequest {
                 team_id: computer.team_id,
                 buyer: computer.created_by.clone(),
-                computer_name: computer.name.as_str().to_owned(),
                 harness_id,
             })
             .await?)
     }
 }
 
-/// Session quiet-ness over the agent session tables.
-#[derive(Clone)]
-pub struct PgSessionActivity {
-    pool: PgPool,
-}
-
-impl PgSessionActivity {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
-    }
-}
-
-impl SessionActivity for PgSessionActivity {
-    type Err = sqlx::Error;
-
-    async fn is_idle_since(
-        &self,
-        harness_id: HarnessId,
-        since: DateTime<Utc>,
-    ) -> Result<bool, sqlx::Error> {
-        let busy = sqlx::query_scalar!(
-            r#"
-            SELECT EXISTS (
-                SELECT 1
-                FROM agent_session s
-                JOIN agent_configs ac ON ac.bot_id = s.bot_id
-                WHERE ac.harness_id = $1
-                  AND NOT s.is_archived
-                  AND (s.turn_state = 'running' OR s.modified_at > $2)
-            ) AS "busy!"
-            "#,
-            harness_id.as_uuid(),
-            since,
-        )
-        .fetch_one(&self.pool)
-        .await?;
-        Ok(!busy)
-    }
-}
-
-/// Commands held for computers that are waking, by harness.
-#[derive(Default)]
-pub struct ParkedCommands {
-    commands: Mutex<HashMap<HarnessId, Vec<(AgentSessionId, HarnessCommand)>>>,
-}
-
-impl ParkedCommands {
-    fn park(&self, harness: HarnessId, session: AgentSessionId, command: HarnessCommand) {
-        if let Ok(mut commands) = self.commands.lock() {
-            commands
-                .entry(harness)
-                .or_default()
-                .push((session, command));
-        }
-    }
-
-    fn take(&self, harness: HarnessId) -> Vec<(AgentSessionId, HarnessCommand)> {
-        self.commands
-            .lock()
-            .map(|mut commands| commands.remove(&harness).unwrap_or_default())
-            .unwrap_or_default()
-    }
-}
-
-/// Forwards like `Inner`, but a command for an asleep computer wakes it and
-/// waits (parked) until its macrod connects, instead of being broadcast to
-/// replicas none of which holds the harness.
-pub struct WakingForwarder<Inner> {
-    inner: Arc<Inner>,
-    operator: Option<Arc<Operator>>,
-    parked: Arc<ParkedCommands>,
-    tracker: TaskTracker,
-    shutdown: CancellationToken,
-}
-
-impl<Inner> WakingForwarder<Inner> {
-    pub fn new(
-        inner: Arc<Inner>,
-        operator: Option<Arc<Operator>>,
-        parked: Arc<ParkedCommands>,
-        tracker: TaskTracker,
-        shutdown: CancellationToken,
-    ) -> Self {
-        Self {
-            inner,
-            operator,
-            parked,
-            tracker,
-            shutdown,
-        }
-    }
-}
-
-impl<Inner: CommandForwarder> CommandForwarder for WakingForwarder<Inner> {
-    async fn forward(
-        &self,
-        session: AgentSessionId,
-        command: HarnessCommand,
-        target: CommandTarget,
-    ) -> HarnessResult<CommandOutcome> {
-        if let (Some(operator), CommandTarget::Harness(harness)) = (&self.operator, &target) {
-            let must_wait = operator
-                .prompt_arrived(*harness)
-                .await
-                .inspect_err(
-                    |error| tracing::error!(%harness, error = ?error, "could not wake a computer"),
-                )
-                .map_err(|error| {
-                    CommandError::Forward(rootcause::Report::new(error).into_dynamic())
-                })?;
-            if must_wait {
-                tracing::info!(%harness, %session, "parking a command until the computer wakes");
-                self.parked.park(*harness, session, command);
-                let inner = Arc::clone(&self.inner);
-                let parked = Arc::clone(&self.parked);
-                let harness = *harness;
-                let shutdown = self.shutdown.clone();
-                let span = tracing::info_span!("computer.prompt_wait", %harness, %session);
-                self.tracker.spawn(
-                    async move {
-                        shutdown
-                            .run_until_cancelled(async {
-                                tokio::time::sleep(PARK_LIMIT).await;
-                                flush(&*inner, &parked, harness).await;
-                            })
-                            .await;
-                    }
-                    .instrument(span),
-                );
-                return Ok(CommandOutcome::Queued);
-            }
-        }
-        self.inner.forward(session, command, target).await
-    }
-}
-
-async fn flush<Inner: CommandForwarder>(
-    inner: &Inner,
-    parked: &ParkedCommands,
-    harness: HarnessId,
-) {
-    for (session, command) in parked.take(harness) {
-        inner
-            .forward(session, command, CommandTarget::Harness(harness))
-            .await
-            .inspect_err(|error| tracing::error!(%harness, %session, error = ?error, "parked command failed"))
-            .ok();
-    }
-}
-
-/// [`HarnessPresence`] that also tells the operator, and releases commands
-/// parked for the harness once it is connected.
-pub struct ComputerPresence<Inner, Forwarder> {
+/// [`HarnessPresence`] that also tells the operator.
+pub struct ComputerPresence<Inner> {
     inner: Arc<Inner>,
     presence_pool: PgPool,
     operator: Option<Arc<Operator>>,
-    forwarder: Arc<Forwarder>,
-    parked: Arc<ParkedCommands>,
+    /// Set once the command bus exists, which needs the runtime registry
+    /// this presence is part of.
+    sign_in_ahead: Arc<std::sync::OnceLock<SignInAheadHandle>>,
+    tasks: TaskTracker,
 }
 
-impl<Inner, Forwarder> ComputerPresence<Inner, Forwarder> {
+/// [`sign_in_ahead::SignInAhead`] over the harness table.
+pub type SignInAheadHandle =
+    Arc<sign_in_ahead::SignInAhead<harnesses::outbound::pg_harness_repo::PgHarnessRepo>>;
+
+impl<Inner> ComputerPresence<Inner> {
     pub fn new(
         inner: Arc<Inner>,
         operator: Option<Arc<Operator>>,
-        forwarder: Arc<Forwarder>,
-        parked: Arc<ParkedCommands>,
         pool: PgPool,
+        sign_in_ahead: Arc<std::sync::OnceLock<SignInAheadHandle>>,
+        tasks: TaskTracker,
     ) -> Self {
         let presence_pool = PgPoolOptions::new()
             .max_connections(1)
@@ -596,17 +451,13 @@ impl<Inner, Forwarder> ComputerPresence<Inner, Forwarder> {
             inner,
             presence_pool,
             operator,
-            forwarder,
-            parked,
+            sign_in_ahead,
+            tasks,
         }
     }
 }
 
-impl<Inner, Forwarder> HarnessPresence for ComputerPresence<Inner, Forwarder>
-where
-    Inner: HarnessPresence,
-    Forwarder: CommandForwarder,
-{
+impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
     fn connected(
         self: Arc<Self>,
         harness: HarnessId,
@@ -636,7 +487,13 @@ where
                     .inspect_err(|error| tracing::error!(%harness, error = ?error, "computer connect event failed"))
                     .ok();
             }
-            flush(&*self.forwarder, &self.parked, harness).await;
+            drop(guard);
+            // After the presence lock: the command round-trips through macrod.
+            if let Some(ahead) = self.sign_in_ahead.get() {
+                let ahead = Arc::clone(ahead);
+                self.tasks
+                    .spawn(async move { ahead.on_connected(harness).await });
+            }
         })
     }
 
@@ -678,20 +535,5 @@ where
         live: Vec<(HarnessId, RuntimeConnectionId)>,
     ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
         Arc::clone(&self.inner).renew(live)
-    }
-}
-
-/// Claude account changes wake an asleep computer the way a prompt does.
-impl claude::ComputerWaker for Operator {
-    fn wake(
-        &self,
-        harness: HarnessId,
-    ) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send + '_>> {
-        Box::pin(async move {
-            self.prompt_arrived(harness)
-                .await
-                .map(drop)
-                .map_err(|error| error.to_string())
-        })
     }
 }

@@ -3,6 +3,7 @@ import { fetchWithToken } from '@core/util/fetchWithToken';
 import type { ResultError } from '@core/util/result';
 import { type BaseFetchErrorCode, statusError } from '@core/util/safeFetch';
 import { match } from 'ts-pattern';
+import { getCompleteTeamComputerSetupUrl } from './generated/client';
 
 import type {
   ComputerSize,
@@ -104,9 +105,10 @@ export const computersClient = {
       }
     ),
   completeSetup: (id: string) =>
-    fetchWithToken<ComputerStatus>(computerUrl(id, 'setup-complete'), {
-      method: 'POST',
-    }),
+    fetchWithToken<ComputerStatus>(
+      `${SERVER_HOSTS['auth-service']}${getCompleteTeamComputerSetupUrl(encodeURIComponent(id))}`,
+      { method: 'POST' }
+    ),
   notify: (size: ComputerSize) =>
     fetchWithToken(`${base}/notify`, {
       method: 'POST',

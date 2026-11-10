@@ -422,6 +422,8 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
                 created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
                 created_at,
                 enrolled_at: Some(created_at),
+                setup_completed_at: None,
+                default_agent_id: None,
                 enrollment_generation: Default::default(),
             },
         );
@@ -498,13 +500,15 @@ async fn retry_failed_computer_restarts_without_billing() {
                 setup: None,
                 macrod_misses: 0,
                 recent_crashes: vec![],
-                wake_requested: false,
+                power_on_requested: false,
                 capacity_wait: None,
             },
             harness_id: None,
             created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             created_at: now(),
             enrolled_at: Some(now()),
+            setup_completed_at: None,
+            default_agent_id: None,
             enrollment_generation: Default::default(),
         },
     );
@@ -584,13 +588,15 @@ async fn retry_running_computer_is_rejected_without_applying_events() {
                 setup: None,
                 macrod_misses: 0,
                 recent_crashes: vec![],
-                wake_requested: false,
+                power_on_requested: false,
                 capacity_wait: None,
             },
             harness_id: None,
             created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             created_at: now(),
             enrolled_at: Some(now()),
+            setup_completed_at: None,
+            default_agent_id: None,
             enrollment_generation: Default::default(),
         },
     );
@@ -641,13 +647,15 @@ async fn retry_another_teams_computer_is_not_found() {
                 setup: None,
                 macrod_misses: 0,
                 recent_crashes: vec![],
-                wake_requested: false,
+                power_on_requested: false,
                 capacity_wait: None,
             },
             harness_id: None,
             created_by: MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),
             created_at: now(),
             enrolled_at: Some(now()),
+            setup_completed_at: None,
+            default_agent_id: None,
             enrollment_generation: Default::default(),
         },
     );
@@ -709,7 +717,7 @@ async fn successful_charge_with_lost_write_is_confirmed_once_by_the_outbox() {
         }
     );
     assert_eq!(
-        computer.status().setup.unwrap().step,
+        computer.status(0).setup.unwrap().step,
         crate::domain::models::SetupStep::Creating
     );
     assert_eq!(service.run_billing_effects().await.unwrap(), 0);

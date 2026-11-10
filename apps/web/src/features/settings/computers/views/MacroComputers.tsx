@@ -270,7 +270,7 @@ function ManagedComputerRow(props: {
           disabled: billingPending(),
           onSelect: () => run(cancelAtPeriodEnd()),
         });
-      } else if (computer.canUndoCancel !== false) {
+      } else if (computer.canUndoCancel) {
         // Billing stops an hour before period end; after that it is final.
         items.push({
           label: t('computers.undoCancel'),
@@ -494,7 +494,7 @@ export function MacroComputers(props: {
         {(computer) => (
           <ReleaseComputerDialog
             computerName={computer.name}
-            agentCount={computer.agentCount ?? agentsOn(computer).length}
+            agentCount={computer.agentCount}
             agentNames={agentsOn(computer)}
             pending={release.isPending}
             error={releaseError()}

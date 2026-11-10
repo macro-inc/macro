@@ -12,13 +12,6 @@ async fn capacity_wait_is_visible_before_and_after_first_enrollment() {
         ),
         (Phase::Stopped { host: HOST }, false),
         (Phase::Stopped { host: HOST }, true),
-        (
-            Phase::Suspended {
-                host: HOST,
-                saved_state: true,
-            },
-            true,
-        ),
     ] {
         let service = ComputerService::new(
             FakeRepo {
@@ -46,7 +39,7 @@ async fn capacity_wait_is_visible_before_and_after_first_enrollment() {
             let mut computers = service.repo.computers.lock().unwrap();
             let computer = computers.get_mut(&id).unwrap();
             computer.state.phase = phase;
-            computer.state.wake_requested = true;
+            computer.state.power_on_requested = true;
             computer.enrolled_at = enrolled.then(now);
         }
         let status = service.status(TEAM, id).await.unwrap();

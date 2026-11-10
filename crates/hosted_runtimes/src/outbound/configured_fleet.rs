@@ -92,34 +92,6 @@ impl Fleet for ConfiguredFleet {
         }
     }
 
-    async fn freeze(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
-        match self {
-            Self::Incus(fleet) => Ok(fleet.freeze(computer_id).await?),
-            Self::Docker(fleet) => Ok(fleet.freeze(computer_id).await?),
-        }
-    }
-
-    async fn unfreeze(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
-        match self {
-            Self::Incus(fleet) => Ok(fleet.unfreeze(computer_id).await?),
-            Self::Docker(fleet) => Ok(fleet.unfreeze(computer_id).await?),
-        }
-    }
-
-    async fn suspend(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
-        match self {
-            Self::Incus(fleet) => Ok(fleet.suspend(computer_id).await?),
-            Self::Docker(fleet) => Ok(fleet.suspend(computer_id).await?),
-        }
-    }
-
-    async fn resume(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
-        match self {
-            Self::Incus(fleet) => Ok(fleet.resume(computer_id).await?),
-            Self::Docker(fleet) => Ok(fleet.resume(computer_id).await?),
-        }
-    }
-
     async fn destroy(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
         match self {
             Self::Incus(fleet) => Ok(fleet.destroy(computer_id).await?),

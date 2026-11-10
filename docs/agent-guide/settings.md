@@ -885,6 +885,14 @@ Claude, then setup-complete.
   Claude" reopens the modal on that step. The code is pasted in the same modal.
 - **Macro's Claude** skips the Claude step.
 
+Macro creates that agent once, on the computer's first connection, with the
+handle `@<first-name>-s-agent` (`-2`, `-3`… when taken), on Claude Code's
+default model, all channels and the runner's connected apps. Deleting or moving
+it never brings it back; if creating it fails, setup still finishes and anyone
+can create one under **Agents**. Agents created later on a computer also
+default to bypassing permission prompts. Releasing a computer, or its disk
+being destroyed, deletes every agent on it.
+
 **Ready** follows by itself once the computer is connected and Claude is set;
 the computer status is refreshed first. **Try it** opens a new Agents
 conversation in Code with that agent selected (`openAgentsPage` with

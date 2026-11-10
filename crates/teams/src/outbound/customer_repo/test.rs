@@ -994,7 +994,12 @@ async fn an_absent_item_price_is_added_idempotently_and_must_be_paid(pool: sqlx:
     mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
 
     repo(&server, pool)
-        .change_item_quantities(&sub.id, vec![computer(1)], "purchase-1")
+        .change_item_quantities(
+            &sub.id,
+            vec![computer(1)],
+            ItemProration::InvoiceNow,
+            "purchase-1",
+        )
         .await
         .unwrap();
 
@@ -1038,7 +1043,12 @@ async fn an_existing_item_price_gains_the_delta(pool: sqlx::PgPool) {
     mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
 
     repo(&server, pool)
-        .change_item_quantities(&sub.id, vec![computer(2)], "purchase-2")
+        .change_item_quantities(
+            &sub.id,
+            vec![computer(2)],
+            ItemProration::InvoiceNow,
+            "purchase-2",
+        )
         .await
         .unwrap();
 
@@ -1066,6 +1076,7 @@ async fn seat_and_computer_changes_join_one_update(pool: sqlx::PgPool) {
                     delta: 1,
                 },
             ],
+            ItemProration::InvoiceNow,
             "purchase-3",
         )
         .await
@@ -1082,7 +1093,7 @@ async fn seat_and_computer_changes_join_one_update(pool: sqlx::PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn an_item_reaching_zero_is_deleted(pool: sqlx::PgPool) {
+async fn an_item_reaching_zero_is_deleted_without_crediting_unused_time(pool: sqlx::PgPool) {
     let server = MockServer::start().await;
     let mut sub = subscription();
     sub.items
@@ -1092,7 +1103,12 @@ async fn an_item_reaching_zero_is_deleted(pool: sqlx::PgPool) {
     mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
 
     repo(&server, pool)
-        .change_item_quantities(&sub.id, vec![computer(-1)], "release-1")
+        .change_item_quantities(
+            &sub.id,
+            vec![computer(-1)],
+            ItemProration::NoProration,
+            "release-1",
+        )
         .await
         .unwrap();
 
@@ -1101,6 +1117,7 @@ async fn an_item_reaching_zero_is_deleted(pool: sqlx::PgPool) {
     assert_eq!(update["items[0][id]"], "si_computer");
     assert_eq!(update["items[0][deleted]"], "true");
     assert!(update.get("items[0][quantity]").is_none());
+    assert_eq!(update["proration_behavior"], "none");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1113,7 +1130,12 @@ async fn a_change_below_zero_is_rejected_before_stripe(pool: sqlx::PgPool) {
     mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
 
     let result = repo(&server, pool)
-        .change_item_quantities(&sub.id, vec![computer(-2)], "release-2")
+        .change_item_quantities(
+            &sub.id,
+            vec![computer(-2)],
+            ItemProration::NoProration,
+            "release-2",
+        )
         .await;
 
     assert!(
@@ -1133,7 +1155,12 @@ async fn a_retried_item_change_is_not_applied_twice(pool: sqlx::PgPool) {
     mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
 
     repo(&server, pool)
-        .change_item_quantities(&sub.id, vec![computer(1)], "purchase-4")
+        .change_item_quantities(
+            &sub.id,
+            vec![computer(1)],
+            ItemProration::InvoiceNow,
+            "purchase-4",
+        )
         .await
         .unwrap();
 
@@ -1159,7 +1186,12 @@ async fn a_declined_item_change_is_a_payment_failure(pool: sqlx::PgPool) {
         .await;
 
     let result = repo(&server, pool)
-        .change_item_quantities(&sub.id, vec![computer(1)], "purchase-5")
+        .change_item_quantities(
+            &sub.id,
+            vec![computer(1)],
+            ItemProration::InvoiceNow,
+            "purchase-5",
+        )
         .await;
 
     assert!(

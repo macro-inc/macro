@@ -4,7 +4,9 @@ pub use crate::domain::lifecycle::InstanceStatus;
 
 use macro_user_id::user_id::MacroUserIdStr;
 
+use bot_id::BotId;
 use harness_id::HarnessId;
+use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
@@ -163,14 +165,27 @@ pub trait ComputerRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Running computers and explicit quarantines; only healthy records enter the idle sweep.
-    fn running(&self) -> impl Future<Output = Result<Vec<ComputerRecord>, Self::Err>> + Send;
-
-    /// The healthy frozen computer on `host` that has been frozen longest.
-    fn coldest_frozen(
+    /// How many live agents are bound to each computer's live harness;
+    /// computers without any are absent.
+    fn agent_counts(
         &self,
-        host: HostId,
-    ) -> impl Future<Output = Result<Option<ComputerId>, Self::Err>> + Send;
+        computer_ids: &[ComputerId],
+    ) -> impl Future<Output = Result<HashMap<ComputerId, u32>, Self::Err>> + Send;
+
+    /// Record the coding agent the computer came with.
+    fn set_default_agent(
+        &self,
+        computer_id: ComputerId,
+        agent_id: BotId,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Record that the team finished the guided setup; later calls keep the
+    /// first time. Returns the computer, or `None` when it does not exist.
+    fn complete_setup(
+        &self,
+        computer_id: ComputerId,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<ComputerRecord>, Self::Err>> + Send;
 
     /// Computers the fleet should hold an instance for on `host`, including quarantined ids.
     fn instances_expected(
@@ -368,25 +383,6 @@ pub trait Fleet: Send + Sync + 'static {
         &self,
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-    /// Pause a running guest in RAM.
-    fn freeze(&self, computer_id: ComputerId)
-    -> impl Future<Output = Result<(), Self::Err>> + Send;
-    /// Resume a guest paused in RAM.
-    fn unfreeze(
-        &self,
-        computer_id: ComputerId,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Save RAM to disk and stop. A fleet without stateful stop stops cold
-    /// and its resume boots fresh; the lifecycle does not need to know.
-    fn suspend(
-        &self,
-        computer_id: ComputerId,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-    /// Restore a suspended guest from saved RAM.
-    fn resume(&self, computer_id: ComputerId)
-    -> impl Future<Output = Result<(), Self::Err>> + Send;
-
     /// Delete the instance and its disk. A missing instance is not an error.
     fn destroy(
         &self,
@@ -457,9 +453,10 @@ pub trait Harnesses: Send + Sync + 'static {
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Option<ComputerId>, Self::Err>> + Send;
 
-    /// Delete the computer's harness and its credential; absent is fine.
-    fn revoke(&self, computer_id: ComputerId)
-    -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// Delete the computer's harness, its credential and every agent bound
+    /// to it, so no agent is left on a machine that is gone; absent is fine.
+    /// Safe to repeat: a retry still finds agents bound to a deleted harness.
+    fn revoke(&self, computer: &Computer) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Give the team a coding agent on the computer's harness, created by the
     /// buyer. Skips when an agent is already bound to the harness.
@@ -475,7 +472,10 @@ pub trait Harnesses: Send + Sync + 'static {
 #[strum(serialize_all = "snake_case")]
 pub enum DefaultAgent {
     /// A new team agent now runs on the harness.
-    Created,
+    Created {
+        /// The new agent's bot.
+        agent_id: BotId,
+    },
     /// The harness already had an agent; nothing was created.
     AlreadyBound,
 }

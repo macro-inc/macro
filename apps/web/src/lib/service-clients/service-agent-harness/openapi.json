@@ -7003,6 +7003,11 @@
         "description": "Successful model-discovery response.",
         "required": ["status", "models"],
         "properties": {
+          "cachedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When a paired runtime that is off or unreachable last reported this\ncatalog; null when it was probed live."
+          },
           "currentModel": {
             "type": ["string", "null"],
             "description": "Current provider model, if model selection is available."

@@ -16,6 +16,7 @@ inbound = [
   "macro_authorization/axum",
   "dep:model-error-response",
   "dep:utoipa",
+  "bot_id/schema",
   "computer_id/schema",
   "pairing_id/schema",
   "ports",
@@ -26,6 +27,7 @@ ports = ["dep:tokio"]
 [dependencies]
 async-stripe = { workspace = true, default-features = false }
 axum = { workspace = true, optional = true }
+bot_id = { path = "../bot_id" }
 chrono = { workspace = true, features = ["serde"] }
 computer_id = { workspace = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false }

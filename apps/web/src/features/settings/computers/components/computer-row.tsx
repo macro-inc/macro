@@ -61,7 +61,7 @@ function ComputerSubtitle(props: {
     const at = props.computer.cancelsAt;
     if (!at) return undefined;
     const date = formatComputerDate(at);
-    return props.computer.canUndoCancel === false
+    return !props.computer.canUndoCancel
       ? t('computers.turnsOff', { date })
       : t('computers.cancels', { date });
   };

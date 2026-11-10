@@ -1,6 +1,5 @@
 //! The control plane: carries out fleet effects, fires timers, reconciles
-//! the fleet with the rows, sleeps idle computers and turns macrod presence
-//! into lifecycle events. Runs in agent_harness_service, next to the fleet.
+//! the fleet with the rows and turns macrod presence into lifecycle events. Runs in agent_harness_service, next to the fleet.
 
 use harness_id::HarnessId;
 
@@ -24,8 +23,6 @@ use crate::domain::service::{Clock, ComputerError};
 #[cfg(test)]
 mod test;
 
-/// A computer whose sessions have been quiet this long is frozen.
-pub const IDLE_AFTER: Duration = Duration::minutes(10);
 /// A fleet effect is retried this many times before the computer fails.
 pub const MAX_EFFECT_ATTEMPTS: u32 = 5;
 /// Minimum guest age before orphan deletion, to avoid racing creation.
@@ -43,20 +40,6 @@ const EFFECT_DRAIN: std::time::Duration = std::time::Duration::from_secs(30);
 
 fn internal<Err: std::error::Error + Send + Sync + 'static>(error: Err) -> ComputerError {
     ComputerError::Internal(rootcause::Report::new(error).into_dynamic())
-}
-
-/// Whether a harness's agent sessions are quiet.
-pub trait SessionActivity: Send + Sync + 'static {
-    /// Adapter failure type.
-    type Err: std::error::Error + Send + Sync + 'static;
-
-    /// True when no turn is running on the harness and nothing happened in
-    /// its sessions after `since`.
-    fn is_idle_since(
-        &self,
-        harness_id: HarnessId,
-        since: DateTime<Utc>,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
 /// Drives one host's computers. V1 runs one fleet (one host) per control plane.
@@ -350,7 +333,6 @@ where
                 )
             }
             Effect::Start { .. } => fleet_completion(self.fleet.start(computer_id).await, None),
-            Effect::Resume { .. } => fleet_completion(self.fleet.resume(computer_id).await, None),
             // Crash recovery must not reboot a guest whose start succeeded
             // before the previous worker lost its completion write.
             Effect::Restart { .. } => fleet_completion(self.fleet.start(computer_id).await, None),
@@ -367,14 +349,6 @@ where
                 }
                 fleet_completion(self.fleet.restart_macrod(computer_id).await, None)
             }
-            Effect::Freeze { .. } => fleet_completion(self.fleet.freeze(computer_id).await, None),
-            Effect::Unfreeze { .. } => {
-                fleet_completion(self.fleet.unfreeze(computer_id).await, None)
-            }
-            Effect::Suspend { .. } => fleet_completion(
-                self.fleet.suspend(computer_id).await,
-                Some(Event::SnapshotSaved),
-            ),
             Effect::Stop { .. } => fleet_completion(
                 self.fleet.stop(computer_id).await,
                 Some(Event::InstanceStopped),
@@ -383,32 +357,9 @@ where
                 self.fleet.destroy(computer_id).await.map_err(internal)?;
                 Ok(None)
             }
-            Effect::MakeRoom { host } => {
-                if !self
-                    .computer(computer_id)
-                    .await?
-                    .state
-                    .waiting_for_capacity()
-                {
-                    return Ok(None);
-                }
-                let coldest = self.repo.coldest_frozen(*host).await.map_err(internal)?;
-                match coldest {
-                    Some(coldest) => {
-                        tracing::info!(suspended = %coldest, "suspending the coldest computer to make room");
-                        self.repo
-                            .apply(coldest, Event::SuspendDue, self.clock.now())
-                            .await
-                            .map_err(internal)?;
-                    }
-                    None => {
-                        return Ok(Some(Event::RoomUnavailable));
-                    }
-                }
-                Ok(None)
-            }
             Effect::RevokeHarness => {
-                self.harnesses.revoke(computer_id).await.map_err(internal)?;
+                let computer = self.computer(computer_id).await?;
+                self.harnesses.revoke(&computer).await.map_err(internal)?;
                 Ok(None)
             }
             Effect::PageOperator { reason } => {
@@ -474,7 +425,7 @@ where
     }
 
     /// Compare the fleet with the rows: a missing or stopped instance of an
-    /// awake computer is a crash; a missing cold or failed guest is recreated.
+    /// awake computer is a crash; a missing stopped or failed guest is recreated.
     /// Only owned orphans older than the grace period are removed.
     #[tracing::instrument(skip(self), err)]
     pub async fn reconcile(&self) -> Result<(), ComputerError> {
@@ -514,13 +465,12 @@ where
                 Phase::Running { .. } | Phase::Booting { .. } => {
                     observed.is_none() || observed == Some(InstanceStatus::Stopped)
                 }
-                Phase::Frozen { .. } => observed.is_none(),
                 _ => false,
             };
             let lost = observed.is_none()
                 && matches!(
                     computer.state.phase,
-                    Phase::Failed { .. } | Phase::Stopped { .. } | Phase::Suspended { .. }
+                    Phase::Failed { .. } | Phase::Stopped { .. }
                 );
             if crashed || lost {
                 use tracing::Instrument;
@@ -569,36 +519,6 @@ where
         Ok(())
     }
 
-    /// Freeze running computers quiet for [`IDLE_AFTER`].
-    pub async fn sleep_idle<Activity: SessionActivity>(
-        &self,
-        activity: &Activity,
-    ) -> Result<usize, ComputerError> {
-        self.host_id().await?;
-        let since = self.clock.now() - IDLE_AFTER;
-        let mut frozen = 0;
-        for record in self.repo.running().await.map_err(internal)? {
-            let Some(computer) = record.healthy() else {
-                continue;
-            };
-            let Some(harness_id) = computer.harness_id else {
-                continue;
-            };
-            let idle = activity
-                .is_idle_since(harness_id, since)
-                .await
-                .map_err(internal)?;
-            if idle {
-                self.repo
-                    .apply(computer.id, Event::SessionsIdle, self.clock.now())
-                    .await
-                    .map_err(internal)?;
-                frozen += 1;
-            }
-        }
-        Ok(frozen)
-    }
-
     /// Tell signers and team admins about Claude sign-ins running out; see
     /// [`claude_sign_in`](crate::domain::claude_sign_in).
     pub async fn notify_claude_sign_ins<SignIns, Notices>(
@@ -624,6 +544,23 @@ where
             .computer_for(harness_id)
             .await
             .map_err(internal)
+    }
+
+    /// Whether the team finished the guided setup of the computer `harness_id`
+    /// runs on; `None` when it is not a computer's.
+    pub async fn setup_completed(
+        &self,
+        harness_id: HarnessId,
+    ) -> Result<Option<bool>, ComputerError> {
+        let Some(computer_id) = self.computer_of(harness_id).await? else {
+            return Ok(None);
+        };
+        Ok(Some(
+            self.computer(computer_id)
+                .await?
+                .setup_completed_at
+                .is_some(),
+        ))
     }
 
     /// macrod connected on `harness_id`. Returns whether it is a computer's.
@@ -694,6 +631,12 @@ where
             .create_default_agent(computer, harness_id)
             .await
             .map_err(internal)?;
+        if let DefaultAgent::Created { agent_id } = outcome {
+            self.repo
+                .set_default_agent(computer.id, agent_id)
+                .await
+                .map_err(internal)?;
+        }
         let name: &'static str = outcome.into();
         tracing::Span::current().record("outcome", name);
         Ok(outcome)
@@ -709,26 +652,6 @@ where
                 .map_err(internal)?;
         }
         Ok(())
-    }
-
-    /// A prompt is waiting for `harness_id`. Wakes its computer when it is
-    /// asleep; returns whether the prompt must wait for macrod to connect.
-    /// Thawing a frozen computer runs it again at once, but its socket may
-    /// have dropped while frozen: the prompt waits unless macrod is connected.
-    #[tracing::instrument(skip(self), err)]
-    pub async fn prompt_arrived(&self, harness_id: HarnessId) -> Result<bool, ComputerError> {
-        let Some(computer_id) = self.computer_of(harness_id).await? else {
-            return Ok(false);
-        };
-        let computer = self
-            .repo
-            .apply(computer_id, Event::PromptArrived, self.clock.now())
-            .await
-            .map_err(internal)?;
-        Ok(computer.is_some_and(|computer| {
-            !(matches!(computer.state.phase, Phase::Running { .. })
-                && computer.state.macrod_connected)
-        }))
     }
 
     async fn computer(&self, computer_id: ComputerId) -> Result<Computer, ComputerError> {
@@ -768,15 +691,10 @@ fn effect_host(effect: &Effect) -> Option<HostId> {
     match effect {
         Effect::Create { host, .. }
         | Effect::Start { host }
-        | Effect::Freeze { host }
-        | Effect::Unfreeze { host }
-        | Effect::Suspend { host }
-        | Effect::Resume { host }
         | Effect::Stop { host }
         | Effect::Restart { host }
         | Effect::RestartMacrod { host }
-        | Effect::Destroy { host }
-        | Effect::MakeRoom { host } => Some(*host),
+        | Effect::Destroy { host } => Some(*host),
         Effect::ConfirmPayment { .. }
         | Effect::RemoveBillingItem
         | Effect::RevokeHarness

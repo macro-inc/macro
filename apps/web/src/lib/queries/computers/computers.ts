@@ -1,7 +1,11 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
-import { invalidateHarnesses } from '@queries/harnesses/harnesses';
+import {
+  invalidateHarnesses,
+  useHarnessesQuery,
+} from '@queries/harnesses/harnesses';
 import {
   type ComputerSize,
   type ComputerStatus,
@@ -11,6 +15,7 @@ import {
   type SizeOffer,
 } from '@service-auth/computers';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
+import { createEffect, on } from 'solid-js';
 import { computerKeys } from './keys';
 
 const TRANSITION_POLL_MS = 3_000;
@@ -39,6 +44,7 @@ function computersQueryOptions(enabled: boolean) {
     enabled,
     queryFn: () => throwOnErr(computersClient.list),
     reconcile: 'id',
+    refetchOnWindowFocus: 'always',
     refetchInterval: (query) =>
       thrownResultErrorHasCode(query.state.error, 'UNAUTHORIZED')
         ? false
@@ -46,9 +52,52 @@ function computersQueryOptions(enabled: boolean) {
   });
 }
 
+/**
+ * Which computers' runtimes are connected, as one comparable string. The
+ * harness list already polls presence, so a change there is the cue that a
+ * computer started, stopped or dropped off.
+ */
+export function computerPresenceKey(
+  computers: readonly ComputerStatus[] | undefined,
+  connectedHarnessIds: ReadonlySet<string>
+): string {
+  return (computers ?? [])
+    .map(
+      (computer) =>
+        `${computer.id}:${computer.harnessId && connectedHarnessIds.has(computer.harnessId) ? 'on' : 'off'}`
+    )
+    .join(',');
+}
+
 /** The current team's Macro computers; any team member can read them. */
 export function useComputersQuery(enabled: () => boolean) {
-  return useQuery(() => computersQueryOptions(enabled()));
+  const computers = useQuery(() => computersQueryOptions(enabled()));
+  const harnesses = useHarnessesQuery();
+  createEffect(
+    on(
+      () =>
+        computerPresenceKey(
+          computers.data,
+          new Set(
+            (harnesses.data ?? [])
+              .filter((harness) => harness.connected)
+              .map((harness) => harness.id)
+          )
+        ),
+      () => {
+        if (enabled()) {
+          fireAndForget(
+            queryClient.invalidateQueries({
+              queryKey: computerKeys.list.queryKey,
+            }),
+            'computers-presence'
+          );
+        }
+      },
+      { defer: true }
+    )
+  );
+  return computers;
 }
 
 function computerOffersQueryOptions(enabled: boolean) {

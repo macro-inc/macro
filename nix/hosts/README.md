@@ -162,6 +162,3 @@ remain allowed.
 Replies are stateful; unsolicited inbound to boxes is dropped. Boxes cannot
 reach the host except DNS/DHCP on 10.210.0.1.
 Box-to-box traffic on the bridge is layer 2 and not filtered.
-
-Stateful stop of a VM needs room for its memory on the root volume: set
-`size.state` on the instance's root disk (at least the VM's RAM).

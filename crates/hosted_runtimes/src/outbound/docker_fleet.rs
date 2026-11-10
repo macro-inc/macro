@@ -1,8 +1,6 @@
 //! [`Fleet`] on the local Docker daemon, for dev stacks without an Incus host.
 //!
-//! Each computer is a `macro-box` container running systemd. Docker has no
-//! stateful stop, so [`Fleet::suspend`] is a plain `docker stop` and
-//! [`Fleet::resume`] boots the container cold; the lifecycle does not care.
+//! Each computer is a `macro-box` container running systemd.
 //! The disk size is not enforced (overlayfs has no per-container quota).
 //!
 //! Enrollment is a file: `<enrollment_dir>/<computer id>/enrollment.json` on
@@ -246,9 +244,6 @@ impl Fleet for DockerFleet {
             } else if state == ContainerState::Exited || state == ContainerState::Created {
                 self.start(computer.id).await?;
             } else {
-                if state == ContainerState::Paused {
-                    self.unfreeze(computer.id).await?;
-                }
                 self.docker(
                     "exec",
                     &[
@@ -295,36 +290,15 @@ impl Fleet for DockerFleet {
 
     #[tracing::instrument(name = "docker_fleet.start", skip(self), err)]
     async fn start(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
-        match self.state(computer_id).await? {
-            Some(ContainerState::Paused) => {
-                self.docker("unpause", &verb_args("unpause", computer_id))
-                    .await?;
-            }
-            _ => {
-                self.docker("start", &verb_args("start", computer_id))
-                    .await?;
-            }
-        }
+        self.docker("start", &verb_args("start", computer_id))
+            .await?;
         Ok(())
     }
 
     #[tracing::instrument(name = "docker_fleet.stop", skip(self), err)]
     async fn stop(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
-        match self.state(computer_id).await? {
-            None => return Ok(()),
-            Some(ContainerState::Paused) => {
-                if let Err(error) = self
-                    .docker("unpause", &verb_args("unpause", computer_id))
-                    .await
-                {
-                    return if error.is_missing() {
-                        Ok(())
-                    } else {
-                        Err(error)
-                    };
-                }
-            }
-            _ => {}
+        if self.state(computer_id).await?.is_none() {
+            return Ok(());
         }
         if let Err(error) = self.docker("stop", &verb_args("stop", computer_id)).await {
             return if error.is_missing() {
@@ -338,10 +312,6 @@ impl Fleet for DockerFleet {
 
     #[tracing::instrument(name = "docker_fleet.restart", skip(self), err)]
     async fn restart(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
-        if self.state(computer_id).await? == Some(ContainerState::Paused) {
-            self.docker("unpause", &verb_args("unpause", computer_id))
-                .await?;
-        }
         self.docker("restart", &verb_args("restart", computer_id))
             .await?;
         Ok(())
@@ -361,48 +331,6 @@ impl Fleet for DockerFleet {
         )
         .await?;
         Ok(())
-    }
-
-    #[tracing::instrument(name = "docker_fleet.freeze", skip(self), err)]
-    async fn freeze(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
-        if self.state(computer_id).await? != Some(ContainerState::Paused) {
-            self.docker("pause", &verb_args("pause", computer_id))
-                .await?;
-        }
-        Ok(())
-    }
-
-    #[tracing::instrument(name = "docker_fleet.unfreeze", skip(self), err)]
-    async fn unfreeze(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
-        match self.state(computer_id).await? {
-            None => return Err(DockerFleetError::Missing { computer_id }),
-            Some(ContainerState::Paused) => {
-                self.docker("unpause", &verb_args("unpause", computer_id))
-                    .await?;
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    /// A cold stop: Docker cannot save RAM.
-    async fn suspend(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
-        match self.state(computer_id).await? {
-            None => return Err(DockerFleetError::Missing { computer_id }),
-            Some(ContainerState::Paused) => {
-                self.docker("unpause", &verb_args("unpause", computer_id))
-                    .await?;
-            }
-            _ => {}
-        }
-        // Unlike stop, suspend must report a guest lost during the operation.
-        self.docker("stop", &verb_args("stop", computer_id)).await?;
-        Ok(())
-    }
-
-    /// A cold boot, after [`Self::suspend`]'s cold stop.
-    async fn resume(&self, computer_id: ComputerId) -> Result<(), DockerFleetError> {
-        self.start(computer_id).await
     }
 
     #[tracing::instrument(name = "docker_fleet.destroy", skip(self), err)]
@@ -480,7 +408,6 @@ impl Fleet for DockerFleet {
 enum ContainerState {
     Created,
     Running,
-    Paused,
     Restarting,
     Removing,
     Exited,
@@ -492,7 +419,6 @@ impl ContainerState {
         match state {
             "created" => Ok(Self::Created),
             "running" => Ok(Self::Running),
-            "paused" => Ok(Self::Paused),
             "restarting" => Ok(Self::Restarting),
             "removing" => Ok(Self::Removing),
             "exited" => Ok(Self::Exited),
@@ -506,7 +432,6 @@ impl ContainerState {
     fn status(self) -> InstanceStatus {
         match self {
             Self::Running | Self::Restarting => InstanceStatus::Running,
-            Self::Paused => InstanceStatus::Frozen,
             Self::Created | Self::Removing | Self::Exited | Self::Dead => InstanceStatus::Stopped,
         }
     }

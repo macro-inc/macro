@@ -204,3 +204,24 @@ async fn webhook_reconcile_and_billing_workers_remain_available_with_flag_off() 
     service.release_now(TEAM, id, "Build box").await.unwrap();
     service.run_billing_effects().await.unwrap();
 }
+
+#[tokio::test]
+async fn undo_is_offered_until_billing_stops_ahead_of_the_renewal() {
+    let (service, id) = existing_computer_with_flag_off().await;
+
+    let canceled = service.cancel(TEAM, id).await.unwrap();
+    assert!(canceled.can_undo_cancel);
+
+    service
+        .repo
+        .apply(id, Event::BillingStops, FixedClock.now())
+        .await
+        .unwrap();
+    let status = service.status(TEAM, id).await.unwrap();
+    assert!(!status.can_undo_cancel);
+    assert_eq!(status.cancels_at, canceled.cancels_at);
+    assert!(matches!(
+        service.undo_cancel(TEAM, id).await,
+        Err(ComputerError::BadRequest(_))
+    ));
+}

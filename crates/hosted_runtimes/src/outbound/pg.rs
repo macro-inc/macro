@@ -1,10 +1,12 @@
 //! Postgres adapter for [`ComputerRepo`].
 
+use bot_id::BotId;
 use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use crate::domain::ids::ComputerId;
@@ -126,7 +128,7 @@ impl PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id
             FROM hosted_runtime
             WHERE id = $1
             FOR UPDATE
@@ -270,8 +272,8 @@ impl PgComputerRepo {
                     INSERT INTO hosted_runtime_timer (computer_id, kind, fire_at)
                     SELECT id, 'capacity_changed', $2 FROM hosted_runtime
                     WHERE host_id = $1 AND id <> $3
-                        AND state->>'power' = 'on' AND state->>'wake_requested' = 'true'
-                        AND state->'phase'->>'phase' IN ('stopped', 'suspended', 'provisioning')
+                        AND state->>'power' = 'on' AND state->>'power_on_requested' = 'true'
+                        AND state->'phase'->>'phase' IN ('stopped', 'provisioning')
                     ON CONFLICT (computer_id, kind) DO UPDATE SET fire_at = LEAST(hosted_runtime_timer.fire_at, EXCLUDED.fire_at)
                     "#,
                     host.into_inner(), now, computer_id.as_uuid(),
@@ -288,7 +290,7 @@ impl PgComputerRepo {
         {
             tracing::info!(computer_id = %computer_id, host_id = ?state.host(),
                 backoff_step = wait.backoff_step, retry_at = %wait.retry_at,
-                room_unavailable = wait.room_unavailable, "computer waiting for host capacity");
+                "computer waiting for host capacity");
         }
         if let Some(setup) = &state.setup {
             crate::domain::telemetry::record_setup_waits(
@@ -314,7 +316,7 @@ impl PgComputerRepo {
     }
 
     /// Whether `computer` fits among the host's other awake computers. Locks
-    /// the host row so concurrent wakes on one host are serialized.
+    /// the host row so concurrent starts on one host are serialized.
     async fn host_has_room(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         host: HostId,
@@ -357,7 +359,7 @@ impl PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id
             FROM hosted_runtime
             WHERE host_id = $1
             "#,
@@ -375,7 +377,7 @@ impl PgComputerRepo {
     ) -> Result<Vec<Uuid>, PgComputerError> {
         let worker = worker.map(|worker| worker.as_ref().to_owned());
         let rows = sqlx::query_as!(ComputerRow,
-            "SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by, created_at, enrolled_at, enrollment_generation FROM hosted_runtime
+            "SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by, created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id FROM hosted_runtime
              WHERE id IN (
                  SELECT computer_id FROM hosted_runtime_effect WHERE worker = $1 AND run_after <= $2
                  UNION
@@ -545,6 +547,8 @@ impl ComputerRepo for PgComputerRepo {
             created_by: computer.created_by,
             created_at: now,
             enrolled_at: None,
+            setup_completed_at: None,
+            default_agent_id: None,
             enrollment_generation: Default::default(),
         })
     }
@@ -570,7 +574,7 @@ impl ComputerRepo for PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id
             FROM hosted_runtime
             WHERE id = $1
             "#,
@@ -587,7 +591,7 @@ impl ComputerRepo for PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id
             FROM hosted_runtime
             WHERE team_id = $1
             ORDER BY created_at
@@ -616,7 +620,7 @@ impl ComputerRepo for PgComputerRepo {
             ComputerRow,
             r#"
             SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation
+                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id
             FROM hosted_runtime
             WHERE harness_id = $1
             "#,
@@ -659,43 +663,71 @@ impl ComputerRepo for PgComputerRepo {
         Ok(())
     }
 
-    async fn running(&self) -> Result<Vec<ComputerRecord>, PgComputerError> {
-        let rows = sqlx::query_as!(
-            ComputerRow,
+    async fn agent_counts(
+        &self,
+        computer_ids: &[ComputerId],
+    ) -> Result<HashMap<ComputerId, u32>, PgComputerError> {
+        let ids: Vec<Uuid> = computer_ids.iter().map(|id| id.as_uuid()).collect();
+        let rows = sqlx::query!(
             r#"
-            SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation
-            FROM hosted_runtime
-            WHERE awake
+            SELECT h.computer_id AS "computer_id!", count(*) AS "agents!"
+            FROM harnesses h
+            JOIN agent_configs a ON a.harness_id = h.id
+            JOIN bots b ON b.id = a.bot_id
+            WHERE h.computer_id = ANY($1)
+              AND h.deleted_at IS NULL
+              AND b.deleted_at IS NULL
+            GROUP BY h.computer_id
             "#,
+            &ids,
         )
         .fetch_all(&self.pool)
         .await?;
-        Ok(self
-            .fetch_many(rows)
-            .await?
-            .into_iter()
-            .filter(|record| {
-                record
-                    .healthy()
-                    .is_none_or(|computer| matches!(computer.state.phase, Phase::Running { .. }))
+        rows.into_iter()
+            .map(|row| {
+                Ok((
+                    ComputerId::new_from_uuid(row.computer_id),
+                    u32::try_from(row.agents)?,
+                ))
             })
-            .collect())
+            .collect()
     }
 
-    async fn coldest_frozen(&self, host: HostId) -> Result<Option<ComputerId>, PgComputerError> {
-        let rows = sqlx::query_as!(ComputerRow,
-            r#"SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by, created_at, enrolled_at, enrollment_generation
-            FROM hosted_runtime
-            WHERE host_id = $1 AND awake AND state->'phase'->>'phase' = 'frozen'
-            ORDER BY updated_at"#,
-            host.into_inner(),
-        ).fetch_all(&self.pool).await?;
-        Ok(self
-            .fetch_many(rows)
-            .await?
-            .iter()
-            .find_map(|record| record.healthy().map(|computer| computer.id)))
+    async fn set_default_agent(
+        &self,
+        computer_id: ComputerId,
+        agent_id: BotId,
+    ) -> Result<(), PgComputerError> {
+        sqlx::query!(
+            "UPDATE hosted_runtime SET default_agent_id = $2 WHERE id = $1",
+            computer_id.as_uuid(),
+            agent_id.as_uuid(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn complete_setup(
+        &self,
+        computer_id: ComputerId,
+        now: DateTime<Utc>,
+    ) -> Result<Option<ComputerRecord>, PgComputerError> {
+        let row = sqlx::query_as!(
+            ComputerRow,
+            r#"
+            UPDATE hosted_runtime
+            SET setup_completed_at = COALESCE(setup_completed_at, $2)
+            WHERE id = $1
+            RETURNING id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by,
+                      created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id
+            "#,
+            computer_id.as_uuid(),
+            now,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(Self::decode_row))
     }
 
     async fn instances_expected(
