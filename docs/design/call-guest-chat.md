@@ -56,7 +56,8 @@ Every `Message` returned to a guest is redacted so no account identity leaves:
   legacy projection used. Bot senders keep their bot profile; guest senders keep their
   guest `sender_id` and `guest_name`.
 - Reactions: account reactor ids are replaced with the same opaque ids, and their names
-  are returned the way external-chat reactions carry names for people outside Macro.
+  are returned in `CountedReaction.names?: Record<string, string>`, keyed by the
+  opaque reactor id, as external-chat reactions do for people outside Macro.
 - `mentions`, `attachments`, `triggered_by` and any other account or entity references
   are emptied.
 
