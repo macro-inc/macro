@@ -488,4 +488,6 @@ impl Editor {
     }
 }
 #[cfg(test)]
+mod after_commit_test;
+#[cfg(test)]
 mod test;
