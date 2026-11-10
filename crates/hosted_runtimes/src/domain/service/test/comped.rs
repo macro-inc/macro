@@ -47,7 +47,7 @@ async fn team_policy_controls_purchases_and_comped_computers_never_call_billing(
     assert_eq!(computer.state.payment, PaymentOutcome::Comped);
     assert!(!computer.is_billed());
     assert_eq!(
-        computer.status().comp_reason.as_deref(),
+        computer.status(0).comp_reason.as_deref(),
         Some("internal team")
     );
     assert!(service.billing.calls.lock().unwrap().is_empty());

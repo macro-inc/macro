@@ -391,7 +391,7 @@ async fn reserve_atomically_schedules_confirmation_and_failed_payment_frees_capa
     assert!(!row.awake);
     assert_eq!(row.host_id, None);
     assert_eq!(
-        repo.list_for_team(TEAM).await.unwrap()[0].status().status,
+        repo.list_for_team(TEAM).await.unwrap()[0].status(0).status,
         crate::domain::models::ComputerStatusKind::PaymentFailed
     );
     assert!(repo.instances_expected(host.id).await.unwrap().is_empty());
@@ -529,7 +529,7 @@ async fn payment_provenance_migration_backfills_legacy_rows_and_preserves_resolv
             .into_healthy()
             .unwrap();
         assert_eq!(computer.state.payment, expected);
-        assert_eq!(computer.status().payment.unwrap(), expected);
+        assert_eq!(computer.status(0).payment.unwrap(), expected);
     }
 }
 
@@ -589,7 +589,7 @@ async fn comped_reservation_commits_provisioning_without_payment_recovery(pool: 
             .unwrap()
             .into_healthy()
             .unwrap()
-            .status()
+            .status(0)
             .comp_reason
             .as_deref(),
         Some("internal team")

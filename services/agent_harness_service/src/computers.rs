@@ -293,6 +293,11 @@ pub trait HostedHarnessService: Send + Sync + 'static {
         &self,
         harness_id: HarnessId,
     ) -> Pin<Box<dyn Future<Output = Result<Option<ComputerId>, HarnessError>> + Send + '_>>;
+
+    fn computer_harnesses(
+        &self,
+        computer_id: ComputerId,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<HarnessId>, HarnessError>> + Send + '_>>;
 }
 
 impl<Service: HarnessService + Send + Sync + 'static> HostedHarnessService for Service {
@@ -328,6 +333,13 @@ impl<Service: HarnessService + Send + Sync + 'static> HostedHarnessService for S
         harness_id: HarnessId,
     ) -> Pin<Box<dyn Future<Output = Result<Option<ComputerId>, HarnessError>> + Send + '_>> {
         Box::pin(HarnessService::harness_computer(self, harness_id))
+    }
+
+    fn computer_harnesses(
+        &self,
+        computer_id: ComputerId,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<HarnessId>, HarnessError>> + Send + '_>> {
+        Box::pin(HarnessService::computer_harnesses(self, computer_id))
     }
 }
 
@@ -376,8 +388,20 @@ impl Harnesses for HostedHarnesses {
         Ok(self.service.harness_computer(harness_id).await?)
     }
 
-    async fn revoke(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
-        Ok(self.service.revoke_hosted_harness(computer_id).await?)
+    async fn revoke(&self, computer: &Computer) -> Result<(), Self::Err> {
+        // The harness goes first. Its delete locks the row that every agent
+        // bind holds while it writes, so once it commits no new agent can
+        // bind, and a computer's agents stay bound to a deleted harness: the
+        // deletion below finds every one, on a retried effect too.
+        self.service.revoke_hosted_harness(computer.id).await?;
+        for harness_id in self.service.computer_harnesses(computer.id).await? {
+            let deleted = self
+                .default_agents
+                .delete_bound(computer.created_by.clone(), harness_id)
+                .await?;
+            tracing::info!(computer_id = %computer.id, %harness_id, deleted, "deleted the computer's agents");
+        }
+        Ok(())
     }
 
     async fn create_default_agent(
@@ -390,7 +414,6 @@ impl Harnesses for HostedHarnesses {
             .create(DefaultAgentRequest {
                 team_id: computer.team_id,
                 buyer: computer.created_by.clone(),
-                computer_name: computer.name.as_str().to_owned(),
                 harness_id,
             })
             .await?)

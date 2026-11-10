@@ -1,5 +1,6 @@
 //! Decode persisted rows without exposing invalid payloads to lifecycle processing.
 
+use bot_id::BotId;
 use chrono::{DateTime, Utc};
 use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -32,6 +33,8 @@ pub(super) struct ComputerRow {
     pub(super) created_at: DateTime<Utc>,
     pub(super) enrolled_at: Option<DateTime<Utc>>,
     pub(super) enrollment_generation: i64,
+    pub(super) setup_completed_at: Option<DateTime<Utc>>,
+    pub(super) default_agent_id: Option<Uuid>,
 }
 
 fn invalid_row(rule: &'static str) -> SanitizedReason {
@@ -82,6 +85,8 @@ impl TryFrom<ComputerRow> for Computer {
                 .map_err(|_| invalid_row("created_by must be a valid Macro user identifier"))?,
             created_at: row.created_at,
             enrolled_at: row.enrolled_at,
+            setup_completed_at: row.setup_completed_at,
+            default_agent_id: row.default_agent_id.map(BotId::new_from_uuid),
             enrollment_generation: crate::domain::enrollment::EnrollmentGeneration::new(
                 u32::try_from(row.enrollment_generation).map_err(|_| {
                     invalid_row("enrollment_generation must fit an unsigned generation")

@@ -3,6 +3,7 @@
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::ids::ComputerId;
+use bot_id::BotId;
 use harness_id::HarnessId;
 
 use std::collections::HashMap;
@@ -59,6 +60,7 @@ pub struct FakeRepo {
     pub corrupt_ids: Mutex<Vec<ComputerId>>,
     pub effects: Mutex<Vec<PendingEffect>>,
     pub events: Mutex<Vec<(ComputerId, Event)>>,
+    pub agent_counts: Mutex<HashMap<ComputerId, u32>>,
 }
 
 impl FakeRepo {
@@ -142,6 +144,8 @@ impl ComputerRepo for FakeRepo {
             created_by: computer.created_by,
             created_at: now,
             enrolled_at: None,
+            setup_completed_at: None,
+            default_agent_id: None,
             enrollment_generation: Default::default(),
         };
         let (effects, run_after) = match computer.billing {
@@ -296,6 +300,48 @@ impl ComputerRepo for FakeRepo {
             computer.enrolled_at.get_or_insert(now);
         }
         Ok(())
+    }
+
+    async fn agent_counts(
+        &self,
+        computer_ids: &[ComputerId],
+    ) -> Result<HashMap<ComputerId, u32>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let counts = self.agent_counts.lock().unwrap();
+        Ok(computer_ids
+            .iter()
+            .filter_map(|id| counts.get(id).map(|count| (*id, *count)))
+            .collect())
+    }
+
+    async fn set_default_agent(
+        &self,
+        computer_id: ComputerId,
+        agent_id: BotId,
+    ) -> Result<(), FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        if let Some(computer) = self.computers.lock().unwrap().get_mut(&computer_id) {
+            computer.default_agent_id = Some(agent_id);
+        }
+        Ok(())
+    }
+
+    async fn complete_setup(
+        &self,
+        computer_id: ComputerId,
+        now: DateTime<Utc>,
+    ) -> Result<Option<ComputerRecord>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let computer = self
+            .computers
+            .lock()
+            .unwrap()
+            .get_mut(&computer_id)
+            .map(|computer| {
+                computer.setup_completed_at.get_or_insert(now);
+                computer.clone()
+            });
+        Ok(computer.map(|computer| self.record(computer)))
     }
 
     async fn instances_expected(&self, host: HostId) -> Result<Vec<ComputerRecord>, FakeError> {

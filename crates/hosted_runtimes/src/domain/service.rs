@@ -46,6 +46,9 @@ pub enum ComputerError {
     /// Request violates a computer input contract.
     #[error("{0}")]
     BadRequest(String),
+    /// The caller's team role does not allow this.
+    #[error("only the computer's buyer or the team owner can do this")]
+    Forbidden,
     /// Confirmation does not match the computer name.
     #[error("type the computer's name to release it")]
     ConfirmationMismatch,
@@ -65,6 +68,15 @@ impl From<rootcause::Report> for ComputerError {
 
 fn internal<Err: std::error::Error + Send + Sync + 'static>(error: Err) -> ComputerError {
     ComputerError::Internal(rootcause::Report::new(error).into_dynamic())
+}
+
+/// The caller's role, as far as managing a computer's setup goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TeamMemberRole {
+    /// The team's owner.
+    Owner,
+    /// Any other member, including admins.
+    Other,
 }
 
 /// Clock seam so tests control time.
@@ -383,7 +395,8 @@ impl<
         computer_id: ComputerId,
     ) -> Result<ComputerStatus, ComputerError> {
         self.require_attached().await?;
-        Ok(self.team_record(team_id, computer_id).await?.status())
+        let record = self.team_record(team_id, computer_id).await?;
+        self.status_of(&record).await
     }
 
     /// The team's computers, oldest first.
@@ -391,7 +404,12 @@ impl<
     pub async fn list(&self, team_id: Uuid) -> Result<Vec<ComputerStatus>, ComputerError> {
         self.require_attached().await?;
         let computers = self.repo.list_for_team(team_id).await.map_err(internal)?;
-        Ok(computers.iter().map(ComputerRecord::status).collect())
+        let ids: Vec<ComputerId> = computers.iter().map(ComputerRecord::id).collect();
+        let counts = self.repo.agent_counts(&ids).await.map_err(internal)?;
+        Ok(computers
+            .iter()
+            .map(|computer| computer.status(counts.get(&computer.id()).copied().unwrap_or(0)))
+            .collect())
     }
 
     /// Apply the team-requested power state.
@@ -425,7 +443,37 @@ impl<
             .await
             .map_err(internal)?
             .ok_or(ComputerError::NotFound)?;
-        Ok(computer.status())
+        self.status_of(&computer.into()).await
+    }
+
+    /// Record that the team finished the guided setup after buying the
+    /// computer. Idempotent: the first time is kept. Allowed to whoever may
+    /// manage the computer's Claude Code sign-in, its buyer or the team owner.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn complete_setup(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+        caller: MacroUserIdStr<'static>,
+        caller_role: TeamMemberRole,
+    ) -> Result<ComputerStatus, ComputerError> {
+        self.require_attached().await?;
+        let computer = self.team_computer(team_id, computer_id).await?;
+        let allowed = match caller_role {
+            TeamMemberRole::Owner => true,
+            TeamMemberRole::Other => computer.created_by == caller,
+        };
+        if !allowed {
+            return Err(ComputerError::Forbidden);
+        }
+
+        let computer = self
+            .repo
+            .complete_setup(computer_id, self.clock.now())
+            .await
+            .map_err(internal)?
+            .ok_or(ComputerError::NotFound)?;
+        self.status_of(&computer).await
     }
 
     /// Stop billing at the end of the current period; undo is allowed until then.
@@ -714,6 +762,16 @@ impl<
         Ok(())
     }
 
+    /// A computer's status, with the agents bound to its harness counted.
+    async fn status_of(&self, record: &ComputerRecord) -> Result<ComputerStatus, ComputerError> {
+        let counts = self
+            .repo
+            .agent_counts(&[record.id()])
+            .await
+            .map_err(internal)?;
+        Ok(record.status(counts.get(&record.id()).copied().unwrap_or(0)))
+    }
+
     async fn team_record(
         &self,
         team_id: Uuid,
@@ -753,7 +811,7 @@ impl<
             .await
             .map_err(internal)?
             .ok_or(ComputerError::NotFound)?;
-        Ok(computer.status())
+        self.status_of(&computer.into()).await
     }
 }
 
@@ -819,7 +877,8 @@ impl<
                 .attachment(self.clock.now())
                 .await
                 .map_err(internal)?;
-            let status = self.team_record(team_id, computer_id).await?.status();
+            let record = self.team_record(team_id, computer_id).await?;
+            let status = self.status_of(&record).await?;
             Ok(RosterComputerStatus {
                 status,
                 availability,

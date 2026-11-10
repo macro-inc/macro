@@ -151,6 +151,13 @@ pub trait HarnessRepo: Send + Sync + 'static {
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<Option<HarnessId>, Self::Err>> + Send;
 
+    /// Every harness a computer has had, deleted ones included, so cleanup
+    /// after its release can still find the agents bound to them.
+    fn computer_harness_ids(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<Vec<HarnessId>, Self::Err>> + Send;
+
     /// The computer a live harness runs on; `None` for unknown harnesses and
     /// machines users paired themselves.
     fn harness_computer(
@@ -410,6 +417,13 @@ pub trait HarnessService: Send + Sync + 'static {
         &self,
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<(), HarnessError>> + Send;
+
+    /// Every harness a Macro computer has had, deleted ones included.
+    /// Trusted in-process callers only, like [`Self::create_hosted_pairing`].
+    fn computer_harnesses(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<Vec<HarnessId>, HarnessError>> + Send;
 
     /// The computer a live harness runs on, if it is a Macro computer's.
     fn harness_computer(

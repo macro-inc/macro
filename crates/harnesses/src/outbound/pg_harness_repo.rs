@@ -320,6 +320,20 @@ impl HarnessRepo for PgHarnessRepo {
             .map_err(Into::into)
     }
 
+    async fn computer_harness_ids(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<Vec<HarnessId>, Self::Err> {
+        let ids = sqlx::query_scalar!(
+            "SELECT id FROM harnesses WHERE computer_id = $1",
+            computer_id.as_uuid(),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to list the computer's harnesses")?;
+        Ok(ids.into_iter().map(HarnessId::new_from_uuid).collect())
+    }
+
     async fn harness_computer(
         &self,
         harness_id: HarnessId,
@@ -647,6 +661,18 @@ impl HarnessRepo for PgHarnessRepo {
 
     async fn delete_harness(&self, harness_id: HarnessId) -> Result<bool, Self::Err> {
         let mut tx = self.pool.begin().await.context("failed to begin tx")?;
+
+        // Lock the row first: agent creates and rebinds hold it `FOR SHARE`
+        // while they write, so a bind either commits before this delete (and
+        // a Macro computer's release then deletes that agent with the rest)
+        // or waits and then sees the harness gone and fails.
+        sqlx::query!(
+            "SELECT id FROM harnesses WHERE id = $1 FOR UPDATE",
+            harness_id.as_uuid(),
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .context("failed to lock harness")?;
 
         let deleted = sqlx::query!(
             r#"

@@ -102,6 +102,8 @@ fn recorded_limits_and_units_survive_catalog_changes() {
         created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
         created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
         enrolled_at: None,
+        setup_completed_at: None,
+        default_agent_id: None,
         enrollment_generation: Default::default(),
     };
     let body = instance_body(
@@ -196,6 +198,8 @@ fn a_remote_image_names_its_server_and_protocol() {
         created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
         created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
         enrolled_at: None,
+        setup_completed_at: None,
+        default_agent_id: None,
         enrollment_generation: Default::default(),
     };
     let body = instance_body(

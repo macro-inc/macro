@@ -10126,6 +10126,7 @@ version = "0.1.0"
 dependencies = [
  "async-stripe",
  "axum",
+ "bot_id",
  "chrono",
  "clap",
  "computer_id",

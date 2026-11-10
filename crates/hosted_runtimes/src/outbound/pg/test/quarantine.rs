@@ -62,7 +62,7 @@ async fn corrupt_row_does_not_abort_fleet_scans(pool: PgPool) {
         ComputerRecord::Healthy(_) => panic!("an invalid name must be quarantined"),
     }
     assert_eq!(
-        bad.status().status,
+        bad.status(0).status,
         crate::domain::models::ComputerStatusKind::NeedsAttention
     );
     assert_eq!(repo.instances_expected(host.id).await.unwrap().len(), 2);

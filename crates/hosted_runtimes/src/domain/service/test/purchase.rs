@@ -44,7 +44,7 @@ async fn both_stripe_purchase_entry_points_provision_before_returning() {
         );
         assert_eq!(computer.state.payment, PaymentOutcome::Paid);
         assert_eq!(
-            computer.status().setup,
+            computer.status(0).setup,
             Some(SetupProgress {
                 step: SetupStep::Creating,
                 position: 1,

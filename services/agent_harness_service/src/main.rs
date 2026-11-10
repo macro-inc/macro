@@ -1318,6 +1318,7 @@ async fn run() -> anyhow::Result<()> {
                 broker.clone(),
             ),
             PgBotsRepo::new(pool.clone()),
+            pool.clone(),
         )),
     )
     .await?;

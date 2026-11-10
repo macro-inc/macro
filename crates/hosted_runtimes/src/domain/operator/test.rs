@@ -19,6 +19,8 @@ use crate::domain::size::ComputerSize;
 
 const HARNESS: HarnessId =
     HarnessId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_0c0c));
+const DEFAULT_AGENT: bot_id::BotId =
+    bot_id::BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_0a0a));
 
 #[derive(Debug, thiserror::Error)]
 enum FakeFleetError {
@@ -262,7 +264,7 @@ impl Harnesses for FakeHarnesses {
         Ok((harness_id == HARNESS).then_some(ComputerId::new_from_uuid(Uuid::from_u128(1))))
     }
 
-    async fn revoke(&self, _computer_id: ComputerId) -> Result<(), FakeError> {
+    async fn revoke(&self, _computer: &Computer) -> Result<(), FakeError> {
         Ok(())
     }
 
@@ -278,7 +280,9 @@ impl Harnesses for FakeHarnesses {
         if self.fail_default_agent.load(Ordering::SeqCst) {
             return Err(FakeError);
         }
-        Ok(DefaultAgent::Created)
+        Ok(DefaultAgent::Created {
+            agent_id: DEFAULT_AGENT,
+        })
     }
 }
 
@@ -402,6 +406,16 @@ async fn the_first_connection_gives_the_team_a_default_agent_once() {
         *operator.harnesses.default_agents.lock().unwrap(),
         vec![(id, HARNESS)]
     );
+    let ready = operator
+        .repo
+        .get(id)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_healthy()
+        .unwrap();
+    assert_eq!(ready.default_agent_id, Some(DEFAULT_AGENT));
+    assert_eq!(ready.status(0).default_agent_id, Some(DEFAULT_AGENT));
 }
 
 /// The agent is a convenience: failing to create it never holds up setup,

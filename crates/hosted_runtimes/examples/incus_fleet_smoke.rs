@@ -135,6 +135,8 @@ async fn main() -> Result<(), rootcause::Report> {
         )?,
         created_at: now,
         enrolled_at: None,
+        setup_completed_at: None,
+        default_agent_id: None,
         enrollment_generation: Default::default(),
     };
     computer.state.phase = hosted_runtimes::domain::lifecycle::Phase::Provisioning {
