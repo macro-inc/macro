@@ -1,8 +1,6 @@
 use crate::domain::models::{
-    ChatResponse, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs,
-    PatchChatMessageArgs, PatchChatRepoArgs, Result,
+    ChatResponse, CopyChatArgs, GetChatResponse, PatchChatArgs, PatchChatRepoArgs, Result,
 };
-use attachment::FormattedParts;
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
@@ -15,17 +13,6 @@ use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefau
 
 /// Repository trait for low-level chat data access.
 pub trait ChatRepo: Send + Sync + 'static {
-    /// Create a new chat, returning the chat ID.
-    ///
-    /// `share_permission` is the pre-resolved initial share permission — the
-    /// repository persists it verbatim and carries no share-policy of its own.
-    fn create(
-        &self,
-        owner: Owner,
-        args: CreateChatArgs,
-        share_permission: SharePermissionV2,
-    ) -> impl std::future::Future<Output = Result<String>> + Send;
-
     /// Get the link-share preference of the owner's team, or `None` when the
     /// owner has no team. The team is the one [`model_owner::team::owner_team`]
     /// resolves, so a bot owner gets its team's default.
@@ -52,6 +39,7 @@ pub trait ChatRepo: Send + Sync + 'static {
     ) -> impl std::future::Future<Output = Result<AccessLevel>> + Send;
 
     /// Copy a chat (create a new chat and duplicate its messages), returning the new chat ID.
+    /// Only entity duplication calls this; nothing else creates a legacy chat.
     ///
     /// `share_permission` is the pre-resolved initial share permission for the
     /// copy — the repository persists it verbatim.
@@ -109,26 +97,6 @@ pub trait ChatRepo: Send + Sync + 'static {
         &self,
         project_id: &str,
     ) -> impl std::future::Future<Output = Result<()>> + Send;
-
-    /// Patch a message's content.
-    fn patch_message(
-        &self,
-        chat_id: &str,
-        args: PatchChatMessageArgs,
-    ) -> impl std::future::Future<Output = Result<()>> + Send;
-
-    /// Store the resolved (AI-facing) representation of a user message.
-    fn store_resolved_message(
-        &self,
-        message_id: &str,
-        parts: FormattedParts,
-    ) -> impl std::future::Future<Output = Result<()>> + Send;
-
-    /// Get the resolved representation of a user message, if it exists.
-    fn get_resolved_message(
-        &self,
-        message_id: &str,
-    ) -> impl std::future::Future<Output = Result<FormattedParts>> + Send;
 }
 
 /// Service trait for chat business logic.

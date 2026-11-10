@@ -1,15 +1,11 @@
 mod owner;
 
-use std::time::Duration;
-
-use agent::types::{ChatMessageContent, Role};
 use chrono::Utc;
 use entity_registry::{BotFacts, EntityRegistryResult, OwnerGrantPolicy};
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use model::chat::NewChatMessage;
 use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::{
@@ -172,7 +168,8 @@ async fn patch_share_permission(
     .unwrap();
 }
 
-async fn create_chat_with_message(repo: &TestRepo) -> (String, String) {
+/// Create a chat holding one history message, as legacy chats were written.
+async fn create_chat_with_message(repo: &TestRepo) -> String {
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
         .unwrap()
         .into_owned();
@@ -180,31 +177,26 @@ async fn create_chat_with_message(repo: &TestRepo) -> (String, String) {
         .create(
             Owner::User(user_id),
             CreateChatArgs {
-                name: "Message update test".to_string(),
+                name: "History chat".to_string(),
                 project_id: None,
             },
             default_share_permission(),
         )
         .await
         .unwrap();
-    let now = Utc::now();
-    let message_id = crate::domain::ports::MessageRepo::create(
-        repo,
-        &chat_id,
-        NewChatMessage {
-            id: None,
-            content: ChatMessageContent::Text("initial content".to_string()),
-            role: Role::User,
-            attachments: None,
-            model: "test-model".to_string(),
-            created_at: now,
-            updated_at: now,
-        },
+    sqlx::query(
+        r#"
+        INSERT INTO "ChatMessage" ("id", "chatId", "content", "role", "model", "createdAt", "updatedAt")
+        VALUES ($1, $2, '"hello"'::jsonb, 'user', 'test-model', NOW(), NOW())
+        "#,
     )
+    .bind(uuid::Uuid::new_v4().to_string())
+    .bind(&chat_id)
+    .execute(&repo.pool)
     .await
     .unwrap();
 
-    (chat_id, message_id)
+    chat_id
 }
 
 #[sqlx::test(
@@ -240,174 +232,6 @@ async fn create_chat_returns_id(pool: Pool<Postgres>) {
 
     assert_eq!(row.get::<String, _>("name"), "Test Chat");
     assert_eq!(row.get::<String, _>("userId"), "macro|test@example.com");
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "fixtures", scripts("users"))
-)]
-async fn create_message_updates_chat_timestamp_and_selected_model(pool: Pool<Postgres>) {
-    let repo = test_repo(pool);
-    let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")
-        .unwrap()
-        .into_owned();
-
-    let chat_id = repo
-        .create(
-            Owner::User(user_id),
-            CreateChatArgs {
-                name: "Active Chat".to_string(),
-                project_id: None,
-            },
-            default_share_permission(),
-        )
-        .await
-        .unwrap();
-    let original_updated_at = repo
-        .get_metadata(&chat_id)
-        .await
-        .unwrap()
-        .updated_at
-        .unwrap();
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    let now = Utc::now();
-    crate::domain::ports::MessageRepo::create(
-        &repo,
-        &chat_id,
-        NewChatMessage {
-            id: None,
-            content: ChatMessageContent::Text("hello".to_string()),
-            role: Role::User,
-            attachments: None,
-            model: "test-model".to_string(),
-            created_at: now,
-            updated_at: now,
-        },
-    )
-    .await
-    .unwrap();
-
-    let updated_at = repo
-        .get_metadata(&chat_id)
-        .await
-        .unwrap()
-        .updated_at
-        .unwrap();
-    assert!(updated_at > original_updated_at);
-    assert_eq!(
-        repo.get_metadata(&chat_id).await.unwrap().model.as_deref(),
-        Some("test-model")
-    );
-
-    for (role, model) in [(Role::User, "new-model"), (Role::Assistant, "test-model")] {
-        let now = Utc::now();
-        crate::domain::ports::MessageRepo::create(
-            &repo,
-            &chat_id,
-            NewChatMessage {
-                id: None,
-                content: ChatMessageContent::Text("another message".to_owned()),
-                role,
-                attachments: None,
-                model: model.to_owned(),
-                created_at: now,
-                updated_at: now,
-            },
-        )
-        .await
-        .unwrap();
-        // An older reply finishing after a new send must not undo its model selection.
-        assert_eq!(
-            repo.get_metadata(&chat_id).await.unwrap().model.as_deref(),
-            Some("new-model")
-        );
-    }
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "fixtures", scripts("users"))
-)]
-async fn delete_message_returns_parent_chat_id_and_removes_message(pool: Pool<Postgres>) {
-    let repo = test_repo(pool);
-    let (chat_id, message_id) = create_chat_with_message(&repo).await;
-
-    let deleted_from_chat_id = crate::domain::ports::MessageRepo::delete(&repo, &message_id)
-        .await
-        .unwrap();
-
-    assert_eq!(deleted_from_chat_id, chat_id);
-    assert!(matches!(
-        crate::domain::ports::MessageRepo::get_message_content(&repo, &chat_id, &message_id).await,
-        Err(ChatErr::NotFound)
-    ));
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "fixtures", scripts("users"))
-)]
-async fn update_message_content_bumps_chat_updated_at(pool: Pool<Postgres>) {
-    let repo = test_repo(pool);
-    let (chat_id, message_id) = create_chat_with_message(&repo).await;
-    let original_updated_at = repo
-        .get_metadata(&chat_id)
-        .await
-        .unwrap()
-        .updated_at
-        .unwrap();
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    crate::domain::ports::MessageRepo::update_message_content(
-        &repo,
-        &chat_id,
-        &message_id,
-        &ChatMessageContent::Text("final content".to_string()),
-    )
-    .await
-    .unwrap();
-
-    let updated_at = repo
-        .get_metadata(&chat_id)
-        .await
-        .unwrap()
-        .updated_at
-        .unwrap();
-    assert!(updated_at > original_updated_at);
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "fixtures", scripts("users"))
-)]
-async fn nonexistent_message_does_not_bump_chat(pool: Pool<Postgres>) {
-    let repo = test_repo(pool);
-    let (chat_id, _) = create_chat_with_message(&repo).await;
-    let original_updated_at = repo
-        .get_metadata(&chat_id)
-        .await
-        .unwrap()
-        .updated_at
-        .unwrap();
-
-    tokio::time::sleep(Duration::from_millis(10)).await;
-    crate::domain::ports::MessageRepo::update_message_content(
-        &repo,
-        &chat_id,
-        "nonexistent-message",
-        &ChatMessageContent::Text("final content".to_string()),
-    )
-    .await
-    .unwrap();
-
-    let updated_at = repo
-        .get_metadata(&chat_id)
-        .await
-        .unwrap()
-        .updated_at
-        .unwrap();
-    assert_eq!(updated_at, original_updated_at);
 }
 
 #[sqlx::test(

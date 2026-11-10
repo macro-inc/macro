@@ -5,19 +5,15 @@ mod team_share;
 #[cfg(test)]
 mod test;
 
-use crate::domain::models::{
-    ChatErr, ChatResponse, CopyChatArgs, CreateChatArgs, PatchChatMessageArgs, PatchChatRepoArgs,
-    Result, WebCitation,
-};
-use crate::domain::ports::{ChatRepo, MessageRepo};
-use agent::types::ChatMessageContent;
-use attachment::FormattedParts;
+#[cfg(test)]
+use crate::domain::models::CreateChatArgs;
+use crate::domain::models::{ChatErr, ChatResponse, CopyChatArgs, PatchChatRepoArgs, Result};
+use crate::domain::ports::ChatRepo;
 use entity_registry::BotFacts;
 use entity_registry_db_utils::{NewEntityRecord, OwnedEntityRegistrar, RegisteredEntityType};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::ChatMessageWithAttachments;
-use model::chat::NewChatMessage;
 use model_owner::Owner;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::TeamShareFacts;
@@ -85,33 +81,12 @@ impl<B: BotFacts + 'static> PgChatRepo<B> {
     async fn get_messages(&self, chat_id: &str) -> anyhow::Result<Vec<ChatMessageWithAttachments>> {
         queries::get_messages::get_messages(&self.pool, chat_id).await
     }
-
-    async fn persist_message_content(
-        &self,
-        chat_id: &str,
-        message_id: &str,
-        content: &ChatMessageContent,
-    ) -> Result<()> {
-        queries::update_message_content::update_message_content(
-            &self.pool, chat_id, message_id, content,
-        )
-        .await
-        .map_err(to_chat_err)
-    }
-
-    /// Store a resolved message without going through the trait.
-    pub async fn store_resolved_message_static(
-        &self,
-        message_id: &str,
-        parts: FormattedParts,
-    ) -> anyhow::Result<()> {
-        queries::store_resolved_message::store_resolved_message(&self.pool, message_id, parts).await
-    }
 }
 
-impl<B: BotFacts + 'static> ChatRepo for PgChatRepo<B> {
-    #[tracing::instrument(err, skip(self, share_permission))]
-    async fn create(
+#[cfg(test)]
+impl<B: BotFacts + 'static> PgChatRepo<B> {
+    /// Create a chat for a test fixture; production never creates legacy chats.
+    pub(crate) async fn create(
         &self,
         owner: Owner,
         args: CreateChatArgs,
@@ -147,7 +122,9 @@ impl<B: BotFacts + 'static> ChatRepo for PgChatRepo<B> {
 
         Ok(chat_id)
     }
+}
 
+impl<B: BotFacts + 'static> ChatRepo for PgChatRepo<B> {
     #[tracing::instrument(err, skip(self))]
     async fn get_team_default_link_share(
         &self,
@@ -340,112 +317,6 @@ impl<B: BotFacts + 'static> ChatRepo for PgChatRepo<B> {
     #[tracing::instrument(err, skip(self))]
     async fn update_project_modified(&self, project_id: &str) -> Result<()> {
         queries::update_project_modified::update_project_modified(&self.pool, project_id)
-            .await
-            .map_err(to_chat_err)
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn patch_message(&self, chat_id: &str, args: PatchChatMessageArgs) -> Result<()> {
-        self.persist_message_content(chat_id, &args.message_id, &args.content)
-            .await
-    }
-
-    #[tracing::instrument(err, skip(self, parts))]
-    async fn store_resolved_message(&self, message_id: &str, parts: FormattedParts) -> Result<()> {
-        queries::store_resolved_message::store_resolved_message(&self.pool, message_id, parts)
-            .await
-            .map_err(to_chat_err)
-    }
-
-    #[tracing::instrument(skip(self))]
-    async fn get_resolved_message(&self, message_id: &str) -> Result<FormattedParts> {
-        queries::get_resolved_message::get_resolved_message(&self.pool, message_id)
-            .await
-            .map_err(to_chat_err)
-    }
-}
-
-impl<B: BotFacts + 'static> MessageRepo for PgChatRepo<B> {
-    #[tracing::instrument(err, skip(self, message))]
-    async fn create(&self, chat_id: &str, message: NewChatMessage) -> Result<String> {
-        queries::create_message::create_message(&self.pool, chat_id, message)
-            .await
-            .map_err(to_chat_err)
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn delete(&self, message_id: &str) -> Result<String> {
-        queries::delete_message::delete_message(&self.pool, message_id)
-            .await
-            .map_err(to_chat_err)
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_messages(&self, chat_id: &str) -> Result<Vec<ChatMessageWithAttachments>> {
-        queries::get_messages::get_messages(&self.pool, chat_id)
-            .await
-            .map_err(to_chat_err)
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_message_content(
-        &self,
-        chat_id: &str,
-        message_id: &str,
-    ) -> Result<ChatMessageContent> {
-        queries::get_message_content::get_message_content(&self.pool, chat_id, message_id)
-            .await
-            .map_err(to_chat_err)
-    }
-
-    #[tracing::instrument(err, skip(self, content))]
-    async fn update_message_content(
-        &self,
-        chat_id: &str,
-        message_id: &str,
-        content: &ChatMessageContent,
-    ) -> Result<()> {
-        self.persist_message_content(chat_id, message_id, content)
-            .await
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn patch_message(&self, chat_id: &str, args: PatchChatMessageArgs) -> Result<()> {
-        self.persist_message_content(chat_id, &args.message_id, &args.content)
-            .await
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn copy_messages(&self, source_chat_id: &str, dest_chat_id: &str) -> Result<()> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|e| ChatErr::Unknown(e.into()))?;
-        queries::copy_messages::copy_messages(&mut tx, source_chat_id, dest_chat_id)
-            .await
-            .map_err(to_chat_err)?;
-        tx.commit().await.map_err(|e| ChatErr::Unknown(e.into()))?;
-        Ok(())
-    }
-
-    #[tracing::instrument(err, skip(self))]
-    async fn get_web_citations(&self, chat_id: &str) -> Result<Vec<(String, Vec<WebCitation>)>> {
-        queries::get_web_citations::get_web_citations(&self.pool, chat_id)
-            .await
-            .map_err(to_chat_err)
-    }
-
-    #[tracing::instrument(err, skip(self, parts))]
-    async fn store_resolved_message(&self, message_id: &str, parts: FormattedParts) -> Result<()> {
-        queries::store_resolved_message::store_resolved_message(&self.pool, message_id, parts)
-            .await
-            .map_err(to_chat_err)
-    }
-
-    #[tracing::instrument(skip(self))]
-    async fn get_resolved_message(&self, message_id: &str) -> Result<FormattedParts> {
-        queries::get_resolved_message::get_resolved_message(&self.pool, message_id)
             .await
             .map_err(to_chat_err)
     }

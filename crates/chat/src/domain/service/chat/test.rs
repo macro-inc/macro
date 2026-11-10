@@ -1,13 +1,12 @@
 use std::sync::{Arc, Mutex};
 
-use attachment::FormattedParts;
 use entity_access_management::domain::models::EntityAccessManagementError;
 use macro_event_broker::{EventBrokerError, MacroEvent};
 use model::chat::Chat;
 use model_owner::Owner;
 
 use super::*;
-use crate::domain::models::{ChatResponse, CreateChatArgs, PatchChatMessageArgs};
+use crate::domain::models::ChatResponse;
 
 pub(super) const CHAT_ID: &str = "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90";
 const NEW_CHAT_ID: &str = "0197f776-6e7b-7c69-a251-780ae754d3e4";
@@ -107,17 +106,6 @@ impl StubChatRepo {
 }
 
 impl ChatRepo for StubChatRepo {
-    async fn create(
-        &self,
-        owner: Owner,
-        _args: CreateChatArgs,
-        share_permission: SharePermissionV2,
-    ) -> Result<String> {
-        self.received_owners.lock().unwrap().push(owner);
-        *self.received_share_permission.lock().unwrap() = Some(share_permission);
-        Ok(CHAT_ID.to_string())
-    }
-
     async fn get_team_default_link_share(
         &self,
         owner: &Owner,
@@ -229,22 +217,6 @@ impl ChatRepo for StubChatRepo {
 
     async fn update_project_modified(&self, _project_id: &str) -> Result<()> {
         Ok(())
-    }
-
-    async fn patch_message(&self, _chat_id: &str, _args: PatchChatMessageArgs) -> Result<()> {
-        unimplemented!("not exercised")
-    }
-
-    async fn store_resolved_message(
-        &self,
-        _message_id: &str,
-        _parts: FormattedParts,
-    ) -> Result<()> {
-        unimplemented!("not exercised")
-    }
-
-    async fn get_resolved_message(&self, _message_id: &str) -> Result<FormattedParts> {
-        unimplemented!("not exercised")
     }
 }
 

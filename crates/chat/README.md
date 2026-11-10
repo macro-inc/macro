@@ -1,8 +1,8 @@
 # Chat crate
 
 This crate owns AI chat models, persistence ports, service policy, and the
-HTTP and toolset adapters for chats and chat messages. The chat and message
-services also produce sanitized lifecycle and message events for successful
+HTTP and toolset adapters for chats and chat messages. Legacy chats are
+read-only. The chat service produces sanitized lifecycle events for successful
 chat mutations.
 
 ## Chat event producer
@@ -16,14 +16,14 @@ between different chats is unspecified.
 
 | Event name | Emitted after | Metadata |
 | --- | --- | --- |
-| `chat.created` | `ChatService::create` and its project bookkeeping succeed; also emitted by the DCS streaming flow when sending a message implicitly creates a chat | `chat_id`, `owner`, `name`, `project_id` |
+| `chat.created` | Nothing; no longer emitted, kept for existing consumers | `chat_id`, `owner`, `name`, `project_id` |
 | `chat.updated` | A chat PATCH (`ChatService::patch`) is persisted | `chat_id`, `actor_user_id`, requested `name`, `previous_project_id`, requested `project_id`, `share_permission_updated` |
 | `chat.deleted` | Soft deletion succeeds | `chat_id`, `actor_user_id`, `project_id` |
 | `chat.permanently_deleted` | Permanent deletion succeeds | `chat_id`, `actor_user_id`, `project_id` |
 | `chat.restored` | `ChatService::revert_delete` succeeds | `chat_id`, `actor_user_id`, `project_id` |
-| `chat.copied` | `ChatService::copy_chat` succeeds | `chat_id` (the new copy), `source_chat_id`, `owner`, `name` |
-| `chat.message_sent` | `MessageService::create` (user message) or `MessageService::store` (assistant message) persists the message | `chat_id`, `message_id`, `role`, `model`, `actor_user_id`, `attachment_count` |
-| `chat.message_deleted` | `MessageService::delete` permanently deletes the message | `chat_id`, `message_id` |
+| `chat.copied` | `ChatService::copy_chat` (entity duplication) succeeds | `chat_id` (the new copy), `source_chat_id`, `owner`, `name` |
+| `chat.message_sent` | Nothing; no longer emitted, kept for existing consumers | `chat_id`, `message_id`, `role`, `model`, `actor_user_id`, `attachment_count` |
+| `chat.message_deleted` | Nothing; no longer emitted, kept for existing consumers | `chat_id`, `message_id` |
 
 Optional metadata is serialized as `null`. On `chat.updated`, `name` and
 `project_id` describe the requested PATCH: `null` means the field was omitted,
@@ -60,14 +60,14 @@ be treated as personal data. This matches identifiers already published on the
 ## Excluded flows and known gaps
 
 Only the successful mutations in the table produce these events. Read/list
-operations and tool-call mutations emit nothing. Message update operations
-and tool events (for example `chat.tool_called` and `chat.tool_rejected`) are
-not yet produced; they can be added later as new enum variants.
+operations emit nothing. Legacy chats are read-only, so nothing creates a
+chat, sends or deletes a message, or runs a tool call; `chat.created`,
+`chat.message_sent` and `chat.message_deleted` stay in the schema for existing
+consumers.
 
-Only the document cognition service (DCS) HTTP chat router and entity
-mutations publish to Kafka. Legacy chats are read-only, so nothing produces
-`chat.created` anymore; the variant stays for existing consumers. The `ChatServiceImpl` instances in mcp_service, memory, and
-ai_tools agent contexts and in the DCS chat tool context use the
+Only the agent harness HTTP chat router and the DSS owned-entity purge publish
+to Kafka. The other `ChatServiceImpl` instances (DSS GraphQL entity mutations,
+the harness chat tool context, and the `ai_tools` agent contexts) use the
 `NoopMacroEventBroker` default and do not publish.
 
 This crate provides production only; it adds no chat-event consumer.
