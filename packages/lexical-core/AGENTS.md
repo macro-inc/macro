@@ -28,6 +28,9 @@ composer imports the URL matcher from this package; do not duplicate it.
 
 ## Gotchas
 
+Keep admitted nullable document-reference render inputs in decorator props while
+leaving serialized authoring types narrow; JSON import preserves those nulls.
+
 Human user mention Markdown requires only a nonempty string `userId`; the importer
 derives a missing email from `macro|` IDs so web name lookup and clipboard round
 trips can resolve the user. Other identities still need an email or display name.

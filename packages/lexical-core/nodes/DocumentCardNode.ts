@@ -57,7 +57,12 @@ export type SerializedDocumentCardNode = Spread<
   SerializedLexicalNode
 >;
 
-export type DocumentCardDecoratorProps = DocumentCardData & {
+export type DocumentCardDecoratorProps = Omit<
+  DocumentCardData,
+  'mentionUuid' | 'previewData'
+> & {
+  mentionUuid?: string | null;
+  previewData?: PreviewData | null;
   key: NodeKey;
   theme: EditorThemeClasses;
   previewComponent?: DecoratorComponent<DocumentCardDecoratorProps>;
