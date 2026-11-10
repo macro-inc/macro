@@ -10,8 +10,8 @@ crate owns only the sync.
 ## How it works
 
 Settings `POST /integrations/dialpad/connection` enrolls the user and returns a
-Macro Connect URL; Connect returns them to `/app/settings/connections`.
-`.../complete` (polled by the row) or the 30-second reconcile then
+Macro Connect URL; consent ends on the connectors' callback page, which closes
+itself. `.../complete` (polled by the row) or the 30-second reconcile then
 reads `users/me`, registers a webhook with a secret Macro chose, and subscribes
 to that user's call states. Dialpad posts HS256 JWTs to
 `/integrations/dialpad/webhooks/{id}`; each verified event is stored with its

@@ -718,7 +718,7 @@ pub async fn build(
 
     // Dialpad grants live in Macro Connect; without its key, sync is off.
     let dialpad_sync: Option<Arc<dyn dialpad_sync::domain::service::SyncService>> =
-        match config.connect_customer_key.value() {
+        match config.connect_customer_key.value().filter(|key| !key.is_empty()) {
             Some(key) => {
                 let grants = dialpad_sync::outbound::connect::ConnectGrants::new(
                     macro_service_urls::ConnectApiUrl::new()?.as_ref(),
@@ -743,9 +743,11 @@ pub async fn build(
                         macro_event_broker.clone(),
                     )),
                     public_url: public_url.to_string(),
+                    // The page connectors use: it closes the Connect tab,
+                    // and the Settings row that opened it finishes setup.
                     return_url: format!(
-                        "{}/app/settings/connections",
-                        macro_service_urls::AppServiceUrl::new()?
+                        "{}/pipedream/mcp/connect/callback",
+                        public_url.as_str().trim_end_matches('/')
                     ),
                 })
                     as Arc<dyn dialpad_sync::domain::service::SyncService>)
