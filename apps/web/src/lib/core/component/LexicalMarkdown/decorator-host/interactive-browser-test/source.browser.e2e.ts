@@ -39,3 +39,32 @@ for (const kind of ['snapshot', 'paste']) {
     expect(errors).toEqual([]);
   });
 }
+
+test('actual Source Snapshot Enter reads published selection after earlier pending mutation', async ({
+  page,
+}, info) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.route('**/__macro_dev/gateway/**', (route) => route.abort());
+  await page.goto(
+    '/src/lib/core/component/LexicalMarkdown/decorator-host/interactive-browser-test/fixture.html?kind=snapshot'
+  );
+  const root = page.getByRole('textbox', { name: 'Interactive decorators' });
+  await expect(root).toContainText('No Access');
+  await page.evaluate(() => window.interactiveSourceFixture!.select());
+  await expect(root.locator('.bg-active.text-ink')).toBeVisible();
+  const result = await page.evaluate(() =>
+    window.interactiveSourceFixture!.enterAfterPendingRange()
+  );
+  expect(result).toEqual({
+    handled: true,
+    publishedNodeDuringEarlier: true,
+    pendingRangeDuringEarlier: true,
+    laterCalls: 0,
+  });
+  await info.attach('snapshot-enter-timing.json', {
+    body: JSON.stringify(result),
+    contentType: 'application/json',
+  });
+  expect(errors).toEqual([]);
+});

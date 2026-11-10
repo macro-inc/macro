@@ -17,7 +17,11 @@ import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
+  $getSelection,
+  $isRangeSelection,
   $setSelection,
+  COMMAND_PRIORITY_NORMAL,
+  KEY_ENTER_COMMAND,
 } from 'lexical';
 import { onCleanup, onMount } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -56,6 +60,12 @@ declare global {
     interactiveSourceFixture?: {
       capture(): { model: string; dom: string };
       select(): void;
+      enterAfterPendingRange(): {
+        handled: boolean;
+        publishedNodeDuringEarlier: boolean;
+        pendingRangeDuringEarlier: boolean;
+        laterCalls: number;
+      };
     };
   }
 }
@@ -75,7 +85,24 @@ function SourceFixture() {
     .use(documentMetadataPlugin({}));
   let root!: HTMLDivElement;
   let key: string;
+  let mutateOnEnter = false;
+  let publishedNodeDuringEarlier = false;
+  let pendingRangeDuringEarlier = false;
   onMount(() => {
+    const releaseEarlier = wrapper.editor.registerCommand(
+      KEY_ENTER_COMMAND,
+      () => {
+        if (!mutateOnEnter) return false;
+        $getRoot().getFirstChildOrThrow().selectStart();
+        const published = wrapper.selection;
+        publishedNodeDuringEarlier =
+          published?.type === 'node' && published.nodeKeys.has(key);
+        pendingRangeDuringEarlier = $isRangeSelection($getSelection());
+        return false;
+      },
+      COMMAND_PRIORITY_NORMAL
+    );
+    onCleanup(releaseEarlier);
     wrapper.editor.setRootElement(root);
     wrapper.editor.update(
       () => {
@@ -119,6 +146,29 @@ function SourceFixture() {
           },
           { discrete: true }
         );
+      },
+      enterAfterPendingRange() {
+        let laterCalls = 0;
+        const releaseLater = wrapper.editor.registerCommand(
+          KEY_ENTER_COMMAND,
+          () => {
+            laterCalls += 1;
+            return false;
+          },
+          COMMAND_PRIORITY_NORMAL
+        );
+        mutateOnEnter = true;
+        try {
+          return {
+            handled: wrapper.editor.dispatchCommand(KEY_ENTER_COMMAND, null),
+            publishedNodeDuringEarlier,
+            pendingRangeDuringEarlier,
+            laterCalls,
+          };
+        } finally {
+          mutateOnEnter = false;
+          releaseLater();
+        }
       },
     };
   });
