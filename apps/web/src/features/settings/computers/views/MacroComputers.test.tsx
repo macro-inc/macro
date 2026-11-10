@@ -308,6 +308,7 @@ it("lists the agents bound to each computer's runtime", () => {
       bot: {
         id: 'bot-default',
         kind: 'owned',
+        has_agent: true,
         name: 'Claude Code · Build machine',
         handle: 'claude-code-build-machine',
         owner: { type: 'team', team_id: 'team-1' },
@@ -328,6 +329,7 @@ it("lists the agents bound to each computer's runtime", () => {
       bot: {
         id: 'bot-laptop',
         kind: 'owned',
+        has_agent: true,
         name: 'Laptop agent',
         handle: 'laptop',
         owner: { type: 'user', user_id: 'viewer' },

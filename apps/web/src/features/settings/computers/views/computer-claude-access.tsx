@@ -131,9 +131,12 @@ export function ComputerClaudeAccess(props: {
       <span class="flex min-w-0 flex-col items-start gap-2">
         <span>
           {currentMode() === 'own_account'
-            ? account()
-              ? t('computers.claudeConnectedAs', { account: account() })
-              : t('computers.claudeOwnAccount')
+            ? (() => {
+                const connected = account();
+                return connected
+                  ? t('computers.claudeConnectedAs', { account: connected })
+                  : t('computers.claudeOwnAccount');
+              })()
             : currentMode() === 'macro_credits'
               ? t('computers.claudeCredits')
               : t('computers.claudeUnavailable')}
