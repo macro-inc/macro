@@ -222,7 +222,7 @@ impl Transaction<'_> {
                 self.check_prepared_publication(&value)?;
                 *value
             }
-            None => self.prepare_transition()?,
+            None => self.prepare_transition(caches)?,
         };
         let dirty = !transition.changes.is_empty();
         let selection_changed = transition.selection_changed;
@@ -257,6 +257,7 @@ impl Transaction<'_> {
     #[inline(always)]
     pub(crate) fn prepare_transition(
         &mut self,
+        caches: CacheReconciliation,
     ) -> Result<crate::prepared::PreparedTransition, Error> {
         #[cfg(feature = "foreign-nodes")]
         if self.foreign_read_only {
