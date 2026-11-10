@@ -1,3 +1,4 @@
+import { Telemetry } from '@macro-inc/observability';
 import { platformWebSocketFactory } from '../websocket/platform/factory';
 import type {
   MinimalWebSocket,
@@ -40,6 +41,8 @@ export interface ExecutorOptions<S extends NativeSession> {
   owner: string;
   user: string;
   create: (now: number, wall: number) => S;
+  /** Release typed host ownership before native free if executor construction fails. */
+  onConstructionFailure?: (session: S) => void;
   view: ViewApplier;
   auth: SessionAuthorization;
   /** Supplied by the application's servers.ts; the package never invents hosts. */
@@ -82,65 +85,131 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
     };
     this.t0 = this.clock.mono();
     options.telemetry.identify(options.doc, options.owner);
-    this.session = options.create(this.now(), this.clock.wall());
-    this.lease = new SessionLease(options.doc, options.owner, options.locks);
-    this.storageQueue = Promise.resolve();
-    this.storage =
-      options.storage ??
-      new StorageAdapter(
+    let native: S | undefined;
+    let lease: SessionLease | undefined;
+    let channel: BroadcastChannel | undefined;
+    let unsubscribe: (() => void) | undefined;
+    let online = false;
+    let pagehide = false;
+    let visibility = false;
+    try {
+      this.session = native = options.create(this.now(), this.clock.wall());
+      this.lease = lease = new SessionLease(
         options.doc,
         options.owner,
-        options.user,
         options.locks
       );
-    this.channel =
-      options.channel ?? new BroadcastChannel(`macro-loro-${options.doc}`);
+      this.storageQueue = Promise.resolve();
+      this.storage =
+        options.storage ??
+        new StorageAdapter(
+          options.doc,
+          options.owner,
+          options.user,
+          options.locks
+        );
+      this.channel = channel =
+        options.channel ?? new BroadcastChannel(`macro-loro-${options.doc}`);
 
-    this.channel.onmessage = (event: MessageEvent<unknown>) => {
-      const value = event.data;
-      if (typeof value !== 'object' || value === null || !('type' in value))
-        return;
-      if (
-        value.type === 'closing' &&
-        'session' in value &&
-        typeof value.session === 'string'
-      ) {
-        const owner = value.session;
-        this.run(() =>
-          this.session.chatter(
-            2,
-            new TextEncoder().encode(owner),
-            this.now(),
-            this.clock.wall()
+      this.channel.onmessage = (event: MessageEvent<unknown>) => {
+        const value = event.data;
+        if (typeof value !== 'object' || value === null || !('type' in value))
+          return;
+        if (
+          value.type === 'closing' &&
+          'session' in value &&
+          typeof value.session === 'string'
+        ) {
+          const owner = value.session;
+          this.run(() =>
+            this.session.chatter(
+              2,
+              new TextEncoder().encode(owner),
+              this.now(),
+              this.clock.wall()
+            )
+          );
+        }
+        if (
+          'data' in value &&
+          value.data instanceof Uint8Array &&
+          (value.type === 'update' || value.type === 'awareness')
+        ) {
+          const kind = value.type === 'update' ? 0 : 1;
+          const data = value.data;
+          this.run(() =>
+            this.session.chatter(kind, data, this.now(), this.clock.wall())
+          );
+        }
+      };
+      this.unsubscribe = unsubscribe = options.auth.subscribe(
+        (current, write, comment) =>
+          this.run(() =>
+            this.session.authorization(
+              current,
+              write,
+              comment,
+              this.now(),
+              this.clock.wall()
+            )
+          )
+      );
+      globalThis.addEventListener?.('online', this.online);
+      online = true;
+      globalThis.addEventListener?.('pagehide', this.pagehide);
+      pagehide = true;
+      globalThis.document?.addEventListener(
+        'visibilitychange',
+        this.visibility
+      );
+      visibility = true;
+    } catch (error) {
+      this.closed = true;
+      this.queue.length = 0;
+      clearTimeout(this.timer);
+      const report = (failure: unknown) => {
+        try {
+          Telemetry.error(failure, { surface: 'session.constructor.cleanup' });
+        } catch {
+          // A telemetry failure must not replace the original thrown value.
+        }
+      };
+      const cleanup = (call: () => void) => {
+        try {
+          call();
+        } catch (failure) {
+          report(failure);
+        }
+      };
+      if (online)
+        cleanup(() => globalThis.removeEventListener?.('online', this.online));
+      if (pagehide)
+        cleanup(() =>
+          globalThis.removeEventListener?.('pagehide', this.pagehide)
+        );
+      if (visibility)
+        cleanup(() =>
+          globalThis.document?.removeEventListener(
+            'visibilitychange',
+            this.visibility
           )
         );
+      if (unsubscribe) cleanup(unsubscribe);
+      if (channel) {
+        const accepted = channel;
+        cleanup(() => {
+          accepted.onmessage = null;
+        });
+        cleanup(() => accepted.close());
       }
-      if (
-        'data' in value &&
-        value.data instanceof Uint8Array &&
-        (value.type === 'update' || value.type === 'awareness')
-      ) {
-        const kind = value.type === 'update' ? 0 : 1;
-        const data = value.data;
-        this.run(() =>
-          this.session.chatter(kind, data, this.now(), this.clock.wall())
-        );
+      if (lease) void lease.release().catch(report);
+      if (native) {
+        const failed = native;
+        cleanup(() => options.onConstructionFailure?.(failed));
+        cleanup(() => failed.free());
       }
-    };
-    this.unsubscribe = options.auth.subscribe((current, write, comment) =>
-      this.run(() =>
-        this.session.authorization(
-          current,
-          write,
-          comment,
-          this.now(),
-          this.clock.wall()
-        )
-      )
-    );
-    globalThis.addEventListener?.('online', this.online);
-    globalThis.addEventListener?.('pagehide', this.pagehide);
-    globalThis.document?.addEventListener('visibilitychange', this.visibility);
+      throw error;
+    }
   }
   now = () => this.clock.mono() - this.t0;
   /** All synchronous admission, including view inputs, is serialized here. */
