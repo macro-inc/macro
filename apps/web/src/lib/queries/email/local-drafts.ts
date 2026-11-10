@@ -1022,10 +1022,18 @@ async function settleDraftAttempt(
     if (code === 'DRAFT_ALREADY_SENT') return undefined;
     const latest = draft.latestAttemptId === attempt.id;
     if (attempt.operation === 'delete') {
-      if (!latest) return draft;
+      // A discard the queue never admitted is still this copy's open request.
+      // Its composer has left, so a failure must stay with the copy.
+      const requested = draft.deleteAttemptId === attempt.id;
+      if (!latest && !requested) return draft;
       if (!failed) return undefined;
       outcome.rejected = 'delete-failed';
-      return { ...draft, status: 'delete-failed', errorCode };
+      return {
+        ...draft,
+        deleteAttemptId: undefined,
+        status: 'delete-failed',
+        errorCode,
+      };
     }
     if (failed) {
       if (superseded || !latest) return draft;

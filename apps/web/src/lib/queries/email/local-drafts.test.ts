@@ -656,6 +656,31 @@ describe('draft queue recovery', () => {
       true
     );
   });
+  it('keeps a failure with a discard the queue could never admit', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    await runtime.localDraftQueueLifecycle(host).onMutationAttemptResult!(
+      discard(deleting),
+      {
+        error: {
+          graphQLErrors: [{ extensions: { code: 'LOCAL_RECOVERY_FAILED' } }],
+        },
+      } as unknown as OperationResult,
+      false
+    );
+    expect(await runtime.readLocalDraft('local')).toMatchObject({
+      status: 'delete-failed',
+      errorCode: 'LOCAL_RECOVERY_FAILED',
+      deleteAttemptId: undefined,
+    });
+    // The copy stays editable, and a late replay cannot discard it.
+    await runtime.saveLocalDraft(input('Kept'));
+    expect(
+      await runtime.localDraftQueueLifecycle(host).beforeMutationAttempt!(
+        discard(deleting)
+      )
+    ).toBe(false);
+  });
   it('reports a rejected discard without draft content', async () => {
     // The module registry is reset per test; spy on the runtime's instance.
     const { Telemetry } = await import('@macro-inc/observability');
