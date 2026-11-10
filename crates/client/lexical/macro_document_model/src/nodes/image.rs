@@ -4,6 +4,9 @@ use super::*;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ImageNode {
+    /// View-only decorator lifetime; never persisted or exported as node properties.
+    #[serde(skip)]
+    pub render_revision: u64,
     /// In-memory block alignment; upstream never serializes this property.
     #[serde(skip, default = "DecoratorBlockData::center")]
     pub block: DecoratorBlockData,
@@ -35,6 +38,12 @@ impl NodeType for ImageNode {
         let json = super::wire::own_json(Self::TYPE, json)?;
         Ok(serde_json::from_value(Value::Object(json))?)
     }
+    fn update_from_json(&mut self, json: &SerializedNode) -> crate::ModelResult<()> {
+        let mut next = Self::import_json(json)?;
+        next.render_revision = self.render_revision;
+        *self = next;
+        Ok(())
+    }
 }
 impl ImportPolicy for ImageNode {
     const IMPORTED_STATE: ImportedState = ImportedState::Full;
@@ -42,6 +51,9 @@ impl ImportPolicy for ImageNode {
 }
 impl DecoratorNode for ImageNode {
     lexical_model::decorator_node_base!();
+    fn render_revision(&self) -> Option<u64> {
+        Some(self.render_revision)
+    }
     fn json_version(&self) -> u32 {
         1
     }
@@ -57,6 +69,7 @@ impl SearchText for ImageNode {}
 impl Default for ImageNode {
     fn default() -> Self {
         Self {
+            render_revision: 0,
             block: DecoratorBlockData::center(),
             media: MediaData::default(),
             alt: String::new(),

@@ -12,6 +12,8 @@ mod links;
 mod list_insert;
 mod markdown_paste;
 mod media;
+mod media_properties;
+pub use media_properties::{MediaMountAction, media_mount_action};
 mod metadata;
 mod movement;
 pub use metadata::{DOCUMENT_METADATA, DOCUMENT_VERSION};
@@ -74,6 +76,7 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = code::register(builder);
     let builder = checklist::register(builder);
     let builder = media::register(builder);
+    let builder = media_properties::register(builder);
     let builder = clipboard::register(builder);
     let builder = text_paste::register(builder);
     let builder = markdown_paste::register(builder, ty);
@@ -126,6 +129,9 @@ pub fn decode_command(
         return Ok(Some(command));
     }
     if let Some(command) = media::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
+    if let Some(command) = media_properties::decode(name, json, generation)? {
         return Ok(Some(command));
     }
     if let Some(command) = checklist::decode(name, json, generation)? {

@@ -1,7 +1,8 @@
 //! Media construction and JavaScript-compatible dimension constraints.
 use super::*;
 /// Media class used by serialized guards.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum MediaType {
     /// Still image.
     Image,
@@ -16,6 +17,27 @@ pub struct Dimensions {
     /// Display height.
     pub height: f64,
 }
+/// The properties accepted by the source media setters.
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[serde(tag = "property", content = "value", rename_all = "camelCase")]
+pub enum MediaProperty {
+    /// Source transport.
+    SrcType(String),
+    /// Storage identity.
+    Id(String),
+    /// Media address.
+    Url(String),
+    /// Authored width.
+    Width(f64),
+    /// Authored height.
+    Height(f64),
+    /// Display scale.
+    Scale(f64),
+    /// Optional width constraint.
+    ConstrainedWidth(Option<f64>),
+    /// Optional height constraint.
+    ConstrainedHeight(Option<f64>),
+}
 /// Common payload projection for the two media classes.
 pub trait MediaNode: DecoratorBlock {
     /// Class of media.
@@ -24,6 +46,40 @@ pub trait MediaNode: DecoratorBlock {
     fn media(&self) -> &MediaData;
     /// Write stored media properties.
     fn media_mut(&mut self) -> &mut MediaData;
+    /// Current nonserialized decorator lifetime.
+    fn media_render_revision(&self) -> u64;
+    /// Mutable nonserialized decorator lifetime.
+    fn media_render_revision_mut(&mut self) -> &mut u64;
+    /// Apply one source setter, preserving its explicit rerender option.
+    fn set_media_property(
+        &mut self,
+        property: MediaProperty,
+        rerender: bool,
+    ) -> crate::ModelResult<()> {
+        if rerender {
+            let next = self
+                .media_render_revision()
+                .checked_add(1)
+                .ok_or(Error::Invariant("media render revision exhausted"))?;
+            *self.media_render_revision_mut() = next;
+        }
+        let media = self.media_mut();
+        match property {
+            MediaProperty::SrcType(value) => media.src_type = Maybe::Value(value),
+            MediaProperty::Id(value) => media.id = Maybe::Value(value),
+            MediaProperty::Url(value) => media.url = Maybe::Value(value),
+            MediaProperty::Width(value) => media.width = Maybe::Value(JsNumber(value)),
+            MediaProperty::Height(value) => media.height = Maybe::Value(JsNumber(value)),
+            MediaProperty::Scale(value) => media.scale = JsNumber(value),
+            MediaProperty::ConstrainedWidth(value) => {
+                media.constrained_width = Maybe::from_option(value.map(JsNumber));
+            }
+            MediaProperty::ConstrainedHeight(value) => {
+                media.constrained_height = Maybe::from_option(value.map(JsNumber));
+            }
+        }
+        Ok(())
+    }
     /// Apply constraints without scaling up; missing dimensions participate as JS NaN/null.
     fn effective_dimensions(&self) -> Dimensions {
         let data = self.media();
@@ -56,6 +112,12 @@ impl MediaNode for ImageNode {
     fn media_mut(&mut self) -> &mut MediaData {
         &mut self.media
     }
+    fn media_render_revision(&self) -> u64 {
+        self.render_revision
+    }
+    fn media_render_revision_mut(&mut self) -> &mut u64 {
+        &mut self.render_revision
+    }
 }
 impl MediaNode for VideoNode {
     const MEDIA_TYPE: MediaType = MediaType::Video;
@@ -64,6 +126,12 @@ impl MediaNode for VideoNode {
     }
     fn media_mut(&mut self) -> &mut MediaData {
         &mut self.media
+    }
+    fn media_render_revision(&self) -> u64 {
+        self.render_revision
+    }
+    fn media_render_revision_mut(&mut self) -> &mut u64 {
+        &mut self.render_revision
     }
 }
 fn truthy_number(value: f64) -> bool {
