@@ -75,59 +75,57 @@ export function computerStatusLabel(computer: ComputerStatus): {
   detail?: string;
   tone: StatusTone;
 } {
-  return (
-    match(computer.status)
-      .returnType<{ label: string; detail?: string; tone: StatusTone }>()
-      .with('setting_up', () => {
-        const setup = computer.setup;
-        const step = setup && setupStepLabel(setup.step);
-        return {
-          label: t('computers.settingUp'),
-          detail:
-            setup && step
-              ? t('computers.setupProgress', {
-                  step,
-                  position: setup.position,
-                  total: setup.total,
-                })
-              : undefined,
-          tone: 'progress',
-        };
-      })
-      .with('waiting_for_capacity', () => ({
-        label: t('computers.waitingForCapacity'),
-        detail: t('computers.waitingForCapacityHint'),
-        tone: 'muted',
-      }))
-      .with('needs_attention', () => ({
-        label: t('computers.needsAttention'),
-        tone: 'failure',
-      }))
-      .with('ready', () => ({ label: t('computers.ready'), tone: 'success' }))
-      .with('starting', () => ({
-        label: t('computers.starting'),
+  return match(computer.status)
+    .returnType<{ label: string; detail?: string; tone: StatusTone }>()
+    .with('setting_up', () => {
+      const setup = computer.setup;
+      const step = setup && setupStepLabel(setup.step);
+      return {
+        label: t('computers.settingUp'),
+        detail:
+          setup && step
+            ? t('computers.setupProgress', {
+                step,
+                position: setup.position,
+                total: setup.total,
+              })
+            : undefined,
         tone: 'progress',
-      }))
-      .with('stopping', () => ({
-        label: t('computers.stopping'),
-        tone: 'progress',
-      }))
-      .with('stopped', () => ({ label: t('computers.stopped'), tone: 'muted' }))
-      .with('failed', () => ({
-        label: t('computers.failed'),
-        detail: t('computers.failedHint'),
-        tone: 'failure',
-      }))
-      .with('payment_failed', () => ({
-        label: t('computers.paymentFailed'),
-        tone: 'failure',
-      }))
-      .with('released', () => ({
-        label: t('computers.releasedStatus'),
-        tone: 'muted',
-      }))
-      .exhaustive((unknown) => ({ label: String(unknown), tone: 'muted' }))
-  );
+      };
+    })
+    .with('waiting_for_capacity', () => ({
+      label: t('computers.waitingForCapacity'),
+      detail: t('computers.waitingForCapacityHint'),
+      tone: 'muted',
+    }))
+    .with('needs_attention', () => ({
+      label: t('computers.needsAttention'),
+      tone: 'failure',
+    }))
+    .with('ready', () => ({ label: t('computers.ready'), tone: 'success' }))
+    .with('starting', () => ({
+      label: t('computers.starting'),
+      tone: 'progress',
+    }))
+    .with('stopping', () => ({
+      label: t('computers.stopping'),
+      tone: 'progress',
+    }))
+    .with('stopped', () => ({ label: t('computers.stopped'), tone: 'muted' }))
+    .with('failed', () => ({
+      label: t('computers.failed'),
+      detail: t('computers.failedHint'),
+      tone: 'failure',
+    }))
+    .with('payment_failed', () => ({
+      label: t('computers.paymentFailed'),
+      tone: 'failure',
+    }))
+    .with('released', () => ({
+      label: t('computers.releasedStatus'),
+      tone: 'muted',
+    }))
+    .exhaustive((unknown) => ({ label: String(unknown), tone: 'muted' }));
 }
 
 /** The status dot every machine row uses, for this computer's state. */

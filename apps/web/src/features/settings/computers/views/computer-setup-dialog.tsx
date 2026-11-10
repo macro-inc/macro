@@ -7,9 +7,10 @@ import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import {
   type AgentWithHarnessId,
+  invalidateAgents,
   useAgentsQuery,
-  useUpdateAgentMutation,
 } from '@queries/agents/agents';
+import { useUpdateBotMutation } from '@queries/bots/bots';
 import {
   useClaudeSignInMutation,
   useClaudeSignOutMutation,
@@ -98,7 +99,7 @@ export function ComputerSetupDialog(props: {
   const nameId = createUniqueId();
   const userId = useUserId();
   const agents = useAgentsQuery();
-  const update = useUpdateAgentMutation();
+  const renameBot = useUpdateBotMutation();
   const signOut = useClaudeSignOutMutation();
   const preKick = useClaudeSignInMutation();
   const completeSetup = useCompleteComputerSetupMutation();
@@ -120,7 +121,7 @@ export function ComputerSetupDialog(props: {
   const agentName = () =>
     name() ?? agent()?.bot.name ?? defaultAgentName(props.firstName);
   const busy = () =>
-    update.isPending || signOut.isPending || completeSetup.isPending;
+    renameBot.isPending || signOut.isPending || completeSetup.isPending;
 
   // Start the Claude sign-in while the user names the agent, so its link is
   // ready the moment they choose their own account. Starting is idempotent.
@@ -152,26 +153,8 @@ export function ComputerSetupDialog(props: {
     try {
       const trimmed = agentName().trim();
       if (trimmed && trimmed !== current.bot.name) {
-        await update.mutateAsync({
-          agentId: current.bot.id,
-          avatarUrl: current.bot.avatar_url ?? undefined,
-          channelIds: current.channel_ids,
-          channelScope: current.channel_scope,
-          defaultModel: current.default_model,
-          description: current.bot.description ?? undefined,
-          handle: current.bot.handle,
-          harness: current.harness,
-          harnessId: current.harness_id ?? undefined,
-          name: trimmed,
-          instructions: current.instructions,
-          mcp: current.mcp,
-          teamId:
-            current.bot.owner?.type === 'team'
-              ? current.bot.owner.team_id
-              : undefined,
-          autoAcceptPermissions: current.auto_accept_permissions ?? undefined,
-          isCoding: current.is_coding,
-        });
+        await renameBot.mutateAsync({ botId: current.bot.id, name: trimmed });
+        await invalidateAgents();
       }
       if (choice() === 'own_account') {
         setStep('claude');
@@ -198,7 +181,7 @@ export function ComputerSetupDialog(props: {
   };
 
   const tryIt = () => {
-    const botId = agent()?.bot.id;
+    const botId = props.computer.defaultAgentId;
     if (botId) createRecentAgentSelections(userId()).remember(botId);
     props.onClose();
     replaceSplit({ content: { type: 'component', id: 'agents' } });
