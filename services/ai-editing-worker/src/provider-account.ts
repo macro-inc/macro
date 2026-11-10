@@ -39,7 +39,6 @@ export function accountUnavailable(
 ): AccountUnavailable | undefined {
   if (status !== undefined && (status < 400 || status >= 500)) return;
 
-  if (status === 412) return 'suspended';
   if (status === 402) return 'out_of_credit';
 
   const text = body.toLowerCase();

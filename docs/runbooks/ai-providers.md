@@ -6,12 +6,13 @@ Every alert links the **AI providers** dashboard.
 
 Macro calls each provider with one account key per provider. When a provider
 suspends that account or it runs out of credit, every request on that provider
-fails until someone fixes billing; retries and model fallbacks do not help.
+fails until someone fixes billing. Retrying the same provider does not help;
+falling back to a model on another provider does.
 
 | What | Search |
 | --- | --- |
 | Refused requests, Rust services | Logs: `"ai provider account unavailable"`, grouped by `@provider` and `@reason` |
-| Refused requests, AI editing worker | Spans: `resource_name:ai.provider_account_unavailable`, grouped by `@ai.provider` |
+| Refused requests, AI editing worker | Spans: `resource_name:ai.provider_account_unavailable`, grouped by `@ai.provider` and `@ai.account_unavailable` |
 | Priced spend per call | Logs: `"ai usage priced" @provider:<provider>`, summing `@cost_usd` |
 
 ## Account suspended or out of credit

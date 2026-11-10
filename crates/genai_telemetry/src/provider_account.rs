@@ -19,7 +19,8 @@ mod test;
 #[strum(serialize_all = "snake_case")]
 pub enum AccountUnavailable {
     /// The provider suspended, deactivated or disabled the account, e.g.
-    /// Fireworks' `412 Precondition Failed: Account … is suspended`.
+    /// Fireworks' `412 Precondition Failed: Account … is suspended`. The body
+    /// decides, not the 412: other preconditions fail with 412 too.
     Suspended,
     /// The account ran out of prepaid credit or reached its spending limit.
     OutOfCredit,
@@ -55,10 +56,6 @@ const OUT_OF_CREDIT: &[&str] = &[
 pub fn account_unavailable(status: Option<u16>, body: &str) -> Option<AccountUnavailable> {
     if status.is_some_and(|status| !(400..500).contains(&status)) {
         return None;
-    }
-
-    if status == Some(412) {
-        return Some(AccountUnavailable::Suspended);
     }
 
     if status == Some(402) {

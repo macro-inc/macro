@@ -70,9 +70,9 @@ const MONTHLY_CAPS = [{ provider: 'fireworks', name: 'Fireworks', usd: 30 }];
 
 const QUERIES = {
   accountUnavailable:
-    'sum:macro.ai.provider_account_unavailable{env:prod} by {provider}.as_count()',
+    'sum:macro.ai.provider_account_unavailable{env:prod} by {provider,reason}.as_count()',
   editingAccountUnavailable:
-    'sum:macro.ai.editing.provider_account_unavailable{env:production} by {provider}.as_count()',
+    'sum:macro.ai.editing.provider_account_unavailable{env:production} by {provider,reason}.as_count()',
   monthToDate: (provider: string) =>
     `sum:macro.ai.usage.cost_usd{provider:${provider}}`,
 };
@@ -123,17 +123,22 @@ export const dashboard = new datadog.Dashboard('ai-providers', {
       },
       ...MONTHLY_CAPS.flatMap(({ provider, name, usd: cap }) => {
         const query = `cumsum(${QUERIES.monthToDate(provider)}.rollup(sum, 3600))`;
+        // cumsum() counts from the start of the window, so the window must be
+        // the monitors' calendar month whatever range the dashboard shows.
+        const liveSpan = 'month_to_date';
         return [
           thresholdGraph({
             title: TITLES.nearingCap(name),
             query,
             critical: String(cap * 0.8),
             warning: String(cap * 0.5),
+            liveSpan,
           }),
           thresholdGraph({
             title: TITLES.reachedCap(name),
             query,
             critical: String(cap),
+            liveSpan,
           }),
         ];
       }),
@@ -167,7 +172,7 @@ prodMonitor('ai-editing-provider-account-unavailable', {
   description: ACCOUNT_DESCRIPTION,
   runbook: `${RUNBOOK}#account-suspended-or-out-of-credit`,
   dashboard: dashboard.url,
-  alertDetail: '{{provider.name}} refused {{value}} edit requests',
+  alertDetail: '{{provider.name}} refused {{value}} edit requests ({{reason.name}})',
   recoveryDetail: '{{provider.name}} is serving edit requests again',
 });
 

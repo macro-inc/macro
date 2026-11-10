@@ -114,3 +114,14 @@ fn server_error_quoting_suspension_is_not_an_account_failure() {
         None
     );
 }
+
+#[test]
+fn other_failed_precondition_is_not_an_account_failure() {
+    assert_eq!(
+        account_unavailable(
+            Some(412),
+            r#"{"error":{"message":"Precondition Failed: the If-Match header does not match"}}"#,
+        ),
+        None
+    );
+}

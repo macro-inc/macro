@@ -49,6 +49,15 @@ describe('accountUnavailable', () => {
     ).toBeUndefined();
   });
 
+  it('leaves an unrelated failed precondition alone', () => {
+    expect(
+      accountUnavailable(
+        412,
+        '{"error":{"message":"Precondition Failed: the If-Match header does not match"}}'
+      )
+    ).toBeUndefined();
+  });
+
   it('leaves a server error alone', () => {
     expect(
       accountUnavailable(500, 'upstream account is suspended')
