@@ -138,8 +138,8 @@ pub fn run() {
 
 /// The startup window as configured, for runtimes without extra window options.
 fn configured_window<'a>(
-    window: tauri::WebviewWindowBuilder<'a, AppRuntime, tauri::App<AppRuntime>>,
-) -> tauri::WebviewWindowBuilder<'a, AppRuntime, tauri::App<AppRuntime>> {
+    window: tauri::WebviewWindowBuilder<'a, AppRuntime, AppHandle<AppRuntime>>,
+) -> tauri::WebviewWindowBuilder<'a, AppRuntime, AppHandle<AppRuntime>> {
     window
 }
 
@@ -153,8 +153,8 @@ pub type AppRuntime = tauri::DynRuntime;
 /// Applies runtime-specific options to each startup window before it is built.
 pub type ConfigureWindow =
     for<'a> fn(
-        tauri::WebviewWindowBuilder<'a, AppRuntime, tauri::App<AppRuntime>>,
-    ) -> tauri::WebviewWindowBuilder<'a, AppRuntime, tauri::App<AppRuntime>>;
+        tauri::WebviewWindowBuilder<'a, AppRuntime, AppHandle<AppRuntime>>,
+    ) -> tauri::WebviewWindowBuilder<'a, AppRuntime, AppHandle<AppRuntime>>;
 
 /// Runs the app on a builder whose webview runtime is already selected.
 /// `desktop-cef` passes a Chromium builder and its window options; every other
@@ -249,8 +249,9 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
         // single instance plugin should always be the first registered
         tracing::debug!("register single instance plugin");
         builder = builder
-            .plugin(tauri_plugin_single_instance::init(|_app, argv, _cwd| {
+            .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
                 tracing::debug!("single instance callback with argv: {argv:?}");
+                desktop::main_window::reveal(app);
             }))
             .plugin(window_state::plugin());
     }
@@ -465,12 +466,14 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>, configure_window: Configure
         ])
         .setup(move |app| {
             #[cfg(desktop)]
-            for config in &startup_windows {
-                let navigation = navigation.clone();
-                let handle = app.handle().clone();
-                let window = tauri::WebviewWindowBuilder::from_config(app, config)?
-                    .on_new_window(move |url, _features| navigation.on_new_window(&handle, &url));
-                configure_window(window).build()?;
+            {
+                let windows = desktop::main_window::StartupWindows::new(
+                    startup_windows,
+                    navigation.clone(),
+                    configure_window,
+                );
+                desktop::main_window::create_all(app.handle(), &windows)?;
+                app.manage(windows);
             }
             #[cfg(desktop)]
             desktop_update::setup(app, recording)?;
