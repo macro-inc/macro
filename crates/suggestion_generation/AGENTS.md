@@ -26,7 +26,8 @@ those crates' tools. Hosted by the harness's scheduling runtime.
   2 to 5, with no run going and no nightly run in 20 hours; at most
   `MAX_NIGHTLY_RUNS` per process. A run its process never finished (a deploy
   cancels runs in flight) counts as going only until `STALE_GENERATION`; then
-  the same trigger restarts it in place, and the other records it failed.
+  it reads as failed and holds no nightly cooldown, the same trigger restarts it
+  in place, and the other records it failed.
 - `POST /scheduled-action/scheduled-actions/suggestions/generate` is the
   retired onboarding route, kept for old web and app bundles: it starts
   onboarding and answers with routine suggestions. It is not in the spec;

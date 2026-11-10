@@ -276,3 +276,91 @@ async fn an_interrupted_generation_holds_no_one_back_once_stale(pool: PgPool) {
     .unwrap();
     assert_eq!(status, "failed");
 }
+
+/// A generation interrupted mid-run reads as failed once stale, with no
+/// later run started, so the suggestions UI stops waiting on it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_interrupted_generation_reads_as_failed_once_stale(pool: PgPool) {
+    insert_user(&pool, OWNER).await;
+    let repo = PgGenerationRepo::new(pool);
+    let now = Utc::now();
+    let stale = TimeDelta::minutes(25);
+    let begun = now - TimeDelta::minutes(30);
+    repo.begin(
+        &owner(),
+        GenerationTrigger::Onboarding,
+        begun,
+        begun - stale,
+        begun - TimeDelta::hours(20),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        GenerationStatuses::latest(&repo, &owner()).await.unwrap(),
+        Some(GenerationStatus::Failed)
+    );
+    // It still restarts in place, and reads as generating again.
+    repo.begin(
+        &owner(),
+        GenerationTrigger::Onboarding,
+        now,
+        now - stale,
+        now - TimeDelta::hours(20),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        GenerationStatuses::latest(&repo, &owner()).await.unwrap(),
+        Some(GenerationStatus::Generating)
+    );
+}
+
+/// A nightly run interrupted tonight doesn't hold back tonight's run: the
+/// person is due again once it is stale, and it restarts in place.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_interrupted_nightly_run_holds_no_cooldown(pool: PgPool) {
+    insert_user(&pool, OWNER).await;
+    let repo = PgGenerationRepo::new(pool);
+    let now = at_hour(18);
+    let stale = TimeDelta::minutes(25);
+    repo.see(&owner(), "Asia/Tokyo", now - TimeDelta::days(1))
+        .await
+        .unwrap();
+    let begun = now - TimeDelta::minutes(30);
+    let night = repo
+        .begin(
+            &owner(),
+            GenerationTrigger::Nightly,
+            begun,
+            begun - stale,
+            begun - TimeDelta::hours(20),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let due = repo
+        .due(
+            now,
+            now - TimeDelta::days(7),
+            now - TimeDelta::hours(20),
+            now - stale,
+            (2, 5),
+            10,
+        )
+        .await
+        .unwrap();
+    assert_eq!(due.len(), 1);
+    let again = repo
+        .begin(
+            &owner(),
+            GenerationTrigger::Nightly,
+            now,
+            now - stale,
+            now - TimeDelta::hours(20),
+        )
+        .await
+        .unwrap();
+    assert_eq!(again, Some(night));
+}

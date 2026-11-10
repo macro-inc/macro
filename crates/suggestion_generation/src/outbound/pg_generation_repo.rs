@@ -14,6 +14,7 @@ use sqlx::PgPool;
 
 use crate::domain::model::{AudienceMember, StaleSession};
 use crate::domain::ports::GenerationRepo;
+use crate::domain::service::STALE_GENERATION;
 
 #[cfg(test)]
 mod test;
@@ -230,7 +231,8 @@ impl GenerationRepo for PgGenerationRepo {
                      SELECT 1 FROM suggestion_generation g
                      WHERE g.user_id = a.user_id
                        AND ((g.status = 'generating' AND g.started_at >= $7)
-                            OR (g.trigger = 'nightly' AND g.started_at > $3)))
+                            OR (g.trigger = 'nightly' AND g.started_at > $3
+                                AND NOT (g.status = 'generating' AND g.started_at < $7))))
                ORDER BY a.seen_at
                LIMIT $6"#,
             now,
@@ -306,10 +308,16 @@ impl SuggestionAudience for PgGenerationRepo {
 #[async_trait::async_trait]
 impl GenerationStatuses for PgGenerationRepo {
     async fn latest(&self, user: &MacroUserIdStr<'_>) -> anyhow::Result<Option<GenerationStatus>> {
+        // A run still generating past STALE_GENERATION was interrupted: it
+        // reads as failed, so nobody waits on it, though it may restart.
+        let stale_before = Utc::now() - chrono::Duration::from_std(STALE_GENERATION)?;
         let status = sqlx::query_scalar!(
-            r#"SELECT status FROM suggestion_generation WHERE user_id = $1
+            r#"SELECT CASE WHEN status = 'generating' AND started_at < $2 THEN 'failed'
+                           ELSE status END AS "status!"
+               FROM suggestion_generation WHERE user_id = $1
                ORDER BY started_at DESC, id DESC LIMIT 1"#,
             user.as_ref(),
+            stale_before,
         )
         .fetch_optional(&self.pool)
         .await?;
