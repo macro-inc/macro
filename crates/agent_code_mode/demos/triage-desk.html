@@ -117,8 +117,9 @@
       const loadedName = loaded[index];
       index += 1;
       if (kind === 'm-user-mention' || kind === 'm-contact-mention') {
+        // Someone with no profile name shows their email's local part.
         const email = tag.email ?? tag.userId?.replace(/^macro\|/, '');
-        return `@${tag.displayName || tag.name || loadedName || email || 'someone'}`;
+        return `@${tag.displayName || tag.name || loadedName || email?.split('@')[0] || 'someone'}`;
       }
       if (kind === 'm-group-mention') return `@${tag.groupAlias ?? 'group'}`;
       if (kind === 'm-date-mention') return tag.displayFormat || tag.date || '';
