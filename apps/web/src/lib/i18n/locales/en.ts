@@ -13,6 +13,7 @@ import common from './en/common';
 import create from './en/create';
 import crm from './en/crm';
 import entityActions from './en/entity-actions';
+import htmlPreview from './en/html-preview';
 import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
@@ -45,6 +46,7 @@ export default {
   create,
   crm,
   entityActions,
+  htmlPreview,
   localRuntime,
   mobile,
   nav,

@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { isHtmlFileType } from '../util/fileMode';
 import { CodeMirror } from './CodeMirror';
 import { HtmlPreview } from './HtmlPreview';
@@ -23,6 +23,20 @@ export type CodeContentProps = {
 export function CodeContent(props: CodeContentProps) {
   const showHtmlPreview = () =>
     props.mode === 'render' && isHtmlFileType(props.fileType);
+  // The preview builds the saved source, so it waits for the editor's last
+  // save (the one it makes as it closes, on a switch to Render) and builds
+  // again after each.
+  const [savesInFlight, setSavesInFlight] = createSignal(0);
+  const [savedVersion, setSavedVersion] = createSignal(0);
+  const save = async (text: string) => {
+    setSavesInFlight((count) => count + 1);
+    try {
+      await props.onSave(text);
+      setSavedVersion((version) => version + 1);
+    } finally {
+      setSavesInFlight((count) => count - 1);
+    }
+  };
 
   return (
     <Show
@@ -33,11 +47,16 @@ export function CodeContent(props: CodeContentProps) {
           fileType={props.fileType}
           readOnly={props.readOnly}
           onTextChange={props.onTextChange}
-          onSave={props.onSave}
+          onSave={save}
         />
       }
     >
-      <HtmlPreview text={props.text} documentId={props.documentId} />
+      <HtmlPreview
+        text={props.text}
+        documentId={props.documentId}
+        saving={savesInFlight() > 0}
+        savedVersion={savedVersion()}
+      />
     </Show>
   );
 }

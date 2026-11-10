@@ -1,8 +1,11 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { enableHtmlCodeMode } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import WarningCircle from '@icon/system/regular/warning-circle.svg';
 import X from '@icon/system/regular/x.svg';
-import { useQuery, useQueryClient } from '@tanstack/solid-query';
+import { useQuery } from '@tanstack/solid-query';
 import { Button } from '@ui/components/Button';
 import {
   createEffect,
@@ -16,18 +19,28 @@ import {
 } from 'solid-js';
 import { attachEventHost } from '../code-mode/event-host';
 import { composeProgramDocument } from '../code-mode/frame-helper';
+import { attachNavigationGuard } from '../code-mode/navigation-guard';
 import { attachProgramHost } from '../code-mode/preview-runner';
 import { documentBuildQueryOptions } from '../queries/document-programs';
-import { documentProgramKeys } from '../queries/keys';
+
+export type HtmlPreviewProps = {
+  text: string;
+  documentId?: string;
+  /** A save of the editor's text is in flight; the build waits for it. */
+  saving?: boolean;
+  /** Completed saves so far, so each one builds the source it saved. */
+  savedVersion?: number;
+};
 
 /**
  * Sandboxed render of an HTML file. With a stored document and the rollout
  * on, the preview shows the server's build of it: its programs run on the
  * server as the viewer through the frame's `window.macro`, and live entity
  * events (name and id only) reach the page; the frame never holds a
- * credential and never sends code.
+ * credential and never sends code. A page without program blocks renders as
+ * plain HTML, exactly as with the rollout off.
  */
-export function HtmlPreview(props: { text: string; documentId?: string }) {
+export function HtmlPreview(props: HtmlPreviewProps) {
   const codeMode = useFeatureFlag(enableHtmlCodeMode);
   const programs = () => (codeMode().enabled ? props.documentId : undefined);
 
@@ -36,7 +49,12 @@ export function HtmlPreview(props: { text: string; documentId?: string }) {
       <Switch fallback={<PlainFrame html={props.text} />}>
         <Match when={programs()}>
           {(documentId) => (
-            <BuiltPreview documentId={documentId()} fallbackHtml={props.text} />
+            <BuiltPreview
+              documentId={documentId()}
+              fallbackHtml={props.text}
+              saving={props.saving ?? false}
+              savedVersion={props.savedVersion ?? 0}
+            />
           )}
         </Match>
       </Switch>
@@ -47,7 +65,7 @@ export function HtmlPreview(props: { text: string; documentId?: string }) {
 function PlainFrame(props: { html: string }) {
   return (
     <iframe
-      title="HTML preview"
+      title={t('htmlPreview.frameTitle')}
       class="size-full border-0"
       sandbox="allow-scripts"
       referrerPolicy="no-referrer"
@@ -57,39 +75,60 @@ function PlainFrame(props: { html: string }) {
 }
 
 /**
- * The server's build of the stored document. A document it can't build
- * (not HTML, too large, unreachable) renders as plain HTML.
+ * The server's build of the stored document, once the editor's last save
+ * has landed. A page without programs, or one the server won't build for
+ * this viewer (outside the rollout, too large, not HTML), renders as plain
+ * HTML; a build the server failed is retried, then offers Retry.
  */
-function BuiltPreview(props: { documentId: string; fallbackHtml: string }) {
-  const queryClient = useQueryClient();
-  const build = useQuery(() => documentBuildQueryOptions(props.documentId));
-  const built = () =>
-    build.isSuccess && build.data.status === 'built' ? build.data : undefined;
-  const failed = () =>
-    build.isSuccess && build.data.status === 'failed' ? build.data : undefined;
-  const refetch = () =>
-    queryClient.invalidateQueries({
-      queryKey: documentProgramKeys.build(props.documentId).queryKey,
-    });
+function BuiltPreview(props: {
+  documentId: string;
+  fallbackHtml: string;
+  saving: boolean;
+  savedVersion: number;
+}) {
+  const build = useQuery(() =>
+    documentBuildQueryOptions(
+      props.documentId,
+      props.savedVersion,
+      !props.saving
+    )
+  );
+  const unavailable = () =>
+    build.isError && thrownResultErrorHasCode(build.error, 'BUILD_UNAVAILABLE');
+  const page = () => (build.isPending ? undefined : build.data);
+  const built = () => {
+    const current = page();
+    return current?.status === 'built' ? current : undefined;
+  };
+  const failed = () => {
+    const current = page();
+    return current?.status === 'failed' ? current : undefined;
+  };
+  const plain = () => page()?.status === 'plain';
+  const refetch = () => {
+    fireAndForget(build.refetch(), 'html-preview-build');
+  };
 
   return (
     <Switch>
-      <Match when={build.isPending}>{null}</Match>
-      <Match when={build.isError}>
+      <Match when={unavailable() || plain()}>
         <PlainFrame html={props.fallbackHtml} />
       </Match>
       <Match when={failed()}>
         {(failure) => <BuildProblems problems={failure().diagnostics} />}
       </Match>
       <Match when={built()} keyed>
-        {(page) => (
+        {(current) => (
           <ProgramFrame
             documentId={props.documentId}
-            html={page.html}
-            sourceHash={page.sourceHash}
+            html={current.html}
+            sourceHash={current.sourceHash}
             onStale={refetch}
           />
         )}
+      </Match>
+      <Match when={build.isError}>
+        <BuildError onRetry={refetch} />
       </Match>
     </Switch>
   );
@@ -98,7 +137,8 @@ function BuiltPreview(props: { documentId: string; fallbackHtml: string }) {
 /**
  * One build's page, with its own token; a new build gets a new frame. The
  * latest failed run shows above it until dismissed, because a page that
- * doesn't catch its call's rejection otherwise shows nothing.
+ * doesn't catch its call's rejection otherwise shows nothing. A page that
+ * starts to navigate away is closed, with a short notice in its place.
  */
 export function ProgramFrame(props: {
   documentId: string;
@@ -109,11 +149,15 @@ export function ProgramFrame(props: {
   const token = crypto.randomUUID();
   const srcdoc = createMemo(() => composeProgramDocument(props.html, token));
   const [failure, setFailure] = createSignal<string>();
+  const [left, setLeft] = createSignal(false);
   let frame: HTMLIFrameElement | undefined;
 
   createEffect(() => {
-    if (!frame) return;
+    if (!frame || left()) return;
     const { documentId, sourceHash, onStale } = props;
+    onCleanup(
+      attachNavigationGuard(frame, { token, onLeave: () => setLeft(true) })
+    );
     onCleanup(
       attachProgramHost(frame, {
         documentId,
@@ -127,24 +171,26 @@ export function ProgramFrame(props: {
   });
 
   return (
-    <div class="flex size-full flex-col">
-      <Show when={failure()}>
-        {(message) => (
-          <RunFailure
-            message={message()}
-            onDismiss={() => setFailure(undefined)}
-          />
-        )}
-      </Show>
-      <iframe
-        ref={frame}
-        title="HTML preview"
-        class="min-h-0 w-full flex-1 border-0"
-        sandbox="allow-scripts"
-        referrerPolicy="no-referrer"
-        srcdoc={srcdoc()}
-      />
-    </div>
+    <Show when={!left()} fallback={<PageLeft />}>
+      <div class="flex size-full flex-col">
+        <Show when={failure()}>
+          {(message) => (
+            <RunFailure
+              message={message()}
+              onDismiss={() => setFailure(undefined)}
+            />
+          )}
+        </Show>
+        <iframe
+          ref={frame}
+          title={t('htmlPreview.frameTitle')}
+          class="min-h-0 w-full flex-1 border-0"
+          sandbox="allow-scripts"
+          referrerPolicy="no-referrer"
+          srcdoc={srcdoc()}
+        />
+      </div>
+    </Show>
   );
 }
 
@@ -157,16 +203,46 @@ function RunFailure(props: { message: string; onDismiss: () => void }) {
     >
       <WarningCircle class="size-3.5 shrink-0 text-failure" />
       <p class="max-h-24 min-w-0 flex-1 overflow-y-auto whitespace-pre-wrap wrap-anywhere">
-        <span class="font-medium">A program failed: </span>
+        <span class="font-medium">{t('htmlPreview.programFailed')} </span>
         {props.message}
       </p>
       <Button
         variant="ghost"
         size="icon-sm"
-        aria-label="Dismiss"
+        aria-label={t('common.dismiss')}
         onClick={() => props.onDismiss()}
       >
         <X class="size-3.5 touch:size-5" />
+      </Button>
+    </div>
+  );
+}
+
+/** In place of a page that tried to navigate away. */
+function PageLeft() {
+  return (
+    <div role="alert" class="p-4 text-sm text-ink">
+      <p class="font-medium">{t('htmlPreview.pageLeftTitle')}</p>
+      <p class="mt-1 text-ink-muted">{t('htmlPreview.pageLeftDescription')}</p>
+    </div>
+  );
+}
+
+/** The server failed to build the page, even after retrying. */
+function BuildError(props: { onRetry: () => void }) {
+  return (
+    <div
+      role="alert"
+      class="flex flex-col items-start gap-3 p-4 text-sm text-ink"
+    >
+      <div>
+        <p class="font-medium">{t('htmlPreview.buildErrorTitle')}</p>
+        <p class="mt-1 text-ink-muted">
+          {t('htmlPreview.buildErrorDescription')}
+        </p>
+      </div>
+      <Button variant="secondary" size="sm" onClick={() => props.onRetry()}>
+        {t('common.retry')}
       </Button>
     </div>
   );
@@ -178,7 +254,7 @@ function BuildProblems(props: {
 }) {
   return (
     <div class="p-4 text-sm text-ink">
-      <p class="font-medium">This page doesn't build.</p>
+      <p class="font-medium">{t('htmlPreview.buildFailedTitle')}</p>
       <ul class="mt-3 flex flex-col gap-3">
         <For each={props.problems}>
           {(problem) => (

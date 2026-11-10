@@ -51,6 +51,12 @@ export type FrameEvent = {
   message?: string;
 };
 
+/**
+ * Frame → host: the page is unloading, as it does when it navigates itself.
+ * Its policy blocks every other network path, so the host closes the frame.
+ */
+export type LeavingMessage = { type: 'macro:leaving'; token: string };
+
 /** Host → frame: one event for one subscription. */
 export type EventMessage = {
   type: 'macro:event';
@@ -165,6 +171,9 @@ export const frameHelperScript = (token: string) =>
       if (data.type === 'macro:result') waiter.resolve(data.result);
       else if (data.type === 'macro:error') waiter.reject(new Error(String(data.message)));
     });
+    function leaving() { host.postMessage({ type: 'macro:leaving', token: token }, '*'); }
+    addEventListener('beforeunload', leaving);
+    addEventListener('pagehide', leaving);
     Object.defineProperty(window, 'macro', { value: Object.freeze({ run: run, on: on }), writable: false, configurable: false });
   })(parent, ${JSON.stringify(token)});`;
 
@@ -172,7 +181,8 @@ export const frameHelperScript = (token: string) =>
  * The built page's content security policy. A page runs programs as the
  * viewer, so it may only run its own inline code and show inline media: no
  * fetch, beacon, remote script, stylesheet or image can carry what it read
- * out of the frame. It does not stop the frame navigating itself.
+ * out of the frame. It does not stop the frame navigating itself; the helper
+ * reports that (`macro:leaving`) and the host closes the frame.
  */
 export const PROGRAM_DOCUMENT_CSP = [
   "default-src 'none'",
