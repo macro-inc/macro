@@ -164,7 +164,9 @@ function ChatInner(props: { data: ChatData }) {
           >
             <div class="min-w-0">
               <p class="font-medium text-ink">Macro Chats are now Agents.</p>
-              <p>This chat is read-only. Continue it in Agents to keep going.</p>
+              <p>
+                This chat is read-only. Continue it in Agents to keep going.
+              </p>
             </div>
             <div class="flex shrink-0 items-center gap-2">
               <Show when={chat.isGenerating()}>
