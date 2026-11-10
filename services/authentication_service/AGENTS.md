@@ -45,8 +45,9 @@ key issuance, and account merge/link flows.
 
 - `cargo test -p authentication_service` (`SQLX_OFFLINE` unset).
 - Signup-policy changes specifically:
-  `env -u DATABASE_URL cargo test -p authentication_service --bin authentication_service config::test`
-  and `cargo run -p authentication_service --bin authentication_service_doppler_config`.
+  `cargo test -p authentication_service --lib config::test` (the lib's
+  test-only queries need a live `DATABASE_URL`) and
+  `cargo run -p authentication_service --bin authentication_service_doppler_config`.
 
 ## Subscription checkout
 
