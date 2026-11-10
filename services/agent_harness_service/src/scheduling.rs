@@ -146,6 +146,25 @@ impl RequestSessions for CorrelationSessions {
     }
 }
 
+/// Paid plans, as AI billing sees them: a paid seat or an enterprise team.
+struct EntitlementPlans(ai_billing::composition::PgEntitlementSource);
+
+#[async_trait::async_trait]
+impl suggestion_generation::domain::ports::Plans for EntitlementPlans {
+    async fn paid(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Result<bool, rootcause::Report> {
+        use ai_billing::domain::EntitlementSource as _;
+        let entitlement = self
+            .0
+            .entitlement(user)
+            .await
+            .map_err(|error| rootcause::report!("{error:?}"))?;
+        Ok(entitlement.unlimited || entitlement.tier.is_paid())
+    }
+}
+
 #[async_trait::async_trait]
 impl ideas::domain::ports::RequestSessions for CorrelationSessions {
     async fn session_of(
@@ -509,19 +528,25 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             ideas::domain::prompt::FIELDS_OF,
         )),
     );
-    let generation = Arc::new(GenerationService::new(
-        generations,
-        sessions,
-        Arc::clone(&suggestions),
-        Arc::clone(&ideas),
-        template_flags.clone(),
-        GenerationAgent {
-            bot: bot_id::MACRO_NEW_BOT_ID,
-            model: chat::domain::models::FREE_MODEL.to_owned(),
-        },
-        lifecycle.workers.clone(),
-        lifecycle.stop_workers.clone(),
-    ));
+    let generation = Arc::new(
+        GenerationService::new(
+            generations,
+            sessions,
+            Arc::clone(&suggestions),
+            Arc::clone(&ideas),
+            template_flags.clone(),
+            GenerationAgent {
+                bot: bot_id::MACRO_NEW_BOT_ID,
+                model: chat::domain::models::FREE_MODEL.to_owned(),
+            },
+            lifecycle.workers.clone(),
+            lifecycle.stop_workers.clone(),
+        )
+        // Nightly runs are for paid plans; onboarding runs for everyone.
+        .with_plans(Arc::new(EntitlementPlans(
+            ai_billing::composition::pg_entitlement_source(db.clone()),
+        ))),
+    );
     // Generation sessions a stopped process left behind lose their session;
     // once ready, people in their night get their nightly generation.
     {

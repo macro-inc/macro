@@ -70,11 +70,7 @@ impl StartGeneration for Starts {
     }
 }
 
-/// Bundles from before the unified generation still call the old route: it
-/// starts onboarding and answers with the person's routine suggestions.
-#[tokio::test]
-async fn the_old_generate_route_starts_onboarding_and_answers_with_suggestions() {
-    let starts = Arc::new(Starts::default());
+fn app(starts: &Arc<Starts>) -> Router {
     let auth = MacroAuthorizationServiceImpl::new(
         Jwt,
         InternalAuthConfig {
@@ -84,10 +80,18 @@ async fn the_old_generate_route_starts_onboarding_and_answers_with_suggestions()
         NoBotAuthorizer,
         NoUserApiKeyAuthorizer,
     );
-    let app: Router = generation_router(GenerationRouterState {
-        service: Arc::clone(&starts),
+    generation_router(GenerationRouterState {
+        service: Arc::clone(starts),
         authorization_state: MacroAuthorizationState::new(Arc::new(auth)),
-    });
+    })
+}
+
+/// Bundles from before the unified generation still call the old route: it
+/// starts onboarding and answers with the person's routine suggestions.
+#[tokio::test]
+async fn the_old_generate_route_starts_onboarding_and_answers_with_suggestions() {
+    let starts = Arc::new(Starts::default());
+    let app = app(&starts);
     let response = app
         .oneshot(
             Request::post("/scheduled-actions/suggestions/generate?timezone=Asia/Tokyo")

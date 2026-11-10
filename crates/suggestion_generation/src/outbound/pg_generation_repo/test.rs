@@ -364,3 +364,71 @@ async fn an_interrupted_nightly_run_holds_no_cooldown(pool: PgPool) {
         .unwrap();
     assert_eq!(again, Some(night));
 }
+
+/// A routines session this week holds the next one back a week; forgetting
+/// a person takes them out of the nightly audience.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn routines_come_weekly_and_a_forgotten_person_is_not_due(pool: PgPool) {
+    insert_user(&pool, OWNER).await;
+    let repo = PgGenerationRepo::new(pool);
+    let now = at_hour(18);
+    assert!(
+        !repo
+            .routines_since(&owner(), now - TimeDelta::days(7))
+            .await
+            .unwrap()
+    );
+    let generation = repo
+        .begin(
+            &owner(),
+            GenerationTrigger::Nightly,
+            now - TimeDelta::days(3),
+            now - TimeDelta::days(3) - TimeDelta::minutes(25),
+            now - TimeDelta::days(4),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    GenerationRepo::open_session(
+        &repo,
+        Uuid::now_v7(),
+        generation,
+        &owner(),
+        bot_id::MACRO_NEW_BOT_ID,
+        SessionKind::Routines,
+        &["email".to_owned()],
+        now - TimeDelta::days(3),
+    )
+    .await
+    .unwrap();
+    assert!(
+        repo.routines_since(&owner(), now - TimeDelta::days(7))
+            .await
+            .unwrap()
+    );
+    assert!(
+        !repo
+            .routines_since(&owner(), now - TimeDelta::days(2))
+            .await
+            .unwrap()
+    );
+
+    repo.see(&owner(), "Asia/Tokyo", now - TimeDelta::days(1))
+        .await
+        .unwrap();
+    let due = |repo: PgGenerationRepo| async move {
+        repo.due(
+            now,
+            now - TimeDelta::days(7),
+            now - TimeDelta::hours(20),
+            now - TimeDelta::minutes(25),
+            (2, 5),
+            10,
+        )
+        .await
+        .unwrap()
+    };
+    assert_eq!(due(repo.clone()).await.len(), 1);
+    repo.forget(&owner()).await.unwrap();
+    assert!(due(repo.clone()).await.is_empty());
+}

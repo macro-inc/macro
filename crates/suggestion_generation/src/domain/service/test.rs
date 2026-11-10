@@ -256,6 +256,9 @@ struct FakeRepo {
     sessions: Mutex<HashMap<Uuid, StoredSession>>,
     seen: Mutex<Vec<String>>,
     due: Mutex<Vec<AudienceMember>>,
+    /// Whether a routines session ran this week.
+    routines_this_week: std::sync::atomic::AtomicBool,
+    forgotten: Mutex<usize>,
 }
 
 impl GenerationRepo for FakeRepo {
@@ -348,6 +351,21 @@ impl GenerationRepo for FakeRepo {
         Ok(())
     }
 
+    async fn routines_since(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        Ok(self
+            .routines_this_week
+            .load(std::sync::atomic::Ordering::SeqCst))
+    }
+
+    async fn forget(&self, _: &MacroUserIdStr<'_>) -> Result<(), Self::Err> {
+        *self.forgotten.lock().unwrap() += 1;
+        Ok(())
+    }
+
     async fn due(
         &self,
         _: DateTime<Utc>,
@@ -365,7 +383,18 @@ impl GenerationRepo for FakeRepo {
 
 type Service = GenerationService<FakeRepo, FakeSessions, FakeRoutines, FakeIdeas, FakeFeatureFlags>;
 
+/// Plans the test sets: everyone paid or nobody.
+struct FakePlans(std::sync::atomic::AtomicBool);
+
+#[async_trait::async_trait]
+impl Plans for FakePlans {
+    async fn paid(&self, _: &MacroUserIdStr<'static>) -> Result<bool, rootcause::Report> {
+        Ok(self.0.load(std::sync::atomic::Ordering::SeqCst))
+    }
+}
+
 struct Harness {
+    plans: Arc<FakePlans>,
     service: Service,
     repo: Arc<FakeRepo>,
     sessions: Arc<FakeSessions>,
@@ -408,7 +437,10 @@ fn harness(ideas: bool, routines: bool, turn: Turn, undelivered: bool) -> Harnes
         TaskTracker::new(),
         CancellationToken::new(),
     );
+    let plans = Arc::new(FakePlans(std::sync::atomic::AtomicBool::new(true)));
+    let service = service.with_plans(Arc::clone(&plans) as Arc<dyn Plans>);
     Harness {
+        plans,
         service,
         repo,
         sessions,
@@ -617,4 +649,83 @@ fn a_layout_has_at_most_three_sessions_and_every_surface_once() {
     );
     assert!(SessionLayout::new(SessionLayout::default().sessions().to_vec()).is_ok());
     assert_eq!(SessionLayout::single().sessions().len(), 1);
+}
+
+impl Harness {
+    async fn nightly_kinds(&self) -> Vec<SessionKind> {
+        self.repo.sessions.lock().unwrap().clear();
+        self.repo.generations.lock().unwrap().clear();
+        self.service
+            .start(&user(), GenerationTrigger::Nightly, chrono_tz::UTC)
+            .await
+            .unwrap();
+        self.service.wait().await;
+        let mut kinds = self.kinds();
+        kinds.dedup();
+        kinds
+    }
+}
+
+/// A nightly run suggests routines once a week; other nights only the
+/// ideas session runs.
+#[tokio::test]
+async fn a_nightly_run_suggests_routines_once_a_week() {
+    let h = harness(true, true, |_, _| 1, false);
+    assert_eq!(
+        h.nightly_kinds().await,
+        [SessionKind::Ideas, SessionKind::Routines]
+    );
+    h.repo
+        .routines_this_week
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    assert_eq!(h.nightly_kinds().await, [SessionKind::Ideas]);
+    // With ideas off, a night without routines runs nothing.
+    let h = harness(false, true, |_, _| 1, false);
+    h.repo
+        .routines_this_week
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    assert!(h.nightly_kinds().await.is_empty());
+}
+
+/// Only people on a paid plan get nightly runs; the others leave the
+/// nightly audience. Onboarding runs for everyone.
+#[tokio::test]
+async fn only_paid_plans_get_nightly_runs() {
+    let h = harness(true, false, |_, _| 1, false);
+    h.plans.0.store(false, std::sync::atomic::Ordering::SeqCst);
+    h.repo.due.lock().unwrap().push(AudienceMember {
+        user: user(),
+        timezone: chrono_tz::UTC,
+    });
+    assert_eq!(h.service.nightly().await.unwrap(), 0);
+    assert_eq!(*h.repo.forgotten.lock().unwrap(), 1);
+    assert!(h.onboard().await.unwrap());
+    assert!(
+        h.repo.seen.lock().unwrap().is_empty(),
+        "free plans aren't in the audience"
+    );
+}
+
+/// Loading the app counts a person as active only with ideas on and a paid
+/// plan.
+#[tokio::test]
+async fn loading_the_app_counts_paid_people_with_ideas_on() {
+    let h = harness(true, false, |_, _| 1, false);
+    h.service
+        .seen(&user(), chrono_tz::Asia::Tokyo)
+        .await
+        .unwrap();
+    assert_eq!(*h.repo.seen.lock().unwrap(), ["Asia/Tokyo"]);
+    h.plans.0.store(false, std::sync::atomic::Ordering::SeqCst);
+    h.service
+        .seen(&user(), chrono_tz::Asia::Tokyo)
+        .await
+        .unwrap();
+    assert_eq!(h.repo.seen.lock().unwrap().len(), 1);
+    let off = harness(false, true, |_, _| 1, false);
+    off.service
+        .seen(&user(), chrono_tz::Asia::Tokyo)
+        .await
+        .unwrap();
+    assert!(off.repo.seen.lock().unwrap().is_empty());
 }

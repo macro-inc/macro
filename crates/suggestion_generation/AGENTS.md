@@ -21,10 +21,14 @@ those crates' tools. Hosted by the harness's scheduling runtime.
   from the kind's crate (`IdeaApi::brief`, `RoutineSuggestionApi::brief`).
 - Code here only schedules, waits, cleans up and logs. The sessions do all
   judging through the tools; no reconciliation, ranking or retiring here.
-- Nightly: people seen in the last week (`suggestion_audience`, written by the
-  onboarding start and ideas feed reads with a time zone) whose local hour is
-  2 to 5, with no run going and no nightly run in 20 hours; at most
-  `MAX_NIGHTLY_RUNS` per process. A run its process never finished (a deploy
+- Nightly: people on a paid plan (`Plans`, from AI billing's entitlements)
+  seen in the last week (`suggestion_audience`: an app load with ideas on,
+  through `GenerationService::seen`, the onboarding start, and ideas feed
+  reads with a time zone) whose local hour is 2 to 5, with no run going and no
+  nightly run in 20 hours; at most `MAX_NIGHTLY_RUNS` per process. A person
+  found unpaid leaves the audience. A nightly run includes the routines
+  session once a week (`ROUTINES_EVERY`); other nights only the ideas session
+  runs. Onboarding runs for every plan. A run its process never finished (a deploy
   cancels runs in flight) counts as going only until `STALE_GENERATION`; then
   it reads as failed and holds no nightly cooldown, the same trigger restarts it
   in place, and the other records it failed.

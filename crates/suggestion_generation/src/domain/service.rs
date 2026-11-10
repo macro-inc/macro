@@ -43,7 +43,7 @@ use super::model::{
     AudienceMember, GenerationAgent, GenerationError, GenerationOutcome, SessionLayout,
     StaleSession,
 };
-use super::ports::GenerationRepo;
+use super::ports::{GenerationRepo, Plans};
 
 #[cfg(test)]
 mod test;
@@ -70,6 +70,9 @@ pub const ACTIVE_WITHIN: chrono::TimeDelta = chrono::TimeDelta::days(7);
 pub const NIGHT: (u8, u8) = (2, 5);
 /// Nightly runs at most once in this long, whatever the zone does.
 pub const NIGHTLY_EVERY: chrono::TimeDelta = chrono::TimeDelta::hours(20);
+/// How often a person's nightly run includes a routines session: once a
+/// week. Other nights run only the ideas session.
+pub const ROUTINES_EVERY: chrono::TimeDelta = chrono::TimeDelta::days(7);
 /// Nightly generations one process runs at once.
 pub const MAX_NIGHTLY_RUNS: usize = 2;
 const SWEEP_BATCH: u16 = 64;
@@ -81,6 +84,8 @@ const MAX_STATUS_FAILURES: u8 = 5;
 pub struct GenerationService<Repo, Sessions, Routines, Ideas, Flags> {
     runner: Arc<Runner<Repo, Sessions, Routines, Ideas>>,
     flags: Option<Flags>,
+    /// Who is on a paid plan; without it, nobody gets a nightly run.
+    plans: Option<Arc<dyn Plans>>,
     nightly: Arc<Semaphore>,
     tasks: TaskTracker,
     shutdown: CancellationToken,
@@ -158,10 +163,29 @@ where
                 layout: SessionLayout::default(),
             }),
             flags,
+            plans: None,
             nightly: Arc::new(Semaphore::new(MAX_NIGHTLY_RUNS)),
             tasks,
             shutdown,
         }
+    }
+
+    /// Read who is on a paid plan from `plans`: only they get nightly runs.
+    pub fn with_plans(mut self, plans: Arc<dyn Plans>) -> Self {
+        self.plans = Some(plans);
+        self
+    }
+
+    /// Whether the person is on a paid plan; no when it can't be told.
+    async fn paid(&self, user: &MacroUserIdStr<'static>) -> bool {
+        let Some(plans) = &self.plans else {
+            return false;
+        };
+        plans
+            .paid(user)
+            .await
+            .inspect_err(|error| tracing::warn!(?error, "could not read a plan; no nightly run"))
+            .unwrap_or(false)
     }
 
     /// Split routine suggestions across `layout`'s sessions.
@@ -204,16 +228,29 @@ where
         trigger: GenerationTrigger,
         timezone: Tz,
     ) -> Result<bool, GenerationError> {
-        let (ideas, routines) = self.kinds(user).await;
-        let span = tracing::Span::current();
-        span.record("suggestion.generation.ideas", ideas);
-        span.record("suggestion.generation.routines", routines);
+        let (ideas, mut routines) = self.kinds(user).await;
         if !ideas && !routines {
             return Err(GenerationError::NotFound);
         }
         let now = Utc::now();
         let repo = &self.runner.repo;
-        if trigger == GenerationTrigger::Onboarding {
+        // Routine suggestions come once a week; other nights only ideas.
+        if trigger == GenerationTrigger::Nightly
+            && routines
+            && repo
+                .routines_since(user, now - ROUTINES_EVERY)
+                .await
+                .map_err(GenerationError::internal)?
+        {
+            routines = false;
+        }
+        let span = tracing::Span::current();
+        span.record("suggestion.generation.ideas", ideas);
+        span.record("suggestion.generation.routines", routines);
+        if !ideas && !routines {
+            return Ok(false);
+        }
+        if trigger == GenerationTrigger::Onboarding && self.paid(user).await {
             repo.see(user, timezone.name(), now)
                 .await
                 .map_err(GenerationError::internal)?;
@@ -297,6 +334,14 @@ where
         span.record("suggestion.nightly.due", due.len());
         let mut started = 0;
         for member in due {
+            // Nightly runs are for paid plans; the rest wait to be seen
+            // again on one.
+            if !self.paid(&member.user).await {
+                if let Err(error) = self.runner.repo.forget(&member.user).await {
+                    tracing::warn!(?error, "could not drop an unpaid person from the audience");
+                }
+                continue;
+            }
             match self
                 .start(&member.user, GenerationTrigger::Nightly, member.timezone)
                 .await
@@ -328,6 +373,24 @@ where
         }
         tracing::Span::current().record("suggestion.swept", stale.len());
         Ok(stale.len())
+    }
+
+    /// The person loaded the app in zone `timezone`: with ideas on and a
+    /// paid plan, they count as active for nightly runs.
+    pub async fn seen(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        timezone: Tz,
+    ) -> Result<(), GenerationError> {
+        let (ideas, _) = self.kinds(user).await;
+        if !ideas || !self.paid(user).await {
+            return Ok(());
+        }
+        self.runner
+            .repo
+            .see(user, timezone.name(), Utc::now())
+            .await
+            .map_err(GenerationError::internal)
     }
 
     /// The person's routine suggestions: AI's, then Macro's templates.

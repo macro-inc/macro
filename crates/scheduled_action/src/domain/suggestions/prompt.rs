@@ -60,7 +60,8 @@ pub fn brief(data: &BriefData<'_>) -> String {
     let occasion = match data.trigger {
         GenerationTrigger::Onboarding => "The user just signed up.",
         GenerationTrigger::Nightly => {
-            "This is the nightly run. First, in one program, read what you suggested before with \
+            "This is the week's run (routine suggestions come once a week). First, in one \
+             program, read what you suggested before with \
              `await macro.routines.review()` and the user's own routines with \
              `await macro.routines.list()`, and retire with `suggestion.retire(reason)` open \
              suggestions that no longer fit their work or duplicate one of their routines. Then \

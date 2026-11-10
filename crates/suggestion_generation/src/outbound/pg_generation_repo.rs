@@ -213,6 +213,33 @@ impl GenerationRepo for PgGenerationRepo {
         Ok(())
     }
 
+    async fn routines_since(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        since: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        let recent = sqlx::query_scalar!(
+            r#"SELECT EXISTS (
+                   SELECT 1 FROM suggestion_generation_session
+                   WHERE user_id = $1 AND kind = 'routines' AND opened_at > $2) AS "recent!""#,
+            user.as_ref(),
+            since,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(recent)
+    }
+
+    async fn forget(&self, user: &MacroUserIdStr<'_>) -> Result<(), Self::Err> {
+        sqlx::query!(
+            "DELETE FROM suggestion_audience WHERE user_id = $1",
+            user.as_ref()
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     async fn due(
         &self,
         now: DateTime<Utc>,

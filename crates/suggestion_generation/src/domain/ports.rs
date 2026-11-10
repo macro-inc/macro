@@ -66,6 +66,19 @@ pub trait GenerationRepo: Send + Sync + 'static {
         limit: u16,
     ) -> impl Future<Output = Result<Vec<StaleSession>, Self::Err>> + Send;
 
+    /// Whether a routines session opened for the person after `since`.
+    fn routines_since(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Take the person out of the nightly audience until they are seen again.
+    fn forget(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// The person opened their suggestions at `now` in zone `timezone`.
     fn see(
         &self,
@@ -89,4 +102,12 @@ pub trait GenerationRepo: Send + Sync + 'static {
         night: (u8, u8),
         limit: u16,
     ) -> impl Future<Output = Result<Vec<AudienceMember>, Self::Err>> + Send;
+}
+
+/// Who is on a paid plan: only they get nightly generations. Object-safe:
+/// the harness hands in its entitlements.
+#[async_trait::async_trait]
+pub trait Plans: Send + Sync + 'static {
+    /// Whether the person is on a paid plan.
+    async fn paid(&self, user: &MacroUserIdStr<'static>) -> Result<bool, rootcause::Report>;
 }
