@@ -8929,6 +8929,12 @@ export type EffectSpecSoftEdgeOptions = string | {
 export type EmailBlockScope = 'team' | 'personal';
 
 /**
+ * Whether a change was initiated by a Macro user action or first observed
+ * syncing from the email provider. Lets automation ignore its own echoes.
+ */
+export type EmailEventOrigin = 'user_action' | 'provider_sync';
+
+/**
  * The email filters used to filter down what emails you search over.
  */
 export type EmailFilters = {
@@ -9095,6 +9101,336 @@ export type EmailFollowupResponse = {
 };
 
 /**
+ * Reference to an email label carried on wire events.
+ */
+export type EmailLabelRef = {
+    /**
+     * Macro's label row id, when the label is known locally.
+     */
+    label_id?: string | null;
+    /**
+     * Label display name, when known.
+     */
+    name?: string | null;
+    /**
+     * Provider (Gmail) label id.
+     */
+    provider_label_id: string;
+};
+
+/**
+ * Metadata for [`EmailTopicEvent::LinkConnected`].
+ */
+export type EmailLinkConnectedMetadata = {
+    /**
+     * When the link was connected.
+     */
+    connected_at: string;
+    /**
+     * Address of the connected inbox.
+     */
+    email_address: string;
+    /**
+     * Whether this is the owner's primary inbox.
+     */
+    is_primary: boolean;
+    /**
+     * The id of the connected link (inbox).
+     */
+    link_id: string;
+    /**
+     * The Macro user who owns the link.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * Email provider (e.g. `GMAIL`).
+     */
+    provider: string;
+};
+
+/**
+ * Why an email link (connected inbox) was disconnected.
+ */
+export type EmailLinkDisconnectReason = 'unused' | 'inactive' | 'manually_disabled' | 'user_deleted' | 'access_revoked';
+
+/**
+ * Metadata for [`EmailTopicEvent::LinkDisconnected`].
+ */
+export type EmailLinkDisconnectedMetadata = {
+    /**
+     * Address of the disconnected inbox.
+     */
+    email_address: string;
+    /**
+     * The id of the disconnected link.
+     */
+    link_id: string;
+    /**
+     * The Macro user who owned the link.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * Why the link was disconnected.
+     */
+    reason: EmailLinkDisconnectReason;
+};
+
+/**
+ * Metadata for [`EmailTopicEvent::LinkReauthRequired`].
+ */
+export type EmailLinkReauthRequiredMetadata = {
+    /**
+     * Address of the inbox needing re-authentication.
+     */
+    email_address: string;
+    /**
+     * The id of the link needing re-authentication.
+     */
+    link_id: string;
+    /**
+     * When the dead grant was observed.
+     */
+    observed_at: string;
+    /**
+     * The Macro user who owns the link.
+     */
+    owner: MacroUserIdStr;
+};
+
+/**
+ * Metadata for [`EmailTopicEvent::MessageDeleted`].
+ */
+export type EmailMessageDeletedMetadata = {
+    /**
+     * The link (inbox) the message belonged to.
+     */
+    link_id: string;
+    /**
+     * Macro's message row id.
+     */
+    message_id: string;
+    /**
+     * The Macro user who owns the link.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * Provider (Gmail) message id.
+     */
+    provider_message_id: string;
+    /**
+     * Macro's thread row id.
+     */
+    thread_id: string;
+};
+
+/**
+ * Metadata for [`EmailTopicEvent::MessageDraftSynced`].
+ */
+export type EmailMessageDraftSyncedMetadata = {
+    /**
+     * Whether the draft is currently spam or trash.
+     */
+    is_spam_or_trash: boolean;
+    /**
+     * The link (inbox) containing the draft.
+     */
+    link_id: string;
+    /**
+     * Macro's message row id.
+     */
+    message_id: string;
+    /**
+     * The Macro user who owns the link.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * Provider (Gmail) message id.
+     */
+    provider_message_id: string;
+    /**
+     * Provider (Gmail) thread id.
+     */
+    provider_thread_id: string;
+    /**
+     * Macro's thread row id.
+     */
+    thread_id: string;
+};
+
+/**
+ * Metadata for [`EmailTopicEvent::MessageReceived`].
+ */
+export type EmailMessageReceivedMetadata = {
+    /**
+     * Number of attachments on the message.
+     */
+    attachment_count: number;
+    /**
+     * Sender address.
+     */
+    from_email?: string | null;
+    /**
+     * Sender display name.
+     */
+    from_name?: string | null;
+    /**
+     * Whether the message started a thread new to this inbox.
+     */
+    is_new_thread: boolean;
+    /**
+     * Whether the message arrived as spam or trash.
+     */
+    is_spam_or_trash: boolean;
+    /**
+     * The link (inbox) that received the message.
+     */
+    link_id: string;
+    /**
+     * Macro's message row id.
+     */
+    message_id: string;
+    /**
+     * The Macro user who owns the link.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * Provider (Gmail) message id.
+     */
+    provider_message_id: string;
+    /**
+     * Provider (Gmail) thread id.
+     */
+    provider_thread_id: string;
+    /**
+     * Provider-reported receive time.
+     */
+    received_at?: string | null;
+    /**
+     * Message subject header.
+     */
+    subject?: string | null;
+    /**
+     * Macro's thread row id.
+     */
+    thread_id: string;
+    /**
+     * Recipient (`To`) addresses.
+     */
+    to_emails: Array<string>;
+};
+
+/**
+ * Metadata for [`EmailTopicEvent::MessageSendCancelled`].
+ */
+export type EmailMessageSendCancelledMetadata = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * The link (inbox) the message would have been sent from.
+     */
+    link_id: string;
+    /**
+     * Macro's message row id.
+     */
+    message_id: string;
+    /**
+     * The Macro user who owns the link.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * Why the queued send was cancelled.
+     */
+    reason: EmailSendCancelReason;
+    /**
+     * Macro's thread row id.
+     */
+    thread_id: string;
+};
+
+/**
+ * Metadata for [`EmailTopicEvent::MessageSendQueued`].
+ */
+export type EmailMessageSendQueuedMetadata = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * `true` for an explicit scheduled send; `false` for the undo-window
+     * delay on an immediate send.
+     */
+    is_scheduled: boolean;
+    /**
+     * The link (inbox) the message will be sent from.
+     */
+    link_id: string;
+    /**
+     * Macro's message row id.
+     */
+    message_id: string;
+    /**
+     * The Macro user who owns the link.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * When the message is scheduled to leave.
+     */
+    scheduled_send_at: string;
+    /**
+     * Macro's thread row id.
+     */
+    thread_id: string;
+};
+
+/**
+ * Metadata for [`EmailTopicEvent::MessageSent`].
+ */
+export type EmailMessageSentMetadata = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * Carbon-copy (`Cc`) addresses. `Bcc` addresses are never published.
+     */
+    cc_emails: Array<string>;
+    /**
+     * The link (inbox) the message was sent from.
+     */
+    link_id: string;
+    /**
+     * Macro's message row id.
+     */
+    message_id: string;
+    /**
+     * Whether the send was performed through Macro or observed from the
+     * provider.
+     */
+    origin: EmailEventOrigin;
+    /**
+     * The Macro user who owns the link.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * Provider (Gmail) message id.
+     */
+    provider_message_id: string;
+    /**
+     * Provider (Gmail) thread id.
+     */
+    provider_thread_id: string;
+    /**
+     * When the provider accepted the message.
+     */
+    sent_at: string;
+    /**
+     * Message subject header.
+     */
+    subject?: string | null;
+    /**
+     * Macro's thread row id.
+     */
+    thread_id: string;
+    /**
+     * Recipient (`To`) addresses.
+     */
+    to_emails: Array<string>;
+};
+
+/**
  * One explicit privacy change, avoiding lost updates to whole blocklists.
  */
 export type EmailPrivacyChange = {
@@ -9190,6 +9526,404 @@ export type EmailReminderSummary = {
      * Original email identity, never a mirror reminder identity.
      */
     threadId: string;
+};
+
+/**
+ * Why a queued send was cancelled before reaching the provider.
+ */
+export type EmailSendCancelReason = 'undo' | 'thread_trashed';
+
+/**
+ * Metadata for [`EmailTopicEvent::ThreadArchived`].
+ */
+export type EmailThreadArchivedMetadata = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * New state: `true` = archived, `false` = moved back to the inbox.
+     */
+    archived: boolean;
+    /**
+     * The link (inbox) containing the thread.
+     */
+    link_id: string;
+    /**
+     * Where the change originated.
+     */
+    origin: EmailEventOrigin;
+    /**
+     * The Macro user who owns the link.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * Macro's thread row id.
+     */
+    thread_id: string;
+};
+
+/**
+ * Metadata for [`EmailTopicEvent::ThreadBackfilled`].
+ */
+export type EmailThreadBackfilledMetadata = {
+    /**
+     * The link (inbox) containing the thread.
+     */
+    link_id: string;
+    /**
+     * The Macro user who owns the link.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * Macro's thread row id.
+     */
+    thread_id: string;
+};
+
+/**
+ * Metadata for [`EmailTopicEvent::ThreadLabelsUpdated`].
+ *
+ * Carries **user label** changes only; system-label changes (INBOX, TRASH,
+ * UNREAD, STARRED, SPAM) are published as the semantic
+ * [`EmailTopicEvent::ThreadArchived`] / [`EmailTopicEvent::ThreadTrashed`] /
+ * [`EmailTopicEvent::ThreadRead`] / [`EmailTopicEvent::ThreadStarred`] /
+ * [`EmailTopicEvent::ThreadSpamChanged`] events instead.
+ */
+export type EmailThreadLabelsUpdatedMetadata = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * Labels added to the thread's messages.
+     */
+    added: Array<EmailLabelRef>;
+    /**
+     * The link (inbox) containing the thread.
+     */
+    link_id: string;
+    /**
+     * Where the change originated.
+     */
+    origin: EmailEventOrigin;
+    /**
+     * The Macro user who owns the link.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * Labels removed from the thread's messages.
+     */
+    removed: Array<EmailLabelRef>;
+    /**
+     * Macro's thread row id.
+     */
+    thread_id: string;
+};
+
+/**
+ * Metadata for [`EmailTopicEvent::ThreadProjectChanged`].
+ */
+export type EmailThreadProjectChangedMetadata = {
+    /**
+     * The authenticated user who changed the project.
+     */
+    actor: MacroUserIdStr;
+    /**
+     * The link (inbox) containing the thread.
+     */
+    link_id: string;
+    /**
+     * The Macro user who owns the link.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * Project id before the change, when any.
+     */
+    previous_project_id?: string | null;
+    /**
+     * New project id; `None` when the thread was removed from its project.
+     */
+    project_id?: string | null;
+    /**
+     * Macro's thread row id.
+     */
+    thread_id: string;
+};
+
+/**
+ * Metadata for [`EmailTopicEvent::ThreadRead`].
+ */
+export type EmailThreadReadMetadata = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * New state: `true` = read, `false` = unread.
+     */
+    is_read: boolean;
+    /**
+     * The link (inbox) containing the thread.
+     */
+    link_id: string;
+    /**
+     * Where the change originated.
+     */
+    origin: EmailEventOrigin;
+    /**
+     * The Macro user who owns the link.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * Macro's thread row id.
+     */
+    thread_id: string;
+};
+
+/**
+ * Metadata for [`EmailTopicEvent::ThreadSpamChanged`].
+ */
+export type EmailThreadSpamChangedMetadata = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * The link (inbox) containing the thread.
+     */
+    link_id: string;
+    /**
+     * Where the change originated.
+     */
+    origin: EmailEventOrigin;
+    /**
+     * The Macro user who owns the link.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * New state: `true` = marked spam, `false` = unmarked.
+     */
+    spam: boolean;
+    /**
+     * Macro's thread row id.
+     */
+    thread_id: string;
+};
+
+/**
+ * Metadata for [`EmailTopicEvent::ThreadStarred`].
+ */
+export type EmailThreadStarredMetadata = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * The link (inbox) containing the thread.
+     */
+    link_id: string;
+    /**
+     * Where the change originated.
+     */
+    origin: EmailEventOrigin;
+    /**
+     * The Macro user who owns the link.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * New state: `true` = starred, `false` = unstarred.
+     */
+    starred: boolean;
+    /**
+     * Macro's thread row id.
+     */
+    thread_id: string;
+};
+
+/**
+ * Metadata for [`EmailTopicEvent::ThreadTrashed`].
+ */
+export type EmailThreadTrashedMetadata = {
+    actor?: null | MacroUserIdStr;
+    /**
+     * The link (inbox) containing the thread.
+     */
+    link_id: string;
+    /**
+     * Where the change originated.
+     */
+    origin: EmailEventOrigin;
+    /**
+     * The Macro user who owns the link.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * Macro's thread row id.
+     */
+    thread_id: string;
+    /**
+     * New state: `true` = trashed, `false` = restored.
+     */
+    trashed: boolean;
+};
+
+/**
+ * Why a set of threads was asked to be reindexed for search.
+ */
+export type EmailThreadsReindexReason = 'provider_changed' | 'contacts_changed';
+
+/**
+ * Metadata for [`EmailTopicEvent::ThreadsReindexRequested`].
+ */
+export type EmailThreadsReindexRequestedMetadata = {
+    /**
+     * The link (inbox) containing the threads.
+     */
+    link_id: string;
+    /**
+     * The Macro user who owns the link.
+     */
+    owner: MacroUserIdStr;
+    /**
+     * Why the reindex was requested.
+     */
+    reason: EmailThreadsReindexReason;
+    /**
+     * Thread row ids to reindex. Producers must chunk to at most 50 ids.
+     */
+    thread_ids: Array<string>;
+};
+
+/**
+ * Events that can be published to [`MacroEmailTopic`].
+ */
+export type EmailTopicEvent = {
+    event_type: 'email.link_connected';
+    /**
+     * An inbox was connected. Emitted from the email-service init handler
+     * after the link row is upserted.
+     */
+    metadata: EmailLinkConnectedMetadata;
+} | {
+    event_type: 'email.link_disconnected';
+    /**
+     * An inbox was disconnected. Emitted from the link-manager worker's
+     * delete cascade after the link row is deleted.
+     */
+    metadata: EmailLinkDisconnectedMetadata;
+} | {
+    event_type: 'email.link_reauth_required';
+    /**
+     * An inbox's OAuth grant went dead. Emitted only on the false→true
+     * `needs_reauth` transition (edge-triggered).
+     */
+    metadata: EmailLinkReauthRequiredMetadata;
+} | {
+    event_type: 'email.message_received';
+    /**
+     * A new inbound message was persisted. Emitted from the inbox-sync
+     * worker for messages not seen before; never from the backfill worker.
+     * When a previously-unsynced thread is pulled in whole, only the
+     * message that triggered the sync is published — its historical
+     * siblings are persisted silently (they were not just received).
+     */
+    metadata: EmailMessageReceivedMetadata;
+} | {
+    event_type: 'email.message_draft_synced';
+    /**
+     * A draft was persisted or updated while syncing from the provider.
+     * Emitted on every synced draft update because draft bodies are mutable.
+     */
+    metadata: EmailMessageDraftSyncedMetadata;
+} | {
+    event_type: 'email.message_sent';
+    /**
+     * A message was accepted by the provider. Emitted from the scheduled
+     * send worker after the provider accepts (`origin = user_action`), or
+     * from the inbox-sync worker when a message sent from another client is
+     * first synced (`origin = provider_sync`).
+     */
+    metadata: EmailMessageSentMetadata;
+} | {
+    event_type: 'email.message_deleted';
+    /**
+     * A message was permanently deleted. Emitted from the inbox-sync worker
+     * after the delete transaction commits.
+     */
+    metadata: EmailMessageDeletedMetadata;
+} | {
+    event_type: 'email.message_send_queued';
+    /**
+     * A send was committed and queued (undo window or scheduled send).
+     * Emitted from the email domain service and the schedule handler.
+     * A completed send or cancellation may later publish `message_sent` or
+     * `message_send_cancelled` for the same message.
+     */
+    metadata: EmailMessageSendQueuedMetadata;
+} | {
+    event_type: 'email.message_send_cancelled';
+    /**
+     * A queued send was cancelled before reaching the provider. Emitted
+     * from the unschedule/undo handler and the trash path.
+     */
+    metadata: EmailMessageSendCancelledMetadata;
+} | {
+    event_type: 'email.thread_archived';
+    /**
+     * A thread was archived or unarchived. Emitted from the archive handler
+     * (`origin = user_action`) or the inbox-sync INBOX-label diff
+     * (`origin = provider_sync`).
+     */
+    metadata: EmailThreadArchivedMetadata;
+} | {
+    event_type: 'email.thread_trashed';
+    /**
+     * A thread was trashed or restored. Emitted from the email domain
+     * service's TRASH label path (`origin = user_action`) or the inbox-sync
+     * TRASH-label diff (`origin = provider_sync`).
+     */
+    metadata: EmailThreadTrashedMetadata;
+} | {
+    event_type: 'email.thread_read';
+    /**
+     * A thread was marked read or unread. Emitted from the seen handler and
+     * the email domain service's UNREAD label path (`origin = user_action`)
+     * or the inbox-sync UNREAD-label diff (`origin = provider_sync`).
+     */
+    metadata: EmailThreadReadMetadata;
+} | {
+    event_type: 'email.thread_starred';
+    /**
+     * A thread was starred or unstarred. Emitted from the email domain
+     * service's STARRED label path (`origin = user_action`) or the
+     * inbox-sync STARRED-label diff (`origin = provider_sync`).
+     */
+    metadata: EmailThreadStarredMetadata;
+} | {
+    event_type: 'email.thread_spam_changed';
+    /**
+     * A thread was marked or unmarked spam. Emitted from the inbox-sync
+     * SPAM-label diff (`origin = provider_sync`) or the domain label path
+     * (`origin = user_action`).
+     */
+    metadata: EmailThreadSpamChangedMetadata;
+} | {
+    event_type: 'email.thread_project_changed';
+    /**
+     * A thread was assigned to or removed from a project. Emitted from the
+     * email domain service's thread-project update.
+     */
+    metadata: EmailThreadProjectChangedMetadata;
+} | {
+    event_type: 'email.thread_labels_updated';
+    /**
+     * A thread's user labels changed. Emitted from the email domain
+     * service's label path (`origin = user_action`) or the inbox-sync label
+     * diff (`origin = provider_sync`). System labels are published as the
+     * semantic thread events instead.
+     */
+    metadata: EmailThreadLabelsUpdatedMetadata;
+} | {
+    event_type: 'email.thread_backfilled';
+    /**
+     * All messages of a backfilled thread are persisted and thread metadata
+     * is final. Emitted from the backfill worker's update-metadata step.
+     */
+    metadata: EmailThreadBackfilledMetadata;
+} | {
+    event_type: 'email.threads_reindex_requested';
+    /**
+     * A bounded batch of threads should be re-derived by read-back consumers
+     * (for example, the search index). Emitted from contact sync when contact
+     * names change. Producers must include at most 50 thread ids.
+     */
+    metadata: EmailThreadsReindexRequestedMetadata;
 };
 
 /**
@@ -22175,7 +22909,7 @@ export type Webhook = {
  * with the event payload. Endpoint validation additionally sends a
  * `WebhookValidationTestEvent`, which is not part of this union.
  */
-export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | AgentSessionLifecycleEvent;
+export type WebhookEvent = DocumentTopicEvent | ChannelTopicEvent | CallNotificationEvent | MessageTopicEvent | EmailTopicEvent | AgentSessionLifecycleEvent;
 
 /**
  * Event and optional entity-id constraints used to match webhook deliveries.
