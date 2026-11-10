@@ -107,6 +107,11 @@ export class Mirror {
     }
     this.types = table;
   }
+  /** Registration from the actual native initialization table, even before a node is created. */
+  hasType(name: string): boolean {
+    for (const row of this.types.values()) if (row.name === name) return true;
+    return false;
+  }
   node(key: NodeKey): ViewNode | null {
     return this.records.get(key) ?? null;
   }

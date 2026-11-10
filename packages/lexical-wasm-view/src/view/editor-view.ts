@@ -141,6 +141,8 @@ export class EditorView implements ViewSink {
     format: 0,
     style: '',
   };
+  private readonly editableListeners = new Set<(editable: boolean) => void>();
+  private editableValue = false;
   private disposed = false;
   private detaching = false;
   private recovering = false;
@@ -1060,8 +1062,19 @@ export class EditorView implements ViewSink {
   blur(): void {
     this.root.blur();
   }
+  /** Actual view editability; independent from native session authorization. */
+  get isEditable(): boolean {
+    return this.editableValue;
+  }
+  onEditableChange(listener: (editable: boolean) => void): () => void {
+    this.editableListeners.add(listener);
+    return () => this.editableListeners.delete(listener);
+  }
   setEditable(editable: boolean): void {
     this.root.contentEditable = String(editable);
+    if (this.editableValue === editable) return;
+    this.editableValue = editable;
+    for (const listener of [...this.editableListeners]) listener(editable);
   }
   dispose(): void {
     if (this.disposed) return;
@@ -1109,6 +1122,7 @@ export class EditorView implements ViewSink {
     this.mutations.clear();
     this.histories.clear();
     this.decoratorListeners.clear();
+    this.editableListeners.clear();
     if (failure) throw failure.error;
   }
 }

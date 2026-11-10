@@ -133,3 +133,5 @@ Set HTML display at DOM creation and observe its actual owner-window selection a
 Apply each native Diff Remove to its named record. The subtree-root flag describes DOM detach; validate surviving children of removed parents after the full packet.
 
 Resolve root DOM boundaries in actual document selectionchange using the pinned Source descendant rule. Keep the browser root caret in place when it maps to a valid model point. Only a focused history awareness effect overrides the packet skip tag.
+
+Read view UI editability through isEditable and synchronous onEditableChange notifications; keep native session authorization separate, and require both real mirror type registration and an installed renderer before offering block-card conversion.
