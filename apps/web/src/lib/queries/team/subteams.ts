@@ -37,13 +37,38 @@ function writeSubteams(update: (subteams: Subteam[]) => Subteam[]) {
   );
 }
 
+/**
+ * Every write to the list shares this key. Writes can overlap (Add people
+ * sends one per person), and each response or rollback carries only its own
+ * view of the list, so they're applied only while nothing else is in flight;
+ * otherwise the list is read again once the last write settles.
+ */
+const SUBTEAM_WRITES = { mutationKey: subteamsKey };
+
+/** Whether no other write is in flight. A write counts itself until it settles. */
+const writingAlone = () => queryClient.isMutating(SUBTEAM_WRITES) <= 1;
+
+/** Whether writes overlapped since the list last matched the server. */
+let overlapped = false;
+
 /** Puts the server's copy of a team into the list. */
 function storeSubteam(subteam: Subteam) {
+  if (!writingAlone()) return;
+
   writeSubteams((subteams) =>
     subteams.some((existing) => existing.id === subteam.id)
       ? subteams.map((existing) =>
           existing.id === subteam.id ? subteam : existing
         )
+      : [...subteams, subteam]
+  );
+}
+
+/** Adds a new team; no other write's response can know it yet. */
+function addSubteam(subteam: Subteam) {
+  writeSubteams((subteams) =>
+    subteams.some((existing) => existing.id === subteam.id)
+      ? subteams
       : [...subteams, subteam]
   );
 }
@@ -55,15 +80,24 @@ async function optimistic(
   update: (subteams: Subteam[]) => Subteam[]
 ): Promise<Snapshot> {
   await queryClient.cancelQueries({ queryKey: subteamsKey });
+  if (!writingAlone()) overlapped = true;
   const previous = queryClient.getQueryData<Subteam[]>(subteamsKey);
   writeSubteams(update);
   return { previous };
 }
 
 function rollback(context: Snapshot | undefined) {
+  if (!writingAlone()) return;
   if (context?.previous) {
     queryClient.setQueryData(subteamsKey, context.previous);
   }
+}
+
+/** After the last of overlapping writes, reads the list the server ended with. */
+function reconcile() {
+  if (!overlapped || !writingAlone()) return;
+  overlapped = false;
+  queryClient.invalidateQueries({ queryKey: subteamsKey });
 }
 
 function reportFailure(message: string, error: Error) {
@@ -75,13 +109,18 @@ export function useCreateSubteamMutation(
   callbacks?: MutationCallbacks<Subteam, Error, CreateSubteamRequest>
 ) {
   return useMutation(() => ({
+    ...SUBTEAM_WRITES,
     mutationFn: (request: CreateSubteamRequest) =>
       throwOnErr(() => authServiceClient.createSubteam(request)),
     ...withCallbacks<Subteam, Error, CreateSubteamRequest>(
       {
-        onSuccess: storeSubteam,
+        onMutate: () => {
+          if (!writingAlone()) overlapped = true;
+        },
+        onSuccess: addSubteam,
         onError: (error) =>
           reportFailure(t('settingsTeams.createFailed'), error),
+        onSettled: reconcile,
       },
       callbacks
     ),
@@ -92,6 +131,7 @@ type UpdateSubteamArgs = { subteamId: string; request: UpdateSubteamRequest };
 
 export function useUpdateSubteamMutation() {
   return useMutation(() => ({
+    ...SUBTEAM_WRITES,
     mutationFn: ({ subteamId, request }: UpdateSubteamArgs) =>
       throwOnErr(() => authServiceClient.updateSubteam(subteamId, request)),
     ...withCallbacks<Subteam, Error, UpdateSubteamArgs, Snapshot>({
@@ -114,6 +154,7 @@ export function useUpdateSubteamMutation() {
         rollback(context);
         reportFailure(t('settingsTeams.updateFailed'), error);
       },
+      onSettled: reconcile,
     }),
   }));
 }
@@ -122,6 +163,7 @@ type NestSubteamArgs = { subteamId: string; parentId: string | null };
 
 export function useNestSubteamMutation() {
   return useMutation(() => ({
+    ...SUBTEAM_WRITES,
     mutationFn: ({ subteamId, parentId }: NestSubteamArgs) =>
       throwOnErr(() => authServiceClient.nestSubteam(subteamId, parentId)),
     ...withCallbacks<Subteam, Error, NestSubteamArgs, Snapshot>({
@@ -136,6 +178,7 @@ export function useNestSubteamMutation() {
         rollback(context);
         reportFailure(t('settingsTeams.moveFailed'), error);
       },
+      onSettled: reconcile,
     }),
   }));
 }
@@ -144,6 +187,7 @@ export function useDeleteSubteamMutation(
   callbacks?: MutationCallbacks<void, Error, string, Snapshot>
 ) {
   return useMutation(() => ({
+    ...SUBTEAM_WRITES,
     mutationFn: (subteamId: string) =>
       throwOnErr(() => authServiceClient.deleteSubteam(subteamId)),
     ...withCallbacks<void, Error, string, Snapshot>(
@@ -163,6 +207,7 @@ export function useDeleteSubteamMutation(
           rollback(context);
           reportFailure(t('settingsTeams.deleteFailed'), error);
         },
+        onSettled: reconcile,
       },
       callbacks
     ),
@@ -177,6 +222,7 @@ type SaveSubteamMemberArgs = {
 
 export function useSaveSubteamMemberMutation() {
   return useMutation(() => ({
+    ...SUBTEAM_WRITES,
     mutationFn: ({ subteamId, userId, role }: SaveSubteamMemberArgs) =>
       throwOnErr(() =>
         authServiceClient.saveSubteamMember(subteamId, userId, role)
@@ -204,6 +250,7 @@ export function useSaveSubteamMemberMutation() {
         rollback(context);
         reportFailure(t('settingsTeams.saveMemberFailed'), error);
       },
+      onSettled: reconcile,
     }),
   }));
 }
@@ -212,6 +259,7 @@ type RemoveSubteamMemberArgs = { subteamId: string; userId: string };
 
 export function useRemoveSubteamMemberMutation() {
   return useMutation(() => ({
+    ...SUBTEAM_WRITES,
     mutationFn: ({ subteamId, userId }: RemoveSubteamMemberArgs) =>
       throwOnErr(() =>
         authServiceClient.removeSubteamMember(subteamId, userId)
@@ -235,6 +283,7 @@ export function useRemoveSubteamMemberMutation() {
         rollback(context);
         reportFailure(t('settingsTeams.removeMemberFailed'), error);
       },
+      onSettled: reconcile,
     }),
   }));
 }

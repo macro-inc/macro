@@ -101,6 +101,34 @@ function refuse(message: string) {
   return err([{ code: 'HTTP_ERROR', message }]);
 }
 
+type Controls = {
+  delays: Record<string, number>;
+  /** Each entry fails one call. */
+  failures: string[];
+  /** The failures used so far, in order. */
+  failed: string[];
+};
+
+/**
+ * Lets a test slow down or fail a call, keyed by method name or by
+ * `method:userId` for member calls: `window.teamsService.delays.listSubteams = 500`.
+ * Each listed failure is used once, then moved to `failed`. An init script may set `window.teamsService` first
+ * to affect the first load.
+ */
+const controls: Controls = (window as { teamsService?: Controls })
+  .teamsService ?? { delays: {}, failures: [], failed: [] };
+Object.assign(window, { teamsService: controls });
+
+/** Waits out the call's delay; true when the call should fail. */
+async function intercept(...keys: string[]) {
+  const delay = Math.max(0, ...keys.map((key) => controls.delays[key] ?? 0));
+  if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+  const index = controls.failures.findIndex((key) => keys.includes(key));
+  if (index < 0) return false;
+  controls.failed.push(...controls.failures.splice(index, 1));
+  return true;
+}
+
 export const authServiceClient = {
   async getTeam() {
     return ok(workspace);
@@ -121,9 +149,11 @@ export const authServiceClient = {
     });
   },
   async listSubteams() {
+    if (await intercept('listSubteams')) return refuse('unavailable');
     return ok({ subteams: structuredClone(subteams) });
   },
   async createSubteam(request: CreateSubteamRequest) {
+    if (await intercept('createSubteam')) return refuse('unavailable');
     const parent = request.parentId ? find(request.parentId) : undefined;
     if (request.parentId && (!parent || parent.parentId))
       return refuse('invalid parent');
@@ -189,6 +219,8 @@ export const authServiceClient = {
     userId: string,
     role: SubteamRole
   ) {
+    if (await intercept('saveSubteamMember', `saveSubteamMember:${userId}`))
+      return refuse('unavailable');
     const subteam = find(subteamId);
     if (!subteam) return refuse('not found');
 

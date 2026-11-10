@@ -43,7 +43,7 @@ export function SubteamRow(props: {
           </div>
         </Show>
       </div>
-      <AvatarStack userIds={userIds()} />
+      <AvatarStack userIds={userIds()} inert />
       <span class="w-6 text-right text-xs tabular-nums text-ink-muted">
         {userIds().length}
       </span>

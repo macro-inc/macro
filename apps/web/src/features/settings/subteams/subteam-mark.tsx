@@ -83,8 +83,15 @@ export function SubteamColorPicker(props: {
   );
 }
 
-/** Overlapping avatars with a count of the rest. */
-export function AvatarStack(props: { userIds: string[]; max?: number }) {
+/**
+ * Overlapping avatars with a count of the rest. Inside a pressable row, pass
+ * `inert` so a press on an avatar is the row's, not a DM or a user card.
+ */
+export function AvatarStack(props: {
+  userIds: string[];
+  max?: number;
+  inert?: boolean;
+}) {
   const max = () => props.max ?? 4;
 
   return (
@@ -93,7 +100,13 @@ export function AvatarStack(props: { userIds: string[]; max?: number }) {
         <For each={props.userIds.slice(0, max())}>
           {(userId) => (
             <span class="rounded-full ring-2 ring-panel">
-              <UserIcon id={userId} isDeleted={false} size="md" />
+              <UserIcon
+                id={userId}
+                isDeleted={false}
+                size="md"
+                suppressClick={props.inert}
+                showTooltip={!props.inert}
+              />
             </span>
           )}
         </For>

@@ -141,8 +141,8 @@ export class Subteam extends MacroEntity<SubteamRecord> {
 
   /** Delete this subteam. Its members stay on the team; nested subteams move to the top. */
   async delete(): Promise<void> {
-    unwrap(
-      await this.client.auth.deleteSubteam({ path: { subteam_id: this.id } }),
+    await this.mutate((client) =>
+      client.auth.deleteSubteam({ path: { subteam_id: this.id } }),
     );
   }
 }

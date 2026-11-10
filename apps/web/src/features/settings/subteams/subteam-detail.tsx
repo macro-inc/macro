@@ -87,9 +87,11 @@ export function SubteamDetail(props: {
   const update = (request: UpdateSubteamRequest) =>
     updateSubteam.mutate({ subteamId: props.subteam.id, request });
 
-  const rename = (value: string) => {
-    const name = value.trim();
-    if (name && name !== props.subteam.name) update({ name });
+  const rename = (input: HTMLInputElement) => {
+    const name = input.value.trim();
+    // A team needs a name: leaving it empty puts the current one back.
+    if (!name) input.value = props.subteam.name;
+    else if (name !== props.subteam.name) update({ name });
   };
 
   const describe = (value: string) => {
@@ -177,7 +179,7 @@ export function SubteamDetail(props: {
                 aria-label={t('settingsTeams.teamName')}
                 maxLength={40}
                 value={props.subteam.name}
-                onChange={(event) => rename(event.currentTarget.value)}
+                onChange={(event) => rename(event.currentTarget)}
                 class="-ml-2 w-full min-w-0 max-w-md rounded-lg border border-transparent bg-transparent px-2 py-0.5 text-[26px]/tight font-medium tracking-[-0.025em] text-ink outline-none hover:border-edge-muted focus:border-edge focus:bg-input-focus"
               />
               <input

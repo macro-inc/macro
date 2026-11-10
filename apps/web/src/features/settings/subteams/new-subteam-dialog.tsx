@@ -40,9 +40,14 @@ export function NewSubteamDialog(props: {
     props.onClose();
   };
 
+  // Set before the request so a second Enter can't send another; the
+  // mutation reports pending only after a tick.
+  let submitting = false;
+
   const create = () => {
     const trimmed = name().trim();
-    if (!trimmed) return;
+    if (!trimmed || submitting) return;
+    submitting = true;
 
     createSubteam.mutate(
       {
@@ -55,6 +60,9 @@ export function NewSubteamDialog(props: {
         onSuccess: (subteam) => {
           close();
           props.onCreated(subteam);
+        },
+        onSettled: () => {
+          submitting = false;
         },
       }
     );
@@ -89,7 +97,9 @@ export function NewSubteamDialog(props: {
                 maxLength={NAME_MAX_LENGTH}
                 value={name()}
                 onInput={(event) => setName(event.currentTarget.value)}
-                onKeyDown={(event) => event.key === 'Enter' && create()}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && !event.isComposing) create();
+                }}
                 placeholder={t('settingsTeams.namePlaceholder')}
                 class="settings-input w-full"
               />

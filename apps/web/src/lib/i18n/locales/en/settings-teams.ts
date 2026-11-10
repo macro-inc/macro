@@ -4,6 +4,7 @@ export default {
   newTeam: 'New team',
   empty: 'No teams yet',
   emptyDescription: 'Group people by what they work on.',
+  loadFailed: "Couldn't load teams",
   notOnATeam: 'Not on a team',
   people: { one: '{{count}} person', other: '{{count}} people' },
   inviteOnly: 'Invite only',

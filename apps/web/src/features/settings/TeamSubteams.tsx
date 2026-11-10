@@ -1,6 +1,7 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { queryReadyGate } from '@queries/gate';
 import { useSubteamsQuery } from '@queries/team/subteams';
@@ -69,6 +70,30 @@ export function TeamSubteams(props: { team: Team }) {
             <Switch>
               <Match when={subteamsQuery.isPending}>
                 <ListSkeleton.Bar class="h-14 w-full" />
+              </Match>
+              {/* Only a failed first load: a failed refetch keeps the teams. */}
+              <Match when={subteamsQuery.isLoadingError}>
+                <SettingsSection>
+                  <SettingsCard>
+                    <div class="flex flex-col items-center gap-2 px-4 py-8 text-center">
+                      <span class="text-sm text-ink-muted">
+                        {t('settingsTeams.loadFailed')}
+                      </span>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          fireAndForget(
+                            subteamsQuery.refetch(),
+                            'settings-teams'
+                          )
+                        }
+                      >
+                        {t('common.retry')}
+                      </Button>
+                    </div>
+                  </SettingsCard>
+                </SettingsSection>
               </Match>
               <Match when={topLevel().length === 0}>
                 <SettingsSection>
