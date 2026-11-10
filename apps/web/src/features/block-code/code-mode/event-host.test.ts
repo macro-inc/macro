@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { EventStreamOptions } from '../queries/document-events';
+import {
+  type EventStreamOptions,
+  EventStreamRefused,
+} from '../queries/document-events';
 import {
   attachEventHost,
   eventEntityId,
@@ -10,8 +13,19 @@ vi.mock('@macro-inc/observability', () => ({
   Telemetry: {
     span: (
       _name: string,
-      operation: (span: { setAttr: () => void; error: () => void }) => unknown
-    ) => operation({ setAttr: () => {}, error: () => {} }),
+      operation: (span: {
+        setAttr: () => void;
+        error: () => void;
+        injectTraceHeaders: (headers: Record<string, string>) => void;
+      }) => unknown
+    ) =>
+      operation({
+        setAttr: () => {},
+        error: () => {},
+        injectTraceHeaders: (headers) => {
+          headers.traceparent = '00-trace-span-01';
+        },
+      }),
   },
 }));
 
@@ -44,6 +58,8 @@ function fakeStream() {
     end: () => void;
     fail: () => void;
   }> = [];
+  /** Errors the next opens fail with before opening, in order. */
+  const refusals: Error[] = [];
   const stream = vi.fn(
     (options: EventStreamOptions) =>
       new Promise<void>((resolve, reject) => {
@@ -55,6 +71,8 @@ function fakeStream() {
           end: resolve,
           fail: () => reject(new Error('dropped')),
         });
+        const refusal = refusals.shift();
+        if (refusal) return reject(refusal);
         options.onOpen?.();
       })
   );
@@ -63,7 +81,7 @@ function fakeStream() {
     if (!open) throw new Error('no stream is open');
     return open;
   };
-  return { stream, opens, latest };
+  return { stream, opens, latest, refusals };
 }
 
 const subscribe = (subscription: number, events: string[], ids?: string[]) => ({
@@ -79,6 +97,17 @@ const documentEvent = (name: string, documentId: string) => ({
   data: {
     event_type: name,
     metadata: { document_id: documentId, secret: 'x' },
+  },
+});
+
+const messageEvent = (name: string, channelId: string) => ({
+  name,
+  data: {
+    event_type: name,
+    metadata: {
+      message_id: 'm1',
+      parent: { type: 'channel', id: channelId },
+    },
   },
 });
 
@@ -195,7 +224,11 @@ describe('attachEventHost', () => {
       send(subscribe(index, ['document.updated']));
     await flush();
 
-    expect(posted).toEqual([
+    const errors = posted.filter(
+      (message) =>
+        (message as { event: { type: string } }).event.type === 'macro.error'
+    );
+    expect(errors).toEqual([
       expect.objectContaining({
         subscription: MAX_SUBSCRIPTIONS + 1,
         event: expect.objectContaining({ type: 'macro.error' }),
@@ -224,6 +257,7 @@ describe('attachEventHost', () => {
     send(subscribe(2, ['message.posted']));
     await vi.advanceTimersByTimeAsync(0);
     const before = opens.length;
+    posted.length = 0;
 
     latest().fail();
     await vi.advanceTimersByTimeAsync(1_000);
@@ -236,6 +270,120 @@ describe('attachEventHost', () => {
       }),
       expect.objectContaining({
         subscription: 2,
+        event: { type: 'macro.resync', id: null },
+      }),
+    ]);
+  });
+
+  it('narrows message events by the conversation the server filters on', async () => {
+    const { send, posted, latest } = attach();
+    send(subscribe(1, ['message.posted'], ['c2']));
+    await flush();
+
+    latest().options.onEvent(messageEvent('message.posted', 'c1'));
+    latest().options.onEvent(messageEvent('message.posted', 'c2'));
+
+    expect(posted).toEqual([
+      expect.objectContaining({
+        subscription: 1,
+        event: { type: 'message.posted', id: 'c2' },
+      }),
+    ]);
+  });
+
+  it('trusts the server’s ids filter for events it can’t read an id from', async () => {
+    const { send, posted, latest } = attach();
+    send(subscribe(1, ['agent_session.opened'], ['s1']));
+    await flush();
+
+    latest().options.onEvent({
+      name: 'agent_session.opened',
+      data: { event_type: 'agent_session.opened', session: { id: 's1' } },
+    });
+
+    expect(posted).toEqual([
+      expect.objectContaining({
+        subscription: 1,
+        event: { type: 'agent_session.opened', id: null },
+      }),
+    ]);
+  });
+
+  it('refuses ids the server would refuse, without opening a stream', async () => {
+    const { send, posted, opens } = attach();
+    send(subscribe(1, ['document.updated'], []));
+    send(subscribe(2, ['document.updated'], ['  ']));
+    send(subscribe(3, ['document.updated'], ['x'.repeat(257)]));
+    await flush();
+
+    expect(opens).toHaveLength(0);
+    expect(
+      posted.map(
+        (message) => (message as { subscription: number }).subscription
+      )
+    ).toEqual([1, 2, 3]);
+    expect(posted).toEqual(
+      Array(3).fill(
+        expect.objectContaining({
+          event: expect.objectContaining({ type: 'macro.error' }),
+        })
+      )
+    );
+  });
+
+  it('reports a stream the server refuses and stops retrying it', async () => {
+    vi.useFakeTimers();
+    const { send, posted, opens, refusals } = attach();
+    refusals.push(new EventStreamRefused(400));
+    send(subscribe(1, ['document.updated']));
+    await vi.advanceTimersByTimeAsync(0);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(opens).toHaveLength(1);
+    expect(posted).toEqual([
+      expect.objectContaining({
+        subscription: 1,
+        event: expect.objectContaining({ type: 'macro.error' }),
+      }),
+    ]);
+  });
+
+  it('resyncs after a reopen for changed subscriptions', async () => {
+    const { send, posted, latest } = attach();
+    send(subscribe(1, ['document.updated']));
+    await flush();
+    expect(posted).toEqual([]);
+
+    send(subscribe(2, ['message.posted']));
+    await flush();
+
+    expect(latest().options.traceHeaders).toEqual({
+      traceparent: '00-trace-span-01',
+    });
+    expect(posted).toEqual([
+      expect.objectContaining({
+        subscription: 1,
+        event: { type: 'macro.resync', id: null },
+      }),
+      expect.objectContaining({
+        subscription: 2,
+        event: { type: 'macro.resync', id: null },
+      }),
+    ]);
+  });
+
+  it('resyncs when the first open follows a failed attempt', async () => {
+    vi.useFakeTimers();
+    const { send, posted, opens, refusals } = attach();
+    refusals.push(new Error('offline'));
+    send(subscribe(1, ['document.updated']));
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(opens).toHaveLength(2);
+    expect(posted).toEqual([
+      expect.objectContaining({
+        subscription: 1,
         event: { type: 'macro.resync', id: null },
       }),
     ]);
@@ -276,9 +424,9 @@ describe('eventEntityId', () => {
     ).toBe('k');
     expect(
       eventEntityId('message.posted', {
-        metadata: { message_id: 'm', channel_id: 'c', document_id: 'd' },
+        metadata: { message_id: 'm', parent: { type: 'document', id: 'd' } },
       })
-    ).toBe('m');
+    ).toBe('d');
     expect(
       eventEntityId('agent_session.opened', { metadata: { document_id: 'd' } })
     ).toBeNull();

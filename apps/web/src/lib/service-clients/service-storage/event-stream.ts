@@ -10,6 +10,8 @@ export type StreamedEvent = { name: string; data: unknown };
 export type EventStreamOptions = {
   filters: EventStreamFilter[];
   signal: AbortSignal;
+  /** Trace context to send, so the server's stream joins the caller's trace. */
+  traceHeaders?: Record<string, string>;
   /** Called once the server accepted the stream, before any event. */
   onOpen?: () => void;
   onEvent: (event: StreamedEvent) => void;
@@ -18,10 +20,33 @@ export type EventStreamOptions = {
 const dssHost = SERVER_HOSTS['document-storage-service'];
 
 /**
+ * The server refused the stream's request (its filters, or access), so
+ * opening it again would be refused the same way.
+ */
+export class EventStreamRefused extends Error {
+  constructor(public readonly status: number) {
+    super(`The event stream refused the request (HTTP ${status}).`);
+    this.name = 'EventStreamRefused';
+  }
+}
+
+/** Statuses a retry can't fix: everything 4xx but expired auth and throttling. */
+function isRefusal(status: number): boolean {
+  return (
+    status >= 400 &&
+    status < 500 &&
+    status !== 401 &&
+    status !== 408 &&
+    status !== 429
+  );
+}
+
+/**
  * Stream the viewer's own entity events (`GET /webhook/events/stream`),
  * filtered and access-checked on the server. Resolves when the server ends
  * the stream and rejects when it refuses or the connection fails; callers
- * reconnect. Delivery is best-effort with no replay.
+ * reconnect, except after an {@link EventStreamRefused}. Delivery is
+ * best-effort with no replay.
  *
  * A raw `fetch` because `safeFetch` reads whole bodies; the bearer is the
  * same Macro API token the SDK uses for this endpoint.
@@ -33,9 +58,14 @@ export async function streamEvents(options: EventStreamOptions): Promise<void> {
     filters: JSON.stringify(options.filters),
   });
   const response = await fetch(`${dssHost}/webhook/events/stream?${query}`, {
-    headers: { Accept: 'text/event-stream', Authorization: `Bearer ${token}` },
+    headers: {
+      ...options.traceHeaders,
+      Accept: 'text/event-stream',
+      Authorization: `Bearer ${token}`,
+    },
     signal: options.signal,
   });
+  if (isRefusal(response.status)) throw new EventStreamRefused(response.status);
   if (!response.ok || !response.body) {
     throw new Error(`The event stream answered ${response.status}.`);
   }
