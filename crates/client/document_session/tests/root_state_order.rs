@@ -27,6 +27,8 @@ fn application_root_state_order_matches_the_actual_source_golden()
     assert_eq!(value["root"]["$"].to_string(), expected);
     let streamed: Value = serde_json::from_str(&editor.state().to_json_string()?)?;
     assert_eq!(streamed["root"]["$"].to_string(), expected);
+    assert_eq!(editor.state().to_json_string()?, source.to_string());
+    assert_eq!(value.to_string(), source.to_string());
     Ok(())
 }
 
