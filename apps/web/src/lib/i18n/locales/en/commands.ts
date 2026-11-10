@@ -26,6 +26,7 @@ export default {
   failedToRedo: 'Failed to redo',
   favorites: 'Favorites',
   backToList: 'Back to list',
+  returnToList: 'Return to list',
   closeSplit: 'Close split',
   maximizeSplit: 'Maximize {{name}}',
   goBack: 'Go back',

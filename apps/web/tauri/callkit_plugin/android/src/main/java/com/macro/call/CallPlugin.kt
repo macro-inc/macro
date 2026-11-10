@@ -177,6 +177,11 @@ class CallPlugin(private val activity: Activity) : Plugin(activity) {
         }
         invoke.resolve()
     }
+    @Command fun openMicrophoneSettings(invoke: Invoke) {
+        runCatching { Calls.openAppSettings(activity) }
+            .onFailure { invoke.reject("Unable to open microphone settings"); return }
+        invoke.resolve()
+    }
     override fun onDestroy(activity: AppCompatActivity) {
         finishPreparePermission(); Calls.abortPendingJoin(activity); Calls.unwatch()
         miniWindow?.release(); miniWindow = null

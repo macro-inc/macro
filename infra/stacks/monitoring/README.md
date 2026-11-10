@@ -7,7 +7,7 @@ Datadog. This stack **adopts** them — it does not recreate them. `import.json`
 lists every one by id. Everything else is declared here first and is created
 on deploy: the prod threshold and anomaly monitors (`monitors/macrodb.ts`,
 `redis.ts`, `queues.ts`, `regressions.ts`, `outlook-sync.ts`,
-`routine-suggestions.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, the Outlook sync and routine suggestions metrics, the Outlook retention filter, one other log-based metric, and one downtime.
+`routine-suggestions.ts`, `harness-runtimes.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, the Outlook sync, routine suggestions and agent runtime metrics, the Outlook retention filter, one other log-based metric, and one downtime.
 
 ## Routing
 
@@ -50,7 +50,7 @@ its thresholds many times a day.
 ## Prod threshold monitors
 
 `monitors/macrodb.ts`, `redis.ts`, `queues.ts`, `regressions.ts`,
-`outlook-sync.ts` and `routine-suggestions.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
+`outlook-sync.ts`, `routine-suggestions.ts` and `harness-runtimes.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
 on CloudWatch metrics have hand-written copies in Grafana
 (`infra/stacks/observability/nixos/prod-alerts.nix`), and Grafana pages on-call for
 the critical ones through GoAlert. Their Datadog copies only notify (GoAlert's
@@ -116,12 +116,13 @@ The gate is that preview:
   of the channel), and the GraphQL soup volume, websocket upgrade, gateway
   connections and task count monitors their `query` and thresholds (volume
   and websocket upgrades also gain recovery thresholds).
-- **102 resources to create**: 73 monitors (32 prod threshold and anomaly, 19 GraphQL soup, 9
+- **116 resources to create**: 79 monitors (35 prod threshold and anomaly, 19 GraphQL soup, 9
   notification retention, 10 WhatsApp session, 1 native call push, 2 harness
-  presence), 2 webhooks,
-  15 log-based metrics, 3 span-based metrics and 1 APM retention filter (6, 3
+  presence, 3 OAuth), 2 webhooks,
+  16 log-based metrics, 9 span-based metrics and 1 APM retention filter (6, 3
   and 1 of them for Outlook sync, 8 log-based metrics for routine
-  suggestions), the GoAlert synthetic test, the six prod alert dashboards, and the notification retention dashboard. If the paging
+  suggestions, 1 log-based and 6 span-based metrics for agent runtimes), the
+  GoAlert synthetic test, the seven prod alert dashboards, and the notification retention dashboard. If the paging
   webhooks and GoAlert synthetic are already deployed, expect only the 2
   Notify webhooks among the webhooks.
 - **1 downtime to create**, muting `[PROD] Notification consumer: no
@@ -222,6 +223,36 @@ Android call push, excluding stale device registrations.
 It sees only publishes SNS rejects. A push that SNS accepts and the device then
 drops leaves no backend trace.
 
+## OAuth connection coverage
+
+`monitors/oauth.ts` adds three production log monitors through GoAlert's
+Notify service. They post to the alerts channel without phoning on-call,
+renotify hourly, and recover when their rolling count falls below the threshold:
+
+| Signal | Threshold | First check |
+| --- | --- | --- |
+| Linked GitHub token lookup errors | 3 in 15 minutes | Internal auth response and the caller's resolved authentication-service key; user OAuth can succeed while this lookup fails. |
+| Native MCP token exchange/provider rejection or Pipedream connection failure | 3 in 1 hour | Provider error, redirect URL, scopes, app configuration and organization permissions. Explicit `access_denied`, `user_cancelled` and `user_canceled` codes are excluded. |
+| OAuth client rejection codes in `error` or `reason` | 1 in 15 minutes | Client ID/secret, app status and allowed grant types for `invalid_client`, `unauthorized_client` or `incorrect_client_credentials`. |
+
+The first two read existing logs from `mcp_client` and `pipedream_mcp`;
+the third is provider-independent. Log samples are not included in notifications;
+follow the filtered log links for investigation. The linked-token log was
+verified in production during the internal-key failure. Ordinary unlinked or
+expired GitHub grants return no token rather than emitting that failure log.
+
+These are failure signals, not synthetic sign-in tests. They cannot detect an
+unused provider breaking, a browser-only failure, or an error that is not
+logged in one of these forms. Repeated failures from one user's permissions
+can trigger the flow monitor and need triage. Generic HTTP 401s, `invalid_grant`,
+and routine expired grants do not by themselves trigger the client-rejection
+monitor. Recovery means the error count fell below threshold, not that a sign-in succeeded.
+
+After deploying a credential fix, verify the internal token lookup succeeds
+and a read-only MCP tool call works with the linked account. This stack needs
+its own explicitly approved manual deployment; merging the service fix does
+not activate these alerts.
+
 ## GraphQL soup rollout coverage
 
 `monitors/graphql-soup.ts` declares 19 new monitors for the `enable-graphql-soup`
@@ -299,3 +330,24 @@ plus two, fail; it does not page while suggestions are behind
 Deploy the agent-harness-service release that emits the
 `routine_suggestions.*` logs before these. Log-based metrics count from deploy
 onward. There is no baseline yet; the 10% threshold is a starting point.
+
+## Agent runtime coverage
+
+`monitors/harness-runtimes.ts` adds **three monitors, one dashboard, six
+span-based metrics and one log-based metric** for agent-harness-service
+runtimes. Its header lists every field it reads;
+[the runbook](../../../docs/runbooks/agent-harness-runtimes.md) covers each
+alert. None of them page.
+
+Per runtime, the monitors notify when one dials more than 15 times in
+15 minutes or lists more than 500 sessions to reattach; across the service,
+when it logs more than 1,000 tokio runtime starvation warnings in 15 minutes.
+Over the seven days to 2026-11-10 quiet 15 minutes stayed at or under 12
+dials, 263 sessions and 451 warnings. Every reattach storm crossed the
+sessions or dials threshold and the starvation one; the storm at 17:15Z on
+2026-11-10 was one runtime listing about 1,450 sessions in three dials.
+
+The eager, lazy and skipped metrics stay empty until the agent-harness-service
+release that records those span fields; the dials, sessions and starvation
+metrics read fields prod emits today. Span-based metrics count from deploy
+onward.

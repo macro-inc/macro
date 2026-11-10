@@ -13,6 +13,8 @@ fn harness(connected: bool) -> Harness {
         owner: HarnessOwner::User {
             user_id: "macro|owner@example.com".to_owned(),
         },
+        access: crate::domain::models::HarnessAccess::None,
+        shared_team_ids: Vec::new(),
         created_by: "macro|owner@example.com".to_owned(),
         created_at: Utc::now(),
         updated_at: Utc::now(),

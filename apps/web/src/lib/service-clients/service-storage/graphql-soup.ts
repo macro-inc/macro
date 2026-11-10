@@ -1305,6 +1305,20 @@ function mapGraphqlNotificationMetadata(
         }) satisfies NotifEventMember<'entity_access_granted'>
     )
     .with(
+      { __typename: 'GraphqlRuntimeAccessRemovedMetadata' },
+      (metadata) =>
+        ({
+          tag: 'runtime_access_removed',
+          content: {
+            runtimeName: metadata.runtimeAccessRemovedRuntimeName,
+            agents: metadata.runtimeAccessRemovedAgents.map((agent) => ({
+              botId: agent.botId,
+              name: agent.name,
+            })),
+          },
+        }) satisfies NotifEventMember<'runtime_access_removed'>
+    )
+    .with(
       { __typename: 'GraphqlCommentedOnDocumentMetadata' },
       (metadata) =>
         ({

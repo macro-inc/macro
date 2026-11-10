@@ -195,7 +195,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/welcome` | Login page (when unauthenticated) |
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
-| `/app/internal/status` | Macro staff only (`@macro.com`): set the system status (Operational, Degraded, Major outage + message), see its history and the `POST /auth/system-status` API. A non-operational status shows a banner across the top of the app for every user; open apps update over the connection gateway |
+| `/app/internal/status` | Macro staff only (`@macro.com`): set the system status (Operational, Degraded, Major outage + message), see its history and the `POST /auth/system-status` API. A non-operational status shows a banner across the top of the app for every user; open apps update over the connection gateway. Its close button hides it until the page reloads (nothing is saved), and a changed level or message shows it again |
 | `/app/home` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
 | `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
 | `/app/mail` | Email client |
@@ -1138,11 +1138,18 @@ the catalog's first four available template cards (icon, name, one line and its 
 New routine's start screen. A card opens New routine already filled in from that
 template. The strip hides while searching and on **On**; on phones the cards
 scroll sideways. With `enable-routine-suggestions` and
-`enable-routine-code-steps` on, **Suggested for you** follows the list, below
-the last row: every suggestion (AI's first, then templates from Macro) as the
-rows described in [setup cards](setup-cards.md#suggested-routines), with
-**All** and one tab per area that has any (`Suggestion area`) when there are
-two or more areas; under **All** each row carries its area's chip. Columns are **Name**, **Trigger**, **Steps** and **Last run**.
+`enable-routine-code-steps` on (not on touch devices), suggestions take the
+strip's place: **Suggested for you** above the rows on **All** shows one row
+of Discover's cards, at Discover's size (as many as fit, three at most desktop
+widths), and in the last column **N more · In Discover**, which opens a third tab, **Discover**. Discover
+replaces the list with every suggestion (AI's first, then Macro's) followed by
+the templates no suggestion already offers, four cards to a row (the knob
+sentence in two lines, the chain and the action; **On** once turned on), with
+**All** and one tab per area that has any (`Suggestion area`) and the hint
+**picked for you, then Macro's templates**. The list's search narrows Discover
+too. Discover's tab carries a violet dot while it has AI picks this browser
+hasn't shown there; opening or leaving it marks them seen. The cards behave as
+in [setup cards](setup-cards.md#suggested-routines). Columns are **Name**, **Trigger**, **Steps** and **Last run**.
 Rows are grouped under **When something happens** and **On a schedule**, each a
 band like the tasks list's group headers, with a count. Each row has an icon for
 its trigger's kind, the name with its description below it when it has one,
@@ -1682,7 +1689,7 @@ restart rules still apply.
 - In any text surface: `@` mentions (bidirectional links), `#` tags, `/` block commands,
   `:` emoji. Clicking a rendered tag opens a Search split filtered to that tag.
 
-Settings → Agents, its Cursor guide, and Runtimes render while their requests are pending.
+Settings → Agents, its Cursor guide, and Machines render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
 Settings → Agents → Agents ends with **Coding sessions**: a **Default repository**

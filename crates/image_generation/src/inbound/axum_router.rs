@@ -304,6 +304,7 @@ pub async fn generate_image_handler<
                     .into_iter()
                     .map(Into::into)
                     .collect(),
+                agent_session_id: None,
             },
         )
         .await?;
