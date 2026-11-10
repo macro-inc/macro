@@ -348,6 +348,7 @@ use utoipa::OpenApi;
         messages::inbound::axum_router::edit,
         messages::inbound::axum_router::delete_message,
         messages::inbound::axum_router::react,
+        messages::inbound::axum_router::remove_link_previews,
         messages::inbound::axum_router::get_thread,
         messages::inbound::axum_router::patch_thread,
         messages::inbound::axum_router::delete_thread,

@@ -199,3 +199,92 @@ async fn a_service_without_link_previews_leaves_messages_alone() {
 
     assert!(repo.link_preview_writes.lock().unwrap().is_empty());
 }
+
+/// A member of the channel [`channel_repo`]'s message is in.
+fn channel_member(user: &str) -> EntityAccessReceipt<MessageWrite> {
+    channel_receipt(user, entity_access::domain::models::ParticipantRole::Member)
+}
+
+fn channel_receipt(
+    user: &str,
+    role: entity_access::domain::models::ParticipantRole,
+) -> EntityAccessReceipt<MessageWrite> {
+    EntityAccessReceipt::try_new_authenticated_user(
+        user.to_string().try_into().unwrap(),
+        entity_access::domain::models::Entity {
+            entity_type: EntityType::Channel,
+            entity_id: Uuid::from_u128(7).to_string(),
+        },
+        EntityPermission::ChannelRole { role },
+    )
+    .unwrap()
+}
+
+#[tokio::test]
+async fn the_sender_removes_their_previews_for_everyone_and_for_good() {
+    let repo = channel_repo(vec![preview(ARTICLE, "stored")]);
+    let events = Events::default();
+    let pages = Pages::default();
+    let message = repo.message.clone();
+    let service = service(
+        repo.clone(),
+        vec![ARTICLE, GUIDE],
+        pages.clone(),
+        events.clone(),
+    );
+
+    let removed = service
+        .remove_link_previews(channel_member("macro|author@example.com"), message.id)
+        .await
+        .unwrap();
+
+    assert_eq!(removed.link_previews, vec![]);
+    {
+        let events = events.0.lock().unwrap();
+        let [event] = events.as_slice() else {
+            panic!("expected one event, got {events:?}");
+        };
+        assert_eq!(event.actor, message.sender_id.as_ref());
+        let MessageChange::LinkPreviewsUpdated { message: updated } = &event.change else {
+            panic!("expected a link preview update, got {:?}", event.change);
+        };
+        assert_eq!(updated.link_previews, vec![]);
+    }
+
+    // A later edit's refresh reads no page and stores nothing, whatever it links.
+    service
+        .refresh_link_previews(&message.parent, message.id)
+        .await
+        .unwrap();
+    assert!(pages.0.lock().unwrap().is_empty());
+    assert!(repo.link_preview_writes.lock().unwrap().is_empty());
+    assert_eq!(events.0.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn nobody_but_the_sender_removes_a_messages_previews() {
+    let repo = channel_repo(vec![preview(ARTICLE, "stored")]);
+    let events = Events::default();
+    let message = repo.message.clone();
+    let service = service(
+        repo.clone(),
+        vec![ARTICLE],
+        Pages::default(),
+        events.clone(),
+    );
+
+    // A channel admin may edit and delete the message, but not this.
+    let result = service
+        .remove_link_previews(
+            channel_receipt(
+                "macro|admin@example.com",
+                entity_access::domain::models::ParticipantRole::Admin,
+            ),
+            message.id,
+        )
+        .await;
+
+    assert!(matches!(result, Err(MessageError::Forbidden)));
+    assert!(!*repo.link_previews_suppressed.lock().unwrap());
+    assert!(events.0.lock().unwrap().is_empty());
+}

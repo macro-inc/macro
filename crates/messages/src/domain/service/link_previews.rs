@@ -33,7 +33,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     /// writes the message without a caller capability and publishes only to
     /// the parent's own audience. Safe to repeat: an unchanged set writes and
     /// publishes nothing, and a message edited or deleted meanwhile is left to
-    /// the newer change.
+    /// the newer change. A message whose sender removed its previews keeps
+    /// none.
     #[tracing::instrument(
         name = "message.link_previews.refresh",
         err,
@@ -56,6 +57,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             return Ok(());
         };
         if message.deleted_at.is_some() {
+            return Ok(());
+        }
+        if self.repo.link_previews_suppressed(parent, id).await? {
             return Ok(());
         }
 
@@ -89,6 +93,41 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         )
         .await;
         Ok(())
+    }
+
+    /// Remove a message's link previews for everyone, for good: it gets none
+    /// again, whatever links a later edit adds. Only its sender may.
+    ///
+    /// Safe to repeat: a message already without previews stays so, and its
+    /// viewers are told again.
+    #[tracing::instrument(name = "message.link_previews.remove", err, skip(self, access))]
+    pub async fn remove_link_previews(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+    ) -> Result<Message, MessageError> {
+        let parent = parent_from_receipt(&access)?;
+        let actor = actor_from_receipt(&access, &parent)?;
+        self.ensure_parent(&parent).await?;
+        let current = self.active_message(&parent, id, false).await?;
+        reject_call_root(&current)?;
+        // Narrower than editing: a moderator may edit a message, but only its
+        // sender decides how their links are shown.
+        if current.sender_id != actor {
+            return Err(MessageError::Forbidden);
+        }
+
+        let message = self.repo.suppress_link_previews(&parent, id).await?;
+        self.publish_message(
+            actor,
+            None,
+            &message,
+            MessageChange::LinkPreviewsUpdated {
+                message: message.clone(),
+            },
+        )
+        .await;
+        Ok(message)
     }
 }
 

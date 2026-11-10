@@ -90,6 +90,11 @@ grant users another agent invocation's edit, deletion, or reaction authority.
   still present, writes only while the message text is unchanged, and
   publishes `link_previews_updated` to the channel alone. Refreshes are
   best-effort: a failed or interrupted one leaves the message without cards.
+  A message's sender, and nobody else, can remove its previews
+  (`remove_link_previews`, `DELETE …/items/{id}/link_previews`): that deletes
+  them, sets `comms_messages.link_previews_suppressed`, and publishes the same
+  `link_previews_updated`. A suppressed message is skipped by every later
+  refresh, and the guarded write refuses one already under way.
 
 - Most modules are feature-gated (`ai_tools`, `annotations`, `broker`,
   `delivery`, `inbound`, `kafka_consumer`, `link_previews`, `outbound`, `ports`,

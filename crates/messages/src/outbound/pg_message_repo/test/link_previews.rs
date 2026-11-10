@@ -66,3 +66,54 @@ async fn link_previews_replace_in_order_only_while_the_text_is_unchanged(pool: P
         .unwrap();
     assert!(refused.is_none());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn suppressed_link_previews_are_deleted_and_never_stored_again(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool);
+    let message = repo
+        .create(command("message-doc-a", None, &format!("read {ARTICLE}")))
+        .await
+        .unwrap();
+    let parent = message.parent.clone();
+    let article = vec![preview(ARTICLE, "Article", None)];
+    repo.replace_link_previews(&parent, message.id, &message.content, &article)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        !repo
+            .link_previews_suppressed(&parent, message.id)
+            .await
+            .unwrap()
+    );
+
+    let suppressed = repo
+        .suppress_link_previews(&parent, message.id)
+        .await
+        .unwrap();
+    assert!(suppressed.link_previews.is_empty());
+    assert_eq!(suppressed.content, message.content);
+    assert!(
+        repo.link_previews_suppressed(&parent, message.id)
+            .await
+            .unwrap()
+    );
+
+    // A refresh that read the message before the removal stores nothing.
+    let refused = repo
+        .replace_link_previews(&parent, message.id, &message.content, &article)
+        .await
+        .unwrap();
+    assert!(refused.is_none());
+    let read = repo.get(&parent, message.id).await.unwrap().unwrap();
+    assert!(read.link_previews.is_empty());
+
+    // Removing again changes nothing; a deleted message can't be changed.
+    repo.suppress_link_previews(&parent, message.id)
+        .await
+        .unwrap();
+    repo.delete(&parent, message.id).await.unwrap();
+    let gone = repo.suppress_link_previews(&parent, message.id).await;
+    assert!(matches!(gone, Err(MessageError::NotFound)));
+}

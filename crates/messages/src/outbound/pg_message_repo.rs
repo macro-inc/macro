@@ -903,11 +903,13 @@ impl MessageRepository for PgMessageRepository {
         let mut tx = self.pool.begin().await.map_err(database_error)?;
         // The row lock orders this write against an edit: an edit that commits
         // first fails the content check, one that waits replaces these previews
-        // with its own refresh.
+        // with its own refresh. A removal by the sender is ordered the same
+        // way, and wins either way.
         let current = sqlx::query_scalar!(
             r#"SELECT id FROM comms_messages
                WHERE id = $1 AND parent_entity_type = $2 AND parent_entity_id = $3
                    AND content = $4 AND deleted_at IS NULL
+                   AND NOT link_previews_suppressed
                FOR UPDATE"#,
             id,
             parent.entity_type(),
@@ -958,6 +960,51 @@ impl MessageRepository for PgMessageRepository {
         let message = Self::require_message_in(&mut tx, parent, id).await?;
         tx.commit().await.map_err(database_error)?;
         Ok(Some(message))
+    }
+
+    async fn link_previews_suppressed(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> Result<bool, MessageError> {
+        let suppressed = sqlx::query_scalar!(
+            r#"SELECT link_previews_suppressed FROM comms_messages
+               WHERE id = $1 AND parent_entity_type = $2 AND parent_entity_id = $3"#,
+            id,
+            parent.entity_type(),
+            parent.entity_id(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(database_error)?;
+        Ok(suppressed.unwrap_or(false))
+    }
+
+    async fn suppress_link_previews(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> Result<Message, MessageError> {
+        let mut tx = self.pool.begin().await.map_err(database_error)?;
+        Self::lock_message(&mut tx, parent, id).await?;
+        sqlx::query!(
+            "UPDATE comms_messages SET link_previews_suppressed = true WHERE id = $1",
+            id
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(database_error)?;
+        sqlx::query!(
+            "DELETE FROM comms_message_link_previews WHERE message_id = $1",
+            id
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(database_error)?;
+
+        let message = Self::require_message_in(&mut tx, parent, id).await?;
+        tx.commit().await.map_err(database_error)?;
+        Ok(message)
     }
 
     async fn delete(&self, parent: &MessageParent, id: Uuid) -> Result<Message, MessageError> {

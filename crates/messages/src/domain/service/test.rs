@@ -27,6 +27,7 @@ struct Repo {
     call_thread: Option<CallThreadFacts>,
     call_statuses: HashMap<Uuid, CallEntryStatus>,
     link_preview_writes: Arc<Mutex<Vec<Vec<LinkPreview>>>>,
+    link_previews_suppressed: Arc<Mutex<bool>>,
 }
 
 impl Repo {
@@ -258,6 +259,9 @@ impl MessageRepository for Repo {
         if message.content != content || message.deleted_at.is_some() {
             return Ok(None);
         }
+        if *self.link_previews_suppressed.lock().unwrap() {
+            return Ok(None);
+        }
         self.link_preview_writes
             .lock()
             .unwrap()
@@ -266,6 +270,25 @@ impl MessageRepository for Repo {
             link_previews: previews.to_vec(),
             ..message
         }))
+    }
+    async fn link_previews_suppressed(
+        &self,
+        _: &MessageParent,
+        _: Uuid,
+    ) -> Result<bool, MessageError> {
+        Ok(*self.link_previews_suppressed.lock().unwrap())
+    }
+    async fn suppress_link_previews(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> Result<Message, MessageError> {
+        let message = self.get(parent, id).await?.ok_or(MessageError::NotFound)?;
+        *self.link_previews_suppressed.lock().unwrap() = true;
+        Ok(Message {
+            link_previews: vec![],
+            ..message
+        })
     }
 }
 
@@ -329,6 +352,7 @@ fn fixture() -> Repo {
         call_thread: None,
         call_statuses: HashMap::new(),
         link_preview_writes: Arc::default(),
+        link_previews_suppressed: Arc::default(),
     }
 }
 
@@ -1474,6 +1498,20 @@ impl MessageRepository for StrictRepo {
         self.inner
             .replace_link_previews(parent, id, content, previews)
             .await
+    }
+    async fn link_previews_suppressed(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> Result<bool, MessageError> {
+        self.inner.link_previews_suppressed(parent, id).await
+    }
+    async fn suppress_link_previews(
+        &self,
+        parent: &MessageParent,
+        id: Uuid,
+    ) -> Result<Message, MessageError> {
+        self.inner.suppress_link_previews(parent, id).await
     }
 }
 

@@ -94,6 +94,12 @@ pub trait MessageCommands: Send + Sync + 'static {
         add: bool,
         nonce: Option<String>,
     ) -> Result<Message, MessageError>;
+    /// Remove the sender's own message's link previews for everyone, for good.
+    async fn remove_link_previews(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+    ) -> Result<Message, MessageError>;
     /// Publish ephemeral typing to the authorized conversation.
     async fn typing(
         &self,
@@ -271,6 +277,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageCommands for Message
     ) -> Result<Message, MessageError> {
         MessageService::react(self, access, id, emoji, add, nonce).await
     }
+    async fn remove_link_previews(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+    ) -> Result<Message, MessageError> {
+        MessageService::remove_link_previews(self, access, id).await
+    }
     async fn typing(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
@@ -383,6 +396,8 @@ mockall::mock! {
         add: bool,
         nonce: Option<String>,
     ) -> Result<Message, MessageError>;
+    /// Remove the sender's own message's link previews for everyone, for good.
+    async fn remove_link_previews(&self, access: EntityAccessReceipt<MessageWrite>, id: Uuid) -> Result<Message, MessageError>;
     /// Publish ephemeral typing to the authorized conversation.
     async fn typing(
         &self,

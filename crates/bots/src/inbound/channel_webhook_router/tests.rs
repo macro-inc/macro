@@ -617,6 +617,13 @@ impl messages::domain::api::MessageCommands for TestChannelPoster {
     ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
         unimplemented!()
     }
+    async fn remove_link_previews(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!()
+    }
     async fn typing(
         &self,
         _: EntityAccessReceipt<messages::domain::service::MessageWrite>,

@@ -4,7 +4,7 @@ use axum::{
     extract::{FromRef, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use entity_access::domain::{
     models::{EntityAccessReceipt, EntityType, RequiredPermission},
@@ -69,6 +69,10 @@ where
         .route(
             "/{parent_type}/{parent_id}/items/{id}/reactions",
             post(react::<A, Auth>),
+        )
+        .route(
+            "/{parent_type}/{parent_id}/items/{id}/link_previews",
+            delete(remove_link_previews::<A, Auth>),
         )
         .route(
             "/{parent_type}/{parent_id}/threads/{id}",
@@ -356,6 +360,29 @@ where
                 receipt(state.access.as_ref(), &user, &path).await?,
                 path_id(&path)?,
                 query.nonce,
+            )
+            .await?,
+    ))
+}
+
+#[utoipa::path(operation_id = "entity_message_remove_link_previews", delete, path = "/messages/{parent_type}/{parent_id}/items/{id}/link_previews", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), responses((status = 200, body = Message)))]
+/// Remove the caller's own message's link previews for everyone. The message
+/// gets none again, whatever links a later edit adds.
+pub async fn remove_link_previews<A, Auth>(
+    State(state): State<MessagesRouterState<A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
+    Path(path): Path<ParentPath>,
+) -> Result<Json<Message>, MessageHttpError>
+where
+    A: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    Ok(Json(
+        state
+            .service
+            .remove_link_previews(
+                receipt(state.access.as_ref(), &user, &path).await?,
+                path_id(&path)?,
             )
             .await?,
     ))

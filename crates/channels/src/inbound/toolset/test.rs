@@ -216,6 +216,13 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
         self.reacts.lock().unwrap().push((access, id, emoji, add));
         result
     }
+    async fn remove_link_previews(
+        &self,
+        _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _: Uuid,
+    ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        unimplemented!()
+    }
     async fn typing(
         &self,
         _: EntityAccessReceipt<messages::domain::service::MessageWrite>,
