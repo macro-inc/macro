@@ -182,3 +182,56 @@ async fn a_broken_idea_row_is_skipped_and_the_rest_read(pool: PgPool) {
     );
     assert!(repo.idea(&user, broken).await.unwrap().is_none());
 }
+
+async fn idea_about_document(pool: &PgPool, user: &str, document: &str) -> Uuid {
+    let idea = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO idea (id, user_id, kind, dedup_key, title, summary, importance,
+                             categories, state, session_id, created_at, updated_at, state_changed_at)
+           VALUES ($1, $2, 'entity', 'doc:review', 'Review the plan', 'It changed.', 50,
+                   '{}', 'proposed', $3, now(), now(), now())"#,
+        idea,
+        user,
+        Uuid::now_v7(),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO idea_entity (idea_id, action) VALUES ($1, 'review')",
+        idea
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO idea_target (idea_id, role, position, entity_type, entity_id)
+           VALUES ($1, 'about', 0, 'document', $2)"#,
+        idea,
+        document,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    idea
+}
+
+/// An idea row that doesn't decode is skipped, so the item's other ideas
+/// still resolve.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_broken_row_about_an_item_is_skipped_and_the_rest_found(pool: PgPool) {
+    const LEGACY: &str = "not a macro user id";
+    insert_user(&pool, OWNER).await;
+    insert_user(&pool, LEGACY).await;
+    let document = Uuid::now_v7().to_string();
+    let good = idea_about_document(&pool, OWNER, &document).await;
+    idea_about_document(&pool, LEGACY, &document).await;
+    let found = PgIdeaRepo::new(pool)
+        .open_about(EntityType::Document, &document)
+        .await
+        .unwrap();
+    assert_eq!(
+        found.iter().map(|target| target.idea).collect::<Vec<_>>(),
+        vec![good]
+    );
+}
