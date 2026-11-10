@@ -1,0 +1,40 @@
+crates/agent_egress/src/domain/approval.rs
+  s_e8b34339741e18::t_4125e6219a1332 77-100
+  s_e8b34339741e18::t_538e99eada732a 190-192
+crates/agent_egress/src/domain/model.rs
+  s_e8b34339741e18::t_ae60558b3cab8a 262-276
+crates/agent_egress/src/domain/approval/test.rs
+  s_e8b34339741e18::t_0f602db28526ad 499-529
+crates/agent_egress/src/domain/service.rs
+  s_e8b34339741e18::t_fb4c12fa03cebb 383-389,408-411,422
+crates/agent_egress/src/domain/service/actor.rs
+  s_e8b34339741e18::t_be0e9ea74c1ac6 223-224,232,234,250-252
+crates/agent_egress/src/domain/service/test.rs
+  s_e8b34339741e18::t_6567ea279953f4 1460-1510
+crates/agent_egress/src/domain/service/test/actor.rs
+  s_c6a08203850d89::t_5db436483c5c33 390-426
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "cc86e05dee45d4b351220502fc76548a5e6f3b60",
+  "prompts": {},
+  "sessions": {
+    "s_c6a08203850d89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7a5-d9c5-77b1-aad4-cec754104614",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e8b34339741e18": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7afbb266-33ee-4abd-968b-6bd9e3280d5b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
