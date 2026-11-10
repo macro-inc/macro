@@ -89,6 +89,14 @@ fn error_backtrace_removal_preserves_nested_debug_delimiters() {
             "Outer(QueryError(database unavailable))",
         ),
         (
+            "DetailedError { reason: DatabaseQueryFailed, source: database unavailable\n\nStack backtrace:\n   0: arbitrary frame }",
+            "DetailedError { reason: DatabaseQueryFailed, source: database unavailable }",
+        ),
+        (
+            "Outer([DetailedError { source: database unavailable\n\nStack backtrace:\n   0: arbitrary frame }])",
+            "Outer([DetailedError { source: database unavailable }])",
+        ),
+        (
             "database unavailable\n\nStack backtrace:\n   0: arbitrary frame",
             "database unavailable",
         ),
@@ -108,15 +116,24 @@ fn nested_string_backtraces_keep_the_error_and_debug_delimiters() {
     if !crate::parity::process_per_test() {
         return;
     }
-    let captured = r#"Outer(Transient("token unavailable\n\nCaused by:\n    unauthorized\n\nStack backtrace:\n   0: arbitrary frame"))"#;
-    let expected = r#"Outer(Transient("token unavailable\n\nCaused by:\n    unauthorized"))"#;
-    let mut normalizer = Normalizer::default();
-    assert_eq!(normalizer.value("logs", json!(captured)), json!(expected));
-    assert_eq!(normalizer.value("spans", json!(captured)), json!(expected));
-    assert_eq!(
-        normalizer.value("response", json!(captured)),
-        json!(captured)
-    );
+    for (captured, expected) in [
+        (
+            r#"Outer(Transient("token unavailable\n\nCaused by:\n    unauthorized\n\nStack backtrace:\n   0: arbitrary frame"))"#,
+            r#"Outer(Transient("token unavailable\n\nCaused by:\n    unauthorized"))"#,
+        ),
+        (
+            r#"Outer { source: Transient("token unavailable\n\nStack backtrace:\n   0: arbitrary frame") }"#,
+            r#"Outer { source: Transient("token unavailable") }"#,
+        ),
+    ] {
+        let mut normalizer = Normalizer::default();
+        assert_eq!(normalizer.value("logs", json!(captured)), json!(expected));
+        assert_eq!(normalizer.value("spans", json!(captured)), json!(expected));
+        assert_eq!(
+            normalizer.value("response", json!(captured)),
+            json!(captured)
+        );
+    }
 }
 
 #[test]

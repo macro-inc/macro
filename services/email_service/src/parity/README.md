@@ -1,4 +1,4 @@
-# Email HTTP parity lab
+# Email parity lab
 
 The test-only lab builds `ApiContext` through production composition and drives
 `api::app` with Tower requests. Postgres and Redis are real; Gmail, SQS, service
@@ -113,8 +113,8 @@ eight scenarios at once) whatever the runner's thread count.
   must not call them; provider credentials are rejected by the recording auth
   stub, making an accidental credential request visible. They are not isolated
   provider implementations and this suite does not characterize their APIs.
-- The label suite exercises HTTP label writes, not delivery by background queue
-  workers. Queued provider writes are recorded but not executed automatically.
+- The label suite exercises HTTP label writes. Queued provider writes are recorded
+  but not executed automatically; `gmail_ops_worker` explicitly delivers them.
 - The AWS SDK retry policy is configured in `macro_aws_config`/the SDK and is not
   part of `email_service` code or characterized here; the lab disables SQS retries
   and records one attempt per injected failure.
@@ -343,3 +343,64 @@ service and its durable outbox; they do not contact Google Calendar or Graph.
 Shared-mailbox promotion generates a customer-ID string containing its generated
 UUID. Only `inbox_init` enables `normalize_embedded_uuids`, retaining the
 `cus_shared_` prefix and the same symbolic UUID identity used elsewhere.
+
+## Queue workers
+
+Call `Lab::start_workers` to build contexts through each production
+`pubsub::<worker>::worker::context` function. This is opt-in so HTTP scenarios
+retain their startup and step boundaries. The lab reuses the label-write
+simulation's Gmail/SQS clients and CRM wiring, and uses its own recorded Kafka
+broker, service HTTP stub, private database, and private Redis. Backfill has the
+production backfill Gmail rate budget. Fixed-endpoint Outlook adapters remain
+subject to the provider restrictions above. The concrete CRM metadata resolver
+also fixes `ReqwestUnfurlFetcher`, which cannot inject a local transport. Gmail
+operation scenarios never invoke it. Future worker scenarios must seed CRM
+directory entries or avoid metadata resolution until that adapter has a seam.
+
+`Lab::worker_step` offers exactly one wire message to fake SQS, calls the real
+`SQSWorker::receive_messages`, then calls the same `process_message` function as
+the selected worker loop. Processing runs in its own Tokio task, as it does in
+the simulation and production worker, so the recorder's future does not add
+stack frames to the legacy reversion path. `delivery` and `outcome` replace `request` and
+`response`; all other sections and sidecars are the same. Delivery includes the
+queue, body (including malformed or absent bodies), identity, receipt handle,
+receive count, system attributes, and message attributes. Outcome independently
+records the returned `Ok`/`Err`, deletion, retention for redelivery, visibility
+changes in seconds, and each send's destination, body, and requested delay.
+`Ok` does not imply deletion: the Gmail retryable-error handler returns `Ok`
+while leaving the message for redelivery.
+
+`Delivery::redelivered` keeps the message identity/body/attributes and increments
+its receive count; `Delivery::from_sent` consumes the actual recorded send body.
+Scheduling is explicit and virtual: the lab never sleeps to make a message
+visible. The suite records the last permitted receives (3 on the primary queue,
+100 on the retry queue); SQS's subsequent redrive is external to the worker.
+Keep worker scenarios in process; do not shell out to host tools or change Redis
+server configuration. Worker labs reuse `suites::redis_database::RedisDatabase`
+to select Redis logical database `1 + NEXTEST_TEST_GROUP_SLOT`, clear only that
+database at startup, and capture
+every key there, including provider-global keys. HTTP labs retain their existing
+fixture-key scope.
+Scripted worker 429 replies carry `Retry-After: 60` so the cooldown survives
+capture. Worker steps opt into `GmailGateWindowTotalUnits`, matching only
+`gmail:{<canonical UUID>}:window`: it replaces the per-second fields with their
+sum in `<total_units>` and retains any other fields unchanged. This pins total
+admitted units per window key, but does not pin the split of admissions across
+wall-clock seconds. The rule is applied before diffing; moving the same units
+between seconds alone is not a Redis change. Other Redis keys and HTTP suite
+transcripts are unaffected by this rule. Learned-cap and lease timestamps are
+masked separately; caps and members are retained.
+
+Outside the step are the infinite receive loop, its batch error aggregation and
+logging, cancellation, panic/restart supervision, and the link-manager loop's
+visibility renewal wrapper. Backfill's per-message visibility heartbeat is
+inside its process function. Long-running backfill admission waits and provider
+timeouts are not characterized by this suite; their real-time waits are not
+advanced by SQS's virtual scheduling. No production retry or timing behavior is
+changed to accommodate tests.
+
+The Gmail suite covers operation forms and batch boundaries, provider responses
+and disconnections, local admission refusal, primary-to-retry sends, retained
+deliveries, malformed bodies, missing links/receipts, SQS failures, marker turns,
+mid-send turn changes, partial and whole-write reversion, duplicates, and query
+and transaction failures. Fixtures and fault installation run outside capture.

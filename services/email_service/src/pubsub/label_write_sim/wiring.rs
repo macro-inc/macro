@@ -23,6 +23,25 @@ pub async fn gmail_api(
     services_url: &str,
     sqs_client: sqs_client::SQS,
 ) -> GmailApi {
+    gmail_api_with_budget(
+        db,
+        redis,
+        gmail_url,
+        services_url,
+        sqs_client,
+        RateBudget::Live,
+    )
+    .await
+}
+
+pub async fn gmail_api_with_budget(
+    db: PgPool,
+    redis: &redis::Client,
+    gmail_url: &str,
+    services_url: &str,
+    sqs_client: sqs_client::SQS,
+    budget: RateBudget,
+) -> GmailApi {
     let client = gmail_client::GmailClient::new_with_urls(
         Some("projects/sim/topics/gmail".to_string()),
         gmail_url.to_string(),
@@ -41,10 +60,18 @@ pub async fn gmail_api(
             ),
             sqs_client,
         ),
-        RedisGmailRequestGate::new(
-            redis.get_connection_manager().await.unwrap(),
-            RateBudget::Live,
-        ),
+        RedisGmailRequestGate::new(redis.get_connection_manager().await.unwrap(), budget),
+    )
+}
+
+pub fn crm_service(db: PgPool) -> crate::pubsub::context::CrmServiceType {
+    crm::domain::service::CrmServiceImpl::new(
+        crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db),
+        crate::pubsub::context::CrmMetadataResolver::new(std::sync::Arc::new(
+            unfurl::domain::service::UnfurlServiceImpl::new(
+                unfurl::outbound::ReqwestUnfurlFetcher::new().expect("unfurl fetcher"),
+            ),
+        )),
     )
 }
 

@@ -1,0 +1,109 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: faulted delivery
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-ops-retry",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<missing>\",\"operation\":{\"modify_message_labels\":{\"dbMessageId\":\"<msg:m1a>\",\"providerMessageId\":\"m1a\",\"labelsToAdd\":[\"Label_work\"],\"labelsToRemove\":[],\"pendingWriteId\":\"<write:older>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-ops-retry","wait_time_seconds":0}
+  INFO extract_gmail_ops_message {}
+  INFO inner_process_message {}
+    INFO fetch_link_by_id {"link_id":"<missing>"}
+  INFO handle_non_retryable_error {"data":"GmailOpsPubsubMessage { link_id: <missing>, operation: ModifyMessageLabels(ModifyMessageLabelsPayload { db_message_id: <msg:m1a>, provider_message_id: \"m1a\", labels_to_add: [\"Label_work\"], labels_to_remove: [], pending_write_id: Some(<write:older>) }) }","e":"DetailedError { reason: LinkNotFound, source: No link found for id <missing> }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Non-retryable error occurred"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing gmail ops message. The message will be deleted.",
+      "fields": {
+        "error": "DetailedError { reason: LinkNotFound, source: No link found for id <missing> }",
+        "payload": "ModifyMessageLabels(ModifyMessageLabelsPayload { db_message_id: <msg:m1a>, provider_message_id: \"m1a\", labels_to_add: [\"Label_work\"], labels_to_remove: [], pending_write_id: Some(<write:older>) })"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-ops-retry",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<missing>\",\"operation\":{\"modify_message_labels\":{\"dbMessageId\":\"<msg:m1a>\",\"providerMessageId\":\"m1a\",\"labelsToAdd\":[\"Label_work\"],\"labelsToRemove\":[],\"pendingWriteId\":\"<write:older>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-ops-retry",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

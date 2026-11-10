@@ -1,0 +1,365 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: first delivery
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-ops-retry",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"modify_message_labels\":{\"dbMessageId\":\"<msg:m1a>\",\"providerMessageId\":\"m1a\",\"labelsToAdd\":[\"Label_work\"],\"labelsToRemove\":[],\"pendingWriteId\":\"<write:older>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-ops-retry","wait_time_seconds":0}
+  INFO extract_gmail_ops_message {}
+  INFO inner_process_message {}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO modify_message_labels_unboxed {"labels_to_add":"[\"Label_work\"]","labels_to_remove":"[]","message_count":1}
+      INFO label_write_turns {"provider_label_ids":"[\"Label_work\"]","write_id":"<write:older>"}
+      INFO modify_one_message_labels {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","skip_missing":false}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO modify_message_labels {"label_ids_to_add":"[\"Label_work\"]","label_ids_to_remove":"[]","provider_message_id":"m1a"}
+          INFO modify_message_labels {"label_ids_to_add":"[\"Label_work\"]","label_ids_to_remove":"[]","provider_message_id":"m1a"}
+      INFO thread_ids_of_messages {"link_id":"<link:A>"}
+      INFO lock_thread_label_writes {}
+      INFO abandon_pending_label_writes {"link_id":"<link:A>","write_id":"<write:older>"}
+  INFO handle_non_retryable_error {"data":"GmailOpsPubsubMessage { link_id: <link:A>, operation: ModifyMessageLabels(ModifyMessageLabelsPayload { db_message_id: <msg:m1a>, provider_message_id: \"m1a\", labels_to_add: [\"Label_work\"], labels_to_remove: [], pending_write_id: Some(<write:older>) }) }","e":"DetailedError { reason: GmailApiFailed, source: modify_message_labels: email provider resource was not found }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed",
+        "modify_one_message_labels",
+        "modify_message_labels",
+        "modify_message_labels"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 404 Not Found: {\"error\":{\"code\":404,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed",
+        "modify_one_message_labels",
+        "modify_message_labels"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 404 Not Found: {\"error\":{\"code\":404,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed",
+        "modify_one_message_labels"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider resource was not found"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed"
+      ],
+      "message": "Permanent Gmail error modifying labels, reverting the messages Gmail hasn't accepted",
+      "fields": {
+        "db_message_ids": "[<msg:m1a>]",
+        "error": "NotFound"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed"
+      ],
+      "message": "Successfully reverted database changes after Gmail API failure",
+      "fields": {
+        "db_message_ids": "[<msg:m1a>]"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail(NotFound)"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Non-retryable error occurred"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing gmail ops message. The message will be deleted.",
+      "fields": {
+        "error": "DetailedError { reason: GmailApiFailed, source: modify_message_labels: email provider resource was not found }",
+        "payload": "ModifyMessageLabels(ModifyMessageLabelsPayload { db_message_id: <msg:m1a>, provider_message_id: \"m1a\", labels_to_add: [\"Label_work\"], labels_to_remove: [], pending_write_id: Some(<write:older>) })"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  305e98fc1c44 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  313867e14a6b rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  d6533f4fe99a rows_affected=1 rows_returned=1
+  310ee9977ecd rows_affected=0 rows_returned=0
+  b7f5f6956675 rows_affected=1 rows_returned=0
+  a1c7c1fc3247 rows_affected=1 rows_returned=0
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=0 rows_returned=0
+  ad640ecb32fd rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "POST",
+      "path": "/gmail/v1/users/me/messages/m1a/modify",
+      "body": {
+        "addLabelIds": [
+          "Label_work"
+        ],
+        "removeLabelIds": []
+      },
+      "status": 404
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-ops-retry",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"modify_message_labels\":{\"dbMessageId\":\"<msg:m1a>\",\"providerMessageId\":\"m1a\",\"labelsToAdd\":[\"Label_work\"],\"labelsToRemove\":[],\"pendingWriteId\":\"<write:older>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-ops-retry",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-00000000f61b}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {
+    "email_gmail_pending_label_writes": {
+      "removed": [
+        {
+          "seq": 1,
+          "write_id": "<write:older>",
+          "expires_at": "<ts>",
+          "message_id": "<msg:m1a>",
+          "label_present": true,
+          "provider_label_id": "Label_work",
+          "label_present_before": false
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "email_message_labels": {
+      "removed": [
+        {
+          "label_id": "<label:A/Label_work>",
+          "message_id": "<msg:m1a>"
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "email_messages": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<msg:m1a>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: redelivery
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-ops-retry",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-2",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"modify_message_labels\":{\"dbMessageId\":\"<msg:m1a>\",\"providerMessageId\":\"m1a\",\"labelsToAdd\":[\"Label_work\"],\"labelsToRemove\":[],\"pendingWriteId\":\"<write:older>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "2"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-ops-retry","wait_time_seconds":0}
+  INFO extract_gmail_ops_message {}
+  INFO inner_process_message {}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO modify_message_labels_unboxed {"labels_to_add":"[\"Label_work\"]","labels_to_remove":"[]","message_count":1}
+      INFO label_write_turns {"provider_label_ids":"[\"Label_work\"]","write_id":"<write:older>"}
+      INFO thread_ids_of_messages {"link_id":"<link:A>"}
+      INFO lock_thread_label_writes {}
+      INFO abandon_pending_label_writes {"link_id":"<link:A>","write_id":"<write:older>"}
+  INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-2"}
+    INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed"
+      ],
+      "message": "Newer label writes took over every message, skipping Gmail",
+      "fields": {}
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  305e98fc1c44 rows_affected=1 rows_returned=1
+  313867e14a6b rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  d6533f4fe99a rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-ops-retry",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"modify_message_labels\":{\"dbMessageId\":\"<msg:m1a>\",\"providerMessageId\":\"m1a\",\"labelsToAdd\":[\"Label_work\"],\"labelsToRemove\":[],\"pendingWriteId\":\"<write:older>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "2"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-ops-retry",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

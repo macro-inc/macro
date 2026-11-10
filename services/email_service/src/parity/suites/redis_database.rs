@@ -2,7 +2,7 @@
 
 mod test;
 
-pub(super) struct RedisDatabase {
+pub(in crate::parity) struct RedisDatabase {
     pub uri: String,
     pub connection: redis::aio::MultiplexedConnection,
     fault_user: Option<String>,

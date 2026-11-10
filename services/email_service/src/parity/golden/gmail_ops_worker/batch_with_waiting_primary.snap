@@ -1,0 +1,480 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: permanent rejection includes waiting messages
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-ops",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"modify_message_labels_batch\":{\"messages\":[{\"dbMessageId\":\"<msg:m1a>\",\"providerMessageId\":\"m1a\"},{\"dbMessageId\":\"<msg:m1b>\",\"providerMessageId\":\"m1b\"},{\"dbMessageId\":\"<msg:m1c>\",\"providerMessageId\":\"m1c\"},{\"dbMessageId\":\"<msg:m2a>\",\"providerMessageId\":\"m2a\"},{\"dbMessageId\":\"<msg:m2b>\",\"providerMessageId\":\"m2b\"},{\"dbMessageId\":\"<msg:m3a>\",\"providerMessageId\":\"m3a\"},{\"dbMessageId\":\"<msg:worker-6>\",\"providerMessageId\":\"worker-6\"},{\"dbMessageId\":\"<msg:worker-7>\",\"providerMessageId\":\"worker-7\"},{\"dbMessageId\":\"<msg:worker-8>\",\"providerMessageId\":\"worker-8\"},{\"dbMessageId\":\"<msg:worker-9>\",\"providerMessageId\":\"worker-9\"},{\"dbMessageId\":\"<msg:worker-10>\",\"providerMessageId\":\"worker-10\"}],\"labelsToAdd\":[\"Label_work\"],\"labelsToRemove\":[],\"pendingWriteId\":\"<write:older>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-ops","wait_time_seconds":0}
+  INFO extract_gmail_ops_message {}
+  INFO inner_process_message {}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO modify_message_labels_unboxed {"labels_to_add":"[\"Label_work\"]","labels_to_remove":"[]","message_count":11}
+      INFO label_write_turns {"provider_label_ids":"[\"Label_work\"]","write_id":"<write:older>"}
+      INFO modify_message_labels {"gate_cap":5,"gate_in_flight":1,"labels_to_add":"[\"Label_work\"]","labels_to_remove":"[]","link_id":"<link:A>","message_count":10}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO batch_modify_message_labels {"label_ids_to_add":"[\"Label_work\"]","label_ids_to_remove":"[]","message_count":10}
+          INFO batch_modify_message_labels {"label_ids_to_add":"[\"Label_work\"]","label_ids_to_remove":"[]","message_count":10}
+      INFO thread_ids_of_messages {"link_id":"<link:A>"}
+      INFO lock_thread_label_writes {}
+      INFO abandon_pending_label_writes {"link_id":"<link:A>","write_id":"<write:older>"}
+  INFO handle_non_retryable_error {"data":"GmailOpsPubsubMessage { link_id: <link:A>, operation: ModifyMessageLabelsBatch(ModifyMessageLabelsBatchPayload { messages: [GmailMessageRef { db_message_id: <msg:m1a>, provider_message_id: \"m1a\" }, GmailMessageRef { db_message_id: <msg:m1b>, provider_message_id: \"m1b\" }, GmailMessageRef { db_message_id: <msg:m1c>, provider_message_id: \"m1c\" }, GmailMessageRef { db_message_id: <msg:m2a>, provider_message_id: \"m2a\" }, GmailMessageRef { db_message_id: <msg:m2b>, provider_message_id: \"m2b\" }, GmailMessageRef { db_message_id: <msg:m3a>, provider_message_id: \"m3a\" }, GmailMessageRef { db_message_id: <msg:worker-6>, provider_message_id: \"worker-6\" }, GmailMessageRef { db_message_id: <msg:worker-7>, provider_message_id: \"worker-7\" }, GmailMessageRef { db_message_id: <msg:worker-8>, provider_message_id: \"worker-8\" }, GmailMessageRef { db_message_id: <msg:worker-9>, provider_message_id: \"worker-9\" }, GmailMessageRef { db_message_id: <msg:worker-10>, provider_message_id: \"worker-10\" }], labels_to_add: [\"Label_work\"], labels_to_remove: [], pending_write_id: Some(<write:older>) }) }","e":"DetailedError { reason: GmailApiFailed, source: modify_message_labels: permanent email provider failure: Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}} }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed",
+        "modify_message_labels",
+        "batch_modify_message_labels",
+        "batch_modify_message_labels"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed",
+        "modify_message_labels",
+        "batch_modify_message_labels"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed",
+        "modify_message_labels"
+      ],
+      "message": null,
+      "fields": {
+        "error": "permanent email provider failure: Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed"
+      ],
+      "message": "Permanent Gmail error modifying labels, reverting database changes",
+      "fields": {
+        "db_message_ids": "[<msg:m1a>, <msg:m1b>, <msg:m1c>, <msg:m2a>, <msg:m2b>, <msg:m3a>, <msg:worker-6>, <msg:worker-7>, <msg:worker-8>, <msg:worker-9>, <msg:worker-10>]",
+        "error": "Permanent { message: \"Gmail API returned 400 Bad Request: {\\\"error\\\":{\\\"code\\\":400,\\\"message\\\":\\\"scripted provider rejection\\\"}}\" }"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed"
+      ],
+      "message": "Successfully reverted database changes after Gmail API failure",
+      "fields": {
+        "db_message_ids": "[<msg:m1a>, <msg:m1b>, <msg:m1c>, <msg:m2a>, <msg:m2b>, <msg:m3a>, <msg:worker-6>, <msg:worker-7>, <msg:worker-8>, <msg:worker-9>]"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail(Permanent { message: \"Gmail API returned 400 Bad Request: {\\\"error\\\":{\\\"code\\\":400,\\\"message\\\":\\\"scripted provider rejection\\\"}}\" })"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Non-retryable error occurred"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing gmail ops message. The message will be deleted.",
+      "fields": {
+        "error": "DetailedError { reason: GmailApiFailed, source: modify_message_labels: permanent email provider failure: Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}} }",
+        "payload": "ModifyMessageLabelsBatch(ModifyMessageLabelsBatchPayload { messages: [GmailMessageRef { db_message_id: <msg:m1a>, provider_message_id: \"m1a\" }, GmailMessageRef { db_message_id: <msg:m1b>, provider_message_id: \"m1b\" }, GmailMessageRef { db_message_id: <msg:m1c>, provider_message_id: \"m1c\" }, GmailMessageRef { db_message_id: <msg:m2a>, provider_message_id: \"m2a\" }, GmailMessageRef { db_message_id: <msg:m2b>, provider_message_id: \"m2b\" }, GmailMessageRef { db_message_id: <msg:m3a>, provider_message_id: \"m3a\" }, GmailMessageRef { db_message_id: <msg:worker-6>, provider_message_id: \"worker-6\" }, GmailMessageRef { db_message_id: <msg:worker-7>, provider_message_id: \"worker-7\" }, GmailMessageRef { db_message_id: <msg:worker-8>, provider_message_id: \"worker-8\" }, GmailMessageRef { db_message_id: <msg:worker-9>, provider_message_id: \"worker-9\" }, GmailMessageRef { db_message_id: <msg:worker-10>, provider_message_id: \"worker-10\" }], labels_to_add: [\"Label_work\"], labels_to_remove: [], pending_write_id: Some(<write:older>) })"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  305e98fc1c44 rows_affected=11 rows_returned=11
+  f680d1b52474 rows_affected=1 rows_returned=1
+  313867e14a6b rows_affected=3 rows_returned=3
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  d6533f4fe99a rows_affected=10 rows_returned=10
+  310ee9977ecd rows_affected=0 rows_returned=0
+  b7f5f6956675 rows_affected=10 rows_returned=0
+  a1c7c1fc3247 rows_affected=10 rows_returned=0
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=0 rows_returned=0
+  ad640ecb32fd rows_affected=0 rows_returned=0
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=0 rows_returned=0
+  ad640ecb32fd rows_affected=0 rows_returned=0
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=0 rows_returned=0
+  ad640ecb32fd rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "POST",
+      "path": "/gmail/v1/users/me/messages/batchModify",
+      "body": {
+        "ids": [
+          "m1a",
+          "m1b",
+          "m1c",
+          "m2a",
+          "m2b",
+          "m3a",
+          "worker-6",
+          "worker-7",
+          "worker-8",
+          "worker-9"
+        ],
+        "addLabelIds": [
+          "Label_work"
+        ],
+        "removeLabelIds": []
+      },
+      "status": 400
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-ops",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"modify_message_labels_batch\":{\"messages\":[{\"dbMessageId\":\"<msg:m1a>\",\"providerMessageId\":\"m1a\"},{\"dbMessageId\":\"<msg:m1b>\",\"providerMessageId\":\"m1b\"},{\"dbMessageId\":\"<msg:m1c>\",\"providerMessageId\":\"m1c\"},{\"dbMessageId\":\"<msg:m2a>\",\"providerMessageId\":\"m2a\"},{\"dbMessageId\":\"<msg:m2b>\",\"providerMessageId\":\"m2b\"},{\"dbMessageId\":\"<msg:m3a>\",\"providerMessageId\":\"m3a\"},{\"dbMessageId\":\"<msg:worker-6>\",\"providerMessageId\":\"worker-6\"},{\"dbMessageId\":\"<msg:worker-7>\",\"providerMessageId\":\"worker-7\"},{\"dbMessageId\":\"<msg:worker-8>\",\"providerMessageId\":\"worker-8\"},{\"dbMessageId\":\"<msg:worker-9>\",\"providerMessageId\":\"worker-9\"},{\"dbMessageId\":\"<msg:worker-10>\",\"providerMessageId\":\"worker-10\"}],\"labelsToAdd\":[\"Label_work\"],\"labelsToRemove\":[],\"pendingWriteId\":\"<write:older>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-ops",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-00000000f62a}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "50"
+      }
+    }
+  }
+db:
+  {
+    "email_gmail_pending_label_writes": {
+      "removed": [
+        {
+          "seq": 1,
+          "write_id": "<write:older>",
+          "expires_at": "<ts>",
+          "message_id": "<msg:m1a>",
+          "label_present": true,
+          "provider_label_id": "Label_work",
+          "label_present_before": false
+        },
+        {
+          "seq": 10,
+          "write_id": "<write:older>",
+          "expires_at": "<ts>",
+          "message_id": "<msg:worker-9>",
+          "label_present": true,
+          "provider_label_id": "Label_work",
+          "label_present_before": false
+        },
+        {
+          "seq": 11,
+          "write_id": "<write:older>",
+          "expires_at": "<ts>",
+          "message_id": "<msg:worker-10>",
+          "label_present": true,
+          "provider_label_id": "Label_work",
+          "label_present_before": false
+        },
+        {
+          "seq": 2,
+          "write_id": "<write:older>",
+          "expires_at": "<ts>",
+          "message_id": "<msg:m1b>",
+          "label_present": true,
+          "provider_label_id": "Label_work",
+          "label_present_before": false
+        },
+        {
+          "seq": 3,
+          "write_id": "<write:older>",
+          "expires_at": "<ts>",
+          "message_id": "<msg:m1c>",
+          "label_present": true,
+          "provider_label_id": "Label_work",
+          "label_present_before": false
+        },
+        {
+          "seq": 4,
+          "write_id": "<write:older>",
+          "expires_at": "<ts>",
+          "message_id": "<msg:m2a>",
+          "label_present": true,
+          "provider_label_id": "Label_work",
+          "label_present_before": false
+        },
+        {
+          "seq": 5,
+          "write_id": "<write:older>",
+          "expires_at": "<ts>",
+          "message_id": "<msg:m2b>",
+          "label_present": true,
+          "provider_label_id": "Label_work",
+          "label_present_before": false
+        },
+        {
+          "seq": 6,
+          "write_id": "<write:older>",
+          "expires_at": "<ts>",
+          "message_id": "<msg:m3a>",
+          "label_present": true,
+          "provider_label_id": "Label_work",
+          "label_present_before": false
+        },
+        {
+          "seq": 7,
+          "write_id": "<write:older>",
+          "expires_at": "<ts>",
+          "message_id": "<msg:worker-6>",
+          "label_present": true,
+          "provider_label_id": "Label_work",
+          "label_present_before": false
+        },
+        {
+          "seq": 8,
+          "write_id": "<write:older>",
+          "expires_at": "<ts>",
+          "message_id": "<msg:worker-7>",
+          "label_present": true,
+          "provider_label_id": "Label_work",
+          "label_present_before": false
+        },
+        {
+          "seq": 9,
+          "write_id": "<write:older>",
+          "expires_at": "<ts>",
+          "message_id": "<msg:worker-8>",
+          "label_present": true,
+          "provider_label_id": "Label_work",
+          "label_present_before": false
+        }
+      ],
+      "added": [],
+      "changed": [
+        {
+          "label_present_before": {
+            "before": true,
+            "after": false
+          },
+          "seq": 12
+        }
+      ]
+    },
+    "email_message_labels": {
+      "removed": [
+        {
+          "label_id": "<label:A/Label_work>",
+          "message_id": "<msg:m1a>"
+        },
+        {
+          "label_id": "<label:A/Label_work>",
+          "message_id": "<msg:m1b>"
+        },
+        {
+          "label_id": "<label:A/Label_work>",
+          "message_id": "<msg:m1c>"
+        },
+        {
+          "label_id": "<label:A/Label_work>",
+          "message_id": "<msg:m2a>"
+        },
+        {
+          "label_id": "<label:A/Label_work>",
+          "message_id": "<msg:m2b>"
+        },
+        {
+          "label_id": "<label:A/Label_work>",
+          "message_id": "<msg:m3a>"
+        },
+        {
+          "label_id": "<label:A/Label_work>",
+          "message_id": "<msg:worker-6>"
+        },
+        {
+          "label_id": "<label:A/Label_work>",
+          "message_id": "<msg:worker-7>"
+        },
+        {
+          "label_id": "<label:A/Label_work>",
+          "message_id": "<msg:worker-8>"
+        },
+        {
+          "label_id": "<label:A/Label_work>",
+          "message_id": "<msg:worker-9>"
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "email_messages": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<msg:m1a>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        },
+        {
+          "id": "<msg:m1b>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        },
+        {
+          "id": "<msg:m1c>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        },
+        {
+          "id": "<msg:m2a>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        },
+        {
+          "id": "<msg:m2b>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        },
+        {
+          "id": "<msg:m3a>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        },
+        {
+          "id": "<msg:worker-6>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        },
+        {
+          "id": "<msg:worker-7>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        },
+        {
+          "id": "<msg:worker-8>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        },
+        {
+          "id": "<msg:worker-9>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }

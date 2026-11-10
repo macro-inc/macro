@@ -111,8 +111,19 @@ pub struct GmailState {
     pub drop_after_requests: BTreeMap<String, usize>,
     /// Optional provider headers, such as Retry-After, for scripted endpoints.
     pub endpoint_headers: BTreeMap<String, Vec<(String, String)>>,
+    /// Ordered, opt-in HTTP replies for worker characterization.
+    pub scripted_http: VecDeque<(String, String, HttpReply)>,
     pause: Option<Pause>,
 }
+
+#[derive(Clone)]
+pub enum HttpReply {
+    Status(u16, Value),
+    Disconnect,
+}
+
+#[derive(Clone)]
+struct Disconnected;
 
 #[derive(Clone)]
 pub struct FakeGmail {
@@ -378,7 +389,7 @@ impl GmailState {
 }
 
 async fn handle(State(gmail): State<FakeGmail>, method: Method, uri: Uri, body: Bytes) -> Response {
-    let dropped = {
+    let mut dropped = {
         let mut state = gmail.lock();
         if let Some(remaining) = state.drop_after_requests.get_mut(uri.path()) {
             if *remaining == 0 {
@@ -414,6 +425,7 @@ async fn handle(State(gmail): State<FakeGmail>, method: Method, uri: Uri, body: 
             );
         }
     }
+    dropped |= response.extensions().get::<Disconnected>().is_some();
     if let (Some(recording), Some(index)) = (recording, entry) {
         let mut recording = recording.lock().expect("HTTP recording");
         if dropped {
@@ -451,6 +463,45 @@ async fn reply(State(gmail): State<FakeGmail>, method: Method, uri: Uri, body: B
                     .into_response();
             }
         }
+    }
+    let scripted = {
+        let mut state = gmail.lock();
+        state
+            .scripted_http
+            .front()
+            .filter(|(expected_method, path, _)| {
+                expected_method == method.as_str() && path == uri.path()
+            })
+            .is_some()
+            .then(|| state.scripted_http.pop_front().expect("scripted reply").2)
+    };
+    if let Some(reply) = scripted {
+        return match reply {
+            HttpReply::Status(status, body) => {
+                let mut response = (
+                    StatusCode::from_u16(status).expect("scripted status"),
+                    axum::Json(body),
+                )
+                    .into_response();
+                if status == 429 {
+                    response
+                        .headers_mut()
+                        .insert("retry-after", axum::http::HeaderValue::from_static("60"));
+                }
+                response
+            }
+            HttpReply::Disconnect => {
+                let mut response = axum::body::Body::from_stream(futures::stream::once(async {
+                    Err::<Bytes, _>(std::io::Error::new(
+                        std::io::ErrorKind::ConnectionReset,
+                        "scripted Gmail disconnect",
+                    ))
+                }))
+                .into_response();
+                response.extensions_mut().insert(Disconnected);
+                response
+            }
+        };
     }
     if method == Method::GET && uri.path() == "/gmail/v1/users/me/settings/sendAs" {
         let state = gmail.lock();

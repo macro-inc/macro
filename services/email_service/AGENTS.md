@@ -24,14 +24,17 @@ the gateway `/email` prefix.
   The transport failure observer and shared HTTP status rule live in `src/api/email/init.rs`.
 - `src/outbound/backfill_jobs.rs`: the existing job queries and initialization
   queue send behind the email domain backfill-job service.
-- `src/parity/`: HTTP characterization lab and its golden suites (message labels,
-  message and thread reads, internal reads, inbox routes, and backfill API); see its
+- `src/parity/`: HTTP and queue-worker characterization lab and its golden suites
+  (message labels, message/thread reads, internal reads, inbox routes, backfill API,
+  inbox initialization, Gmail ingress, and Gmail operations); see its
   README for recording, normalization, and the providers it cannot isolate.
 - `src/pubsub/`: SQS pubsub workers, one module per concern — `inbox_sync`,
   `link_manager` (Gmail re-subscribe, health checks, inbox deletion),
   `scheduled` (scheduled sends),
   `sfs_uploader`/`sfs_deleter` (attachment storage), `gmail_ops`, `backfill`,
   `crm_cleanup`, `worker_lifecycle`.
+  Each worker's `worker::context` builds its production context; the parity lab
+  and label-write simulation reuse those builders.
 - `src/backfill_outbox.rs`, `src/backfill_init_service.rs`,
   `src/backfill_completion_service.rs`: Gmail history backfill orchestration.
 - `src/crm_enrichment_worker.rs`: periodic pass that resolves pending CRM

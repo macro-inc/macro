@@ -1,0 +1,1 @@
+DELETE FROM email_message_labels ml USING unnest($1::uuid[], $2::text[]) AS r(message_id, provider_label_id), email_labels l WHERE ml.message_id = r.message_id AND ml.label_id = l.id AND l.link_id = $3 AND l.provider_label_id = r.provider_label_id

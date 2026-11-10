@@ -17,6 +17,8 @@ use tower::ServiceExt;
 use tracing::Instrument;
 use tracing::instrument::WithSubscriber;
 
+pub(super) mod worker;
+
 pub(super) struct LabOptions {
     pub suite: &'static str,
     pub name: &'static str,
@@ -50,6 +52,8 @@ const VOLATILE_RESPONSE_HEADERS: [&str; 2] = ["x-request-id", "date"];
 pub(super) struct Lab {
     _guard: tokio::sync::OwnedMutexGuard<()>,
     app: Router,
+    api: crate::api::context::ApiContext,
+    workers: Option<worker::WorkerContexts>,
     pub db: PgPool,
     pub fixture: Fixture,
     pub sqs: FakeSqs,
@@ -64,6 +68,13 @@ pub(super) struct Lab {
 }
 
 impl Lab {
+    pub async fn start_worker_lab(db: PgPool, options: LabOptions) -> Self {
+        let redis = super::suites::redis_database::RedisDatabase::start().await;
+        let mut lab = Self::start_with_redis(db, options, redis.uri).await;
+        lab.record_redis_scope("");
+        lab
+    }
+
     #[expect(
         clippy::disallowed_methods,
         reason = "The test-only Redis URL comes from the explicitly supported REDIS_URI override"
@@ -245,7 +256,9 @@ impl Lab {
         .expect("production API composition");
         let lab = Self {
             _guard: guard,
-            app: crate::api::app(state),
+            app: crate::api::app(state.clone()),
+            api: state,
+            workers: None,
             db,
             fixture,
             sqs,

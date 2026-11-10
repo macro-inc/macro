@@ -1,0 +1,298 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: faulted delivery
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-ops-retry",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"modify_message_labels\":{\"dbMessageId\":\"<msg:m1a>\",\"providerMessageId\":\"m1a\",\"labelsToAdd\":[\"Label_work\"],\"labelsToRemove\":[],\"pendingWriteId\":\"<write:older>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-ops-retry","wait_time_seconds":0}
+  INFO extract_gmail_ops_message {}
+  INFO inner_process_message {}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO modify_message_labels_unboxed {"labels_to_add":"[\"Label_work\"]","labels_to_remove":"[]","message_count":1}
+      INFO label_write_turns {"provider_label_ids":"[\"Label_work\"]","write_id":"<write:older>"}
+      INFO modify_one_message_labels {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","skip_missing":false}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+  INFO handle_retryable_error {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed",
+        "modify_one_message_labels",
+        "get_access_token",
+        "get_access_token",
+        "fetch_link_by_id"
+      ],
+      "message": null,
+      "fields": {
+        "error": "attempted to acquire a connection on a closed pool"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed",
+        "modify_one_message_labels",
+        "get_access_token",
+        "get_access_token"
+      ],
+      "message": "Failed to load link for access-token acquisition",
+      "fields": {
+        "error": "attempted to acquire a connection on a closed pool",
+        "link_id": "<link:A>"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed",
+        "modify_one_message_labels",
+        "get_access_token",
+        "get_access_token"
+      ],
+      "message": null,
+      "fields": {
+        "error": "access token acquisition failed temporarily: unable to load the linked mailbox"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed",
+        "modify_one_message_labels",
+        "get_access_token"
+      ],
+      "message": null,
+      "fields": {
+        "error": "transient email provider failure: unable to load the linked mailbox"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed",
+        "modify_one_message_labels"
+      ],
+      "message": null,
+      "fields": {
+        "error": "transient email provider failure: unable to load the linked mailbox"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed"
+      ],
+      "message": "Retryable Gmail error modifying labels, preserving optimistic database changes",
+      "fields": {
+        "db_message_id": "<msg:m1a>",
+        "error": "Transient { message: \"unable to load the linked mailbox\" }"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "modify_message_labels_unboxed"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail(Transient { message: \"unable to load the linked mailbox\" })"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "inner_process_message"
+      ],
+      "message": "Gmail API rate limited or unavailable in retry worker, message will be retried after visibility timeout",
+      "fields": {
+        "error": "transient email provider failure: unable to load the linked mailbox",
+        "link_id": "<link:A>"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Retryable error occurred"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  305e98fc1c44 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-ops-retry",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"modify_message_labels\":{\"dbMessageId\":\"<msg:m1a>\",\"providerMessageId\":\"m1a\",\"labelsToAdd\":[\"Label_work\"],\"labelsToRemove\":[],\"pendingWriteId\":\"<write:older>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-00000000f30f}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: last receive before queue redrive
+delivery:
+  {
+    "queue": "<sqs>/000000000000/gmail-ops-retry",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-2",
+      "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"modify_message_labels\":{\"dbMessageId\":\"<msg:m1a>\",\"providerMessageId\":\"m1a\",\"labelsToAdd\":[\"Label_work\"],\"labelsToRemove\":[],\"pendingWriteId\":\"<write:older>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "100"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/gmail-ops-retry","wait_time_seconds":0}
+  INFO extract_gmail_ops_message {}
+  INFO inner_process_message {}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+  INFO handle_retryable_error {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message",
+        "fetch_link_by_id"
+      ],
+      "message": null,
+      "fields": {
+        "error": "attempted to acquire a connection on a closed pool"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "inner_process_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Retryable error occurred"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-ops-retry",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"linkId\":\"<link:A>\",\"operation\":{\"modify_message_labels\":{\"dbMessageId\":\"<msg:m1a>\",\"providerMessageId\":\"m1a\",\"labelsToAdd\":[\"Label_work\"],\"labelsToRemove\":[],\"pendingWriteId\":\"<write:older>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "100"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

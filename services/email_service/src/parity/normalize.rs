@@ -216,7 +216,7 @@ fn without_backtrace(text: &str) -> Cow<'_, str> {
     // outer Debug rendering escapes the backtrace's newlines and adds a quote.
     if let Some((message, backtrace)) = text.split_once("\\n\\nStack backtrace:") {
         let backtrace = backtrace.trim_end();
-        let content = backtrace.trim_end_matches(')');
+        let content = backtrace.trim_end_matches([')', '}', ']', ' ']);
         if content.ends_with('"') {
             let closing = &backtrace[content.len()..];
             return Cow::Owned(format!("{message}\"{closing}"));
@@ -225,10 +225,10 @@ fn without_backtrace(text: &str) -> Cow<'_, str> {
     let Some((message, backtrace)) = text.split_once("\n\nStack backtrace:") else {
         return Cow::Borrowed(text);
     };
-    // Debug-formatting an enum around anyhow::Error closes the tuple after
-    // the backtrace. Keep those delimiters, just as in its non-backtrace form.
+    // Debug-formatting wrappers around anyhow::Error closes their tuples or
+    // structs after the backtrace. Keep those delimiters and their spacing.
     let backtrace = backtrace.trim_end();
-    let closing = &backtrace[backtrace.trim_end_matches(')').len()..];
+    let closing = &backtrace[backtrace.trim_end_matches([')', '}', ']', ' ']).len()..];
     Cow::Owned(format!("{message}{closing}"))
 }
 

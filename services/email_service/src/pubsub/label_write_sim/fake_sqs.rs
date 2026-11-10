@@ -42,6 +42,9 @@ pub struct SqsState {
     /// Fail this numbered send attempt (batch entries count individually).
     pub fail_nth_send: Option<u64>,
     pub failed_sends: Vec<Sent>,
+    /// Explicit one-message receives; the caller owns redelivery and virtual time.
+    pub deliveries: std::collections::BTreeMap<String, std::collections::VecDeque<Value>>,
+    pub fail_delete: bool,
     send_attempts: u64,
     next_id: u64,
     /// Holds the next SendMessage until released.
@@ -92,6 +95,15 @@ impl FakeSqs {
         assert!(nth > 0, "send attempts start at one");
         let mut state = self.lock();
         state.fail_nth_send = Some(state.send_attempts + nth);
+    }
+
+    /// Offers one wire message to the real SDK receive path, without polling.
+    pub fn deliver(&self, queue_url: &str, message: Value) {
+        self.lock()
+            .deliveries
+            .entry(queue_url.into())
+            .or_default()
+            .push_back(message);
     }
 
     /// Holds the next SendMessage. Returns (arrived, release).
@@ -234,6 +246,11 @@ async fn reply(State(sqs): State<FakeSqs>, headers: HeaderMap, body: Bytes) -> R
             json_response(json!({ "Successful": successful, "Failed": failed }))
         }
         "DeleteMessage" => {
+            if state.fail_delete {
+                return (StatusCode::INTERNAL_SERVER_ERROR, axum::Json(json!({
+                    "__type": "com.amazonaws.sqs#InternalError", "message": "injected delete failure"
+                }))).into_response();
+            }
             state.acks.push(Ack::Deleted {
                 receipt: text("ReceiptHandle"),
             });
@@ -249,7 +266,15 @@ async fn reply(State(sqs): State<FakeSqs>, headers: HeaderMap, body: Bytes) -> R
             });
             json_response(json!({}))
         }
-        "ReceiveMessage" => json_response(json!({ "Messages": [] })),
+        "ReceiveMessage" => {
+            let messages: Vec<Value> = state
+                .deliveries
+                .get_mut(&text("QueueUrl"))
+                .and_then(std::collections::VecDeque::pop_front)
+                .into_iter()
+                .collect();
+            json_response(json!({ "Messages": messages }))
+        }
         other => panic!("fake SQS does not implement {other}"),
     }
 }

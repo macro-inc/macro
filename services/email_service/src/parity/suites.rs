@@ -7,4 +7,6 @@ mod backfill_api;
 mod gmail_ingress;
 mod inbox_init;
 mod inbox_routes;
-mod redis_database;
+pub(super) mod redis_database;
+
+mod gmail_ops_worker;
