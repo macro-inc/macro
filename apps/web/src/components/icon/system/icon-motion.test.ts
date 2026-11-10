@@ -140,28 +140,22 @@ it('cancels the previous motion instead of stacking repeated presses', () => {
   expect(animate).toHaveBeenCalledTimes(2);
 });
 
-it('waits for hover intent and cancels on leave or press', () => {
-  const button = control();
-  pointer(button, 'pointerover');
-  vi.advanceTimersByTime(100);
-  expect(animate).not.toHaveBeenCalled();
-  pointer(button, 'pointerout');
-  vi.advanceTimersByTime(200);
-  expect(animate).not.toHaveBeenCalled();
-  pointer(button, 'pointerover');
-  vi.advanceTimersByTime(160);
-  expect(animate.mock.calls[0][1].duration).toBe(280);
-  pointer(button, 'pointerover');
-  pointer(button);
-  vi.advanceTimersByTime(200);
-  expect(animate).toHaveBeenCalledTimes(2);
-});
+it.each(['magnifying-glass', 'gear', 'gear-six', 'plus', 'folder'])(
+  'keeps %s still throughout mouse hover and leave',
+  (name) => {
+    const button = control(name);
+    pointer(button, 'pointerover');
+    vi.advanceTimersByTime(1000);
+    expect(animate).not.toHaveBeenCalled();
+    pointer(button, 'pointerout');
+    vi.advanceTimersByTime(1000);
+    expect(animate).not.toHaveBeenCalled();
+  }
+);
 
-it('limits hover to suitable icons and ignores touch hover', () => {
-  pointer(control('folder'), 'pointerover');
-  vi.advanceTimersByTime(200);
+it('keeps icons still on touch hover', () => {
   pointer(control(), 'pointerover', { pointerType: 'touch' });
-  vi.advanceTimersByTime(200);
+  vi.advanceTimersByTime(1000);
   expect(animate).not.toHaveBeenCalled();
 });
 
@@ -191,7 +185,7 @@ it('respects reduced motion immediately and cancels active animations on change'
   expect(animate).toHaveBeenCalledTimes(1);
 });
 
-it('removes listeners, pending hovers, and active animations on cleanup', () => {
+it('removes listeners and active animations on cleanup', () => {
   const button = control();
   pointer(button);
   pointer(button, 'pointerover');

@@ -138,12 +138,11 @@ and keyboard/assistive-technology clicks to the leading action glyph in buttons,
 links, tabs, command options, and menu items, including portal menus and newly mounted controls.
 All existing and newly authored `data-macro-icon` SVGs inherit this behavior.
 
-- Keep feedback brief and finite: 320 ms on press, 280 ms on hover. Use a small
+- Keep feedback brief and finite: 320 ms on press. Use a small
   press-and-settle, a restrained turn for settings, tilt for folders/mail,
   or lift for sharing. Do not bounce continuously or delay the action.
-- Hover is limited to search, settings, and add glyphs after 160 ms of
-  pointer intent. Touch does not trigger hover. Most icons respond only to press.
-  The agent sparkle stays still.
+- Keep all glyphs still on hover; feedback runs only on activation.
+  The agent sparkle stays still on both hover and activation.
 - Animate the drawing, never its label, hit target, selection background, or
   layout. Individual transform properties preserve existing layout transforms.
 - Put `data-icon-motion-target` on a fixed-size wrapper when an action swaps SVGs
@@ -152,7 +151,7 @@ All existing and newly authored `data-macro-icon` SVGs inherit this behavior.
   disabled/busy controls, and illustrations larger than 32 px stay still.
   Add `data-icon-motion="none"` on a glyph or ancestor for other stateful icons
   or controls that own their own motion. Do not add decorative motion to status.
-- Respect `prefers-reduced-motion` for every effect, including hover; preference
+- Respect `prefers-reduced-motion` for activation feedback; preference
   changes cancel in-flight animation. Rapid presses replace rather than stack.
 - New semantic motion belongs in this shared module, not individual consumers.
   Draw original paths and motion; references such as Grok inform restraint and
