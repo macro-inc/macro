@@ -1,0 +1,41 @@
+apps/web/src/components/app/GlobalAppState.tsx
+  s_9dcb386dc55165::t_c26d5a3947a6ef 34-36
+  s_9dcb386dc55165::t_c91795d6b19e98 31-33
+apps/web/src/features/notifications/components/MarkMessageNotifications.tsx
+  s_9dcb386dc55165::t_c26d5a3947a6ef 1,36,38-42,87
+apps/web/src/lib/core/messages/MessageThread.tsx
+  s_9dcb386dc55165::t_93a1862051afc6 76-78,87-88,93-96,102-103,112-115,140-141,151-156,166-169
+  s_9dcb386dc55165::t_c91795d6b19e98 29-32,89-92,104-111,142-150,157-165
+apps/web/src/lib/core/messages/MessageThread.test.tsx
+  s_9dcb386dc55165::t_c91795d6b19e98 11-14,115-117,261-264,266-275
+  s_9dcb386dc55165::t_24b685e3381a2f 21
+  s_9dcb386dc55165::t_7dff34d61888d0 56-62
+  s_9dcb386dc55165::t_210a5c5d684e28 120,135,238-255,257-260,265,276-277
+  s_9dcb386dc55165::t_cce79d15187dda 256,278-290
+  s_9dcb386dc55165::t_bba004d9918bfd 291-292
+apps/web/src/features/channel/Message/SenderIcon.tsx
+  s_9dcb386dc55165::t_6802f40bc29648 45-46
+  s_9dcb386dc55165::t_c26d5a3947a6ef 6
+apps/web/src/features/channel/Thread/ChannelThread.tsx
+  s_9dcb386dc55165::t_c26d5a3947a6ef 3,45-46
+apps/web/src/features/channel/Message/Reactions.tsx
+  s_9dcb386dc55165::t_c26d5a3947a6ef 2,20-21
+apps/web/src/features/channel/Message/SenderIcon.test.tsx
+  s_9dcb386dc55165::t_44f786fb1945af 131-150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "67abf2d769d12e6e073cec541089e3aebd31b9fc",
+  "prompts": {},
+  "sessions": {
+    "s_9dcb386dc55165": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c74b-243d-79d2-9a12-262b7d5d6492",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
