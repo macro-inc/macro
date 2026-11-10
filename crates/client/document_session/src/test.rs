@@ -190,7 +190,9 @@ fn literal_dom_first_keystroke_one_handle_zero_io_and_coalesced_wake() {
         SessionInput::Editor(Input::Undo),
     );
     assert!(!out.view.iter().any(|v| matches!(v, ViewEffect::Error(_))));
-    assert_eq!(session.surface().state().view().text_content(text), "a");
+    // With no prior selection, Source records the first edit as Other; the
+    // following character starts a new entry. See table-history-boundaries.test.ts.
+    assert_eq!(session.surface().state().view().text_content(text), "ab");
     assert!(session.surface().history().can_redo);
     session.handle(
         Now {
