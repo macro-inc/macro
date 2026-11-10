@@ -172,6 +172,7 @@ async fn people_seen_this_week_are_due_in_their_night_once(pool: PgPool) {
                 now,
                 now - TimeDelta::days(7),
                 now - TimeDelta::hours(20),
+                now - TimeDelta::minutes(25),
                 (2, 5),
                 10,
             )
@@ -211,4 +212,67 @@ async fn people_seen_this_week_are_due_in_their_night_once(pool: PgPool) {
     assert!(due(now + TimeDelta::minutes(30)).await.is_empty());
     // The next night, it is due again.
     assert_eq!(due(now + TimeDelta::days(1)).await.len(), 1);
+}
+
+/// A generation its process never finished (cancelled by a deploy, or the
+/// process stopped) holds the person back only until it is stale; then the
+/// nightly run starts and records the interrupted one failed.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_interrupted_generation_holds_no_one_back_once_stale(pool: PgPool) {
+    insert_user(&pool, OWNER).await;
+    let repo = PgGenerationRepo::new(pool.clone());
+    let now = at_hour(18);
+    let stale = TimeDelta::minutes(25);
+    repo.see(&owner(), "Asia/Tokyo", now - TimeDelta::days(1))
+        .await
+        .unwrap();
+    let due = |at: DateTime<Utc>| {
+        let repo = repo.clone();
+        async move {
+            repo.due(
+                at,
+                at - TimeDelta::days(7),
+                at - TimeDelta::hours(20),
+                at - TimeDelta::minutes(25),
+                (2, 5),
+                10,
+            )
+            .await
+            .unwrap()
+        }
+    };
+    let begun = now - TimeDelta::minutes(10);
+    let onboarding = repo
+        .begin(
+            &owner(),
+            GenerationTrigger::Onboarding,
+            begun,
+            begun - stale,
+            begun - TimeDelta::hours(20),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(due(now).await.is_empty(), "still running");
+    let later = now + TimeDelta::minutes(20);
+    assert_eq!(due(later).await.len(), 1, "interrupted");
+    let night = repo
+        .begin(
+            &owner(),
+            GenerationTrigger::Nightly,
+            later,
+            later - stale,
+            later - TimeDelta::hours(20),
+        )
+        .await
+        .unwrap();
+    assert!(night.is_some_and(|night| night != onboarding));
+    let status = sqlx::query_scalar!(
+        "SELECT status FROM suggestion_generation WHERE id = $1",
+        onboarding
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(status, "failed");
 }

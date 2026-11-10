@@ -353,6 +353,7 @@ impl GenerationRepo for FakeRepo {
         _: DateTime<Utc>,
         _: DateTime<Utc>,
         _: DateTime<Utc>,
+        _: DateTime<Utc>,
         night: (u8, u8),
         limit: u16,
     ) -> Result<Vec<AudienceMember>, Self::Err> {
