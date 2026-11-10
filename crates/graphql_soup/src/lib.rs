@@ -36,8 +36,8 @@ pub use mutation_thread::{
     EmailMutationThreadLoader, EmailMutationThreadReader, email_mutation_thread_loader,
 };
 pub use objects::{
-    EmailThreadPrefetch, GraphqlReminderScheduleType, GraphqlSoupAgentSession, GraphqlSoupBin,
-    GraphqlSoupCall, GraphqlSoupChannel, GraphqlSoupChannelMessage,
+    EmailThreadPrefetch, EntityPrefetch, GraphqlReminderScheduleType, GraphqlSoupAgentSession,
+    GraphqlSoupBin, GraphqlSoupCall, GraphqlSoupChannel, GraphqlSoupChannelMessage,
     GraphqlSoupChannelMessagePreview, GraphqlSoupChat, GraphqlSoupCrmCompany,
     GraphqlSoupCrmContact, GraphqlSoupDatabaseRow, GraphqlSoupDocument, GraphqlSoupDocumentSubType,
     GraphqlSoupEmailThread, GraphqlSoupEntity, GraphqlSoupForeignEntity, GraphqlSoupInitiative,

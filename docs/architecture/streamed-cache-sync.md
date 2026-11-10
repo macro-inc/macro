@@ -81,8 +81,9 @@ Request body:
     page is the next slice, with the cursor a normal page would carry.
   - The email-content budget is a page's: up to 500 threads and 10,000
     requested messages per batch (one operation: 20 and 100).
-  - A Soup page loads its email threads' Mail projections and metadata in one
-    batch per page.
+  - A Soup page loads its per-entity data in one batch per page instead of as
+    each entity's fields ask: its entities' viewer permissions and properties,
+    and its email threads' Mail projections and metadata.
 - A page runs for at most 45 seconds and fails its lane past that; time spent
   waiting for a turn does not count. A stream starts no page after 5 minutes,
   waiting included, and ends with `deadline`.

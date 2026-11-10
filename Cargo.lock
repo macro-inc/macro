@@ -9979,7 +9979,6 @@ version = "0.1.0"
 dependencies = [
  "async-graphql",
  "entity_access",
- "futures",
  "macro_user_id",
  "model-entity",
  "rootcause",
@@ -9995,7 +9994,6 @@ dependencies = [
  "async-graphql",
  "chrono",
  "entity_access",
- "futures",
  "graphql_common",
  "macro_user_id",
  "model-entity",

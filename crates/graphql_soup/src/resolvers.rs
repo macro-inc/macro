@@ -29,8 +29,8 @@ use crate::{
     inputs::{GroupedSoupInput, SoupChannelReads, SoupInput},
     loaders::{AgentSessionEntityLoader, PrimarySoupItemLoader, SoupItemDataLoader},
     objects::{
-        EmailThreadPrefetch, GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity,
-        GroupedSoup, SoupEntityEdges, SoupPage, SoupPagePrefetch, SoupPatch,
+        EmailThreadPrefetch, EntityPrefetch, GraphqlSoupAgentSession, GraphqlSoupEmailThread,
+        GraphqlSoupEntity, GroupedSoup, SoupEntityEdges, SoupPage, SoupPagePrefetch, SoupPatch,
     },
 };
 
@@ -437,13 +437,33 @@ where
         SoupPage::new_with_projection(page.type_erase())
     };
     if ctx.data_opt::<SoupPagePrefetch>().is_some() {
-        let prefetch = EmailThreadPrefetch::for_soup_items(ctx);
+        let entities = EntityPrefetch::for_soup_items(ctx);
+        let threads = EmailThreadPrefetch::for_soup_items(ctx);
         let thread_ids = page.email_thread_ids();
-        if prefetch.any() && !thread_ids.is_empty() {
-            prefetch_email_threads::<Edges>(ctx, thread_ids, prefetch).await;
-        }
+        tokio::join!(
+            async {
+                if entities.any() {
+                    prefetch_entities::<Edges>(ctx, page.edges(), entities).await;
+                }
+            },
+            async {
+                if threads.any() && !thread_ids.is_empty() {
+                    prefetch_email_threads::<Edges>(ctx, thread_ids, threads).await;
+                }
+            },
+        );
     }
     Ok(page)
+}
+
+/// Loads the page's entities' per-entity data in one batch per loader. Boxed
+/// for the reason [`prefetch_email_threads`] is.
+fn prefetch_entities<'a, Edges: SoupEntityEdges>(
+    ctx: &'a Context<'_>,
+    edges: Vec<Edges>,
+    prefetch: EntityPrefetch,
+) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
+    Box::pin(Edges::prefetch_entities(ctx, edges, prefetch))
 }
 
 /// Loads the page's email threads' per-thread data in one batch per loader.

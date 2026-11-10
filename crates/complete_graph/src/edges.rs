@@ -26,10 +26,13 @@ use graphql_notification::{
     load_entity_notifications,
 };
 use graphql_permission::{
-    EntityPermissionEdgeReader, GraphqlEntityPermission, load_entity_permission,
+    EntityPermissionDataLoader, EntityPermissionEdgeReader, GraphqlEntityPermission,
+    load_entity_permission,
 };
-use graphql_properties::{EntityPropertyReader, GraphqlProperty, load_entity_properties};
-use graphql_soup::{EmailThreadPrefetch, SoupEntityEdges};
+use graphql_properties::{
+    EntityPropertiesDataLoader, EntityPropertyReader, GraphqlProperty, load_entity_properties,
+};
+use graphql_soup::{EmailThreadPrefetch, EntityPrefetch, SoupEntityEdges};
 use graphql_time_tracking::{GraphqlTimeEntryPage, load_time_entries};
 use predicate_index::{RecordKey, utc_timestamp_micros};
 use soup_filter_projection::{
@@ -160,6 +163,36 @@ where
             }
         };
         tokio::join!(projections, metadata);
+    }
+
+    async fn prefetch_entities(ctx: &Context<'_>, edges: Vec<Self>, prefetch: EntityPrefetch) {
+        // A batch that fails is not cached: the entities' fields load again
+        // and report the failure.
+        let permissions = async {
+            if prefetch.viewer_permission
+                && let Ok(loader) = ctx.data::<EntityPermissionDataLoader<AR>>()
+            {
+                let _ = loader
+                    .load_many(edges.iter().map(|edge| {
+                        model_entity::OwnedEntity::from(edge.permission_entity.clone())
+                    }))
+                    .await;
+            }
+        };
+        let properties = async {
+            if prefetch.properties
+                && let Ok(loader) = ctx.data::<EntityPropertiesDataLoader<PR>>()
+            {
+                let _ = loader
+                    .load_many(
+                        edges
+                            .iter()
+                            .map(|edge| model_entity::OwnedEntity::from(edge.entity.clone())),
+                    )
+                    .await;
+            }
+        };
+        tokio::join!(permissions, properties);
     }
 
     fn initiative_edges(initiative_id: Uuid) -> Self::InitiativeEdges {

@@ -22,8 +22,8 @@ pub use graphql_common::{
     GraphqlPropertiesBinaryExpr, GraphqlPropertiesExpr, GraphqlPropertyEntityType,
 };
 pub use loaders::{
-    EntityPropertiesLoader, EntityPropertyReader, NoOpEntityPropertyReader,
-    PropertiesEntityPropertyReader, entity_properties_loader,
+    EntityPropertiesDataLoader, EntityPropertiesLoader, EntityPropertyReader,
+    NoOpEntityPropertyReader, PropertiesEntityPropertyReader, entity_properties_loader,
 };
 pub use mutations::{
     EntityPropertyOptionDelta, EntityPropertyWriter, GraphqlEntityReferenceInput,

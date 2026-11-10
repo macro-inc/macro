@@ -8,8 +8,9 @@
 mod permission;
 
 pub use permission::{
-    EntityPermissionEdgeReader, EntityPermissionLoader, GraphqlAccessLevelPermission,
-    GraphqlChannelParticipantRole, GraphqlChannelRolePermission, GraphqlChannelViewOnlyPermission,
-    GraphqlEntityAccessLevel, GraphqlEntityPermission, GraphqlTeamRole, GraphqlTeamRolePermission,
-    NoOpEntityPermissionEdgeReader, entity_permission_loader, load_entity_permission,
+    EntityPermissionDataLoader, EntityPermissionEdgeReader, EntityPermissionLoader,
+    GraphqlAccessLevelPermission, GraphqlChannelParticipantRole, GraphqlChannelRolePermission,
+    GraphqlChannelViewOnlyPermission, GraphqlEntityAccessLevel, GraphqlEntityPermission,
+    GraphqlTeamRole, GraphqlTeamRolePermission, NoOpEntityPermissionEdgeReader,
+    entity_permission_loader, load_entity_permission,
 };

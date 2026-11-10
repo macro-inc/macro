@@ -17,7 +17,8 @@ edge.
   entity).
 - `src/mutations.rs`: `PropertiesMutationRoot` — setting/clearing a property
   value on an entity.
-- `src/loaders.rs`: `EntityPropertiesLoader` batching.
+- `src/loaders.rs`: `EntityPropertiesLoader` batching. The loader's cache is
+  off unless the request turns it on (stream pages).
 
 ## Scope
 

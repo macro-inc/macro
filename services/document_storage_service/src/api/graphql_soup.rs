@@ -283,11 +283,9 @@ fn insert_graphql_context_data(
             OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(state.db.clone()))),
         ),
     ));
-    data.insert(complete_graph::entity_properties_loader(
-        macro_user_id.clone(),
-        property_reader,
-    ));
     let stream_page = scope == ContextScope::SyncStreamPage;
+    let properties =
+        complete_graph::entity_properties_loader(macro_user_id.clone(), property_reader);
     data.insert(complete_graph::email_content_loader(
         macro_user_id.clone(),
         email_content_reader.clone(),
@@ -307,14 +305,23 @@ fn insert_graphql_context_data(
         viewer_id,
         email_content_reader,
     );
+    let permissions = complete_graph::entity_permission_loader(
+        macro_user_id.clone(),
+        organization_id,
+        state.entity_access_service.clone(),
+    );
     if stream_page {
         // A stream page is one query: nothing it reads changes under it.
         metadata.enable_all_cache(true);
         projections.enable_all_cache(true);
+        permissions.enable_all_cache(true);
+        properties.enable_all_cache(true);
         data.insert(graphql_soup::SoupPagePrefetch);
     }
     data.insert(metadata);
     data.insert(projections);
+    data.insert(permissions);
+    data.insert(properties);
     data.insert(complete_graph::EmailFocusContext(
         state.email_focus_reader.clone(),
     ));
@@ -325,11 +332,6 @@ fn insert_graphql_context_data(
     data.insert(complete_graph::entity_favorite_loader(
         macro_user_id.clone(),
         state.favorites_service.clone(),
-    ));
-    data.insert(complete_graph::entity_permission_loader(
-        macro_user_id.clone(),
-        organization_id,
-        state.entity_access_service.clone(),
     ));
     data.insert(property_writer);
     data.insert(complete_graph::entity_notifications_loader(

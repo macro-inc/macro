@@ -2,7 +2,7 @@
 
 use std::marker::PhantomData;
 
-use async_graphql::{Context, Enum, ID, Object, SimpleObject, Union, dataloader::DataLoader};
+use async_graphql::{Context, Enum, ID, Object, SimpleObject, Union};
 use graphql_common::{GraphqlPropertyEntityType, parse_id};
 use models_properties::{
     PropertyOwner,
@@ -12,7 +12,7 @@ use models_properties::{
     },
 };
 
-use crate::{EntityPropertiesLoader, EntityPropertyReader, GraphqlPropertyDataType};
+use crate::{EntityPropertiesDataLoader, EntityPropertyReader, GraphqlPropertyDataType};
 
 /// Which authenticated-caller property definitions to list.
 #[derive(Enum, Debug, Clone, Copy, PartialEq, Eq)]
@@ -212,7 +212,7 @@ pub async fn load_property_definitions<R: EntityPropertyReader>(
     scope: GraphqlPropertyDefinitionScope,
     for_entity_type: Option<GraphqlPropertyEntityType>,
 ) -> async_graphql::Result<Vec<GraphqlPropertyDefinition<R>>> {
-    let loader = ctx.data::<DataLoader<EntityPropertiesLoader<R>>>()?;
+    let loader = ctx.data::<EntityPropertiesDataLoader<R>>()?;
     let definitions = loader
         .loader()
         .definitions(
@@ -236,7 +236,7 @@ pub async fn load_property_options<R: EntityPropertyReader>(
     property_definition_id: ID,
 ) -> async_graphql::Result<Vec<GraphqlPropertyOption>> {
     let definition_id = parse_id(property_definition_id, "propertyDefinitionId")?;
-    let loader = ctx.data::<DataLoader<EntityPropertiesLoader<R>>>()?;
+    let loader = ctx.data::<EntityPropertiesDataLoader<R>>()?;
     let options = loader
         .load_one(definition_id)
         .await

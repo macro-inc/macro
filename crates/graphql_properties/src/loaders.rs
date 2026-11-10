@@ -1,6 +1,6 @@
 use std::{collections::HashMap, sync::Arc};
 
-use async_graphql::dataloader::{DataLoader, Loader};
+use async_graphql::dataloader::{DataLoader, HashMapCache, Loader};
 use entity_access::domain::models::{EntityAccessReceipt, EntityPermission, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use futures::{StreamExt, stream};
@@ -386,17 +386,30 @@ where
     }
 }
 
+/// The request's property loader. It can cache, but its cache starts off: see
+/// [`entity_properties_loader`].
+pub type EntityPropertiesDataLoader<R> = DataLoader<EntityPropertiesLoader<R>, HashMapCache>;
+
 /// Build a DataLoader for entity property edges scoped to the requesting user.
+///
+/// Its cache starts off: subscription connection data outlives one payload,
+/// and a request may set a property between two reads. A query-only request
+/// (a streamed sync page) turns it on with `enable_all_cache(true)` so a
+/// page's prefetched properties serve its entities' fields.
 pub fn entity_properties_loader<R>(
     user_id: MacroUserIdStr<'static>,
     reader: R,
-) -> DataLoader<EntityPropertiesLoader<R>>
+) -> EntityPropertiesDataLoader<R>
 where
     R: EntityPropertyReader,
 {
-    DataLoader::new(EntityPropertiesLoader::new(user_id, reader), |future| {
-        tokio::spawn(future.in_current_span())
-    })
+    let loader = DataLoader::with_cache(
+        EntityPropertiesLoader::new(user_id, reader),
+        |future| tokio::spawn(future.in_current_span()),
+        HashMapCache::default(),
+    );
+    loader.enable_all_cache(false);
+    loader
 }
 
 /// Bound database pressure while independent property targets are authorized.
