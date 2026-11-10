@@ -1,0 +1,93 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE notification_stack AS stack\n            SET position = (ordered.place - 1)::int\n            FROM UNNEST($2::uuid[]) WITH ORDINALITY AS ordered(id, place)\n            WHERE stack.id = ordered.id AND stack.user_id = $1\n            RETURNING stack.id, stack.user_id, stack.name, stack.position,\n                      stack.lane AS \"lane: NotificationLane\",\n                      stack.capture AS \"capture: Json<Vec<StackRule>>\",\n                      stack.release AS \"release: Json<Vec<StackRule>>\",\n                      stack.enabled, stack.revision, stack.created_at, stack.updated_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "position",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "lane: NotificationLane",
+        "type_info": {
+          "Custom": {
+            "name": "notification_lane",
+            "kind": {
+              "Enum": [
+                "signal",
+                "noise"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "capture: Json<Vec<StackRule>>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "release: Json<Vec<StackRule>>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "revision",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6bbfd461a1b7a6ab1a871156e987afd22e12ee8903c3d695258c0ffb406d0082"
+}

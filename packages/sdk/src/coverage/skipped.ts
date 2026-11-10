@@ -278,8 +278,14 @@ export const notificationExcluded = [
   'unsubscribeItems',
 ] as const satisfies readonly (keyof NotificationSdk)[];
 
-export const notificationBacklog =
-  [] as const satisfies readonly (keyof NotificationSdk)[];
+export const notificationBacklog = [
+  // Notification stacks are behind a flag; the SDK wraps them when they ship.
+  'createNotificationStack',
+  'deleteNotificationStack',
+  'listNotificationStacks',
+  'reorderNotificationStacks',
+  'updateNotificationStack',
+] as const satisfies readonly (keyof NotificationSdk)[];
 
 export const propertiesExcluded = [
   'mergeTag',

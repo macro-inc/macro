@@ -1196,6 +1196,24 @@ export type NewEmailMetadata = {
 };
 
 /**
+ * A new stack as its owner writes it. It captures into the noise lane.
+ */
+export type NewNotificationStack = {
+    /**
+     * The capture rules. At least one.
+     */
+    capture: Array<NotificationStackRule>;
+    /**
+     * The stack's name.
+     */
+    name: string;
+    /**
+     * The release rules.
+     */
+    release?: Array<NotificationStackRule>;
+};
+
+/**
  * Mirrors [`model_notifications::NotificationEvent`] but uses `tag` / `content`
  * as the serde adjacently-tagged field names so it can be deserialized from the
  * shape produced by [`UserNotificationRow::into_tagged`] +
@@ -1470,6 +1488,162 @@ export type NotificationDocumentSubType = {
 export type NotificationLane = 'signal' | 'noise';
 
 export type NotificationServiceApiVersion = 'v1';
+
+/**
+ * A person's stack: it captures the notifications its capture rules match
+ * and files them in its lane, except those its release rules let through.
+ */
+export type NotificationStack = {
+    /**
+     * A notification any of these rules matches is captured.
+     */
+    capture: Array<NotificationStackRule>;
+    /**
+     * When it was created.
+     */
+    createdAt: string;
+    /**
+     * Whether the stack routes anything.
+     */
+    enabled: boolean;
+    /**
+     * The stack's id.
+     */
+    id: string;
+    /**
+     * The lane a captured notification is filed in.
+     */
+    lane: NotificationLane;
+    /**
+     * The name its owner gave it.
+     */
+    name: string;
+    /**
+     * Where it sits among its owner's stacks. Stacks are tried in this
+     * order and the first whose capture rules match takes the notification.
+     */
+    position: number;
+    /**
+     * A captured notification any of these rules matches is let through
+     * and delivered as usual.
+     */
+    release: Array<NotificationStackRule>;
+    /**
+     * Counts its edits. A routed notification records the revision that
+     * routed it.
+     */
+    revision: number;
+    /**
+     * When it was last edited.
+     */
+    updatedAt: string;
+};
+
+/**
+ * Changes to a stack. A field left out keeps its value.
+ */
+export type NotificationStackChanges = {
+    /**
+     * New capture rules, replacing the old ones.
+     */
+    capture?: Array<NotificationStackRule> | null;
+    /**
+     * Whether the stack routes anything.
+     */
+    enabled?: boolean | null;
+    /**
+     * A new name.
+     */
+    name?: string | null;
+    /**
+     * New release rules, replacing the old ones.
+     */
+    release?: Array<NotificationStackRule> | null;
+};
+
+/**
+ * What kind of notification a rule matches, whichever place it happened in.
+ */
+export type NotificationStackKind = 'mention' | 'reply' | 'newMessage' | 'reaction' | 'documentMention' | 'comment';
+
+/**
+ * A new order for the caller's stacks.
+ */
+export type NotificationStackOrder = {
+    /**
+     * Every one of the caller's stack ids, first tried first.
+     */
+    ids: Array<string>;
+};
+
+/**
+ * One rule. It matches a notification when every condition it sets holds.
+ * A condition is set when its list has a value, and holds when any of its
+ * values matches.
+ */
+export type NotificationStackRule = {
+    /**
+     * The type of the channel it happened in.
+     */
+    channelTypes?: Array<ChannelType>;
+    /**
+     * What kind of notification it is.
+     */
+    kinds?: Array<NotificationStackKind>;
+    /**
+     * The person who caused it. A bot or an agent is never a sender.
+     */
+    senders?: Array<string>;
+    /**
+     * Where the notification happened.
+     */
+    sources?: Array<NotificationStackSource>;
+};
+
+/**
+ * A place a rule matches notifications from.
+ */
+export type NotificationStackSource = {
+    /**
+     * The channel's id.
+     */
+    id: string;
+    type: 'channel';
+} | {
+    /**
+     * The text to find in the channel's name.
+     */
+    text: string;
+    type: 'channelNameContains';
+} | {
+    /**
+     * The document's id.
+     */
+    id: string;
+    type: 'document';
+} | {
+    /**
+     * The folder's id.
+     */
+    id: string;
+    type: 'folder';
+} | {
+    /**
+     * The project's id.
+     */
+    id: string;
+    type: 'project';
+};
+
+/**
+ * The caller's stacks in the order they are tried.
+ */
+export type NotificationStacks = {
+    /**
+     * The stacks, first tried first.
+     */
+    stacks: Array<NotificationStack>;
+};
 
 /**
  * The mutually exclusive lifecycle states of a user's notification.
@@ -1758,6 +1932,127 @@ export type HealthHandlerResponses = {
 };
 
 export type HealthHandlerResponse = HealthHandlerResponses[keyof HealthHandlerResponses];
+
+export type ListNotificationStacksData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/notification_stacks';
+};
+
+export type ListNotificationStacksErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListNotificationStacksError = ListNotificationStacksErrors[keyof ListNotificationStacksErrors];
+
+export type ListNotificationStacksResponses = {
+    200: NotificationStacks;
+};
+
+export type ListNotificationStacksResponse = ListNotificationStacksResponses[keyof ListNotificationStacksResponses];
+
+export type CreateNotificationStackData = {
+    body: NewNotificationStack;
+    path?: never;
+    query?: never;
+    url: '/notification_stacks';
+};
+
+export type CreateNotificationStackErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateNotificationStackError = CreateNotificationStackErrors[keyof CreateNotificationStackErrors];
+
+export type CreateNotificationStackResponses = {
+    201: NotificationStack;
+};
+
+export type CreateNotificationStackResponse = CreateNotificationStackResponses[keyof CreateNotificationStackResponses];
+
+export type ReorderNotificationStacksData = {
+    body: NotificationStackOrder;
+    path?: never;
+    query?: never;
+    url: '/notification_stacks/order';
+};
+
+export type ReorderNotificationStacksErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ReorderNotificationStacksError = ReorderNotificationStacksErrors[keyof ReorderNotificationStacksErrors];
+
+export type ReorderNotificationStacksResponses = {
+    200: NotificationStacks;
+};
+
+export type ReorderNotificationStacksResponse = ReorderNotificationStacksResponses[keyof ReorderNotificationStacksResponses];
+
+export type DeleteNotificationStackData = {
+    body?: never;
+    path: {
+        /**
+         * The stack's id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/notification_stacks/{id}';
+};
+
+export type DeleteNotificationStackErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteNotificationStackError = DeleteNotificationStackErrors[keyof DeleteNotificationStackErrors];
+
+export type DeleteNotificationStackResponses = {
+    /**
+     * Stack deleted
+     */
+    204: void;
+};
+
+export type DeleteNotificationStackResponse = DeleteNotificationStackResponses[keyof DeleteNotificationStackResponses];
+
+export type UpdateNotificationStackData = {
+    body: NotificationStackChanges;
+    path: {
+        /**
+         * The stack's id.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/notification_stacks/{id}';
+};
+
+export type UpdateNotificationStackErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateNotificationStackError = UpdateNotificationStackErrors[keyof UpdateNotificationStackErrors];
+
+export type UpdateNotificationStackResponses = {
+    200: NotificationStack;
+};
+
+export type UpdateNotificationStackResponse = UpdateNotificationStackResponses[keyof UpdateNotificationStackResponses];
 
 export type GetUnsubscribesData = {
     body?: never;

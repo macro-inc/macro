@@ -1,0 +1,92 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, user_id, name, position, lane AS \"lane: NotificationLane\",\n                   capture AS \"capture: Json<Vec<StackRule>>\",\n                   release AS \"release: Json<Vec<StackRule>>\",\n                   enabled, revision, created_at, updated_at\n            FROM notification_stack\n            WHERE user_id = $1\n            ORDER BY position, id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "position",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "lane: NotificationLane",
+        "type_info": {
+          "Custom": {
+            "name": "notification_lane",
+            "kind": {
+              "Enum": [
+                "signal",
+                "noise"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "capture: Json<Vec<StackRule>>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 6,
+        "name": "release: Json<Vec<StackRule>>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "enabled",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "revision",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "7778438bd14e3381e61b13720d725d33aa7d8d23e5efdf994815f4cdf9d4c2eb"
+}
