@@ -12,5 +12,5 @@ export type MagicChipUIData = Omit<
   'channelId' | 'promptedMessage'
 > & {
   channelId?: string | null;
-  promptedMessage: MagicChipMessage | MagicChipArrayMessage | null;
+  promptedMessage?: MagicChipMessage | MagicChipArrayMessage | null;
 };

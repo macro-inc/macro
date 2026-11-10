@@ -14,6 +14,8 @@ export type MagicChipUIInputControls = [
   Assert<Assignable<MagicChipDecoratorProps, MagicChipUIData>>,
   Assert<Assignable<null, MagicChipUIData['channelId']>>,
   Assert<Assignable<JsonValue[], MagicChipUIData['promptedMessage']>>,
+  Assert<Assignable<undefined, MagicChipUIData['promptedMessage']>>,
+  Assert<Assignable<Omit<MagicChipData, 'promptedMessage'>, MagicChipUIData>>,
   Assert<
     Assignable<MagicChipUIData, MagicChipData> extends false ? true : false
   >,
