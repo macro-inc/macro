@@ -23,7 +23,6 @@ import './monitors/calls';
 import './monitors/graphql-soup';
 import './monitors/harness-presence';
 import './monitors/macrodb';
-import './monitors/oauth';
 import './monitors/outlook-sync';
 import './monitors/queues';
 import './monitors/redis';

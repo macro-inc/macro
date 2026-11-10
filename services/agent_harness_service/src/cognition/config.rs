@@ -116,8 +116,8 @@ pub struct Config {
     /// document storage service auth key
     pub document_storage_service_auth_key: DocumentStorageServiceAuthKey,
     pub sync_service_auth_key: LocalOrRemoteSecret<SyncServiceAuthKey>,
-    /// Authentication service key or deployed Secrets Manager name.
-    pub authentication_service_secret_key: LocalOrRemoteSecret<AuthenticationServiceSecretKey>,
+    /// authentication service secret key (for soup service)
+    pub authentication_service_secret_key: AuthenticationServiceSecretKey,
     /// Redis host for stream service
     pub redis_host: RedisHost,
     /// The S3 bucket for DOCX document uploads
@@ -227,8 +227,8 @@ impl Config {
             sync_service_auth_key: LocalOrRemoteSecret::Local(SyncServiceAuthKey::Comptime(
                 "SYNC_SERVICE_AUTH_KEY",
             )),
-            authentication_service_secret_key: LocalOrRemoteSecret::Local(
-                AuthenticationServiceSecretKey::Comptime("AUTHENTICATION_SERVICE_SECRET_KEY"),
+            authentication_service_secret_key: AuthenticationServiceSecretKey::Comptime(
+                "AUTHENTICATION_SERVICE_SECRET_KEY",
             ),
             redis_host: RedisHost::Comptime("REDIS_HOST"),
             docx_document_upload_bucket: DocxDocumentUploadBucket::Comptime(

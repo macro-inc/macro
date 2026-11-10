@@ -116,9 +116,9 @@ The gate is that preview:
   of the channel), and the GraphQL soup volume, websocket upgrade, gateway
   connections and task count monitors their `query` and thresholds (volume
   and websocket upgrades also gain recovery thresholds).
-- **105 resources to create**: 76 monitors (32 prod threshold and anomaly, 19 GraphQL soup, 9
+- **102 resources to create**: 73 monitors (32 prod threshold and anomaly, 19 GraphQL soup, 9
   notification retention, 10 WhatsApp session, 1 native call push, 2 harness
-  presence, 3 OAuth), 2 webhooks,
+  presence), 2 webhooks,
   15 log-based metrics, 3 span-based metrics and 1 APM retention filter (6, 3
   and 1 of them for Outlook sync, 8 log-based metrics for routine
   suggestions), the GoAlert synthetic test, the six prod alert dashboards, and the notification retention dashboard. If the paging
@@ -221,36 +221,6 @@ Android call push, excluding stale device registrations.
 
 It sees only publishes SNS rejects. A push that SNS accepts and the device then
 drops leaves no backend trace.
-
-## OAuth connection coverage
-
-`monitors/oauth.ts` adds three production log monitors through GoAlert's
-Notify service. They post to the alerts channel without phoning on-call,
-renotify hourly, and recover when their rolling count falls below the threshold:
-
-| Signal | Threshold | First check |
-| --- | --- | --- |
-| Linked GitHub token lookup errors | 3 in 15 minutes | Internal auth response and the caller's resolved authentication-service key; user OAuth can succeed while this lookup fails. |
-| Native MCP token exchange/provider rejection or Pipedream connection failure | 3 in 1 hour | Provider error, redirect URL, scopes, app configuration and organization permissions. Explicit `access_denied`, `user_cancelled` and `user_canceled` codes are excluded. |
-| OAuth client rejection codes in `error` or `reason` | 1 in 15 minutes | Client ID/secret, app status and allowed grant types for `invalid_client`, `unauthorized_client` or `incorrect_client_credentials`. |
-
-The first two read existing logs from `mcp_client` and `pipedream_mcp`;
-the third is provider-independent. Log samples are not included in notifications;
-follow the filtered log links for investigation. The linked-token log was
-verified in production during the internal-key failure. Ordinary unlinked or
-expired GitHub grants return no token rather than emitting that failure log.
-
-These are failure signals, not synthetic sign-in tests. They cannot detect an
-unused provider breaking, a browser-only failure, or an error that is not
-logged in one of these forms. Repeated failures from one user's permissions
-can trigger the flow monitor and need triage. Generic HTTP 401s, `invalid_grant`,
-and routine expired grants do not by themselves trigger the client-rejection
-monitor. Recovery means the error count fell below threshold, not that a sign-in succeeded.
-
-After deploying a credential fix, verify the internal token lookup succeeds
-and a read-only MCP tool call works with the linked account. This stack needs
-its own explicitly approved manual deployment; merging the service fix does
-not activate these alerts.
 
 ## GraphQL soup rollout coverage
 

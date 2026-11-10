@@ -1,20 +1,5 @@
 use super::*;
 use serde_json::{Value, json};
-use std::sync::Arc;
-
-struct TestSecretManager;
-
-impl secretsmanager_client::SecretManager for TestSecretManager {
-    type Err = std::io::Error;
-
-    async fn get_secret_value<T: AsRef<str> + Send>(
-        &self,
-        secret_name: T,
-    ) -> Result<Arc<str>, Self::Err> {
-        assert_eq!(secret_name.as_ref(), "auth-secret-name");
-        Ok(Arc::from("resolved-auth-key"))
-    }
-}
 
 fn config_values() -> Value {
     json!({
@@ -125,23 +110,6 @@ fn settlement_requests_need_billing_on_and_the_authentication_key() {
     let mut values = config_values();
     values["ENABLE_AI_USAGE_BILLING"] = json!("enabled");
     assert!(serde_json::from_value::<Config>(values).is_err());
-}
-
-#[tokio::test]
-async fn authentication_key_resolves_before_settlement_client_is_built() {
-    let mut values = config_values();
-    values["ENVIRONMENT"] = json!("dev");
-    values["AUTHENTICATION_SERVICE_SECRET_KEY"] = json!("auth-secret-name");
-    let config: Config = serde_json::from_value(values).unwrap();
-
-    let config = config
-        .resolve_remote_secrets(Environment::Develop, &TestSecretManager)
-        .await
-        .unwrap();
-    assert_eq!(
-        config.authentication_service_secret_key.as_str(),
-        Some("resolved-auth-key")
-    );
 }
 
 #[test]
