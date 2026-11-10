@@ -10,6 +10,8 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 
 ## Boundaries
 
+- Share table hover-delete bounds with bulk facts; obtain selected-cell paint from actual TableSelection traversal independently, preserving merged-cell closure and current selection-only updates.
+
 - Insert typed user mentions separately after search removal and host I/O, using current selection/admission, Source constructor fallback, insert_nodes_at_selection and select_next(0, 0); do not reuse strict menu-select range admission.
 
 - Read inline-search controller caches through surface::query_editor; preserve every ordered callback (including equal payloads), Source peer import versus dirty-transform timing, and UI-only host resets.
