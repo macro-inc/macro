@@ -96,6 +96,11 @@ impl ContainerManager for TaggedManager {
         Ok(())
     }
 
+    async fn release_idle(&self, _session: AgentSessionId) -> Result<()> {
+        self.record("release_idle");
+        Ok(())
+    }
+
     fn resize_effect(&self, _from: SandboxSize, _to: SandboxSize) -> SandboxResizeEffect {
         unimplemented!("these tests never resize")
     }

@@ -252,8 +252,10 @@ impl InMemAgentManager {
         Ok(server_half)
     }
 
-    /// End the session for good: kill its agent task, drop its conversation,
-    /// and close the MCP sessions its token was holding open.
+    /// Drop everything this process holds for the session: kill its agent
+    /// task, drop its conversation, and close the MCP sessions its token was
+    /// holding open. Used on delete, and by the harness's idle release; a
+    /// later [`Self::attach`] rebuilds the conversation from the log.
     pub fn teardown(&self, session: AgentSessionId) {
         self.live.remove(&session);
         self.store.remove(&session);

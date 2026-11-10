@@ -286,4 +286,14 @@ where
             Route::Sandbox => self.sandbox.teardown(session).await,
         }
     }
+
+    /// Drops this process's in-process conversation, agent task and egress
+    /// token for `session`, if it holds any. Map removals only, so no route
+    /// lookup: a session of any other runtime has nothing here to drop.
+    async fn release_idle(&self, session: AgentSessionId) -> Result<()> {
+        if let Some(inmem) = &self.inmem {
+            inmem.manager.teardown(session);
+        }
+        Ok(())
+    }
 }

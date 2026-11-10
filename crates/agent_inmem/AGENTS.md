@@ -14,6 +14,9 @@ milliseconds instead of waiting on container provisioning.
 - `src/domain/engine.rs`: `TurnEngine` port — the seam `rig_engine` fills.
 - `src/outbound/manager.rs`: `InMemAgentManager` — provisions per-session
   agent tasks, implements the container-manager port the harness expects.
+  `teardown` drops a session's conversation, agent task and token; the
+  harness calls it on delete and when it releases an idle session, and the
+  next `attach` rebuilds the conversation from the log.
 - `src/domain/tool_stream.rs`: throttled, bounded argument previews for pending
   calls; replay ignores previews and retains only calls that began execution.
 - `src/domain/session.rs` / `src/domain/replay.rs`: in-process session state

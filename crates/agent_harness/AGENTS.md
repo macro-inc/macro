@@ -108,7 +108,14 @@ Each session's commands run one at a time on its command worker
 (`service/queue.rs`). A worker exits after `WORKER_IDLE_TIMEOUT` with nothing
 queued, and with the session it deletes, removing its map entry through
 `retire_worker`; commands are sent under the same entry lock, so one racing
-the exit either keeps the worker or starts a new one.
+the exit either keeps the worker or starts a new one. Before an idle worker
+retires, `service/idle.rs` releases a quiet session (nothing admitted in
+`busy`, empty queue, no notification batch): an in-process session's actor
+attached here is closed (its claim released under its own fence), then
+`ContainerManager::release_idle` drops this process's runtime state, and the
+queue copy and `hydrated` mark are forgotten. The next command reconnects and
+rebuilds from the log, as after a restart. Unclaimed warm sessions never get a
+worker, so they stay warm.
 
 Durable system events use the `agent_session` outbox, distinct from the user
 push notifications planned in `domain/notifications.rs`. The serialized session

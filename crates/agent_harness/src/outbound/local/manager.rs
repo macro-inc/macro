@@ -309,6 +309,11 @@ impl ContainerManager for LocalContainerManager {
         tracing::info!(container = %container.name, %session, "container removed");
         Ok(())
     }
+
+    /// Holds nothing in this process for an idle session.
+    async fn release_idle(&self, _session: AgentSessionId) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// The container name for a session.

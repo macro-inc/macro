@@ -8,6 +8,7 @@ mod command_workers;
 mod external_mcp;
 mod external_replies;
 mod followers;
+mod idle_release;
 mod notifications;
 mod owned_purge;
 mod permission_refresh;

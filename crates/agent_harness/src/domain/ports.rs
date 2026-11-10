@@ -600,4 +600,13 @@ pub trait ContainerManager: Send + Sync + 'static {
     /// this is the end of the session: nothing will reattach. A session with
     /// no container is already in the state this asks for, so it succeeds.
     fn teardown(&self, session: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+
+    /// Free what this process holds in memory for a session nothing has used
+    /// lately, after the harness closed its actor. A later [`Self::resume`]
+    /// rebuilds it from the durable log, the way it does after a restart.
+    ///
+    /// Only local memory: nothing durable, no container, and nothing another
+    /// replica holds. A provider whose sessions keep nothing in this process
+    /// (sandboxes stop through their own idle reapers) has nothing to do.
+    fn release_idle(&self, session: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 }

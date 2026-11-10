@@ -1080,3 +1080,143 @@ async fn a_default_session_still_admits_and_meters_its_turns_as_agent_session() 
     );
     assert_eq!(metered, vec![ai_usage::AiFeature::AgentSession]);
 }
+
+/// Reports each ended turn, so a test waits for one instead of polling.
+struct TurnEnds(tokio::sync::mpsc::UnboundedSender<AgentSessionId>);
+
+impl agent_session::domain::ports::SessionTurnObserver for TurnEnds {
+    fn signal(&self, id: AgentSessionId, signal: agent_fold::domain::model::TurnSignal) {
+        if matches!(
+            signal,
+            agent_fold::domain::model::TurnSignal::TurnEnded { .. }
+        ) {
+            let _ = self.0.send(id);
+        }
+    }
+
+    fn session_stopped(
+        &self,
+        _id: AgentSessionId,
+        _reason: agent_session::domain::session::StopReason,
+    ) {
+    }
+
+    fn runtime_closed(&self, _id: AgentSessionId) {}
+}
+
+/// The harness's idle release closes the session's actor and tears down its
+/// state in this manager. The next attach on the same manager rebuilds the
+/// conversation from the log, with every earlier message exactly once.
+#[tokio::test]
+async fn an_idle_release_rebuilds_the_conversation_without_losing_or_repeating_it() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let (ended_tx, mut ended) = tokio::sync::mpsc::unbounded_channel();
+    let sessions = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        NoOpRealtime,
+        NoOpAgentSessionNameGenerator,
+        Arc::new(TurnEnds(ended_tx)),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+    let id = AgentSessionId::new();
+    sessions
+        .create_session(CreateAgentSessionParams {
+            billing: Default::default(),
+            origin: trigger_context::TriggerOrigin::Unknown,
+            purpose: agent_session::domain::model::SessionPurpose::Standalone,
+            repo_branch: None,
+            id,
+            owner_id: Owner::User(owner()),
+            bot_id: BotId::TEST_A,
+            thread_id: None,
+            originating_message_id: None,
+            model: "anthropic/claude-sonnet-5-5".to_owned(),
+            harness: "macro-inmem".to_owned(),
+            repo_url: None,
+            workspace: "/workspace".to_owned(),
+            sandbox_size: agent_session::domain::model::SandboxSize::Default,
+            instructions: None,
+            mcp_servers: Default::default(),
+            egress_token_hash: None,
+        })
+        .await
+        .expect("the session row should create");
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+        "a reply".to_owned(),
+    )]));
+    let manager = manager(&repo, Arc::clone(&engine));
+
+    let transport = manager
+        .attach(facts(id), Some("first-token".to_owned()))
+        .await
+        .expect("the conversation starts");
+    sessions
+        .attach_session(id, RuntimeAttachment::solo(transport))
+        .await
+        .expect("the transport attaches");
+    for prompt in ["first question", "second question"] {
+        sessions
+            .send_action(
+                id,
+                Some(owner()),
+                AgentAction::prompt(prompt),
+                AgentActionId::mint(),
+            )
+            .await
+            .expect("the prompt sends");
+        assert_eq!(ended.recv().await, Some(id));
+    }
+
+    // What the harness's idle release does for an in-process session.
+    sessions.close_session(id).await.expect("the actor closes");
+    manager.teardown(id);
+    assert_eq!(manager.conversations(), 0);
+    assert_eq!(manager.live_agents(), 0);
+    assert_eq!(manager.session_token(id), None);
+
+    // What its next prompt's resume does.
+    let row = sessions.get_session(id).await.expect("the row reads");
+    let transport = manager
+        .attach(
+            SessionFacts {
+                acp_session_id: row.acp_session_id.clone(),
+                ..facts(id)
+            },
+            Some("second-token".to_owned()),
+        )
+        .await
+        .expect("the conversation rebuilds from the log");
+    sessions
+        .attach_session(id, RuntimeAttachment::solo(transport))
+        .await
+        .expect("the rebuilt transport attaches");
+    sessions
+        .send_action(
+            id,
+            Some(owner()),
+            AgentAction::prompt("third question"),
+            AgentActionId::mint(),
+        )
+        .await
+        .expect("the prompt sends on the rebuilt session");
+    assert_eq!(ended.recv().await, Some(id));
+
+    let turns = engine.requests();
+    assert_eq!(turns.len(), 3);
+    assert_eq!(
+        turns[2]
+            .messages
+            .iter()
+            .map(|text| without_invocation_context(text).to_owned())
+            .collect::<Vec<_>>(),
+        vec![
+            "first question".to_owned(),
+            "a reply".to_owned(),
+            "second question".to_owned(),
+            "a reply".to_owned(),
+            "third question".to_owned(),
+        ]
+    );
+}

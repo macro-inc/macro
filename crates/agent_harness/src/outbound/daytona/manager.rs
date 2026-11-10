@@ -552,6 +552,11 @@ impl ContainerManager for DaytonaContainerManager {
         tracing::info!(sandbox_id = %id.as_str(), session = %session, "sandbox deleted");
         Ok(())
     }
+
+    /// Holds nothing in this process for an idle session.
+    async fn release_idle(&self, _session: AgentSessionId) -> Result<()> {
+        Ok(())
+    }
 }
 
 async fn reap_idle_containers(client: DaytonaClient, managed: Arc<DaytonaContainerManagerState>) {

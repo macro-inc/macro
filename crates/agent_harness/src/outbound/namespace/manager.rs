@@ -165,6 +165,11 @@ impl ContainerManager for NamespaceContainerManager {
         // lookup `resume` is waiting on.
         todo!("tearing down Namespace instances is not implemented yet")
     }
+
+    /// Holds nothing in this process for an idle session.
+    async fn release_idle(&self, _session: AgentSessionId) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// One Namespace instance and its live sidecar transport.

@@ -209,6 +209,11 @@ pub struct MockContainerManager {
     /// Signalled on every spawn, so a test waits for a sandbox instead of
     /// spinning on [`Self::spawned`].
     spawned_signal: Arc<tokio::sync::Notify>,
+    /// Signalled on every resume.
+    resumed_signal: Arc<tokio::sync::Notify>,
+    /// Sessions handed to `release_idle`, in order.
+    released: Arc<Mutex<Vec<AgentSessionId>>>,
+    released_signal: Arc<tokio::sync::Notify>,
 }
 
 impl MockContainerManager {
@@ -286,6 +291,44 @@ impl MockContainerManager {
     #[must_use]
     pub fn resumed(&self) -> usize {
         self.resumes.load(Ordering::Relaxed)
+    }
+
+    /// Wait until `count` resumes have been requested, then hand back the
+    /// session's newest container.
+    pub async fn wait_for_resumes(&self, session: AgentSessionId, count: usize) -> ContainerMock {
+        loop {
+            let waited = self.resumed_signal.notified();
+            tokio::pin!(waited);
+            waited.as_mut().enable();
+            if self.resumed() >= count
+                && let Some(container) = self.container(session)
+            {
+                return container;
+            }
+            waited.await;
+        }
+    }
+
+    /// Sessions the harness released as idle, in order.
+    #[must_use]
+    pub fn released(&self) -> Vec<AgentSessionId> {
+        self.released
+            .lock()
+            .expect("released lock should not be poisoned")
+            .clone()
+    }
+
+    /// Wait until `session` has been released as idle.
+    pub async fn wait_for_release(&self, session: AgentSessionId) {
+        loop {
+            let waited = self.released_signal.notified();
+            tokio::pin!(waited);
+            waited.as_mut().enable();
+            if self.released().contains(&session) {
+                return;
+            }
+            waited.await;
+        }
     }
 
     /// Hold no session tokens from now on, like an in-process agent's
@@ -414,6 +457,8 @@ impl ContainerManager for MockContainerManager {
         }
         let container = ContainerMock::default();
         containers.insert(session, container.clone());
+        drop(containers);
+        self.resumed_signal.notify_waiters();
         Ok(agent_session::domain::connection::RuntimeAttachment::solo(
             container,
         ))
@@ -438,6 +483,17 @@ impl ContainerManager for MockContainerManager {
         }
         self.teardowns.fetch_add(1, Ordering::Relaxed);
         self.lock().remove(&session);
+        Ok(())
+    }
+
+    /// Records the release and keeps the container, as an in-process
+    /// manager keeps nothing but the session row a resume rebuilds from.
+    async fn release_idle(&self, session: AgentSessionId) -> Result<(), HarnessError> {
+        self.released
+            .lock()
+            .expect("released lock should not be poisoned")
+            .push(session);
+        self.released_signal.notify_waiters();
         Ok(())
     }
 }

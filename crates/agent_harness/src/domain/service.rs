@@ -19,6 +19,7 @@ mod test;
 mod admission;
 mod deliver;
 mod external_replies;
+mod idle;
 mod lifecycle;
 mod lifecycle_events;
 mod open;
