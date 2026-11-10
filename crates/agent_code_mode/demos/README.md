@@ -36,7 +36,7 @@ Macro into one tool a team or an agent might build for itself.
 | `triage-desk.html` | Notifications, tasks, email | `notifications.list`, unassigned open tasks, unread inbox threads | Mark a notification done; assign a task to yourself; archive a thread | `message.posted`, `message.mentioned`, `document.*`; refreshes on focus |
 | `standup-composer.html` | Tasks, documents, channels | Your tasks done or under way since yesterday (or Friday), what's next and overdue, documents you own that changed | Post the editable standup to a channel | `document.*` |
 | `channel-to-tasks.html` | Channels, tasks | A channel's recent messages, with the ✅ reactions you left | Create a task per picked message (quote and channel link, due date, assignee), reply in its thread with a task mention, react ✅ | `message.*` |
-| `workload-board.html` | Teams, users, tasks | Team members and every open task's assignees and due date | Reassign a task, or leave it unassigned | `document.*` |
+| `workload-board.html` | Teams, users, tasks | Team members and every open task's assignees and due date | Swap one assignee of a task for another, or take them off it; co-assignees stay | `document.*` |
 | `doc-freshness.html` | Documents, users, direct messages, tasks | Documents untouched for N days and their owners | Ask the owner in a direct message with a document mention; for your own, create a review task | `document.updated`, `document.deleted` |
 | `automation-ops.html` | Routines, agent sessions | `routines.list` with `routine.history`, joined to the sessions their runs started (`resource_id`); open agent sessions and their turn state | Run a routine now, pause or resume it; archive a session | `agent_session.*` |
 | `follow-up-radar.html` | CRM, email, tasks | `crm.searchContacts` with last interaction, the latest email thread per contact, open "Follow up with" tasks | Create a follow-up task and comment on the contact with a task mention | `document.*`; refreshes on focus |
@@ -58,7 +58,11 @@ the `Message` handle exposes no accessor for.
 The pages share a few patterns: every read and write is a program, the client
 renders with `textContent` and `createElement`, and reloads are coalesced
 because live events arrive in bursts and a page runs at most two programs at
-once.
+once. A write catches its failure, re-enables its control and shows the error
+in the page's status, reloading only on success so the error stays visible;
+creates and posts can't run twice. Message text replaces only Macro's `<m-…>`
+tags, with names (a mention the SDK built carries only the user id, so its
+name is loaded); other text, angle brackets included, is kept.
 
 `every_demo_page_builds` in `src/domain/document_programs/page_build/test.rs`
 builds every page here against the current SDK, so an SDK change that breaks
