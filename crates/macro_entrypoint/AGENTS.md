@@ -51,6 +51,11 @@ nearly every Rust service's `main.rs` calls.
   xtask sets it only for trace-enabled local runs.
 - Prod/develop export logs as JSON on stdout for Datadog, not via OTLP — only
   spans go through OTLP there.
+- The OTel resource starts from `Resource::builder()`, whose env detector
+  reads `OTEL_RESOURCE_ATTRIBUTES` from the process environment. ECS task
+  definitions set `service.version` there from the image digest
+  (`imageVersion` in `infra/packages/resources`); Datadog reads it as the
+  `version` tag that marks deploys. Keep that builder (not `builder_empty`).
 
 ## Related
 

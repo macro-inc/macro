@@ -68,6 +68,10 @@ word docs, Illustrator/Photoshop files).
   an acting user; a bot caller's id rides in the worker token as the actor.
   Caller-fixable failures (`PresentationError`, `WordDocumentRejected`, the
   readers' errors) are 400s.
+- `src/domain/markdown_body.rs`: `GET`/`PUT /{id}/markdown`, the SDK's
+  `contentWithRevision`/`setContent`. The worker's `POST /markdown` reads the
+  body with sync-service's revision and commits a write only at the revision
+  the caller read (409 `revision_conflict` otherwise). No model, no billing.
 - `src/domain/text_comment.rs`: a comment thread anchored to quoted text, shared
   by the `CommentOnText` tool and `POST /{id}/comments/text` (the SDK's
   `Document.commentOnText`). Markdown places the mark first and removes it if

@@ -71,8 +71,8 @@ targets:
         NSUserActivityTypes:
           - INSendMessageIntent
           - NSUserActivityTypeBrowsingWeb
-        NSCameraUsageDescription: "This app needs access to the camera to take photos and videos for attachments."
-        NSMicrophoneUsageDescription: "This app needs access to the microphone to record videos for attachments."
+        NSCameraUsageDescription: "Macro uses the camera for video calls and for photos and videos you attach."
+        NSMicrophoneUsageDescription: "Macro uses the microphone for calls and for videos you record to attach."
         NSPhotoLibraryUsageDescription: "This app needs access to your photo library to upload attachments."
         LSApplicationQueriesSchemes:
           - macro

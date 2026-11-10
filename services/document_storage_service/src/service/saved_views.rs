@@ -2,7 +2,7 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use saved_views::{
     PgViewStorage,
-    domain::{MembershipPort, SavedViewService},
+    domain::{ChangeNotifier, MembershipPort, SavedViewService},
 };
 use std::collections::HashSet;
 use teams::{
@@ -39,10 +39,23 @@ impl MembershipPort for Membership {
     }
 }
 
-/// Construct the domain service with primary-backed storage and membership evidence.
-pub fn service(pool: sqlx::PgPool) -> SavedViewService<PgViewStorage, Membership> {
+/// The composed service: Postgres storage, Teams membership evidence, and
+/// connection-gateway pushes for each committed change.
+pub type DssSavedViewService = SavedViewService<
+    PgViewStorage,
+    Membership,
+    crate::outbound::saved_view_changes::ConnectionGatewaySavedViewChanges<Membership>,
+>;
+
+/// Construct the domain service with primary-backed storage and membership
+/// evidence; `notifier` hears each committed change.
+pub fn service<N: ChangeNotifier>(
+    pool: sqlx::PgPool,
+    notifier: N,
+) -> SavedViewService<PgViewStorage, Membership, N> {
     SavedViewService::new(
         PgViewStorage::new(pool.clone()),
         Membership(TeamRepositoryImpl::new(pool)),
+        notifier,
     )
 }

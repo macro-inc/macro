@@ -12,13 +12,14 @@
 //! Apps the routine requires ([`RoutineProgram::mcp_servers`]) go to its agent.
 #![deny(missing_docs)]
 
+mod catalog;
 mod contract;
 mod knob;
 mod model;
 mod plan;
-mod starters;
 mod validate;
 
+pub use catalog::{CATALOG, CatalogRoutine, NamedItemKind, Surface, catalog_routine};
 pub use contract::{CODE_STEPS, CheckFile, MAX_OUTPUT_BYTES, STEP_CONTEXT, code_version};
 pub use knob::{
     EntityId, EntityKind, EntityValue, InvalidEntityId, InvalidKnobName, Knob, KnobName,
@@ -26,5 +27,4 @@ pub use knob::{
 };
 pub use model::*;
 pub use plan::{CallRecord, CallStatus, StepPath, StepRecord, StepResult};
-pub use starters::{STARTERS, Starter};
 pub use validate::{ProgramError, limits};

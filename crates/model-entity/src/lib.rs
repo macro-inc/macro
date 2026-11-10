@@ -67,6 +67,9 @@ pub enum EntityType {
     CrmPipeline,
     /// The entity is a reminder set by a user
     Reminder,
+    /// A registered runtime: a computer running macrod. Shared with people and
+    /// teams, never with channels or the public.
+    Harness,
     /// The entity is an AI skill: either a skill document or a built-in
     /// system skill (see the `system_skills` crate)
     Skill,
@@ -144,6 +147,9 @@ impl EntityType {
             // the folder it is filed in.
             EntityType::Form => true,
             EntityType::ExternalChat => true,
+            // A runtime's grants are `entity_access` rows, but it is not something
+            // you file into a project.
+            EntityType::Harness => false,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

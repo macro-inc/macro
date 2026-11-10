@@ -224,6 +224,16 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         template_id: Uuid,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
+    /// `create_action` for a routine saved from routine suggestion
+    /// `suggestion_id`, recorded as given: it only marks that suggestion
+    /// taken for the routine's owner.
+    fn create_action_from_suggestion(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        suggestion_id: Uuid,
+    ) -> impl Future<Output = Result<ScheduledAction>> + Send;
+
     /// Actions `user_id` can access. Legacy clients see cron actions only;
     /// backend clients opt into events. ID-based operations and workers must
     /// never authorize through this list.
@@ -262,9 +272,9 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
 
-    /// Starter routines whose step is code, to offer when a routine is
-    /// created; none on hosts where code can't be saved.
-    fn code_starters(&self) -> Vec<super::code_check::StarterRoutine>;
+    /// Macro's catalog routines with schedules in `timezone`, without code
+    /// steps on hosts where code can't be saved.
+    fn catalog(&self, timezone: chrono_tz::Tz) -> Vec<super::catalog::CatalogEntry>;
 
     /// How the routine's code steps were brought to new SDKs, newest first.
     fn get_code_upgrades(
@@ -284,6 +294,29 @@ pub trait RoutineDraftService: Send + Sync + 'static {
         request: super::drafts::DraftRequest,
         context: super::drafts::DraftContext,
     ) -> impl Future<Output = Result<super::drafts::Draft>> + Send;
+}
+
+/// What a routine suggestion was, for the log of a routine saved from it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SuggestionOrigin {
+    /// `for_you` (AI's) or `macro` (a template).
+    pub from: &'static str,
+    /// `catalog` or `routine`.
+    pub kind: &'static str,
+    /// The surface it belongs to most.
+    pub surface: Option<&'static str>,
+}
+
+/// Finds what a suggestion was. Object-safe, so the scheduled action service
+/// need not know the suggestion store's type.
+#[async_trait::async_trait]
+pub trait SuggestionOrigins: Send + Sync + 'static {
+    /// What suggestion `suggestion`, made to `owner`, was, if it is one.
+    async fn origin(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        suggestion: Uuid,
+    ) -> Result<Option<SuggestionOrigin>>;
 }
 
 /// Where a draft's session hands its routine back: one row per draft,

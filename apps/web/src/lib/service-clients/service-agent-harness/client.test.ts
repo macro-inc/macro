@@ -39,6 +39,36 @@ describe('session request errors', () => {
     expect(error.message).toBe('Model is unavailable.');
   });
 
+  it('tells a stopped agent apart from a session the caller may not touch', async () => {
+    await agentHarnessServiceClient.control('session-1', {
+      type: 'prompt',
+      prompt: 'hello',
+    });
+    const error = await errorHandler()(
+      Response.json(
+        {
+          code: 'no_runtime_access',
+          error:
+            'This agent has stopped: its owner no longer has access to Studio Mac.',
+        },
+        { status: 403 }
+      )
+    );
+    expect(error).toEqual({
+      code: 'NO_RUNTIME_ACCESS',
+      message:
+        'This agent has stopped: its owner no longer has access to Studio Mac.',
+    });
+
+    const forbidden = await errorHandler()(
+      new Response('forbidden', {
+        status: 403,
+        headers: { 'Content-Type': 'text/plain' },
+      })
+    );
+    expect(forbidden.code).toBe('HTTP_ERROR');
+  });
+
   it('does not display an HTML proxy error as a service message', async () => {
     await agentHarnessServiceClient.create({});
     const error = await errorHandler()(

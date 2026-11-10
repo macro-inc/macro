@@ -31,9 +31,11 @@ each run.
 - `src/domain/code_check.rs`: saving a routine gives its steps ids, type-checks
   all its code steps together and stamps the task's `sdk` (the version from
   `routine_program::code_version`); unchanged code already checked against the
-  current version isn't checked again. `GET /scheduled-actions/code/starters`
-  (the starter routines, none where code can't be saved) serves the
-  new-routine flow.
+  current version isn't checked again.
+- `src/domain/catalog.rs`: `GET /scheduled-actions/catalog?timezone=` serves
+  `routine_program`'s catalog to the new-routine flow: each trigger as an
+  `ActionTrigger` with schedules in that zone, and code steps only where code
+  can be saved.
 - `src/domain/drafts.rs` + `src/inbound/draft_router.rs`: `POST
   /scheduled-actions/drafts`, AI drafting a routine, a step to add, or a
   change to a code step from the person's words (Draft it and the step
@@ -77,6 +79,47 @@ each run.
   checks again before each code step that has one, failing it with the
   reason and without running its code. A composition without the port
   refuses entity knobs.
+- `src/domain/suggestions.rs` + `src/inbound/suggestion_router.rs`: routine
+  suggestions, the Draft pattern. `POST /scheduled-actions/suggestions/generate`
+  (onboarding calls it once the inbox connects) starts the person's one
+  generation ever: hidden background sessions of the in-process Macro agent,
+  as the person, three at once by surface group (`SuggestionLayout`: email,
+  calendar, tasks; crm, calls, chat; files, reviews, agents), each capped at
+  `SESSION_TIMEOUT` (240 s), handing back catalog picks first, then drafts.
+  A prompt whose delivery is unknown ends the session like a failure, so it
+  gets the one retry. Each brief (`suggestions/prompt.rs`) holds the
+  routines guide, the catalog for its surfaces, what was dismissed, and the
+  newest 100 messages and connected apps inside `<untrusted>` tags (angle
+  brackets in the data are swapped so it can't close them). A session hands
+  back each suggestion through `macro.routines.suggest`
+  (`POST /scheduled-actions/suggestions`), which only the person's own open
+  suggestion session may call (`routine_suggestion_session`, found from the
+  request's code-mode invocation like a draft's check; anything else is 403
+  `NotSuggesting`). `suggestions/decode.rs` is the trust boundary: a catalog
+  key with knob values that fit their knob, or a drafted routine that passes
+  saving's checks, kept switched off and never acting as the user; a one-line
+  reason; no email address, phone number or street address in the reason or
+  the drafted routine's words (`personal_detail`, by shape); the session's
+  surfaces. A session that keeps
+  nothing is retried once; then Macro's templates fill in. `GET
+  /scheduled-actions/suggestions?surface=` never generates: per surface,
+  drafted routines, then catalog picks (each best first, a second with the
+  same catalog title or name left out), then catalog routines marked `suggest` as
+  Macro's templates (stable ids, `template_id`) to `PER_SURFACE`, skipping
+  dismissed (permanent, `.../{id}/dismiss` for either kind) and saved ones
+  (`scheduled_action.suggestion_id`). `onByDefault` marks at most two safe
+  catalog picks AI rated likely kept, never one that affects others. Unlike a draft's, a suggestion session
+  is prepared with `SessionBilling::NonBillable`, so its turns are
+  recorded as the non-billable `NonBillableAgentSession`, never billed as
+  agent session usage. The sweep deletes sessions a stopped
+  process left open. Spans: `routine.suggestions.generate`, `.session`,
+  `.suggest`; log events `routine_suggestions.generated`, `.suggested`,
+  `.dismissed`, `.saved`.
+- The `routine_suggestions.*` INFO logs (`suggestions.rs`, and `saved` in
+  `service.rs`, which names the suggestion through the `SuggestionOrigins`
+  port the harness sets with `with_suggestion_origins`) are the field
+  contract of `infra/stacks/monitoring/monitors/routine-suggestions.ts`;
+  renaming an event or field empties its dashboard or alert.
 - `src/domain/code_upgrade.rs`: before a run uses code checked against an
   older version (SDK or `StepContext`), it is checked again, and rewritten by
   a model only if that fails (once per routine and version,

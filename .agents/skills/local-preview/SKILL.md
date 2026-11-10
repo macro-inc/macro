@@ -45,7 +45,10 @@ Pick one, start it, and hand the user an HTTPS hostname link.
    and log. It survives your Bash call timing out; if that happens, run `just
    run_local wait --instance <name>`. Repeating it never wipes an instance:
    only `--fresh` does. Frontend edits apply on save. After Rust edits, run
-   `just run_local rebuild --instance <name>`.
+   `just run_local rebuild --instance <name>`. Working on one service, add
+   `--services <name>` (comma-separated compose or binary names) to rebuild and
+   restart only it; services left on older code are listed in `stale_services`
+   from `status --json`, and `rebuild` with no flag catches them all up.
 3. Read `frontend_url` from `just run_local status --json --instance <name>`, and
    build the link from `hostname`, even if a URL is printed with `localhost`.
 4. Offer seed data: `just seed-scenario --instance <name> apply --file
@@ -70,6 +73,9 @@ link fails TLS. Tell the user, once:
   `infra/local/certs/README.md`).
 - The viewer must resolve the hostname and reach the port (same network or
   tailnet).
+- Each stack has its own session on that hostname, whatever its port, so
+  previews of two stacks can stay signed in side by side. Web-app previews
+  against hosted services do share one session.
 - Sign in with an email code on that hostname. On the web-app preview it is a
   real email to a dev account; on the stack the code lands in Mailpit: use
   `mailpit_url` from `just run_local status --json`.

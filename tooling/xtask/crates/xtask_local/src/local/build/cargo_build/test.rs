@@ -1,9 +1,9 @@
-use super::super::test_support::TempDir;
 use super::*;
+use crate::local::test_support::TempDir;
 
 #[test]
 fn build_args_pass_local_features_package_qualified() {
-    let args = build_args();
+    let args = build_args(None);
     let features = args
         .iter()
         .position(|a| a == "--features")
@@ -22,7 +22,7 @@ fn build_args_pass_local_features_package_qualified() {
 
 #[test]
 fn build_args_build_every_local_service_bin_in_one_invocation() {
-    let args = build_args();
+    let args = build_args(None);
     for svc in built_services() {
         assert!(
             args.windows(2)
@@ -69,4 +69,26 @@ fn drops_the_variables_cargo_run_sets() {
             "CARGO"
         ]
     );
+}
+
+#[test]
+fn a_build_of_some_services_keeps_every_services_features() {
+    let contacts = RUST_SERVICES
+        .iter()
+        .find(|s| s.cargo_bin == "contacts_service")
+        .unwrap();
+    let args = build_args(Some(&[contacts]));
+    let bins: Vec<&String> = args
+        .iter()
+        .zip(args.iter().skip(1))
+        .filter(|(flag, _)| *flag == "--bin")
+        .map(|(_, bin)| bin)
+        .collect();
+    assert_eq!(bins, ["contacts_service"]);
+    let features = |a: &[String]| {
+        a.iter()
+            .position(|x| x == "--features")
+            .map(|i| a[i + 1].clone())
+    };
+    assert_eq!(features(&args), features(&build_args(None)));
 }

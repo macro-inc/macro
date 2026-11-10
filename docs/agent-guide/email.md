@@ -43,7 +43,8 @@ flags on, a `Focus` tab leads them. Selecting Inbox from another mailbox opens
 Signal; selecting it while in Focus or Noise keeps that tab.
 The desktop sidebar continues with `Favorites`, `Drafts`, `Sent`, `Scheduled`,
 and `Reminders` (when reminders are enabled), followed by a **Library** section containing `All mail`,
-`Archived`, and `Shared`, then **Tags**. Sidebar number shortcuts follow that
+`Archived`, and `Shared`, then **Saved views** (flagged, see
+[Saved email views](#saved-email-views)), then **Tags**. Sidebar number shortcuts follow that
 order; `Tab` and `Shift+Tab` move between the Inbox tabs (from another mailbox,
 `Tab` opens the first, Focus when it shows, else Signal, and `Shift+Tab` Noise).
 While the email list itself has focus, `Tab` moves browser focus instead; use
@@ -136,7 +137,10 @@ delivery progress is silent, as on Gmail: a composer or sent message shows a
 notice only for a conflict, uncertain or rejected delivery, revoked access,
 unsavable content, or an inbox move. Use its recovery actions and check the
 provider copy before choosing an explicit resend; a resend in flight shows as
-the send button's pending state. A new-email draft locked by a conflict or an
+the send button's pending state. A draft whose sync failed or could not be
+confirmed (the "Draft could not be synced" banner) still sends: Send carries the
+editor's latest text through the outbox. Check that it sends once, with the
+latest text, and that Undo brings the draft back. A new-email draft locked by a conflict or an
 unconfirmed draft or attachment write still discards from its trash and
 Cmd+Shift+D; delivery in progress, unknown or rejected delivery, and revoked
 access keep discard locked. Switching the sender
@@ -240,7 +244,7 @@ is flat with no day headers. Touch layouts, phone or tablet, have no dropdown an
 keep the saved order: Most recent, unless that browser had already saved
 Importance. A saved order
 that no longer exists restores as Most recent. The filter menu adds a Focus group (Reply
-needed, Follow up) on this tab only and has no Status or Done group there. The
+needed, Follow up) on this tab only and has no Read status or Done group there. The
 list is one `user.emailFocus` GraphQL read filtered on the client. New mail
 reaches an open Focus tab within seconds: when the worker stores a
 classification it pushes `refresh_email` (`focus_updated`) to the inbox's owner
@@ -336,13 +340,33 @@ Their triggers are icon-only buttons matching the surrounding view controls;
 Clear/Reset filters and the mobile Clear all action use destructive text styling.
 Both layouts show a small accent dot beside categories with active refinements;
 default All selections are not marked.
-Email Status and Done are single choices that close the menu; attachment filters
-stay open for multiple selections. Tags supports search, pins selected tags first
+Email Read status and Done are single choices that close the menu; Has
+(Starred, Calendar invite) and Attachments (PDFs, Images, Documents) take
+several and stay open while you tick them. Ticked Has items all apply;
+attachment kinds match any one. Tags supports search, pins selected tags first
 on opening, and is omitted when no tags exist. **f** opens the filter menu.
+
+On Signal, Noise, All, Archived, Favorites and Calendar, Filters holds every
+condition a saved view can except Subject contains, which only the Save view
+dialog sets: People (search, or type an address, domain, `@domain` or website
+and pick `Add “…”`; once someone is chosen, Match from toggles From/To/Cc/Bcc at
+the bottom of the submenu, and the last field stays on), Tags, Importance, Read status, Done, Latest activity,
+Inboxes (with two or more linked; several can be chosen, in step with the
+account picker), Has and Attachments. Each tab's own restrictions show as
+selected (Signal: Importance Signal and Done Not done; Favorites: Has Starred;
+Archived: Done; Calendar: Has Calendar invite) and can be changed; they don't
+count toward the filter badge or dots, and Clear returns to them and every
+inbox. While they stand, the list uses the tab's own query; once one changes,
+or a People, Subject or Latest activity condition is set, it lists mail as an
+open saved view would. The other tabs keep the facets, Tags and Inboxes. The
+mobile filter drawer shows the same sections, with the builder's People
+field. Check on Signal: Filters shows Not done selected with no badge;
+choosing Done → All widens the list, shows **Save view** and **Revert**, and
+Revert or Clear restores it.
 
 ### Read state and trash
 
-In the Email view, Status filters discovery on the server **before pagination**,
+In the Email view, Read status filters discovery on the server **before pagination**,
 for both the mailbox list and service-backed search. With Unread selected, opening
 or marking an admitted row read keeps its position across refreshes. Separate
 lookups, bounded to 100 already-admitted thread IDs each, omit only the read filter;
@@ -1403,7 +1427,8 @@ scrolling row of those tabs, with `Open email filters` at the left. The rest of 
 view is the email list, which scrolls beneath the header and supports pull to refresh
 and swiping left to mark emails done in Signal and Noise. The filter button opens a
 glass bottom sheet for status, done, attachment, calendar and tag filters, plus an `Inbox`
-section when the user can pick one: `All inboxes` or a single address, never several.
+section when the user can pick one: `All inboxes`, any set of inboxes as checkboxes,
+or one alias, which replaces the inbox selection.
 `Clear all` resets those filters and the inbox selection. Desktop keeps its sidebar,
 single-row header: title (with Signal/Noise tabs beside Inbox), inbox/filter
 controls, reading-pane option, New, and an expandable Search icon. At 640px or
@@ -1477,8 +1502,9 @@ The address is a borderless ghost dropdown with the title's font weight and a
 consistent 14px font size at all widths; `from` is 12px. Both align to the title's baseline, without
 a tooltip or a separate clear button.
 Its single-select menu includes `All inboxes`, which clears the account selection
-and removes the filter. Saved selections from the old multi-select picker restore
-the first saved inbox; an empty saved selection restores All inboxes. Once linked
+and removes the filter; choosing an inbox there narrows to that one. Several
+inboxes, chosen in Filters or the mobile drawer, show as `N inboxes` and are
+restored as a set; an empty saved selection restores All inboxes. Once linked
 accounts load successfully, a selected inbox that no longer exists resets to All
 inboxes. This runs for the whole email view, including on touch devices before
 the filter drawer opens. New email uses the originating email-view split even if another split
@@ -1518,6 +1544,54 @@ Storage/schema failures that cannot prove preservation show recovery/update
 instructions instead of repeatedly reopening potentially damaged storage.
 
 Date-grouped email lists start directly with today's messages; Today is not shown as a leading group heading. Older date headings remain visible and ordering still uses the server's thread activity timestamp.
+
+## Saved email views
+
+Behind `enable-email-saved-views` (on in dev). A saved view is a named
+`kind: "email"` definition in the shared saved-view store; opening it queries
+live mail with the viewer's access. See `docs/design/saved-views.md`.
+
+- **Create.** The sidebar **Saved views** `+` (or the empty state's Create view)
+  opens the builder: name, a hint that agents can create saved views too,
+  People (one chip picker listing
+  companies first, CRM companies by name and then your contacts' domains by
+  how many contacts use them, then people, your own address included; typing
+  `example.com` offers the domain above the people at it. A typed address adds
+  a person and a typed domain, `@domain` or website adds a domain, with Enter,
+  a comma, or leaving the field), Match from (From/To/Cc/Bcc toggle buttons, at
+  least one on), Subject contains, Tags (a chip picker over the same team and
+  personal tags as Filters, shown when any exist; a tag the viewer can no
+  longer see reads Unavailable tag and stays), and an **Advanced settings** toggle that
+  reveals Importance, Read status, Done, Latest activity, Inboxes (with two or more
+  linked), and **Has** (Starred, Calendar invite, PDFs, Images, Documents); it starts
+  open when the view already sets one of them. Values within one
+  condition are alternatives; conditions all apply. Once the filters on Signal,
+  Noise, All, Archived, Favorites or Calendar differ from the tab's own (or an
+  inbox is chosen), **Save view** left of Filters opens the builder prefilled,
+  as in Tasks, and **Revert** beside it returns to the tab's own filters and
+  every inbox; Sent, Drafts, Scheduled, Reminders, Shared and Focus can't be
+  saved. Search text is never saved.
+- **Open.** The view opens on All with every condition in the Filters
+  controls; the header shows its name and a
+  `…` menu, and built-in tabs stop looking selected. Changing a filter shows
+  **Save changes** (owner) and **Reset**. Choosing a tab, or Return to Email
+  from an unavailable view, goes back to the tab and inboxes it was opened from.
+  The URL carries `mail.savedView=<id>`; a view the viewer can't open shows
+  the unavailable state, never all mail. Email views are private, so their
+  menus have no Copy link.
+- **Order and unread.** Desktop rows drag to reorder (a 4px move starts the
+  drag, so a click still opens the view); their menus have no Move items. In
+  the mobile picker, which has no drag, each row's menu has Move up/Move down.
+  The order is personal and follows the account. A dot marks a view whose first
+  unread page has unread mail.
+- **Mobile.** A saved-view pill follows Filters; its drawer lists and manages
+  views. The filter drawer shows "Save these filters as a view" with Save view
+  and Revert above its footer, and Save changes/Reset in the footer while a view
+  is edited.
+
+Check: create a view for a contact and a domain, open it, mark a
+thread read and watch the dot, reorder two views and reload, then search inside
+the view and confirm results stay within it.
 
 ## Dragging sidebar tags
 
