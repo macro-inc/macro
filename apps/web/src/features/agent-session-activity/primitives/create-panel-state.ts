@@ -1,4 +1,4 @@
-import { createEffect, createSignal, on } from 'solid-js';
+import { batch, createEffect, createSignal, on } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import type {
   AgentActivityRow,
@@ -9,26 +9,42 @@ import {
   foldAgentActivityRows,
 } from '../core/fold-rows';
 
+export type PanelStateOptions = {
+  /** Runs just before the shown items change, so a view can measure them. */
+  beforeApply?: () => void;
+};
+
 /** Hold a rendered snapshot while the list is being read. */
-export function createPanelState(source: AgentActivitySource) {
+export function createPanelState(
+  source: AgentActivitySource,
+  options: PanelStateOptions = {}
+) {
   const [visibleRows, setVisibleRows] = createSignal<AgentActivityRow[]>([]);
   const [held, setHeld] = createSignal(false);
   const [openKey, setOpenKey] = createSignal<string>();
   const [unseenIds, setUnseenIds] = createSignal<string[]>([]);
   const [pendingChanges, setPendingChanges] = createSignal(false);
   const [unseenKeys, setUnseenKeys] = createSignal<string[]>([]);
+  const [arrivals, setArrivals] = createSignal<string[]>([]);
   const [items, setItems] = createStore<AgentActivityItem[]>([]);
   let initialized = false;
 
   const catchUp = () => {
+    // Measure before any write: setters outside a batch update the DOM at once.
+    options.beforeApply?.();
+    batch(() => apply());
+  };
+
+  const apply = () => {
     const before = items;
     const next = foldAgentActivityRows(source.rows());
     const changed = next.find((item) => {
       const previous = before.find((old) => old.key === item.key);
       return previous && previous.latest.id !== item.latest.id;
     });
+    let newKeys: string[] = [];
     if (initialized) {
-      const newKeys = next
+      newKeys = next
         .filter((item) => {
           const previous = before.find((old) => old.key === item.key);
           return !previous || previous.latest.id !== item.latest.id;
@@ -46,6 +62,7 @@ export function createPanelState(source: AgentActivitySource) {
     });
     if (wasInitialized && hasNews) setOpenKey(changed?.key);
     setItems(reconcile(next, { key: 'key' }));
+    setArrivals(newKeys);
     setUnseenIds([]);
     setPendingChanges(false);
   };
@@ -58,6 +75,7 @@ export function createPanelState(source: AgentActivitySource) {
           rows.length > shown.length &&
           shown.every((row, index) => rows[index]?.id === row.id);
         if (onlyOlderRowsAdded) {
+          options.beforeApply?.();
           setVisibleRows(rows);
           setItems(reconcile(foldAgentActivityRows(rows), { key: 'key' }));
           return;
@@ -84,6 +102,8 @@ export function createPanelState(source: AgentActivitySource) {
     openKey,
     setOpenKey,
     unseenCount: () => unseenIds().length,
+    /** Items whose newest row arrived in the latest update, for its highlight. */
+    arrivals,
     isUnseen: (key: string) => unseenKeys().includes(key),
     unseenItemCount: () => unseenKeys().length,
     markSeen: (key: string) =>

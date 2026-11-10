@@ -12,6 +12,8 @@ export default {
   verbCount: { other: '{{verb}} (x{{count}})' },
   showEntityActivity: 'Show activity for {{name}}',
   unseenActivity: 'New activity',
+  copyLink: 'Copy link',
+  liveActivity: 'Live',
   // What an agent did to an item: SDK verbs, then activity action tags.
   stepAccessRequested: 'Requested access',
   stepAdded: 'Added',

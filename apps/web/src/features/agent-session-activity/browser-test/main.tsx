@@ -1,5 +1,10 @@
+import { SidePanel } from '@components/app/side-panel';
+import { UserContextProvider } from '@core/context/user';
+import { queryClient } from '@queries/client';
+import { QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
+import '@fontsource-variable/inter';
 import '../../../index.css';
 import {
   type AgentActivityRow,
@@ -51,26 +56,56 @@ function Fixture() {
     ]);
   };
   return (
-    <main class="w-[320px] p-3">
+    <main class="flex h-dvh flex-col bg-page p-3">
       <div class="flex gap-2">
-        <button onClick={addUpdate}>Update document 3</button>
-        <button onClick={addNew}>Add document</button>
+        <button type="button" onClick={addUpdate}>
+          Update document 3
+        </button>
+        <button type="button" onClick={addNew}>
+          Add document
+        </button>
       </div>
-      <AgentActivitySourceProvider
-        value={{
-          rows,
-          isPending: () => false,
-          hasMore: () => false,
-          loadMore: () => {},
-        }}
+      <SidePanel.Root
+        floating
+        persistentFloating
+        defaultOpen
+        persistKey="activity-test"
       >
-        <AgentActivitySection />
-      </AgentActivitySourceProvider>
-      <div data-below-section class="h-10">
-        Next section
-      </div>
+        <SidePanel.Toggle />
+        <div class="relative min-h-0 flex-1">
+          <SidePanel.Layout headerToggle={false} floating persistentFloating>
+            <AgentActivitySourceProvider
+              value={{
+                rows,
+                isPending: () => false,
+                hasMore: () => false,
+                loadMore: () => {},
+              }}
+            >
+              <AgentActivitySection />
+            </AgentActivitySourceProvider>
+            <SidePanel.Section
+              id="below"
+              title={<span data-below-section>Session</span>}
+              order={10}
+            >
+              <span />
+            </SidePanel.Section>
+            <section class="size-full" aria-label="Agent session" />
+          </SidePanel.Layout>
+        </div>
+      </SidePanel.Root>
     </main>
   );
 }
 
-render(() => <Fixture />, document.getElementById('root')!);
+render(
+  () => (
+    <QueryClientProvider client={queryClient}>
+      <UserContextProvider>
+        <Fixture />
+      </UserContextProvider>
+    </QueryClientProvider>
+  ),
+  document.getElementById('root')!
+);

@@ -3,6 +3,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
+import wasm from 'vite-plugin-wasm';
 import tsconfigPaths from 'vite-tsconfig-paths';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
@@ -12,33 +13,32 @@ export default defineConfig({
   cacheDir: `${directory}/.vite`,
   plugins: [
     tailwindcss(),
+    wasm(),
     solid(),
     solidSvg({ defaultAsComponent: true }),
     tsconfigPaths({ projects: [`${webDirectory}/tsconfig.json`] }),
   ],
   resolve: {
-    dedupe: ['solid-js'],
+    dedupe: ['solid-js', 'loro-crdt'],
     alias: [
-      { find: '@app/lib/i18n', replacement: `${directory}/mock-i18n.ts` },
+      { find: /^@property\/hooks$/, replacement: `${directory}/stubs.tsx` },
       {
-        find: '@components/app/side-panel',
-        replacement: `${directory}/mock-ui.tsx`,
-      },
-      { find: '@property/hooks', replacement: `${directory}/mock-ui.tsx` },
-      {
-        find: '@app/features/activity/components/entity-mention',
-        replacement: `${directory}/mock-ui.tsx`,
+        find: /^@app\/features\/activity\/context\/activity-context$/,
+        replacement: `${directory}/stubs.tsx`,
       },
       {
-        find: '@app/features/activity/context/activity-context',
-        replacement: `${directory}/mock-ui.tsx`,
+        find: /^@core\/util\/useCopyLink$/,
+        replacement: `${directory}/stubs.tsx`,
       },
       {
-        find: '@core/component/EntityIcon',
-        replacement: `${directory}/mock-ui.tsx`,
+        find: /^@app\/features\/activity\/open-entity-in-split$/,
+        replacement: `${directory}/stubs.tsx`,
       },
-      { find: '@ui', replacement: `${directory}/mock-ui.tsx` },
     ],
+  },
+  optimizeDeps: {
+    exclude: ['loro-crdt'],
+    esbuildOptions: { target: 'esnext' },
   },
   server: { host: '127.0.0.1', strictPort: true },
 });

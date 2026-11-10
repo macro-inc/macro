@@ -193,10 +193,13 @@ export function AgentSidePanelSections() {
 }
 
 function SessionActivitySection(props: { sessionId: string }) {
+  const { turn } = useAgentSession();
   const source = createAgentActivitySource(() => props.sessionId);
   return (
     <AgentActivitySourceProvider value={source}>
-      <AgentActivitySection />
+      <AgentActivitySection
+        live={turn() === 'running' || turn() === 'starting'}
+      />
     </AgentActivitySourceProvider>
   );
 }

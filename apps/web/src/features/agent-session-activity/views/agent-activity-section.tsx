@@ -1,14 +1,16 @@
-import { EntityMention } from '@app/features/activity/components/entity-mention';
 import {
   type ActivityContext,
   useActivityContext,
 } from '@app/features/activity/context/activity-context';
-import { formatRelativeTimestamp } from '@app/features/entity/utils/timestamp';
+import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
+import { formatCompactRelativeTimestamp } from '@app/features/entity/utils/timestamp';
 import { t } from '@app/lib/i18n';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { debounce } from '@core/util/debounce';
-import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { buildSimpleEntityUrl } from '@core/util/url';
+import { useCopyLink } from '@core/util/useCopyLink';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { EntityType as PropertyEntityType } from '@service-properties/generated/schemas/entityType';
 import { Button } from '@ui';
@@ -21,7 +23,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { TransitionGroup } from 'solid-transition-group';
+import { ActivityRow } from '../components/activity-row';
 import { useAgentActivitySource } from '../context/agent-activity-source';
 import type { AgentActivityItem, AgentActivityStep } from '../core/fold-rows';
 import { stepLabelKey } from '../core/step-label';
@@ -46,18 +48,52 @@ const PROPERTY_ENTITY_TYPES: Partial<
 
 const UNSEEN_MS = 8000;
 const LOAD_MORE_WITHIN_PX = 120;
+const CLOCK_MS = 30_000;
+const MOVE_MS = 240;
+const ARRIVAL_MS = 1800;
+const EASE_OUT = 'cubic-bezier(0.22, 1, 0.36, 1)';
+const FADE_PX = 24;
 
-export function AgentActivitySection() {
+function reducedMotion() {
+  return (
+    window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? true
+  );
+}
+
+/** A faded edge wherever the list has more to scroll to. */
+function edgeMask(above: boolean, below: boolean): string | undefined {
+  if (!above && !below) return undefined;
+  const top = above ? `transparent, #000 ${FADE_PX}px` : '#000';
+  const bottom = below ? `#000 calc(100% - ${FADE_PX}px), transparent` : '#000';
+  return `linear-gradient(${top}, ${bottom})`;
+}
+
+export function AgentActivitySection(props: {
+  /** The agent is working, so the list can still change. */
+  live?: boolean;
+}) {
   const source = useAgentActivitySource();
   const activityContext = useActivityContext();
-  const state = createPanelState(source);
+  const rowElements = new Map<string, HTMLElement>();
+  let before = new Map<string, number>();
+  const state = createPanelState(source, {
+    // Where every row was before an update, so it can slide to its new place.
+    beforeApply: () => {
+      before = new Map(
+        [...rowElements].map(([key, element]) => [key, element.offsetTop])
+      );
+    },
+  });
   const sidePanel = useSidePanel();
   // Dots mark what's new since you last looked, not forever.
   const clearSeenSoon = debounce(state.markAllSeen, UNSEEN_MS);
   sidePanel?.reportUnseenCount(state.unseenItemCount);
+  const [now, setNow] = createSignal(Date.now());
+  const clock = setInterval(() => setNow(Date.now()), CLOCK_MS);
   onCleanup(() => {
     sidePanel?.reportUnseenCount(undefined);
     clearSeenSoon.clear();
+    clearInterval(clock);
   });
   createEffect(() => {
     if (sidePanel?.isOpen() && state.unseenItemCount() > 0) clearSeenSoon();
@@ -67,6 +103,7 @@ export function AgentActivitySection() {
   const [awayFromTop, setAwayFromTop] = createSignal(false);
   const [awayFromBottom, setAwayFromBottom] = createSignal(false);
   let list: HTMLDivElement | undefined;
+  let touchedLast = false;
 
   const updateHold = () => {
     if (pointerInside() || focusInside() || awayFromTop()) {
@@ -85,10 +122,55 @@ export function AgentActivitySection() {
     updateHold();
   };
 
+  const catchUp = () => {
+    state.catchUp();
+    if (list?.scrollTo) {
+      list.scrollTo({ top: 0, behavior: reducedMotion() ? 'auto' : 'smooth' });
+    } else if (list) {
+      list.scrollTop = 0;
+    }
+    updateEdges();
+  };
+
+  // Rows slide from where they were, and an updated row flashes as it lands.
   createEffect(
     on(
-      () => [state.items().length, state.openKey()],
-      () => queueMicrotask(updateEdges)
+      () => [
+        state
+          .items()
+          .map((item) => item.key)
+          .join('\u0001'),
+        state.arrivals(),
+      ],
+      () => {
+        const motion = !reducedMotion();
+        for (const [key, element] of rowElements) {
+          const was = before.get(key);
+          const delta = was === undefined ? 0 : was - element.offsetTop;
+          if (motion && delta) {
+            element.animate?.(
+              [{ transform: `translateY(${delta}px)` }, { transform: 'none' }],
+              { duration: MOVE_MS, easing: EASE_OUT }
+            );
+          }
+        }
+        if (motion) {
+          for (const key of state.arrivals()) {
+            rowElements
+              .get(key)
+              ?.animate(
+                [
+                  { backgroundColor: 'var(--color-selected)' },
+                  { backgroundColor: 'transparent' },
+                ],
+                { duration: ARRIVAL_MS, easing: 'ease-out' }
+              );
+          }
+        }
+        before = new Map();
+        queueMicrotask(updateEdges);
+      },
+      { defer: true }
     )
   );
 
@@ -102,21 +184,43 @@ export function AgentActivitySection() {
             count={state.items().length}
           />
         }
+        actions={
+          <Show when={props.live}>
+            <span class="flex items-center gap-1.5 text-[11px] text-ink-subtle">
+              <span
+                aria-hidden="true"
+                class="size-1.5 rounded-full bg-success motion-safe:animate-pulse"
+              />
+              {t('agentWork.liveActivity')}
+            </span>
+          </Show>
+        }
         defaultOpen
         order={0}
       >
         <div
-          class="relative"
+          class="relative -mx-2"
           data-agent-activity-section
-          onPointerEnter={() => {
+          onPointerEnter={(event) => {
+            if (event.pointerType === 'touch') return;
             setPointerInside(true);
             updateHold();
           }}
-          onPointerLeave={() => {
+          onPointerLeave={(event) => {
+            if (event.pointerType === 'touch') return;
             setPointerInside(false);
             updateHold();
           }}
+          onPointerDown={(event) => {
+            touchedLast = event.pointerType === 'touch';
+          }}
+          onKeyDown={() => {
+            touchedLast = false;
+          }}
           onFocusIn={() => {
+            // A tap's leftover focus doesn't hold the list, or a phone would
+            // stop updating after any tap; keyboard and mouse focus do.
+            if (touchedLast) return;
             setFocusInside(true);
             updateHold();
           }}
@@ -131,54 +235,53 @@ export function AgentActivitySection() {
           }}
         >
           <Show when={state.unseenCount() > 0}>
-            <div class="absolute inset-x-0 top-1 z-10 flex justify-center">
+            <div class="pointer-events-none absolute inset-x-0 top-1.5 z-10 flex justify-center">
               <Button
-                variant="accent"
-                size="sm"
-                onClick={() => {
-                  state.catchUp();
-                  if (list) list.scrollTop = 0;
-                  updateEdges();
-                }}
+                class="pointer-events-auto"
+                variant="secondary"
+                size="xs"
+                onClick={catchUp}
               >
                 {t('agentWork.newActivity', { count: state.unseenCount() })}
               </Button>
             </div>
-          </Show>
-          <Show when={awayFromTop()}>
-            <div class="pointer-events-none absolute inset-x-0 top-0 z-[1] h-4 bg-gradient-to-b from-surface to-transparent" />
           </Show>
           <div
             ref={(element) => {
               list = element;
               queueMicrotask(updateEdges);
             }}
-            class="h-[300px] overflow-y-auto overscroll-contain"
+            class="h-[300px] overflow-y-auto overscroll-contain [overflow-anchor:none]"
+            style={{
+              'mask-image': edgeMask(awayFromTop(), awayFromBottom()),
+              '-webkit-mask-image': edgeMask(awayFromTop(), awayFromBottom()),
+            }}
             data-agent-activity-list
             onScroll={updateEdges}
           >
-            <TransitionGroup moveClass="transition-transform duration-200 ease-out motion-reduce:transition-none">
-              <For each={state.items()}>
-                {(item) => (
-                  <AgentActivityItemRow
-                    item={item}
-                    entityDisplay={activityContext.entityDisplay}
-                    open={state.openKey() === item.key}
-                    unseen={state.isUnseen(item.key)}
-                    onToggle={() => {
-                      state.markSeen(item.key);
-                      state.setOpenKey(
-                        state.openKey() === item.key ? undefined : item.key
-                      );
-                    }}
-                  />
-                )}
-              </For>
-            </TransitionGroup>
+            <For each={state.items()}>
+              {(item) => (
+                <AgentActivityItemRow
+                  item={item}
+                  now={now()}
+                  entityDisplay={activityContext.entityDisplay}
+                  open={state.openKey() === item.key}
+                  unseen={state.isUnseen(item.key)}
+                  onSeen={() => state.markSeen(item.key)}
+                  onToggle={() => {
+                    state.markSeen(item.key);
+                    state.setOpenKey(
+                      state.openKey() === item.key ? undefined : item.key
+                    );
+                  }}
+                  ref={(element) => {
+                    rowElements.set(item.key, element);
+                    onCleanup(() => rowElements.delete(item.key));
+                  }}
+                />
+              )}
+            </For>
           </div>
-          <Show when={awayFromBottom()}>
-            <div class="pointer-events-none absolute inset-x-0 bottom-0 h-4 bg-gradient-to-t from-surface to-transparent" />
-          </Show>
         </div>
       </SidePanel.Section>
     </Show>
@@ -187,10 +290,14 @@ export function AgentActivitySection() {
 
 function AgentActivityItemRow(props: {
   item: AgentActivityItem;
+  /** Re-renders relative times as the clock moves. */
+  now: number;
   entityDisplay: ActivityContext['entityDisplay'];
   open: boolean;
   unseen: boolean;
+  onSeen: () => void;
   onToggle: () => void;
+  ref: (element: HTMLDivElement) => void;
 }) {
   const display = usePropertyEntityDisplay(
     () => props.item.entityId,
@@ -237,122 +344,81 @@ function AgentActivityItemRow(props: {
     }
     return entityDisplay.name();
   });
-  const mentionDisplay = {
-    ...entityDisplay,
-    name,
-    icon: () =>
-      remoteDisplay || PROPERTY_ENTITY_TYPES[props.item.entityType] ? (
-        entityDisplay.icon()
-      ) : (
-        <EntityIcon targetType={props.item.entityType} size="xs" />
-      ),
-    blockOrFileType: () =>
-      resolvable() ? entityDisplay.blockOrFileType() : null,
+  const block = () => (resolvable() ? entityDisplay.blockOrFileType() : null);
+  const icon = () =>
+    remoteDisplay || PROPERTY_ENTITY_TYPES[props.item.entityType] ? (
+      entityDisplay.icon()
+    ) : (
+      <EntityIcon targetType={props.item.entityType} size="xs" />
+    );
+  const copyLink = useCopyLink();
+  const time = (occurredAt: string) => {
+    props.now;
+    return formatCompactRelativeTimestamp(occurredAt);
   };
-  const latest = () => props.item.steps[0];
-
-  const multiple = () => props.item.steps.length > 1;
-  const expanded = () => props.open && multiple();
+  // Steps arrive newest first; the timeline reads oldest first.
+  const steps = () =>
+    [...props.item.steps].reverse().map((step) => ({
+      key: step.key,
+      label: stepText(step),
+      time: time(step.latest.occurredAt),
+    }));
 
   return (
-    <div data-agent-activity-item={props.item.key}>
-      <div class="flex touch:min-h-11 flex-col justify-center rounded-lg px-1 py-1 not-touch:hover:bg-hover">
-        <div class="flex min-w-0 items-center gap-2">
-          <span class="min-w-0 flex-1 truncate text-xs font-medium text-ink">
-            <EntityMention
-              entityId={props.item.entityId}
-              display={mentionDisplay}
-            />
-          </span>
-          <Show when={props.unseen}>
-            <span
-              class="size-1.5 shrink-0 rounded-full bg-accent"
-              aria-label={t('agentWork.unseenActivity')}
-            />
-          </Show>
-          <span class="shrink-0 text-[11px] tabular-nums text-ink-extra-muted">
-            {formatRelativeTimestamp(new Date(props.item.latest.occurredAt), {
-              condensed: true,
-            })}
-          </span>
-        </div>
-        <Show
-          when={multiple()}
-          fallback={
-            <span class="pl-5.5 text-[11px] leading-4 text-ink-muted">
-              <Show when={latest()}>
-                {(step) => <StepLabel step={step()} />}
-              </Show>
-            </span>
-          }
-        >
-          <button
-            type="button"
-            class="flex w-full min-w-0 items-center justify-between gap-2 rounded pl-5.5 text-left text-[11px] leading-4 text-ink-muted focus-visible:outline-2 focus-visible:outline-accent"
-            aria-expanded={expanded()}
-            aria-label={t('agentWork.showEntityActivity', { name: name() })}
-            onClick={props.onToggle}
-          >
-            <span class="truncate">
-              <Show when={latest()}>
-                {(step) => <StepLabel step={step()} />}
-              </Show>
-            </span>
-            <span class="flex shrink-0 items-center gap-0.5 tabular-nums">
-              {props.item.steps.length}
-              <CaretDownIcon
-                class={`size-3 transition-transform ${expanded() ? 'rotate-180' : ''}`}
-              />
-            </span>
-          </button>
-        </Show>
-      </div>
-      <Show when={multiple()}>
-        <div
-          class="grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none"
-          classList={{
-            'grid-rows-[0fr]': !expanded(),
-            'grid-rows-[1fr]': expanded(),
-          }}
-          inert={!expanded()}
-        >
-          <div class="min-h-0 overflow-hidden">
-            <div class="ml-2.5 border-l border-edge-muted pb-1 pl-3.5">
-              <For each={[...props.item.steps].reverse()}>
-                {(step) => (
-                  <div class="flex min-h-6 items-center justify-between gap-2 text-[11px] text-ink-muted touch:min-h-9">
-                    <span>
-                      <StepLabel step={step} />
-                    </span>
-                    <span class="tabular-nums text-ink-extra-muted">
-                      {formatRelativeTimestamp(
-                        new Date(step.latest.occurredAt),
-                        {
-                          condensed: true,
-                        }
-                      )}
-                    </span>
-                  </div>
-                )}
-              </For>
-            </div>
-          </div>
-        </div>
-      </Show>
-    </div>
+    <ActivityRow
+      ref={props.ref}
+      name={name()}
+      icon={icon()}
+      latest={props.item.steps[0] ? stepText(props.item.steps[0]) : ''}
+      time={time(props.item.latest.occurredAt)}
+      unseen={props.unseen}
+      steps={steps()}
+      expanded={props.open}
+      onToggle={props.onToggle}
+      onOpen={
+        block()
+          ? (event) => {
+              const target = block();
+              if (!target) return;
+              props.onSeen();
+              openEntityInSplit({
+                block: target,
+                id: props.item.entityId,
+                params: entityDisplay.linkParams(),
+                newSplit: event.shiftKey || event.metaKey,
+              });
+            }
+          : undefined
+      }
+      onCopyLink={
+        block()
+          ? () => {
+              const target = block();
+              if (!target) return;
+              props.onSeen();
+              fireCopy(copyLink, target, props.item.entityId);
+            }
+          : undefined
+      }
+    />
   );
 }
 
-function StepLabel(props: { step: AgentActivityStep }) {
-  const verb = () => t(stepLabelKey(props.step.verb));
-  return (
-    <>
-      {props.step.count > 1
-        ? t('agentWork.verbCount', {
-            verb: verb(),
-            count: props.step.count,
-          })
-        : verb()}
-    </>
+function fireCopy(
+  copyLink: ReturnType<typeof useCopyLink>,
+  block: string,
+  id: string
+) {
+  fireAndForget(
+    copyLink(buildSimpleEntityUrl({ type: block, id })),
+    'agent-session-activity-copy-link'
   );
+}
+
+/** "Edited" or "Edited (x3)", translated. */
+function stepText(step: AgentActivityStep): string {
+  const verb = t(stepLabelKey(step.verb));
+  return step.count > 1
+    ? t('agentWork.verbCount', { verb, count: step.count })
+    : verb;
 }

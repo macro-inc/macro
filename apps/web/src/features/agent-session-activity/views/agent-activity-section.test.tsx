@@ -52,16 +52,41 @@ vi.mock('@app/features/activity/context/activity-context', () => ({
   useActivityContext: () => ({ entityDisplay: () => undefined }),
 }));
 
-vi.mock('@ui', () => ({
-  Button: (props: { children: JSX.Element; onClick: () => void }) => (
-    <button onClick={props.onClick}>{props.children}</button>
+vi.mock('@ui', async (importOriginal) => ({
+  cn: (await importOriginal<typeof import('@ui')>()).cn,
+  Button: (props: {
+    children: JSX.Element;
+    onClick: () => void;
+    'aria-label'?: string;
+  }) => (
+    <button aria-label={props['aria-label']} onClick={props.onClick}>
+      {props.children}
+    </button>
   ),
+}));
+
+vi.mock('@core/util/useCopyLink', () => ({
+  useCopyLink: () => async () => true,
+}));
+
+vi.mock('@app/features/activity/open-entity-in-split', () => ({
+  openEntityInSplit: vi.fn(),
 }));
 
 vi.mock('@core/component/EntityIcon', () => ({
   EntityIcon: () => null,
   getIconConfig: () => ({ icon: () => null }),
 }));
+
+// The shared collapse animation measures with ResizeObserver, which jsdom lacks.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+);
 
 afterEach(cleanup);
 
