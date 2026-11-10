@@ -1767,17 +1767,27 @@ async fn run_server() -> anyhow::Result<()> {
         )),
     );
 
+    let contacts_service = Arc::new(contacts::domain::service::ContactsDomainService {
+        repository: contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+        notifier: None::<contacts::outbound::gateway::ConnectionGatewayNotifier>,
+    });
     // SQL predicates and follow-up reads use the primary, matching the catalog
     // versions and writes; replica lag must not select stale rows for an edit.
     let sql_service = databases_sql::DatabasesSql::new(
         databases_service.clone(),
         entity_access_service.clone(),
         primary_entity_soup.clone(),
-        Arc::new(contacts::domain::service::ContactsDomainService {
-            repository: contacts::outbound::repository::DbContactsRepository::new(db.clone()),
-            notifier: None::<contacts::outbound::gateway::ConnectionGatewayNotifier>,
-        }),
+        contacts_service.clone(),
     );
+
+    // Directory refreshes follow contacts_invalidation immediately after writes.
+    // Keep membership and names on the primary, matching the legacy contacts read.
+    let graphql_contacts_context = graphql_contacts::ContactsGraphqlContext::new(Arc::new(
+        contacts::domain::service::directory::ContactsDirectoryService::new(
+            contacts_service,
+            contacts::outbound::names::DbContactNames::new(db.clone()),
+        ),
+    ));
 
     let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
 
@@ -2320,7 +2330,20 @@ async fn run_server() -> anyhow::Result<()> {
 
     let sync_sessions =
         sync_router::session::SyncSessionFactory::new(SyncServiceUrl::new()?.as_ref().parse()?)?;
+    // GraphQL and REST share one saved-view service; each committed write
+    // pushes a change to the pages that show those views.
+    let saved_views = Arc::new(crate::service::saved_views::service(
+        db.clone(),
+        crate::outbound::saved_view_changes::ConnectionGatewaySavedViewChanges::new(
+            (*conn_gateway_client).clone(),
+            Arc::new(crate::service::saved_views::Membership(
+                teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
+            )),
+            event_broker_tracker.clone(),
+        ),
+    ));
     let api_context = ApiContext {
+        saved_views,
         sync_sessions,
         dictation_state,
         graphql_work_feed_context,
@@ -2417,6 +2440,7 @@ async fn run_server() -> anyhow::Result<()> {
         graphql_scheduled_action_context: ScheduledActionGraphqlContext::new(
             scheduled_action_read_service,
         ),
+        graphql_contacts_context,
         graphql_calendar_context,
         graphql_calendar_mutation_context,
         initiative_state: InitiativeRouterState::new(
