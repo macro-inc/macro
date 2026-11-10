@@ -51,7 +51,7 @@ All component paths below are relative to
 | Slash (`component/menu/ActionsMenu.tsx`) | Root listener/root, `hasNodes`, CLOSE/REMOVE action search, `Action.action(editor, context)`, existing menu operations; dependency check differs between click and keyboard selection | Root subscription, action availability, close query, remove query, execute selected catalog action with pointer/keyboard origin | `group-a.menu-select` atomically validates/replaces exact UTF-16 trigger range and inserts block choices. No general menu query/close primitive. Picker and creation actions require typed choices; filtering to nine block actions would lose Source rows. |
 | Checklist (`plugins/checklist/checklistPlugin.ts`) | Owned listitem DOM, editable gate, checkbox hit geometry, drag threshold, toggle-selection keyboard routing | Register owned pointer bridge and dispatch toggle by key | `registerNativeChecklist` already exists but is unmounted. `group-b.checklist` supports toggle, toggle-selection, settings with attached/type/generation checks. Native task-list controls are separate from toggling. |
 | Link (`component/menu/FloatingLinkMenu.tsx`) | `isEditable`, `isInteractable`, root/focus; `linksPlugin` hover/click/create callbacks; insert/update/url/unlink commands; HIGH Escape and CRITICAL Enter handlers | `LinkMenuHost` below | Existing `registerNativeLinks` supplies hover/click and `group-b.link` supplies insert/update/url/toggle/unlink. Create-picker notification and captured-link selection targeting need explicit native wiring. |
-| Mentions and inline search (`component/menu/MentionsMenu`, `EmojiMenu.tsx`, `SnippetsMenu.tsx`) | Inline-search mutation/query state, live range/peer validation, catalog/service providers, typed mention payloads, collapse/remove and insertion commands | Current query identity/range and catalog types, close/collapse, atomic native choice commit | `group-a.menu-select` supports text, user, document, date, group, agent-session, booking-link, block, snippet and snippet-start. No general web menu-query API. Existing Android source providers retain their own lifetime protocol and are not a replacement web UI. |
+| Mentions and inline search (`component/menu/MentionsMenu`, `EmojiMenu.tsx`, `SnippetsMenu.tsx`) | Inline-search mutation/query state, live range/peer validation, catalog/service providers, typed mention payloads, collapse/remove and insertion commands | `MentionMenuHost` supplies root, close and selection to the actual mention controller; query/range and other search controllers remain separate | `group-a.menu-select` supports text, user, document, date, group, agent-session, booking-link, block, snippet and snippet-start. No consumable general web menu-query API. Existing Android source providers retain their own lifetime protocol and are not a replacement web UI. |
 | Drag blocks (`component/misc/DraggableBlockMenu.tsx`, `DragInsertIndicator.tsx`) | Root rect, nearest node, list parent/first-child/group, selected text, drag store, copy/delete/move actions | Owned block target/group query, reactive drag state, DOM rects and native move/copy/delete | Native draggable-block registration and geometry exist. Shared menu must stop reading Lexical list nodes; selection-only commits must not invalidate document-revision drag validity. |
 | Table picker (`component/menu/FloatingTableMenu.tsx`) | Picker plugin callback and insert command, root/selection positioning, editable gate | `TablePickerHost`: root/focus, insert dimensions, register picker | `group-b.table` picker/insert and `registerNativeTablePicker` exist. Source extraction retains the original shared controller; native binding is separate. |
 | Table insert/delete (`component/misc/TableInsertButton.tsx`, `TableDeleteButtons.tsx`) | DOM cell lookup, table map, selection extent, scroll clipping, hover target, row/column insertion/deletion | Native cell identity, table/selection extents plus DOM measurements, insert/delete | Native insert-row/column, delete and convertible-list query exist. Native extent projection must be verified before replacing Source map reads. |
@@ -259,3 +259,31 @@ discard and all markup remain in the shared controller. Existing controller
 unit tests supply upload results and observe insertion; the separate GIF plugin
 unit test exercises real image serialization. Browser cases supply catalog and
 failed downloads only and do not establish successful uploads or native binding.
+
+## Mention Source host
+
+The public `MentionsMenu` import remains the Source wrapper and reexports
+`HostedMentionsMenu`. The shared leaf retains the existing Suspense/Inner
+boundary, all providers, buckets, native presentation and controller setup.
+Its editor mode requires a host factory, invoked at the exact former selection
+handler initialization point. The Source factory captures the initial editor
+and handler dependencies there, including the conditional block-name context
+read. Root geometry and CLOSE continue to read the current Source editor when
+called. If no editor was initially present, the real Source host still supplies
+those dynamic reads while leaving the initial selection handler absent.
+
+The existing `onPick` plus anchor mode has no factory, Source handler or
+block-name read. The shared UI retains its synchronous onPick branch, offline
+check, analytics, awaited Source selection and keyboard error handling at the
+same points. Production callers assemble one discriminated mode for a mounted
+component; these controls do not claim arbitrary in-place switching between
+editor and onPick modes. Existing reactive values within each mode remain live.
+
+`MentionMenuHost` does not execute native choices. Its Source adapter alone
+owns actual `createItemHandler`, including REMOVE before action, reference
+tracking, sharing and callbacks. Native must provide complete typed choice,
+query, CLOSE/REMOVE and IO contracts without executing that Source handler or
+filtering unsupported buckets. The source browser fixture supplies users through
+the existing custom-list props and mounts real app providers, Source model and
+user decorator. It verifies that scoped Source surface, not remote catalogs or
+native installation.
