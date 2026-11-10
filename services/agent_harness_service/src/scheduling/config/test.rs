@@ -131,6 +131,11 @@ fn authentication_key_is_required_with_billing_disabled_or_enabled() {
                 .to_string()
                 .contains("AUTHENTICATION_SERVICE_SECRET_KEY")
         );
+
+        let mut values = config_values();
+        values["ENABLE_AI_USAGE_BILLING"] = serde_json::json!(billing);
+        values["AUTHENTICATION_SERVICE_SECRET_KEY"] = serde_json::Value::Null;
+        assert!(serde_json::from_value::<Config>(values).is_err());
     }
 }
 
