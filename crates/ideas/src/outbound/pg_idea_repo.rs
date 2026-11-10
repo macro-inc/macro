@@ -472,15 +472,20 @@ impl IdeaRepo for PgIdeaRepo {
         Ok(u32::try_from(count).unwrap_or(u32::MAX))
     }
 
-    async fn start_run(&self, run: &StoredRun) -> Result<bool, Self::Err> {
+    async fn start_run(
+        &self,
+        run: &StoredRun,
+        shown_updated_at: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
         let mut tx = self.pool.begin().await?;
         ideas_db_utils::lock_user(&mut tx, run.user.as_ref()).await?;
         // Proposed with no run going (a restored idea's old run may still
-        // be), or accepted with no run going and its last one failed.
+        // be), or accepted with no run going and its last one failed; and
+        // still what the person saw.
         let accepted = sqlx::query!(
             r#"UPDATE idea SET state = 'accepted', updated_at = $3,
                    state_changed_at = CASE WHEN state = 'accepted' THEN state_changed_at ELSE $3 END
-               WHERE id = $1 AND user_id = $2
+               WHERE id = $1 AND user_id = $2 AND updated_at = $4
                  AND EXISTS (SELECT 1 FROM idea_prompt p WHERE p.idea_id = idea.id AND p.run_mode = 'background')
                  AND ((state = 'proposed' AND NOT EXISTS (
                           SELECT 1 FROM idea_run r WHERE r.idea_id = idea.id AND r.settled_at IS NULL))
@@ -490,6 +495,7 @@ impl IdeaRepo for PgIdeaRepo {
             run.idea,
             run.user.as_ref(),
             run.started_at,
+            shown_updated_at,
         )
         .execute(&mut *tx)
         .await?
@@ -514,14 +520,22 @@ impl IdeaRepo for PgIdeaRepo {
         Ok(true)
     }
 
-    async fn latest_runs(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<StoredRun>, Self::Err> {
+    async fn latest_runs(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        ideas: &[Uuid],
+    ) -> Result<Vec<StoredRun>, Self::Err> {
+        if ideas.is_empty() {
+            return Ok(Vec::new());
+        }
         let rows = sqlx::query_as!(
             RunRow,
             r#"SELECT DISTINCT ON (idea_id) session_id, idea_id, user_id, agent_id, action_id,
                       started_at, outcome
-               FROM idea_run WHERE user_id = $1
+               FROM idea_run WHERE user_id = $1 AND idea_id = ANY($2)
                ORDER BY idea_id, started_at DESC"#,
             user.as_ref(),
+            ideas,
         )
         .fetch_all(&self.pool)
         .await?;

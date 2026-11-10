@@ -9,7 +9,7 @@ use model_entity::EntityType;
 use model_owner::CreationPrincipal;
 
 use super::model::{
-    Change, GenerationSession, GenerationTrigger, Idea, IdeaContent, IdeaError, IdeaReview,
+    Accept, Change, GenerationSession, GenerationTrigger, Idea, IdeaContent, IdeaError, IdeaReview,
     IdeaState, IdeaWriteOutcome, Ideas, NewKind, OpenTarget, ResolveReason, RetireIdea,
     RewriteIdea, RunSettled, RunStartError, SessionReadError, SessionState, StoredRun, SuggestIdea,
     Target,
@@ -85,14 +85,20 @@ pub trait IdeaRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<u32, Self::Err>> + Send;
 
     /// Start run `run` of the person's background prompt idea: one that is
-    /// proposed, or accepted with its last run failed. The idea becomes
-    /// accepted. False when it can't run now.
-    fn start_run(&self, run: &StoredRun) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+    /// proposed, or accepted with no run going and none finished, and last
+    /// changed at `shown_updated_at`. The idea becomes accepted. False when
+    /// it can't run now.
+    fn start_run(
+        &self,
+        run: &StoredRun,
+        shown_updated_at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Each of the person's background prompt ideas' latest run.
+    /// The latest run of each of the person's ideas in `ideas` that has one.
     fn latest_runs(
         &self,
         user: &MacroUserIdStr<'_>,
+        ideas: &[Uuid],
     ) -> impl Future<Output = Result<Vec<StoredRun>, Self::Err>> + Send;
 
     /// Runs not settled yet, least recently checked first, at most `limit`.
@@ -274,12 +280,14 @@ pub trait IdeaApi: Send + Sync + 'static {
         timezone: Option<chrono_tz::Tz>,
     ) -> impl Future<Output = Result<Ideas, IdeaError>> + Send;
 
-    /// The person acts on a proposed idea; a background prompt idea starts
-    /// a run, and one whose last run failed runs again.
+    /// The person acts on an idea. A background prompt idea starts a run
+    /// (one whose last run failed runs again) when the person themself
+    /// accepts it as they saw it; any other is done.
     fn accept(
         &self,
         user: &MacroUserIdStr<'static>,
         id: Uuid,
+        accept: Accept,
     ) -> impl Future<Output = Result<(), IdeaError>> + Send;
 
     /// The person isn't interested in an open idea.

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use axum::extract::rejection::JsonRejection;
 use axum::extract::{FromRef, Path, Query, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -18,7 +18,7 @@ use serde::Deserialize;
 use utoipa::IntoParams;
 
 use crate::domain::model::{
-    IdeaError, IdeaReview, IdeaWriteOutcome, Ideas, RetireIdea, RewriteIdea, SuggestIdea,
+    Accept, IdeaError, IdeaReview, IdeaWriteOutcome, Ideas, RetireIdea, RewriteIdea, SuggestIdea,
 };
 use crate::domain::ports::IdeaApi;
 
@@ -100,12 +100,33 @@ impl IntoResponse for IdeaApiError {
             Self::Service(error @ IdeaError::NotGenerating) => {
                 (StatusCode::FORBIDDEN, error.to_string()).into_response()
             }
+            Self::Service(error @ IdeaError::Changed) => {
+                (StatusCode::CONFLICT, error.to_string()).into_response()
+            }
             Self::Service(IdeaError::Internal(report)) => {
                 tracing::error!(error = ?report, "ideas call failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
             }
         }
     }
+}
+
+/// Acting on an idea, as the caller's copy of it shows it.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AcceptIdeaRequest {
+    /// The idea's `updatedAt` as the caller read it. A background idea runs
+    /// only if it is unchanged since; otherwise the answer is 409.
+    pub updated_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Whether a request is the person's own, in the app: their own session's
+/// credential, not a program's (a code-mode invocation, an API token or an
+/// agent's). Anything else counts as acting for them.
+fn by_person(user: &macro_authorization::MacroUserAuthentication, headers: &HeaderMap) -> bool {
+    user.is_human_session()
+        && !headers.contains_key(macro_authorization::CODE_EXECUTION_HEADER)
+        && agent_correlation::context::current().is_none()
 }
 
 /// The reader's time zone.
@@ -156,9 +177,12 @@ where
     tag = "ideas",
     operation_id = "accept_idea",
     params(("id" = String, Path, description = "ID of the idea")),
+    request_body = AcceptIdeaRequest,
     responses(
-        (status = 204, description = "Accepted: a background prompt idea is taken on, any other idea is done; accepting a done idea again changes nothing"),
+        (status = 204, description = "Accepted: a background prompt idea starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other idea is done; accepting a done idea again changes nothing"),
+        (status = 400, body = String),
         (status = 401, body = String),
+        (status = 409, body = String, description = "The idea changed since the caller read it: read it again"),
         (status = 404, body = String, description = "No open or done idea with this id for the caller, or ideas are off"),
         (status = 500, body = String),
     )
@@ -169,15 +193,22 @@ where
 pub async fn accept_idea<S, Auth>(
     State(state): State<IdeaRouterState<S, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    headers: HeaderMap,
     Path(id): Path<Uuid>,
+    body: Result<Json<AcceptIdeaRequest>, JsonRejection>,
 ) -> Result<StatusCode, IdeaApiError>
 where
     S: IdeaApi,
     Auth: MacroAuthorizationService,
 {
+    let Json(request) = body.map_err(IdeaApiError::InvalidRequest)?;
+    let accept = Accept {
+        shown_updated_at: request.updated_at,
+        by_person: by_person(&user.authorization, &headers),
+    };
     state
         .service
-        .accept(&user.authorization.macro_user_id, id)
+        .accept(&user.authorization.macro_user_id, id, accept)
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

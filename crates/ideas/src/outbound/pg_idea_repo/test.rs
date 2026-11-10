@@ -363,7 +363,8 @@ async fn unsettled_runs_take_turns(pool: PgPool) {
             started_at: Utc::now() - chrono::Duration::minutes(10 - n),
             settled: None,
         };
-        assert!(repo.start_run(&run).await.unwrap());
+        let shown = repo.idea(&user, idea).await.unwrap().unwrap().updated_at;
+        assert!(repo.start_run(&run, shown).await.unwrap());
         sessions.push(run.session);
     }
     let first = repo.unsettled_runs(1).await.unwrap();

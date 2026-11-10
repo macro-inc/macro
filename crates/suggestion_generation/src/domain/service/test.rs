@@ -190,7 +190,12 @@ impl IdeaApi for FakeIdeas {
         unreachable!()
     }
 
-    async fn accept(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<(), IdeaError> {
+    async fn accept(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+        _: ideas::domain::model::Accept,
+    ) -> Result<(), IdeaError> {
         unreachable!()
     }
 
