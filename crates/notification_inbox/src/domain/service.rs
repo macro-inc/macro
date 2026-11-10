@@ -67,6 +67,8 @@ pub trait NotificationInboxService: Send + Sync + 'static {
     /// for, then recompute the row's group for the caller's inbox. The row's
     /// last shown notification completes the row, as `mark_done` does. A
     /// notification the row no longer shows has nothing left to acknowledge.
+    /// The changes describe the caller's inbox alone: a row of the other lane
+    /// is still acknowledged, and its own inbox learns from its live updates.
     fn mark_notification_done(
         &self,
         viewer: FeedViewer,
@@ -94,7 +96,9 @@ pub trait NotificationInboxService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<InboxChange<Self::Entity>>, FeedError>> + Send;
 
     /// Mark the rows' shown and hidden notifications seen, then recompute
-    /// their groups for the caller's inbox.
+    /// their groups for the caller's inbox. The changes describe that inbox
+    /// alone: a row of the other lane is still marked seen, and its own inbox
+    /// learns from its live updates.
     fn mark_seen(
         &self,
         viewer: FeedViewer,

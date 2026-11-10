@@ -967,3 +967,36 @@ async fn done_reaches_only_the_lane_the_caller_saw() {
         NotificationState::Unseen
     );
 }
+
+#[tokio::test]
+async fn seen_on_a_row_of_the_other_lane_reports_the_callers_inbox() {
+    let harness = two_lanes();
+    let changes = harness
+        .service
+        .mark_seen(
+            viewer(),
+            InboxScope::default(),
+            vec![InboxRowId {
+                group: channel(),
+                lane: NotificationLane::Noise,
+                slot: "top_level".to_string(),
+            }],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        harness.notifications.state_of(uuid(2)),
+        NotificationState::Seen
+    );
+    assert_eq!(
+        harness.notifications.state_of(uuid(1)),
+        NotificationState::Unseen
+    );
+    // The caller asked from the signal inbox, so the changes are its rows.
+    let InboxChange::Upserted(entry) = &changes[0] else {
+        panic!("the channel stays listed in the signal inbox");
+    };
+    assert_eq!(ids(&entry.rows[0].notifications), vec![uuid(1)]);
+    assert!(entry.rows[0].unseen);
+}

@@ -59,7 +59,9 @@ agent session or runtime). Built on the shared feed layer, `crates/attention_fee
   those only filter rows, so the web cache can normalize rows by id across
   inboxes. The lane is different: the same slot holds other notifications in
   each lane, so the lane is part of the row id, and done, seen and
-  notification-done find a row in the lane its id names.
+  notification-done find a row in the lane its id names. The changes they
+  return describe the scope's lane alone; a row of the other lane is still
+  acted on and reaches its own inbox through live updates.
 - "Noise" in `rows.rs` (low-value kinds hidden inside a row) is unrelated to
   the Noise lane and applies in either lane.
 - An unread scope filters on each row's `unseen`, which follows the row's own
