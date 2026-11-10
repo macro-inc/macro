@@ -588,7 +588,9 @@ static CHANNEL_LIST_SELECT: &str = r#"
     END) DESC, pc.id::text DESC
 "#;
 
-/// Matches channels where the user has a live notification in `state`.
+/// Matches channels where the user has a live signal notification in `state`.
+/// Noise never counts: a channel whose only unseen notifications are noise is
+/// not unread.
 ///
 /// Each candidate channel is one seek on `idx_user_notification_viewer_entity`,
 /// whose key is the user, the entity and the state, so the cost is bounded by
@@ -605,6 +607,7 @@ fn build_channel_notification_state_clause(state: item_filters::NotificationStat
             FROM user_notification un
             WHERE un.user_id = $1
               AND un.deleted_at IS NULL
+              AND un.lane = 'signal'
               AND un.event_item_type = 'channel'
               AND un.event_item_id = (c.id)::text
               AND {predicate}
@@ -984,6 +987,7 @@ fn push_channel_thread_notification_filter_expr(
     builder.push(
         r#"
               AND un.deleted_at IS NULL
+              AND un.lane = 'signal'
               AND n.event_item_type = 'channel'
               AND n.event_item_id = c.id::text
               AND n.secondary_event_item_type = 'channel_message'
@@ -1047,6 +1051,7 @@ fn channel_message_notification_ids_sql(state_predicate: &str) -> String {
                FROM user_notification un
                WHERE un.user_id = $1
                  AND un.deleted_at IS NULL
+                 AND un.lane = 'signal'
                  AND un.event_item_type = 'channel'
                  AND un.notification_event_type <> 'channel_message_send'
                  AND {state_predicate}

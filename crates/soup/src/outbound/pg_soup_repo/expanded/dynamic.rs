@@ -877,6 +877,10 @@ static GROUPED_EMPTY_COMBINED_CLAUSE: &str = r#"
         WHERE false
 "#;
 
+/// Restricts `user_notification un` to the signal lane. A notification-state
+/// filter asks whether the viewer was notified, and noise never counts.
+pub(in crate::outbound::pg_soup_repo) const SIGNAL_LANE_SQL: &str = "un.lane = 'signal'";
+
 pub(in crate::outbound::pg_soup_repo) fn build_notification_exists_clause(
     entity_id_sql: &str,
     entity_type: &str,
@@ -889,6 +893,7 @@ pub(in crate::outbound::pg_soup_repo) fn build_notification_exists_clause(
             JOIN user_notification un ON un.notification_id = n.id
             WHERE un.user_id = $1
               AND un.deleted_at IS NULL
+              AND {SIGNAL_LANE_SQL}
               AND n.event_item_type = '{entity_type}'
               AND n.event_item_id = ({entity_id_sql})::text
               AND {predicate_sql}
@@ -1102,6 +1107,7 @@ fn build_notification_items_cte(
         JOIN notification n ON n.id = un.notification_id
         WHERE un.user_id = $1
           AND un.deleted_at IS NULL
+          AND {SIGNAL_LANE_SQL}
           AND {}
           AND n.event_item_type IN ({item_types})
     ),

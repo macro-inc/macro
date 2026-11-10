@@ -31,6 +31,8 @@ use std::sync::Arc;
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
+mod notification_lane;
+
 /// The unfiltered soup pages used to be served by two hand-written queries in
 /// `expanded::by_cursor`. They are now answered by the dynamic builder with an
 /// empty filter, which folds to the same predicates. These helpers keep the

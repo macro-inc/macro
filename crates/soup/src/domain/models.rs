@@ -31,6 +31,7 @@ use models_pagination::{
 use models_soup::SoupProperty;
 use models_soup::item::SoupItem;
 use non_empty::IsEmpty;
+use notification_state::NotificationLane;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
@@ -1005,6 +1006,8 @@ pub struct AttentionCandidateRequest<'a> {
     pub own_work: bool,
     /// How notifications key to candidates.
     pub keying: AttentionKeying,
+    /// The lane whose pending notifications place candidates.
+    pub lane: NotificationLane,
     /// Resume after this position; `None` for the first page.
     pub after: Option<AttentionPagePosition>,
     /// Entity types the caller asked for. Narrowed further by the filter
@@ -1061,6 +1064,9 @@ pub struct AttentionSoupRequest {
     pub own_work: bool,
     /// How notifications key to candidates.
     pub keying: AttentionKeying,
+    /// The lane whose pending notifications place items. A feed reads one
+    /// lane: noise never places an item in a signal feed.
+    pub lane: NotificationLane,
     /// Entity types to include.
     pub types: Vec<EntityType>,
     /// Membership filters, folded into the candidate gates and applied in

@@ -67,8 +67,9 @@ attention_floor AS MATERIALIZED (
     ) page_of_own_work
 ),
 -- The viewer's attention: the newest pending (unseen or seen) notification
--- keyed to each item. Only pending rows can place an item, so done ones are
--- never read. Both streams look items up here, so it is built once.
+-- of the requested lane keyed to each item. Only pending rows can place an
+-- item, so done ones are never read, and noise never places an item in a
+-- signal feed. Both streams look items up here, so it is built once.
 pending AS MATERIALIZED (
     SELECT
         notified.entity_type,
@@ -92,6 +93,7 @@ pending AS MATERIALIZED (
     WHERE un.user_id = $1
     AND un.deleted_at IS NULL
     AND un.state <> 'done'
+    AND un.lane = $12::notification_lane
     AND un.created_at >= COALESCE(
         (SELECT floor_at AT TIME ZONE 'UTC' FROM attention_floor),
         '-infinity'

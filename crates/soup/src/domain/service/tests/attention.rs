@@ -10,6 +10,7 @@ fn work_feed_request(limit: u16) -> AttentionSoupRequest {
         limit,
         own_work: true,
         keying: AttentionKeying::ThreadScoped,
+        lane: notification_state::NotificationLane::Signal,
         types: vec![EntityType::Document],
         filter: EntityFilterAst::default(),
         after: None,

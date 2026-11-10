@@ -88,6 +88,61 @@ async fn notification_boolean_filters_match_every_present_state_set(pool: PgPool
     assert!(missing_viewer.is_empty());
 }
 
+/// The filter compares the set of states a pull request holds, so one whose
+/// only notification is noise holds none.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn noise_counts_as_no_notification(pool: PgPool) {
+    let repo = PgForeignEntityRepo::new(pool.clone());
+    let listing = PgGithubPullRequestRepo::new(pool.clone());
+    let user = "macro|user@example.com";
+    let signal =
+        insert_foreign_entity_for_source(&repo, "pr-signal", "github_pull_request", user, "user")
+            .await;
+    let noise =
+        insert_foreign_entity_for_source(&repo, "pr-noise", "github_pull_request", user, "user")
+            .await;
+    insert_foreign_entity_notification(&pool, signal.id, user, false, false).await;
+    insert_foreign_entity_notification(&pool, noise.id, user, false, false).await;
+    sqlx::query!(
+        "UPDATE user_notification SET lane = 'noise' WHERE user_id = $1 AND event_item_id = $2",
+        user,
+        noise.id.to_string(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let unseen = listing
+        .list_pull_requests(
+            Some(user.to_owned()),
+            vec![SourceId::user(user)],
+            100,
+            filter_query(Some(Arc::new(Expr::val(
+                ForeignEntityLiteral::NotificationState(Unseen),
+            )))),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .unwrap();
+    assert_eq!(ids(&unseen), vec![signal.id]);
+
+    let not_unseen = listing
+        .list_pull_requests(
+            Some(user.to_owned()),
+            vec![SourceId::user(user)],
+            100,
+            filter_query(Some(Arc::new(Expr::is_not(Expr::val(
+                ForeignEntityLiteral::NotificationState(Unseen),
+            ))))),
+            None,
+            GithubPullRequestSortDirection::Desc,
+        )
+        .await
+        .unwrap();
+    assert_eq!(ids(&not_unseen), vec![noise.id]);
+}
+
 #[test]
 fn mixed_subtrees_cannot_be_misclassified_by_boolean_short_circuiting() {
     let state = || Expr::val(ForeignEntityLiteral::NotificationState(Done));

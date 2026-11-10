@@ -8,6 +8,7 @@ use item_filters::ast::{EntityFilterAst, document::DocumentLiteral};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
+use notification_state::NotificationLane;
 use sqlx::{Pool, Postgres};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -70,6 +71,7 @@ fn req<'a>(
         limit: 50,
         own_work,
         keying: AttentionKeying::ThreadScoped,
+        lane: NotificationLane::Signal,
         after: None,
         types: ALL_TYPES,
         filter: None,
@@ -186,6 +188,98 @@ async fn attention_mode_ignores_own_work(pool: Pool<Postgres>) -> anyhow::Result
     // doc-H sits at its pending notification, not its newer done one.
     assert_eq!(page[3].sort_at.minute(), 6);
     assert_eq!(page[4].sort_at.minute(), 5);
+
+    Ok(())
+}
+
+const DOC_A_MENTION: &str = "0190b000-0000-7000-8000-000000000005";
+const THREAD_M_MENTION: &str = "0190b000-0000-7000-8000-000000000001";
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn noise_does_not_place_an_item_in_a_signal_feed(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    sqlx::query!(
+        "UPDATE user_notification SET lane = 'noise'
+         WHERE user_id = $1 AND notification_id = ANY($2::uuid[])",
+        USER_1,
+        &[
+            Uuid::parse_str(DOC_A_MENTION)?,
+            Uuid::parse_str(THREAD_M_MENTION)?,
+        ],
+    )
+    .execute(&pool)
+    .await?;
+
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+
+    let page = attention_soup_page(&pool, req(ATTENTION, &link_ids, &sources)).await?;
+    assert_eq!(
+        keys(&page),
+        vec![
+            (EntityType::EmailThread, THREAD_Z.to_string()),
+            (EntityType::Document, DOC_B.to_string()),
+            (EntityType::Document, DOC_G.to_string()),
+            (EntityType::Document, DOC_H.to_string()),
+            (EntityType::Chat, CHAT_A.to_string()),
+        ]
+    );
+
+    // Doc-A's edit still lists it as own work, with no attention. Thread-M
+    // had nothing but its mention.
+    let page = attention_soup_page(&pool, req(WORK, &link_ids, &sources)).await?;
+    assert_eq!(keys(&page)[4], (EntityType::Document, DOC_A.to_string()));
+    assert_eq!(minutes(&page)[4], (9, None, Some(9)));
+    assert!(!keys(&page).contains(&(EntityType::ChannelMessage, THREAD_M.to_string())));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn noise_lane_pages_only_noise_notifications(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    sqlx::query!(
+        "UPDATE user_notification SET lane = 'noise'
+         WHERE user_id = $1 AND notification_id = ANY($2::uuid[])",
+        USER_1,
+        &[
+            Uuid::parse_str(DOC_A_MENTION)?,
+            Uuid::parse_str(THREAD_M_MENTION)?,
+        ],
+    )
+    .execute(&pool)
+    .await?;
+
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+
+    let mut request = req(ATTENTION, &link_ids, &sources);
+    request.lane = NotificationLane::Noise;
+    let page = attention_soup_page(&pool, request).await?;
+    assert_eq!(
+        keys(&page),
+        vec![
+            (EntityType::Document, DOC_A.to_string()),
+            (EntityType::ChannelMessage, THREAD_M.to_string()),
+        ]
+    );
+
+    // Filed under its entity, the channel mention places channel-X.
+    let mut request = req(ATTENTION, &link_ids, &sources);
+    request.lane = NotificationLane::Noise;
+    request.keying = AttentionKeying::FiledEntity;
+    let page = attention_soup_page(&pool, request).await?;
+    assert_eq!(
+        keys(&page),
+        vec![
+            (EntityType::Document, DOC_A.to_string()),
+            (EntityType::Channel, CHANNEL_X.to_string()),
+        ]
+    );
 
     Ok(())
 }

@@ -759,6 +759,80 @@ async fn test_dynamic_filter_document_notification_done(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn noise_does_not_match_a_notification_state_filter(pool: PgPool) {
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    let signal_doc = Uuid::now_v7();
+    let noise_doc = Uuid::now_v7();
+
+    for (doc, score, lane) in [(signal_doc, 100.0, "signal"), (noise_doc, 90.0, "noise")] {
+        storage
+            .set_aggregate(AggregateFrecency {
+                id: AggregateId {
+                    entity: EntityType::Document.with_entity_string(doc.to_string()),
+                    user_id: test_user_id.clone(),
+                },
+                data: FrecencyData {
+                    event_count: 1,
+                    frecency_score: score,
+                    first_event: Utc::now(),
+                    recent_events: VecDeque::new(),
+                },
+            })
+            .await
+            .unwrap();
+
+        let notification_id = Uuid::now_v7();
+        sqlx::query!(
+            r#"
+            INSERT INTO notification
+                (id, notification_event_type, event_item_id, event_item_type, service_sender, metadata)
+            VALUES
+                ($1, 'test', $2, 'document', 'test', '{}'::jsonb)
+            "#,
+            notification_id,
+            doc.to_string(),
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        sqlx::query!(
+            r#"
+            INSERT INTO user_notification (user_id, notification_id, state, lane)
+            VALUES ($1, $2, 'unseen', ($3::text)::notification_lane)
+            "#,
+            test_user_id.as_ref(),
+            notification_id,
+            lane,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+
+    let filter = EntityFilterAst {
+        document_filter: Some(Arc::new(Expr::val(DocumentLiteral::NotificationState(
+            item_filters::NotificationState::Unseen,
+        )))),
+        ..Default::default()
+    };
+
+    let results = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 10,
+            filters: Some(filter),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].id.entity.entity_id, signal_doc.to_string());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn test_dynamic_filter_document_task_include_cbm_atm_nc(pool: PgPool) {
     let storage = FrecencyPgStorage::new(pool.clone());
     let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();

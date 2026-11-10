@@ -83,3 +83,58 @@ async fn exact_states_are_viewer_scoped_and_independent_of_read(
     }
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn noise_does_not_make_a_thread_unseen(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link = uuid::uuid!("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    let signal = uuid::uuid!("20000001-0000-0000-0000-000000000001");
+    let noise = uuid::uuid!("20000004-0000-0000-0000-000000000004");
+    let inbox_owner = sqlx::query_scalar!("SELECT macro_id FROM email_links WHERE id = $1", link)
+        .fetch_one(&pool)
+        .await?;
+    let viewer = inbox_owner.as_str();
+    for (thread, lane) in [(signal, "signal"), (noise, "noise")] {
+        let id = Uuid::now_v7();
+        sqlx::query!(
+            "INSERT INTO notification
+                (id, notification_event_type, event_item_id, event_item_type, service_sender)
+             VALUES ($1, 'new_email', $2, 'email_thread', 'test')",
+            id,
+            thread.to_string(),
+        )
+        .execute(&pool)
+        .await?;
+        sqlx::query!(
+            "INSERT INTO user_notification (user_id, notification_id, state, lane)
+             VALUES ($1, $2, 'unseen', ($3::text)::notification_lane)",
+            viewer,
+            id,
+            lane,
+        )
+        .execute(&pool)
+        .await?;
+    }
+
+    let query = Query::new(
+        None,
+        SimpleSortMethod::UpdatedAt,
+        Arc::new(Expr::val(EmailLiteral::NotificationState(Unseen))),
+    );
+    let rows = dynamic::dynamic_email_thread_cursor(
+        &pool,
+        &[link],
+        50,
+        &PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
+        query,
+        viewer,
+        None,
+    )
+    .await?;
+
+    let ids = rows.into_iter().map(|row| row.id).collect::<Vec<_>>();
+    assert_eq!(ids, vec![signal]);
+    Ok(())
+}

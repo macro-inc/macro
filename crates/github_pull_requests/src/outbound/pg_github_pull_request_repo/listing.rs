@@ -376,6 +376,7 @@ impl PgGithubPullRequestRepo {
                         FROM user_notification un
                         WHERE un.user_id = $9::text
                           AND un.deleted_at IS NULL
+                          AND un.lane = 'signal'
                           AND un.event_item_type = 'foreign_entity'
                           AND un.event_item_id = fe.id::text
                     ) = ANY($8::int[]))

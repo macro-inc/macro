@@ -31,6 +31,8 @@ const TEAM_T: &str = "eeeeeeee-1111-1111-1111-111111111111";
 const CHANNEL_X_INVITE: &str = "0190a000-0000-7000-8000-000000000000";
 const THREAD_M_MENTION: &str = "0190a000-0000-7000-8000-000000000006";
 const PR_F1_EVENT: &str = "0190a000-0000-7000-8000-000000000003";
+const DOC_A_COMMENT: &str = "0190a000-0000-7000-8000-000000000009";
+const PROJECT_A_SHARE: &str = "0190a000-0000-7000-8000-000000000007";
 
 const EVERYTHING: NotifiedHydratableTypes = NotifiedHydratableTypes {
     channels: true,
@@ -108,6 +110,48 @@ async fn feed_orders_by_latest_notification(pool: Pool<Postgres>) -> anyhow::Res
         ]
     );
     assert_eq!(minutes(&page), vec![20, 19, 9, 8, 7, 6, 5, 4, 3, 0]);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("notified_at")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn noise_neither_lists_nor_places_an_entity(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    sqlx::query!(
+        "UPDATE user_notification SET lane = 'noise'
+         WHERE user_id = $1 AND notification_id = ANY($2::uuid[])",
+        USER_1,
+        &[
+            Uuid::parse_str(DOC_A_COMMENT)?,
+            Uuid::parse_str(PROJECT_A_SHARE)?,
+        ],
+    )
+    .execute(&pool)
+    .await?;
+
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let page = notified_soup_page(&pool, req(None, &link_ids, &sources, EVERYTHING)).await?;
+
+    // Project-A's only notification is noise, so it is gone. Doc-A's newer
+    // comment is noise, so it falls back to its T1 mention.
+    assert_eq!(
+        keys(&page),
+        vec![
+            (EntityType::CalendarEvent, EVENT_E3.to_string()),
+            (EntityType::ForeignEntity, PR_F3.to_string()),
+            (EntityType::Chat, CHAT_A.to_string()),
+            (EntityType::ChannelMessage, THREAD_M.to_string()),
+            (EntityType::CalendarEvent, EVENT_E1.to_string()),
+            (EntityType::EmailThread, THREAD_Z.to_string()),
+            (EntityType::ForeignEntity, PR_F1.to_string()),
+            (EntityType::Document, DOC_A.to_string()),
+            (EntityType::Channel, CHANNEL_X.to_string()),
+        ]
+    );
+    assert_eq!(minutes(&page), vec![20, 19, 8, 6, 5, 4, 3, 1, 0]);
 
     Ok(())
 }
