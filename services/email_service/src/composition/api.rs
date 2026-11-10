@@ -216,6 +216,12 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
     ));
     let signature_sfs_client = Arc::new(sfs_client.clone());
     Ok(ApiContext {
+        backfill_jobs: Arc::new(email::domain::backfill_jobs::BackfillJobService {
+            repository: crate::outbound::backfill_jobs::PgBackfillJobs(db.clone()),
+            queue: crate::outbound::backfill_jobs::BackfillInitializationQueue(
+                sqs_client.as_ref().clone(),
+            ),
+        }),
         calendar_disconnect: Arc::new(
             email::domain::mailbox::calendar_disconnect::CalendarDisconnectService {
                 catalog: inbox_catalog.clone(),

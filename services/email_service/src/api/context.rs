@@ -139,8 +139,14 @@ pub(crate) type SignatureSettingsSvc = email::domain::signature_settings::Signat
     crate::outbound::signature_settings::GmailSignatures,
 >;
 
+pub(crate) type BackfillJobSvc = email::domain::backfill_jobs::BackfillJobService<
+    crate::outbound::backfill_jobs::PgBackfillJobs,
+    crate::outbound::backfill_jobs::BackfillInitializationQueue,
+>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub backfill_jobs: Arc<BackfillJobSvc>,
     pub calendar_disconnect: Arc<CalendarDisconnectSvc>,
     pub contacts: Arc<ContactListSvc>,
     pub scheduled_drafts: Arc<ScheduledDraftSvc>,
