@@ -3,7 +3,7 @@ import { useCodexAgentsAccess } from '@core/codex/flag';
 import { toast } from '@core/component/Toast/Toast';
 import { MACRO_HARNESS_NAME } from '@core/constant/macroAgent';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { ThrownResultError } from '@core/util/result';
+import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
@@ -15,6 +15,7 @@ import {
 import {
   useDeleteHarnessMutation,
   useHarnessesQuery,
+  invalidateHarnesses,
   usePatchHarnessMutation,
 } from '@queries/harnesses/harnesses';
 import { useIsTeamOwner } from '@queries/team/teams';
@@ -106,16 +107,27 @@ export function Harness(
     }
   });
 
+  // Set synchronously, before the mutation's own pending state renders, so a
+  // second click cannot send a second DELETE for a row that is already gone.
+  const [removing, setRemoving] = createSignal(false);
   const removeHarness = async () => {
     const current = removingHarness();
-    if (!current) return;
-
+    if (!current || removing()) return;
+    setRemoving(true);
     try {
       await deleteHarnessMutation.mutateAsync({ harnessId: current.id });
       setRemovingHarness(undefined);
       toast.success('Machine removed');
     } catch (error) {
+      if (thrownResultErrorHasCode(error, 'NOT_FOUND')) {
+        // Already gone, e.g. removed elsewhere: the list just needs to catch up.
+        setRemovingHarness(undefined);
+        fireAndForget(invalidateHarnesses(), 'harness-settings');
+        return;
+      }
       toast.failure(failureMessage(error, 'Failed to remove machine'));
+    } finally {
+      setRemoving(false);
     }
   };
 
@@ -366,7 +378,7 @@ export function Harness(
         {(harness) => (
           <HarnessRemoveDialog
             harnessName={harness.name}
-            pending={deleteHarnessMutation.isPending}
+            pending={removing() || deleteHarnessMutation.isPending}
             onClose={() => setRemovingHarness(undefined)}
             onConfirm={() => fireAndForget(removeHarness(), 'harness-settings')}
           />

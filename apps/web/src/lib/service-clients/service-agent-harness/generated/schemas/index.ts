@@ -300,6 +300,7 @@ export * from './listAgentRepositoryBranchesParams';
 export * from './loadAgentModelsRequest';
 export * from './loadAgentModelsRequestHarnessId';
 export * from './loadAgentModelsResponse';
+export * from './loadAgentModelsResponseCachedAt';
 export * from './loadAgentModelsResponseCurrentModel';
 export * from './logDirectionDto';
 export * from './logFrameDto';

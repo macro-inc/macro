@@ -9,7 +9,7 @@ use hosted_runtimes::domain::{
     size::ComputerSize,
 };
 use teams::domain::{
-    model::{BillingCadence, CustomerError, ItemQuantityChange},
+    model::{BillingCadence, CustomerError, ItemProration, ItemQuantityChange},
     subscription_items::{TeamSubscriptionItems, TeamSubscriptionItemsError},
 };
 use uuid::Uuid;
@@ -108,7 +108,12 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
         }))
         .collect();
         self.teams
-            .change_team_subscription_items(&team_id, changes, idempotency_key)
+            .change_team_subscription_items(
+                &team_id,
+                changes,
+                ItemProration::InvoiceNow,
+                idempotency_key,
+            )
             .await
             .map_err(billing_error)
     }
@@ -135,6 +140,10 @@ impl<Teams: TeamSubscriptionItems> Billing for TeamComputerBilling<Teams> {
                     price_id: price_id.clone(),
                     delta: -1,
                 }],
+                // Releasing a computer refunds nothing: Release now stops
+                // billing at once, and cancel-at-period-end removes it when
+                // the paid period is over.
+                ItemProration::NoProration,
                 idempotency_key,
             )
             .await

@@ -2155,6 +2155,11 @@ export type LoadAgentModelsRequest = {
  */
 export type LoadAgentModelsResponse = {
     /**
+     * When a paired runtime that is off or unreachable last reported this
+     * catalog; null when it was probed live.
+     */
+    cachedAt?: string | null;
+    /**
      * Current provider model, if model selection is available.
      */
     currentModel?: string | null;

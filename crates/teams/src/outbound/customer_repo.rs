@@ -19,8 +19,8 @@ use stripe::{UpdateSubscription, UpdateSubscriptionItems};
 use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
-        BillingCadence, CustomerError, ItemQuantityChange, PriceInfo, ScheduledSeatPlan, SeatPlan,
-        SeatPrices, SubscriptionTerms,
+        BillingCadence, CustomerError, ItemProration, ItemQuantityChange, PriceInfo,
+        ScheduledSeatPlan, SeatPlan, SeatPrices, SubscriptionTerms,
     },
 };
 
@@ -46,6 +46,8 @@ struct ItemUpdateOptions<'a> {
     /// Fail the update when its invoice cannot be paid, instead of leaving
     /// the subscription past due.
     error_if_incomplete: bool,
+    /// Seat changes always invoice their proration.
+    proration: ItemProration,
 }
 
 /// One plan's seat item on a subscription.
@@ -335,6 +337,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
         &self,
         subscription_id: &stripe::SubscriptionId,
         changes: Vec<ItemQuantityChange>,
+        proration: ItemProration,
         idempotency_key: &str,
     ) -> Result<(), CustomerError> {
         let _billing = self
@@ -378,6 +381,7 @@ impl CustomerRepository for CustomerRepositoryImpl {
             ItemUpdateOptions {
                 idempotency_key: Some(idempotency_key),
                 error_if_incomplete: true,
+                proration,
             },
         )
         .await

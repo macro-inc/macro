@@ -372,7 +372,10 @@ impl CustomerRepositoryImpl {
                     &subscription,
                     phase,
                     pending,
-                    "always_invoice",
+                    match options.proration {
+                        ItemProration::InvoiceNow => "always_invoice",
+                        ItemProration::NoProration => "none",
+                    },
                     options.idempotency_key,
                 )
                 .await?;
@@ -384,9 +387,14 @@ impl CustomerRepositoryImpl {
         }
         let mut update_params = UpdateSubscription {
             items: Some(items),
-            proration_behavior: Some(
-                stripe::generated::billing::subscription::SubscriptionProrationBehavior::AlwaysInvoice,
-            ),
+            proration_behavior: Some(match options.proration {
+                ItemProration::InvoiceNow => {
+                    stripe::generated::billing::subscription::SubscriptionProrationBehavior::AlwaysInvoice
+                }
+                ItemProration::NoProration => {
+                    stripe::generated::billing::subscription::SubscriptionProrationBehavior::None
+                }
+            }),
             ..Default::default()
         };
         if end_trial {

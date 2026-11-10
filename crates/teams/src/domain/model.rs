@@ -263,6 +263,17 @@ pub struct ItemQuantityChange {
     pub delta: i64,
 }
 
+/// How an item change bills the part of the period already paid for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ItemProration {
+    /// Invoice the prorated difference now: an addition is charged for the
+    /// rest of the period at once.
+    #[default]
+    InvoiceNow,
+    /// No proration: a removal stops billing without crediting unused time.
+    NoProration,
+}
+
 /// How often a subscription or recurring price bills.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BillingCadence {

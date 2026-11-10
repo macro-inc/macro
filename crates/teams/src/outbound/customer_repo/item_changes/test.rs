@@ -14,12 +14,22 @@ async fn receipts_survive_intervening_item_changes_and_replay_without_stripe(poo
     mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 2).await;
     mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 2).await;
     let repo = repo(&server, pool);
-    repo.change_item_quantities(&sub.id, vec![computer(1)], "computer-add:first")
-        .await
-        .unwrap();
-    repo.change_item_quantities(&sub.id, vec![computer(1)], "computer-add:second")
-        .await
-        .unwrap();
+    repo.change_item_quantities(
+        &sub.id,
+        vec![computer(1)],
+        ItemProration::InvoiceNow,
+        "computer-add:first",
+    )
+    .await
+    .unwrap();
+    repo.change_item_quantities(
+        &sub.id,
+        vec![computer(1)],
+        ItemProration::InvoiceNow,
+        "computer-add:second",
+    )
+    .await
+    .unwrap();
     assert!(repo.replay_item_change("computer-add:first").await.unwrap());
     assert!(
         repo.replay_item_change("computer-add:second")
@@ -47,9 +57,14 @@ async fn an_unknown_charge_blocks_other_mutations_and_replays_the_exact_request(
         .await;
     let repo = repo(&server, pool.clone());
     assert!(
-        repo.change_item_quantities(&sub.id, vec![computer(1)], "computer-add:pending")
-            .await
-            .is_err()
+        repo.change_item_quantities(
+            &sub.id,
+            vec![computer(1)],
+            ItemProration::InvoiceNow,
+            "computer-add:pending"
+        )
+        .await
+        .is_err()
     );
     let first_requests = server.received_requests().await.unwrap();
     let original = first_requests
@@ -59,9 +74,14 @@ async fn an_unknown_charge_blocks_other_mutations_and_replays_the_exact_request(
         .body
         .clone();
     assert!(
-        repo.change_item_quantities(&sub.id, vec![computer(1)], "computer-add:other")
-            .await
-            .is_err()
+        repo.change_item_quantities(
+            &sub.id,
+            vec![computer(1)],
+            ItemProration::InvoiceNow,
+            "computer-add:other"
+        )
+        .await
+        .is_err()
     );
     assert!(
         repo.increment_seat_count(&sub.id, SeatPlan::Max, 1)
@@ -150,9 +170,14 @@ async fn a_schedule_charge_marks_the_same_atomic_request_and_recovers_without_re
     )
     .await;
     let repo = repo(&server, pool.clone());
-    repo.change_item_quantities(&sub.id, vec![computer(1)], "computer-add:scheduled")
-        .await
-        .unwrap();
+    repo.change_item_quantities(
+        &sub.id,
+        vec![computer(1)],
+        ItemProration::InvoiceNow,
+        "computer-add:scheduled",
+    )
+    .await
+    .unwrap();
     let requests = server.received_requests().await.unwrap();
     let post = requests
         .iter()
