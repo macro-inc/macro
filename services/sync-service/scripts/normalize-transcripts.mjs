@@ -1,3 +1,4 @@
+import { gunzipSync } from 'node:zlib';
 import { readdirSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join, relative } from 'node:path';
@@ -6,7 +7,7 @@ import { FromPeer, FromRemote } from '../../../crates/sync_protocol/bebop/genera
 
 function files(root) {
   return readdirSync(root, { recursive: true, withFileTypes: true })
-    .filter(entry => entry.isFile() && entry.name.endsWith('.jsonl'))
+    .filter(entry => entry.isFile() && (entry.name.endsWith('.jsonl') || entry.name.endsWith('.jsonl.gz')))
     .map(entry => join(entry.parentPath, entry.name)).sort();
 }
 
@@ -229,18 +230,26 @@ function corpus(root) {
     const revision = root.slice(root.indexOf(':') + 1);
     // Old commits retain the original C0 location; new commits own the corpus in the sim.
     const prefixes = activated ? ['crates/sync_server_sim/tests/transcripts-activated/'] : ['crates/sync_server_sim/tests/transcripts/', 'services/sync-service/tests/transcripts/'];
-    const paths = execFileSync('git', ['ls-tree', '--full-tree', '-r', '--name-only', revision, '--', ...prefixes], { encoding: 'utf8' }).trim().split('\n').filter(path => path.endsWith('.jsonl'));
+    const paths = execFileSync('git', ['ls-tree', '--full-tree', '-r', '--name-only', revision, '--', ...prefixes], { encoding: 'utf8' }).trim().split('\n').filter(path => path.endsWith('.jsonl') || path.endsWith('.jsonl.gz'));
     const records = new Map();
     for (const path of paths) {
       const prefix = prefixes.find(prefix => path.startsWith(prefix));
-      const name = path.slice(prefix.length);
+      const name = path.slice(prefix.length).replace(/\.gz$/, '');
       if (records.has(name)) throw new Error(`ambiguous transcript ${name} at ${revision}`);
-      records.set(name, normalize(execFileSync('git', ['show', `${revision}:${path}`], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 }).split('\n')));
+      const bytes = execFileSync('git', ['show', `${revision}:${path}`], { maxBuffer: 256 * 1024 * 1024 });
+      records.set(name, normalize((path.endsWith('.gz') ? gunzipSync(bytes) : bytes).toString('utf8').split('\n')));
     }
     if (!records.size) throw new Error(`no transcript corpus at ${revision}`);
     return records;
   }
-  return new Map(files(root).map(path => [relative(root, path), normalize(readFileSync(path, 'utf8').split('\n'))]));
+  const records = new Map();
+  for (const path of files(root)) {
+    const name = relative(root, path).replace(/\.gz$/, '');
+    if (records.has(name)) throw new Error(`ambiguous transcript ${name} at ${root}`);
+    const bytes = readFileSync(path);
+    records.set(name, normalize((path.endsWith('.gz') ? gunzipSync(bytes) : bytes).toString('utf8').split('\n')));
+  }
+  return records;
 }
 
 export function compare(expected, actual) {

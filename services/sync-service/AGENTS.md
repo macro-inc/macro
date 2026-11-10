@@ -175,3 +175,7 @@ Capture atomic storage transactions losslessly, including each retry, argument,
 return, error and commit. Normalize recorded clock/entropy IDs in bulk put keys
 with the same rules as string keys; never normalize payload values or arbitrary
 object keys to conceal a storage or wire difference.
+
+Treat `.jsonl` and `.jsonl.gz` as the same logical transcript in directory and Git
+comparisons; decode gzip losslessly and reject duplicate logical names or damaged
+compressed input. Never omit a compressed case from the diff.
