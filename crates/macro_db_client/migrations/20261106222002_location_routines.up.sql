@@ -1,6 +1,10 @@
 -- Routines can run when their owner's phone arrives at or leaves a place,
 -- alone or among other triggers. A location routine keeps its configuration
--- in trigger_config, like `once`, and has no schedule of its own.
+-- in trigger_config, like `once`, and has no schedule of its own. The widened
+-- checks are added NOT VALID and validated by the next migration, so these
+-- exclusive locks are not held through a scan.
+SET LOCAL lock_timeout = '5s';
+
 ALTER TABLE scheduled_action DROP CONSTRAINT scheduled_action_trigger_shape_check;
 ALTER TABLE scheduled_action
 ADD CONSTRAINT scheduled_action_trigger_shape_check CHECK (
@@ -54,7 +58,7 @@ ADD CONSTRAINT scheduled_action_trigger_shape_check CHECK (
                         ELSE FALSE END)
             ))
     ) IS TRUE
-);
+) NOT VALID;
 
 ALTER TABLE scheduled_action DROP CONSTRAINT scheduled_action_supported_triggers_check;
 ALTER TABLE scheduled_action
@@ -69,7 +73,7 @@ ADD CONSTRAINT scheduled_action_supported_triggers_check CHECK (
                 )) = jsonb_array_length(trigger_config->'triggers')
             ELSE FALSE END
     )) IS TRUE
-);
+) NOT VALID;
 
 -- A phone that reports place crossings for its owner's routines. Only the
 -- token's SHA-256 is kept; the raw token is returned once, to the app that
@@ -99,4 +103,4 @@ ALTER TABLE agent_session_source DROP CONSTRAINT agent_session_source_routine_fi
 ALTER TABLE agent_session_source
 ADD CONSTRAINT agent_session_source_routine_firing CHECK (
     routine_firing IS NULL OR routine_firing IN ('scheduled', 'manual', 'event', 'location')
-);
+) NOT VALID;
