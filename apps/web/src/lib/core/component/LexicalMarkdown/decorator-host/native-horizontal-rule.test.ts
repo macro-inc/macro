@@ -79,6 +79,15 @@ test('actual Macro HTML paste preserves a horizontal rule between paragraphs', a
     if (!paragraph) throw new Error('Missing insertion paragraph');
     fixture.root.focus();
     document.getSelection()?.setBaseAndExtent(paragraph, 0, paragraph, 0);
+    // Admit the fixture's caret before starting the asynchronous HTML import.
+    document.dispatchEvent(new Event('selectionchange'));
+    const key = fixture.view.node(0)?.children[0];
+    const point = { key, offset: 0, type: 'element' };
+    expect(fixture.view.selection().selection).toEqual({
+      kind: 'range',
+      anchor: point,
+      focus: point,
+    });
     expect(
       await fixture.view.clipboard.paste(
         transfer('before\n\nafter', '<p>before</p><hr><p>after</p>')
