@@ -212,6 +212,11 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         },
     );
     Ok(ApiContext {
+        message_labels: Arc::new(email::domain::message_labels::MessageLabelService {
+            repository: crate::outbound::message_labels::PgMessageLabels(db.clone()),
+            enqueuer: sqs_client.as_ref().clone(),
+            broker: macro_event_broker.clone(),
+        }),
         draft_transfers: Arc::new(email::domain::draft_transfer::DraftTransferService {
             repository: EmailPgRepo::new(db.clone()),
             bytes: transfer_bytes,
