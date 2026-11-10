@@ -1,7 +1,7 @@
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
-import { createMemo, createSignal, onCleanup } from 'solid-js';
+import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { IdeaActions, IdeasSource } from '../context/ideas-source';
 import {
   type FeedFilter,
@@ -10,6 +10,7 @@ import {
   type IdeaStatus,
   ideaResult,
   ideaStatus,
+  isNewSince,
   matchesFilter,
   orderFeed,
 } from '../core/idea';
@@ -20,6 +21,8 @@ export type FeedEntry = {
   status: IdeaStatus;
   /** Turned down here, not yet sent: its card is a one-line Undo row. */
   dismissed: boolean;
+  /** Arrived since the person last looked. */
+  isNew: boolean;
   /** Its action is under way. */
   busy: boolean;
   /** Its last action failed. */
@@ -33,6 +36,8 @@ export type FeedView =
   | { kind: 'ideas'; entries: FeedEntry[] };
 
 export type IdeasFeedOptions = {
+  /** When the person last looked at the feed, for the new marks. */
+  lastSeenAt?: Accessor<string | undefined>;
   /** How long a dismissal waits for Undo before it is sent. */
   undoMs?: number;
 };
@@ -82,6 +87,7 @@ export function createIdeasFeed(
         idea,
         status: ideaStatus(idea),
         dismissed: dismissedIds().includes(idea.id),
+        isNew: isNewSince(idea, options.lastSeenAt?.()),
         busy: busyIds().includes(idea.id),
         failed: failedIds().includes(idea.id),
       }))
@@ -189,6 +195,12 @@ export function createIdeasFeed(
 
       const [about] = idea.about;
       if (about) actions.openItem(about);
+    },
+    /** Put a prompt idea's prompt in the composer to edit, without taking it up. */
+    openInChat(idea: Idea) {
+      if (idea.kind !== 'prompt') return;
+
+      fireAndForget(actions.openComposer(idea.prompt), 'ideas');
     },
     reviewRoutine(idea: Idea) {
       if (idea.kind === 'routine') {

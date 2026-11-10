@@ -20,11 +20,11 @@ for (const theme of ['dark', 'light']) {
     await expect(card(page, 'idea-done')).toContainText('Done');
     // What a run will post is on the card before Run.
     await expect(
-      card(page, 'idea-background').locator('[data-idea-meta]')
+      card(page, 'idea-background').locator('[data-idea-sends]')
     ).toHaveText('Posts the weekly status summary in #ops');
     await expect(
-      card(page, 'idea-quiet').locator('[data-idea-meta]')
-    ).toHaveText('Runs in the background. Posts and sends nothing.');
+      card(page, 'idea-quiet').locator('[data-idea-sends]')
+    ).toHaveText('Runs in the background. It posts and sends nothing.');
     await page.screenshot({
       path: testInfo.outputPath(`for-you-${theme}.png`),
       fullPage: true,
@@ -38,7 +38,7 @@ test('Run on a composer idea opens the composer with its prompt', async ({
 }) => {
   await page.goto('/');
   await card(page, 'idea-composer')
-    .getByRole('button', { name: 'Run', exact: true })
+    .getByRole('button', { name: 'Open in chat', exact: true })
     .click();
 
   await expect(requests(page)).toContainText(
@@ -166,9 +166,7 @@ test('a running idea reads as under way, not as one waiting', async ({
   await page.goto('/');
   const running = card(page, 'idea-running');
 
-  await expect(running.locator('[data-idea-meta]')).toContainText(
-    'Working on this in the background'
-  );
+  await expect(running.locator('[data-idea-time]')).toContainText('started');
   await expect(
     running.getByRole('button', { name: 'View progress' })
   ).toBeVisible();
@@ -183,7 +181,7 @@ test('an opened idea becomes done and can be opened again', async ({
   await reply.getByRole('button', { name: 'Open', exact: true }).click();
 
   await expect(reply).toHaveAttribute('data-idea-status', 'done');
-  await reply.getByRole('button', { name: 'Open', exact: true }).click();
+  await reply.getByRole('button', { name: 'Open thread' }).click();
   await expect(requests(page).getByText('accept idea-reply')).toHaveCount(1);
   await expect(
     requests(page).getByText('open email_thread thread-1')

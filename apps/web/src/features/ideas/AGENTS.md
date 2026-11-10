@@ -47,13 +47,16 @@ only, behind `enable-ideas`.
   seconds after the last one, or when the person leaves (`sendDismissals`,
   with `keepalive` on unload). Splits can stay mounted after navigating away,
   so leaving alone would not send it.
-- Violet marks what AI picked (a routine's values) and nothing else.
 - The feed keeps the server's order (most important first); only done ideas
   move, to the end. An idea taken up by opening it (`accepted`, no run) shows
   as done; Open on it opens again without accepting, which the server refuses
   twice.
-- An idea card is built like a routine suggestion card (`Card` filled at
-  depth 3, a title that is the card-wide click target, one quiet action in
-  the footer). A background idea that has not run has no card-wide target:
-  Run is its own button.
+- The page follows the chosen design frames: one column; a card is a tile,
+  title, state badge and time, one sentence, one block for its kind (prompt
+  quote, drafted reply, routine sentence, a finished run's result), then
+  source chips and actions. Done ideas sit under "Done today", dismissed ones
+  under "Dismissed". The parts that read the app's items (`IdeaItemParts`:
+  source chip, draft text, result) are supplied by `idea-items.tsx`.
+- Violet marks what AI picked (a routine's values) and the dot on an idea new
+  since the last visit.
 - Gate every entry point with `useIdeasFlag`, which is also false on touch.

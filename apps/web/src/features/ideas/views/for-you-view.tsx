@@ -3,21 +3,31 @@ import { t } from '@app/lib/i18n';
 import { onElementConnect } from '@core/util/onElementConnect';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { Button, Card, Tabs } from '@ui';
-import { For, Match, Show, Switch } from 'solid-js';
-import { DismissedIdea, IdeaCard } from '../components/idea-card';
-import type { IdeaActions } from '../context/ideas-source';
-import type { FeedFilter } from '../core/idea';
-import type { IdeasFeed } from '../primitives/feed';
+import { For, type JSX, Match, Show, Switch } from 'solid-js';
+import { DismissedIdea, DoneIdeaRow, IdeaCard } from '../components/idea-card';
+import type { IdeaActions, IdeaItemParts } from '../context/ideas-source';
+import type { FeedFilter, Idea } from '../core/idea';
+import type { FeedEntry, IdeasFeed } from '../primitives/feed';
+
+/** A finished run has something to preview; other finished ideas are one line. */
+function hasResult(idea: Idea) {
+  return idea.kind === 'prompt' && idea.runMode === 'background';
+}
+
+function SectionLabel(props: { children: JSX.Element }) {
+  return (
+    <h2 class="mt-3 flex items-center gap-3 px-0.5 text-[13px] font-normal text-ink-muted after:h-px after:flex-1 after:bg-edge-muted after:content-['']">
+      {props.children}
+    </h2>
+  );
+}
 
 function FeedSkeleton() {
   return (
-    <ListSkeleton.Root
-      label={t('ideas.loading')}
-      class="grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-3"
-    >
+    <ListSkeleton.Root label={t('ideas.loading')} class="flex flex-col gap-3">
       <For each={[0, 1, 2]}>
         {() => (
-          <Card variant="filled" depth={3} class="gap-3 p-4">
+          <Card variant="filled" depth={1} class="gap-3 p-3.5">
             <ListSkeleton.Bar class="h-3 w-2/5" />
             <ListSkeleton.Bar class="w-4/5" />
             <ListSkeleton.Bar class="w-3/5" />
@@ -31,7 +41,8 @@ function FeedSkeleton() {
 /** The For you page: every idea as a card, filtered by where it stands. */
 export function ForYouView(props: {
   feed: IdeasFeed;
-  actions: Pick<IdeaActions, 'routineText'>;
+  actions: Pick<IdeaActions, 'routineText' | 'openItem'>;
+  parts: IdeaItemParts;
   focusedId?: string;
   onRetry(): void;
 }) {
@@ -57,6 +68,62 @@ export function ForYouView(props: {
       { value: 'done', label: t('ideas.done') },
     ];
   };
+
+  /** The feed in three parts: what waits or runs, what is done, what was dismissed here. */
+  const sections = () => {
+    const view = props.feed.view();
+    if (view.kind !== 'ideas') return undefined;
+
+    const kept = view.entries.filter((entry) => !entry.dismissed);
+
+    return {
+      open: kept.filter((entry) => entry.status !== 'done'),
+      done: kept.filter((entry) => entry.status === 'done'),
+      dismissed: view.entries.filter((entry) => entry.dismissed),
+    };
+  };
+  const card = (entry: FeedEntry) => (
+    <li
+      class="scroll-mt-4"
+      ref={(element) => {
+        if (entry.idea.id !== props.focusedId) return;
+
+        onElementConnect(element, () =>
+          element.scrollIntoView({ block: 'start' })
+        );
+      }}
+    >
+      <Show
+        when={entry.status !== 'done' || hasResult(entry.idea)}
+        fallback={
+          <DoneIdeaRow
+            idea={entry.idea}
+            onOpen={() => props.feed.open(entry.idea)}
+          />
+        }
+      >
+        <IdeaCard
+          idea={entry.idea}
+          status={entry.status}
+          isNew={entry.isNew}
+          busy={entry.busy}
+          failed={entry.failed}
+          parts={props.parts}
+          routine={
+            entry.idea.kind === 'routine'
+              ? props.actions.routineText(entry.idea.routineSuggestionId)
+              : undefined
+          }
+          onAccept={() => props.feed.accept(entry.idea)}
+          onOpen={() => props.feed.open(entry.idea)}
+          onOpenInChat={() => props.feed.openInChat(entry.idea)}
+          onOpenSource={props.actions.openItem}
+          onReview={() => props.feed.reviewRoutine(entry.idea)}
+          onDismiss={() => props.feed.dismiss(entry.idea)}
+        />
+      </Show>
+    </li>
+  );
 
   return (
     <section
@@ -113,59 +180,36 @@ export function ForYouView(props: {
                 </Show>
               </div>
             </Match>
-            <Match
-              when={(() => {
-                const view = props.feed.view();
-                return view.kind === 'ideas' && view.entries;
-              })()}
-            >
-              {(entries) => (
-                <ul class="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-3 p-0">
-                  <For each={entries()}>
-                    {(entry) => (
-                      <li
-                        class="min-w-0 scroll-mt-4"
-                        ref={(element) => {
-                          if (entry.idea.id !== props.focusedId) return;
-
-                          onElementConnect(element, () =>
-                            element.scrollIntoView({ block: 'start' })
-                          );
-                        }}
-                      >
-                        <Show
-                          when={!entry.dismissed}
-                          fallback={
+            <Match when={sections()} keyed>
+              {(shown) => (
+                <div class="flex flex-col gap-3">
+                  <Show when={shown.open.length > 0}>
+                    <ul class="m-0 flex list-none flex-col gap-3 p-0">
+                      <For each={shown.open}>{(entry) => card(entry)}</For>
+                    </ul>
+                  </Show>
+                  <Show when={shown.done.length > 0}>
+                    <SectionLabel>{t('ideas.doneToday')}</SectionLabel>
+                    <ul class="m-0 flex list-none flex-col gap-3 p-0">
+                      <For each={shown.done}>{(entry) => card(entry)}</For>
+                    </ul>
+                  </Show>
+                  <Show when={shown.dismissed.length > 0}>
+                    <SectionLabel>{t('ideas.dismissedSection')}</SectionLabel>
+                    <ul class="m-0 flex list-none flex-col gap-3 p-0">
+                      <For each={shown.dismissed}>
+                        {(entry) => (
+                          <li>
                             <DismissedIdea
                               idea={entry.idea}
                               onUndo={() => props.feed.undoDismiss(entry.idea)}
                             />
-                          }
-                        >
-                          <IdeaCard
-                            idea={entry.idea}
-                            status={entry.status}
-                            busy={entry.busy}
-                            failed={entry.failed}
-                            routine={
-                              entry.idea.kind === 'routine'
-                                ? props.actions.routineText(
-                                    entry.idea.routineSuggestionId
-                                  )
-                                : undefined
-                            }
-                            onAccept={() => props.feed.accept(entry.idea)}
-                            onOpen={() => props.feed.open(entry.idea)}
-                            onReview={() =>
-                              props.feed.reviewRoutine(entry.idea)
-                            }
-                            onDismiss={() => props.feed.dismiss(entry.idea)}
-                          />
-                        </Show>
-                      </li>
-                    )}
-                  </For>
-                </ul>
+                          </li>
+                        )}
+                      </For>
+                    </ul>
+                  </Show>
+                </div>
               )}
             </Match>
           </Switch>

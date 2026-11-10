@@ -1,4 +1,4 @@
-import type { Accessor } from 'solid-js';
+import type { Accessor, Component } from 'solid-js';
 import type { Idea, IdeaTarget } from '../core/idea';
 
 /** The person's ideas and the two writes they can make. */
@@ -39,4 +39,17 @@ export type IdeaActions = {
   reviewRoutine(suggestionId: string): void;
   /** Save a routine idea's suggestion as a routine, switched on. */
   turnOnRoutine(suggestionId: string): Promise<void>;
+};
+
+/**
+ * The parts of a card that show an item of the app: its icon and name, a
+ * draft's text. They read the app's own data, so the host supplies them.
+ */
+export type IdeaItemParts = {
+  /** An item's icon and name, as a chip that opens it. */
+  Source: Component<{ target: IdeaTarget; onOpen(): void }>;
+  /** The text of a drafted reply. */
+  Draft: Component<{ draft: IdeaTarget }>;
+  /** What a finished idea made: its icon and name, over a line about it. */
+  Result: Component<{ target: IdeaTarget; line: string }>;
 };

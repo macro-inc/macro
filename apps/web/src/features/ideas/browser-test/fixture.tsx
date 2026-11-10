@@ -4,7 +4,11 @@ import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
-import type { IdeaActions, IdeasSource } from '../context/ideas-source';
+import type {
+  IdeaActions,
+  IdeaItemParts,
+  IdeasSource,
+} from '../context/ideas-source';
 import { layoutDay } from '../core/day';
 import type { Idea } from '../core/idea';
 import { topPriorities } from '../core/idea';
@@ -43,6 +47,21 @@ const ALL: Idea[] = [
   failedIdea,
   doneIdea,
 ];
+
+/** Items by their ids, where the app would read their names and text. */
+const PARTS: IdeaItemParts = {
+  Source: (props) => (
+    <button type="button" data-idea-source onClick={() => props.onOpen()}>
+      {props.target.entityType} {props.target.entityId}
+    </button>
+  ),
+  Draft: (props) => <p>Draft {props.draft.partId}</p>,
+  Result: (props) => (
+    <p data-idea-result>
+      {props.target.entityType} {props.target.entityId}: {props.line}
+    </p>
+  ),
+};
 
 /** A scripted source: writes are recorded, and a run moves on when told to. */
 function Fixture() {
@@ -120,7 +139,9 @@ function Fixture() {
       change('idea-routine', (idea) => ({ ...idea, state: 'done' }));
     },
   };
-  const feed = createIdeasFeed(source, actions);
+  const feed = createIdeasFeed(source, actions, {
+    lastSeenAt: () => '2026-11-09T05:00:00Z',
+  });
   /** Finish the fixture's runs, as the server's next answer would. */
   const finishRuns = () =>
     setIdeas((list) =>
@@ -146,6 +167,7 @@ function Fixture() {
         <ForYouView
           feed={feed}
           actions={actions}
+          parts={PARTS}
           focusedId={PARAMS.get('idea') ?? undefined}
           onRetry={source.retry}
         />

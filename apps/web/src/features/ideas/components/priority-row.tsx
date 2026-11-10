@@ -1,8 +1,7 @@
 import { t } from '@app/lib/i18n';
-import { Badge, Item } from '@ui';
 import { Show } from 'solid-js';
 import type { Idea, IdeaStatus } from '../core/idea';
-import { IdeaGlyph } from './idea-tile';
+import { IdeaTile } from './idea-tile';
 
 /** One of Home's priorities: the idea's tile, title and a one-line reason. */
 export function PriorityRow(props: {
@@ -14,35 +13,35 @@ export function PriorityRow(props: {
     <li>
       <button
         type="button"
-        class="group w-full min-w-0 rounded-xl text-left outline-none not-touch:hover:bg-hover focus-visible:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
+        class="group flex w-full min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left outline-none not-touch:hover:bg-hover focus-visible:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
         data-priority={props.idea.id}
         onClick={props.onOpen}
       >
-        <Item size="sm">
-          <Item.Icon aria-hidden="true">
-            <IdeaGlyph idea={props.idea} status={props.status} />
-          </Item.Icon>
-          <Item.Content class="gap-0">
-            <Item.Title class="truncate">{props.idea.title}</Item.Title>
-            <Item.Description class="truncate">
-              <Show when={props.status === 'running'}>
-                {t('ideas.badgeRunning')}
-                {' · '}
-              </Show>
-              <Show when={props.status === 'failed'}>
-                {t('ideas.badgeFailed')}
-                {' · '}
-              </Show>
-              {props.idea.summary}
-            </Item.Description>
-          </Item.Content>
-          <Item.Actions
-            class="opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
-            aria-hidden="true"
-          >
-            <Badge variant="secondary">{t('ideas.openItem')}</Badge>
-          </Item.Actions>
-        </Item>
+        <IdeaTile idea={props.idea} />
+        <span class="flex min-w-0 flex-1 flex-col">
+          <span class="truncate text-sm font-medium text-ink">
+            {props.idea.title}
+          </span>
+          <span class="flex min-w-0 items-center gap-1.5 text-xs text-ink-extra-muted">
+            <Show when={props.status === 'running'}>
+              <span class="shrink-0">{t('ideas.badgeRunning')}</span>
+            </Show>
+            <Show when={props.status === 'failed'}>
+              <span
+                class="size-1.5 shrink-0 rounded-full bg-warning"
+                aria-hidden="true"
+              />
+              <span class="shrink-0">{t('ideas.badgeFailed')}</span>
+            </Show>
+            <span class="truncate">{props.idea.summary}</span>
+          </span>
+        </span>
+        <span
+          class="shrink-0 rounded-full bg-button-secondary-bg px-2.5 py-1 text-xs font-medium text-ink opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+          aria-hidden="true"
+        >
+          {t('ideas.openItem')}
+        </span>
       </button>
     </li>
   );

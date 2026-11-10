@@ -1,17 +1,14 @@
 import ArrowBendUpLeftIcon from '@icon/system/regular/arrow-bend-up-left.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FileTextIcon from '@icon/system/regular/file-text.svg';
 import PaperPlaneIcon from '@icon/system/regular/paper-plane-tilt.svg';
-import RepeatIcon from '@icon/system/regular/repeat.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
-import WarningIcon from '@icon/system/regular/warning.svg';
-import { Spinner } from '@ui';
-import type { Component } from 'solid-js';
-import { Match, Switch } from 'solid-js';
+import { type Component, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
-import type { Idea, IdeaStatus } from '../core/idea';
+import type { Idea } from '../core/idea';
 
 type Look = { icon: Component<{ class?: string }>; color: string };
 
@@ -26,7 +23,7 @@ function ideaLook(idea: Idea): Look {
       color: prompt.sends ? 'text-warning' : 'text-accent',
     }))
     .with({ kind: 'entity', action: 'reply' }, () => ({
-      icon: ArrowBendUpLeftIcon,
+      icon: EnvelopeIcon,
       color: 'text-email',
     }))
     .with({ kind: 'entity', action: 'review' }, () => ({
@@ -34,35 +31,34 @@ function ideaLook(idea: Idea): Look {
       color: 'text-success',
     }))
     .with({ kind: 'entity', action: 'follow_up' }, () => ({
-      icon: ClockIcon,
+      icon: ArrowBendUpLeftIcon,
       color: 'text-task',
     }))
     .with({ kind: 'routine' }, () => ({
-      icon: RepeatIcon,
+      icon: ClockIcon,
       color: 'text-warning',
     }))
     .exhaustive();
 }
 
-/** An idea's glyph: its kind while it waits, then where it stands. */
-export function IdeaGlyph(props: { idea: Idea; status: IdeaStatus }) {
+/**
+ * The routine step tile, for an idea: a quiet square with the kind's glyph,
+ * or a check once the idea is a finished row.
+ */
+export function IdeaTile(props: { idea: Idea; finished?: boolean }) {
   const look = () => ideaLook(props.idea);
 
   return (
-    <Switch
-      fallback={
-        <Dynamic component={look().icon} class={`size-4 ${look().color}`} />
-      }
+    <span
+      class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-ink/5"
+      aria-hidden="true"
     >
-      <Match when={props.status === 'running'}>
-        <Spinner size="sm" decorative class="size-4" />
-      </Match>
-      <Match when={props.status === 'failed'}>
-        <WarningIcon class="size-4 text-failure" />
-      </Match>
-      <Match when={props.status === 'done'}>
-        <CheckIcon class="size-4 text-success" />
-      </Match>
-    </Switch>
+      <Show
+        when={!props.finished}
+        fallback={<CheckIcon class="size-4 text-success" />}
+      >
+        <Dynamic component={look().icon} class={`size-4 ${look().color}`} />
+      </Show>
+    </span>
   );
 }

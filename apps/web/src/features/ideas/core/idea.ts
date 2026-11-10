@@ -141,3 +141,10 @@ export function topPriorities(ideas: Idea[], limit: number): Idea[] {
     .filter((idea) => ideaStatus(idea) !== 'done')
     .slice(0, limit);
 }
+
+/** Whether an idea arrived after the person last looked at the feed. */
+export function isNewSince(idea: Idea, lastSeenAt: string | undefined) {
+  if (!lastSeenAt || idea.state !== 'proposed') return false;
+
+  return Date.parse(idea.createdAt) > Date.parse(lastSeenAt);
+}
