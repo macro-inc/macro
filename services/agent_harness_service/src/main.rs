@@ -1436,6 +1436,9 @@ async fn run() -> anyhow::Result<()> {
             agent_session::outbound::notifications::PgNotificationStore(pool.clone()),
         ))
         .with_conversation_turns(conversation_turns)
+        .with_worker_idle_timeout(std::time::Duration::from_secs(
+            config.agent_session_idle_timeout_secs,
+        ))
         .with_admission(admission.clone())
         .with_agent_keys(agent_keys)
         .with_repositories(open_repositories)

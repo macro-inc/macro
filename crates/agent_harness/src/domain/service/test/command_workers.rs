@@ -147,3 +147,26 @@ async fn a_worker_never_retires_an_entry_that_is_not_its_own() {
     assert!(workers.contains_key(&id), "the newer worker's entry stays");
     drop(old);
 }
+
+#[tokio::test]
+async fn a_host_set_idle_timeout_retires_workers_on_its_schedule() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let id = AgentSessionId::new();
+    repo.insert_session(agent_session::testing::test_agent_session(id));
+    let service = harness_sharing_repo(repo).with_worker_idle_timeout(Duration::from_secs(60));
+    service
+        .execute_here(
+            id,
+            HarnessCommand::SessionStopped {
+                reason: "first".to_owned(),
+            },
+        )
+        .await
+        .expect("the command runs");
+
+    tokio::time::pause();
+    tokio::time::sleep(Duration::from_secs(59)).await;
+    assert_eq!(service.command_workers(), 1, "still inside the window");
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    assert_eq!(service.command_workers(), 0, "retired after 60 seconds");
+}

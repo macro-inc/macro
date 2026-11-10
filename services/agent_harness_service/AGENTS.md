@@ -192,6 +192,10 @@ The binary allocates with mimalloc (`#[global_allocator]` in `src/main.rs`):
 glibc malloc kept freed memory resident as fragmentation under this
 workload. Tests and the library keep the system allocator.
 
+`AGENT_SESSION_IDLE_TIMEOUT_SECS` (default 900, so no Doppler key) is how long
+a session's command worker waits before it releases a quiet session from
+memory and exits; lower it only to exercise the release end to end.
+
 The shared Postgres pool defaults to 30 connections (`DATABASE_MAX_CONNECTIONS`).
 Routine dispatch waits for the shared HTTP listener and calls its loopback
 address, avoiding an ALB/self-startup race. Shutdown stops scheduling intake and

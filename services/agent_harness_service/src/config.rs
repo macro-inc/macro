@@ -114,6 +114,11 @@ pub struct Config {
     /// replicas use the independent for_warming lifecycle marker.
     #[macro_config_default(false)]
     pub hide_agent_dm_sessions: bool,
+    /// Seconds a session's command worker waits for its next command before
+    /// it releases the quiet session from memory and exits. Lowered only to
+    /// exercise the release end to end.
+    #[macro_config_default(900)]
+    pub agent_session_idle_timeout_secs: u64,
     /// Backend feature flags, evaluated using the authenticated session owner.
     pub posthog_api_key: PosthogApiKey,
     /// Same regional origin as the frontend's PostHog project.

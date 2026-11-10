@@ -208,6 +208,9 @@ struct AgentHarnessInner<
     /// The shape each reply message was last shown with, so a report that
     /// changes nothing it shows does not rewrite it.
     presented_shapes: DashMap<macro_uuid::Uuid, Vec<crate::domain::presenter::SegmentShape>>,
+    /// How long a session's command worker waits for its next command before
+    /// it releases the quiet session and exits.
+    worker_idle_timeout: std::time::Duration,
 }
 
 /// One handle on the orchestrator's state, shared by the service's clones
@@ -405,6 +408,7 @@ where
                 projections: DashMap::new(),
                 typing_phases: DashMap::new(),
                 presented_shapes: DashMap::new(),
+                worker_idle_timeout: queue::WORKER_IDLE_TIMEOUT,
             }),
             workers: Arc::new(DashMap::new()),
             repositories: None,
@@ -422,6 +426,16 @@ where
         Arc::get_mut(&mut self.inner)
             .expect("configure journal before cloning the harness")
             .conversation_turns = Some(store);
+        self
+    }
+
+    /// Release quiet sessions and retire their command workers after
+    /// `timeout` with no command, instead of
+    /// [`queue::WORKER_IDLE_TIMEOUT`]. Set before cloning the harness.
+    pub fn with_worker_idle_timeout(mut self, timeout: std::time::Duration) -> Self {
+        Arc::get_mut(&mut self.inner)
+            .expect("configure the idle timeout before cloning the harness")
+            .worker_idle_timeout = timeout;
         self
     }
 

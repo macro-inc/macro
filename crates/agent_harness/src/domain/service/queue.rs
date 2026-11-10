@@ -25,8 +25,9 @@ pub(super) enum Dispatch {
 pub(super) type SessionWorkers = DashMap<AgentSessionId, mpsc::UnboundedSender<QueuedCommand>>;
 
 /// How long a session's command worker waits for its next command before it
-/// releases the quiet session's local state (`idle.rs`) and exits. The next
-/// command starts a new worker.
+/// releases the quiet session's local state (`idle.rs`) and exits, unless
+/// the host sets another (`AgentHarnessService::with_worker_idle_timeout`).
+/// The next command starts a new worker.
 pub(super) const WORKER_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(15 * 60);
 
 pub(super) struct QueuedCommand {
@@ -1884,7 +1885,7 @@ pub(super) async fn run_session_worker<
     loop {
         let queued = tokio::select! {
             queued = receiver.recv() => queued,
-            () = tokio::time::sleep(WORKER_IDLE_TIMEOUT) => {
+            () = tokio::time::sleep(inner.worker_idle_timeout) => {
                 // Before retiring, while commands for the session still queue
                 // behind this worker rather than racing it on a new one.
                 inner.release_idle(session_id).await;
