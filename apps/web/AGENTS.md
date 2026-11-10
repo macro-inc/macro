@@ -242,9 +242,10 @@ replacement, cancellation, keyboard editing, and read-only references. Navigatio
 adapter tests separately check file types, access failures, and split selection.
 
 Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
-backend-free desktop/phone regression: the card reserves its height from
-`previewData.poll.optionCount` as a `min-height`, grows to wrapped text, and
-never scrolls or clips inside:
+backend-free desktop/phone regression: while loading, the card draws its
+header with the question (the card's name, so it wraps as it will) above a body
+reserved from `previewData.poll.optionCount`, keeps that height through load,
+and never scrolls or clips inside:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts poll-card.browser.e2e.ts`.
 
 Pinch zoom on opened image files (Drive details and image splits) has a
