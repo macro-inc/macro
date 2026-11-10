@@ -353,7 +353,10 @@ async fn admission_skips_invalid_first_and_middle_pages_without_truncating_fanou
         .map(|run| run.action_id)
         .collect();
     admitted.sort();
-    assert_eq!(admitted, vec![first_valid, second_valid, last_valid]);
+    // Ids minted in the same millisecond need not sort in minting order.
+    let mut expected = vec![first_valid, second_valid, last_valid];
+    expected.sort();
+    assert_eq!(admitted, expected);
     assert_eq!(
         service.ingest(&incoming).await.unwrap(),
         EventIngestionResult::Admitted { inserted: 0 }
