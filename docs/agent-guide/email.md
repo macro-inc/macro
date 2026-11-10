@@ -648,7 +648,10 @@ row titles the thread as its header does: repeated leading `Re:` prefixes are
 dropped, and a blank subject reads `[No subject]`.
 Without room for both (narrow split, collapsed window) the pane folds away and
 a thread replaces the list as usual; the thread remounts, but a reply draft
-survives. The divider can be dragged; the list width is remembered. Verify that
+survives. The divider can be dragged; the list keeps that width, remembered per
+browser, across reloads, window and split resizes, and sidebar changes, while
+the reader takes the rest. In a window too tight for both, the list gives way
+before the sidebar does and returns when there is room. Verify that
 list `e` still works after switching threads in the pane (the reader's `e` must
 not replace it), and that after j/k the grid still has focus: the next Enter
 moves into the reader without opening a reply.
