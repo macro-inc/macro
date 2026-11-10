@@ -48,17 +48,12 @@ import { CallRecordingBody } from '../component/CallRecording/CallRecordingBody'
 import { CallRecordingRoot } from '../component/CallRecording/CallRecordingRoot';
 import { CallSidePanelSections } from '../component/sidepanel/CallSidePanelSections';
 import type { CallTranscriptTarget } from '../constants';
+import { recordingName } from '../primitives/recording-identity';
 import { callRecordingDownloadSource } from '../queries/recording-download';
 
 import { CallDetailMobileHeader } from './CallDetailMobileHeader';
 
 export type CallDetailData = { record: CallRecord; name: string };
-
-function callDetailName(record: CallRecord): string {
-  return (
-    record.customName ?? record.channelName ?? t('calls.detailFallbackName')
-  );
-}
 
 /** Share the call query without owning either host's header. */
 export function useCallDetail(callId: Accessor<string>) {
@@ -68,7 +63,7 @@ export function useCallDetail(callId: Accessor<string>) {
   const data = (): CallDetailData | undefined => {
     if (query.isPending) return undefined;
     const record = query.data;
-    return record ? { record, name: callDetailName(record) } : undefined;
+    return record ? { record, name: recordingName(record) } : undefined;
   };
 
   return { query, data };

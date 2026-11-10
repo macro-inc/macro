@@ -6,11 +6,9 @@ import { formatVideoTimestamp } from '@core/util/duration';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlayIcon from '@icon/system/regular/play.svg';
 import { Button } from '@ui';
-import { createEffect, createMemo, For, on, Show } from 'solid-js';
-import {
-  messageVideoSeconds,
-  recordingChatMessages,
-} from '../../core/recording-chat';
+import { For, Show } from 'solid-js';
+import { messageVideoSeconds } from '../../core/recording-chat';
+import { createRecordingChat } from '../../primitives/recording-chat';
 
 export function CallRecordingChat(props: {
   source: CallDiscussionSource;
@@ -22,19 +20,7 @@ export function CallRecordingChat(props: {
   onClearTarget?: () => void;
   hideHeading?: boolean;
 }) {
-  const messages = createMemo(() =>
-    recordingChatMessages(props.source.thread())
-  );
-  const rows = new Map<string, HTMLDivElement>();
-  createEffect(
-    on(
-      () => [props.targetId, props.requestKey, messages()] as const,
-      ([id]) => {
-        if (!id) return;
-        rows.get(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }
-    )
-  );
+  const { messages, registerRow } = createRecordingChat(props);
   return (
     <section
       class="flex min-w-0 flex-col gap-5"
@@ -85,7 +71,7 @@ export function CallRecordingChat(props: {
               return (
                 <Message.Root
                   message={message}
-                  ref={(el) => rows.set(message.id, el)}
+                  ref={(el) => registerRow(message.id, el)}
                   targeted={props.targetId === message.id}
                   onClick={() =>
                     props.targetId === message.id && props.onClearTarget?.()

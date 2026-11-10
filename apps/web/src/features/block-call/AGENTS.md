@@ -8,11 +8,12 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 ## Start here
 
 - `views/CallDetailView.tsx`: native route hosts, query, header and loading states.
-- `component/CallRecording/CallRecordingBody.tsx`: one playback owner and responsive composition.
+- `component/CallRecording/CallRecordingBody.tsx`: playback, transcript and responsive composition wiring.
 - `component/CallRecording/CallRecordingRoot.tsx`: shared recording and independent details state.
-- `component/CallTranscript.tsx`: transcript rows, inline chat and follow/seek behavior.
+- `component/CallTranscript.tsx`: transcript and inline chat presentation.
 - `component/sidepanel/CallSidePanelSections.tsx`: existing metadata, sharing and entity sections.
-- `primitives/recording-playback.ts`: native media state and actions.
+- `primitives/recording-*.ts`: media playback, controls, layout, identity and recording timeline state/actions.
+- `primitives/transcript-*.ts`: mixed transcript timeline and follow/scroll behavior.
 - `core/recording-chat.ts`: visible messages and valid recording offsets.
 
 ## Boundaries

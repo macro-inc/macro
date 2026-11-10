@@ -1,4 +1,4 @@
-import { formatLocale, t } from '@app/lib/i18n';
+import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
@@ -6,8 +6,8 @@ import HashIcon from '@icon/system/regular/hash.svg';
 import { InlineFetchedEntityTagsPill } from '@property/tags';
 import type { CallRecord } from '@service-call/client';
 import { Button } from '@ui';
-import { isSameDay } from 'date-fns';
 import { createSignal, Show, Suspense } from 'solid-js';
+import { createRecordingIdentity } from '../../primitives/recording-identity';
 import {
   CallRecordingAvatars,
   CallRecordingParticipantsSection,
@@ -15,35 +15,7 @@ import {
 
 export function CallRecordingTitle(props: { record: CallRecord }) {
   const [participantsOpen, setParticipantsOpen] = createSignal(false);
-  const dateRange = () => {
-    const start = new Date(props.record.startedAt);
-    const end = props.record.endedAt
-      ? new Date(props.record.endedAt)
-      : undefined;
-    if (!Number.isFinite(start.getTime())) return '';
-    const samePeriod =
-      end &&
-      isSameDay(start, end) &&
-      start.getHours() < 12 === end.getHours() < 12;
-    const options: Intl.DateTimeFormatOptions = {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    };
-    const from = new Intl.DateTimeFormat(formatLocale(), options)
-      .formatToParts(start)
-      .filter((part) => !samePeriod || part.type !== 'dayPeriod')
-      .map((part) => part.value)
-      .join('')
-      .trim();
-    if (!end || !Number.isFinite(end.getTime())) return from;
-    const endOptions = isSameDay(start, end)
-      ? ({ hour: 'numeric', minute: '2-digit' } as const)
-      : options;
-    return `${from} – ${new Intl.DateTimeFormat(formatLocale(), endOptions).format(end)}`;
-  };
+  const { title, dateRange } = createRecordingIdentity(() => props.record);
 
   return (
     <header class="flex min-w-0 flex-col gap-1 @container/call-title">
@@ -56,9 +28,7 @@ export function CallRecordingTitle(props: { record: CallRecord }) {
         )}
       </Show>
       <h1 class="text-2xl font-semibold tracking-tight text-ink text-balance">
-        {props.record.customName ??
-          props.record.channelName ??
-          t('calls.detailFallbackName')}
+        {title()}
       </h1>
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-ink-muted">
         <Show

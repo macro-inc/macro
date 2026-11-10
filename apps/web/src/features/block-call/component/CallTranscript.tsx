@@ -12,27 +12,10 @@ import CrosshairIcon from '@icon/system/regular/crosshair.svg';
 import { senderFromStorageId } from '@queries/messages/message-sender';
 import type { CallRecordTranscriptSegment } from '@service-storage/generated/schemas/callRecordTranscriptSegment';
 import { Avatar, Button, Tooltip } from '@ui';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  on,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { messageVideoSeconds } from '../core/recording-chat';
-import { getSegmentVideoSeconds } from './transcript-playback';
-
-type TimelineRow =
-  | {
-      kind: 'transcript';
-      key: string;
-      seconds: number | null;
-      segment: CallRecordTranscriptSegment;
-    }
-  | { kind: 'chat'; key: string; seconds: number; message: MessageData };
+import { createTranscriptScroll } from '../primitives/transcript-scroll';
+import { createTranscriptTimeline } from '../primitives/transcript-timeline';
 
 export function CallTranscript(props: {
   transcript: CallRecordTranscriptSegment[];
@@ -55,163 +38,9 @@ export function CallTranscript(props: {
   syncTarget?: HTMLElement;
   syncSurface?: 'surface' | 'inset';
 }) {
-  const [scrollRef, setScrollRef] = createSignal<HTMLElement>();
-  const viewport = () =>
-    props.active === false ? undefined : (props.scrollElement ?? scrollRef());
-  const [following, setFollowing] = createSignal(true);
-  const [activeVisible, setActiveVisible] = createSignal(true);
-  const rows = new Map<number, HTMLDivElement>();
-  let ignoreScrollUntil = 0;
-
-  const timeline = createMemo<TimelineRow[]>(() => {
-    const segments: TimelineRow[] = [...props.transcript]
-      .sort((a, b) => a.sequenceNum - b.sequenceNum)
-      .map((segment) => ({
-        kind: 'transcript',
-        key: segment.transcriptId,
-        segment,
-        seconds: getSegmentVideoSeconds(segment, props.timelineStartMs),
-      }));
-    const messages: TimelineRow[] = (props.messages ?? []).flatMap(
-      (message) => {
-        const seconds = messageVideoSeconds(
-          message.created_at,
-          props.timelineStartMs,
-          props.durationSeconds
-        );
-        return seconds === null
-          ? []
-          : [{ kind: 'chat' as const, key: message.id, seconds, message }];
-      }
-    );
-    return [...segments, ...messages].sort(
-      (a, b) => (a.seconds ?? Infinity) - (b.seconds ?? Infinity)
-    );
-  });
-
-  const updateVisibility = () => {
-    const sequence = props.activeSequenceNum;
-    if (sequence === null || sequence === undefined) {
-      setActiveVisible(true);
-      return;
-    }
-    const container = viewport();
-    const row = rows.get(sequence);
-    if (!container || !row) {
-      setActiveVisible(false);
-      return;
-    }
-    const outer = container.getBoundingClientRect();
-    const inner = row.getBoundingClientRect();
-    setActiveVisible(inner.bottom > outer.top && inner.top < outer.bottom);
-  };
-
-  const scrollActiveIntoView = (
-    force = false,
-    behavior: ScrollBehavior = 'smooth'
-  ) => {
-    const sequence = props.activeSequenceNum;
-    if (sequence === null || sequence === undefined) return;
-    const container = viewport();
-    const row = rows.get(sequence);
-    if (!container || !row) return;
-    const outer = container.getBoundingClientRect();
-    const inner = row.getBoundingClientRect();
-    if (!force && inner.top >= outer.top && inner.bottom <= outer.bottom)
-      return;
-    ignoreScrollUntil = performance.now() + 350;
-    container.scrollTo({
-      top: Math.max(
-        0,
-        container.scrollTop +
-          inner.top -
-          outer.top -
-          container.clientHeight / 2 +
-          row.clientHeight / 2
-      ),
-      behavior,
-    });
-  };
-
-  createEffect(
-    on(
-      () => props.videoSeekGeneration ?? 0,
-      (generation, previous) => {
-        if (previous !== undefined && generation !== previous) {
-          setFollowing(true);
-          scrollActiveIntoView(true);
-        }
-        updateVisibility();
-      }
-    )
-  );
-
-  createEffect(
-    on(
-      () => [props.activeSequenceNum, following(), viewport()] as const,
-      () => {
-        if (following()) scrollActiveIntoView();
-        updateVisibility();
-      }
-    )
-  );
-
-  createEffect(
-    on(
-      () => props.manualScrollGeneration ?? 0,
-      (generation, previous) => {
-        if (previous !== undefined && generation !== previous)
-          setFollowing(false);
-      }
-    )
-  );
-
-  createEffect(() => {
-    const element = viewport();
-    if (!element) return;
-    const stopFollowing = () => setFollowing(false);
-    const onScroll = () => {
-      if (!following() || performance.now() >= ignoreScrollUntil)
-        updateVisibility();
-    };
-    const onPointerDown = (event: PointerEvent) => {
-      // Scrollbar presses target the viewport; content presses target a row.
-      if (event.target === element && event.pointerType !== 'touch')
-        stopFollowing();
-    };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (
-        [
-          'ArrowUp',
-          'ArrowDown',
-          'PageUp',
-          'PageDown',
-          'Home',
-          'End',
-          ' ',
-        ].includes(event.key)
-      )
-        stopFollowing();
-    };
-    element.addEventListener('wheel', stopFollowing, { passive: true });
-    element.addEventListener('touchmove', stopFollowing, { passive: true });
-    element.addEventListener('scroll', onScroll, { passive: true });
-    element.addEventListener('pointerdown', onPointerDown);
-    element.addEventListener('keydown', onKeyDown);
-    const observer = new ResizeObserver(() => {
-      if (following()) scrollActiveIntoView(false, 'auto');
-      updateVisibility();
-    });
-    observer.observe(element);
-    onCleanup(() => {
-      observer.disconnect();
-      element.removeEventListener('wheel', stopFollowing);
-      element.removeEventListener('touchmove', stopFollowing);
-      element.removeEventListener('scroll', onScroll);
-      element.removeEventListener('pointerdown', onPointerDown);
-      element.removeEventListener('keydown', onKeyDown);
-    });
-  });
+  const scroll = createTranscriptScroll(props);
+  const { scrollRef, setScrollRef, following, activeVisible } = scroll;
+  const timeline = createTranscriptTimeline(props);
 
   const syncButton = () => (
     <div
@@ -221,14 +50,7 @@ export function CallTranscript(props: {
         'bg-surface': props.syncSurface !== 'inset',
       }}
     >
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => {
-          setFollowing(true);
-          scrollActiveIntoView(true);
-        }}
-      >
+      <Button variant="secondary" size="sm" onClick={scroll.sync}>
         <CrosshairIcon class="size-4" />
         {t('calls.detailSyncToVideo')}
       </Button>
@@ -311,10 +133,9 @@ export function CallTranscript(props: {
                 return (
                   <div
                     data-call-transcript-row
-                    ref={(element) => {
-                      rows.set(segment().sequenceNum, element);
-                      onCleanup(() => rows.delete(segment().sequenceNum));
-                    }}
+                    ref={(element) =>
+                      scroll.registerRow(segment().sequenceNum, element)
+                    }
                   >
                     <Message.Root
                       message={message()}
@@ -395,7 +216,7 @@ export function CallTranscript(props: {
       <Show when={!props.scrollElement}>
         <CustomScrollbar
           scrollContainer={scrollRef}
-          onScrollIntent={() => setFollowing(false)}
+          onScrollIntent={scroll.stopFollowing}
         />
       </Show>
       <Show

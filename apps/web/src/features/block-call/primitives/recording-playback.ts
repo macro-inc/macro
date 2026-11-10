@@ -1,5 +1,16 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import { type Accessor, createEffect, onCleanup } from 'solid-js';
+import { createStore } from 'solid-js/store';
+
+type RecordingPlaybackState = {
+  time: number;
+  duration: number;
+  paused: boolean;
+  muted: boolean;
+  rate: number;
+  volume: number;
+  isFullscreen: boolean;
+};
 
 export const RECORDING_PLAYBACK_RATES = [1, 1.25, 1.5, 1.75, 2] as const;
 
@@ -8,18 +19,23 @@ export function createRecordingPlayback(
   video: Accessor<HTMLVideoElement | undefined>,
   fullscreenTarget?: Accessor<HTMLElement | undefined>
 ) {
-  const [time, setTime] = createSignal(0);
-  const [duration, setDuration] = createSignal(0);
-  const [paused, setPaused] = createSignal(true);
-  const [muted, setMuted] = createSignal(false);
-  const [rate, setRate] = createSignal(1);
-  const [volume, setVolumeLevel] = createSignal(1);
-  const [isFullscreen, setIsFullscreen] = createSignal(false);
+  const [state, setState] = createStore<RecordingPlaybackState>({
+    time: 0,
+    duration: 0,
+    paused: true,
+    muted: false,
+    rate: 1,
+    volume: 1,
+    isFullscreen: false,
+  });
   const target = () => fullscreenTarget?.() ?? video()?.parentElement;
   createEffect(() => {
     const element = target();
     const update = () =>
-      setIsFullscreen(!!element && document.fullscreenElement === element);
+      setState(
+        'isFullscreen',
+        !!element && document.fullscreenElement === element
+      );
     update();
     document.addEventListener('fullscreenchange', update);
     onCleanup(() => {
@@ -33,13 +49,15 @@ export function createRecordingPlayback(
     const element = video();
     if (!element) return;
     const update = () => {
-      setTime(Number.isFinite(element.currentTime) ? element.currentTime : 0);
-      setDuration(Number.isFinite(element.duration) ? element.duration : 0);
-      setPaused(element.paused);
-      setMuted(element.muted);
-      setVolumeLevel(element.volume);
+      setState({
+        time: Number.isFinite(element.currentTime) ? element.currentTime : 0,
+        duration: Number.isFinite(element.duration) ? element.duration : 0,
+        paused: element.paused,
+        muted: element.muted,
+        volume: element.volume,
+        rate: element.playbackRate,
+      });
       if (element.volume > 0) audibleVolume = element.volume;
-      setRate(element.playbackRate);
     };
     const events = [
       'timeupdate',
@@ -64,16 +82,16 @@ export function createRecordingPlayback(
     if (!element || !Number.isFinite(seconds)) return;
     const end = Number.isFinite(element.duration) ? element.duration : Infinity;
     element.currentTime = Math.max(0, Math.min(end, seconds));
-    setTime(element.currentTime);
+    setState('time', element.currentTime);
   };
   return {
-    time,
-    duration,
-    paused,
-    muted,
-    rate,
-    volume,
-    isFullscreen,
+    time: () => state.time,
+    duration: () => state.duration,
+    paused: () => state.paused,
+    muted: () => state.muted,
+    rate: () => state.rate,
+    volume: () => state.volume,
+    isFullscreen: () => state.isFullscreen,
     seek,
     toggle: () => {
       const element = video();
@@ -102,8 +120,7 @@ export function createRecordingPlayback(
       }
       // Controlled sliders read back during the same pointer event, before the
       // browser dispatches volumechange.
-      setVolumeLevel(element.volume);
-      setMuted(element.muted);
+      setState({ volume: element.volume, muted: element.muted });
     },
     setRate: (value: number) => {
       const element = video();

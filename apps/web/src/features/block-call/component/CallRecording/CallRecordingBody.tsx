@@ -3,19 +3,15 @@ import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
 import { t } from '@app/lib/i18n';
 import { beginInteraction, usePending } from '@app/observability/flow';
 import { useCallContextOptional } from '@channel/Call/CallContext';
-import { guestDisplayName } from '@channel/Call/call-identity';
 import { CallDiscussionHistory } from '@channel/Call/chat/CallChatHistory';
 import { HeaderActionButton } from '@components/app/HeaderActionButton';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel, useSidePanel } from '@components/app/side-panel';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { isMobile } from '@core/mobile/isMobile';
-import { getDisplayName, tryMacroId } from '@core/user';
-import { createScrollIntentTracker } from '@core/util/scroll-intent';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import type { CallRecord } from '@service-call/client';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, Layer, Tabs } from '@ui';
 import {
   createEffect,
@@ -24,20 +20,17 @@ import {
   type JSX,
   Match,
   on,
-  onCleanup,
   Show,
   Switch,
 } from 'solid-js';
 import type { CallTranscriptTarget } from '../../constants';
 import { useRecordingView } from '../../context/recording-view';
 import { recordingChatMessages } from '../../core/recording-chat';
+import { createRecordingIdentity } from '../../primitives/recording-identity';
+import { createRecordingLayout } from '../../primitives/recording-layout';
 import { createRecordingPlayback } from '../../primitives/recording-playback';
+import { createRecordingTimeline } from '../../primitives/recording-timeline';
 import { CallTranscript } from '../CallTranscript';
-import {
-  getActiveTranscriptSequenceNum,
-  getSegmentVideoSeconds,
-  sortTranscriptSegments,
-} from '../transcript-playback';
 import { useCallAgain } from '../use-call-again';
 import { CallRecordingChat } from './CallRecordingChat';
 import { CallRecordingMobileActions } from './CallRecordingMobileActions';
@@ -46,14 +39,7 @@ import { CallRecordingPinnedPlayer } from './CallRecordingPinnedPlayer';
 import { CallRecordingSummarySection } from './CallRecordingSummary';
 import { CallRecordingTitle } from './CallRecordingTitle';
 import { CallRecordingVideo } from './CallRecordingVideo';
-import {
-  seekDedupeKey,
-  shouldCoalesceSeekGenerationBump,
-} from './call-recording-utils';
 
-// 520px player + 480px card + 28px section gap + 80px page insets.
-// The 1308px group cap keeps the original 800px content cap (720px + insets).
-const TRANSCRIPT_LAYOUT_MIN_PX = 1108;
 export function CallRecordingBody(props: {
   record: CallRecord;
   callId: string;
@@ -67,223 +53,49 @@ export function CallRecordingBody(props: {
   const record = () => props.record;
   const panel = useSidePanel();
   const { contentTab, setContentTab } = useRecordingView();
+  const [videoRef, setVideoRef] = createSignal<HTMLVideoElement>();
   const [columnRef, setColumnRef] = createSignal<HTMLDivElement>();
-  const columnSize = createElementSize(columnRef);
-  const wideTranscript = () =>
-    !isMobile() && (columnSize.width ?? 0) >= TRANSCRIPT_LAYOUT_MIN_PX;
+  const playback = createRecordingPlayback(videoRef, columnRef);
+  const layout = createRecordingLayout({
+    playback,
+    hasRecording: () => !!record().recordingUrl,
+  });
+  const setWorkspace = (element: HTMLDivElement) => {
+    setColumnRef(element);
+    layout.setColumnRef(element);
+  };
+  const {
+    wideTranscript,
+    transcriptPanel,
+    fullscreenTranscript,
+    toggleFullscreenTranscript,
+    scrollRef,
+    scrollIntent,
+    scrollingDown,
+    floatingPlayback,
+    manualScrollGeneration,
+    setManualScrollGeneration,
+    syncTarget,
+    registerSyncTarget,
+    setPageScrollRef,
+    setLeftScrollRef,
+    setPlayerColumnRef,
+    setPlayerRef,
+    setTranscriptCardRef,
+  } = layout;
   const selectedTab = () =>
     !isMobile() && contentTab() === 'chat' ? 'summary' : contentTab();
-  const [playbackSeconds, setPlaybackSeconds] = createSignal(0);
-  const [allowFutureLead, setAllowFutureLead] = createSignal(true);
-  const [videoRef, setVideoRef] = createSignal<HTMLVideoElement>();
-  const playback = createRecordingPlayback(videoRef, columnRef);
-  const [fullscreenTranscript, setFullscreenTranscript] = createSignal(true);
-  const transcriptPanel = () => playback.isFullscreen() || wideTranscript();
-  createEffect(
-    on(playback.isFullscreen, (active) => {
-      if (!active) setFullscreenTranscript(true);
-    })
-  );
-  const toggleFullscreenTranscript = () => {
-    const interaction = beginInteraction('call.recording.transcript');
-    try {
-      setFullscreenTranscript((visible) => !visible);
-    } finally {
-      interaction.end();
-    }
-  };
   const recordingDuration = () => playback.duration() || undefined;
-  const [pageScrollRef, setPageScrollRef] = createSignal<HTMLDivElement>();
-  const [leftScrollRef, setLeftScrollRef] = createSignal<HTMLDivElement>();
-  const scrollRef = () =>
-    transcriptPanel() ? leftScrollRef() : pageScrollRef();
-  const [scrollingDown, setScrollingDown] = createSignal(false);
-  const [manualScrollGeneration, setManualScrollGeneration] = createSignal(0);
-  const [syncTarget, setSyncTarget] = createSignal<HTMLDivElement>();
-  const registerSyncTarget = (element: HTMLDivElement) => {
-    setSyncTarget(element);
-    onCleanup(() => {
-      if (syncTarget() === element) setSyncTarget(undefined);
-    });
-  };
-  const scrollIntent = createScrollIntentTracker(() => {
-    const direction = scrollIntent.lastDirection();
-    if (direction) setScrollingDown(direction === 'down');
-  });
-  const [playerRef, setPlayerRef] = createSignal<HTMLElement>();
-  const [playerColumnRef, setPlayerColumnRef] = createSignal<HTMLDivElement>();
-  const [transcriptCardRef, setTranscriptCardRef] = createSignal<HTMLElement>();
-  let narrowPlayerRect: DOMRect | undefined;
-  let layoutAnimations: Animation[] = [];
-  let animationPaneWidth = 0;
-  const cancelLayoutAnimations = () => {
-    for (const animation of layoutAnimations) animation.cancel();
-    layoutAnimations = [];
-  };
-  onCleanup(cancelLayoutAnimations);
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const motionChanged = () => {
-    if (reducedMotion.matches) cancelLayoutAnimations();
-  };
-  reducedMotion.addEventListener('change', motionChanged);
-  onCleanup(() => reducedMotion.removeEventListener('change', motionChanged));
-  createEffect(() => {
-    const column = columnRef();
-    const player = playerRef();
-    if (!column) return;
-    const observer = new ResizeObserver(() => {
-      if (layoutAnimations.length && column.clientWidth !== animationPaneWidth)
-        cancelLayoutAnimations();
-      if (player && !wideTranscript() && !playback.isFullscreen())
-        narrowPlayerRect = player.getBoundingClientRect();
-    });
-    observer.observe(column);
-    if (player) observer.observe(player);
-    onCleanup(() => observer.disconnect());
-  });
-  createEffect(
-    on(wideTranscript, (wide, previous) => {
-      cancelLayoutAnimations();
-      if (
-        !wide ||
-        previous !== false ||
-        playback.isFullscreen() ||
-        reducedMotion.matches
-      )
-        return;
-      const before = narrowPlayerRect;
-      const player = playerRef();
-      const column = playerColumnRef();
-      const card = transcriptCardRef();
-      if (!column || !card) return;
-      const cardRect = card.getBoundingClientRect();
-      animationPaneWidth = columnRef()?.clientWidth ?? 0;
-      const timing = { duration: 240, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
-      const cardOffset = before ? before.right + 28 - cardRect.left : 12;
-      layoutAnimations = [
-        card.animate(
-          [
-            { opacity: 0, transform: `translateX(${cardOffset}px)` },
-            { opacity: 1, transform: 'translateX(0)' },
-          ],
-          timing
-        ),
-      ];
-      if (before && player) {
-        const after = player.getBoundingClientRect();
-        layoutAnimations.push(
-          column.animate(
-            [
-              {
-                width: `${before.width}px`,
-                transform: `translate(${before.left - after.left}px, ${before.top - after.top}px)`,
-              },
-              { width: `${after.width}px`, transform: 'translate(0, 0)' },
-            ],
-            timing
-          )
-        );
-      }
-    })
-  );
-  createEffect(
-    on(playback.isFullscreen, (active) => {
-      if (active) cancelLayoutAnimations();
-    })
-  );
-  const [playerOffscreen, setPlayerOffscreen] = createSignal(false);
-  const floatingPlayback = () => playerOffscreen() && !!record().recordingUrl;
   const mobilePlaybackActive = () =>
     selectedTab() === 'transcript' && floatingPlayback() && !panel?.isOpen();
-  createEffect(
-    on([scrollRef, playerRef], ([root, player]) => {
-      if (!root || !player) return;
-      const observer = new IntersectionObserver(
-        ([entry]) => {
-          setPlayerOffscreen(
-            entry.boundingClientRect.bottom <= (entry.rootBounds?.top ?? 0)
-          );
-        },
-        { root }
-      );
-      observer.observe(player);
-      onCleanup(() => observer.disconnect());
-    })
-  );
-  const sortedTranscript = createMemo(() =>
-    sortTranscriptSegments(record().transcript)
-  );
-  const [videoSeekGeneration, setVideoSeekGeneration] = createSignal(0);
-  let lastVideoSeekBumpKey: string | null = null;
-  let lastVideoSeekBumpAtMs = 0;
-
-  const timelineStartMs = createMemo(() => {
-    const anchor = record().recordingStartedAt ?? record().startedAt;
-    const ms = new Date(anchor).getTime();
-    return Number.isFinite(ms) ? ms : null;
-  });
-
-  const bumpVideoSeekGeneration = (seconds: number) => {
-    if (!Number.isFinite(seconds)) return;
-    const key = seekDedupeKey(seconds);
-    const now = performance.now();
-    if (
-      shouldCoalesceSeekGenerationBump(
-        key,
-        now,
-        lastVideoSeekBumpKey,
-        lastVideoSeekBumpAtMs
-      )
-    )
-      return;
-    lastVideoSeekBumpKey = key;
-    lastVideoSeekBumpAtMs = now;
-    setVideoSeekGeneration((n) => n + 1);
-  };
-
-  const activeSequenceNum = createMemo(() =>
-    getActiveTranscriptSequenceNum(
-      sortedTranscript(),
-      playbackSeconds(),
-      timelineStartMs(),
-      allowFutureLead()
-    )
-  );
-
-  const handleTimeUpdate = (
-    seconds: number,
-    source: 'playback' | 'seeking' | 'seeked'
-  ) => {
-    setPlaybackSeconds(seconds);
-    setAllowFutureLead(source === 'playback');
-    if (source === 'seeked') bumpVideoSeekGeneration(seconds);
-  };
-
-  const seekToSeconds = (seconds: number) => {
-    if (!Number.isFinite(seconds)) return;
-    const video = videoRef();
-    const maxTime = Number.isFinite(video?.duration ?? Number.NaN)
-      ? (video!.duration as number)
-      : seconds;
-    const targetSeconds = Math.max(0, Math.min(seconds, maxTime));
-
-    setPlaybackSeconds(targetSeconds);
-    setAllowFutureLead(false);
-    bumpVideoSeekGeneration(targetSeconds);
-
-    if (video) video.currentTime = targetSeconds;
-  };
-
-  const goToTranscriptSegment = (transcriptId: string) => {
-    const segment = sortedTranscript().find(
-      (s) => s.transcriptId === transcriptId
-    );
-    if (!segment) return;
-    const seconds = getSegmentVideoSeconds(segment, timelineStartMs());
-    if (seconds === null) return;
-    seekToSeconds(seconds);
-  };
-
+  const {
+    timelineStartMs,
+    activeSequenceNum,
+    handleTimeUpdate,
+    seekToSeconds,
+    goToTranscriptSegment,
+    videoSeekGeneration,
+  } = createRecordingTimeline(record, videoRef);
   createEffect(
     on(
       () =>
@@ -304,22 +116,10 @@ export function CallRecordingBody(props: {
     )
   );
 
-  const callTitle = createMemo(
-    () =>
-      record().customName ??
-      record().channelName ??
-      t('calls.detailFallbackName')
+  const { title: callTitle, currentSpeaker } = createRecordingIdentity(
+    record,
+    activeSequenceNum
   );
-  const currentSpeaker = () => {
-    const segment = sortedTranscript().find(
-      (item) => item.sequenceNum === activeSequenceNum()
-    );
-    if (!segment) return callTitle();
-    return (
-      guestDisplayName(record(), segment.speakerId) ||
-      getDisplayName(tryMacroId(segment.speakerId))
-    );
-  };
 
   const callCtx = useCallContextOptional();
   const { canCallAgain, callAgain } = useCallAgain(
@@ -351,7 +151,7 @@ export function CallRecordingBody(props: {
                 floating
               >
                 <div
-                  ref={setColumnRef}
+                  ref={setWorkspace}
                   class="recording-workspace relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden @container/call-column"
                   data-fullscreen-transcript={fullscreenTranscript()}
                 >
@@ -557,12 +357,7 @@ export function CallRecordingBody(props: {
                                 <CallRecordingPinnedPlayer
                                   playback={playback}
                                   speaker={currentSpeaker()}
-                                  onShowVideo={() =>
-                                    playerRef()?.scrollIntoView({
-                                      behavior: 'smooth',
-                                      block: 'start',
-                                    })
-                                  }
+                                  onShowVideo={layout.showVideo}
                                 />
                               </Show>
                             </div>
@@ -636,12 +431,7 @@ export function CallRecordingBody(props: {
                       active={mobilePlaybackActive()}
                       scrollingDown={scrollingDown()}
                       syncTargetRef={registerSyncTarget}
-                      onShowVideo={() =>
-                        playerRef()?.scrollIntoView({
-                          behavior: 'smooth',
-                          block: 'start',
-                        })
-                      }
+                      onShowVideo={layout.showVideo}
                     />
                   </Show>
                 </div>
