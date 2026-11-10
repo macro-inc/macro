@@ -3,9 +3,9 @@ import { render, screen, waitFor } from '@solidjs/testing-library';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { afterEach, expect, it, vi } from 'vitest';
-import { RoutineWebhookUrl } from '../components/routine-webhook-url';
-import { scheduledActionKeys } from './keys';
-import { createRoutineWebhook } from './webhook';
+import { RoutineWebhookUrl } from './components/routine-webhook-url';
+import { scheduledActionKeys } from './queries/keys';
+import { createRoutineWebhook } from './queries/webhook';
 
 const getWebhook = vi.hoisted(() => vi.fn());
 vi.mock('@service-scheduled-action/client', () => ({
