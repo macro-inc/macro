@@ -65,6 +65,11 @@ impl ImportPolicy for MagicChipNode {
 }
 impl DecoratorNode for MagicChipNode {
     lexical_model::decorator_node_base!();
+    fn render_signature(&self) -> Result<Option<DecoratorRenderSignature>, Error> {
+        Ok(Some(DecoratorRenderSignature::new(to_js_json_string(
+            &serde_json::to_value(self)?,
+        ))))
+    }
     fn json_version(&self) -> u32 {
         5
     }
@@ -91,3 +96,7 @@ impl lexical_markdown::MarkdownText for MagicChipNode {
 
 #[cfg(test)]
 mod test;
+
+#[cfg(test)]
+#[path = "magic_chip/signature_test.rs"]
+mod signature_test;
