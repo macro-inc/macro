@@ -3184,7 +3184,12 @@ write plain TypeScript against the DOM and the SDK.
 same names as the SDK's `macro.events`, such as `document.created`,
 `document.updated` and `message.posted`; tasks are documents) and returns an
 `off` function. The handler gets `{ type, id }`, the event name and the entity
-it is about, never its data: call the program again to read what changed. Pass
+it is about, never its data: call the program again to read what changed.
+`document.updated` means a rename, move or sharing change. A task's Status,
+Assignee or Due change emits no event yet, and content edits arrive only as
+`document.interaction`, about every 5 seconds while someone types and when a
+document is opened or closed; so a page reloads after its own writes and when
+it regains focus (`window.addEventListener('focus', …)`). Pass
 `ids` to hear about specific entities only; a message event is about its
 conversation, so narrow `message.*` by channel or document id. After a
 reconnect, or a reopen for changed subscriptions, the handler gets `{ type:

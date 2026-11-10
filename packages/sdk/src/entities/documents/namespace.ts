@@ -175,8 +175,12 @@ export class DocumentNamespace {
    *   `macro.events` names (`document.updated`; tasks are documents; a
    *   `message.*` event's id is its channel or document), and with
    *   `{ type: 'macro.resync' }` after a reconnect: call the program again to
-   *   read what changed. Other scripts are left as they are and can't call
-   *   programs.
+   *   read what changed. `document.updated` means a rename, move or sharing
+   *   change; a task's Status, Assignee or Due change emits no event yet, and
+   *   content edits arrive only as `document.interaction` (about every 5
+   *   seconds while someone types, and on open and close), so reload after
+   *   the page's own writes and on window focus. Other scripts are left as
+   *   they are and can't call programs.
    *
    * Neither block may import anything else: no `npm:` packages, remote URLs
    * or JSX. Write plain TypeScript against the DOM and the SDK. The page runs
