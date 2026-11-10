@@ -38,7 +38,7 @@ export function SectionRuleEditor(props: {
   };
   return (
     <form
-      class="flex min-h-0 flex-col gap-3 p-3"
+      class="flex min-h-0 max-h-[min(30rem,65dvh)] flex-col gap-3 p-3"
       onSubmit={(event) => fireAndForget(save(event), 'channels-view')}
     >
       <label class="flex flex-col gap-2 text-sm">
@@ -56,7 +56,10 @@ export function SectionRuleEditor(props: {
           {t('channelSections.replacePickedChannelsWarning')}
         </p>
       </Show>
-      <div class="max-h-64 overflow-y-auto" aria-busy={preview.isFetching}>
+      <div
+        class="min-h-0 max-h-64 overflow-y-auto"
+        aria-busy={preview.isFetching}
+      >
         <For
           each={queryReadyGate(preview) ? (preview.data?.channels ?? []) : []}
         >
@@ -89,17 +92,18 @@ export function SectionRuleEditor(props: {
           {error()}
         </p>
       </Show>
-      <div class="flex items-center gap-2">
-        <span class="flex-1 text-xs text-ink-muted">
-          <Show when={queryReadyGate(preview)}>
-            {t('channelSections.matchCount', {
-              count: queryReadyGate(preview)
-                ? (preview.data?.totalCount ?? 0)
-                : 0,
-            })}
-          </Show>
-        </span>
+      <Show when={queryReadyGate(preview)}>
+        <p class="shrink-0 text-xs whitespace-nowrap text-ink-muted">
+          {t('channelSections.matchCount', {
+            count: queryReadyGate(preview)
+              ? (preview.data?.totalCount ?? 0)
+              : 0,
+          })}
+        </p>
+      </Show>
+      <div class="flex shrink-0 items-center justify-end gap-2">
         <Button
+          class="shrink-0"
           type="button"
           variant="ghost"
           size="sm"
@@ -109,6 +113,7 @@ export function SectionRuleEditor(props: {
           {t('common.cancel')}
         </Button>
         <Button
+          class="shrink-0"
           type="submit"
           variant="primary"
           size="sm"

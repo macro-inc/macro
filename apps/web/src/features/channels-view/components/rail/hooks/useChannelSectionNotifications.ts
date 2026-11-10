@@ -1,7 +1,10 @@
 import { t } from '@app/lib/i18n';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import { notificationIsRead } from '@entity/utils/notification';
 import { Telemetry } from '@macro-inc/observability';
+import { ensureNotificationSourceLoaded } from '@notifications/notification-helpers';
 import { openSnoozeNotifications } from '@notifications/SnoozeNotificationsDialog';
 import { useBulkNotificationPreferencesMutation } from '@queries/notification/unsubscribes';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
@@ -22,6 +25,7 @@ export function useChannelSectionNotifications(
   options: SectionNotificationOptions
 ) {
   const userId = useUserId();
+  const notificationSource = useGlobalNotificationSource();
   const notificationPreferences = useBulkNotificationPreferencesMutation();
   const [pending, setPending] = createSignal<{ actorId: string }>();
   const requests = new Set<AbortController>();
@@ -92,7 +96,7 @@ export function useChannelSectionNotifications(
 
   const updateSectionNotifications = async (
     section: ChannelSectionKey,
-    action: 'mute' | 'unmute' | 'snooze',
+    action: 'mute' | 'unmute' | 'snooze' | 'read',
     until?: Date
   ) => {
     const actorId = userId();
@@ -128,6 +132,22 @@ export function useChannelSectionNotifications(
 
         span.setAttr('channel.ids', channelIds);
         span.setAttr('notification.count', channelIds.length);
+
+        if (action === 'read') {
+          await ensureNotificationSourceLoaded(notificationSource);
+          if (!isCurrent()) return;
+          const members = new Set(channelIds);
+          const unread = notificationSource
+            .notifications()
+            .filter(
+              (notification) =>
+                notification.entity_type === 'channel' &&
+                members.has(notification.entity_id) &&
+                !notificationIsRead(notification)
+            );
+          await notificationSource.bulkMarkAsRead(unread);
+          return;
+        }
 
         if (action === 'snooze' && !until) {
           openSnoozeNotifications(
@@ -195,6 +215,8 @@ export function useChannelSectionNotifications(
 
   return {
     sectionNotificationsDisabled,
+    markSectionRead: (section: ChannelSectionKey) =>
+      updateSectionNotifications(section, 'read'),
     muteSection: (section: ChannelSectionKey, muted: boolean) =>
       updateSectionNotifications(section, muted ? 'mute' : 'unmute'),
     snoozeSection: (section: ChannelSectionKey, until?: Date) =>

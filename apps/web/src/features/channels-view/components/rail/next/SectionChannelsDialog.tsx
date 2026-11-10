@@ -4,6 +4,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { createFreshSearch, NAME_MATCH_RANKING } from '@core/util/freshSort';
 import HashIcon from '@icon/system/regular/hash.svg';
 import LockIcon from '@icon/system/regular/lock-simple.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { useAvailableSectionChannelsQuery } from '@queries/channel-labels/channel-labels';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
@@ -165,29 +166,37 @@ export function SectionChannelsPicker(props: SectionChannelsPickerProps) {
 
   const body = () => (
     <>
-      <div class="flex shrink-0 flex-col gap-2 px-5 pt-4 pb-3">
-        <Show when={props.presentation !== 'sheet'}>
-          <h2 class="text-base font-semibold">
-            {t('channelSections.addChannelsTo', { name: props.label.name })}
-          </h2>
-        </Show>
-        <p class="text-xs leading-4 text-ink-muted">
-          {props.label.teamId
-            ? t('channelSections.addSharedChannelsHint')
-            : t('channelSections.addPersonalChannelsHint')}
-        </p>
-        <Input
-          type="text"
-          aria-label={t('channelSections.searchChannels')}
-          placeholder={t('channelSections.searchChannels')}
-          value={search()}
-          onInput={(event) => setSearch(event.currentTarget.value)}
-          readOnly={saving()}
-        />
-      </div>
+      <Show
+        when={props.presentation === 'sheet'}
+        fallback={
+          <div class="flex h-10 w-full shrink-0 items-center gap-2 border-b border-edge-muted px-3 focus-within:ring-2 focus-within:ring-edge-muted">
+            <SearchIcon class="size-4 shrink-0 text-ink-muted" />
+            <Input
+              variant="bare"
+              class="h-full rounded-none border-0 px-0 focus-visible:ring-0"
+              type="text"
+              aria-label={t('channelSections.searchChannels')}
+              placeholder={t('channelSections.searchChannels')}
+              value={search()}
+              onInput={(event) => setSearch(event.currentTarget.value)}
+              readOnly={saving()}
+            />
+          </div>
+        }
+      >
+        <div class="flex shrink-0 flex-col gap-2 px-5 pt-4 pb-3">
+          <Input
+            type="text"
+            aria-label={t('channelSections.searchChannels')}
+            placeholder={t('channelSections.searchChannels')}
+            value={search()}
+            onInput={(event) => setSearch(event.currentTarget.value)}
+            readOnly={saving()}
+          />
+        </div>
+      </Show>
       <div
-        class="min-h-0 overflow-y-auto px-3"
-        classList={{ 'flex-1': props.presentation === 'sheet' }}
+        class="min-h-0 flex-1 overflow-y-auto px-3"
         aria-busy={query.isFetching}
       >
         <Switch>
@@ -269,7 +278,10 @@ export function SectionChannelsPicker(props: SectionChannelsPickerProps) {
   return (
     <form
       class="flex min-h-0 flex-col"
-      classList={{ 'flex-1': props.presentation === 'sheet' }}
+      classList={{
+        'flex-1': props.presentation === 'sheet',
+        'max-h-[min(30rem,65dvh)]': props.presentation !== 'sheet',
+      }}
       onSubmit={(event) => {
         event.preventDefault();
         fireAndForget(submit(), 'channels-view');

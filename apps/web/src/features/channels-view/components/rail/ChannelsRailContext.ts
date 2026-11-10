@@ -134,9 +134,8 @@ export type ChannelRailActivationMetadata = {
 };
 
 export type SectionDraft = {
-  initialChannelIds: string[];
   scope: ChannelLabelScopeSelection;
-  existing?: ChannelLabel;
+  existing: ChannelLabel;
 };
 
 export type SectionValue = {
@@ -197,6 +196,8 @@ export type ChannelsRailContext = {
   createSmartTag: () => Promise<void>;
   editSmartTag: (label: ChannelLabel) => Promise<void>;
   canShareSections: Accessor<boolean>;
+  canEditSection: (label: ChannelLabel) => boolean;
+  canChangeSectionScope: (label: ChannelLabel) => boolean;
   /** Pick eligible channels to add to a manual section. */
   addChannelsToLabel: (label: ChannelLabel) => Promise<void>;
   /** Assign additions without opening the channel picker; return IDs that failed. */
@@ -217,6 +218,7 @@ export type ChannelsRailContext = {
   activeDropTarget: Accessor<ChannelLabelDropTarget | undefined>;
   /** Mark every unread notification in the label's visible channels read. */
   markLabelRead: (label: ChannelLabel) => void;
+  markSectionRead: (section: ChannelSectionKey) => Promise<void>;
   /** Update the viewer's notifications for the section's current full membership. */
   muteSection: (section: ChannelSectionKey, muted: boolean) => Promise<void>;
   snoozeSection: (section: ChannelSectionKey, until?: Date) => Promise<void>;

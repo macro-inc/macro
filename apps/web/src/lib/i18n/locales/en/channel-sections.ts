@@ -33,8 +33,9 @@ export default {
   direct_messages: 'Direct messages',
   empty: 'No conversations yet',
   emptyFavorites: 'Star conversations to keep them here.',
-  emptySection: 'No channels in this section.',
+  emptySection: 'No channels yet',
   emptySmartSection: 'No conversations match this rule.',
+  emptySectionHint: 'Add channels or match their names automatically.',
   noResults: 'No matching conversations',
   loadMore: 'Load more',
   retry: 'Retry',
@@ -43,11 +44,9 @@ export default {
   renameSection: 'Rename section',
   deleteSection: 'Delete section',
   deleteConfirmTitle: 'Delete “{{name}}”?',
-  deleteConfirmBody:
-    '{{scopeDescription}} {{channelsText}} Nobody loses access to a channel.',
-  deleteSmartChannels:
-    'Channels stop appearing in this smart label. Other labels are unchanged.',
-  deleteEmptyChannels: 'It has no channels in it.',
+  deleteConfirmBody: 'Channels and messages will not be deleted.',
+  deleteSharedConfirmBody:
+    'This section will be removed for everyone. Channels and messages will not be deleted.',
   created: 'Created “{{name}}”',
   updated: 'Updated “{{name}}”',
   deleted: 'Deleted “{{name}}”',

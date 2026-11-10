@@ -17,6 +17,7 @@ export function useMobileSectionActions(options: {
   teamId: Accessor<string | undefined>;
   channelsById: Accessor<ReadonlyMap<string, ChannelEntity>>;
   favorites: Accessor<readonly Favorite[]>;
+  onSectionCreated: (labelId: string) => void;
 }) {
   const owner = getOwner();
   const { setGroupOpen, setLabelOpen } = useChannelsView();
@@ -33,6 +34,7 @@ export function useMobileSectionActions(options: {
     labelDialogOwner: () => owner,
     setGroupOpen,
     setLabelOpen,
+    onSectionCreated: options.onSectionCreated,
   });
   const notifications = useChannelSectionNotifications({
     enabled: options.enabled,

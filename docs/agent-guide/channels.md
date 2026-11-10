@@ -1146,8 +1146,8 @@ sections. The team heading is **[Team name] channels**, with **Team channels** a
 the fallback while its name is unavailable. The team section always shows joined team channels,
 including channels assigned to manual or smart custom sections. Each custom
 section is a top-level heading, independent of the Team channels disclosure. Empty sections
-use padded, bordered cards like saved views, with a subtle background and secondary
-actions; empty Favorites explains how to add a favorite. Private conversations
+use padded, bordered cards with a short explanation, Add channels as the primary action,
+and Match by name beside it. Read-only sections omit editing actions. Empty Favorites explains how to add a favorite. Private conversations
 use a lock icon in the sidebar and mobile feed, including favorited private
 conversations.
 All section headers use the shared collapsible-section styling without leading
@@ -1170,8 +1170,8 @@ list, and search results. Rows retain stable identities and measured positions
 through live refreshes and section reordering; focused and dragged rows remain
 mounted when they leave the visible range. Each section tracks its own measured
 position, including when other sections change height without changing the total
-stack height, so rows do not leave blank gaps behind. Opening, resizing, or closing
-the inline section editor also updates the nested list positions.
+stack height, so rows do not leave blank gaps behind. Inline renaming remains
+within its section; creation uses a separate dialog.
 Keyboard navigation scrolls immediately, without animation, only when the
 highlighted row enters the viewport's two-row context margin, leaving neighboring
 rows visible above and below. The margin shrinks in short sections.
@@ -1260,13 +1260,17 @@ Turning the flag off hides section controls and stops label reads without
 deleting saved labels. Channel and direct-message creation remain independent of
 the label service and its feature flag.
 
-Use **New → New section** to create a focused name field directly in the sidebar.
-**Add to section → New section** starts the same draft with that channel selected.
-Enter or the Save control persists it; Escape or Cancel discards it. Rename edits
-the section name in place. Failed saves retain the draft.
+Use **New → New section** to open the section dialog. **Add to section → New section**
+opens the same dialog with that channel selected. Create saves the section; Cancel
+or Escape discards the draft. New sections append before All channels without
+re-sorting existing sections, and the sidebar reveals the new heading. On phones,
+creation selects the new section tab. Rename still edits the section name in place.
+Failed saves retain the draft.
 
 A manual section's header **+** and empty **Add channels** action open an anchored searchable
-checkbox picker. Additions retain successful writes when part of a batch fails.
+checkbox picker. The desktop picker has a full-width top search, no visible title or
+description, and a height-bounded scrollable channel list above its fixed actions.
+Additions retain successful writes when part of a batch fails.
 **Match by name** opens a separate anchored editor with **Name contains**, a live
 preview, a match count, and Save. Matching is literal and case-insensitive.
 Shared sections show a people icon; saved name rules show a funnel.
@@ -1282,8 +1286,10 @@ additive section API keeps unjoined visibility separate from legacy labels used
 when the flag is off.
 
 Custom section menus contain Rename, Add channels for manual sections, Match by
-name, Visible to, Sort, Display, notification controls, and Delete. Click and right-click menus
-share the same controls. **Visible to** uses a checkbox layout but permits only
+name, Visible to, Sort, Display, Mark all as read, notification controls, and Delete.
+Click and right-click menus share the same controls and isolate menu loading from
+the sidebar. Editing actions require verified access; unavailable scope transfers
+are hidden. **Visible to** uses a checkbox layout but permits only
 **Only me** or the current team. Checking one replaces the other. Multiple-team
 visibility needs a separate storage-model change. Scope transfers preserve the
 section ID, validate complete channel eligibility, and confirm removal from the
@@ -1293,6 +1299,8 @@ channels; shared sections stay restricted to their own team. DMs are excluded.
 **Sort** remains personal. **Display** contains **Unread only** and default-on
 **Unread when collapsed**. Toggling either leaves the submenu open. Filtering
 never changes assignments. Favorites retain Custom order and drag reordering.
+**Mark all as read** applies to the section's complete current membership, including
+unloaded and filtered channels, without touching notifications from other sections.
 
 **Mute all channels** opens the existing snooze durations with end times,
 **Until I turn it off**, and **Custom…**. Custom uses the existing natural-time

@@ -24,6 +24,8 @@ export function MobileSectionOptions(props: {
   label: ChannelLabel;
   teamName?: string;
   canShare: boolean;
+  canEdit: boolean;
+  canChangeScope: boolean;
   preferences: ChannelSectionPreferences;
   onPreferences: (preferences: ChannelSectionPreferences) => void;
   onScope: (shared: boolean) => Promise<void>;
@@ -33,6 +35,7 @@ export function MobileSectionOptions(props: {
   onDelete: () => Promise<void>;
   onMute: (muted: boolean) => Promise<void>;
   onSnooze: (until?: Date) => Promise<void>;
+  onMarkRead: () => Promise<void>;
   disabled?: boolean;
   onClose: () => void;
   editors?: JSX.Element;
@@ -89,47 +92,51 @@ export function MobileSectionOptions(props: {
           <MobileDrawer.ScrollBody class="px-3">
             <Switch>
               <Match when={page() === 'main'}>
-                <MobileDrawer.Item
-                  disabled={props.disabled}
-                  onClick={() =>
-                    fireAndForget(props.onRename(), 'channels-view')
-                  }
-                >
-                  <PencilIcon class="size-5" />
-                  {t('channelSections.renameSection')}
-                </MobileDrawer.Item>
-                <Show when={!props.label.rule}>
+                <Show when={props.canEdit}>
                   <MobileDrawer.Item
                     disabled={props.disabled}
-                    onPointerDown={(event) => event.preventDefault()}
-                    onMouseDown={(event) => event.preventDefault()}
                     onClick={() =>
-                      fireAndForget(props.onAdd(), 'channels-view')
+                      fireAndForget(props.onRename(), 'channels-view')
                     }
                   >
-                    <PlusIcon class="size-5" />
-                    {t('channelSections.addChannels')}
+                    <PencilIcon class="size-5" />
+                    {t('channelSections.renameSection')}
                   </MobileDrawer.Item>
+                  <Show when={!props.label.rule}>
+                    <MobileDrawer.Item
+                      disabled={props.disabled}
+                      onPointerDown={(event) => event.preventDefault()}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() =>
+                        fireAndForget(props.onAdd(), 'channels-view')
+                      }
+                    >
+                      <PlusIcon class="size-5" />
+                      {t('channelSections.addChannels')}
+                    </MobileDrawer.Item>
+                  </Show>
+                  <MobileDrawer.Item
+                    disabled={props.disabled}
+                    onClick={() =>
+                      fireAndForget(props.onMatch(), 'channels-view')
+                    }
+                  >
+                    <FunnelIcon class="size-5" />
+                    {t('channelSections.matchByName')}
+                  </MobileDrawer.Item>
+                  <Show when={props.canChangeScope}>
+                    <MobileDrawer.Item onClick={() => setPage('visibility')}>
+                      <UsersIcon class="size-5" />
+                      {t('channelSections.visibleTo')}
+                      <span class="ml-auto truncate text-sm text-ink-muted">
+                        {props.label.teamId
+                          ? props.teamName
+                          : t('channelSections.onlyMe')}
+                      </span>
+                      <CaretRightIcon class="size-4" />
+                    </MobileDrawer.Item>
+                  </Show>
                 </Show>
-                <MobileDrawer.Item
-                  disabled={props.disabled}
-                  onClick={() =>
-                    fireAndForget(props.onMatch(), 'channels-view')
-                  }
-                >
-                  <FunnelIcon class="size-5" />
-                  {t('channelSections.matchByName')}
-                </MobileDrawer.Item>
-                <MobileDrawer.Item onClick={() => setPage('visibility')}>
-                  <UsersIcon class="size-5" />
-                  {t('channelSections.visibleTo')}
-                  <span class="ml-auto truncate text-sm text-ink-muted">
-                    {props.label.teamId
-                      ? props.teamName
-                      : t('channelSections.onlyMe')}
-                  </span>
-                  <CaretRightIcon class="size-4" />
-                </MobileDrawer.Item>
                 <MobileDrawer.Item onClick={() => setPage('sort')}>
                   {t('channelSections.sort')}
                   <CaretRightIcon class="ml-auto size-4" />
@@ -137,6 +144,16 @@ export function MobileSectionOptions(props: {
                 <MobileDrawer.Item onClick={() => setPage('display')}>
                   {t('channelSections.display')}
                   <CaretRightIcon class="ml-auto size-4" />
+                </MobileDrawer.Item>
+                <MobileDrawer.Item
+                  disabled={
+                    props.disabled || props.label.channelIds.length === 0
+                  }
+                  onClick={() =>
+                    fireAndForget(props.onMarkRead(), 'channels-view')
+                  }
+                >
+                  {t('channelLabels.markAllAsRead')}
                 </MobileDrawer.Item>
                 <MobileDrawer.Item
                   disabled={props.disabled}
@@ -155,20 +172,22 @@ export function MobileSectionOptions(props: {
                     <CaretRightIcon class="ml-auto size-4" />
                   </Show>
                 </MobileDrawer.Item>
-                <MobileDrawer.Item
-                  disabled={props.disabled}
-                  onClick={() =>
-                    fireAndForget(props.onDelete(), 'channels-view')
-                  }
-                  class="text-failure-ink"
-                >
-                  <TrashIcon class="size-5" />
-                  {t(
-                    props.label.teamId
-                      ? 'channelSections.deleteForEveryone'
-                      : 'channelSections.deleteSection'
-                  )}
-                </MobileDrawer.Item>
+                <Show when={props.canEdit}>
+                  <MobileDrawer.Item
+                    disabled={props.disabled}
+                    onClick={() =>
+                      fireAndForget(props.onDelete(), 'channels-view')
+                    }
+                    class="text-failure-ink"
+                  >
+                    <TrashIcon class="size-5" />
+                    {t(
+                      props.label.teamId
+                        ? 'channelSections.deleteForEveryone'
+                        : 'channelSections.deleteSection'
+                    )}
+                  </MobileDrawer.Item>
+                </Show>
               </Match>
               <Match when={page() === 'visibility'}>
                 <Checkbox

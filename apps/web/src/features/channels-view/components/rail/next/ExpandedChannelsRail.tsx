@@ -68,7 +68,6 @@ import {
   ChannelSectionContextMenu,
   ChannelSectionDropdown,
 } from './ChannelSectionMenu';
-import { InlineSectionDraft } from './InlineSectionDraft';
 import { ResizableRailSection } from './ResizableRailSection';
 import { ExpandedSearchResults } from './SectionSearchResults';
 import { useFavoriteReorder } from './useFavoriteReorder';
@@ -330,7 +329,6 @@ function BrowseSection(props: {
   outerScrollRoot: HTMLDivElement | undefined;
   layoutVersion: number;
   sectionStart: number;
-  stackOffset: number;
   sectionOrder: readonly ChannelSectionKey[];
   scrollVersion: number;
   savedScrollTop: number;
@@ -378,7 +376,6 @@ function BrowseSection(props: {
         outerScroll,
         () => props.layoutVersion,
         () => props.sectionStart,
-        () => props.stackOffset,
         () => props.sectionOrder,
         () => size.height,
       ],
@@ -625,7 +622,6 @@ function ExpandedBrowse() {
   const resizeFlag = useFeatureFlag(enableChatSidebarSectionResize);
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const [stackContent, setStackContent] = createSignal<HTMLDivElement>();
-  const [stackPrefix, setStackPrefix] = createSignal<HTMLDivElement>();
   const [scrollVersion, setScrollVersion] = createSignal(0);
   const [handlesVersion, setHandlesVersion] = createSignal(0);
   const [gestureSection, setGestureSection] = createSignal<ChannelSectionKey>();
@@ -638,7 +634,6 @@ function ExpandedBrowse() {
   const userId = useUserId();
   const scrollSize = createElementSize(scrollRoot);
   const stackSize = createElementSize(stackContent);
-  const prefixSize = createElementSize(stackPrefix);
   const scrollOffsets = new Map<ChannelSectionKey, number>();
   const sections = createMemo(() =>
     groupChannelRailSections(rail.list.items.all())
@@ -865,24 +860,6 @@ function ExpandedBrowse() {
         class="scrollbar-hidden relative min-h-0 flex-1 overflow-y-auto px-(--sidebar-gutter) [&:has([data-resizing])]:[overflow-anchor:none]"
         on:scroll={{ capture: true, handleEvent: updateDropTarget }}
       >
-        <div ref={setStackPrefix}>
-          <Show
-            when={
-              rail.sectionDraft() && !rail.sectionDraft()?.existing
-                ? rail.sectionDraft()
-                : undefined
-            }
-          >
-            {(draft) => (
-              <InlineSectionDraft
-                scope={draft().scope}
-                canShare={rail.canShareSections()}
-                onSave={rail.saveSectionDraft}
-                onCancel={rail.cancelSectionDraft}
-              />
-            )}
-          </Show>
-        </div>
         <div ref={setStackContent}>
           <ChannelRailVirtualizer
             scrollRoot={scrollRoot()}
@@ -902,7 +879,6 @@ function ExpandedBrowse() {
                     outerScrollRoot={scrollRoot()}
                     layoutVersion={stackSize.height ?? 0}
                     sectionStart={start()}
-                    stackOffset={prefixSize.height ?? 0}
                     sectionOrder={keys()}
                     scrollVersion={scrollVersion()}
                     savedScrollTop={scrollOffsets.get(key) ?? 0}

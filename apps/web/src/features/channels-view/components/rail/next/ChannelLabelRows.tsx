@@ -160,7 +160,7 @@ function ChannelLabelActions(props: {
 }) {
   const rail = useChannelsRail();
   return (
-    <>
+    <Show when={rail.canEditSection(props.label)}>
       <MenuGroup>
         <MenuItem
           icon={PencilIcon}
@@ -184,16 +184,18 @@ function ChannelLabelActions(props: {
           onClick={() => props.onEdit('match')}
         />
       </MenuGroup>
-      <MenuSeparator />
-      <SectionVisibilityMenu label={props.label} />
-    </>
+      <Show when={rail.canChangeSectionScope(props.label)}>
+        <MenuSeparator />
+        <SectionVisibilityMenu label={props.label} />
+      </Show>
+    </Show>
   );
 }
 
 function DeleteSectionItem(props: { label: ChannelLabel }) {
   const rail = useChannelsRail();
   return (
-    <>
+    <Show when={rail.canEditSection(props.label)}>
       <MenuSeparator />
       <MenuItem
         icon={TrashIcon}
@@ -207,7 +209,7 @@ function DeleteSectionItem(props: { label: ChannelLabel }) {
           fireAndForget(rail.deleteLabel(props.label), 'channels-view')
         }
       />
-    </>
+    </Show>
   );
 }
 
@@ -268,7 +270,9 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
                 </>
               }
             >
-              <Show when={!props.label.rule}>
+              <Show
+                when={!props.label.rule && rail.canEditSection(props.label)}
+              >
                 <ViewSidebar.Control
                   variant="ghost"
                   size="icon-sm"
@@ -325,26 +329,40 @@ export function ChannelLabelEmptyState(props: { label: ChannelLabel }) {
           when={unreadOnly()}
           fallback={
             <>
-              <Show when={!props.label.rule}>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!rail.labelsAvailable()}
-                  onClick={() => setEditor('add')}
-                >
-                  <PlusIcon class="size-3.5" />
-                  {t('channelSections.addChannels')}
-                </Button>
+              <p class="font-medium text-ink">
+                {t(
+                  props.label.rule
+                    ? 'channelSections.emptySmartSection'
+                    : 'channelSections.emptySection'
+                )}
+              </p>
+              <Show when={rail.canEditSection(props.label)}>
+                <Show when={!props.label.rule}>
+                  <p>{t('channelSections.emptySectionHint')}</p>
+                </Show>
+                <div class="flex flex-wrap items-center gap-1">
+                  <Show when={!props.label.rule}>
+                    <Button
+                      variant="secondary"
+                      size="xs"
+                      onClick={() => setEditor('add')}
+                    >
+                      {t('channelSections.addChannels')}
+                    </Button>
+                  </Show>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setEditor('match')}
+                  >
+                    {t(
+                      props.label.rule
+                        ? 'channelSections.editRule'
+                        : 'channelSections.matchByName'
+                    )}
+                  </Button>
+                </div>
               </Show>
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={!rail.labelsAvailable()}
-                onClick={() => setEditor('match')}
-              >
-                <FunnelIcon class="size-3.5" />
-                {t('channelSections.matchByName')}
-              </Button>
             </>
           }
         >
@@ -373,8 +391,9 @@ function SectionMenuItems(props: { channel: ChannelEntity }) {
       .labels()
       .filter(
         (label) =>
-          label.channelIds.includes(props.channel.id) ||
-          canAssignChannel(props.channel, label)
+          rail.canEditSection(label) &&
+          (label.channelIds.includes(props.channel.id) ||
+            canAssignChannel(props.channel, label))
       );
   return (
     <Show
@@ -386,7 +405,10 @@ function SectionMenuItems(props: { channel: ChannelEntity }) {
     >
       <ContextMenu.Sub>
         <SubTrigger icon={TagIcon} text={t('channelSections.addToSection')} />
-        <ContextMenuContent submenu class="min-w-56 max-w-[22rem]">
+        <ContextMenuContent
+          submenu
+          class="min-w-56 max-w-[22rem] max-h-[min(24rem,60dvh)] overflow-y-auto"
+        >
           <For each={labels()}>
             {(label) => {
               const automatic = () => Boolean(label.rule);
@@ -404,7 +426,7 @@ function SectionMenuItems(props: { channel: ChannelEntity }) {
                 <MenuItem
                   selectorType="checkbox"
                   checked={label.channelIds.includes(props.channel.id)}
-                  disabled={automatic()}
+                  disabled={automatic() || !rail.canEditSection(label)}
                   text={labelText}
                   onChange={(checked) =>
                     rail.setChannelLabel(

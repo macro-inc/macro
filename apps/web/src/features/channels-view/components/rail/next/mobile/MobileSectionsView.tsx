@@ -46,7 +46,8 @@ export function MobileSectionsView(props: {
   sources: ChannelsSources;
   pinned: readonly ChannelEntity[];
 }) {
-  const { state, sectionsEnabled, setSectionPreferences } = useChannelsView();
+  const { state, sectionsEnabled, setSectionPreferences, setSectionOrder } =
+    useChannelsView();
   const channelTags = useFeatureFlag(enableChannelTags);
   const shared = useChannelLabelsQuery(undefined, sectionsEnabled);
   const personal = useChannelLabelsQuery('personal', sectionsEnabled);
@@ -184,6 +185,24 @@ export function MobileSectionsView(props: {
         ]).map((channel) => [channel.id, channel])
       ),
     favorites: () => favorites()?.favorites ?? [],
+    onSectionCreated: (id) => {
+      const key = `label:${id}` as const;
+      const order = [
+        ...new Set([
+          ...state.sectionOrder,
+          'favorites' as const,
+          'direct_messages' as const,
+          'team_channels' as const,
+          ...keys().filter((key) => key !== 'all' && key !== 'direct_messages'),
+        ]),
+      ].filter((item) => item !== key);
+      const insertion = order.indexOf('channels');
+      order.splice(insertion < 0 ? order.length : insertion, 0, key);
+      setSectionOrder(order);
+      setQuery('');
+      setSearchOpen(false);
+      setSelection(key);
+    },
   });
   return (
     <TabSelector.Root
@@ -336,6 +355,8 @@ export function MobileSectionsView(props: {
             label={label()}
             teamName={queryReadyGate(team) ? team.data?.team.name : undefined}
             canShare={queryReadyGate(shared) && Boolean(shared.data?.teamId)}
+            canEdit={actions.canEditSection(label())}
+            canChangeScope={actions.canChangeSectionScope(label())}
             preferences={
               state.sectionPreferences[`label:${label().id}`] ?? {
                 sort: 'name',
@@ -356,6 +377,7 @@ export function MobileSectionsView(props: {
             onMatch={async () => {
               setSectionEditor('match');
             }}
+            onMarkRead={() => actions.markSectionRead(`label:${label().id}`)}
             onDelete={() => actions.deleteLabel(label())}
             onMute={(muted) =>
               actions.muteSection(`label:${label().id}`, muted)

@@ -15,7 +15,7 @@ import { createSignal, getOwner, type JSX, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsSources } from '../../queries';
 import type { ChannelSectionKey, ChannelSectionPreferences } from '../../types';
-import type { ChannelRailRow, SectionDraft } from './ChannelsRailContext';
+import type { ChannelRailRow } from './ChannelsRailContext';
 
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => mocks.userId,
@@ -23,6 +23,9 @@ vi.mock('@core/context/user', () => ({
 const mocks = vi.hoisted(() => ({
   fetchChannel: vi.fn<(id: string) => Promise<ChannelEntity>>(),
   bulkPreferences: vi.fn(),
+  createSection: vi.fn(),
+  promptSection:
+    vi.fn<typeof import('./next/SectionDialog')['promptSection']>(),
   favoriteId: undefined as string | undefined,
   favorites: [] as Favorite[],
   referencedChannels: [] as ChannelEntity[],
@@ -52,6 +55,34 @@ const mocks = vi.hoisted(() => ({
   selected: undefined as ChannelPreviewSelection | undefined,
   userId: 'viewer',
   source: {
+    notifications: vi.fn(() => [
+      {
+        id: 'loaded',
+        entity_type: 'channel',
+        entity_id: 'one',
+        state: 'unseen',
+      },
+      {
+        id: 'off-page',
+        entity_type: 'channel',
+        entity_id: 'unloaded',
+        state: 'unseen',
+      },
+      { id: 'read', entity_type: 'channel', entity_id: 'one', state: 'seen' },
+      {
+        id: 'outside',
+        entity_type: 'channel',
+        entity_id: 'outside',
+        state: 'unseen',
+      },
+      {
+        id: 'document',
+        entity_type: 'document',
+        entity_id: 'one',
+        state: 'unseen',
+      },
+    ]),
+    bulkMarkAsRead: vi.fn(async () => {}),
     muteEntity:
       vi.fn<(entity: { type: string; id: string }) => Promise<void>>(),
     unmuteEntity:
@@ -78,7 +109,6 @@ const mocks = vi.hoisted(() => ({
   },
   hotkeys: new Map<string, () => unknown>(),
   realRenderer: false,
-  sectionDraft: undefined as (() => SectionDraft | undefined) | undefined,
 }));
 vi.mock('@app/components/list', () => ({
   createListController: (options: {
@@ -254,7 +284,7 @@ vi.mock('@queries/channel-labels/channel-labels', () => ({
     isError: false,
     data: [],
   }),
-  useCreateChannelLabelMutation: () => ({}),
+  useCreateChannelLabelMutation: () => ({ mutateAsync: mocks.createSection }),
   useDeleteChannelLabelMutation: () => ({}),
   useRenameChannelLabelMutation: () => ({}),
   useSetChannelLabelMutation: () => ({}),
@@ -326,7 +356,7 @@ vi.mock('@queries/channel/by-ids', () => ({
     retry: async () => {},
   }),
 }));
-vi.mock('./next/SectionDialog', () => ({ promptSection: vi.fn() }));
+vi.mock('./next/SectionDialog', () => ({ promptSection: mocks.promptSection }));
 vi.mock('./ChannelLabelNameDialog', () => ({
   promptLabelName: vi.fn(),
 }));
@@ -366,8 +396,6 @@ vi.mock('./next/ExpandedChannelsRail', async (importOriginal) => {
   return {
     ExpandedChannelsRail: (props: Parameters<typeof RealRenderer>[0]) => {
       if (mocks.realRenderer) {
-        const rail = useChannelsRail();
-        if (mocks.sectionDraft) rail.sectionDraft = mocks.sectionDraft;
         return <RealRenderer {...props} />;
       }
       const rail = useChannelsRail();
@@ -387,9 +415,6 @@ vi.mock('./next/ExpandedChannelsRail', async (importOriginal) => {
     },
   };
 });
-vi.mock('./next/InlineSectionDraft', () => ({
-  InlineSectionDraft: () => <div data-inline-section-draft />,
-}));
 
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({}),
@@ -483,6 +508,7 @@ vi.mock('../ConversationsCreateMenu', () => ({
 }));
 
 import { ChannelsRail } from './ChannelsRail';
+import { useChannelLabelActions } from './hooks/useChannelLabelActions';
 import { useChannelSectionNotifications } from './hooks/useChannelSectionNotifications';
 
 const channel: ChannelEntity = {
@@ -533,7 +559,6 @@ const mount = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.realRenderer = false;
-  mocks.sectionDraft = undefined;
   mocks.focusedRow = undefined;
   mocks.favorites = [];
   mocks.referencedChannels = [];
@@ -830,131 +855,6 @@ it('opens search over mounted section rows', async () => {
 
   expect(screen.getByRole('button', { name: 'Found' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'One' })).toBeNull();
-});
-
-it('keeps nested rows aligned when the inline editor opens and changes height', async () => {
-  mocks.realRenderer = true;
-  vi.useFakeTimers();
-  const [draft, setDraft] = createSignal<SectionDraft>();
-  mocks.sectionDraft = draft;
-  let draftHeight = 0;
-  let prefix: Element | undefined;
-  let stack: Element | undefined;
-  const observers: ResizeObserver[] = [];
-  const targets = new Map<ResizeObserver, Set<Element>>();
-  const callbacks = new Map<ResizeObserver, ResizeObserverCallback>();
-  vi.stubGlobal(
-    'ResizeObserver',
-    class implements ResizeObserver {
-      constructor(callback: ResizeObserverCallback) {
-        observers.push(this);
-        callbacks.set(this, callback);
-        targets.set(this, new Set());
-      }
-      observe(target: Element) {
-        targets.get(this)?.add(target);
-      }
-      unobserve(target: Element) {
-        targets.get(this)?.delete(target);
-      }
-      disconnect() {
-        targets.get(this)?.clear();
-      }
-    }
-  );
-  vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
-    function (this: HTMLElement) {
-      return this.parentElement;
-    }
-  );
-  vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(
-    function (this: HTMLElement) {
-      if (this === stack) return draftHeight;
-      return this.hasAttribute('data-index')
-        ? Number.parseFloat(this.style.top) || 0
-        : 0;
-    }
-  );
-  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(200);
-  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(300);
-  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
-    function (this: HTMLElement) {
-      if (this === prefix) return draftHeight;
-      if (this === stack) return 1700;
-      if (this.hasAttribute('data-index'))
-        return this.firstElementChild?.classList.contains('shrink-0')
-          ? 1700
-          : 34;
-      return 200;
-    }
-  );
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
-    function (this: HTMLElement) {
-      return new DOMRect(0, 0, 300, this.offsetHeight);
-    }
-  );
-  mocks.listRows = [
-    { kind: 'section', id: 'section:channels', group: 'channels' },
-    ...Array.from(
-      { length: 50 },
-      (_, index): ChannelRailRow => ({
-        kind: 'conversation',
-        id: `channel:item-${index}`,
-        group: 'channels',
-        scope: 'channels',
-        localIndex: index,
-        channel: { ...channel, id: `item-${index}`, name: `Channel ${index}` },
-      })
-    ),
-  ];
-  const view = mount();
-  const viewport = view.container.querySelector<HTMLDivElement>(
-    '.scrollbar-hidden.overflow-y-auto'
-  );
-  if (!viewport) throw new Error('Missing sidebar viewport');
-  prefix = viewport.firstElementChild ?? undefined;
-  stack = viewport.lastElementChild ?? undefined;
-  const measure = () => {
-    for (const observer of observers) {
-      const entries = [...(targets.get(observer) ?? [])].map((target) => ({
-        target,
-        contentRect: target.getBoundingClientRect(),
-        borderBoxSize: [
-          { inlineSize: 300, blockSize: target.getBoundingClientRect().height },
-        ],
-        contentBoxSize: [],
-        devicePixelContentBoxSize: [],
-      }));
-      if (entries.length) callbacks.get(observer)?.(entries, observer);
-    }
-  };
-  for (let pass = 0; pass < 3; pass++) {
-    await Promise.resolve();
-    measure();
-    await vi.advanceTimersByTimeAsync(20);
-  }
-  viewport.scrollTop = 680;
-  fireEvent.scroll(viewport);
-  await vi.advanceTimersByTimeAsync(20);
-  expect(screen.queryByRole('button', { name: 'Channel 12' })).toBeNull();
-
-  draftHeight = 136;
-  setDraft({ initialChannelIds: [], scope: 'personal' });
-  measure();
-  await vi.advanceTimersByTimeAsync(20);
-  expect(screen.getByRole('button', { name: 'Channel 12' })).toBeTruthy();
-
-  draftHeight = 68;
-  measure();
-  await vi.advanceTimersByTimeAsync(20);
-  expect(screen.queryByRole('button', { name: 'Channel 10' })).toBeNull();
-  expect(screen.getByRole('button', { name: 'Channel 12' })).toBeTruthy();
-
-  draftHeight = 0;
-  setDraft(undefined);
-  measure();
-  await vi.advanceTimersByTimeAsync(20);
-  expect(screen.queryByRole('button', { name: 'Channel 12' })).toBeNull();
 });
 
 describe('section heading navigation', () => {
@@ -1382,6 +1282,47 @@ describe('channel row presses', () => {
   });
 });
 
+describe('section creation', () => {
+  it('uses the dialog and reveals the saved section only after it closes', async () => {
+    let close!: () => void;
+    const closed = new Promise<void>((resolve) => {
+      close = resolve;
+    });
+    const onSectionCreated = vi.fn();
+    mocks.createSection.mockResolvedValueOnce({ id: 'created-section' });
+    mocks.promptSection.mockImplementationOnce(async (props) => {
+      await props.onConfirm({ name: 'New section', scope: 'personal' });
+      await closed;
+    });
+    let actions!: ReturnType<typeof useChannelLabelActions>;
+    render(() => {
+      const owner = getOwner();
+      actions = useChannelLabelActions({
+        sectionsEnabled: () => true,
+        channelTagsEnabled: () => true,
+        labelsAvailable: () => true,
+        labelsUnavailableReason: () => '',
+        sharedLabels: () => false,
+        labels: () => [],
+        channelsById: () => new Map(),
+        searchResults: () => [],
+        labelDialogOwner: () => owner,
+        setGroupOpen: vi.fn(),
+        setLabelOpen: vi.fn(),
+        onSectionCreated,
+      });
+      return null;
+    });
+    const pending = actions.createLabel([]);
+    await waitFor(() => expect(mocks.createSection).toHaveBeenCalledOnce());
+    expect(actions.sectionDraft()).toBeUndefined();
+    expect(onSectionCreated).not.toHaveBeenCalled();
+    close();
+    await pending;
+    expect(onSectionCreated).toHaveBeenCalledExactlyOnceWith('created-section');
+  });
+});
+
 describe('section notification actions', () => {
   const label: ChannelLabel = {
     id: 'section',
@@ -1415,6 +1356,41 @@ describe('section notification actions', () => {
     return actions;
   };
 
+  it('marks only unread channel notifications in the complete section membership', async () => {
+    const actions = mountActions();
+    await actions.markSectionRead('label:section');
+    expect(mocks.source.bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([
+      {
+        id: 'loaded',
+        entity_type: 'channel',
+        entity_id: 'one',
+        state: 'unseen',
+      },
+      {
+        id: 'off-page',
+        entity_type: 'channel',
+        entity_id: 'unloaded',
+        state: 'unseen',
+      },
+    ]);
+    expect(mocks.bulkPreferences).not.toHaveBeenCalled();
+  });
+
+  it('discards a mark-read action when the account changes during membership lookup', async () => {
+    let finish!: (ids: string[]) => void;
+    mocks.fetchGroupIds.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    );
+    const actions = mountActions();
+    const pending = actions.markSectionRead('team_channels');
+    mocks.userId = 'another-viewer';
+    finish(['one']);
+    await pending;
+    expect(mocks.source.bulkMarkAsRead).not.toHaveBeenCalled();
+  });
   it('submits all section members through one bulk operation', async () => {
     const current = {
       ...label,

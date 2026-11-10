@@ -36,7 +36,7 @@ import type { ChannelsRailSection } from '../../../types';
 import { promptLabelName } from '../ChannelLabelNameDialog';
 import type { SectionDraft, SectionValue } from '../ChannelsRailContext';
 import { promptSectionChannels } from '../next/SectionChannelsDialog';
-import type { SectionDialogValue } from '../next/SectionDialog';
+import { promptSection, type SectionDialogValue } from '../next/SectionDialog';
 import { promptSmartTag } from '../SmartTagDialog';
 
 type ChannelLabelActionsOptions = {
@@ -52,6 +52,7 @@ type ChannelLabelActionsOptions = {
   labelDialogOwner: Accessor<Owner | null | undefined>;
   setGroupOpen: (group: ChannelsRailSection, open: boolean) => void;
   setLabelOpen: (labelId: string, open: boolean) => void;
+  onSectionCreated?: (labelId: string) => void;
 };
 
 export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
@@ -141,6 +142,21 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     );
   };
 
+  const canEditSection = (label: ChannelLabel) =>
+    channelTagsEnabled() &&
+    labelsAvailable() &&
+    labels().some(
+      (current) => current.id === label.id && current.teamId === label.teamId
+    ) &&
+    (!label.teamId || (sharedLabels() && teamId?.() === label.teamId));
+  const canChangeSectionScope = (label: ChannelLabel) => {
+    if (!canEditSection(label)) return false;
+    const targetTeamId = label.teamId ? undefined : teamId?.();
+    if (!label.teamId && (!sharedLabels() || !targetTeamId)) return false;
+    return !channelSectionScopeChangeError(label, channelsById(), {
+      teamId: targetTeamId,
+    });
+  };
   const cancelSectionDraft = () => setSectionDraft(undefined);
   createEffect(
     on([userId, sectionsEnabled, channelTagsEnabled], cancelSectionDraft, {
@@ -155,19 +171,15 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
       throw new Error(t('channelSections.unavailable'));
     }
 
-    if (draft.existing) {
-      const saved = await persistUpdate(
-        draft.existing,
-        value.name,
-        value.rule,
-        value.scope,
-        actorId,
-        true
-      );
-      if (!saved) return;
-    } else {
-      await persistCreate(draft.initialChannelIds, value, actorId, true);
-    }
+    const saved = await persistUpdate(
+      draft.existing,
+      value.name,
+      value.rule,
+      value.scope,
+      actorId,
+      true
+    );
+    if (!saved) return;
 
     if (
       actorId !== userId() ||
@@ -234,6 +246,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
 
       setLabelOpen(created.id, true);
       toast.success(t('channelSections.created', { name }));
+      return created.id;
     });
 
   const createLabel = async (
@@ -254,14 +267,26 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     }
 
     if (sectionMode) {
-      draftActorId = actorId;
-      setSectionDraft({ initialChannelIds: [...channelIds], scope });
+      let createdId: string | undefined;
+      await promptSection(
+        {
+          scope,
+          canShare: sharedLabels(),
+          onConfirm: async (value) => {
+            createdId = await persistCreate(channelIds, value, actorId, true);
+          },
+        },
+        { owner: labelDialogOwner() }
+      );
+      if (createdId && actorId === userId() && sectionsEnabled()) {
+        options.onSectionCreated?.(createdId);
+      }
       return;
     }
 
-    const save = (value: SectionDialogValue) =>
-      persistCreate(channelIds, value, actorId, sectionMode);
-
+    const save = async (value: SectionDialogValue) => {
+      await persistCreate(channelIds, value, actorId, sectionMode);
+    };
     if (smart) {
       await promptSmartTag(
         {
@@ -311,6 +336,10 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
         !labelsAvailable()
       ) {
         throw new Error(t('channelSections.unavailable'));
+      }
+
+      if (sectionMode && !canEditSection(current)) {
+        throw new Error(t('channelSections.noAccess'));
       }
 
       if (nextScope !== scope) {
@@ -404,9 +433,9 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
 
     const scope = scopeForLabel(label);
     if (sectionMode) {
+      if (!canEditSection(label)) return;
       draftActorId = actorId;
       setSectionDraft({
-        initialChannelIds: [...label.channelIds],
         scope,
         existing: label,
       });
@@ -452,23 +481,15 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     }
 
     const sectionMode = sectionsEnabled();
-    let channelsText: string;
-
-    if (label.rule) {
-      channelsText = t('channelSections.deleteSmartChannels');
-    } else if (label.channelCount === 0) {
-      channelsText = t('channelSections.deleteEmptyChannels');
-    } else {
-      channelsText = t('channelSections.conversationsRemain');
-    }
-
+    if (sectionMode && !canEditSection(label)) return;
     const confirmed = await confirmDialog(
       {
         title: t('channelSections.deleteConfirmTitle', { name: label.name }),
-        body: t('channelSections.deleteConfirmBody', {
-          scopeDescription: labelScopeDescription(scopeForLabel(label)),
-          channelsText,
-        }),
+        body: t(
+          label.teamId
+            ? 'channelSections.deleteSharedConfirmBody'
+            : 'channelSections.deleteConfirmBody'
+        ),
         confirmLabel: label.teamId
           ? t('channelSections.deleteForEveryone')
           : t('channelSections.deleteSection'),
@@ -535,6 +556,9 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
         throw new Error(t('channelSections.unavailable'));
       }
 
+      if (!canEditSection(current)) {
+        throw new Error(t('channelSections.noAccess'));
+      }
       if (current.rule) {
         throw new Error(t('channelSections.smartSectionDropHint'));
       }
@@ -637,6 +661,8 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     );
 
     if (
+      (sectionMode &&
+        ((to && !canEditSection(to)) || (from && !canEditSection(from)))) ||
       to?.rule ||
       from?.id === labelId ||
       (!labelId && previous && from?.id !== previous.id)
@@ -735,6 +761,8 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
 
   return {
     createLabel,
+    canEditSection,
+    canChangeSectionScope,
     sectionDraft,
     saveSectionDraft,
     cancelSectionDraft,

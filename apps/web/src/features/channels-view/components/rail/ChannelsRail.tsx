@@ -1114,8 +1114,32 @@ export function ChannelsRail(props: ChannelsRailProps) {
     }
   };
 
+  const [createdSection, setCreatedSection] = createSignal<{
+    id: string;
+    actorId: string | undefined;
+  }>();
+  createEffect(() => {
+    const request = createdSection();
+    if (!request) return;
+    if (request.actorId !== userId()) {
+      setCreatedSection(undefined);
+      return;
+    }
+    const id = request.id;
+    const handle = browseScrollHandle();
+    if (!handle || props.searchOpen || tab() !== 'browse') return;
+    const index = visibleRows().findIndex(
+      (row) => row.id === rowKeyForLabel(id)
+    );
+    if (index < 0) return;
+    list.focus.set(rowKeyForLabel(id), { reason: 'programmatic' });
+    handle.scrollToIndex(index, { align: 'nearest' });
+    setCreatedSection(undefined);
+  });
   const {
     createLabel,
+    canEditSection,
+    canChangeSectionScope,
     sectionDraft,
     saveSectionDraft,
     cancelSectionDraft,
@@ -1145,16 +1169,35 @@ export function ChannelsRail(props: ChannelsRailProps) {
     labelDialogOwner,
     setGroupOpen,
     setLabelOpen,
+    onSectionCreated: (id) => {
+      closeSearch();
+      setTab('browse');
+      setRestoreListScroll(false);
+      const key = rowKeyForLabel(id);
+      const order = visibleRows().flatMap((row) => {
+        if (row.kind === 'section') return [row.group];
+        if (row.kind === 'label' && row.id !== key) return [row.id];
+        return [];
+      });
+      const insertion = order.indexOf('channels');
+      order.splice(insertion < 0 ? order.length : insertion, 0, key);
+      setSectionOrder(order);
+      setCreatedSection({ id, actorId: userId() });
+    },
   });
 
-  const { muteSection, snoozeSection, sectionNotificationsDisabled } =
-    useChannelSectionNotifications({
-      enabled: sectionsEnabled,
-      labelsAvailable: () => !channelTagsEnabled() || labelsAvailable(),
-      labels,
-      favorites,
-      dialogOwner: labelDialogOwner,
-    });
+  const {
+    markSectionRead,
+    muteSection,
+    snoozeSection,
+    sectionNotificationsDisabled,
+  } = useChannelSectionNotifications({
+    enabled: sectionsEnabled,
+    labelsAvailable: () => !channelTagsEnabled() || labelsAvailable(),
+    labels,
+    favorites,
+    dialogOwner: labelDialogOwner,
+  });
 
   // Drops are resolved here rather than per row so a channel dragged from
   // anywhere in the section lands the same way.
@@ -1354,6 +1397,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
     createSmartTag,
     editSmartTag: renameLabel,
     canShareSections: () => sharedLabels(),
+    canEditSection,
+    canChangeSectionScope,
     addChannelsToLabel,
     addLabelChannels,
     renameLabel,
@@ -1361,6 +1406,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     setChannelLabel,
     activeDropTarget,
     markLabelRead,
+    markSectionRead,
     muteSection,
     snoozeSection,
     sectionNotificationsDisabled,

@@ -5,14 +5,16 @@ import {
   ContextMenuTrigger,
   MENU_ITEM_CLASS,
   MenuGroup,
+  MenuItem,
   MenuSeparator,
   SubTrigger,
 } from '@core/component/ContextMenu';
+import { fireAndForget } from '@core/util/fireAndForget';
 import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Dropdown, SingleSelectCheck, ToggleSwitch } from '@ui';
-import { For, type JSX } from 'solid-js';
+import { For, type JSX, Suspense } from 'solid-js';
 import type {
   ChannelSectionKey,
   ChannelSectionPreferences,
@@ -41,8 +43,8 @@ export function ChannelSectionDropdown(props: {
         <SlidersIcon class="size-3.5" />
       </Dropdown.Trigger>
       <DropdownMenu.Portal>
-        {/* The shared menu content honors canceled focus restoration; DropdownMenu.Content always refocuses its trigger. */}
         <ContextMenuContent
+          contentComponent={DropdownMenu.Content}
           class="min-w-44"
           onCloseAutoFocus={(event) => {
             if (document.querySelector('[role="dialog"]')) {
@@ -50,9 +52,13 @@ export function ChannelSectionDropdown(props: {
             }
           }}
         >
-          {props.before}
-          <ChannelSectionMenuItems section={props.section} />
-          {props.children}
+          <Suspense
+            fallback={<MenuItem text={t('channelSections.loading')} disabled />}
+          >
+            {props.before}
+            <ChannelSectionMenuItems section={props.section} />
+            {props.children}
+          </Suspense>
         </ContextMenuContent>
       </DropdownMenu.Portal>
     </Dropdown>
@@ -80,9 +86,13 @@ export function ChannelSectionContextMenu(props: {
             }
           }}
         >
-          {props.before}
-          <ChannelSectionMenuItems section={props.section} />
-          {props.actions}
+          <Suspense
+            fallback={<MenuItem text={t('channelSections.loading')} disabled />}
+          >
+            {props.before}
+            <ChannelSectionMenuItems section={props.section} />
+            {props.actions}
+          </Suspense>
         </ContextMenuContent>
       </ContextMenu.Portal>
     </ContextMenu>
@@ -207,6 +217,13 @@ export function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
       </MenuGroup>
       <MenuSeparator />
       <MenuGroup>
+        <MenuItem
+          text={t('channelLabels.markAllAsRead')}
+          disabled={rail.sectionNotificationsDisabled(props.section)}
+          onClick={() =>
+            fireAndForget(rail.markSectionRead(props.section), 'channels-view')
+          }
+        />
         <SectionMuteMenu section={props.section} />
       </MenuGroup>
     </>
