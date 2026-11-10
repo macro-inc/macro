@@ -1,6 +1,6 @@
 ---
 name: query-writing
-description: Use when you are about to write or change SQL, before the first line and again before you commit it. Applies to any new or changed sqlx `query!`, `query_as!`, or `query_scalar!`, QueryBuilder or other assembled SQL, a Soup or GraphQL filter that becomes SQL, a SQL function, view, or trigger, and a caller that runs an existing query more often or over a wider scope. Covers how to write the query so it stays bounded and index-backed, and the required EXPLAIN (ANALYZE, BUFFERS) on a production-size local database before the commit. Reviewing a finished diff is query-review; macro and cache checks are sqlx-query-validator.
+description: Use when you are about to write or change SQL, before the first line and again before you commit it. Applies to any new or changed sqlx `query!`, `query_as!`, or `query_scalar!`, QueryBuilder or other assembled SQL, a Soup or GraphQL filter that becomes SQL, a SQL function, view, or trigger, and code that calls an existing query in a loop, from a new page or job, or with a wider scope (a team instead of a user, a list instead of one id). Covers how to write the query so it stays bounded and index-backed, and the required EXPLAIN (ANALYZE, BUFFERS) on a production-size local database before the commit. Reviewing a finished diff is query-review; macro and cache checks are sqlx-query-validator.
 ---
 
 # Query writing
