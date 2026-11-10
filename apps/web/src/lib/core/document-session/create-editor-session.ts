@@ -1,5 +1,6 @@
 import { startEditorOperation } from '@app/observability/editor';
 import type { NativeMarkdownEditingPort } from '@core/component/LexicalMarkdown/editing/nativeMarkdownPorts';
+import type { NativeMarkdownOverlayInstallation } from '@core/component/LexicalMarkdown/editing/nativeOverlayPorts';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   ABI_MAJOR,
@@ -120,6 +121,7 @@ export function createRustEditorSession(
     registry: NodeViewRegistry;
     view: ViewOptions;
     installEditing?: (view: EditorView) => NativeMarkdownEditingPort;
+    installOverlays?: (view: EditorView) => NativeMarkdownOverlayInstallation;
   }
 ) {
   const configured = configureSession(
@@ -135,6 +137,7 @@ export function createRustEditorSession(
     false
   );
   let mounted: ReturnType<typeof mountSessionView> | undefined;
+  let overlays: NativeMarkdownOverlayInstallation | undefined;
   try {
     const runtime = mountSessionView(
       options.root,
@@ -148,20 +151,28 @@ export function createRustEditorSession(
       configured.session
     );
     mounted = runtime;
+    overlays = options.installOverlays?.(runtime.view);
     const editing = options.installEditing?.(runtime.view);
     let closing: Promise<void> | undefined;
     return {
       ...runtime,
       editing,
+      overlays,
       close() {
         closing ??= (async () => {
+          // Publish the in-flight close before disposal can synchronously reenter.
+          await Promise.resolve();
           try {
-            editing?.dispose();
+            overlays?.dispose();
           } finally {
             try {
-              await runtime.close();
+              editing?.dispose();
             } finally {
-              configured.dispose();
+              try {
+                await runtime.close();
+              } finally {
+                configured.dispose();
+              }
             }
           }
         })();
@@ -171,9 +182,13 @@ export function createRustEditorSession(
   } catch (error) {
     const closeFailed = async () => {
       try {
-        await mounted?.close();
+        overlays?.dispose();
       } finally {
-        configured.dispose();
+        try {
+          await mounted?.close();
+        } finally {
+          configured.dispose();
+        }
       }
     };
     fireAndForget(closeFailed(), 'rust-editor.mount.close');
