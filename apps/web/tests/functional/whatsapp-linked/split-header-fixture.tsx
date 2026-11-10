@@ -8,6 +8,8 @@ import type {
   SplitHandle,
   SplitId,
 } from '@components/app/split-layout/layoutManager';
+import { createSplitRowRename } from '@components/app/split-layout/row-rename';
+import { createSplitTitleRenames } from '@components/app/split-layout/title-rename';
 import { createOwnedSlots } from '@components/app/split-layout/utils/createOwnedSlots';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createSignal, type ParentProps, Show } from 'solid-js';
@@ -24,6 +26,8 @@ export function ChatHeaderFixture(props: ParentProps) {
   const refs = createMutable<SplitPanelContextType['layoutRefs']>({});
   const collapse = createPriorityCollapseController();
   const slots = createOwnedSlots();
+  const titleRenames = createSplitTitleRenames();
+  const rowRename = createSplitRowRename();
   const content = { type: 'component', id: 'external' } as const;
   const handle: SplitHandle = {
     id: 'functional-chat' as SplitId,
@@ -81,6 +85,8 @@ export function ChatHeaderFixture(props: ParentProps) {
         setTitleFileMenuTrigger: setTitleTrigger,
         titleFileMenuActions: titleActions,
         setTitleFileMenuActions: setTitleActions,
+        ...titleRenames,
+        rowRename,
         replaceOwnedSlot: slots.replace,
         headerCollapser: collapse.collapser,
         toolbarCollapser: collapse.collapser,
