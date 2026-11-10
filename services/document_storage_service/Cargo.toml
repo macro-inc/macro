@@ -101,7 +101,7 @@ connection = { workspace = true, features = [
   "outbound",
 ] }
 connection_gateway_client = { workspace = true }
-contacts = { workspace = true, default-features = true }
+contacts = { workspace = true, default-features = true, features = ["directory-names"] }
 channel_labels = { workspace = true, features = [
   "inbound",
   "postgres",
@@ -169,6 +169,7 @@ graphql_initiative = { workspace = true }
 graphql_databases = { workspace = true }
 
 graphql_calendar = { workspace = true }
+graphql_contacts = { workspace = true }
 graphql_scheduled_action = { workspace = true }
 harnesses = { workspace = true, default-features = true }
 hex = { workspace = true }

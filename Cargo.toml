@@ -116,6 +116,7 @@ members = [
   "crates/graphql/graphql_calendar",
   "crates/graphql/graphql_channel",
   "crates/graphql/graphql_common",
+  "crates/graphql/graphql_contacts",
   "crates/graphql/graphql_crm",
   "crates/graphql/graphql_databases",
   "crates/graphql/graphql_email",
@@ -224,6 +225,7 @@ members = [
   "crates/types/notification_state",
   "crates/types/project_id",
   "crates/types/soup_property",
+  "crates/types/subsequence_match",
   "crates/types/team_id",
   "crates/types/thread_id",
   "crates/types/trigger_context",
@@ -779,6 +781,7 @@ graphql_activity = { path = "crates/graphql/graphql_activity" }
 graphql_calendar = { path = "crates/graphql/graphql_calendar" }
 graphql_channel = { path = "crates/graphql/graphql_channel" }
 graphql_common = { path = "crates/graphql/graphql_common" }
+graphql_contacts = { path = "crates/graphql/graphql_contacts" }
 graphql_crm = { path = "crates/graphql/graphql_crm" }
 graphql_databases = { path = "crates/graphql/graphql_databases" }
 graphql_email = { path = "crates/graphql/graphql_email" }
@@ -934,6 +937,7 @@ static_file_public_url = { path = "crates/platform/service_urls/static_file_publ
 static_file_service_client = { path = "crates/clients/static_file_service_client" }
 static_file_service_url = { path = "crates/platform/service_urls/static_file_service_url" }
 stream = { path = "crates/platform/stream" }
+subsequence_match = { path = "crates/types/subsequence_match" }
 sync_service_bebop_schema = { path = "services/sync-service/bebop-schema" }
 sync_service_client = { path = "crates/clients/sync_service_client" }
 sync_service_url = { path = "crates/platform/service_urls/sync_service_url" }

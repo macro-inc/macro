@@ -10,7 +10,11 @@ adapters are `crates/comms/contacts_outbound`.
 
 ## Start here
 
-- `src/service.rs`: the contacts use cases.
+- `src/service.rs`: the contacts use cases, including bounded ID pages through `ContactsPageService`; the deployed full-list API is unchanged.
+- `src/service/directory.rs`: bounded enrichment, search, and membership-first lookup. Search is ID-ordered, not ranked: at most four 500-row batches are enriched per request, and empty results may have a continuation.
+- `src/models/contact.rs`: viewer/person-derived normalized identity and nullable resolved names; email fallback stays with the consuming surface. `contact/identity-fixtures.json` freezes the UUIDv5 contract for viewer-scoped point reads; keep it stable for clients.
+- `src/models/page.rs`: page sizes (default 100, maximum 500) and original per-row positions, distinct from canonicalized user IDs. Short/empty pages may still have continuations.
+- `src/models/query.rs`: 512-byte normalized subsequence searches (including the local-part label fallback plus email), exact/first-name reference predicates applied before limiting and at most 500 raw lookup IDs, deduplicated without reordering; empty lookup never means all contacts.
 - `src/ports.rs`: the traits the inbound/outbound crates implement.
 - `src/models/`: contact graphs, users and the queue messages.
 
@@ -22,8 +26,8 @@ adapters are `crates/comms/contacts_outbound`.
 
 ## Boundaries
 
-- Depends on: `macro_user_id`.
-- Used by: `teams` (backfill on team join), `channels`, `database_sql_runner`, the
+- Depends on: `macro_user_id`, `subsequence_match`.
+- Used by: `graphql_contacts` (paged directory reads), `teams` (backfill on team join), `channels`, `database_sql_runner`, the
   adapter crates, and through the `contacts` facade the composition roots and
   `agent_tools`.
 

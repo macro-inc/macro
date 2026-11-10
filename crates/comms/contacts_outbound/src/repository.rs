@@ -1,3 +1,4 @@
+mod page;
 #[cfg(test)]
 mod test;
 

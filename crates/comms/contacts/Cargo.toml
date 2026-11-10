@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [features]
 axum = ["dep:contacts_inbound", "contacts_inbound/axum"]
+directory-names = ["dep:contacts_outbound", "contacts_outbound/directory-names", "ports"]
 default = ["axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "contacts_inbound/worker", "ports"]
 outbound = ["dep:contacts_outbound", "ports"]

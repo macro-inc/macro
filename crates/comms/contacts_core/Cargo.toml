@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 macro_user_id = { workspace = true }
+subsequence_match = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }

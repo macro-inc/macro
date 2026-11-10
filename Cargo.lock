@@ -5100,6 +5100,7 @@ dependencies = [
  "calendar_event_id",
  "calendar_events",
  "chrono",
+ "contacts",
  "crm",
  "database_sql_runner",
  "databases",
@@ -5114,6 +5115,7 @@ dependencies = [
  "graphql_calendar",
  "graphql_channel",
  "graphql_common",
+ "graphql_contacts",
  "graphql_crm",
  "graphql_databases",
  "graphql_email",
@@ -5450,6 +5452,7 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "subsequence_match",
  "tokio",
  "tracing",
  "uuid",
@@ -5487,8 +5490,10 @@ dependencies = [
  "axum",
  "contacts_core",
  "futures",
+ "macro_db_client",
  "macro_db_migrator",
  "macro_user_id",
+ "non_empty",
  "reqwest 0.13.4",
  "rootcause",
  "serde",
@@ -7073,6 +7078,7 @@ dependencies = [
  "github_pull_requests",
  "gmail_client",
  "graphql_calendar",
+ "graphql_contacts",
  "graphql_crm",
  "graphql_databases",
  "graphql_initiative",
@@ -9958,6 +9964,22 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_contacts"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "contacts",
+ "graphql_common",
+ "macro_user_id",
+ "pagination_types",
+ "rootcause",
+ "serde_json",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
@@ -20601,6 +20623,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "subsequence_match"
+version = "0.1.0"
+dependencies = [
+ "workspace-hack",
 ]
 
 [[package]]

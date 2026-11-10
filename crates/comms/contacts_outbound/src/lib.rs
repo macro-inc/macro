@@ -7,5 +7,8 @@
 pub mod gateway;
 /// SQS-backed contacts ingress queue adapter.
 pub mod ingress;
+/// Existing viewer-aware user-name resolution behind the directory's name port.
+#[cfg(feature = "directory-names")]
+pub mod names;
 /// Database-backed contacts repository.
 pub mod repository;

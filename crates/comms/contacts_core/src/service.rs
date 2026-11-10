@@ -2,9 +2,12 @@ use crate::models::graph::{UndirectedGraph, Vertex};
 use crate::models::messages::{
     ContactConnection, ContactConnections, ContactsMessage, ContactsNodes,
 };
+use crate::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
+use crate::models::query::ContactLookup;
 use crate::ports::{
     ContactsBackfillOutboxRepo, ContactsIngress, ContactsIngressQueue, ContactsNotifier,
-    ContactsOutboxService, ContactsRepository, ContactsService,
+    ContactsOutboxService, ContactsPageRepository, ContactsPageService, ContactsRepository,
+    ContactsService,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -13,6 +16,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use tracing::instrument;
 
+/// Bounded name enrichment of the viewer's contact graph.
+pub mod directory;
 #[cfg(test)]
 mod test;
 
@@ -85,6 +90,29 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsService for ContactsDom
 
     async fn add_contact_nodes(&self, nodes: ContactsNodes) -> Result<(), rootcause::Report> {
         self.process_message(ContactsMessage::Nodes(nodes)).await
+    }
+}
+
+impl<R: ContactsPageRepository, N: ContactsNotifier> ContactsPageService
+    for ContactsDomainService<R, N>
+{
+    #[tracing::instrument(name = "contacts.lookup", skip_all, fields(count = lookup.ids().len() as i64), err)]
+    async fn lookup_contact_ids(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        lookup: &ContactLookup,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        self.repository.lookup_contact_ids(viewer, lookup).await
+    }
+
+    #[tracing::instrument(name = "contacts.page", skip_all, fields(limit = i64::from(limit.get()), has_cursor = after.is_some()), err)]
+    async fn contact_id_page(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> Result<ContactIdPage, Report> {
+        self.repository.contact_id_page(viewer, after, limit).await
     }
 }
 

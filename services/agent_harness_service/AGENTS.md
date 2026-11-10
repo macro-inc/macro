@@ -174,8 +174,9 @@ feature flags and the MCP and integration analytics; when the key is unset,
 analytics are off and routine template publishing, reads, and activation are
 disabled. Scheduling wires the per-user `enable-routine-sharing` PostHog gate;
 owner unsharing and already activated routines remain available.
-`AUTHENTICATION_SERVICE_SECRET_KEY` is a Secrets Manager name in deployed
-configs and a direct key locally. Resolve it for the harness, cognition, and
+`AUTHENTICATION_SERVICE_SECRET_KEY` is required in harness, cognition, and
+scheduling configs regardless of billing flags. It is a Secrets Manager name
+in deployed configs and a direct key locally. Resolve it for the harness, cognition, and
 scheduling configs before building authentication service clients; the task
 role must allow reading its ARN.
 In deployed configs, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY`

@@ -27,6 +27,7 @@ entity_mutation = { workspace = true }
 favorites = { workspace = true, features = ["ports"] }
 graphql_activity = { workspace = true }
 graphql_calendar = { workspace = true }
+graphql_contacts = { workspace = true }
 graphql_channel = { workspace = true }
 graphql_common = { workspace = true }
 graphql_crm = { workspace = true }
@@ -63,6 +64,7 @@ saved_views = { workspace = true }
 soup_realtime_core = { workspace = true }
 
 [dev-dependencies]
+contacts = { workspace = true, features = ["ports"] }
 calendar_event_id = { workspace = true }
 bot_id = { workspace = true }
 crm = { workspace = true, features = ["ports"] }
