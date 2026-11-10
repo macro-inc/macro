@@ -1,12 +1,13 @@
 import { analytics } from '@app/lib/analytics';
+import { t } from '@app/lib/i18n';
 import { Telemetry } from '@macro-inc/observability';
 import { type Accessor, createSignal } from 'solid-js';
 import type { ScheduleDraft } from '../../routines/core/draft';
+import type { Knob } from '../../routines/core/knobs';
 import { getErrorMessage } from '../../routines/core/routine-draft';
 import {
   draftWithEdits,
   type EnabledRow,
-  initialEdits,
   type SuggestionEdits,
   type SuggestionItem,
   type SuggestionStatus,
@@ -47,16 +48,16 @@ function surfaceOf(item: SuggestionItem, placement: SuggestionPlacement) {
 }
 
 /**
- * Per-suggestion state for a list: what the person edited, which row is
- * open, and whether enabling is running, done or failed. Enabling twice never
- * creates two routines, and a row enabled here stays in place to open it.
+ * Per-suggestion state for a list: the knob values the person changed, and
+ * whether turning it on is running, done or failed. Turning one on twice
+ * never creates two routines, and a card turned on here stays in place.
+ * Templates, which aren't suggestions, aren't counted as suggestion events.
  */
 export function createSuggestionActions(deps: SuggestionActionsDeps) {
   const [edits, setEdits] = createSignal<Record<string, SuggestionEdits>>({});
   const [statuses, setStatuses] = createSignal<
     Record<string, SuggestionStatus>
   >({});
-  const [expandedId, setExpandedId] = createSignal<string>();
   const [enabled, setEnabled] = createSignal<EnabledRow<SuggestionItem>[]>([]);
   // Plain sets: they only dedupe analytics, nothing renders from them.
   const shownIds = new Set<string>();
@@ -73,8 +74,10 @@ export function createSuggestionActions(deps: SuggestionActionsDeps) {
       catalogKey: item.catalogKey,
     };
   };
-  const track = (event: SuggestionEvent, item: SuggestionItem, extra = {}) =>
+  const track = (event: SuggestionEvent, item: SuggestionItem, extra = {}) => {
+    if (item.template) return;
     analytics.track(event, { ...eventProps(item), ...extra });
+  };
   const spanAttrs = (
     span: { setAttr(name: string, value: string): void },
     item: SuggestionItem
@@ -93,7 +96,7 @@ export function createSuggestionActions(deps: SuggestionActionsDeps) {
     setStatuses((previous) => ({ ...previous, [id]: status }));
 
   const editsFor = (item: SuggestionItem): SuggestionEdits =>
-    edits()[item.id] ?? initialEdits(item);
+    edits()[item.id] ?? {};
 
   const statusFor = (item: SuggestionItem): SuggestionStatus =>
     statuses()[item.id] ?? { kind: 'idle' };
@@ -101,7 +104,7 @@ export function createSuggestionActions(deps: SuggestionActionsDeps) {
   const draftFor = (item: SuggestionItem) =>
     draftWithEdits(item, editsFor(item));
 
-  /** `above` lists the rows above it, so it stays there once the server drops it. */
+  /** `above` lists the cards before it, so it stays there once the server drops it. */
   async function enable(item: SuggestionItem, above: readonly string[] = []) {
     const current = statusFor(item).kind;
     if (current === 'enabling' || current === 'enabled') return;
@@ -127,12 +130,16 @@ export function createSuggestionActions(deps: SuggestionActionsDeps) {
     } catch (error) {
       setStatus(item.id, {
         kind: 'failed',
-        message: `Couldn't enable this routine. ${getErrorMessage(error)}`,
+        message: t('routineSuggestions.turnOnFailed', {
+          reason: getErrorMessage(error),
+        }),
       });
     }
   }
 
   async function dismiss(item: SuggestionItem) {
+    // Templates aren't suggestions; there is nothing to dismiss.
+    if (item.template) return;
     track('routine_suggestion_dismissed', item);
     try {
       await Telemetry.span('routine_suggestion.dismiss', async (span) => {
@@ -140,27 +147,25 @@ export function createSuggestionActions(deps: SuggestionActionsDeps) {
         await deps.dismiss(item);
       });
     } catch {
-      deps.notify('Couldn’t dismiss that suggestion. Try again.');
+      deps.notify(t('routineSuggestions.dismissFailed'));
     }
   }
 
   return {
     editsFor,
     statusFor,
-    /** The list with rows enabled here kept where they were. */
+    /** The list with cards turned on here kept where they were. */
     visible: (items: readonly SuggestionItem[]) =>
       withEnabledInPlace(items, enabled()),
-    /** Record that a row was on screen, once per list. */
+    /** Record that a card was on screen, once per list. */
     shown(item: SuggestionItem) {
       if (shownIds.has(item.id)) return;
       shownIds.add(item.id);
       track('routine_suggestion_shown', item);
     },
-    isExpanded: (item: SuggestionItem) => expandedId() === item.id,
-    setExpanded: (item: SuggestionItem, expanded: boolean) =>
-      setExpandedId(expanded ? item.id : undefined),
-    edit(item: SuggestionItem, next: SuggestionEdits) {
-      setEdits((previous) => ({ ...previous, [item.id]: next }));
+    /** The person changed a knob's value on its card. */
+    editKnobs(item: SuggestionItem, knobs: Knob[]) {
+      setEdits((previous) => ({ ...previous, [item.id]: { knobs } }));
       if (!editedIds.has(item.id)) {
         editedIds.add(item.id);
         track('routine_suggestion_edited', item);
