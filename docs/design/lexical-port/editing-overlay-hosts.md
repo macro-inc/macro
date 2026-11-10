@@ -48,11 +48,12 @@ All component paths below are relative to
 
 | Overlay | Actual Source reads/calls | Narrow host capability | Native status at review base |
 | --- | --- | --- | --- |
-| Slash (`component/menu/ActionsMenu.tsx`) | Root listener/root, `hasNodes`, CLOSE/REMOVE action search, `Action.action(editor, context)`, existing menu operations; dependency check differs between click and keyboard selection | Root subscription, action availability, close query, remove query, execute selected catalog action with pointer/keyboard origin | `group-a.menu-select` atomically validates/replaces exact UTF-16 trigger range and inserts block choices. No general menu query/close primitive. Picker and creation actions require typed choices; filtering to nine block actions would lose Source rows. |
+| Slash (`component/menu/ActionsMenu.tsx`) | Root listener/root, `hasNodes`, CLOSE/REMOVE action search, `Action.action(editor, context)`, existing menu operations; dependency check differs between click and keyboard selection | Root subscription, action availability, close query, remove query, execute selected catalog action with pointer/keyboard origin | Existing strict `group-a.menu-select` atomically validates/replaces a supplied range. Full catalog behavior separately requires Source REMOVE admission then actual action/request; it must not be silently replaced with an atomic removal/choice. No consumable general menu query/close primitive. Filtering to nine block actions would lose Source rows. |
 | Checklist (`plugins/checklist/checklistPlugin.ts`) | Owned listitem DOM, editable gate, checkbox hit geometry, drag threshold, toggle-selection keyboard routing | Register owned pointer bridge and dispatch toggle by key | `registerNativeChecklist` already exists but is unmounted. `group-b.checklist` supports toggle, toggle-selection, settings with attached/type/generation checks. Native task-list controls are separate from toggling. |
 | Link (`component/menu/FloatingLinkMenu.tsx`) | `isEditable`, `isInteractable`, root/focus; `linksPlugin` hover/click/create callbacks; insert/update/url/unlink commands; HIGH Escape and CRITICAL Enter handlers | `LinkMenuHost` below | Existing `registerNativeLinks` supplies hover/click and `group-b.link` supplies insert/update/url/toggle/unlink. Create-picker notification and captured-link selection targeting need explicit native wiring. |
 | Mentions and inline search (`component/menu/MentionsMenu`, `EmojiMenu.tsx`, `SnippetsMenu.tsx`) | Inline-search mutation/query state, live range/peer validation, catalog/service providers, typed mention payloads, collapse/remove and insertion commands | `MentionMenuHost` supplies root, close and selection to the actual mention controller; query/range and other search controllers remain separate | `group-a.menu-select` supports text, user, document, date, group, agent-session, booking-link, block, snippet and snippet-start. No consumable general web menu-query API. Existing Android source providers retain their own lifetime protocol and are not a replacement web UI. |
 | Emoji (`component/menu/EmojiMenu.tsx`) | Actual root subscription, search removal before text insertion, CLOSE and an editor-owned InlineSearchNode text transform | `EmojiMenuHost` supplies root/subscription, compound insert, close and raw search-text registration | The Source controller is shared. Native click/keyboard menu commits still need actual query/ordered events; enclosed-shortcode transform/resolution remains a separate unavailable policy/callback contract. |
+| Snippets (`component/menu/SnippetsMenu/SnippetsMenu.tsx`) | Actual catalog provider, current root, distinct CLOSE, snippet command with current source-document ID and lazy fetch callback | `SnippetMenuHost` supplies root, close and insert identity | Source host preserves the full real snippet plugin. Native request/bookmark/completion contracts remain separate from strict menu-selection support. |
 | Drag blocks (`component/misc/DraggableBlockMenu.tsx`, `DragInsertIndicator.tsx`) | Root rect, nearest node, list parent/first-child/group, selected text, drag store, copy/delete/move actions | Owned block target/group query, reactive drag state, DOM rects and native move/copy/delete | Native draggable-block registration and geometry exist. Shared menu must stop reading Lexical list nodes; selection-only commits must not invalidate document-revision drag validity. |
 | Table picker (`component/menu/FloatingTableMenu.tsx`) | Picker plugin callback and insert command, root/selection positioning, editable gate | `TablePickerHost`: root/focus, insert dimensions, register picker | `group-b.table` picker/insert and `registerNativeTablePicker` exist. Source extraction retains the original shared controller; native binding is separate. |
 | Table insert/delete (`component/misc/TableInsertButton.tsx`, `TableDeleteButtons.tsx`) | DOM cell lookup, table map, selection extent, scroll clipping, hover target, row/column insertion/deletion | Native cell identity, table/selection extents plus DOM measurements, insert/delete | Native insert-row/column, delete and convertible-list query exist. Native extent projection must be verified before replacing Source map reads. |
@@ -311,3 +312,55 @@ this extraction adds no automatic replay when loading finishes. Native needs
 its own actual policy and scoped callback contract for enclosed shortcodes.
 The existing strict native text menu-select action alone does not establish
 that capability. No native emoji host or picker is installed by this change.
+
+## Snippet Source host
+
+The public `SnippetsMenu` supplies a required `SnippetMenuHost` to the shared
+`HostedSnippetsMenu`. The existing Suspense/Inner boundary, actual catalog
+provider, filtering, keyboard/pointer controller and markup stay in the shared
+leaf. Analytics runs before host insertion. The Source adapter dispatches the
+actual snippet command with the selected document ID, current source-document
+ID and lazy `fetchSnippetRaw` callback; it performs no eager fetch. Root reads
+and CLOSE remain the original dynamic editor operations.
+
+The real snippet plugin remains untouched: self-insertion guard, first DFS
+snippet-search target, actual Await insertion, extraction-editor cache,
+internal-Markdown conversion, target-registry parse, replacement and error
+handling retain their Source behavior. Native must implement actual typed
+request/bookmark/completion and current admission rather than executing the
+Source callback in Rust or assuming generic strict menu-select covers it.
+
+Browser controls use supplied catalog rows and an actual fresh query-cache
+result with the existing snippet feature override enabled. They exercise real
+cached fetch and parsing, not backend permission-token/download IO. Raw captures
+retain open/query/completed model JSON and DOM without masking fields or IDs;
+transient Await behavior is additionally covered by the existing actual-plugin
+sequential-state controls. No native snippet host is installed here.
+
+## Native search controller decision awaiting implementation
+
+The agreed phase-one design is not a consumable native capability or binding.
+It reserves `group-a.search-trigger` with `{kind}` for actions, mentions, emojis
+and snippets; `group-a.search-close` and `group-a.search-remove` take strict
+empty objects and traverse all peer-valid search kinds. Eligibility reads the
+committed snapshot and insertion runs in the active LOW ordered handler. CLOSE
+keeps LOW and REMOVE keeps HIGH. No native priority workaround is permitted.
+
+The proposed `group-a.search-query` snapshot is
+`{kind, open, term, range: null | {key, offset, expected}}`, with offset at the
+UTF-16 start and expected containing the full trigger/search text. Generation
+uses the existing envelope. It reflects the native mutation-controller cache,
+including closed term caches, rather than scanning nodes or reconstructing
+eligibility through a mirror regex.
+
+The host applies that snapshot for initial subscription only. It must then
+receive every actual ordered controller callback event, even when payloads are
+equal, preserving mutation visitation/order. Shared UI cache setters remain
+host-owned: keyboard term resets and `setIsOpen` are not model mutations, and
+query polling must not overwrite those local UI decisions. Query `open` does
+not claim that the menu is currently visible. Concrete event types, sequencing,
+implementation hash and consumer validation remain required before activation.
+
+Full-catalog choice policy remains separate: preserve Source REMOVE admission
+followed by the actual action or host request, including IO/lifetime boundaries.
+The existing strict menu-select validation is retained as its own contract.
