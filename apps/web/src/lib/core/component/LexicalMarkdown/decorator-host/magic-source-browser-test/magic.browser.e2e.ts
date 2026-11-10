@@ -2,13 +2,13 @@ import { expect, test } from '@playwright/test';
 
 const fixture =
   '/src/lib/core/component/LexicalMarkdown/decorator-host/magic-source-browser-test/fixture.html';
-test('actual Source mounts admitted Magic tuple and null channel unchanged', async ({
+test('actual Source mounts ordinary, admitted and missing Magic inputs unchanged', async ({
   page,
 }, info) => {
   const pageErrors: string[] = [];
   page.on('pageerror', (error) => pageErrors.push(error.message));
   const captures = [];
-  for (const unusual of [false, true]) {
+  for (const kind of ['ordinary', 'admitted', 'missing']) {
     const input = JSON.stringify({
       root: {
         type: 'root',
@@ -26,9 +26,11 @@ test('actual Source mounts admitted Magic tuple and null channel unchanged', asy
             version: 5,
             $: { id: 'fast-magic-node' },
             agentSessionId: 'fixture-agent',
-            ...(unusual
+            ...(kind === 'admitted'
               ? { channelId: null, promptedMessage: [0, 'user'] }
-              : { promptedMessage: { turn: 0, author: 'user' } }),
+              : kind === 'ordinary'
+                ? { promptedMessage: { turn: 0, author: 'user' } }
+                : {}),
             status: 'no_messages',
           },
         ],
@@ -71,17 +73,21 @@ test('actual Source mounts admitted Magic tuple and null channel unchanged', asy
       firstObservation: 'after-import',
     });
     const child = JSON.parse(actual.capture.model).root.children[0];
-    expect(child.promptedMessage).toEqual(
-      unusual ? [0, 'user'] : { turn: 0, author: 'user' }
-    );
-    if (unusual) expect(child.channelId).toBeNull();
+    if (kind === 'missing') expect(child).not.toHaveProperty('promptedMessage');
+    else
+      expect(child.promptedMessage).toEqual(
+        kind === 'admitted' ? [0, 'user'] : { turn: 0, author: 'user' }
+      );
+    if (kind === 'admitted') expect(child.channelId).toBeNull();
     captures.push(actual.capture);
-    await info.attach(
-      unusual ? 'source-admitted-magic.json' : 'source-ordinary-magic.json',
-      { body: JSON.stringify(actual), contentType: 'application/json' }
-    );
+    await info.attach(`source-${kind}-magic.json`, {
+      body: JSON.stringify(actual),
+      contentType: 'application/json',
+    });
   }
   expect(captures[1]?.dom).toBe(captures[0]?.dom);
   expect(captures[1]?.shadows).toEqual(captures[0]?.shadows);
+  expect(captures[2]?.dom).toBe(captures[0]?.dom);
+  expect(captures[2]?.shadows).toEqual(captures[0]?.shadows);
   expect(pageErrors).toEqual([]);
 });

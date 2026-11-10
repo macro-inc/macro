@@ -4,8 +4,12 @@
 rows to the shared adapter. It obtains the initialized application components,
 projects actual props, and does not construct model nodes. AgentActivity spreads
 the original ordered props, retaining extra fields. Magic preserves an omitted
-channel, null channel, and the array messages admitted by Source import; its
+channel, null channel, missing prompted message, and the array messages admitted by Source import; its
 actual UI input type includes those cases without changing public node props.
+Missing prompted messages remain an own undefined property in projected props
+and are omitted by JSON serialization; explicit null stays null. The regression
+parses real Source nodes and projects their exported data, without a fabricated
+view node, editor host or native acknowledgement.
 
 The optional Magic host supplies document kind, editability and node selection.
 Without it the component uses its existing Lexical wrapper. The native context

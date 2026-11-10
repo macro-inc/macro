@@ -2,13 +2,12 @@ import {
   type AgentActivityDecoratorProps,
   AgentActivityNode,
   isAgentActivityData,
-  isMagicChipMessage,
-  isMagicChipStatus,
   MagicChipNode,
 } from '@macro-inc/lexical-core';
 import type { MacroDecorators } from '@macro-inc/lexical-wasm-view/view/node-views/macro';
 import type { MagicChipUIData } from '../component/decorator/MagicChip/types';
 import type { MagicChipHost, MagicChipHostProp } from './magic-host';
+import { projectMagicChipData } from './magic-projection';
 import {
   createNativeDecoratorAdapter,
   type NativeDecoratorContext,
@@ -34,26 +33,8 @@ export function createNativeFastCachedDecoratorViews<
     'magic-chip': bind<MagicChipUIData & MagicChipHostProp & { key: string }>(
       MagicChipNode,
       (node, context) => {
-        const value = node.props();
-        const message = value.promptedMessage;
-        if (
-          typeof value.agentSessionId !== 'string' ||
-          (value.channelId !== undefined &&
-            value.channelId !== null &&
-            typeof value.channelId !== 'string') ||
-          !isMagicChipStatus(value.status) ||
-          (message !== null &&
-            !Array.isArray(message) &&
-            !isMagicChipMessage(message))
-        )
-          throw new Error('Invalid magic chip payload');
         return {
-          agentSessionId: value.agentSessionId,
-          ...(value.channelId === undefined
-            ? {}
-            : { channelId: value.channelId }),
-          promptedMessage: message,
-          status: value.status,
+          ...projectMagicChipData(node.props()),
           key: String(node.key),
           theme: context.theme,
           host: context.host,
