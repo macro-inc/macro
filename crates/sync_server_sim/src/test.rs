@@ -520,6 +520,50 @@ fn golden_replay_rejects_reordered_writes_and_changed_final_storage() {
 }
 
 #[test]
+fn gzip_transcript_loads_every_member_and_rejects_corrupt_trailing_data() {
+    use std::io::Write;
+    let directory = std::env::temp_dir().join(format!("sync-gzip-members-{}", std::process::id()));
+    std::fs::create_dir(&directory).unwrap();
+    struct Cleanup(std::path::PathBuf);
+    impl Drop for Cleanup {
+        fn drop(&mut self) {
+            std::fs::remove_dir_all(&self.0).unwrap();
+        }
+    }
+    let _cleanup = Cleanup(directory.clone());
+    let path = directory.join("case.jsonl.gz");
+    let member = |source: &[u8]| {
+        let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::best());
+        gzip.write_all(source).unwrap();
+        gzip.finish().unwrap()
+    };
+    let first = member(b"{\"record\":1}\n");
+    let second = member(b"{\"record\":2}\n");
+    let joined = [first.as_slice(), second.as_slice()].concat();
+    std::fs::write(&path, &joined).unwrap();
+    let loaded = Transcript::load(&path, "case.jsonl").unwrap();
+    assert_eq!(
+        loaded.records,
+        vec![
+            serde_json::json!({"record":1}),
+            serde_json::json!({"record":2})
+        ]
+    );
+    let mut crc = second.clone();
+    let end = crc.len();
+    crc[end - 8] ^= 1;
+    for tail in [
+        crc,
+        second[..second.len() - 1].to_vec(),
+        vec![1, 2, 3],
+        member(b"invalid-json\n"),
+    ] {
+        std::fs::write(&path, [first.as_slice(), tail.as_slice()].concat()).unwrap();
+        assert!(Transcript::load(&path, "case.jsonl").is_err());
+    }
+}
+
+#[test]
 fn room_step_preserves_synchronous_crash_effects() {
     use sync_server_core::domain::permissions::{AccessLevel, AuthToken};
     let ports = SimPorts::new();
