@@ -124,6 +124,18 @@ export class Message extends FavoritableEntity<MessageRecord> {
     return this;
   }
 
+  /**
+   * Remove this message's link preview cards for everyone. Only the
+   * message's sender can, and the message gets none again, whatever links a
+   * later edit adds.
+   */
+  async removeLinkPreviews(): Promise<this> {
+    await this.mutate((c) =>
+      c.storage.entityMessageRemoveLinkPreviews({ path: this.path }),
+    );
+    return this;
+  }
+
   /** Delete this message. */
   async delete(): Promise<void> {
     await this.mutate((c) =>
