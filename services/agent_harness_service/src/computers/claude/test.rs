@@ -333,7 +333,7 @@ async fn dropped_submit_reconciles(acknowledge_cancel: bool) {
     };
     use harness_id::HarnessId;
     use harnesses::domain::{
-        models::ClaudeMode, ports::MockHarnessRepo, service::HarnessServiceImpl,
+        models::ClaudeModeChange, ports::MockHarnessRepo, service::HarnessServiceImpl,
     };
     use std::sync::Arc;
 
@@ -350,9 +350,17 @@ async fn dropped_submit_reconciles(acknowledge_cancel: bool) {
     let mut repo = MockHarnessRepo::new();
     repo.expect_set_claude_mode()
         .times(1)
-        .return_once(move |id, mode| {
+        .return_once(move |id, change| {
             assert_eq!(id, harness_id);
-            assert_eq!(mode, ClaudeMode::OwnAccount);
+            assert_eq!(
+                change,
+                ClaudeModeChange::SignedIn {
+                    signed_in_by: macro_user_id::user_id::MacroUserIdStr::try_from(
+                        "macro|owner@example.com".to_owned()
+                    )
+                    .unwrap(),
+                }
+            );
             Box::pin(async move {
                 mode_saved.send(()).unwrap();
                 Ok(true)
@@ -371,7 +379,14 @@ async fn dropped_submit_reconciles(acknowledge_cancel: bool) {
     };
     let request = tokio::spawn(async move {
         state
-            .complete_sign_in(harness_id, "test-code".to_owned())
+            .complete_sign_in(
+                harness_id,
+                "test-code".to_owned(),
+                macro_user_id::user_id::MacroUserIdStr::try_from(
+                    "macro|owner@example.com".to_owned(),
+                )
+                .unwrap(),
+            )
             .await
     });
     let ToRuntimeMessage::ComputerControl {

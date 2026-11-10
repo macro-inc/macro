@@ -147,6 +147,28 @@ impl std::str::FromStr for ClaudeMode {
     }
 }
 
+/// A confirmed change to how Claude Code on a Macro computer is paid for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ClaudeModeChange {
+    /// `signed_in_by` signed a Claude account in through Macro.
+    SignedIn {
+        /// The person whose request completed the sign-in.
+        signed_in_by: MacroUserIdStr<'static>,
+    },
+    /// The account was signed out; Macro credits pay again.
+    SignedOut,
+}
+
+impl ClaudeModeChange {
+    /// The mode it leaves the harness in.
+    pub const fn mode(&self) -> ClaudeMode {
+        match self {
+            Self::SignedIn { .. } => ClaudeMode::OwnAccount,
+            Self::SignedOut => ClaudeMode::MacroCredits,
+        }
+    }
+}
+
 /// What a caller wants to do with a harness.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HarnessPermission {

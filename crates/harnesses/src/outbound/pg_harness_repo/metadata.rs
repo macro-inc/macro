@@ -11,7 +11,7 @@ impl PgHarnessRepo {
         let updated = sqlx::query!(
             r#"
             UPDATE harnesses
-            SET capabilities = $2, updated_at = now()
+            SET capabilities = $2, capabilities_reported_at = now(), updated_at = now()
             WHERE id = $1 AND deleted_at IS NULL
             "#,
             harness_id.as_uuid(),
@@ -32,16 +32,24 @@ impl PgHarnessRepo {
     pub(super) async fn set_claude_mode_inner(
         &self,
         harness_id: HarnessId,
-        mode: ClaudeMode,
+        change: ClaudeModeChange,
     ) -> Result<bool, HarnessPersistenceError> {
+        let signed_in_by = match &change {
+            ClaudeModeChange::SignedIn { signed_in_by } => Some(signed_in_by.as_ref()),
+            ClaudeModeChange::SignedOut => None,
+        };
         let updated = sqlx::query!(
             r#"
             UPDATE harnesses
-            SET claude_mode = $2, updated_at = now()
+            SET claude_mode = $2,
+                claude_signed_in_by = $3,
+                claude_signed_in_at = CASE WHEN $3::text IS NULL THEN NULL ELSE now() END,
+                updated_at = now()
             WHERE id = $1 AND deleted_at IS NULL
             "#,
             harness_id.as_uuid(),
-            mode.as_str(),
+            change.mode().as_str(),
+            signed_in_by,
         )
         .execute(&self.pool)
         .await

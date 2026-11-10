@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use super::{
     models::{
-        ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing, ClaudeMode,
+        ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaimedPairing, ClaudeModeChange,
         CreateHostedPairing, CreatePairingRequest, CreatedPairing, Harness, HarnessAccess,
         HarnessAgent, HarnessCapabilities, HarnessOwner, HarnessPermission, HarnessResident,
         HarnessSession, HostedPairing, PairingDetails, PairingStatus, PatchHarnessRequest,
@@ -636,15 +636,15 @@ where
         Ok(harness)
     }
 
-    #[tracing::instrument(skip(self), fields(mode = mode.as_str()), err)]
+    #[tracing::instrument(skip(self, change), fields(mode = change.mode().as_str()), err)]
     async fn set_claude_mode(
         &self,
         harness_id: HarnessId,
-        mode: ClaudeMode,
+        change: ClaudeModeChange,
     ) -> Result<(), HarnessError> {
         if !self
             .repo
-            .set_claude_mode(harness_id, mode)
+            .set_claude_mode(harness_id, change)
             .await
             .map_err(Into::into)?
         {

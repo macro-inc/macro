@@ -14,13 +14,13 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use harness_id::HarnessId;
-use harnesses::domain::models::{ClaudeMode, HarnessPermission};
+use harnesses::domain::models::{ClaudeMode, ClaudeModeChange, HarnessPermission};
 use harnesses::domain::ports::{HarnessError, HarnessService};
 use hosted_runtimes::domain::models::{FleetAttachment, FleetUnavailable};
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOrInternal,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use tracing::Instrument as _;
@@ -214,10 +214,13 @@ where
     Harnesses: HarnessService,
     Auth: MacroAuthorizationService,
 {
+    let signed_in_by = caller.authorization.user.macro_user_id.clone();
     state
         .authorize_computer(caller, path.harness_id, HarnessPermission::Manage)
         .await?;
-    let account = state.complete_sign_in(path.harness_id, body.code).await?;
+    let account = state
+        .complete_sign_in(path.harness_id, body.code, signed_in_by)
+        .await?;
     Ok(Json(ClaudeSignedIn {
         signed_in: true,
         account,
@@ -294,7 +297,7 @@ where
         ComputerControlResult::SignedOut => {
             state
                 .harnesses
-                .set_claude_mode(path.harness_id, ClaudeMode::MacroCredits)
+                .set_claude_mode(path.harness_id, ClaudeModeChange::SignedOut)
                 .await?;
             Ok(Json(ClaudeModeResponse {
                 mode: ClaudeMode::MacroCredits,
@@ -339,10 +342,13 @@ where
     /// Finish runtime confirmation and its mode write even if the HTTP waiter
     /// disappears after macrod commits. A dropped waiter asks macrod to cancel;
     /// whichever terminal outcome won is still reconciled before lease release.
+    /// `signed_in_by` is recorded as the sign-in's signer, who hears when it
+    /// runs out.
     async fn complete_sign_in(
         &self,
         harness_id: HarnessId,
         code: String,
+        signed_in_by: MacroUserIdStr<'static>,
     ) -> Result<Option<String>, ComputerRouteError> {
         let account_change = bus::AccountChange::claim(&self.redis, harness_id, &self.cleanup)
             .await?
@@ -361,7 +367,10 @@ where
                     {
                         ComputerControlResult::SignedIn { account } => {
                             harnesses
-                                .set_claude_mode(harness_id, ClaudeMode::OwnAccount)
+                                .set_claude_mode(
+                                    harness_id,
+                                    ClaudeModeChange::SignedIn { signed_in_by },
+                                )
                                 .await?;
                             Ok(account)
                         }

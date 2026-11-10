@@ -11,11 +11,11 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaudeMode, CreateHostedPairing,
-    CreatePairingRequest, CreatedPairing, Harness, HarnessAccess, HarnessAgent,
-    HarnessCapabilities, HarnessOwner, HarnessPermission, HarnessResident, HarnessSession,
-    HostedPairing, PairingClaimFacts, PairingDetails, PairingStatus, PatchHarnessRequest,
-    SetHarnessTeamAccessRequest,
+    ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, ClaudeModeChange,
+    CreateHostedPairing, CreatePairingRequest, CreatedPairing, Harness, HarnessAccess,
+    HarnessAgent, HarnessCapabilities, HarnessOwner, HarnessPermission, HarnessResident,
+    HarnessSession, HostedPairing, PairingClaimFacts, PairingDetails, PairingStatus,
+    PatchHarnessRequest, SetHarnessTeamAccessRequest,
 };
 
 /// A pairing row to persist.
@@ -166,12 +166,12 @@ pub trait HarnessRepo: Send + Sync + 'static {
         capabilities: HarnessCapabilities,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Record how Claude Code on an active harness is paid for. Returns
-    /// `false` when the harness is unknown or deleted.
+    /// Record how Claude Code on an active harness is paid for, and who
+    /// signed it in. Returns `false` when the harness is unknown or deleted.
     fn set_claude_mode(
         &self,
         harness_id: HarnessId,
-        mode: ClaudeMode,
+        change: ClaudeModeChange,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Get the facts the claim path verifies.
@@ -427,12 +427,13 @@ pub trait HarnessService: Send + Sync + 'static {
         access: HarnessPermission,
     ) -> impl Future<Output = Result<Harness, HarnessError>> + Send;
 
-    /// Record how Claude Code on a harness is paid for, once its runtime
-    /// confirmed the switch. Trusted in-process callers only.
+    /// Record how Claude Code on a harness is paid for, and who signed it
+    /// in, once its runtime confirmed the switch. Trusted in-process callers
+    /// only.
     fn set_claude_mode(
         &self,
         harness_id: HarnessId,
-        mode: ClaudeMode,
+        change: ClaudeModeChange,
     ) -> impl Future<Output = Result<(), HarnessError>> + Send;
 }
 

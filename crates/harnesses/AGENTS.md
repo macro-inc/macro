@@ -65,12 +65,15 @@ before acting"); paired machines keep it off until their owner turns it on.
   the access boundary for other services' routes: View requires effective
   access; Use requires Owner or User; Manage is the owner, or an owner of a
   team the runtime is shared with (take it out of service). `set_claude_mode`
-  (trusted) records `claude_mode` (`macro_credits` | `own_account`) once macrod
-  confirmed it.
+  (trusted) records a `ClaudeModeChange` once macrod confirmed it: `SignedIn
+  { signed_in_by }` writes `own_account` with `claude_signed_in_by` and
+  `claude_signed_in_at`; `SignedOut` writes `macro_credits` and clears both.
+  The control plane's Claude sign-in notices go to that signer.
 - `patch_harness` lets managers change the name and permission bypass while
   preserving computer identity, capabilities, and Claude billing mode.
 - Harness rows carry `capabilities` (jsonb, `HarnessCapabilities`, e.g.
   `screen`), which macrod reports through `PUT /harnesses/me/capabilities`,
+  stamping `capabilities_reported_at`,
   and `computer_id` (set only for Macro computers; unique among live rows).
   The authenticated harness may replace only its own report.
 

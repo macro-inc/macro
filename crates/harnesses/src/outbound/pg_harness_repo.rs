@@ -23,7 +23,7 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        ClaudeMode, Harness, HarnessAccess, HarnessAgent, HarnessCapabilities, HarnessOwner,
+        ClaudeModeChange, Harness, HarnessAccess, HarnessAgent, HarnessCapabilities, HarnessOwner,
         HarnessResident, HarnessSession, PairingClaimFacts, PairingDetails, PairingStatus,
     },
     ports::{
@@ -342,9 +342,9 @@ impl HarnessRepo for PgHarnessRepo {
     async fn set_claude_mode(
         &self,
         harness_id: HarnessId,
-        mode: ClaudeMode,
+        change: ClaudeModeChange,
     ) -> Result<bool, Self::Err> {
-        self.set_claude_mode_inner(harness_id, mode)
+        self.set_claude_mode_inner(harness_id, change)
             .await
             .map_err(Into::into)
     }

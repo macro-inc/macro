@@ -4,6 +4,7 @@ use chrono::Duration;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
+use crate::domain::models::ClaudeMode;
 use crate::domain::{
     models::PairingClaimFacts,
     ports::{HostedPairingUpsert, OpenPairingCounts, PairingRow},
@@ -67,7 +68,7 @@ struct Calls {
     team_lookups: Vec<(String, Uuid)>,
     hosted_upserts: Vec<(NewPairing, NewHarness)>,
     capability_reports: Vec<(HarnessId, HarnessCapabilities)>,
-    claude_modes: Vec<(HarnessId, ClaudeMode)>,
+    claude_modes: Vec<(HarnessId, ClaudeModeChange)>,
     team_access: Vec<(Uuid, bool)>,
 }
 
@@ -199,13 +200,13 @@ impl HarnessRepo for FakeRepo {
     async fn set_claude_mode(
         &self,
         harness_id: HarnessId,
-        mode: ClaudeMode,
+        change: ClaudeModeChange,
     ) -> Result<bool, Self::Err> {
         self.calls
             .lock()
             .unwrap()
             .claude_modes
-            .push((harness_id, mode));
+            .push((harness_id, change));
         Ok(self.harness.is_some())
     }
 
@@ -1163,16 +1164,34 @@ async fn capability_reports_reach_the_repo_and_unknown_harnesses_are_not_found()
         ..FakeRepo::default()
     };
     service(repo.clone())
-        .report_capabilities(HarnessId::TEST_A, HarnessCapabilities { screen: true, claude: None })
+        .report_capabilities(
+            HarnessId::TEST_A,
+            HarnessCapabilities {
+                screen: true,
+                claude: None,
+            },
+        )
         .await
         .unwrap();
     assert_eq!(
         repo.calls.lock().unwrap().capability_reports,
-        [(HarnessId::TEST_A, HarnessCapabilities { screen: true, claude: None })]
+        [(
+            HarnessId::TEST_A,
+            HarnessCapabilities {
+                screen: true,
+                claude: None
+            }
+        )]
     );
 
     let result = service(FakeRepo::default())
-        .report_capabilities(HarnessId::TEST_A, HarnessCapabilities { screen: true, claude: None })
+        .report_capabilities(
+            HarnessId::TEST_A,
+            HarnessCapabilities {
+                screen: true,
+                claude: None,
+            },
+        )
         .await;
     assert!(matches!(result, Err(HarnessError::NotFound(_))));
 }
@@ -1230,16 +1249,19 @@ async fn claude_mode_reaches_the_repo() {
         harness: Some(harness(user_owner(OWNER_ID))),
         ..FakeRepo::default()
     };
+    let signed_in = ClaudeModeChange::SignedIn {
+        signed_in_by: MacroUserIdStr::try_from(OWNER_ID.to_owned()).unwrap(),
+    };
     service(repo.clone())
-        .set_claude_mode(HarnessId::TEST_A, ClaudeMode::OwnAccount)
+        .set_claude_mode(HarnessId::TEST_A, signed_in.clone())
         .await
         .unwrap();
     assert_eq!(
         repo.calls.lock().unwrap().claude_modes,
-        [(HarnessId::TEST_A, ClaudeMode::OwnAccount)]
+        [(HarnessId::TEST_A, signed_in)]
     );
     let missing = service(FakeRepo::default())
-        .set_claude_mode(HarnessId::TEST_A, ClaudeMode::OwnAccount)
+        .set_claude_mode(HarnessId::TEST_A, ClaudeModeChange::SignedOut)
         .await;
     assert!(matches!(missing, Err(HarnessError::NotFound(_))));
 }
