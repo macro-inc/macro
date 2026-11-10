@@ -14,8 +14,8 @@ import { DatabaseTimelineView } from '../views/database-timeline-view';
 /**
  * The production timeline with the app's styles and a host that keeps its
  * records in memory. `?grouped` groups by stage, `?empty` starts without
- * records, `?fields` shows each record's notes on its bar, `?theme=dark` uses
- * the dark theme.
+ * records, `?fields` shows each record's notes on its bar, `?readonly` views
+ * without edit rights, `?theme=dark` uses the dark theme.
  */
 const params = new URLSearchParams(location.search);
 const name: DatabaseViewColumn = {
@@ -78,7 +78,7 @@ const RECORDS: DatabaseRow[] = [
   ['Design review', allDay(2, 6), 'Build'],
   [
     'Build the prototype',
-    allDay(-2, 12),
+    allDay(-2, 24),
     'Build',
     'Covers the editor, the sync layer and the first round of fixes',
   ],
@@ -110,7 +110,7 @@ function Fixture() {
         view={view()}
         rows={rows()}
         columns={COLUMNS}
-        canEdit
+        canEdit={!params.has('readonly')}
         filtered={false}
         rowPending={() => false}
         onViewChange={(change) =>

@@ -93,9 +93,23 @@ for (const [name, viewport, touch] of [
     }) => {
       await open(page, 'fields');
       await bar(page, 'Build the prototype').scrollIntoViewIfNeeded();
-      await expect(
-        bar(page, 'Build the prototype').getByText(/^Covers the editor/)
-      ).toBeVisible();
+      // The field is cut at its cap, on the bar's one visible line.
+      const field = await bar(page, 'Build the prototype')
+        .getByText(/^Covers the editor/)
+        .evaluate((element) => {
+          const body = element
+            .closest('[data-gantt-bar-body]')!
+            .getBoundingClientRect();
+          const box = element.getBoundingClientRect();
+          return {
+            cut: element.scrollWidth > element.clientWidth,
+            onBar: box.top >= body.top && box.bottom <= body.bottom,
+            shown:
+              getComputedStyle(element).visibility === 'visible' &&
+              box.left < innerWidth,
+          };
+        });
+      expect(field).toEqual({ cut: true, onBar: true, shown: true });
       expect(await titleBeside(page, 'Build the prototype')).toMatchObject({
         shown: false,
       });
