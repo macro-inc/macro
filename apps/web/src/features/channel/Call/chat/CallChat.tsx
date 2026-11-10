@@ -247,6 +247,7 @@ function CallChatView(props: ChatViewProps) {
             {(thread) => (
               <MessageThread
                 data={threadListItem(thread())}
+                replies={thread().replies}
                 canWrite
                 expanded
                 hideReplyInput

@@ -70,7 +70,7 @@ function fakeServer(context: BrowserContext, messages: Message[]) {
   const ready = context.route('**/*', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
-    const path = url.pathname;
+    const path = url.pathname.replace(/^\/__macro_dev\/gateway\/dss/, '');
     const guest = path.startsWith(`/call/guest-chat/${CALL}/`);
     const member = path.startsWith(`/messages/call/${CALL}`);
     if (guest || member) {
@@ -154,13 +154,7 @@ function fakeServer(context: BrowserContext, messages: Message[]) {
     }
     if (
       url.hostname === 'localhost' &&
-      (path.startsWith('/src/') ||
-        path.startsWith('/node_modules/') ||
-        path.startsWith('/@vite/') ||
-        path.startsWith('/@id/') ||
-        path.startsWith('/@fs/') ||
-        path.startsWith('/app/') ||
-        path.startsWith('/assets/'))
+      !url.pathname.startsWith('/__macro_dev/')
     ) {
       await route.continue();
       return;
@@ -211,12 +205,12 @@ async function action(page: Page, id: string, name: string) {
     });
     const drawer = page.getByRole('dialog', { name: 'Message actions' });
     await expect(drawer).toBeVisible();
+    await drawer.getByRole('button', { name, exact: true }).click();
     await row.dispatchEvent('touchend', {
       bubbles: true,
       touches: [],
       changedTouches: [],
     });
-    await drawer.getByRole('button', { name, exact: true }).click();
     return;
   }
   await row.hover({ force: true });
@@ -255,6 +249,22 @@ test('guest and member render the same rows with redacted identity', async ({
   expect(fake.requests.some((request) => request.includes(OPAQUE))).toBe(false);
   expect(fake.errors).toEqual([]);
   await memberPage.close();
+});
+
+test('member chat renders messages on a meeting page without app providers', async ({
+  context,
+  page,
+}) => {
+  const fake = fakeServer(context, [
+    makeMessage(CALL, MEMBER, 'Meeting discussion'),
+  ]);
+  await fake.ready;
+
+  const chat = await open(page, 'member', fake.errors);
+  await expect(chat.locator(`[data-message-id="${CALL}"]`)).toContainText(
+    'Meeting discussion'
+  );
+  expect(fake.errors).toEqual([]);
 });
 
 test('guest first post becomes the call root', async ({ context, page }) => {
@@ -336,6 +346,9 @@ test('guest changes appear to member and ownership limits actions', async ({
   ).toHaveCount(0);
 
   await action(page, GUEST_MESSAGE, 'Edit');
+  const threadReadsBeforeEdit = fake.requests.filter((request) =>
+    request.endsWith('/thread')
+  ).length;
   await guest
     .locator(`[data-message-id="${GUEST_MESSAGE}"] [contenteditable="true"]`)
     .fill('Edited guest message');
@@ -343,6 +356,18 @@ test('guest changes appear to member and ownership limits actions', async ({
     .locator(`[data-message-id="${GUEST_MESSAGE}"]`)
     .getByRole('button', { name: 'Send message' })
     .click();
+  await expect
+    .poll(
+      () =>
+        fake.messages.find((message) => message.id === GUEST_MESSAGE)?.content
+    )
+    .toBe('Edited guest message');
+  await expect
+    .poll(
+      () =>
+        fake.requests.filter((request) => request.endsWith('/thread')).length
+    )
+    .toBeGreaterThan(threadReadsBeforeEdit);
   await expect(
     guest.locator(`[data-message-id="${GUEST_MESSAGE}"]`)
   ).toContainText('Edited guest message');

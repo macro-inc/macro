@@ -74,7 +74,7 @@ export function ChannelThread(props: ThreadProps) {
   const repliesQuery = useThreadRepliesQuery(
     props.parent,
     () => props.data().id,
-    fetchRepliesEnabled
+    () => !props.replies && fetchRepliesEnabled()
   );
   // A project's cached root must not outlive an explicit denial from its
   // thread read while the surrounding project is revalidating access.
@@ -85,6 +85,7 @@ export function ChannelThread(props: ThreadProps) {
     );
 
   const queryReplies = (): Array<EntityMessage> | undefined => {
+    if (props.replies) return props.replies();
     if (projectUnavailable()) return [];
     return queryReadyGate(repliesQuery) ? repliesQuery.data : undefined;
   };

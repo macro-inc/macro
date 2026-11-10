@@ -20,6 +20,7 @@ import {
 } from '@queries/messages/reactions';
 import { useMessageThreadQuery } from '@queries/messages/thread-replies';
 import type {
+  Message,
   MessageListItem,
   MessageParent,
   MessageThread as ThreadData,
@@ -47,6 +48,8 @@ export function threadListItem(thread: ThreadData): MessageListItem {
 
 type ThreadOptions = {
   canWrite: boolean;
+  /** Complete replies from an already loaded thread. */
+  replies?: Message[];
   /** Delete comments the caller did not write. Document owners set this. */
   canModerate?: boolean;
   buildLink?: (message: MessageData) => string;
@@ -218,6 +221,7 @@ export function MessageThread(
         <confirm.ConfirmationDialog />
         <ChannelThread
           data={() => props.data}
+          replies={props.replies ? () => props.replies ?? [] : undefined}
           parent={() => props.data.parent}
           getMessageActions={(message) => {
             const value = actions(message);
