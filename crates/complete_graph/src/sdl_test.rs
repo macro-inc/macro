@@ -856,7 +856,8 @@ fn ideas_and_routine_suggestions_hang_off_the_authenticated_user() {
         "status: GraphqlSuggestionGenerationStatus!",
         "suggestions: [GraphqlRoutineSuggestion!]!",
         "union GraphqlRoutineSuggestionPick = GraphqlCatalogRoutinePick | GraphqlDraftedRoutinePick",
-        "dismissRoutineSuggestion(suggestionId: ID!): GraphqlRoutineSuggestionDismissed!",
+        "dismissRoutineSuggestion(suggestionId: ID!): GraphqlRoutineSuggestion!",
+        "state: GraphqlRoutineSuggestionState!",
         "startSuggestionGeneration(timezone: String!): GraphqlSuggestionGenerationStarted!",
     ] {
         assert_sdl_line(&sdl, expected);
@@ -878,7 +879,7 @@ fn ideas_and_routine_suggestions_hang_off_the_authenticated_user() {
         ("GraphqlRoutineSuggestions", false),
         ("GraphqlCatalogRoutinePick", false),
         ("GraphqlDraftedRoutinePick", false),
-        ("GraphqlRoutineSuggestionDismissed", false),
+        ("GraphqlSuggestionGenerationStarted", false),
     ] {
         let object = schema.get_object(name).expect(name);
         assert_eq!(object.fields.contains_key("id"), keyed, "{name}");

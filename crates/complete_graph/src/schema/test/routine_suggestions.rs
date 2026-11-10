@@ -30,6 +30,23 @@ impl RecordingSuggestions {
     }
 }
 
+fn suggestion() -> RoutineSuggestion {
+    let mut knobs = serde_json::Map::new();
+    knobs.insert("label".to_owned(), serde_json::json!("Invoices"));
+    RoutineSuggestion {
+        id: SUGGESTION_ID,
+        from: SuggestionFrom::ForYou,
+        surfaces: vec![Surface::Email, Surface::Tasks],
+        reason: Some("You file invoices by hand.".to_owned()),
+        keep_probability: Some(0.5),
+        on_by_default: true,
+        pick: SuggestedPick::Catalog {
+            key: "inbox".to_owned(),
+            knobs,
+        },
+    }
+}
+
 impl RoutineSuggestionsGraphql for RecordingSuggestions {
     fn suggestions(
         &self,
@@ -38,33 +55,24 @@ impl RoutineSuggestionsGraphql for RecordingSuggestions {
     ) -> SuggestionsFuture<'_, RoutineSuggestions> {
         Box::pin(async move {
             self.record(format!("suggestions {user} {surface:?}"))?;
-            let mut knobs = serde_json::Map::new();
-            knobs.insert("label".to_owned(), serde_json::json!("Invoices"));
             Ok(RoutineSuggestions {
                 status: GenerationStatus::Generating,
-                suggestions: vec![RoutineSuggestion {
-                    id: SUGGESTION_ID,
-                    from: SuggestionFrom::ForYou,
-                    surfaces: vec![Surface::Email, Surface::Tasks],
-                    reason: Some("You file invoices by hand.".to_owned()),
-                    keep_probability: Some(0.5),
-                    on_by_default: true,
-                    pick: SuggestedPick::Catalog {
-                        key: "inbox".to_owned(),
-                        knobs,
-                    },
-                }],
+                suggestions: vec![suggestion()],
             })
         })
     }
 
-    fn dismiss(&self, user: MacroUserIdStr<'static>, id: Uuid) -> SuggestionsFuture<'_, ()> {
+    fn dismiss(
+        &self,
+        user: MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> SuggestionsFuture<'_, RoutineSuggestion> {
         Box::pin(async move {
             self.record(format!("dismiss {user} {id}"))?;
             if id != SUGGESTION_ID {
                 return Err(RoutineSuggestionsError::NotFound);
             }
-            Ok(())
+            Ok(suggestion())
         })
     }
 
@@ -110,7 +118,7 @@ async fn suggestions_serve_the_status_and_each_pick_for_the_viewers_surface() {
         r#"{ user { routineSuggestions(surface: EMAIL) {
             status
             suggestions {
-                id from surfaces reason keepProbability onByDefault
+                id from surfaces reason keepProbability onByDefault state
                 pick { __typename ... on GraphqlCatalogRoutinePick { key knobs } }
             }
         } } }"#,
@@ -129,6 +137,7 @@ async fn suggestions_serve_the_status_and_each_pick_for_the_viewers_surface() {
                 "reason": "You file invoices by hand.",
                 "keepProbability": 0.5,
                 "onByDefault": true,
+                "state": "OPEN",
                 "pick": {
                     "__typename": "GraphqlCatalogRoutinePick",
                     "key": "inbox",
@@ -164,7 +173,7 @@ async fn suggestions_being_off_answer_null_without_failing_the_user() {
     let dismissed = run(
         &suggestions,
         &format!(
-            r#"mutation {{ dismissRoutineSuggestion(suggestionId: "{SUGGESTION_ID}") {{ suggestionId }} }}"#
+            r#"mutation {{ dismissRoutineSuggestion(suggestionId: "{SUGGESTION_ID}") {{ id }} }}"#
         ),
     )
     .await;
@@ -179,7 +188,7 @@ async fn dismissing_and_generating_run_for_the_viewer_with_typed_failures() {
         &suggestions,
         &format!(
             r#"mutation {{
-                dismissRoutineSuggestion(suggestionId: "{SUGGESTION_ID}") {{ suggestionId }}
+                dismissRoutineSuggestion(suggestionId: "{SUGGESTION_ID}") {{ id state }}
                 startSuggestionGeneration(timezone: "Europe/Paris") {{ started }}
             }}"#
         ),
@@ -190,16 +199,14 @@ async fn dismissing_and_generating_run_for_the_viewer_with_typed_failures() {
     assert_eq!(
         response.data.into_json().unwrap(),
         serde_json::json!({
-            "dismissRoutineSuggestion": { "suggestionId": SUGGESTION_ID.to_string() },
+            "dismissRoutineSuggestion": { "id": SUGGESTION_ID.to_string(), "state": "DISMISSED" },
             "startSuggestionGeneration": { "started": true },
         })
     );
 
     let missing = run(
         &suggestions,
-        &format!(
-            r#"mutation {{ dismissRoutineSuggestion(suggestionId: "{unknown}") {{ suggestionId }} }}"#
-        ),
+        &format!(r#"mutation {{ dismissRoutineSuggestion(suggestionId: "{unknown}") {{ id }} }}"#),
     )
     .await;
     assert_eq!(code(&missing), "NOT_FOUND");

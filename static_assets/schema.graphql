@@ -481,9 +481,10 @@ type CompleteMutationRoot {
 	recordIdeasSeen(timezone: String!): Boolean!
 	"""
 	The user isn't interested in a suggestion, AI's or a template: it is
-	never suggested again, on any surface.
+	never suggested again, on any surface. Answers with the suggestion,
+	now `DISMISSED`, so every list showing it drops it.
 	"""
-	dismissRoutineSuggestion(suggestionId: ID!): GraphqlRoutineSuggestionDismissed!
+	dismissRoutineSuggestion(suggestionId: ID!): GraphqlRoutineSuggestion!
 	"""
 	Start the user's onboarding generation, once their inbox is
 	connected, in IANA time zone `timezone`: their ideas and routine
@@ -7799,19 +7800,14 @@ type GraphqlRoutineSuggestion {
 	"""
 	onByDefault: Boolean!
 	"""
+	Where it is for the user. Lists serve only `OPEN` ones; a mutation
+	answers with the state it left, and views leave out the rest.
+	"""
+	state: GraphqlRoutineSuggestionState!
+	"""
 	What is suggested.
 	"""
 	pick: GraphqlRoutineSuggestionPick!
-}
-
-"""
-A suggestion the user dismissed.
-"""
-type GraphqlRoutineSuggestionDismissed {
-	"""
-	The dismissed suggestion.
-	"""
-	suggestionId: ID!
 }
 
 """
@@ -7832,6 +7828,25 @@ enum GraphqlRoutineSuggestionFrom {
 What is suggested.
 """
 union GraphqlRoutineSuggestionPick = GraphqlCatalogRoutinePick | GraphqlDraftedRoutinePick
+
+"""
+Where a routine suggestion is for the user.
+"""
+enum GraphqlRoutineSuggestionState {
+	"""
+	Shown.
+	"""
+	OPEN
+	"""
+	The user turned it down; it is never suggested again.
+	"""
+	DISMISSED
+	"""
+	The user saved a routine from it. Never served: a client that saves
+	a routine from a suggestion writes it, so its lists drop it.
+	"""
+	SAVED
+}
 
 """
 The user's routine suggestions, and whether more are on the way.

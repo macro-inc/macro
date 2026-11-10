@@ -42,8 +42,13 @@ pub trait RoutineSuggestionsGraphql: Send + Sync {
         surface: Option<Surface>,
     ) -> SuggestionsFuture<'_, RoutineSuggestions>;
 
-    /// The user isn't interested in suggestion `id`, AI's or a template.
-    fn dismiss(&self, user: MacroUserIdStr<'static>, id: Uuid) -> SuggestionsFuture<'_, ()>;
+    /// The user isn't interested in suggestion `id`, AI's or a template;
+    /// the suggestion as it was shown.
+    fn dismiss(
+        &self,
+        user: MacroUserIdStr<'static>,
+        id: Uuid,
+    ) -> SuggestionsFuture<'_, RoutineSuggestion>;
 
     /// Start the user's onboarding generation; whether one started.
     fn start_generation(
@@ -101,21 +106,25 @@ pub struct RoutineSuggestionsMutationRoot;
 #[Object]
 impl RoutineSuggestionsMutationRoot {
     /// The user isn't interested in a suggestion, AI's or a template: it is
-    /// never suggested again, on any surface.
+    /// never suggested again, on any surface. Answers with the suggestion,
+    /// now `DISMISSED`, so every list showing it drops it.
     #[tracing::instrument(skip_all, fields(routine.suggestion.id = %suggestion_id.as_str()), err(Debug))]
     async fn dismiss_routine_suggestion(
         &self,
         ctx: &Context<'_>,
         suggestion_id: ID,
-    ) -> async_graphql::Result<GraphqlRoutineSuggestionDismissed> {
+    ) -> async_graphql::Result<GraphqlRoutineSuggestion> {
         let user = require_authenticated_user(ctx)?;
         let id: Uuid = suggestion_id.parse().map_err(|_| {
             async_graphql::Error::new("suggestionId must be a UUID")
                 .extend_with(|_, extensions| extensions.set("code", "BAD_USER_INPUT"))
         })?;
         let service = &ctx.data::<RoutineSuggestionsGraphqlContext>()?.0;
-        service.dismiss(user, id).await.map_err(suggestions_error)?;
-        Ok(GraphqlRoutineSuggestionDismissed { suggestion_id })
+        let dismissed = service.dismiss(user, id).await.map_err(suggestions_error)?;
+        // The write committed, so a suggestion that can't be shown is a
+        // terminal answer, never a retry.
+        routine_suggestion(dismissed, GraphqlRoutineSuggestionState::Dismissed)
+            .ok_or_else(|| suggestions_error(RoutineSuggestionsError::NotFound))
     }
 
     /// Start the user's onboarding generation, once their inbox is
@@ -175,7 +184,9 @@ impl From<RoutineSuggestions> for GraphqlRoutineSuggestions {
             suggestions: suggestions
                 .suggestions
                 .into_iter()
-                .filter_map(routine_suggestion)
+                .filter_map(|suggestion| {
+                    routine_suggestion(suggestion, GraphqlRoutineSuggestionState::Open)
+                })
                 .collect(),
         }
     }
@@ -199,13 +210,19 @@ pub struct GraphqlRoutineSuggestion {
     keep_probability: Option<f32>,
     /// Onboarding shows it switched on.
     on_by_default: bool,
+    /// Where it is for the user. Lists serve only `OPEN` ones; a mutation
+    /// answers with the state it left, and views leave out the rest.
+    state: GraphqlRoutineSuggestionState,
     /// What is suggested.
     pick: GraphqlRoutineSuggestionPick,
 }
 
 /// A suggestion as GraphQL serves it; a drafted routine that can't be
 /// encoded is logged and left out, never failing the list.
-fn routine_suggestion(suggestion: RoutineSuggestion) -> Option<GraphqlRoutineSuggestion> {
+fn routine_suggestion(
+    suggestion: RoutineSuggestion,
+    state: GraphqlRoutineSuggestionState,
+) -> Option<GraphqlRoutineSuggestion> {
     let pick = match suggestion.pick {
         SuggestedPick::Catalog { key, knobs } => {
             GraphqlRoutineSuggestionPick::Catalog(GraphqlCatalogRoutinePick {
@@ -231,6 +248,7 @@ fn routine_suggestion(suggestion: RoutineSuggestion) -> Option<GraphqlRoutineSug
         reason: suggestion.reason,
         keep_probability: suggestion.keep_probability,
         on_by_default: suggestion.on_by_default,
+        state,
         pick,
     })
 }
@@ -262,11 +280,16 @@ pub struct GraphqlDraftedRoutinePick {
     routine: Json<Value>,
 }
 
-/// A suggestion the user dismissed.
-#[derive(SimpleObject)]
-pub struct GraphqlRoutineSuggestionDismissed {
-    /// The dismissed suggestion.
-    suggestion_id: ID,
+/// Where a routine suggestion is for the user.
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub enum GraphqlRoutineSuggestionState {
+    /// Shown.
+    Open,
+    /// The user turned it down; it is never suggested again.
+    Dismissed,
+    /// The user saved a routine from it. Never served: a client that saves
+    /// a routine from a suggestion writes it, so its lists drop it.
+    Saved,
 }
 
 /// What starting a generation did.
