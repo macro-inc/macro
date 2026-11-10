@@ -64,7 +64,9 @@ pkgs.testers.runNixOSTest {
     ];
     environment.etc."macro-box-image".text = "v2";
   };
-  testScript = ''
+  testScript =
+    { nodes, ... }:
+    ''
     machine.wait_for_unit("multi-user.target")
 
     with subtest("enrollment fails with a reason when Incus is missing"):
@@ -90,6 +92,9 @@ pkgs.testers.runNixOSTest {
         machine.succeed("su - macro -c 'command -v claude herdr docker chromium node git uv'")
         machine.succeed("su - macro -c 'docker info' >&2")
         machine.succeed("su - macro -c 'test -f ~/.claude/skills/this-machine/SKILL.md && test -O ~/.claude.json'")
+        # herdr's official skill, from the source herdr was built from.
+        machine.succeed("cmp /home/macro/.claude/skills/herdr/SKILL.md ${nodes.machine.macro.box.herdrSource}/skills/herdr/SKILL.md")
+        machine.succeed("grep -F 'HERDR_ENV=1' /etc/skel/.claude/skills/herdr/SKILL.md && test -s /etc/skel/.claude/skills/herdr/LICENSE")
         machine.succeed("su - macro -c '/bin/bash -c true'")
 
     with subtest("downloaded glibc binaries run through nix-ld"):

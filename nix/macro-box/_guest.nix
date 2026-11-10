@@ -17,6 +17,7 @@ let
   enrolledMarker = "/var/lib/macrod/enrolled";
   # /var/lib/macrod links here when there is a data disk.
   persistentMacrodState = if cfg.dataDisk == null then "/var/lib/macrod" else "/home/.system/macrod";
+  herdr = pkgs.callPackage "${cfg.herdrSource}/nix/package.nix" { };
   adapterDirectory = "${home}/.macrod/adapters/${cfg.claudeAgentAcp.adapterDirectory}";
   display = ":0";
   waitForDisplay = pkgs.writeShellScript "wait-for-display" ''
@@ -43,6 +44,15 @@ let
   skel = {
     "skel/.claude.json" = {
       source = claudeUserConfig;
+      mode = "0644";
+    };
+    # herdr's official skill (Apache-2.0), with its license alongside.
+    "skel/.claude/skills/herdr/SKILL.md" = {
+      source = "${cfg.herdrSource}/skills/herdr/SKILL.md";
+      mode = "0644";
+    };
+    "skel/.claude/skills/herdr/LICENSE" = {
+      source = "${cfg.herdrSource}/LICENSE";
       mode = "0644";
     };
   }
@@ -92,6 +102,10 @@ in
       type = lib.types.package;
       default = import ./_chrome-devtools-mcp.nix { inherit pkgs; };
       description = "The chrome-devtools MCP server.";
+    };
+    herdrSource = lib.mkOption {
+      type = lib.types.path;
+      description = "herdr's source at a release tag: its package and official agent skill.";
     };
     enrollFrom = lib.mkOption {
       type = lib.types.str;
@@ -203,9 +217,9 @@ in
       cfg.macrod
       cfg.claudeCode
       cfg.chromeDevtoolsMcp
+      herdr
     ]
     ++ (with pkgs; [
-      herdr
       chromium
       nodejs_24
       python3

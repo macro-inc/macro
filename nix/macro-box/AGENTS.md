@@ -32,6 +32,13 @@ PID 1 (for the dev-only DockerFleet).
   `~macro/.macrod/adapters/<package>@<version>`, so macrod never runs npm.
 - `files/` holds the enrollment probe script and `/etc/claude-code/CLAUDE.md`;
   `skills/` is copied into `/etc/skel/.claude/skills` and macro's home.
+- herdr is built from the `herdr` flake input (`github:herdrdev/herdr/v<version>`)
+  with its own `nix/package.nix`, and its official skill
+  (`skills/herdr/SKILL.md`, Apache-2.0, with `LICENSE` beside it) comes from
+  the same source. Evaluation fails when the input's tag differs from the
+  version in its `Cargo.toml`. herdr sets `HERDR_ENV=1` in its panes, which
+  the skill requires. To upgrade, change the tag in `flake.nix` and run
+  `nix flake lock --update-input herdr`.
 
 ## Outputs
 
