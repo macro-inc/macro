@@ -740,11 +740,16 @@ export type IdeaWriteOutcome = {
 };
 
 /**
- * A person's open ideas, best first.
+ * A person's feed: their open ideas, best first, and the ones they
+ * finished in the last day, newest first.
  */
 export type Ideas = {
     /**
-     * The ideas.
+     * Ideas done in the last 24 hours, with what they produced.
+     */
+    done: Array<Idea>;
+    /**
+     * The open ideas.
      */
     ideas: Array<Idea>;
 };

@@ -34,6 +34,9 @@ pub const OPEN_LIMIT: u32 = 30;
 /// Most ideas one generation may add or bring back.
 pub const NEW_PER_GENERATION: u32 = 12;
 
+/// How long a finished idea stays in the feed's `done`.
+pub const DONE_WITHIN: chrono::TimeDelta = chrono::TimeDelta::hours(24);
+
 /// Ideas whose items the feed checks at once.
 const ACCESS_CHECKS_AT_ONCE: usize = 8;
 
@@ -210,21 +213,26 @@ where
 {
     #[tracing::instrument(name = "ideas.feed", skip_all, fields(
         ideas.open = tracing::field::Empty,
+        ideas.done = tracing::field::Empty,
         ideas.hidden = tracing::field::Empty,
     ), err)]
     async fn feed(&self, user: &MacroUserIdStr<'static>) -> Result<Ideas, IdeaError> {
         self.require_flag(user).await?;
-        let open: Vec<Idea> = self
+        let done_since = Utc::now() - DONE_WITHIN;
+        let shown: Vec<Idea> = self
             .repo
             .ideas(user)
             .await
             .map_err(IdeaError::internal)?
             .into_iter()
-            .filter(|idea| idea.state.is_open())
+            .filter(|idea| {
+                idea.state.is_open()
+                    || (idea.state == IdeaState::Done && idea.state_changed_at >= done_since)
+            })
             .collect();
-        let before = open.len();
+        let before = shown.len();
         // Up to 30 ideas of up to 5 items each: check a few at a time.
-        let mut ideas: Vec<Idea> = futures::stream::iter(open)
+        let viewable: Vec<Idea> = futures::stream::iter(shown)
             .map(|idea| async move {
                 Ok::<_, IdeaError>(self.viewable(user, &idea).await?.then_some(idea))
             })
@@ -232,15 +240,20 @@ where
             .try_filter_map(|idea| async move { Ok(idea) })
             .try_collect()
             .await?;
+        let hidden = before - viewable.len();
+        let (mut ideas, mut done): (Vec<Idea>, Vec<Idea>) =
+            viewable.into_iter().partition(|idea| idea.state.is_open());
         ideas.sort_by(|a, b| {
             b.importance
                 .cmp(&a.importance)
                 .then(b.updated_at.cmp(&a.updated_at))
         });
+        done.sort_by(|a, b| b.state_changed_at.cmp(&a.state_changed_at));
         let span = tracing::Span::current();
         span.record("ideas.open", ideas.len());
-        span.record("ideas.hidden", before - ideas.len());
-        Ok(Ideas { ideas })
+        span.record("ideas.done", done.len());
+        span.record("ideas.hidden", hidden);
+        Ok(Ideas { ideas, done })
     }
 
     #[tracing::instrument(name = "ideas.accept", skip_all, fields(idea.id = %id), err)]

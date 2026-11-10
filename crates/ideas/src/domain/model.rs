@@ -244,12 +244,15 @@ pub struct Target {
     pub part_id: Option<String>,
 }
 
-/// A person's open ideas, best first.
+/// A person's feed: their open ideas, best first, and the ones they
+/// finished in the last day, newest first.
 #[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Ideas {
-    /// The ideas.
+    /// The open ideas.
     pub ideas: Vec<Idea>,
+    /// Ideas done in the last 24 hours, with what they produced.
+    pub done: Vec<Idea>,
 }
 
 /// What a generation session reads before managing the person's ideas:

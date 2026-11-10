@@ -3245,15 +3245,22 @@
       },
       "Ideas": {
         "type": "object",
-        "description": "A person's open ideas, best first.",
-        "required": ["ideas"],
+        "description": "A person's feed: their open ideas, best first, and the ones they\nfinished in the last day, newest first.",
+        "required": ["ideas", "done"],
         "properties": {
+          "done": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Idea"
+            },
+            "description": "Ideas done in the last 24 hours, with what they produced."
+          },
           "ideas": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Idea"
             },
-            "description": "The ideas."
+            "description": "The open ideas."
           }
         }
       },

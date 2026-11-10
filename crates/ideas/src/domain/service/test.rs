@@ -584,3 +584,48 @@ async fn the_person_accepts_and_dismisses_only_their_open_ideas(pool: PgPool) {
         Err(IdeaError::NotFound)
     ));
 }
+
+/// The feed keeps ideas done in the last day, newest first, apart from the
+/// open ones; older ones and other closed ones leave it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_feed_keeps_ideas_done_in_the_last_day(pool: PgPool) {
+    let h = harness(pool, true).await;
+    let session = h.session(OWNER, "ideas").await;
+    let mut ids = Vec::new();
+    for key in ["a:done", "b:done-yesterday", "c:open", "d:dismissed"] {
+        ids.push(h.suggest(session, entity_idea(key)).await.idea.unwrap().id);
+    }
+    let repo = PgIdeaRepo::new(h.pool.clone());
+    for (id, state) in [
+        (ids[0], IdeaState::Done),
+        (ids[1], IdeaState::Done),
+        (ids[3], IdeaState::Dismissed),
+    ] {
+        repo.set_state(
+            &user(OWNER),
+            id,
+            &[IdeaState::Proposed],
+            state,
+            None,
+            Utc::now(),
+        )
+        .await
+        .unwrap();
+    }
+    sqlx::query!(
+        "UPDATE idea SET state_changed_at = now() - interval '25 hours' WHERE id = $1",
+        ids[1]
+    )
+    .execute(&h.pool)
+    .await
+    .unwrap();
+    let feed = h.service.feed(&user(OWNER)).await.unwrap();
+    assert_eq!(
+        feed.ideas.iter().map(|idea| idea.id).collect::<Vec<_>>(),
+        [ids[2]]
+    );
+    assert_eq!(
+        feed.done.iter().map(|idea| idea.id).collect::<Vec<_>>(),
+        [ids[0]]
+    );
+}

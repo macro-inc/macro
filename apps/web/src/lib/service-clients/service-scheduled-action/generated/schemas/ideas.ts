@@ -8,9 +8,12 @@
 import type { Idea } from './idea';
 
 /**
- * A person's open ideas, best first.
+ * A person's feed: their open ideas, best first, and the ones they
+finished in the last day, newest first.
  */
 export interface Ideas {
-  /** The ideas. */
+  /** Ideas done in the last 24 hours, with what they produced. */
+  done: Idea[];
+  /** The open ideas. */
   ideas: Idea[];
 }
