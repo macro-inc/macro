@@ -176,7 +176,7 @@ turn the bypass off. Accounts created while the bypass is on remain afterward.
 Useful checks after editing signup configuration behavior:
 
 ```bash
-nix develop --command env -u DATABASE_URL cargo test -p authentication_service --bin authentication_service config::test
+nix develop --command cargo test -p authentication_service --lib config::test  # needs a live DATABASE_URL
 nix develop --command cargo check -p authentication_service --bin authentication_service_doppler_config
 cargo fmt --check
 ```

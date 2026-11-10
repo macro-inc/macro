@@ -88,8 +88,10 @@ failure toast.
 
 ## Signup in Develop
 
-Develop creates new accounts only for `@macro.com` addresses and the addresses on
-the Develop signup allowlist. A code request for any other new address gets a
+With `DEVELOPMENT_BYPASS_SIGNUP_ALLOWLIST` off (the default), Develop creates new
+accounts only for `@macro.com` addresses and the addresses on the Develop signup
+allowlist; turning the bypass on admits every address. With the bypass off, a
+code request for any other new address gets a
 generic `403`, and FusionAuth aborts any other provider sign-up. Existing
 accounts still sign in. See the
 [authentication-service configuration guide](../../services/authentication_service/README.md#development-signup-allowlist).
