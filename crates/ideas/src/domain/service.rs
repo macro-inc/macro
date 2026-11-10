@@ -57,6 +57,8 @@ pub struct IdeaService<Repo, Access, Flags> {
     generation_sessions: Arc<dyn GenerationSessions>,
     audience: Arc<dyn SuggestionAudience>,
     flags: Option<Flags>,
+    /// The SDK reference an ideas session's brief carries.
+    sdk_reference: String,
 }
 
 impl<Repo, Access, Flags> IdeaService<Repo, Access, Flags>
@@ -81,7 +83,16 @@ where
             generation_sessions,
             audience,
             flags,
+            sdk_reference: String::new(),
         }
+    }
+
+    /// Hand ideas sessions `reference`, the SDK methods and fields they use
+    /// ([`prompt::SYMBOLS`], [`prompt::FIELDS_OF`]), so they skip reading the
+    /// documentation.
+    pub fn with_sdk_reference(mut self, reference: String) -> Self {
+        self.sdk_reference = reference;
+        self
     }
 
     #[tracing::instrument(name = "ideas.flag", err, skip_all)]
@@ -280,7 +291,7 @@ where
     }
 
     fn brief(&self, trigger: GenerationTrigger, timezone: chrono_tz::Tz) -> String {
-        prompt::brief(trigger, timezone.name(), Utc::now())
+        prompt::brief(trigger, timezone.name(), Utc::now(), &self.sdk_reference)
     }
 
     async fn kept(&self, session: Uuid) -> Result<u32, IdeaError> {
