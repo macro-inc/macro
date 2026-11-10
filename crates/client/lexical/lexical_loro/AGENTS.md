@@ -11,7 +11,7 @@ It preserves the persisted loro-mirror node schema and takes explicit clocks.
 - `reconstruct_initial_state`: one read-only walk reports persisted transparent wrappers; `mirror::set_synced_state` performs explicit full cleanup with protected local fields retained.
 - `src/policy.rs`: synced editor view and application exclusions.
 - `src/schema.rs`: fresh/existing container inference and text splicing.
-- `src/local.rs`: dirty commit projection and corrected list moves; local_commit_without_events suppresses materialization only at the final commit, and its owner must checkpoint undo from local operations.
+- `src/local.rs`, `child_index.rs`: dirty projection, stable direct-child insertion anchors and corrected list moves; local_commit_without_events suppresses materialization only at the final commit, and its owner must checkpoint undo from local operations.
 - `src/remote.rs`: buffered Loro events and id-keyed raw editor changes.
 - `src/cursor.rs`: Unicode/UTF-16 conversion and awareness cursor codec.
 
@@ -59,6 +59,8 @@ visibility before emitting updates or retaining their model bindings.
 
 Remote Create JSON retains an empty children marker for native elements so
 opt-in unknown types keep their structural kind through EditorCore.
+
+Trust direct-child insertion anchors only for the exact previous editor snapshot and unchanged native oplog/state, with no pending writes; invalidate them on external edits, checkout, fixups or projection failure. Keep full checks independent and use general reconciliation for wrappers, foreign children, removals and moves.
 
 Snapshot ownership of affected child lists before initializing new subtrees;
 rebinding a moved descendant must not turn its old container into a foreign child.
