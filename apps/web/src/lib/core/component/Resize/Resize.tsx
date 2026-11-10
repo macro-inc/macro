@@ -273,6 +273,8 @@ type PanelProps = {
    */
   target?: number | PanelSizeSpec;
   collapsed?: () => boolean;
+  /** Fill the zone without taking a slot in the resize layout. */
+  overlay?: boolean;
   hidden?: () => boolean;
   /** The index position for this panel in the layout order */
   index?: number;
@@ -333,7 +335,7 @@ function Panel(props: ParentProps<PanelProps>) {
     const collapsed = props.collapsed?.() ?? false;
     const hidden = props.hidden?.() ?? false;
 
-    if (collapsed || (hidden && !props.persistent)) {
+    if (props.overlay || collapsed || (hidden && !props.persistent)) {
       ctx.unregister(next.id);
       return;
     }
@@ -367,6 +369,7 @@ function Panel(props: ParentProps<PanelProps>) {
   const size = createMemo(ctx.sizeOf(props.id));
 
   const styles = createMemo(() => {
+    if (props.overlay) return { inset: '0px', 'z-index': 1 };
     if (ctx.direction() === 'horizontal') {
       return {
         top: '0px',

@@ -137,7 +137,8 @@ function TouchEmailPanes(props: {
   onListWidthChange: (width: number) => void;
 }) {
   const shell = useViewShell();
-  const { selectedThread, composing, closeThread } = useEmailView();
+  const { selectedThread, composing, closeThread, navigateToList } =
+    useEmailView();
   return (
     <CollectionPanes
       list={
@@ -149,7 +150,7 @@ function TouchEmailPanes(props: {
       hasDetail={!!selectedThread() || composing()}
       empty={<EmailReaderEmpty />}
       onListWidthChangeEnd={props.onListWidthChange}
-      onBack={selectedThread() ? closeThread : undefined}
+      onBack={selectedThread() ? navigateToList : undefined}
     >
       <EmailReader
         focusList={() => {

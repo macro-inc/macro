@@ -778,6 +778,7 @@ test('Back and a left-edge swipe return a folded detail to its list', async ({
 
   await wide();
   await select();
+  const originalList = await list.elementHandle();
   await narrow();
   await expect(back).toBeVisible();
 
@@ -798,6 +799,31 @@ test('Back and a left-edge swipe return a folded detail to its list', async ({
   };
   await swipe({ x: 12, y: 340 });
   await expect(preview).toBeVisible();
+
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchStart',
+    touchPoints: [{ x: 4, y: 160 }],
+  });
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchMove',
+    touchPoints: [{ x: 104, y: 160 }],
+  });
+  await expect(list).toBeVisible();
+  expect((await preview.boundingBox())!.x).toBeCloseTo(100);
+  await expect(page.locator('[data-view-shell-list]')).toHaveAttribute('inert');
+  expect(
+    await list.evaluate(
+      (element, original) => element === original,
+      originalList
+    )
+  ).toBe(true);
+  await touch.send('Input.dispatchTouchEvent', {
+    type: 'touchCancel',
+    touchPoints: [],
+  });
+  await expect(list).toBeHidden();
+  expect((await preview.boundingBox())!.x).toBeCloseTo(0);
+
   await swipe({ x: 240, y: 160 });
   await expect(list).toBeVisible();
   await expect(preview).toBeHidden();

@@ -1,12 +1,20 @@
 import { FloatRegionScope } from '@components/app/mobile/float-regions/FloatRegionScope';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
-import { createMobileEdgeSwipe } from '@components/app/split-layout/mobile/createMobileEdgeSwipe';
+import { createMobileSwipeBackGesture } from '@components/app/split-layout/mobile/createMobileSwipeBackGesture';
 import { Resize } from '@core/component/Resize';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { createSignal, createUniqueId, type JSX, Show } from 'solid-js';
+import {
+  createComputed,
+  createSignal,
+  createUniqueId,
+  type JSX,
+  on,
+  Show,
+} from 'solid-js';
 import { ViewShell } from './ViewShell';
 import {
   useViewShellInternal,
+  ViewShellListActiveContext,
   ViewShellPaneContext,
   ViewShellReturnToListContext,
 } from './view-shell-context';
@@ -21,7 +29,7 @@ export function CollectionPanes(props: {
   hasDetail: boolean;
   empty?: JSX.Element;
   onListWidthChangeEnd?: (width: number) => void;
-  onBack?: () => void;
+  onBack?: () => void | Promise<void>;
   children: JSX.Element;
 }) {
   const ws = useViewShellInternal();
@@ -35,18 +43,23 @@ export function CollectionPanes(props: {
   const preferredListWidth = () => ws.main.layout().width ?? listWidth();
   const listVisible = () => ws.collectionLayout() || !props.hasDetail;
   const detailVisible = () => ws.collectionLayout() || props.hasDetail;
+  const stacked = () => isTouchDevice() && !listVisible() && !!props.onBack;
+  const listMounted = () => listVisible() || stacked();
   const returnToList = () => {
-    if (!isTouchDevice() || listVisible() || panel?.isPanelActive() === false) {
-      return;
-    }
-    return props.onBack;
+    if (stacked() && panel?.isPanelActive() !== false) return props.onBack;
   };
-  const swipe = createMobileEdgeSwipe({
-    enabled: () => !!returnToList(),
-    onEnd: (completed) => {
-      if (completed) returnToList()?.();
-    },
+  const swipe = createMobileSwipeBackGesture({
+    canGoBack: () => !!returnToList() && !ws.aside.isOverlay(),
+    width: () => ws.width() ?? 0,
+    completeGoBack: () => returnToList()?.(),
   });
+  const swiping = () =>
+    stacked() && (swipe.isDragging() || swipe.isAnimatingOut());
+  createComputed(
+    on(stacked, (active) => {
+      if (!active) swipe.reset();
+    })
+  );
   return (
     <ViewShell.Main class="relative overflow-hidden">
       <Resize.Zone
@@ -66,7 +79,7 @@ export function CollectionPanes(props: {
             ws.collectionLayout() ? preferredListWidth() : undefined
           }
           onSizeChangeEnd={props.onListWidthChangeEnd ?? setListWidth}
-          collapsed={() => !listVisible()}
+          collapsed={() => !listMounted()}
           target={
             ws.collectionLayout()
               ? {
@@ -81,11 +94,20 @@ export function CollectionPanes(props: {
               <div
                 ref={setListFrame}
                 class="relative flex size-full min-h-0 min-w-0 flex-col"
+                classList={{
+                  isolate: stacked(),
+                  invisible: !listVisible() && !swiping(),
+                }}
+                style={swiping() ? swipe.styleForSlot(false) : undefined}
                 data-view-shell-list
                 inert={!listVisible()}
                 aria-hidden={!listVisible()}
               >
-                <Show when={listVisible()}>{props.list}</Show>
+                <Show when={listMounted()}>
+                  <ViewShellListActiveContext.Provider value={listVisible}>
+                    {props.list}
+                  </ViewShellListActiveContext.Provider>
+                </Show>
               </div>
             </FloatRegionScope>
           </ViewShellPaneContext.Provider>
@@ -94,6 +116,7 @@ export function CollectionPanes(props: {
           id={`${id}-detail`}
           index={1}
           minSize={320}
+          overlay={stacked()}
           collapsed={() => !detailVisible()}
         >
           <ViewShellPaneContext.Provider value="detail">
@@ -101,6 +124,8 @@ export function CollectionPanes(props: {
               <div
                 ref={setDetailFrame}
                 class="relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden touch:[--mobile-content-inset-top:0px]"
+                classList={{ 'bg-panel': stacked() }}
+                style={swiping() ? swipe.styleForSlot(true) : undefined}
                 data-view-shell-detail
                 on:touchstart={(event) => {
                   // A narrow detail returns within its own workspace. Do not

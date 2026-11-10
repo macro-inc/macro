@@ -2,6 +2,7 @@ import { t } from '@app/lib/i18n';
 import { SplitPanel } from '@components/app/split-panel';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
@@ -125,7 +126,11 @@ export function ViewNavigationControls() {
       keyed
       fallback={<SidebarNavigationControls />}
     >
-      {(onBack) => <ViewListBackButton onClick={onBack} />}
+      {(onBack) => (
+        <ViewListBackButton
+          onClick={() => fireAndForget(onBack(), 'workspace-back')}
+        />
+      )}
     </Show>
   );
 }

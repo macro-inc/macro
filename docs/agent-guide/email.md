@@ -4,7 +4,9 @@ Email paints its touch top fade within the email-list pane only. Above 720px on 
 
 Fold with a thread open to verify the same thread and its draft stay mounted.
 The thread fills the pane and its top-left Back button returns to the current
-mailbox and filter. A rightward swipe starting at the left edge does the same.
+mailbox and filter. Drag right from the left edge of the thread body to reveal
+the same list underneath. Cancel the drag to return to the thread, or complete
+it to return to the list.
 Unfolding before going back restores the side-by-side reading pane.
 
 ## Thread motion

@@ -131,6 +131,7 @@ export type EmailViewContext = {
     }
   ) => boolean;
   closeThread: () => void;
+  navigateToList: () => Promise<void>;
   isSidebarSectionOpen: (id: string) => boolean;
   setSidebarSectionOpen: (id: string, open: boolean) => void;
   /** Open threads beside the list instead of in its place (desktop). */
@@ -268,23 +269,21 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       !(event?.shiftKey || event?.metaKey || event?.ctrlKey || event?.altKey)
     );
   };
-  const closeThread = () => {
-    fireAndForget(
-      navigate(
-        { route: emailSplitRoute, params: {} },
-        {
-          search: {
-            // A new email's draft stays with its own entry.
-            [composeDraftSearch.namespace]: {},
-            [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
-              tab: state.tab,
-            }),
-          },
-        }
-      ),
-      'email-view'
+  const navigateToList = async () => {
+    await navigate(
+      { route: emailSplitRoute, params: {} },
+      {
+        search: {
+          // A new email's draft stays with its own entry.
+          [composeDraftSearch.namespace]: {},
+          [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
+            tab: state.tab,
+          }),
+        },
+      }
     );
   };
+  const closeThread = () => fireAndForget(navigateToList(), 'email-view');
   const notificationSource = useGlobalNotificationSource();
   const openThread = (
     thread: EmailThreadTarget,
@@ -500,6 +499,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     composing,
     openThread,
     closeThread,
+    navigateToList,
     isSidebarSectionOpen,
     setSidebarSectionOpen,
     readingPane,
