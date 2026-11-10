@@ -10,7 +10,23 @@ mod metadata;
 mod unsubscribe;
 pub use device::DeviceType;
 pub use metadata::{
-    AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionOriginParent, AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata, AiResponseMetadata, CalendarEventJoinRequestMetadata, CalendarEventReminderMetadata, CallStartedMetadata, ChannelAccessRequestedMetadata, ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType, ClaudeSignInExpiryMetadata, ClaudeSignInExpiryStage, ColleagueJoinedMacro, CommentedOnDocumentMetadata, CommonChannelMetadata, CrmDiscussionMetadata, CrmDiscussionReason, DocumentMentionMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata, ExternalChatMessageMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata, InitiativeDiscussionMetadata, InitiativeDiscussionReason, InviteToTeamMetadata, InviteePlan, ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType, NotificationTitle, ReminderMetadata, RepliedToDocumentCommentThreadMetadata, RequestedAccessLevel, RoutineRunFinishedMetadata, RoutineRunOutcome, RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
+    AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionOriginParent,
+    AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata, AiResponseMetadata,
+    CalendarEventJoinRequestMetadata, CalendarEventReminderMetadata, CallStartedMetadata,
+    ChannelAccessRequestedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
+    ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
+    ClaudeSignInExpiryMetadata, ClaudeSignInExpiryStage, ColleagueJoinedMacro,
+    CommentedOnDocumentMetadata, CommonChannelMetadata, CrmDiscussionMetadata, CrmDiscussionReason,
+    DocumentMentionMetadata, EntityAccessGrantedMetadata, EntityAccessRequestedMetadata,
+    ExternalChatMessageMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment,
+    GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus, GithubPrMention,
+    GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
+    GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
+    InitiativeDiscussionMetadata, InitiativeDiscussionReason, InviteToTeamMetadata, InviteePlan,
+    ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
+    NotificationDocumentSubType, NotificationTitle, ReminderMetadata,
+    RepliedToDocumentCommentThreadMetadata, RequestedAccessLevel, RoutineRunFinishedMetadata,
+    RoutineRunOutcome, RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
