@@ -1,0 +1,24 @@
+apps/web/src/lib/service-clients/service-call/client.ts
+  s_4ea1693858fae7::t_d75a601ffe9e6c 19,22,33-36,69-74,95-100
+  s_4ea1693858fae7::t_6471a839f80d3a 32,37-38,52-68,75-85,87-94,101-110
+  s_4ea1693858fae7::t_8b096c270ceb04 86
+apps/web/src/lib/service-clients/service-call/client.test.ts
+  s_4ea1693858fae7::t_4706a63cfbbec5 26-27,49-50,93-95
+  s_4ea1693858fae7::t_d75a601ffe9e6c 28-48,51-92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9b6e8566963565868f471a93040f3bac16fa82e9",
+  "prompts": {},
+  "sessions": {
+    "s_4ea1693858fae7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c74b-245f-72d0-9756-ef44eb99e5e6",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
