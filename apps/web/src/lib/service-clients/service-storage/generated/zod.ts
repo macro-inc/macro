@@ -43309,7 +43309,7 @@ export const approveHarnessPairingResponse = zod
     access: zod
       .enum(['owner', 'user', 'read', 'none'])
       .optional()
-      .describe('What one caller may do with a runtime.'),
+      .describe('What one caller may do with a machine.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
@@ -43333,9 +43333,9 @@ export const approveHarnessPairingResponse = zod
         type: zod.enum(['user']),
         user_id: zod.string().describe('Owner user id.'),
       })
-      .describe('The person whose runtime this is.')
+      .describe('The person whose machine this is.')
       .describe(
-        "Harness owner.\n\nAlways one person: a runtime is someone's computer. A team runtime is a\nperson's runtime with a grant to the team, never one owned by the team."
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
       ),
     shared_team_ids: zod
       .array(zod.uuid())
@@ -43376,7 +43376,7 @@ export const claimHarnessPairingResponse = zod
         access: zod
           .enum(['owner', 'user', 'read', 'none'])
           .optional()
-          .describe('What one caller may do with a runtime.'),
+          .describe('What one caller may do with a machine.'),
         allow_permission_bypass: zod
           .boolean()
           .optional()
@@ -43400,9 +43400,9 @@ export const claimHarnessPairingResponse = zod
             type: zod.enum(['user']),
             user_id: zod.string().describe('Owner user id.'),
           })
-          .describe('The person whose runtime this is.')
+          .describe('The person whose machine this is.')
           .describe(
-            "Harness owner.\n\nAlways one person: a runtime is someone's computer. A team runtime is a\nperson's runtime with a grant to the team, never one owned by the team."
+            "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
           ),
         shared_team_ids: zod
           .array(zod.uuid())
@@ -43431,7 +43431,7 @@ export const listHarnessesResponseItem = zod
     access: zod
       .enum(['owner', 'user', 'read', 'none'])
       .optional()
-      .describe('What one caller may do with a runtime.'),
+      .describe('What one caller may do with a machine.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
@@ -43455,9 +43455,9 @@ export const listHarnessesResponseItem = zod
         type: zod.enum(['user']),
         user_id: zod.string().describe('Owner user id.'),
       })
-      .describe('The person whose runtime this is.')
+      .describe('The person whose machine this is.')
       .describe(
-        "Harness owner.\n\nAlways one person: a runtime is someone's computer. A team runtime is a\nperson's runtime with a grant to the team, never one owned by the team."
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
       ),
     shared_team_ids: zod
       .array(zod.uuid())
@@ -43480,7 +43480,7 @@ export const listHarnessDirectoryResponseItem = zod
     access: zod
       .enum(['owner', 'user', 'read', 'none'])
       .optional()
-      .describe('What one caller may do with a runtime.'),
+      .describe('What one caller may do with a machine.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
@@ -43504,9 +43504,9 @@ export const listHarnessDirectoryResponseItem = zod
         type: zod.enum(['user']),
         user_id: zod.string().describe('Owner user id.'),
       })
-      .describe('The person whose runtime this is.')
+      .describe('The person whose machine this is.')
       .describe(
-        "Harness owner.\n\nAlways one person: a runtime is someone's computer. A team runtime is a\nperson's runtime with a grant to the team, never one owned by the team."
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
       ),
     shared_team_ids: zod
       .array(zod.uuid())
@@ -43531,7 +43531,7 @@ export const getSelfHarnessResponse = zod
     access: zod
       .enum(['owner', 'user', 'read', 'none'])
       .optional()
-      .describe('What one caller may do with a runtime.'),
+      .describe('What one caller may do with a machine.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
@@ -43555,9 +43555,9 @@ export const getSelfHarnessResponse = zod
         type: zod.enum(['user']),
         user_id: zod.string().describe('Owner user id.'),
       })
-      .describe('The person whose runtime this is.')
+      .describe('The person whose machine this is.')
       .describe(
-        "Harness owner.\n\nAlways one person: a runtime is someone's computer. A team runtime is a\nperson's runtime with a grant to the team, never one owned by the team."
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
       ),
     shared_team_ids: zod
       .array(zod.uuid())
@@ -43643,7 +43643,7 @@ export const patchHarnessResponse = zod
     access: zod
       .enum(['owner', 'user', 'read', 'none'])
       .optional()
-      .describe('What one caller may do with a runtime.'),
+      .describe('What one caller may do with a machine.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
@@ -43667,9 +43667,9 @@ export const patchHarnessResponse = zod
         type: zod.enum(['user']),
         user_id: zod.string().describe('Owner user id.'),
       })
-      .describe('The person whose runtime this is.')
+      .describe('The person whose machine this is.')
       .describe(
-        "Harness owner.\n\nAlways one person: a runtime is someone's computer. A team runtime is a\nperson's runtime with a grant to the team, never one owned by the team."
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
       ),
     shared_team_ids: zod
       .array(zod.uuid())
@@ -43704,15 +43704,15 @@ export const listHarnessResidentsResponseItem = zod
       .describe('The team owning the agent, when a team does.'),
   })
   .describe(
-    'An agent that lives on a runtime, as opposed to a coding agent directed\nthere turn by turn. Anyone who can reach it can talk to it; it stays up only\nwhile its own owner can use the runtime.'
+    'An agent that lives on a machine, as opposed to a coding agent directed\nthere turn by turn. Anyone who can reach it can talk to it; it stays up only\nwhile its own owner can use the machine.'
   );
 export const listHarnessResidentsResponse = zod.array(
   listHarnessResidentsResponseItem
 );
 
 /**
- * Requires the owner's own session: an agent can ask for access to a runtime
-but never open one, since that grants code execution on the machine.
+ * Requires the owner's own session: an agent can ask for access to a machine
+but never open one, since that grants code execution on it.
  * @summary Handler for `PUT /harnesses/{harness_id}/team-access`.
  */
 export const setHarnessTeamAccessParams = zod.object({
@@ -43723,10 +43723,10 @@ export const setHarnessTeamAccessBody = zod
   .object({
     enabled: zod
       .boolean()
-      .describe('Whether every member of the team may use the runtime.'),
+      .describe('Whether every member of the team may use the machine.'),
     team_id: zod.uuid().describe('The team, which the owner must belong to.'),
   })
-  .describe("Request to open or close a runtime to one of the owner's teams.");
+  .describe("Request to open or close a machine to one of the owner's teams.");
 
 /**
  * @summary Gets the users history

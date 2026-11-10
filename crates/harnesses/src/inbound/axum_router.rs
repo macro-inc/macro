@@ -315,8 +315,8 @@ pub async fn list_directory_handler<S: HarnessService, Auth: MacroAuthorizationS
 
 /// Handler for `PUT /harnesses/{harness_id}/team-access`.
 ///
-/// Requires the owner's own session: an agent can ask for access to a runtime
-/// but never open one, since that grants code execution on the machine.
+/// Requires the owner's own session: an agent can ask for access to a machine
+/// but never open one, since that grants code execution on it.
 #[utoipa::path(
     put,
     tag = "harnesses",

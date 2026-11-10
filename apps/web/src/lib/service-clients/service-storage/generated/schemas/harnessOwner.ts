@@ -9,7 +9,7 @@ import type { HarnessOwnerOneOf } from './harnessOwnerOneOf';
 /**
  * Harness owner.
 
-Always one person: a runtime is someone's computer. A team runtime is a
-person's runtime with a grant to the team, never one owned by the team.
+Always one person: a machine is someone's computer. A team machine is a
+person's machine with a grant to the team, never one owned by the team.
  */
 export type HarnessOwner = HarnessOwnerOneOf;

@@ -8,20 +8,20 @@ use uuid::Uuid;
 
 /// Harness owner.
 ///
-/// Always one person: a runtime is someone's computer. A team runtime is a
-/// person's runtime with a grant to the team, never one owned by the team.
+/// Always one person: a machine is someone's computer. A team machine is a
+/// person's machine with a grant to the team, never one owned by the team.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case", tag = "type")]
 pub enum HarnessOwner {
-    /// The person whose runtime this is.
+    /// The person whose machine this is.
     User {
         /// Owner user id.
         user_id: String,
     },
 }
 
-/// What one caller may do with a runtime.
+/// What one caller may do with a machine.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
@@ -37,9 +37,9 @@ pub enum HarnessAccess {
     None,
 }
 
-/// An agent that lives on a runtime, as opposed to a coding agent directed
+/// An agent that lives on a machine, as opposed to a coding agent directed
 /// there turn by turn. Anyone who can reach it can talk to it; it stays up only
-/// while its own owner can use the runtime.
+/// while its own owner can use the machine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct HarnessResident {
@@ -53,13 +53,13 @@ pub struct HarnessResident {
     pub team_id: Option<Uuid>,
 }
 
-/// Request to open or close a runtime to one of the owner's teams.
+/// Request to open or close a machine to one of the owner's teams.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct SetHarnessTeamAccessRequest {
     /// The team, which the owner must belong to.
     pub team_id: Uuid,
-    /// Whether every member of the team may use the runtime.
+    /// Whether every member of the team may use the machine.
     pub enabled: bool,
 }
 

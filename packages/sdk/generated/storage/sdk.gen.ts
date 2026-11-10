@@ -3591,8 +3591,8 @@ export class Sdk extends HeyApiClient {
     /**
      * Handler for `PUT /harnesses/{harness_id}/team-access`.
      *
-     * Requires the owner's own session: an agent can ask for access to a runtime
-     * but never open one, since that grants code execution on the machine.
+     * Requires the owner's own session: an agent can ask for access to a machine
+     * but never open one, since that grants code execution on it.
      */
     public setHarnessTeamAccess<ThrowOnError extends boolean = false>(options: Options<SetHarnessTeamAccessData, ThrowOnError>): RequestResult<SetHarnessTeamAccessResponses, SetHarnessTeamAccessErrors, ThrowOnError> {
         return (options.client ?? this.client).put<SetHarnessTeamAccessResponses, SetHarnessTeamAccessErrors, ThrowOnError>({
