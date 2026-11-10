@@ -1887,7 +1887,10 @@ async fn a_run_cut_off_by_a_restart_is_given_up_and_runs_again(pool: PgPool) {
         .await
         .idea
         .unwrap();
-    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     let run_session = runs.started.lock().unwrap()[0].0;
     runs.set(run_session, SessionState::Disconnected);
     assert_eq!(h.first_run().await.progress, RunProgress::Running);
@@ -1895,6 +1898,9 @@ async fn a_run_cut_off_by_a_restart_is_given_up_and_runs_again(pool: PgPool) {
     age_runs(&h.pool, chrono::Duration::minutes(11)).await;
     assert_eq!(h.service.settle_runs().await.unwrap(), 1);
     assert_eq!(*runs.discarded.lock().unwrap(), [run_session]);
-    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    h.service
+        .accept(&user(OWNER), IdeaCaller::User, idea.id)
+        .await
+        .unwrap();
     assert_eq!(runs.started.lock().unwrap().len(), 2);
 }
