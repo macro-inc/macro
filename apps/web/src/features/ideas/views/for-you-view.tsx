@@ -2,7 +2,7 @@ import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
 import { onElementConnect } from '@core/util/onElementConnect';
 import CheckIcon from '@icon/system/regular/check.svg';
-import { Button, Tabs } from '@ui';
+import { Button, Card, Tabs } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
 import { DismissedIdea, IdeaCard } from '../components/idea-card';
 import type { IdeaActions } from '../context/ideas-source';
@@ -11,17 +11,17 @@ import type { IdeasFeed } from '../primitives/feed';
 
 function FeedSkeleton() {
   return (
-    <ListSkeleton.Root label={t('ideas.loading')} class="flex flex-col gap-3">
+    <ListSkeleton.Root
+      label={t('ideas.loading')}
+      class="grid grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-3"
+    >
       <For each={[0, 1, 2]}>
         {() => (
-          <div class="flex items-start gap-2.5 rounded-xl border border-edge-muted p-4">
-            <div class="skeleton-shimmer size-7 shrink-0 rounded-lg bg-skeleton" />
-            <div class="flex min-w-0 flex-1 flex-col gap-3 pt-2">
-              <ListSkeleton.Bar class="h-3 w-2/5" />
-              <ListSkeleton.Bar class="w-4/5" />
-              <ListSkeleton.Bar class="w-3/5" />
-            </div>
-          </div>
+          <Card variant="filled" depth={3} class="gap-3 p-4">
+            <ListSkeleton.Bar class="h-3 w-2/5" />
+            <ListSkeleton.Bar class="w-4/5" />
+            <ListSkeleton.Bar class="w-3/5" />
+          </Card>
         )}
       </For>
     </ListSkeleton.Root>
@@ -120,11 +120,11 @@ export function ForYouView(props: {
               })()}
             >
               {(entries) => (
-                <ul class="m-0 flex list-none flex-col gap-3 p-0">
+                <ul class="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(20rem,1fr))] gap-3 p-0">
                   <For each={entries()}>
                     {(entry) => (
                       <li
-                        class="scroll-mt-4"
+                        class="min-w-0 scroll-mt-4"
                         ref={(element) => {
                           if (entry.idea.id !== props.focusedId) return;
 

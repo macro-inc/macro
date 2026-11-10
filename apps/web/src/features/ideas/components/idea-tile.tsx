@@ -44,33 +44,25 @@ function ideaLook(idea: Idea): Look {
     .exhaustive();
 }
 
-/**
- * The routine step tile, for an idea: a quiet square with the kind's glyph
- * while it waits, and where it stands once it is taken up.
- */
-export function IdeaTile(props: { idea: Idea; status: IdeaStatus }) {
+/** An idea's glyph: its kind while it waits, then where it stands. */
+export function IdeaGlyph(props: { idea: Idea; status: IdeaStatus }) {
   const look = () => ideaLook(props.idea);
 
   return (
-    <span
-      class="flex size-7 shrink-0 items-center justify-center rounded-lg bg-ink/5"
-      aria-hidden="true"
+    <Switch
+      fallback={
+        <Dynamic component={look().icon} class={`size-4 ${look().color}`} />
+      }
     >
-      <Switch
-        fallback={
-          <Dynamic component={look().icon} class={`size-4 ${look().color}`} />
-        }
-      >
-        <Match when={props.status === 'running'}>
-          <Spinner size="sm" decorative class="size-4" />
-        </Match>
-        <Match when={props.status === 'failed'}>
-          <WarningIcon class="size-4 text-failure" />
-        </Match>
-        <Match when={props.status === 'done'}>
-          <CheckIcon class="size-4 text-success" />
-        </Match>
-      </Switch>
-    </span>
+      <Match when={props.status === 'running'}>
+        <Spinner size="sm" decorative class="size-4" />
+      </Match>
+      <Match when={props.status === 'failed'}>
+        <WarningIcon class="size-4 text-failure" />
+      </Match>
+      <Match when={props.status === 'done'}>
+        <CheckIcon class="size-4 text-success" />
+      </Match>
+    </Switch>
   );
 }

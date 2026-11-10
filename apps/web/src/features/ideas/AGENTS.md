@@ -52,4 +52,8 @@ only, behind `enable-ideas`.
   move, to the end. An idea taken up by opening it (`accepted`, no run) shows
   as done; Open on it opens again without accepting, which the server refuses
   twice.
+- An idea card is built like a routine suggestion card (`Card` filled at
+  depth 3, a title that is the card-wide click target, one quiet action in
+  the footer). A background idea that has not run has no card-wide target:
+  Run is its own button.
 - Gate every entry point with `useIdeasFlag`, which is also false on touch.

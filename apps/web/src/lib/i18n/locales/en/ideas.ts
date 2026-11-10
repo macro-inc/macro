@@ -22,16 +22,12 @@ export default {
   dismissIdea: 'Dismiss “{{title}}”',
   dismissed: 'Dismissed “{{title}}”. You won’t see it again unless it changes.',
   undo: 'Undo',
-  promptLabel: 'Prompt',
-  runningNow:
-    'Working on this in the background. The result will show up here.',
-  runningSince:
-    'Working on this in the background, started {{when}}. The result will show up here.',
-  sendsNothing: 'Runs in the background. It posts and sends nothing.',
-  sendsUnknown: 'Runs in the background as your agent.',
-  draftReady: 'A reply is drafted for you. Nothing is sent until you send it.',
-  runFailed:
-    'The run didn’t finish. Nothing more will happen unless you run it again.',
+  runningNow: 'Working on this in the background',
+  runningSince: 'Working on this in the background, started {{when}}',
+  sendsNothing: 'Runs in the background. Posts and sends nothing.',
+  opensComposer: 'Opens in the composer, unsent',
+  draftReady: 'A reply is drafted. Nothing is sent until you send it.',
+  runFailed: 'The run didn’t finish',
   actionFailed: 'That didn’t work. Try again.',
   loading: 'Loading your ideas',
   loadError: 'Your ideas couldn’t be loaded.',
