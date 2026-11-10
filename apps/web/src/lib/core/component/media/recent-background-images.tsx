@@ -1,35 +1,15 @@
 import { t } from '@app/lib/i18n';
 import Upload from '@icon/system/regular/upload-simple.svg';
 import { confirmDialog, Dropdown, Tooltip } from '@ui';
-import { createSignal, For, onMount, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { BackgroundEffect } from '../../media/background-effect';
 import {
-  loadRecentBackgroundImages,
-  type RecentBackgroundImage,
-  removeRecentBackgroundImage,
-  saveRecentBackgroundImage,
-} from '../../media/recent-background-images';
-import { fireAndForget } from '../../util/fireAndForget';
+  createRecentBackgrounds,
+  recent,
+} from '../../media/recent-background-state';
 
-const [recent, setRecent] = createSignal<RecentBackgroundImage[]>([]);
-let pending: Promise<unknown> = Promise.resolve();
-
-function enqueue(action: () => Promise<RecentBackgroundImage[] | null>) {
-  const result = pending.then(action);
-  pending = result.catch(() => {});
-  return result
-    .then((images) => {
-      if (images) setRecent(images);
-    })
-    .catch(() => {
-      // Storage is optional. Never change the list on a failed transaction.
-    });
-}
-
-export function rememberRecentBackgroundImage(image: RecentBackgroundImage) {
-  return enqueue(() => saveRecentBackgroundImage(image));
-}
+export { rememberRecentBackgroundImage } from '../../media/recent-background-state';
 
 export function RecentBackgroundImages(props: {
   effect: BackgroundEffect;
@@ -40,50 +20,18 @@ export function RecentBackgroundImages(props: {
   phone?: boolean;
   embedded?: boolean;
 }) {
-  onMount(() => {
-    fireAndForget(
-      enqueue(loadRecentBackgroundImages),
-      'recent-background-images'
-    );
+  const { current, removing, remove, select } = createRecentBackgrounds({
+    effect: () => props.effect,
+    disabled: () => props.disabled,
+    onSelect: (effect) => props.onSelect(effect),
+    confirmRemoval: () =>
+      confirmDialog(() => ({
+        title: t('calls.removeBackground'),
+        body: t('calls.removeBackgroundBody'),
+        confirmLabel: t('calls.removeBackgroundAction'),
+        tone: 'danger',
+      })),
   });
-  const current = (image: RecentBackgroundImage) =>
-    props.effect.type === 'image' && props.effect.path === image.path;
-  const [removing, setRemoving] = createSignal(false);
-  const remove = (image: RecentBackgroundImage) => {
-    if (props.disabled || removing()) return;
-    setRemoving(true);
-    fireAndForget(
-      (async () => {
-        try {
-          if (current(image)) {
-            const confirmed = await confirmDialog(() => ({
-              title: t('calls.removeBackground'),
-              body: t('calls.removeBackgroundBody'),
-              confirmLabel: t('calls.removeBackgroundAction'),
-              tone: 'danger',
-            }));
-            if (!confirmed) return;
-            if (current(image) && !(await props.onSelect({ type: 'none' })))
-              return;
-          }
-          await enqueue(() => removeRecentBackgroundImage(image.path));
-        } finally {
-          setRemoving(false);
-        }
-      })(),
-      'recent-background-images'
-    );
-  };
-  const select = (image: RecentBackgroundImage) => {
-    fireAndForget(
-      Promise.resolve(props.onSelect({ type: 'image', ...image })).then(
-        (applied) => {
-          if (applied) return rememberRecentBackgroundImage(image);
-        }
-      ),
-      'recent-background-images'
-    );
-  };
   return (
     <div
       class={

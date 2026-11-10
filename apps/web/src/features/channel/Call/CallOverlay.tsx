@@ -23,9 +23,7 @@ import CaretUp from '@icon/system/regular/caret-up.svg';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { makePersisted } from '@solid-primitives/storage';
 import { Avatar, Button, cn } from '@ui';
-import type { RemoteParticipant } from 'livekit-client';
 import {
   createEffect,
   createMemo,
@@ -35,7 +33,6 @@ import {
   type JSXElement,
   lazy,
   Match,
-  on,
   onCleanup,
   Show,
   Suspense,
@@ -62,25 +59,15 @@ import {
   useCallFullscreenOptional,
 } from './call-fullscreen-host';
 import { createCallHotkeys } from './call-hotkeys';
-import {
-  activeCallPin,
-  type CallLayout,
-  type CallPin,
-  callStageGridStyle,
-  callTileGridPosition,
-  normalizeCallLayout,
-  sameCallPin,
-  selectCallStageParticipant,
-} from './call-layout';
+import { callStageGridStyle } from './call-layout';
 import { createCallReactions } from './call-reactions';
-import {
-  CallChatPanel,
-  type CallPanelTab,
-} from './chat/components/CallChatPanel';
+import { CallChatPanel } from './chat/components/CallChatPanel';
 import { createControlsVisibility } from './create-controls-visibility';
 import type { CallPanelState } from './discussion/CallDiscussionContent';
 import { isProgramParticipant } from './is-program-participant';
 import { LK_TRACK_SOURCE } from './livekit-loader';
+import { createCallPanel } from './primitives/create-call-panel';
+import { createCallStage } from './primitives/create-call-stage';
 import { useActiveCallTeamShare } from './use-toggle-share-with-team';
 
 const CallChat = lazy(() => import('./chat/CallChat'));
@@ -122,10 +109,16 @@ export function CallOverlay(props: {
   const teamShare = useActiveCallTeamShare();
   const sharedWithTeam = () =>
     props.sharedWithTeam ?? callCtx.isSharedWithTeam();
-  const [panelOpen, setPanelOpen] = createSignal(false);
-  const [panelMounted, setPanelMounted] = createSignal(false);
-  const [selectedTab, setSelectedTab] = createSignal<CallPanelTab>('chat');
-  const [focusChatOnOpen, setFocusChatOnOpen] = createSignal(true);
+  let panelButton: HTMLButtonElement | undefined;
+  const panel = createCallPanel(
+    () => props.discussion?.opensByDefault() ?? false,
+    () => panelButton?.focus()
+  );
+  const panelOpen = () => panel.state.open;
+  const panelMounted = () => panel.state.mounted;
+  const selectedTab = () => panel.state.tab;
+  const focusChatOnOpen = () => panel.state.focusOnOpen;
+  const setSelectedTab = panel.selectTab;
   const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
   const [entranceReady, setEntranceReady] = createSignal(false);
   createEffect(() => {
@@ -159,31 +152,11 @@ export function CallOverlay(props: {
   });
   const controlsHidden = () => isMobile() && !controls.visible();
   const panelId = createUniqueId();
-  let panelButton: HTMLButtonElement | undefined;
   const [panelToggleFrame, setPanelToggleFrame] =
     createSignal<HTMLDivElement>();
   const panelToggleSize = createElementSize(panelToggleFrame);
-  const closePanel = () => {
-    setPanelOpen(false);
-    panelButton?.focus();
-  };
-  createEffect(
-    on(
-      () => props.discussion?.opensByDefault() ?? false,
-      (opensByDefault) => {
-        if (!opensByDefault) return;
-        setFocusChatOnOpen(false);
-        setPanelMounted(true);
-        setPanelOpen(true);
-      }
-    )
-  );
-  const togglePanel = () => {
-    if (panelOpen()) return closePanel();
-    setFocusChatOnOpen(true);
-    setPanelMounted(true);
-    setPanelOpen(true);
-  };
+  const closePanel = panel.close;
+  const togglePanel = panel.toggle;
   const canChat = () => props.showChat !== false && !!callCtx.activeCallId();
   const canShareWithTeam = () =>
     callCtx.activeChannelId() !== null && props.showTeamSharing !== false;
@@ -255,31 +228,7 @@ export function CallOverlay(props: {
   });
   const openWork = () => {
     workArrivals.dismiss();
-    setFocusChatOnOpen(false);
-    setSelectedTab('work');
-    setPanelMounted(true);
-    setPanelOpen(true);
-  };
-
-  // The same selection owns participant and screen pins. A removed target never
-  // becomes pinned again if its identity reconnects later.
-  const [selectedPin, setSelectedPin] =
-    createSignal<CallPin<RemoteParticipant>>();
-  const activePin = () =>
-    activeCallPin(
-      selectedPin(),
-      participants(),
-      remoteScreenShares(),
-      callCtx.isScreenSharing()
-    );
-  const togglePin = (target: CallPin<RemoteParticipant>) => {
-    const interaction = beginInteraction('call.pin');
-    try {
-      setSelectedPin(sameCallPin(activePin(), target) ? undefined : target);
-      setHideParticipants(false);
-    } finally {
-      interaction.end();
-    }
+    panel.open(false, 'work');
   };
 
   const isLocalSpeaking = () => callCtx.isLocalSpeaking();
@@ -310,11 +259,6 @@ export function CallOverlay(props: {
     });
   };
 
-  createEffect(() => {
-    // Consume both roster and publication changes before clearing the stored pin.
-    if (selectedPin() && !activePin()) setSelectedPin(undefined);
-  });
-
   function isAccountSpeaking(accountId: string) {
     const participant = participants().find(
       (candidate) => tryMacroId(candidate.identity) === accountId
@@ -322,113 +266,36 @@ export function CallOverlay(props: {
     return participant ? callCtx.isParticipantSpeaking(participant) : false;
   }
 
-  const hasAnyScreenShare = () =>
-    callCtx.isScreenSharing() || remoteScreenShares().length > 0;
+  const {
+    activePin,
+    togglePin,
+    hasAnyScreenShare,
+    layout,
+    setSavedLayout,
+    hideParticipants,
+    changeParticipantVisibility,
+    pinnedShare,
+    pinnedPerson,
+    showScreenShare,
+    spotlight,
+    staged,
+    isStage,
+    sideStrip,
+    stagePerson,
+    localOnStage,
+    selfInGrid,
+    stripTargets,
+    tilePosition,
+  } = createCallStage({
+    participants,
+    screens: remoteScreenShares,
+    screenSharing: callCtx.isScreenSharing,
+    isSpeaking: callCtx.isParticipantSpeaking,
+    localSpeaking: isLocalSpeaking,
+    mobile: isMobile,
+    compact: compactControls,
+  });
 
-  const [savedLayout, setSavedLayout] = makePersisted(
-    createSignal<CallLayout>('auto'),
-    {
-      name: 'call.layout',
-      deserialize: (value) => {
-        try {
-          return normalizeCallLayout(JSON.parse(value));
-        } catch {
-          return 'auto';
-        }
-      },
-    }
-  );
-  const layout = () => (isMobile() ? 'auto' : savedLayout());
-  const [hideParticipants, setHideParticipants] = createSignal(false);
-  const changeParticipantVisibility = (value: boolean) => {
-    const interaction = beginInteraction('call.participants.visibility');
-    try {
-      setHideParticipants(value);
-    } finally {
-      interaction.end();
-    }
-  };
-  createEffect(
-    on(hasAnyScreenShare, (sharing) => {
-      if (!sharing) setHideParticipants(false);
-    })
-  );
-  const pinnedShare = () => {
-    const selected = activePin();
-    return selected && typeof selected === 'object' && 'share' in selected
-      ? selected.share
-      : undefined;
-  };
-  const pinnedPerson = () => {
-    const selected = activePin();
-    return selected && typeof selected === 'object' && !('share' in selected)
-      ? selected
-      : undefined;
-  };
-  const showScreenShare = () => hasAnyScreenShare() && !activePin();
-  const speakerLayout = () => layout() === 'speaker' || layout() === 'sidebar';
-  const primary = () =>
-    selectCallStageParticipant(
-      participants(),
-      (participant) => callCtx.isParticipantSpeaking(participant),
-      isLocalSpeaking()
-    );
-  const spotlight = () =>
-    speakerLayout() &&
-    participants().length > 0 &&
-    !hasAnyScreenShare() &&
-    !activePin();
-  const stageTarget = (): CallPin<RemoteParticipant> | undefined => {
-    const pinned = activePin();
-    if (pinned) return pinned;
-    if (hasAnyScreenShare() && layout() !== 'grid') {
-      if (callCtx.isScreenSharing()) return 'local-share';
-      const share = remoteScreenShares()[0];
-      if (share) return { share };
-    }
-    return spotlight() ? primary() : undefined;
-  };
-  const staged = () => stageTarget() !== undefined;
-  const isStage = (target: CallPin<RemoteParticipant>) =>
-    sameCallPin(stageTarget(), target);
-  const sideStrip = () =>
-    layout() === 'sidebar' &&
-    (staged() || showScreenShare()) &&
-    !hideParticipants();
-  const stagePerson = () => {
-    const target = stageTarget();
-    return target && typeof target === 'object' && !('share' in target)
-      ? target
-      : undefined;
-  };
-  const localOnStage = () => stageTarget() === 'local';
-  const selfInGrid = () =>
-    !localOnStage() &&
-    (layout() !== 'auto' ||
-      (staged() && !!activePin()) ||
-      (isMobile() && (staged() || !hasAnyScreenShare())) ||
-      (compactControls() && !hasAnyScreenShare())) &&
-    participants().length > 0;
-  const stripTargets = () => {
-    const targets: CallPin<RemoteParticipant>[] = [
-      ...(callCtx.isScreenSharing() ? ['local-share' as const] : []),
-      ...remoteScreenShares().map((share) => ({ share })),
-      ...participants(),
-      ...(selfInGrid() ? ['local' as const] : []),
-    ];
-    return targets.filter((target) => !isStage(target));
-  };
-  const tilePosition = (target: CallPin<RemoteParticipant>) => {
-    if (!staged()) return undefined;
-    const index = stripTargets().findIndex((item) => sameCallPin(item, target));
-    if (!isStage(target) && index < 0) return undefined;
-    return callTileGridPosition(
-      isStage(target),
-      index,
-      stripTargets().length,
-      sideStrip()
-    );
-  };
   const talking = () =>
     participants().find((participant) =>
       callCtx.isParticipantSpeaking(participant)
@@ -1003,10 +870,7 @@ export function CallOverlay(props: {
               open={panelOpen()}
               onClose={closePanel}
               activeTab={activeTab()}
-              onTabChange={(tab) => {
-                setFocusChatOnOpen(false);
-                setSelectedTab(tab);
-              }}
+              onTabChange={setSelectedTab}
               chatAvailable={canChat()}
               participantCount={participants().length + 1}
               participants={

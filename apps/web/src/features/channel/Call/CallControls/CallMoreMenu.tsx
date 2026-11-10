@@ -10,9 +10,10 @@ import UsersSlash from '@icon/system/regular/users-slash.svg';
 import { Popover } from '@kobalte/core/popover';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, Dropdown, Hotkey, SingleSelectCheck, ToggleSwitch } from '@ui';
-import { createSignal, For, type JSX, onCleanup, Show } from 'solid-js';
+import { createSignal, For, type JSX, Show } from 'solid-js';
 import { type CallLayout, normalizeCallLayout } from '../call-layout';
 import type { CallReactionEmoji } from '../call-reactions';
+import { createCallMoreMenu } from '../primitives/create-call-more-menu';
 import { CallReactionRow } from './CallReactionMenu';
 
 const layouts = [
@@ -94,23 +95,11 @@ export function CallMoreMenu(props: {
   const [menuElement, setMenuElement] = createSignal<HTMLDivElement>();
   const [layoutMenu, setLayoutMenu] = createSignal<HTMLDivElement>();
   const layoutMenuSize = createElementSize(layoutMenu);
-  const [menuOpen, setMenuOpen] = createSignal(false);
-  const [shortcutsOpen, setShortcutsOpen] = createSignal(false);
-  let shortcutsInteractedOutside = false;
-  let shortcutsRequested = false;
-  let disposed = false;
-  onCleanup(() => {
-    disposed = true;
-  });
-  const onMenuOpenChange = (open: boolean) => {
-    setMenuOpen(open);
-    props.onOpenChange(open || shortcutsOpen() || shortcutsRequested);
-  };
-  const onShortcutsOpenChange = (open: boolean) => {
-    if (open) shortcutsInteractedOutside = false;
-    setShortcutsOpen(open);
-    props.onOpenChange(open || menuOpen());
-  };
+  const menu = createCallMoreMenu(props.onOpenChange);
+  const menuOpen = () => menu.state.menuOpen;
+  const shortcutsOpen = () => menu.state.shortcutsOpen;
+  const onMenuOpenChange = menu.setMenuOpen;
+  const onShortcutsOpenChange = menu.setShortcutsOpen;
   const shortcuts = [
     { label: 'calls.muteShortcut', shortcut: 'cmd+d' },
     { label: 'calls.cameraShortcut', shortcut: 'shift+cmd+e' },
@@ -143,13 +132,7 @@ export function CallMoreMenu(props: {
             portalScope="local"
             class="min-w-64"
             onCloseAutoFocus={(event) => {
-              if (shortcutsRequested) {
-                event.preventDefault();
-                shortcutsRequested = false;
-                queueMicrotask(() => {
-                  if (!disposed) onShortcutsOpenChange(true);
-                });
-              } else if (shortcutsOpen()) event.preventDefault();
+              if (menu.finishMenuClose()) event.preventDefault();
             }}
           >
             <Show when={props.compact && props.onReaction}>
@@ -266,12 +249,7 @@ export function CallMoreMenu(props: {
               </Dropdown.Item>
             </Dropdown.Group>
             <Dropdown.Group>
-              <Dropdown.Item
-                onSelect={() => {
-                  shortcutsRequested = true;
-                  onMenuOpenChange(false);
-                }}
-              >
+              <Dropdown.Item onSelect={menu.requestShortcuts}>
                 <Keyboard class="size-4" />
                 <span class="flex-1">{t('calls.keyboardShortcuts')}</span>
               </Dropdown.Item>
@@ -295,12 +273,10 @@ export function CallMoreMenu(props: {
           >
             <Popover.Content
               class="menu-surface z-action-menu min-w-72 max-w-[calc(100vw-1rem)] rounded-xl p-3 text-sm menu-open-animation outline-none"
-              onInteractOutside={() => {
-                shortcutsInteractedOutside = true;
-              }}
+              onInteractOutside={menu.interactOutside}
               onCloseAutoFocus={(event) => {
                 event.preventDefault();
-                if (!shortcutsInteractedOutside) trigger()?.focus();
+                if (!menu.state.interactedOutside) trigger()?.focus();
               }}
             >
               <Popover.Title class="mb-2 font-medium text-ink">

@@ -1,5 +1,4 @@
 import { t } from '@app/lib/i18n';
-import { usePreference } from '@app/preferences/use-preference';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
@@ -11,15 +10,7 @@ import { useLiveCallRecordQuery } from '@queries/call/call';
 import { createMediaQuery } from '@solid-primitives/media';
 import { Button, cn, Dropdown } from '@ui';
 import type { Participant } from 'livekit-client';
-import {
-  createMemo,
-  createSignal,
-  For,
-  onCleanup,
-  onMount,
-  Show,
-  untrack,
-} from 'solid-js';
+import { createMemo, For, Show, untrack } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { Transition } from 'solid-transition-group';
 import { useCallContext } from './CallContext';
@@ -27,21 +18,14 @@ import { CallLiveChip } from './CallLiveChip';
 import { CallParticipantVolume } from './CallParticipantVolume';
 import { CallQuickControls } from './CallQuickControls';
 import { CallReactionLayer } from './CallReactionLayer';
-import {
-  type CallPlayerCorner,
-  type CallPlayerResizeEdge,
-  constrainCallPlayerPosition,
-  getCallPlayerSnapPreview,
-  getCallPlayerSnapTarget,
-  MAX_CALL_PLAYER_WIDTH,
-  resizeCallPlayer,
-} from './call-mini-player';
+import type { CallPlayerResizeEdge } from './call-mini-player';
 import { createHeldCallPreview } from './call-mini-player-selection';
 import { createCallReactions } from './call-reactions';
 import { useCallVolumeOptional } from './call-volume';
 import { LK_TRACK_SOURCE } from './livekit-loader';
 import { MutedForYouBadge } from './MutedForYouBadge';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
+import { createCallMiniPlayer } from './primitives/create-call-mini-player';
 import { TrackView } from './TrackView';
 
 export function CallMiniPlayer(props: {
@@ -52,86 +36,8 @@ export function CallMiniPlayer(props: {
   const volumes = useCallVolumeOptional();
   const reactions = createCallReactions(call.room);
   const record = useLiveCallRecordQuery(() => call.activeCallId() ?? '');
-  const [corner, setCorner] = createSignal<CallPlayerCorner>('bottom-right');
-  const [position, setPosition] = createSignal<{ x: number; y: number }>();
-  const [snapTarget, setSnapTarget] =
-    createSignal<ReturnType<typeof getCallPlayerSnapPreview>>();
-  const [snapping, setSnapping] = createSignal(false);
-  const visibleSnapTarget = createMemo(
-    (previous: ReturnType<typeof getCallPlayerSnapPreview>) =>
-      snapTarget() ?? previous
-  );
-  const [storedWidth, setWidth] = usePreference(
-    'macro:pref:call:mini-player-width',
-    { default: 336 }
-  );
-  const [storedAudioHeight, setAudioHeight] = usePreference(
-    'macro:pref:call:mini-player-audio-height',
-    { default: 144 }
-  );
-  const [previewSize, setPreviewSize] = createSignal<{
-    width: number;
-    audioHeight: number;
-  }>();
-  const [viewport, setViewport] = createSignal({
-    width: window.innerWidth,
-    height: window.innerHeight,
-  });
-  const onViewportResize = () => {
-    setViewport({ width: window.innerWidth, height: window.innerHeight });
-    setSnapping(false);
-    const box = root.getBoundingClientRect();
-    setPosition((point) =>
-      point
-        ? constrainCallPlayerPosition(
-            point.x,
-            point.y,
-            box.width,
-            box.height,
-            window.innerWidth,
-            window.innerHeight
-          )
-        : point
-    );
-  };
-  window.addEventListener('resize', onViewportResize);
-  onCleanup(() => window.removeEventListener('resize', onViewportResize));
   let root!: HTMLDivElement;
   let media: HTMLDivElement | undefined;
-  onMount(() => {
-    const observer = new ResizeObserver(() => {
-      const box = root.getBoundingClientRect();
-      setPosition((previous) => {
-        if (!previous) return previous;
-        const next = constrainCallPlayerPosition(
-          previous.x,
-          previous.y,
-          box.width,
-          box.height,
-          window.innerWidth,
-          window.innerHeight
-        );
-        return next.x === previous.x && next.y === previous.y ? previous : next;
-      });
-    });
-    observer.observe(root);
-    onCleanup(() => observer.disconnect());
-  });
-  let drag:
-    | { pointer: number; x: number; y: number; left: number; top: number }
-    | undefined;
-  let resize:
-    | {
-        pointer: number;
-        x: number;
-        y: number;
-        edge: CallPlayerResizeEdge;
-        box: { x: number; y: number; width: number; height: number };
-        mediaHeight: number;
-        audioOnly: boolean;
-        corner: CallPlayerCorner;
-      }
-    | undefined;
   const candidates = createMemo(() => {
     call.trackVersion();
     const room = call.room();
@@ -176,32 +82,6 @@ export function CallMiniPlayer(props: {
   });
   const reducedMotion = createMediaQuery('(prefers-reduced-motion: reduce)');
   const selected = createHeldCallPreview(candidates, reducedMotion);
-  const previewAnimations = new Set<Animation>();
-  onCleanup(() => {
-    for (const animation of previewAnimations) {
-      animation.onfinish = null;
-      animation.cancel();
-    }
-  });
-  const animatePreview = (
-    element: Element,
-    done: () => void,
-    entering: boolean
-  ) => {
-    if (reducedMotion() || typeof element.animate !== 'function') {
-      done();
-      return;
-    }
-    const animation = element.animate(
-      [{ opacity: entering ? 0 : 1 }, { opacity: entering ? 1 : 0 }],
-      { duration: 200, easing: 'ease-out' }
-    );
-    previewAnimations.add(animation);
-    animation.onfinish = () => {
-      previewAnimations.delete(animation);
-      done();
-    };
-  };
   const audioOnly = () =>
     !candidates().some(
       (participant) => participant.hasVideo || participant.sharing
@@ -210,122 +90,24 @@ export function CallMiniPlayer(props: {
     record.isSuccess
       ? record.data.channelName || t('nav.returnToCall')
       : t('nav.returnToCall');
-  const width = () => {
-    const maximum = Math.max(
-      0,
-      Math.min(
-        MAX_CALL_PLAYER_WIDTH,
-        viewport().width - 24,
-        audioOnly() ? Infinity : ((viewport().height - 180) * 16) / 9 + 16
-      )
-    );
-    return Math.max(
-      Math.min(256, maximum),
-      Math.min(previewSize()?.width ?? storedWidth(), maximum)
-    );
-  };
-  const placement = () => {
-    const point = position();
-    if (point) return { left: `${point.x}px`, top: `${point.y}px` };
-    return {
-      [corner().endsWith('left') ? 'left' : 'right']: '20px',
-      [corner().startsWith('top') ? 'top' : 'bottom']: '20px',
-    };
-  };
-  const atDefaults = () => {
-    const point = position();
-    return (
-      storedWidth() === 336 &&
-      storedAudioHeight() === 144 &&
-      corner() === 'bottom-right' &&
-      (!point ||
-        (Math.abs(point.x - (viewport().width - width() - 20)) < 1 &&
-          Math.abs(
-            point.y -
-              (viewport().height - root.getBoundingClientRect().height - 20)
-          ) < 1))
-    );
-  };
-  let resetFrame: number | undefined;
-  onCleanup(() => {
-    if (resetFrame !== undefined) cancelAnimationFrame(resetFrame);
+  const player = createCallMiniPlayer({
+    root: () => root,
+    media: () => media,
+    audioOnly,
+    reducedMotion,
   });
-  const resetPlayer = () => {
-    setPreviewSize(undefined);
-    setWidth(336);
-    setAudioHeight(144);
-    localStorage.removeItem('macro:pref:call:mini-player-width');
-    localStorage.removeItem('macro:pref:call:mini-player-audio-height');
-    setCorner('bottom-right');
-    setSnapTarget(undefined);
-    if (resetFrame !== undefined) cancelAnimationFrame(resetFrame);
-    resetFrame = requestAnimationFrame(() => {
-      resetFrame = undefined;
-      const box = root.getBoundingClientRect();
-      const target = constrainCallPlayerPosition(
-        window.innerWidth - box.width - 20,
-        window.innerHeight - box.height - 20,
-        box.width,
-        box.height,
-        window.innerWidth,
-        window.innerHeight
-      );
-      if (
-        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ||
-        (Math.abs(box.x - target.x) < 1 && Math.abs(box.y - target.y) < 1)
-      ) {
-        setSnapping(false);
-        setPosition(undefined);
-        return;
-      }
-      setSnapping(true);
-      setPosition(target);
-    });
-  };
-  const finishDrag = (event: PointerEvent, cancelled = false) => {
-    if (!drag || drag.pointer !== event.pointerId) return;
-    const box = root.getBoundingClientRect();
-    const target = cancelled
-      ? undefined
-      : getCallPlayerSnapTarget(
-          box.x,
-          box.y,
-          box.width,
-          box.height,
-          window.innerWidth,
-          window.innerHeight
-        );
-    if (target) {
-      setCorner(target.corner);
-      setSnapping(true);
-      setPosition({ x: target.x, y: target.y });
-    }
-    setSnapTarget(undefined);
-    drag = undefined;
-  };
-  const finishResize = (event: PointerEvent, cancelled = false) => {
-    if (!resize || resize.pointer !== event.pointerId) return;
-    const preview = previewSize();
-    if (!cancelled && preview) {
-      setWidth(preview.width);
-      if (resize.audioOnly) setAudioHeight(preview.audioHeight);
-    } else if (cancelled) {
-      setPosition({ x: resize.box.x, y: resize.box.y });
-    }
-    setPreviewSize(undefined);
-    resize = undefined;
-  };
+  const { placement } = player;
   return (
     <Portal>
-      <Show when={visibleSnapTarget()}>
+      <Show when={player.visibleSnapTarget()}>
         {(target) => (
           <div
             aria-hidden="true"
             data-call-snap-target
             class="pointer-events-none fixed z-modal transition-[opacity,visibility] duration-150 motion-reduce:transition-none starting:opacity-0"
-            classList={{ 'invisible opacity-0': !snapTarget() }}
+            classList={{ 'invisible opacity-0': !placement.snapTarget }}
             style={{
-              opacity: snapTarget()?.opacity ?? 0,
+              opacity: placement.snapTarget?.opacity ?? 0,
               left: target().corner.endsWith('left') ? '0px' : 'auto',
               right: target().corner.endsWith('right') ? '0px' : 'auto',
               top: target().corner.startsWith('top') ? '0px' : 'auto',
@@ -360,74 +142,19 @@ export function CallMiniPlayer(props: {
         aria-label={title()}
         class={cn(
           'menu-surface fixed z-modal max-w-[calc(100vw-24px)] max-h-[calc(100dvh-24px)] overflow-x-hidden overflow-y-auto rounded-2xl',
-          snapping() &&
+          placement.snapping &&
             'transition-[left,top] duration-200 ease-out motion-reduce:transition-none'
         )}
-        onTransitionEnd={(event) => {
-          if (event.target === root) {
-            setSnapping(false);
-            const box = root.getBoundingClientRect();
-            if (
-              corner() === 'bottom-right' &&
-              Math.abs(box.right - (window.innerWidth - 20)) < 1 &&
-              Math.abs(box.bottom - (window.innerHeight - 20)) < 1
-            )
-              setPosition(undefined);
-          }
-        }}
-        style={{ ...placement(), width: `${width()}px` }}
+        onTransitionEnd={player.onTransitionEnd}
+        style={{ ...player.positionStyle(), width: `${player.width()}px` }}
       >
         <div
           class="flex touch-none cursor-grab items-center gap-2 px-3 py-2"
-          onPointerDown={(event) => {
-            if (
-              event.button !== 0 ||
-              event.isPrimary === false ||
-              drag ||
-              resize ||
-              (event.target instanceof Element &&
-                event.target.closest('button, [role="menu"]'))
-            )
-              return;
-            setSnapping(false);
-            setSnapTarget(undefined);
-            const box = root.getBoundingClientRect();
-            setPosition({ x: box.x, y: box.y });
-            drag = {
-              pointer: event.pointerId,
-              x: event.clientX,
-              y: event.clientY,
-              left: box.left,
-              top: box.top,
-            };
-            event.currentTarget.setPointerCapture(event.pointerId);
-          }}
-          onPointerMove={(event) => {
-            if (!drag || drag.pointer !== event.pointerId) return;
-            const box = root.getBoundingClientRect();
-            const point = constrainCallPlayerPosition(
-              drag.left + event.clientX - drag.x,
-              drag.top + event.clientY - drag.y,
-              box.width,
-              box.height,
-              window.innerWidth,
-              window.innerHeight
-            );
-            setPosition(point);
-            setSnapTarget(
-              getCallPlayerSnapPreview(
-                point.x,
-                point.y,
-                box.width,
-                box.height,
-                window.innerWidth,
-                window.innerHeight
-              )
-            );
-          }}
-          onPointerUp={(event) => finishDrag(event)}
-          onPointerCancel={(event) => finishDrag(event, true)}
-          onLostPointerCapture={(event) => finishDrag(event, true)}
+          onPointerDown={player.onDragStart}
+          onPointerMove={player.onDragMove}
+          onPointerUp={(event) => player.finishDrag(event)}
+          onPointerCancel={(event) => player.finishDrag(event, true)}
+          onLostPointerCapture={(event) => player.finishDrag(event, true)}
         >
           <span class="min-w-0 flex-1 truncate text-sm font-semibold">
             {title()}
@@ -447,7 +174,10 @@ export function CallMiniPlayer(props: {
             </Dropdown.Trigger>
             <Dropdown.Content>
               <Dropdown.Group>
-                <Dropdown.Item disabled={atDefaults()} onSelect={resetPlayer}>
+                <Dropdown.Item
+                  disabled={player.atDefaults()}
+                  onSelect={player.resetPlayer}
+                >
                   <ArrowCounterClockwise class="size-4" />
                   <span>{t('calls.resetPlayer')}</span>
                 </Dropdown.Item>
@@ -478,7 +208,7 @@ export function CallMiniPlayer(props: {
               style={
                 audioOnly()
                   ? {
-                      height: `${Math.min(previewSize()?.audioHeight ?? storedAudioHeight(), Math.max(144, viewport().height - 180))}px`,
+                      height: `${player.mediaHeight()}px`,
                     }
                   : undefined
               }
@@ -490,8 +220,12 @@ export function CallMiniPlayer(props: {
               )}
             >
               <Transition
-                onEnter={(element, done) => animatePreview(element, done, true)}
-                onExit={(element, done) => animatePreview(element, done, false)}
+                onEnter={(element, done) =>
+                  player.animatePreview(element, done, true)
+                }
+                onExit={(element, done) =>
+                  player.animatePreview(element, done, false)
+                }
                 onBeforeExit={(element) => {
                   element.setAttribute('inert', '');
                   element.setAttribute('aria-hidden', 'true');
@@ -653,57 +387,11 @@ export function CallMiniPlayer(props: {
                 'cursor-nesw-resize':
                   edge === 'top-right' || edge === 'bottom-left',
               }}
-              onPointerDown={(event) => {
-                if (
-                  event.button !== 0 ||
-                  event.isPrimary === false ||
-                  drag ||
-                  resize
-                )
-                  return;
-                event.preventDefault();
-                event.stopPropagation();
-                setSnapping(false);
-                const box = root.getBoundingClientRect();
-                resize = {
-                  pointer: event.pointerId,
-                  x: event.clientX,
-                  y: event.clientY,
-                  edge,
-                  box: {
-                    x: box.x,
-                    y: box.y,
-                    width: box.width,
-                    height: box.height,
-                  },
-                  mediaHeight: media?.getBoundingClientRect().height ?? 0,
-                  audioOnly: audioOnly(),
-                  corner: corner(),
-                };
-                event.currentTarget.setPointerCapture(event.pointerId);
-              }}
-              onPointerMove={(event) => {
-                if (!resize || resize.pointer !== event.pointerId) return;
-                const result = resizeCallPlayer(
-                  resize.edge,
-                  resize.box,
-                  resize.mediaHeight,
-                  event.clientX - resize.x,
-                  event.clientY - resize.y,
-                  window.innerWidth,
-                  window.innerHeight,
-                  resize.audioOnly,
-                  resize.corner
-                );
-                setPreviewSize({
-                  width: result.width,
-                  audioHeight: result.mediaHeight,
-                });
-                setPosition({ x: result.x, y: result.y });
-              }}
-              onPointerUp={(event) => finishResize(event)}
-              onPointerCancel={(event) => finishResize(event, true)}
-              onLostPointerCapture={(event) => finishResize(event, true)}
+              onPointerDown={(event) => player.onResizeStart(edge, event)}
+              onPointerMove={player.onResizeMove}
+              onPointerUp={(event) => player.finishResize(event)}
+              onPointerCancel={(event) => player.finishResize(event, true)}
+              onLostPointerCapture={(event) => player.finishResize(event, true)}
             />
           )}
         </For>

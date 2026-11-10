@@ -2,17 +2,12 @@ import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { BackgroundCameraPreview } from '@core/component/media/background-camera-preview';
 import { MediaDeviceRadioItems } from '@core/component/media/media-device-picker';
-import {
-  RecentBackgroundImages,
-  rememberRecentBackgroundImage,
-} from '@core/component/media/recent-background-images';
+import { RecentBackgroundImages } from '@core/component/media/recent-background-images';
 import type { BackgroundEffect } from '@core/media/background-effect';
-import { readBackgroundImage } from '@core/media/read-background-image';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SpeakerIcon from '@icon/system/regular/speaker-high.svg';
 import { Dropdown, SingleSelectCheck, ToggleSwitch, Tooltip } from '@ui';
 import {
-  createMemo,
   createSignal,
   createUniqueId,
   For,
@@ -20,45 +15,15 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import type { CallState } from '../CallContext';
+import { CallMediaPermissionHelp } from '../CallMediaPermissionHelp';
+import { createCallMediaPermissionHelp } from '../primitives/create-call-media-permission-help';
 import {
-  CallMediaPermissionHelp,
-  createCallMediaPermissionHelp,
-} from '../CallMediaPermissionHelp';
-import { LK_TRACK_SOURCE } from '../livekit-loader';
+  type CallMediaControlsState,
+  createCallMediaSettings,
+} from '../primitives/create-call-media-settings';
 import { CallControlBar } from './CallControlBar';
 
-export type CallMediaControlsState = Pick<
-  CallState,
-  | 'isConnecting'
-  | 'isAudioMuted'
-  | 'isVideoMuted'
-  | 'isScreenSharing'
-  | 'toggleAudio'
-  | 'toggleVideo'
-  | 'toggleScreenShare'
-  | 'shareScreenAudio'
-  | 'setShareScreenAudio'
-  | 'audioInputDevices'
-  | 'audioOutputDevices'
-  | 'videoInputDevices'
-  | 'activeAudioInputDeviceId'
-  | 'activeAudioOutputDeviceId'
-  | 'activeVideoInputDeviceId'
-  | 'switchAudioInput'
-  | 'switchAudioOutput'
-  | 'switchVideoInput'
-  | 'isNoiseSuppressed'
-  | 'toggleNoiseSuppression'
-  | 'backgroundEffect'
-  | 'setBackgroundEffect'
-> &
-  Partial<
-    Pick<
-      CallState,
-      'microphonePermission' | 'cameraPermission' | 'room' | 'trackVersion'
-    >
-  >;
+export type { CallMediaControlsState } from '../primitives/create-call-media-settings';
 
 type BackgroundChoice = 'none' | 'light' | 'heavy' | 'image';
 
@@ -82,84 +47,15 @@ export function CallMediaControls(props: {
 }) {
   const call = props.media;
   const permissionHelp = createCallMediaPermissionHelp(call);
-  const cameraTrack = createMemo(() => {
-    call.trackVersion?.();
-    if (call.isVideoMuted() || call.cameraPermission?.() === 'denied')
-      return undefined;
-    const track = call
-      .room?.()
-      ?.localParticipant.getTrackPublication(LK_TRACK_SOURCE.Camera)?.track;
-    // mediaStreamTrack returns processed output when a processor is active.
-    const processor = track?.getProcessor?.();
-    const source =
-      processor &&
-      'source' in processor &&
-      processor.source instanceof MediaStreamTrack
-        ? processor.source
-        : (track?.mediaStream?.getVideoTracks()[0] ??
-          (!processor ? track?.mediaStreamTrack : undefined));
-    return source?.readyState === 'live' ? source : undefined;
-  });
-  const [applyingBackground, setApplyingBackground] = createSignal(false);
-  const [error, setError] = createSignal<string>();
+  const {
+    cameraTrack,
+    applyingBackground,
+    error,
+    fire,
+    applyBackground,
+    selectBackground,
+  } = createCallMediaSettings(call);
   let upload: HTMLInputElement | undefined;
-  let disposed = false;
-  onCleanup(() => {
-    disposed = true;
-  });
-
-  async function run(action: () => void | Promise<void>): Promise<boolean> {
-    setError(undefined);
-    try {
-      await action();
-      return true;
-    } catch (error) {
-      if (!disposed)
-        setError(
-          error instanceof Error
-            ? error.message
-            : 'Could not update call settings.'
-        );
-      return false;
-    }
-  }
-  const fire = (action: () => void | Promise<void>) =>
-    fireAndForget(run(action), 'channel-call');
-
-  async function applyBackground(effect: BackgroundEffect | File) {
-    if (disposed || applyingBackground()) return false;
-    setApplyingBackground(true);
-    let next: BackgroundEffect | undefined;
-    const applied = await run(async () => {
-      next =
-        effect instanceof File
-          ? {
-              type: 'image',
-              id: 'custom',
-              path: await readBackgroundImage(effect),
-            }
-          : effect;
-      if (!disposed) await call.setBackgroundEffect(next);
-    });
-    if (
-      applied &&
-      effect instanceof File &&
-      next?.type === 'image' &&
-      !disposed
-    )
-      fireAndForget(
-        rememberRecentBackgroundImage({ id: next.id, path: next.path }),
-        'recent-background-images'
-      );
-    if (!disposed) setApplyingBackground(false);
-    return applied && !disposed;
-  }
-  async function selectBackground(value: string) {
-    if (value === 'none') await applyBackground({ type: 'none' });
-    else if (value === 'light' || value === 'heavy')
-      await applyBackground({ type: 'blur', intensity: value });
-  }
-
   const shareAudioDescription = createUniqueId();
   const [shareAudioFocused, setShareAudioFocused] = createSignal(false);
   const shareAudioReason = () =>

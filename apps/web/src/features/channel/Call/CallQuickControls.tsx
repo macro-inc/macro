@@ -17,12 +17,10 @@ import {
 import { CallMediaControls } from './CallControls/CallMediaControls';
 import { CallReactionMenu } from './CallControls/CallReactionMenu';
 import { CallSharingMenu } from './CallControls/CallSharingMenu';
-import {
-  CallMediaPermissionHelp,
-  createCallMediaPermissionHelp,
-} from './CallMediaPermissionHelp';
+import { CallMediaPermissionHelp } from './CallMediaPermissionHelp';
 import type { CallReactionEmoji } from './call-reactions';
 import { LK_TRACK_SOURCE } from './livekit-loader';
+import { createCallMediaPermissionHelp } from './primitives/create-call-media-permission-help';
 import { useActiveCallCompanion } from './use-active-call-companion';
 import { useActiveCallTeamShare } from './use-toggle-share-with-team';
 
