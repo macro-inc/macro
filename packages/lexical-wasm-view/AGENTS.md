@@ -18,6 +18,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 - Set the HTML-render mount display before its mount class to preserve the Source block wrapper and Chromium-observed attribute order; verify other engines against their own captures.
 - The Diff applier owns mirror writes; renderers and view plugins read it.
 - Assemble wholly created subtrees off DOM in the existing slot-walk order; keep reused-node moves and trees with DOM-slot hooks on the ordinary path and resolve dynamic slot boundaries when attaching, before selection and commit notifications.
+- Attach one synchronous view before subscribing to authorization; apply each native output immediately, never buffer pre-mount packets, and retire view observation once before disposal and terminal close.
 - A successful flags=0 TextFromView may acknowledge exactly the submitted edit
   through that applier. Authoritative Rust corrections take precedence.
 - Resolve terminal element carets before the managed line break; it is DOM scaffolding, not a model child.
