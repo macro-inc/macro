@@ -1,0 +1,80 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                c.id AS computer_id,\n                c.team_id,\n                h.id AS harness_id,\n                h.name,\n                h.claude_signed_in_by AS \"claude_signed_in_by!\",\n                h.claude_signed_in_at AS \"claude_signed_in_at!\",\n                h.capabilities AS \"capabilities: Json<HarnessCapabilities>\",\n                h.capabilities_reported_at,\n                c.claude_notice_stage,\n                c.claude_notice_signed_in_at,\n                c.claude_notice_expires_at\n            FROM harnesses h\n            JOIN hosted_runtime c ON c.id = h.computer_id\n            WHERE h.deleted_at IS NULL\n              AND h.claude_mode = 'own_account'\n              AND h.claude_signed_in_by IS NOT NULL\n              AND h.claude_signed_in_at IS NOT NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "computer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "harness_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "claude_signed_in_by!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "claude_signed_in_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "capabilities: Json<HarnessCapabilities>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "capabilities_reported_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "claude_notice_stage",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "claude_notice_signed_in_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "claude_notice_expires_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "4db527176198de2563d3268d2f8f6593df7b084cbce6e5e320ef1562fb1d6bf1"
+}
