@@ -290,3 +290,22 @@ On phones, shared confirmations (including Remove Member and Cancel Invitation)
 use a glass sheet with a title, description, Close confirmation button, and
 side-by-side cancel and confirm actions. Pending actions disable both buttons
 and prevent dismissal; canceling leaves the underlying data unchanged.
+
+## Ideas on Home
+
+With `enable-ideas` on (desktop only), the idle pane shows, below the composer
+and in place of the recommended actions:
+
+- **Today**: the day's timed events across working hours (8am to 8pm) as
+  neutral chips with a thin line at now; a chip opens the event in Calendar.
+  It needs the calendar to be on.
+- **Your top priorities**: up to five ideas, running and failed runs first.
+  A row opens For you with that idea first; **All in For you** opens the page.
+
+On For you, each card has one action for its kind: **Run** opens the composer
+with the prompt; **Run in background** starts the run at once (the card says
+what it will post or send first), then shows Running and, when done, **Open
+result**; **Open** or **Open draft** opens the item or the drafted reply;
+**Turn on** saves a routine idea and **Review** opens it in the routine
+editor. The `x` dismisses with an Undo row until you leave the page.
+

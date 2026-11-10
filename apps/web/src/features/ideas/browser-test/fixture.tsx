@@ -5,7 +5,9 @@ import { render } from 'solid-js/web';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
 import type { IdeaActions, IdeasSource } from '../context/ideas-source';
+import { layoutDay } from '../core/day';
 import type { Idea } from '../core/idea';
+import { topPriorities } from '../core/idea';
 import { createIdeasFeed } from '../primitives/feed';
 import {
   backgroundIdea,
@@ -19,6 +21,7 @@ import {
   runningIdea,
 } from '../tests/fixtures';
 import { ForYouView } from '../views/for-you-view';
+import { HomeIdeasView } from '../views/home-ideas-view';
 
 const PARAMS = new URLSearchParams(location.search);
 const IS_LIGHT = PARAMS.get('theme') === 'light';
@@ -164,5 +167,58 @@ function Fixture() {
   );
 }
 
+const NOON = new Date('2026-11-09T12:00:00');
+const at = (time: string) => new Date(`2026-11-09T${time}:00`).toISOString();
+const EVENTS = [
+  { id: 'sync', title: 'Morning sync', start: at('08:00'), end: at('08:30') },
+  {
+    id: 'review',
+    title: 'Design review',
+    start: at('11:30'),
+    end: at('12:30'),
+  },
+  {
+    id: 'plan',
+    title: 'Project planning',
+    start: at('14:00'),
+    end: at('15:00'),
+  },
+  {
+    id: 'walk',
+    title: 'Prototype walkthrough',
+    start: at('14:30'),
+    end: at('15:30'),
+  },
+];
+
+/** Home's section over fixed events and the same ideas. */
+function HomeFixture() {
+  const [opened, setOpened] = createSignal('');
+
+  return (
+    <main class="h-dvh overflow-y-auto bg-panel p-8 font-sans text-ink">
+      <div class="mx-auto max-w-180">
+        <HomeIdeasView
+          today={
+            PARAMS.get('calendar') === 'none'
+              ? undefined
+              : { date: NOON, strip: layoutDay(EVENTS, NOON) }
+          }
+          priorities={topPriorities(ALL, 5)}
+          onOpenEvent={(event) => setOpened(`event ${event.id}`)}
+          onOpenIdea={(idea) => setOpened(`idea ${idea.id}`)}
+          onOpenAll={() => setOpened('all')}
+        />
+        <output aria-label="Opened">{opened()}</output>
+      </div>
+    </main>
+  );
+}
+
 const ROOT = document.getElementById('root');
-if (ROOT) render(() => <Fixture />, ROOT);
+if (ROOT) {
+  render(
+    () => (PARAMS.get('view') === 'home' ? <HomeFixture /> : <Fixture />),
+    ROOT
+  );
+}
