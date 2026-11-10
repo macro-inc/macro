@@ -1207,7 +1207,9 @@ The sidebar shows available channel rows immediately. One shared by-ID query
 per batch supplies cached channel data and fetches only missing records using
 Soup's generic explicit-entity hydration. Channel batching and unread refreshes
 stay in the channel query layer; the sidebar does not coordinate separate cache
-and network queries.
+and network queries. Reading a channel notification retains already-resolved
+section members while their unread state refreshes. Only unresolved members show
+loading feedback, and changing membership or accounts starts a fresh lookup.
 Each expanded section appends skeleton rows while its remaining channels load,
 using the same row indentation and icon/text columns as loaded channels.
 A failed fetch keeps available rows and replaces that section's loading feedback
