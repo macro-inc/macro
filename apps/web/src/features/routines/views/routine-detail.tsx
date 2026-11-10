@@ -23,7 +23,7 @@ import type { RoutineDetailSlots } from '../context/routine-slots';
 import type { RoutineDetailSource } from '../context/routine-sources';
 import { isClaimActive } from '../core/claim';
 import type { HistoryRecord, HistoryResource } from '../core/history';
-import { isFinished } from '../core/routine';
+import { isFinished, type RoutineSnapshot } from '../core/routine';
 import {
   createEmptyDraft,
   draftPrompt,
@@ -89,6 +89,27 @@ function SaveState(props: {
   );
 }
 
+/** What a routine's runs created, as its page lists them, newest first. */
+function subRoutineItems(
+  children: readonly RoutineSnapshot[],
+  finished: boolean
+): SubRoutineItem[] {
+  const state = (child: RoutineSnapshot): SubRoutineItem['state'] => {
+    if (finished) return 'finished';
+    if (isClaimActive(child.claimedAt)) return 'running';
+    return child.enabled ? 'active' : 'paused';
+  };
+  return children
+    .filter((child) => isFinished(child) === finished)
+    .toSorted((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .map((child) => ({
+      id: child.id,
+      name: child.name,
+      when: (child.draft?.triggers ?? []).map(describeTrigger).join(' · '),
+      state: state(child),
+    }));
+}
+
 export function RoutineDetailView(props: {
   source: RoutineDetailSource;
   userId: Accessor<string | undefined>;
@@ -149,23 +170,6 @@ export function RoutineDetailView(props: {
       return 'Update the schedule before turning it on';
     return 'Fix the routine before turning it on';
   };
-  const subRoutineItems = (finished: boolean): SubRoutineItem[] =>
-    props.source
-      .subRoutines()
-      .filter((child) => isFinished(child) === finished)
-      .toSorted((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
-      .map((child) => ({
-        id: child.id,
-        name: child.name,
-        when: (child.draft?.triggers ?? []).map(describeTrigger).join(' · '),
-        state: finished
-          ? 'finished'
-          : isClaimActive(child.claimedAt)
-            ? 'running'
-            : child.enabled
-              ? 'active'
-              : 'paused',
-      }));
   return (
     <Show
       when={schedule()}
@@ -405,8 +409,8 @@ export function RoutineDetailView(props: {
             isOwned() &&
             props.source.subRoutines().length > 0 && (
               <RoutineSubRoutines
-                active={subRoutineItems(false)}
-                finished={subRoutineItems(true)}
+                active={subRoutineItems(props.source.subRoutines(), false)}
+                finished={subRoutineItems(props.source.subRoutines(), true)}
                 onOpen={props.onOpenRoutine}
               />
             )
