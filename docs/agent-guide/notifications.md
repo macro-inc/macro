@@ -94,6 +94,17 @@ leaves it and new activity brings one back. A row you read under Unread, or a
 stack you're going through, stays until you next switch or reload.
 With nothing unread, Unread shows **You're all caught up**.
 
+With `enable-notification-stacks` on, the tabs are the lanes instead:
+**Signal** and **Noise** (`1` and `2`, or Tab), and Unread becomes an **Unread**
+toggle beside the filter that narrows whichever lane shows. Signal is the inbox
+as before. Noise lists what the reader's [stacks](settings.md#notification-stacks)
+captured: those notifications make no sound, badge, push, email or digest and
+count as unread nowhere else, but inside Noise a row is unread until seen and
+every row action, Clear and the filters work the same on that lane alone. The
+lane is not remembered: the view opens on Signal. An empty Noise lane shows
+**Nothing in Noise** with **Manage stacks**, which opens Settings →
+Notifications.
+
 **Clear notifications** (double check, beside the filter; a sheet beside the
 filter pill on touch) offers **Clear today** (everything since local midnight,
 the rows under the list's today sections), **Clear all**, and **Clear by kind**
@@ -117,7 +128,9 @@ at all (including push and email).
 
 On touch devices the dock's bell (**Notifications**) opens this view with the
 flag on, as the list alone under the floating controls Home, Email, Tasks and Drive
-use: the filter drawer (Type), then All and Unread pills. Rows keep the same anatomy with 44px targets
+use: the filter drawer (Type), then All and Unread pills (Signal and Noise pills
+with stacks on, where **Unread only** is a switch at the top of the filter
+drawer). Rows keep the same anatomy with 44px targets
 and inline row buttons; at phone width they have a larger avatar and slightly larger
 text; a read row there fades its avatar and mutes its text, so unread rows stand
 out. A tablet keeps the desktop's sizes. Tapping a row or an unfolded notification opens it

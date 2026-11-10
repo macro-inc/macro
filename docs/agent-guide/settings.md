@@ -147,6 +147,36 @@ times. **Change time** opens the same searchable time picker used by entity
 actions; **Resume** cancels a snooze immediately. Permanent mutes appear separately
 under **Muted items**, with **Snooze instead** to replace one with a timed pause.
 
+### Notification stacks
+
+With `enable-notification-stacks` on, **Settings → Notifications → Stacks**
+(above Snoozed items) lists the reader's stacks in the order they are tried; the
+first stack that captures a notification takes it. A stack captures the
+notifications its rules match into the **Noise** tab of
+[Notifications](notifications.md), except what it lets through. Each row shows
+what the stack captures and lets through, a switch to turn it on or off, and a
+**…** menu: **Edit**, **Move up**, **Move down**, **Delete** (confirmed; what it
+already captured stays in Noise).
+
+**New stack** opens the editor: **Stack name**, then **Capture notifications
+from** with a button per kind of place (**Channels**, **Documents and tasks**,
+**Folders**, **Task projects**, **People**) that opens a searchable multi-select
+picker, and **Channel name contains**, which takes text and Enter or **Add**
+(it never matches a direct message). Chosen places and people show as removable
+chips. **Kinds** narrows the capture to the checked kinds; none checked means
+every kind. **Still notify me about** has **Mentions** and **Replies in my
+threads**, both checked for a new stack. **Create stack** refuses an empty name,
+and a stack with no place, person or kind, which would capture everything. On
+phones the editor is a bottom sheet and each picker opens as a full-height
+picker sheet with **Done**.
+
+A channel's menu (rail, list row or title) offers **Add to stack…** beside
+**Mute notifications**: it ticks the stacks that capture the channel, saving each
+tick at once, and **New stack with this channel** opens the editor with the
+channel chosen. Only conversation is capturable (channel messages, mentions,
+replies and reactions, comments, project discussion); assignments, invites,
+reminders and the like always arrive as Signal.
+
 The Chat detail pane also supplies these commands for its current channel or DM;
 focus the conversation before opening the command menu.
 
