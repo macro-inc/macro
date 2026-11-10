@@ -172,7 +172,13 @@ impl Computer {
     #[tracing::instrument(name = "macrod.claude.sign_in.start", skip_all, err)]
     async fn start_sign_in(&self) -> rootcause::Result<ComputerControlResult> {
         let mut slot = self.sign_in.lock().await;
-        // A new start abandons whatever sign-in was waiting.
+        // Starting again while a sign-in waits hands out the same URL, so a
+        // pre-started sign-in opens at once. One gone stale is replaced.
+        if let Some(waiting) = slot.as_ref()
+            && let Some(url) = waiting.fresh_url().await
+        {
+            return Ok(ComputerControlResult::SignInStarted { url });
+        }
         if let Some(previous) = slot.take() {
             previous.close().await;
         }

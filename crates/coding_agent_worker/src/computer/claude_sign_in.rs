@@ -57,7 +57,8 @@ pub(super) enum Screen {
 
 impl Screen {
     pub(super) fn read(screen: &str) -> Self {
-        if screen.contains("OAuth error") {
+        // Older Claude Code prints the OAuth error; newer explains the code.
+        if screen.contains("OAuth error") || screen.contains("That code wasn't accepted") {
             return Self::OAuthError;
         }
         if screen.contains("Login successful") || screen.contains("Logged in as") {
@@ -122,10 +123,18 @@ pub(super) fn pasted_code(pasted: &str) -> Result<&str, CompleteError> {
     Ok(code)
 }
 
+/// How long a sign-in URL nobody has used yet is handed out again. Claude
+/// Code itself waits at its paste prompt indefinitely, but its PKCE verifier
+/// lives only in that process and claude.ai does not say how long an unused
+/// authorization request stays valid, so an older one is replaced.
+pub const FRESH_FOR: Duration = Duration::from_secs(10 * 60);
+
 /// A Claude login waiting in its herdr pane.
 pub struct SignIn {
     pane: Option<Pane>,
     claude: std::path::PathBuf,
+    url: Option<String>,
+    started: tokio::time::Instant,
 }
 
 impl SignIn {
@@ -143,7 +152,20 @@ impl SignIn {
         Ok(Self {
             pane: Some(pane),
             claude: claude.to_owned(),
+            url: None,
+            started: tokio::time::Instant::now(),
         })
+    }
+
+    /// The URL it showed, while it is young enough to hand out again and
+    /// Claude is still waiting for its code.
+    pub async fn fresh_url(&self) -> Option<String> {
+        let url = self.url.clone()?;
+        if self.started.elapsed() >= FRESH_FOR {
+            return None;
+        }
+        let screen = self.pane().ok()?.screen().await.ok()?;
+        (Screen::read(&screen) == Screen::AwaitingCode { url: url.clone() }).then_some(url)
     }
 
     fn pane(&self) -> rootcause::Result<&Pane> {
@@ -155,11 +177,13 @@ impl SignIn {
     /// Answer Claude's questions until it shows the sign-in URL.
     pub async fn url(&mut self) -> rootcause::Result<String> {
         let pane = self.pane()?;
-        tokio::time::timeout(URL_TIMEOUT, async {
+        let url: String = tokio::time::timeout(URL_TIMEOUT, async {
             let mut asked_login = false;
             loop {
                 match Screen::read(&pane.screen().await?) {
-                    Screen::AwaitingCode { url } => return Ok(url),
+                    Screen::AwaitingCode { url } => {
+                        return Ok::<_, rootcause::Report>(url);
+                    }
                     Screen::ThemePicker => pane.press(&["enter"]).await?,
                     Screen::LoginMethod {
                         subscription_selected: true,
@@ -180,7 +204,9 @@ impl SignIn {
             }
         })
         .await
-        .map_err(|_| rootcause::report!("Claude Code showed no sign-in URL in time"))?
+        .map_err(|_| rootcause::report!("Claude Code showed no sign-in URL in time"))??;
+        self.url = Some(url.clone());
+        Ok(url)
     }
 
     /// Type the pasted code and wait for Claude to accept or reject it.

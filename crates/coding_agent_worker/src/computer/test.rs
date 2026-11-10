@@ -194,6 +194,8 @@ mod sign_in_screens {
     const METHOD: &str = "Welcome to Claude Code v2.1.280\n\n Select login method:\n\n ❯ 1. Claude account with subscription · Pro, Max,\n      Team, or Enterprise\n   2. Anthropic Console account · API usage billing\n";
     const URL_SCREEN: &str = "Welcome to Claude Code v2.1.280\n\n Browser didn't open? Use the url below to  (c to\n sign in                                    copy)\n\nhttps://claude.com/cai/oauth/authorize?code=true&clie\nnt_id=9d1c250a&response_t\nype=code&state=xS07\n\n\n Paste code here if prompted >\n";
     const OAUTH_ERROR: &str = "Welcome to Claude Code v2.1.280\n\n OAuth error: Request failed with status code 400\n\n\n Press Enter to retry.\n";
+    // Claude Code 2.1.319's wording for a rejected code.
+    const CODE_REJECTED: &str = " That code wasn't accepted. It may be incomplete, expired, already\n used, or from an earlier sign-in attempt. Sign in again to get a new\n code.\n";
     const TRUST: &str = " Accessing workspace:\n\n /home/macro\n\n ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm · Esc to cancel\n";
     const PROMPT: &str = " ▐▛███▛█   Claude Code v2.1.280\n\n─────────\n❯ Try \"write a test for <filepath>\"\n─────────\n";
 
@@ -219,6 +221,7 @@ mod sign_in_screens {
             }
         );
         assert_eq!(Screen::read(OAUTH_ERROR), Screen::OAuthError);
+        assert_eq!(Screen::read(CODE_REJECTED), Screen::OAuthError);
         assert_eq!(Screen::read(TRUST), Screen::TrustFolder);
         assert_eq!(Screen::read(PROMPT), Screen::Prompt);
         assert_eq!(Screen::read(""), Screen::Unknown);
