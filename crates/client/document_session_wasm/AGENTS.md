@@ -38,7 +38,7 @@ Route application bulk reads through query kind 9 with the mirror generation in 
 
 - Generate native payload field IDs and both descriptor tables from pinned class ASTs with generate-native-fields.ts; synchronize ordinary JS properties through explicit native projections, not replacement accessors.
 - `abi/foreign-host.bop`: production JS class/record/clone/opaque-value metadata; generate both languages with packages/collaboration/scripts/generate-foreign-host-schema.ts. Keep JS values editor-local in opaque slots and node/selection/state references typed. Clone acknowledgements verify tree links and apply only validated base/native patches to the destination; retain instance owner namespaces across editor-state transfers. Keep public export acknowledgements opaque and serialized export acknowledgements explicit; root cached text is derived metadata rather than a native payload field.
-- Emit foreign render metadata through ForeignRenderBatch alongside the unchanged flat eleven-op Diff; captureId identifies an exact host-scoped owned capture, never an allocator address. Deliver state/instance-only changes even when no flat operation exists, and hydrate unbound records before JS rendering.
+- Emit foreign render metadata through ForeignRenderBatch alongside the flat Diff; captureId identifies an exact host-scoped owned capture, never an allocator address. Deliver state/instance-only changes even when no flat operation exists, and hydrate unbound records before JS rendering.
 - `abi/session.bop`: authoritative ABI, generated constants and messages.
 - `src/machine.rs`: clocks, lifecycle and one handle call per input.
 - `src/macro_editor.rs`: delegate the MarkdownSync preset to document_session::application_editor_config for `EditorSession.createMacro`; group plugin registration lives in macro_document_model/src/surface.rs.
@@ -229,3 +229,5 @@ final live membership, and bypass public exportJSON/getters during this path.
 Drain actual external compatibility commits through compatTakePublications until empty before currentVersion or Begin; preserve queued receipts and reject pending drains. Treat flags=0 as drain-only metadata, never a replacement for the causal session output. Close the one-time cold bootstrap only at the exact currentVersion/full-snapshot fence; reject later owner rebuilds without silently replacing state.
 
 Construct app document sessions with createMacroWithNamespace using the host wrapper allocator value; keep the view and core clipboard namespace identical without persisting the instance counter.
+
+Encode SetDecoratorRevision (12) as [key, low32, high32] from actual opt-in native render-lifetime metadata; preserve existing opcodes 1–11 and full u64 precision. The generated enum alone does not install emission or view consumption.
