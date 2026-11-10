@@ -1,6 +1,6 @@
 /**
  * Copyright (c) Meta Platforms, Inc. and affiliates.
- * MIT licensed. DOM import selection, wrappers and built-in conversions retargeted
+ * MIT licensed. DOM import selection, implicitWrappers and built-in conversions retargeted
  * from Lexical 0.45.0, 0cfcc169296723e07de2396cd42ea3434b5b79ed.
  */
 
@@ -54,17 +54,30 @@ function isBlock(node: JsonObject): boolean {
     'classed-block',
   ].includes(String(node.type));
 }
-function wrapInlines(nodes: readonly JsonObject[]): JsonObject[] {
+function wrapInlines(
+  nodes: readonly JsonObject[],
+  implicitWrappers?: WeakSet<JsonObject>,
+  format = ''
+): JsonObject[] {
   const output: JsonObject[] = [];
   let inline: JsonObject[] = [];
+  const wrap = () => {
+    const node = { ...paragraph(inline, true), format };
+    implicitWrappers?.add(node);
+    output.push(node);
+    inline = [];
+  };
   for (const node of nodes) {
     if (isBlock(node)) {
-      if (inline.length) output.push(paragraph(inline, true));
-      inline = [];
-      output.push(node);
+      if (inline.length) wrap();
+      if (format && !node.format) {
+        const aligned = { ...node, format };
+        if (implicitWrappers?.has(node)) implicitWrappers.add(aligned);
+        output.push(aligned);
+      } else output.push(node);
     } else inline.push(node);
   }
-  if (inline.length) output.push(paragraph(inline, true));
+  if (inline.length) wrap();
   return output;
 }
 function objectChildren(node: JsonObject): JsonObject[] {
@@ -109,11 +122,12 @@ export function importHTML(
   const window = document.defaultView;
   if (!window) throw new Error('HTML import requires a browser document');
   const ElementType = window.HTMLElement;
-  const InputType = window.HTMLInputElement;
+  const OrderedListType = window.HTMLOListElement;
   const CellType = window.HTMLTableCellElement;
   const RowType = window.HTMLTableRowElement;
   const parsed = new window.DOMParser().parseFromString(html, 'text/html');
   const macroTypes = registry?.names();
+  const implicitWrappers = new WeakSet<JsonObject>();
   function children(
     node: Node,
     formats: ReadonlyMap<string, number>
@@ -183,6 +197,15 @@ export function importHTML(
         ? [{ type: 'linebreak', version: 1 }]
         : [];
     let values = children(node, nextFormats);
+    const wrap = (items: readonly JsonObject[]) =>
+      wrapInlines(items, implicitWrappers, node.style.textAlign);
+    const createElement = (
+      type: string,
+      items: readonly JsonObject[],
+      extra: JsonObject = {}
+    ) =>
+      element(type, isBlockDOM(node, ElementType) ? wrap(items) : items, extra);
+
     let custom: DraftConversion | null = macroConversion(node, macroTypes);
     for (const importer of registry?.importers(tag) ?? []) {
       const candidate = importer(node);
@@ -192,54 +215,96 @@ export function importHTML(
     if (custom) {
       const converted = custom.convert(node, values);
       if (converted !== null) return [...converted];
-      return isBlockDOM(node, ElementType) ? wrapInlines(values) : values;
+      return isBlockDOM(node, ElementType) ? wrap(values) : values;
     }
     const base: JsonObject = {
       direction: node.dir === 'ltr' || node.dir === 'rtl' ? node.dir : null,
       format: node.style.textAlign || '',
       indent: 0,
     };
-    if (tag === 'p') return [{ ...paragraph(values), ...base }];
+    if (tag === 'p') return [{ ...paragraph(wrap(values)), ...base }];
     if (/^h[1-6]$/.test(tag))
-      return [element('heading', values, { ...base, tag })];
-    if (tag === 'blockquote') return [element('quote', values, base)];
+      return [createElement('heading', values, { ...base, tag })];
+    if (tag === 'blockquote') return [createElement('quote', values, base)];
     if (tag === 'ul' || tag === 'ol') {
       const check =
         node.getAttribute('__lexicallisttype') === 'check' ||
         node.classList.contains('contains-task-list') ||
         node.getAttribute('data-is-checklist') === '1' ||
-        [...node.children].some((child) => child.hasAttribute('aria-checked'));
+        [...node.children].some(
+          (child) =>
+            child instanceof ElementType && child.hasAttribute('aria-checked')
+        );
       return [
-        element('list', normalizeList(values), {
-          ...base,
-          listType: tag === 'ol' ? 'number' : check ? 'check' : 'bullet',
-          tag,
-          start: Number(node.getAttribute('start') ?? 1),
-        }),
+        createElement(
+          'list',
+          normalizeList(values).map((item) => {
+            const fields = Object.fromEntries(
+              Object.entries(item).filter(([key]) => key !== 'checked')
+            );
+            return check && tag !== 'ol'
+              ? { ...fields, checked: item.checked === true }
+              : fields;
+          }),
+          {
+            direction: base.direction,
+            listType: tag === 'ol' ? 'number' : check ? 'check' : 'bullet',
+            tag,
+            start: node instanceof OrderedListType ? node.start : 1,
+          }
+        ),
       ];
     }
     if (tag === 'li') {
-      const input = node.querySelector('input[type=checkbox]');
-      const checked =
-        input instanceof InputType
-          ? input.checked
-          : node.getAttribute('aria-checked') === 'true'
-            ? true
-            : node.getAttribute('aria-checked') === 'false'
-              ? false
-              : undefined;
-      return [
-        element('listitem', values, {
+      let input: Element | undefined;
+      if (node.classList.contains('task-list-item'))
+        input = [...node.children].find((child) => child.tagName === 'INPUT');
+      if (!input && node.classList.contains('joplin-checkbox')) {
+        for (const child of node.children) {
+          const first = child.children[0];
+          if (
+            child.classList.contains('checkbox-wrapper') &&
+            first?.tagName === 'INPUT'
+          ) {
+            input = first;
+            break;
+          }
+        }
+      }
+      let properties: JsonObject;
+      if (input) {
+        if (input.getAttribute('type') !== 'checkbox') return values;
+        properties = { value: 1, checked: input.hasAttribute('checked') };
+      } else {
+        const checked = node.getAttribute('aria-checked');
+        properties = {
           ...base,
           value: 1,
-          ...(checked === undefined ? {} : { checked }),
-        }),
-      ];
+          ...(checked === 'true'
+            ? { checked: true }
+            : checked === 'false'
+              ? { checked: false }
+              : {}),
+        };
+      }
+      const first = values[0];
+      if (
+        values.length === 1 &&
+        first?.type === 'paragraph' &&
+        !implicitWrappers.has(first) &&
+        !properties.format &&
+        typeof first.format === 'string' &&
+        first.format
+      ) {
+        properties = { ...properties, format: first.format };
+        values = objectChildren(first);
+      }
+      return [createElement('listitem', values, properties)];
     }
     if (tag === 'a') {
       if (!node.textContent && node.children.length === 0) return [];
       return [
-        element('link', values, {
+        createElement('link', values, {
           ...base,
           url: node.getAttribute('href') ?? '',
           target: node.getAttribute('target'),
@@ -251,18 +316,31 @@ export function importHTML(
     if (
       tag === 'pre' ||
       codeBlock ||
-      (tag === 'div' && node.style.fontFamily.includes('monospace'))
+      (tag === 'div' && node.style.fontFamily.includes('monospace')) ||
+      (tag === 'table' && node.classList.contains('js-file-line-container'))
     ) {
-      const language = node.getAttribute('data-highlight-language');
+      const language =
+        tag === 'div' || tag === 'table'
+          ? null
+          : node.getAttribute('data-language');
       return [
-        element('code', values, { ...base, ...(language ? { language } : {}) }),
+        createElement('code', values, { ...(language ? { language } : {}) }),
       ];
     }
-    if (tag === 'table') return [element('table', values, base)];
+    const codeTable = node
+      .closest('table')
+      ?.classList.contains('js-file-line-container');
+    if (
+      (tag === 'td' &&
+        (node.classList.contains('js-file-line') || codeTable)) ||
+      (tag === 'tr' && codeTable)
+    )
+      return isBlockDOM(node, ElementType) ? wrap(values) : values;
+    if (tag === 'table') return [createElement('table', values, base)];
     if (tag === 'tr') {
       const height = Number.parseFloat(node.style.height);
       return [
-        element('tablerow', values, {
+        createElement('tablerow', values, {
           ...base,
           ...(Number.isNaN(height) ? {} : { height }),
         }),
@@ -308,7 +386,7 @@ export function importHTML(
         : undefined;
       const verticalAlign = node.style.verticalAlign;
       return [
-        element('tablecell', values, {
+        createElement('tablecell', values, {
           headerState,
           colSpan: node.colSpan,
           rowSpan: node.rowSpan,
@@ -320,8 +398,57 @@ export function importHTML(
         }),
       ];
     }
-    if (isBlockDOM(node, ElementType)) return wrapInlines(values);
+    if (isBlockDOM(node, ElementType)) return wrap(values);
     return values;
   }
-  return children(parsed.body, new Map()).map((node) => JSON.stringify(node));
+  // Resolve upstream's artificial inline wrappers only after their actual
+  // converted block ancestry is known; no wrapper reaches the native model.
+  function mergeListItemChildren(items: readonly JsonObject[]): JsonObject[] {
+    return items.flatMap((node) =>
+      !implicitWrappers.has(node) &&
+      (node.type === 'paragraph' || node.type === 'listitem')
+        ? mergeListItemChildren(objectChildren(node))
+        : [node]
+    );
+  }
+  function resolveWrappers(
+    items: readonly JsonObject[],
+    ancestor: boolean,
+    parent?: string
+  ): JsonObject[] {
+    const input = parent === 'listitem' ? mergeListItemChildren(items) : items;
+    const output: JsonObject[] = [];
+    for (const [index, node] of input.entries()) {
+      const implicit = implicitWrappers.has(node);
+      if (implicit && ancestor) {
+        output.push(...resolveWrappers(objectChildren(node), ancestor));
+        const next = input[index + 1];
+        if (next && implicitWrappers.has(next))
+          output.push({ type: 'linebreak', version: 1 });
+        continue;
+      }
+      const elementNode =
+        isBlock(node) ||
+        ['link', 'autolink', 'mark'].includes(String(node.type));
+      if (!elementNode) {
+        output.push(node);
+        continue;
+      }
+      let context = ancestor;
+      if (!implicit)
+        context = node.type === 'tablecell' ? false : ancestor || isBlock(node);
+      output.push({
+        ...node,
+        children: resolveWrappers(
+          objectChildren(node),
+          context,
+          String(node.type)
+        ),
+      });
+    }
+    return output;
+  }
+  return resolveWrappers(children(parsed.body, new Map()), false).map((node) =>
+    JSON.stringify(node)
+  );
 }
