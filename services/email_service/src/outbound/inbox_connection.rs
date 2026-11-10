@@ -27,7 +27,15 @@ pub struct LoginEmailIdentity;
 
 impl ConnectionIdentity for LoginEmailIdentity {
     fn login_email(&self, user: &str) -> Result<String, ConnectionError> {
-        crate::utils::extract_email_with_response(user)
-            .map_err(|_| ConnectionError::LoginEmailUnavailable)
+        extract_email_with_response(user)
     }
+}
+
+// Keep the legacy span while returning only the domain refusal to this adapter.
+#[tracing::instrument(level = "debug")]
+fn extract_email_with_response(user_id: &str) -> Result<String, ConnectionError> {
+    crate::utils::email_from_user_id(user_id).map_err(|e| {
+        tracing::error!(error=?e, "unable to get email from user id");
+        ConnectionError::LoginEmailUnavailable
+    })
 }
