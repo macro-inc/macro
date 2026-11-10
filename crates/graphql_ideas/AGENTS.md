@@ -1,5 +1,31 @@
 # graphql_ideas
 
+> **Parked.** GraphQL for Ideas and routine suggestions is deferred; Ideas
+> ships on REST. This branch is kept for later and is unfinished:
+>
+> - **Not served.** Nothing in `document_storage_service` puts
+>   `IdeasGraphqlContext` or `RoutineSuggestionsGraphqlContext` into request
+>   data, so every field here fails at runtime. The wiring waits on a choice
+>   between two designs: (A) the storage service calls the scheduler's
+>   existing routes as the user through one internal client, or (B) the
+>   scheduler's adapters move into shared crates and the storage service
+>   builds the domain services itself.
+> - **Shapes behind the domain.** `ideaFeed.done` (ideas finished in the last
+>   24 hours with what their run produced), `sends` on prompt ideas, and
+>   `recordIdeasSeen` calling `GenerationService::seen` are not exposed yet.
+>   Run composer/background, run status and opening targets have no
+>   mutations.
+> - **Live updates are interim.** No subscription or cache push; the web app
+>   re-reads the routine suggestions list every 2 s while generating.
+> - **Tests.** `src/mutation/test.rs`, `src/user_query/test.rs` and
+>   `graphql_scheduled_action/src/suggestions/test.rs` are empty; resolver
+>   tests so far use fakes in `complete_graph`.
+> - **Web.** The web app's routine suggestion queries on this branch already
+>   read GraphQL, so they do not work until the fields are served. Two files
+>   left dead by that switch still need deleting:
+>   `apps/web/src/features/routine-suggestions/queries/keys.ts` and
+>   `apps/web/src/features/onboarding/queries/keys.ts`.
+
 ## What it is
 
 The GraphQL inbound adapter for Ideas: the authenticated user's feed
