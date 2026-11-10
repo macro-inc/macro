@@ -479,6 +479,18 @@ export type AppEvents = {
     trigger: 'manual';
     targetKind?: 'agent' | 'model' | 'steps';
   };
+
+  // --- Saved email views ---------------------------------------------------
+  /** A confirmed create, by where the definition started. */
+  email_saved_view_created: {
+    savedViewId: string;
+    source: 'builder' | 'save_filters' | 'duplicate';
+  };
+  /** Opened from the sidebar or picker; `viewCount` is how many the viewer has. */
+  email_saved_view_opened: {
+    savedViewId: string;
+    viewCount: number;
+  };
 };
 
 export type AppEventNames = keyof AppEvents;
