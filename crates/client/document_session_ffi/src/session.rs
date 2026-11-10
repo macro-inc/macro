@@ -183,14 +183,14 @@ impl NativeEditorSession {
         if host.application.is_none() {
             return Err(invalid("application query requires an application preset"));
         }
-        macro_document_model::surface::query(
-            &name,
-            &payload,
-            generation,
-            host.session.surface().state(),
-        )
-        .map_err(invalid)?
-        .ok_or_else(|| invalid("unknown application query"))
+        if generation != host.session.surface().state().max_key().generation() {
+            return Err(invalid("application model generation changed"));
+        }
+        host.session
+            .surface()
+            .application_query(&name, &payload, generation)
+            .map_err(invalid)?
+            .ok_or_else(|| invalid("unknown application query"))
     }
     /// Read cached native root text.
     pub fn text_content(&self) -> Result<String, FfiSessionError> {
