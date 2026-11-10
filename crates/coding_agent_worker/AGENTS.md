@@ -35,11 +35,12 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   computer-reachable egress URL; macrod.toml stays the one URL source at runtime).
   It claims the pre-approved pairing, chowns the config to its directory's owner,
   then writes `/var/lib/macrod/enrolled`. A stored credential skips the claim, so
-  retries are safe. `--root` (hidden) prefixes system paths for tests.
+  retries are safe; a failed claim retries every 250 ms for up to five
+  minutes. `--root` (hidden) prefixes system paths for tests.
 - `src/capabilities.rs`: on an enrolled Macro computer only (the marker
   exists), reports `HarnessCapabilities` (`screen` = Xvnc on
-  `127.0.0.1:5900`, probed once a minute) to `PUT /harnesses/me/capabilities`
-  when it changes. Open a fresh connection for each report so recurring polls
+  `127.0.0.1:5900`, and `claude` = the Claude sign-in, both probed once a
+  minute) to `PUT /harnesses/me/capabilities` when they change. Open a fresh connection for each report so recurring polls
   cannot pin a reassigned service IP after backend restarts. The reporter is
   cancellation-aware and tracked by the daemon's `TaskTracker`, including
   across re-pair and shutdown.
@@ -49,29 +50,25 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   `macro_internal` MCP URL with `/mcp/internal` → `/anthropic`),
   `ANTHROPIC_AUTH_TOKEN` (its bearer) and
   `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1` to `session/new|load|resume`
-  as `_meta.claudeCode.options.env`; own-account mode adds
-  `CLAUDE_CODE_OAUTH_TOKEN` instead, for sessions opened after the switch.
-  `claude_sign_in.rs` drives `claude setup-token` on a hidden PTY (`pty.rs`,
-  rustix): returns its OAuth URL, then types the pasted code or GETs a pasted
-  `http://localhost:<port>/callback?code=` URL inside the box, and stores the
-  `sk-ant-oat01-` token at `/var/lib/macrod/claude-token` (0600);
-  sign-out deletes it. Match the pinned Claude Code setup-token rejection text
-  in `claude_sign_in.rs` and return typed `InvalidCode` immediately; silence
-  still times out after 60 seconds. `claude_sign_in_cancel` interrupts URL/token
-  waits before taking the sign-in mutex, then drops the PTY; completion owns
-  its process so all failures also kill it immediately. Cancellation during a
-  token-store save restores the prior token (or deletes the newly saved token
-  when previously using credits) before acknowledging cancellation. `token_store.rs` keeps disk access in the root-only
-  `macrod-token-store.service`, installed by enrollment. Its Unix socket is
-  0600, owned by the config's uid, verifies peer credentials in both directions,
-  and accepts only bounded load/save/delete requests. macrod and Claude stay
-  unprivileged. On an already enrolled box, rerun `macrod enroll` as root to
-  install the helper without re-pairing; the image's first-boot unit skips an
-  existing marker. ACP trace logs contain only direction and byte counts.
-  `screen.rs`: `screen_open` connects to Xvnc on
-  `127.0.0.1:5900`, then dials its own wss to
-  `<api_url>/harnesses/me/screen?stream=` and relays raw bytes. Spans:
-  `macrod.computer.control`, `macrod.screen.stream`.
+  as `_meta.claudeCode.options.env`; once Claude Code is signed in to a
+  Claude account those variables are removed and sessions use Claude Code's
+  own stored credential, for sessions opened after the switch.
+  `claude_sign_in.rs` runs Claude Code's own login in a "Claude sign-in"
+  herdr workspace (`herdr_pane.rs` starts the user's headless `herdr server`
+  when none runs): it answers the first-run text-style and login-method
+  questions or types `/login`, reads the hard-wrapped OAuth URL off the
+  screen, types the pasted code, and treats `OAuth error` as typed
+  `InvalidCode` (start again for a fresh URL). Screen recognition is pure
+  (`Screen::read`) and tested against captured Claude Code 2.1.280 screens;
+  update those fixtures when the pinned Claude Code changes its wording.
+  `claude_auth.rs` reads `claude auth status --json` (only `claude.ai` logins
+  count) for the account and `loginExpiresAt`; sign-out runs
+  `claude auth logout`. `claude_sign_in_cancel` interrupts URL/code waits
+  before taking the sign-in mutex and closes the workspace. The capability
+  reporter re-reads the sign-in every minute and reports at once when it
+  changes. ACP trace logs contain only direction and byte counts. Spans:
+  `macrod.computer.control`, `macrod.claude.sign_in.start`/`.complete`,
+  `macrod.claude.sign_out`.
 - `src/trigger.rs` + `src/dispatch.rs`: agent-trigger broker events → session
   create/dial/prompt against the live harness service.
 - `src/daemon.rs` `watch_presence`: each minute a connection has held, asks
