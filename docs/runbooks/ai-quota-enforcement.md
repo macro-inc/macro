@@ -120,10 +120,12 @@ automatic reload changes, credit purchases, and the sweep. Enable them
 together. Settlement without `ENABLE_AI_USAGE_ENFORCEMENT` finds nothing to
 settle, because only counted rows are chargeable.
 
-A requesting host other than document cognition presents the authentication
-service's own internal key, `AUTHENTICATION_SERVICE_SECRET_KEY` (document
-cognition already holds it). The key is optional in those hosts' configuration
-while `ENABLE_AI_USAGE_BILLING` is false and mandatory once it is true: a host
+A requesting host presents the authentication service's own internal key,
+`AUTHENTICATION_SERVICE_SECRET_KEY`. In deployed Doppler configs this value is
+the Secrets Manager name; services resolve it at startup. Locally it is the
+key itself. The key is optional in the harness and scheduling settlement
+configs while `ENABLE_AI_USAGE_BILLING` is false and mandatory once it is true;
+the cognition config requires it regardless of billing. A host
 enabling billing without the key fails startup rather than quietly recording
 chargeable usage that only the sweep settles. Hosts without the recorder
 (document storage, the standalone trigger service, memory) are covered by the
@@ -424,7 +426,7 @@ procedure. Operators must approve and record each release gate.
    whatever the flags say; see [Settlement](#settlement-enable_ai_usage_billing).
    Before `ENABLE_AI_USAGE_BILLING` is turned on for the agent harness, MCP, or
    scheduled action service, register `AUTHENTICATION_SERVICE_SECRET_KEY` (the
-   authentication service's internal key, as document cognition already has it)
+   authentication service's Secrets Manager name in deployed configs)
    in that service's Doppler config; those hosts refuse to start with billing on
    and the key absent.
    Verify the effective startup value for every replica/worker. Registration and
