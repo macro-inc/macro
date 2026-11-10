@@ -5,7 +5,7 @@ use anyhow::Context;
 use axum::Router;
 use context::ApiContext;
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use utoipa::OpenApi;
@@ -36,7 +36,9 @@ pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let correlation =
         agent_correlation::inbound::CorrelationState::new(state.db.clone(), state.jwt_args.clone());
     let port = state.config.port;
-    let unsubscribe = unsubscribe_page(state.sequences.clone());
+    let unsubscribe = traced_without_path(
+        email_sequences::inbound::public_unsubscribe::unsubscribe_router(state.sequences.clone()),
+    );
     let traced_api = traced(api_router(state.clone()).with_state(state).layer(
         axum::middleware::from_fn_with_state(correlation, agent_correlation::inbound::propagate),
     ));
@@ -71,27 +73,31 @@ fn traced(api: Router) -> Router {
     )
 }
 
-/// The public unsubscribe page, outside [`traced`]: the shared span records
-/// `url.path`, which here holds the recipient's token, so this span names the
-/// route instead. Mail clients call it, so there is no trace to adopt.
-fn unsubscribe_page(sequences: Arc<context::SequencesSvc>) -> Router {
-    use email_sequences::inbound::public_unsubscribe::{UNSUBSCRIBE_PATH, unsubscribe_router};
+/// [`traced`]'s server span without `url.path`, for routes whose path holds a
+/// secret: the public unsubscribe page's token. It records the matched route.
+/// Mail clients call the page, so there is no `traceparent` to adopt.
+fn traced_without_path(page: Router) -> Router {
+    use axum::extract::MatchedPath;
     use macro_tower_layers::{CustomOnFailure, CustomOnResponse};
     use tracing::field::Empty;
 
-    unsubscribe_router(sequences).layer(
+    page.layer(
         TraceLayer::new_for_http()
             .make_span_with(|request: &axum::http::Request<_>| {
-                tracing::info_span!(
+                let span = tracing::info_span!(
                     "http.request",
                     otel.kind = "server",
                     "http.request.method" = %request.method(),
-                    "http.route" = UNSUBSCRIBE_PATH,
+                    "http.route" = Empty,
                     "http.response.status_code" = Empty,
                     latency_ms = Empty,
                     otel.status_code = Empty,
                     otel.status_description = Empty,
-                )
+                );
+                if let Some(route) = request.extensions().get::<MatchedPath>() {
+                    span.record("http.route", route.as_str());
+                }
+                span
             })
             .on_request(())
             .on_response(CustomOnResponse::new_with_threshold(SLOW_REQUEST))
