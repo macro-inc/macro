@@ -142,6 +142,43 @@ function runtimeConnected(
   }
 }
 
+/** Why a saved agent can't start from the composer, and what fixes it. */
+function availability(
+  agent: PersistedAgentLike,
+  input: RosterInput,
+  state: {
+    connected: boolean;
+    poweredOff: boolean;
+    disconnected: boolean;
+    needsRuntimeAccess: boolean;
+  }
+): Pick<RosterAgent, 'connectLabel' | 'unavailableReason'> {
+  if (agent.harness === 'cursor' && input.cursorNeedsConnection)
+    return {
+      connectLabel: 'Connect Cursor',
+      unavailableReason: state.connected
+        ? undefined
+        : 'Connect Cursor to start it',
+    };
+  if (state.needsRuntimeAccess)
+    return {
+      connectLabel: 'Request access',
+      unavailableReason: 'You need access to its machine',
+    };
+  if (state.poweredOff)
+    return {
+      unavailableReason: 'Turn its computer on in Settings → Machines',
+    };
+  if (state.disconnected)
+    return {
+      connectLabel: 'Reconnect machine',
+      unavailableReason: 'Its machine is disconnected',
+    };
+  if (agent.harness === 'cursor' && !state.connected)
+    return { unavailableReason: 'Connect Cursor to start it' };
+  return {};
+}
+
 function persistedAgent(
   agent: PersistedAgentLike,
   input: RosterInput
@@ -182,23 +219,12 @@ function persistedAgent(
     offline: disconnected,
     poweredOff,
     needsRuntimeAccess,
-    connectLabel:
-      agent.harness === 'cursor' && input.cursorNeedsConnection
-        ? 'Connect Cursor'
-        : needsRuntimeAccess
-          ? 'Request access'
-          : disconnected
-            ? 'Reconnect machine'
-            : undefined,
-    unavailableReason: needsRuntimeAccess
-      ? 'You need access to its machine'
-      : poweredOff
-        ? 'Turn its computer on in Settings → Machines'
-        : disconnected
-          ? 'Its machine is disconnected'
-          : agent.harness === 'cursor' && !connected
-            ? 'Connect Cursor to start it'
-            : undefined,
+    ...availability(agent, input, {
+      connected,
+      poweredOff,
+      disconnected,
+      needsRuntimeAccess,
+    }),
     persisted: agent,
   };
 }

@@ -1114,9 +1114,11 @@ call the reviewed workspace tools, and show separate task/project totals.
 
 ### Computer Claude access
 
-Settings computer rows compose `ComputerClaudeAccess`; managers fetch
-`claude-mode`, while other members read the harness list's `claude_mode`.
-The backend also requires management rights for Claude account changes.
+Computer rows show the Claude mode from `claude-mode` for managers and from
+the harness list's `claude_mode` for other members. Sign-in is a dialog
+(`claude-sign-in-flow.tsx`) that starts the sign-in on open, so its Open
+claude.ai control stays a plain `target="_blank"` link; never open it after an
+await. The backend also requires management rights for Claude account changes.
 Focused tests: `bun run test src/features/settings/computers`.
 
 Use the existing Billing route's `SubscriptionStatus.billing` for actual seat,

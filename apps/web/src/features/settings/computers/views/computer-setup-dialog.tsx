@@ -132,9 +132,12 @@ export function ComputerSetupDialog(props: {
       (harnessId) => {
         if (!harnessId || provisioning()) return;
         fireAndForget(
-          preKick
-            .mutateAsync({ harnessId, signal: new AbortController().signal })
-            .then(() => undefined),
+          (async () => {
+            await preKick.mutateAsync({
+              harnessId,
+              signal: new AbortController().signal,
+            });
+          })(),
           'computer-setup'
         );
       }

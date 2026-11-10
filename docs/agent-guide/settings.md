@@ -775,7 +775,7 @@ New macrod sessions use the agent's saved model before sending the first prompt.
 Changing that default applies to new sessions; existing sessions keep their selected model.
 If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
-Under its title and description, the `Machines` section shows the MacroD `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog, on every platform. The `Machines` section shows built-in Macro, Cursor, and Codex configuration (under `Built-in machines`), followed by paired macrod machines. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in machines: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and a larger Full access choice labeled Suggested (unchecked until explicitly selected). `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this machine) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. Before this computer is paired, a dismissible “Run agents on this computer” invitation also appears above the Home input and the Agents new-conversation and active-session inputs; its `Set up` runs the same flow in a dialog in place, and dismissal applies only to this user on this computer. The Machines settings tab stays available in the desktop app even if the newer Agents view is disabled. A running machine with no agent bound to it offers `Create agent`. The daemon runs with the user's interactive login-shell environment (variables exported from `.zshrc` and the like), so agents authenticate as they do in a terminal. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped machine offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Machines navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New machine` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission bypass, then Approve and Done. `Your machines` lists the machines the viewer owns. Each row shows a status dot before the name, then a meta line (`Private` or `Team machine`, the count of waiting access requests in accent ink, and the last connection), with `Share`, `Options`, `Rename` and `Remove` at the top right; on narrow rows the name wraps, the meta line sits under it and the actions get their own line. `Options` opens a small menu on desktop and a sheet on touch with one toggle, `Don't ask before acting` (the machine's permission bypass: turning it on asks for confirmation and applies from each session's next turn). Only the owner can change it; everyone else sees it disabled with its current value. A machine's name and this toggle are set only here, and its sharing through Share; macrod.toml holds only machine-local config, and macrod refuses a file that still sets `[identity]` or a credentials `scope`. Desktop setup's Full access choice turns the toggle on for the new machine. Back/Cancel returns to the machine list. Destructive removal still requires confirmation. Every paired machine has one person as its owner; its `Team machine` or `Private` label says whether every teammate is a user of it. Everyone else on the team can see it and holds a role: No Access, Read (sees what is on it but cannot run agents), or User (can run agents); non-coding agents bound to it are Residents. `Share` opens the machine Share menu: the `Team machine` switch, the owner, residents, people with a `Read` or `User` role picker, access requests (each reads `Requested to use <machine>`) with `Approve` and `Deny`, and a filterable list of teammates to `Add` as users. It has no link, channel or outside sharing. Removing or lowering access a resident depends on first warns that it shuts the agent down. `Teammates' machines`, below, groups the team's other machines by owner. Each row uses the same layout: status dot and name, a meta line with `Online`/`Offline` and `Your access: None/Read/User/Requested`, `Request access` (or the pending `Requested`, which cancels) when the viewer cannot run agents on it, and the read-only `Options`; the team's owner also gets `Remove` on team machines. People never show machines: user cards, hover cards, drawers and chips list none. Agent cards and the agent session pane still show the machine an agent runs or lives on (`Runs on <machine>` / `Lives on <machine>`), with `Request access`, and so do the agent and routine pickers. When an agent's owner loses access to the machine it lives on, the agent stops: its session pane and DM header say `Stopped: no access to <machine>` with `Request access` for the owner, a prompt to it leaves a refusal line in the transcript instead of running, and the owner gets a notification ("<person> removed your access to <machine>" / "<agent> has stopped.") that opens this section with that machine pointed out. An access-request notification ("requested to use <machine>") opens this section with that machine's row highlighted and its Share menu open; a grant notification highlights the row only. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported. A Macro computer's row says **Macro computer** and has no `Remove`; release it from **Macro computers** instead.
+Under its title and description, the `Machines` section shows the MacroD `TutorialPill` (from `features/video-tutorials`) once that video is in its catalog, on every platform. The `Machines` section shows built-in Macro, Cursor, and Codex configuration (under `Built-in machines`), followed by paired macrod machines. Codex's card appears only within the agents and Codex rollouts. On the desktop app only, a “This computer” card appears above the built-in machines: the bundled macrod daemon is set up from here with one click. `Set up` scans the machine for installed agents and names the one it will use (Claude Code first, then Codex, OpenCode, OpenClaw, Hermes); `Options` changes the agent, workspace folder, and a larger Full access choice labeled Suggested (unchecked until explicitly selected). `Set up <agent>` then walks a three-step checklist — Find an agent, Connect this computer (start, install the connector, link to the account; the pairing is approved automatically, no code is typed), Create your agent (a private `@<agent>` coding agent bound to this machine) — and ends on `@<agent> is ready` with `Start a session`, which opens the Agents composer in Auto with that agent as the usual coding agent. A failed step shows its error and `Try again`, which resumes at the failed step. A desktop app that was never set up also shows a one-time “Run agents on this computer” prompt whose `Set up` runs the same flow in a dialog; closing the prompt sticks. Before this computer is paired, a dismissible “Run agents on this computer” invitation also appears above the Home input and the Agents new-conversation and active-session inputs; its `Set up` runs the same flow in a dialog in place, and dismissal applies only to this user on this computer. The Machines settings tab stays available in the desktop app even if the newer Agents view is disabled. A running machine with no agent bound to it offers `Create agent`. The daemon runs with the user's interactive login-shell environment (variables exported from `.zshrc` and the like), so agents authenticate as they do in a terminal. The app then keeps the daemon up: it restarts after any unexpected exit (with backoff) and on every launch until the user presses `Stop`, and any re-pairing is approved from wherever the user is in the app, not only on this card. While running the card shows the bound agent and workspace with a `Stop` action; a stopped machine offers `Start`. The web app never shows this card. The “Bring your own agent” card sits above the Agents / Machines navigation and is visible on both sections. It rotates Claude Code, OpenCode, OpenClaw, and Hermes; reduced motion keeps a static name. Its `New machine` action opens the full-page pairing flow from either section: enter the code, look up the request, review the machine, name, sharing and permission bypass, then Approve and Done. `Your machines` lists the machines the viewer owns. Each row shows a status dot before the name, then a meta line (`Private` or `Team machine`, the count of waiting access requests in accent ink, and the last connection), with `Share`, `Options`, `Rename` and `Remove` at the top right; on narrow rows the name wraps, the meta line sits under it and the actions get their own line. `Options` opens a small menu on desktop and a sheet on touch with one toggle, `Don't ask before acting` (the machine's permission bypass: turning it on asks for confirmation and applies from each session's next turn). Only the owner can change it; everyone else sees it disabled with its current value. A machine's name and this toggle are set only here, and its sharing through Share; macrod.toml holds only machine-local config, and macrod refuses a file that still sets `[identity]` or a credentials `scope`. Desktop setup's Full access choice turns the toggle on for the new machine. Back/Cancel returns to the machine list. Destructive removal still requires confirmation. Every paired machine has one person as its owner; its `Team machine` or `Private` label says whether every teammate is a user of it. Everyone else on the team can see it and holds a role: No Access, Read (sees what is on it but cannot run agents), or User (can run agents); non-coding agents bound to it are Residents. `Share` opens the machine Share menu: the `Team machine` switch, the owner, residents, people with a `Read` or `User` role picker, access requests (each reads `Requested to use <machine>`) with `Approve` and `Deny`, and a filterable list of teammates to `Add` as users. It has no link, channel or outside sharing. Removing or lowering access a resident depends on first warns that it shuts the agent down. `Teammates' machines`, below, groups the team's other machines by owner. Each row uses the same layout: status dot and name, a meta line with `Online`/`Offline` and `Your access: None/Read/User/Requested`, `Request access` (or the pending `Requested`, which cancels) when the viewer cannot run agents on it, and the read-only `Options`; the team's owner also gets `Remove` on team machines. People never show machines: user cards, hover cards, drawers and chips list none. Agent cards and the agent session pane still show the machine an agent runs or lives on (`Runs on <machine>` / `Lives on <machine>`), with `Request access`, and so do the agent and routine pickers. When an agent's owner loses access to the machine it lives on, the agent stops: its session pane and DM header say `Stopped: no access to <machine>` with `Request access` for the owner, a prompt to it leaves a refusal line in the transcript instead of running, and the owner gets a notification ("<person> removed your access to <machine>" / "<agent> has stopped.") that opens this section with that machine pointed out. An access-request notification ("requested to use <machine>") opens this section with that machine's row highlighted and its Share menu open; a grant notification highlights the row only. `/settings/runtimes` opens this section; legacy `/settings/harness?pair=…` links remain supported. A Macro computer is listed only under **Macro computers**, not here.
 Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action. Beside it,
 the composer's speedometer effort control (the bottom sheet on touch) offers the
@@ -809,104 +809,106 @@ session were not exercised by that UI check.
 
 ### Macro computers
 
-Macro computers are hosted machines a team buys for its agents, billed on
-the team subscription. They sit in `Runtimes`, behind the
+Macro computers are hosted machines a team buys for its agents, billed on the
+team subscription. They never sleep. They sit in `Machines`, behind the
 `enable-macro-computers` flag for purchases and Claude account controls, and
 need a team: without one the page shows nothing about them. The flag follows
 PostHog in every environment unless explicitly overridden locally. With the
-flag off, existing computers stay listed in Runtimes and team Billing, and
-management actions including Cancel and Release stay available. Team purchase,
-quote and offers return 403 when the rollout is off, missing or unavailable.
-Every team member sees the **Macro computers**
-list; only team admins and owners see the buying card and the row controls.
+flag off, existing computers stay listed and manageable in Machines and team
+Billing. Team purchase, quote and offers return 403 when the rollout is off,
+missing or unavailable. If the environment has no computer prices configured,
+offers, quotes, and purchases answer 503 with `computers are not available in
+this environment`; partial price configuration prevents the authentication
+service from starting.
 
-If the environment has no computer prices configured, offers, quotes, and
-purchases answer 503 with `computers are not available in this environment`.
-Partial price configuration prevents the authentication service from starting.
-Runtimes rows and the team Billing computers list show the recorded resources
-(vCPU, GiB memory and GiB disk), even when the purchase catalog changes.
+**Macro computers** lists every team computer once; its runtime is not listed
+again under **Your machines**. Each row uses the same layout as a Your machines
+row: status dot, name, one muted line, at most one action, and **⋯** (a sheet
+on touch) for the rest. The line is the size and the resources recorded at
+purchase (`Standard · 4 vCPU · 8 GB · 100 GB`), then one state: setup progress
+(`Setting up · Starting up (step 2 of 4)`, or **Waiting for space on the
+host**), **Starting…** while a power-on runs, **Powered off**, a fault, or how
+Claude is paid for (`Claude: Macro credits`, `Claude: your account · <email>`,
+`Claude: not signed in`; a shimmer while the mode loads). A pending cancellation
+adds `Cancels <date>`, or `Turns off <date>` once billing has stopped
+(`canUndoCancel` false). The list polls every 3 seconds while any computer is
+setting up, waiting for capacity, starting or stopping.
+
+The row's one action is **Finish setup** while guided setup is incomplete
+(only for the buyer and the team owner), else **Sign in with Claude** when the
+computer is on its own Claude account but signed out, else none. **⋯** holds,
+in order: **Share** and **Don't ask before acting** (the runtime's Share menu
+and permission bypass, for its owner); **Turn off** (confirm: agents on it stop
+until it is turned back on) or **Turn on**; **Switch to Macro credits** or
+**Sign in with Claude** (confirm: it affects everyone on the team); **Cancel at
+period end** or **Undo cancel** (hidden once billing has stopped); and **Release
+now** last. Release asks for the computer's exact name and says how many agents
+it deletes (`<N> agents on this computer will be deleted`, naming them when
+there are three or fewer). Team admins and owners get power, billing and
+release; whoever manages the runtime gets the Claude items.
 
 To buy one as a team admin:
 
-1. Open `/app/settings/runtimes` (mobile: Settings sheet → Runtimes).
-2. Under **Get a Macro computer**, pick a size radio (**Standard**, **Large**,
-   **XL**); each shows vCPU, memory and disk in GiB, and its price per interval. A
-   sold-out size is disabled and offers **Notify me**, which turns into
-   "We'll let you know".
-3. Press **Continue**. The dialog (a drawer on phones) titled
-   **Buy a <size> Macro computer?** sizes to its content and shows the shared
-   item/specifications/amount breakdown, total and proration note. **Name
-   (optional)** names the computer.
-4. Press **Buy · <price>/month** (or the quoted year interval). A zero-price
-   offer keeps the breakdown with Included amounts and a plain **Buy** action. Failures stay in the dialog: sold out (409),
-   payment declined (402), or a subscription that can't add computers (422).
-   On success the dialog closes with "Computer purchased. Setting it up now."
+1. Open `/app/settings/runtimes` (mobile: Settings sheet → Machines). The last
+   row of **Macro computers** reads **Get a Macro computer** ("Claude Code, a
+   browser and Docker, ready to go · from <price>/month"). In **Settings →
+   Agents**, a team without a computer also sees **Run coding agents on a Macro
+   computer** in the agents list, and **Where it runs** ends with **New Macro
+   computer**.
+2. **Get a computer** opens one dialog (a drawer on phones): the size radios
+   (**Standard**, **Large**, **XL**) with price per interval, sold-out sizes
+   offering **Notify me**; **Name**, prefilled "<first name>'s Agent Box"
+   (**Agent Box** without a first name); and the price breakdown.
+3. **Buy · <price>/month** (or **Buy** for an included offer) adds it.
+   Failures stay in the dialog: sold out (409), payment declined (402), or a
+   subscription that can't add computers (422). On success the toast reads
+   "Computer purchased. Provisioning now." and guided setup opens.
 
-The new row reads **Setting up** with its step (creating, starting up,
-connecting, ready; "step N of 4"). Payment recovery also reports creating;
-no payment stage is shown. A computer blocked by awake host capacity instead
-shows **Waiting for space on the host**, with "Turn off or release another
-computer on this host to make room". It has no setup step; admins can turn it
-off or release it. This applies both before and after first enrollment, on
-desktop and mobile. The list polls every 3 seconds
-while any computer is setting up, waiting for capacity, waking or stopping. Once ready a row shows
-its size, the vCPU/memory/disk resources recorded at purchase, status (**Ready**, **Asleep**, **Waking**, **Stopping**,
-**Stopped**, **Failed**), its Claude access mode, and the runtime it
-registered as with a connection dot; that runtime's row under **Connected
-runtimes** carries a **Macro computer** badge and no Remove. Admin controls
-on each row:
+Guided setup (a sheet on phones) shows provisioning progress, then **Let's set
+up an agent on it**: the agent Macro created on the computer ("<buyer first
+name>'s Agent", a coding agent that bypasses permission prompts), its editable
+name, and an explicit choice between **Your Claude account** and **Macro's
+Claude**; nothing is preselected. **Continue** renames the agent
+(`PATCH /bots/{bot_id}`), then either runs Claude sign-in or switches to Macro
+credits, then marks setup complete. The last step's **Try it** opens a new
+Agents conversation in Code with that agent selected (`openAgentsPage` with
+`composerAgentId`). Closing at any step keeps what was done; **Finish setup**
+resumes. Bought from **Where it runs**, the editor selects the new computer
+when setup closes.
 
-- **Power** switch: on/off, available when Ready, Asleep, Stopped or waiting for capacity.
-- **Cancel at period end**: billing stops at the period end, shown as
-  "Cancels <date>"; **Keep computer** undoes it until then. After the period
-  a canceled computer shows "Disk deleted <date>".
-- **Release now**: a content-sized dialog explains the computer and its disk are destroyed
-  now with no refund; **Release now** stays disabled until the computer's
-  exact name is typed.
+**Sign in with Claude** is a dialog. It starts the sign-in when it opens, so
+**Open claude.ai** is a plain new-tab link (the desktop app hands it to the
+system browser). Sign in there, copy the code, come back, paste it into the
+focused field, and press **Complete sign-in**; **Use Macro credits instead**
+switches to credits. A rejected code shows "That code didn't work. Try again to
+get a new one." with **Try again**; an expired sign-in shows **Start over**.
+Success closes the dialog with "Connected as <account>". Everyone on the team
+uses that Claude account on the computer.
 
-When a computer first becomes ready, the team gets **Claude Code · <name>**
-(`@claude-code-<name>`, with `-2`, `-3`… when that handle is taken): a team
-coding agent on the computer, created by the buyer, on Claude Code's default
-model, all channels and the runner's connected apps. It is created only on the
-first connection, so deleting or moving it never brings it back; if creating it
-fails, setup still finishes and anyone can create one under **Agents**. Each
-computer row lists the agents bound to its runtime after **Agents**, by name and
-`@handle`. Any teammate can pick the computer under **Where it runs**
-(`<name> · Team machine`) for a private or team agent.
+In **Settings → Agents**, agents on a computer read `On a Macro computer ·
+<name>`. The editor's **Where it runs** has its own **On a Macro computer**
+option with a computer picker; a computer that is off reads `<name> · Powered
+off`, its model list comes from the last-known catalog, and a computer never
+shows "Could not load models". New agents on a computer default to **Always
+bypass**. In the composer's agent picker, an agent on a powered-off computer
+stays under **Your agents** with a **Powered off** badge and "Turn its computer
+on in Settings → Machines"; it is never "Needs connection" or "Reconnect
+machine".
 
-**Sign in with Claude** opens Claude's OAuth page. Paste the code or localhost
-callback URL back into the form and press **Complete sign-in**. **Cancel**
-kills the pending sign-in on the computer and closes the paste form, including
-while a code is being submitted. **Sign in with Claude** stays disabled while
-starting, while the paste form is open, and while its result is pending. Leaving
-the controls aborts the request and cancels the pending sign-in. These controls
-behave the same way on desktop and mobile. A rejected code
-shows “That code didn't work — sign in again to get a new one”; start again to
-obtain a fresh code. A 409 shows “Another sign-in is in progress on this computer
-— try again shortly”. New sessions then use that Claude account. **Use Macro
-credits** signs out on the computer.
-
-Team **Billing** lists the same computers under **Macro computers** with size,
-status, cancel date and price per interval.
-
-Each enrolled computer shows **Claude: Macro credits** or **Claude: your account**.
-Harness managers can press **Sign in with Claude**, which opens Claude in a new
-tab. Finish signing in there, then paste the code or callback URL into **Paste
-the code or the URL you were sent to** and press **Complete sign-in**. The input
-accepts surrounding whitespace. If the new tab was blocked, use **Open Claude
-sign-in** beside the field. Successful sign-in switches the label to your account;
-**Use Macro credits** signs the computer out and restores Macro credits. Request
-failures appear inline. Members without management rights see the mode without
-account controls. This account is used by Claude on the shared computer.
+Team **Billing** lists the computers on the subscription breakdown with their
+specs, status (**Alive**, **Starting…**, **Setting up…**, **Stopped**,
+**Failed**) and amount, or under **Macro computers** when the subscription has
+no itemized billing.
 
 Whoever completed the sign-in, and the team's owner and admins, get a
-**Claude sign-in on <computer> expires soon** notification three days before
-the sign-in expires, **… expires today** within its last day, and **… expired**
-once it passes or as soon as macrod reports Claude signed out. Each goes out
-once per sign-in, a later stage replacing the earlier ones it overtook, and
-none arrive after **Use Macro credits**. Opening one lands on this section,
-where **Sign in with Claude** starts over. People can turn them off under
-**Settings → Notifications → Computer Claude sign-ins**.
+**Claude sign-in expires soon** notification three days before the sign-in
+expires, **… expires today** within its last day, and **… expired** once it
+passes or as soon as macrod reports Claude signed out; the notification list
+row uses the same titles. Each goes out once per sign-in, a later stage
+replacing the earlier ones it overtook, and none arrive after switching to
+Macro credits. Opening one lands on this section, where **Sign in with Claude**
+starts over. People can turn them off under **Settings → Notifications →
+Computer Claude sign-ins**.
 
 ### GitHub reconnect recovery
 
