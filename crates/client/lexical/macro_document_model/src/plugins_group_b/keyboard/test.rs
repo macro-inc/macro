@@ -161,3 +161,224 @@ fn ordinary_outdent_reduces_heading_and_quote_indentation() -> Result<(), Error>
     }
     Ok(())
 }
+
+#[test]
+fn right_arrow_escapes_inline_code_and_inserts_a_trailing_space() -> Result<(), Error> {
+    let mut editor = register(Editor::builder(EditorMode::ViewAttached))
+        .build()
+        .expect("keyboard fixture");
+    let (code, _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph {})?;
+        let code = tx.create_text("code")?;
+        tx.text(code)?.set_format(TextFormat::CODE)?;
+        tx.append(paragraph, &[code.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        let mut range = RangeSelection::collapsed(Point::text(code, Utf16Offset(4)));
+        range.format = TextFormat::CODE;
+        tx.set_selection(Some(Selection::Range(range)))?;
+        Ok(code)
+    })?;
+    let (handled, commit) = editor.dispatch(&Command::Key {
+        command: KeyCommand::ArrowRight,
+        event: Some(KeyEvent {
+            key: "ArrowRight".into(),
+            ..KeyEvent::default()
+        }),
+    })?;
+    assert_eq!(handled, Handled::Yes);
+    assert!(commit.default_prevented);
+    let view = editor.state().view();
+    assert_eq!(view.text_content(NodeKey::ROOT), "code ");
+    assert_eq!(view.text(code).expect("code").format, TextFormat::CODE);
+    let range = editor
+        .state()
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    assert!(range.is_collapsed());
+    assert_eq!(range.anchor.offset(), 1);
+    assert!(!range.has_format(TextFormatType::Code));
+    let selected = view.text(range.anchor.key()).expect("selected plain text");
+    assert_eq!(selected.text.as_str(), " ");
+    assert_eq!(selected.format, TextFormat::empty());
+    assert_eq!(selected.style.as_ref(), "");
+    Ok(())
+}
+
+#[test]
+fn right_arrow_escapes_inline_code_and_reuses_a_trailing_space() -> Result<(), Error> {
+    let mut editor = register(Editor::builder(EditorMode::ViewAttached))
+        .build()
+        .expect("keyboard fixture");
+    let (code, _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph {})?;
+        let code = tx.create_text("code")?;
+        tx.text(code)?.set_format(TextFormat::CODE)?;
+        tx.append(paragraph, &[code.key()])?;
+        let right = tx.create_text(" ")?;
+        tx.append(paragraph, &[right.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        let mut range = RangeSelection::collapsed(Point::text(code, Utf16Offset(4)));
+        range.format = TextFormat::CODE;
+        tx.set_selection(Some(Selection::Range(range)))?;
+        Ok(code)
+    })?;
+    let (handled, commit) = editor.dispatch(&Command::Key {
+        command: KeyCommand::ArrowRight,
+        event: Some(KeyEvent {
+            key: "ArrowRight".into(),
+            ..KeyEvent::default()
+        }),
+    })?;
+    assert_eq!(handled, Handled::Yes);
+    assert!(commit.default_prevented);
+    let view = editor.state().view();
+    assert_eq!(view.text_content(NodeKey::ROOT), "code ");
+    assert_eq!(view.text(code).expect("code").format, TextFormat::CODE);
+    let range = editor
+        .state()
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    assert!(range.is_collapsed());
+    assert_eq!(range.anchor.offset(), 1);
+    assert!(!range.has_format(TextFormatType::Code));
+    let selected = view.text(range.anchor.key()).expect("selected plain text");
+    assert_eq!(selected.text.as_str(), " ");
+    assert_eq!(selected.format, TextFormat::empty());
+    assert_eq!(selected.style.as_ref(), "");
+    Ok(())
+}
+
+#[test]
+fn right_arrow_inserts_space_at_start_of_text_after_inline_code() -> Result<(), Error> {
+    let mut editor = register(Editor::builder(EditorMode::ViewAttached))
+        .build()
+        .expect("keyboard fixture");
+    let (code, _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph {})?;
+        let code = tx.create_text("code")?;
+        tx.text(code)?.set_format(TextFormat::CODE)?;
+        tx.append(paragraph, &[code.key()])?;
+        let right = tx.create_text("after")?;
+        tx.append(paragraph, &[right.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        let mut range = RangeSelection::collapsed(Point::text(right, Utf16Offset(0)));
+        range.format = TextFormat::empty();
+        tx.set_selection(Some(Selection::Range(range)))?;
+        Ok(code)
+    })?;
+    let (handled, commit) = editor.dispatch(&Command::Key {
+        command: KeyCommand::ArrowRight,
+        event: Some(KeyEvent {
+            key: "ArrowRight".into(),
+            ..KeyEvent::default()
+        }),
+    })?;
+    assert_eq!(handled, Handled::Yes);
+    assert!(commit.default_prevented);
+    let view = editor.state().view();
+    assert_eq!(view.text_content(NodeKey::ROOT), "code after");
+    assert_eq!(view.text(code).expect("code").format, TextFormat::CODE);
+    let range = editor
+        .state()
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    assert!(range.is_collapsed());
+    assert_eq!(range.anchor.offset(), 1);
+    assert!(!range.has_format(TextFormatType::Code));
+    let selected = view.text(range.anchor.key()).expect("selected plain text");
+    assert_eq!(selected.text.as_str(), " after");
+    assert_eq!(selected.format, TextFormat::empty());
+    assert_eq!(selected.style.as_ref(), "");
+    Ok(())
+}
+
+#[test]
+fn right_arrow_reuses_space_from_element_boundary_after_inline_code() -> Result<(), Error> {
+    let mut editor = register(Editor::builder(EditorMode::ViewAttached))
+        .build()
+        .expect("keyboard fixture");
+    let (code, _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph {})?;
+        let code = tx.create_text("code")?;
+        tx.text(code)?.set_format(TextFormat::CODE)?;
+        tx.append(paragraph, &[code.key()])?;
+        let right = tx.create_text(" ")?;
+        tx.append(paragraph, &[right.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        let mut range = RangeSelection::collapsed(Point::element(paragraph, ChildIndex(1)));
+        range.format = TextFormat::empty();
+        tx.set_selection(Some(Selection::Range(range)))?;
+        Ok(code)
+    })?;
+    let (handled, commit) = editor.dispatch(&Command::Key {
+        command: KeyCommand::ArrowRight,
+        event: Some(KeyEvent {
+            key: "ArrowRight".into(),
+            ..KeyEvent::default()
+        }),
+    })?;
+    assert_eq!(handled, Handled::Yes);
+    assert!(commit.default_prevented);
+    let view = editor.state().view();
+    assert_eq!(view.text_content(NodeKey::ROOT), "code ");
+    assert_eq!(view.text(code).expect("code").format, TextFormat::CODE);
+    let range = editor
+        .state()
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    assert!(range.is_collapsed());
+    assert_eq!(range.anchor.offset(), 1);
+    assert!(!range.has_format(TextFormatType::Code));
+    let selected = view.text(range.anchor.key()).expect("selected plain text");
+    assert_eq!(selected.text.as_str(), " ");
+    assert_eq!(selected.format, TextFormat::empty());
+    assert_eq!(selected.style.as_ref(), "");
+    Ok(())
+}
+
+#[test]
+fn right_arrow_escapes_raw_inline_code_when_selection_format_is_clear() -> Result<(), Error> {
+    let mut editor = register(Editor::builder(EditorMode::ViewAttached))
+        .build()
+        .expect("keyboard fixture");
+    let (code, _) = editor.update(|tx| {
+        let paragraph = tx.create(Paragraph {})?;
+        let code = tx.create_text("code")?;
+        tx.text(code)?.set_format(TextFormat::CODE)?;
+        tx.append(paragraph, &[code.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        let mut range = RangeSelection::collapsed(Point::text(code, Utf16Offset(4)));
+        range.format = TextFormat::empty();
+        tx.set_selection(Some(Selection::Range(range)))?;
+        Ok(code)
+    })?;
+    let (handled, commit) = editor.dispatch(&Command::Key {
+        command: KeyCommand::ArrowRight,
+        event: Some(KeyEvent {
+            key: "ArrowRight".into(),
+            ..KeyEvent::default()
+        }),
+    })?;
+    assert_eq!(handled, Handled::Yes);
+    assert!(commit.default_prevented);
+    let view = editor.state().view();
+    assert_eq!(view.text_content(NodeKey::ROOT), "code ");
+    assert_eq!(view.text(code).expect("code").format, TextFormat::CODE);
+    let range = editor
+        .state()
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    assert!(range.is_collapsed());
+    assert_eq!(range.anchor.offset(), 1);
+    assert!(!range.has_format(TextFormatType::Code));
+    let selected = view.text(range.anchor.key()).expect("selected plain text");
+    assert_eq!(selected.text.as_str(), " ");
+    assert_eq!(selected.format, TextFormat::empty());
+    assert_eq!(selected.style.as_ref(), "");
+    Ok(())
+}
