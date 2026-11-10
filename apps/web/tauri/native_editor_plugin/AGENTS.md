@@ -37,6 +37,7 @@ Android registration exposes bridge commands; it does not select native editing 
 - Route physical editing shortcuts through KeyDown with their real modifier facts before the typed command; preserve model-returned history selection and subtree identities.
 - Do not enable reduced node rendering as a substitute for application parity.
 - Keep editor editability, content-interaction permission and comment capability distinct; recheck permission when committing gestures or asynchronous results.
+- Observe effective session access through the generated getter after authorization changes; initial configuration and UI locks are not current authorization, and each later input must still pass normal session admission.
 
 ## Checks
 

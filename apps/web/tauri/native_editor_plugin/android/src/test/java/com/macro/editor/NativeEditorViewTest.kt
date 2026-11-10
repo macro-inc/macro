@@ -9,6 +9,10 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class NativeEditorViewTest {
+    @Test fun effectiveAccessTracksServerDowngradeAndRegrant() {
+        NativeAccessScenario.run()
+    }
+
     @Test fun snippetsKeepTheConfirmedSourceExtractionCache() {
         NativeSnippetScenario.sourceCache(RuntimeEnvironment.getApplication())
     }
