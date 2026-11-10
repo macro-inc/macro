@@ -64,6 +64,7 @@ import {
   PendingDirectMessage,
   PendingDirectMessageTitle,
 } from '@channel/views/pending-direct-message';
+import { useMaybePreviewPanel } from '@components/app/PreviewPanel';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
@@ -392,6 +393,9 @@ function ChannelBlockAdapter(props: BlockChannelProps) {
   blockHotkeyScopeSignal.set(splitPanel.splitHotkeyScope);
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { navigatedFromJK } = useNavigatedFromJK();
+  // An inline preview (the Notifications list's) focuses the composer when a
+  // click or Enter opened it, and hands Esc back to that list.
+  const preview = useMaybePreviewPanel();
   const channelId = useBlockId();
   const conversationChannel = useChannel(channelId);
   useBlockEntityCommands({
@@ -651,7 +655,12 @@ function ChannelBlockAdapter(props: BlockChannelProps) {
                 <Suspense fallback={<ChannelLoading />}>
                   <TraceFlow name="channel.messages.view">
                     <ChannelMessages
-                      autofocus={canAutofocusSplitContent && !navigatedFromJK()}
+                      autofocus={
+                        (canAutofocusSplitContent && !navigatedFromJK()) ||
+                        (preview?.focusRequest() ?? 0) > 0
+                      }
+                      composerFocusRequest={preview?.focusRequest()}
+                      onEscapeToList={preview?.onEscapeToList}
                     />
                   </TraceFlow>
                 </Suspense>

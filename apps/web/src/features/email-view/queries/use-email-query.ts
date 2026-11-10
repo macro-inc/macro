@@ -37,7 +37,11 @@ import { canSearchEmailTab, isExcludedEmailFolder } from '../constants';
 import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
 import type { EmailTab, EmailViewState } from '../types';
 import { advanceEmptyAliasPages } from './advance-empty-alias-pages';
-import { buildEmailQuery, type EmailQueryContext } from './email-query';
+import {
+  buildEmailQuery,
+  type EmailQueryContext,
+  type EmailSavedViewScope,
+} from './email-query';
 import { buildEmailDateRows } from './email-results';
 import { buildEmailSearchRequest } from './email-search';
 import { emailAdmissionBatches, mergeEmailAdmission } from './read-admission';
@@ -65,6 +69,15 @@ export type UseEmailDataSourceOptions = {
    */
   tagSets: Accessor<readonly TagSetResponse[]>;
   tagSetsReady: Accessor<boolean>;
+  /** A saved view's tag bindings, kept even when the tag's set is unreadable. */
+  tagBindings?: Accessor<ReadonlyMap<string, string> | undefined>;
+  /**
+   * Conditions resolved for one query: an open view's, or a tab's once its
+   * filters leave what the tab itself selects. Either lists mail as a view.
+   */
+  savedView?: Accessor<EmailSavedViewScope | undefined>;
+  /** False while the list must not query, such as a loading saved view. */
+  enabled?: Accessor<boolean>;
 };
 
 /**
@@ -152,9 +165,21 @@ export function useEmailDataSource(
   );
   const favoriteIds = createMemo(() => new Set(favoriteThreadIds()));
 
-  const facetContext = createMemo(
-    (): EmailFacetContext => createTagFacetContext(options.tagSets())
-  );
+  const facetContext = createMemo((): EmailFacetContext => {
+    const context = createTagFacetContext(options.tagSets());
+    const bindings = options.tagBindings?.();
+    if (!bindings?.size) return context;
+    return {
+      tagPropertyDefinitionByOptionId: new Map([
+        ...context.tagPropertyDefinitionByOptionId,
+        ...bindings,
+      ]),
+    };
+  });
+  // Search can't apply an alias or a saved view's conditions itself, so its
+  // hits are kept only when the list's own predicate also admits them.
+  const searchNeedsMembership = () =>
+    !!state.aliasFilter || !!options.savedView?.();
 
   const queryContext = createMemo(
     (): EmailQueryContext => ({
@@ -163,6 +188,7 @@ export function useEmailDataSource(
       aliasFilter: state.aliasFilter,
       facets: state.facets,
       facetContext: facetContext(),
+      savedView: options.savedView?.(),
     })
   );
 
@@ -176,6 +202,7 @@ export function useEmailDataSource(
   const filtersReady = () =>
     tagsReady() && (!state.search.trim() || searchFavoritesReady());
   const sourceEnabled = () =>
+    (options.enabled?.() ?? true) &&
     tagsReady() &&
     state.tab !== 'scheduled' &&
     state.tab !== 'reminders' &&
@@ -228,7 +255,7 @@ export function useEmailDataSource(
   // IDs with the same GraphQL alias predicate used by normal mail discovery;
   // never broaden an alias selection or depend on incomplete search previews.
   const aliasSearchBatches = createMemo(() =>
-    state.aliasFilter &&
+    searchNeedsMembership() &&
     search.usesServiceSearch() &&
     search.searchQuery.isSuccess &&
     !search.searchQuery.isPlaceholderData
@@ -239,7 +266,7 @@ export function useEmailDataSource(
     useSoupAstItemsQuery(
       () => buildEmailQuery(queryContext(), ids()),
       () => ({
-        enabled: !!state.aliasFilter && search.usesServiceSearch(),
+        enabled: searchNeedsMembership() && search.usesServiceSearch(),
         keepPreviousData: false,
         ...folderQueryOptions(state.tab),
       })
@@ -280,7 +307,7 @@ export function useEmailDataSource(
     // Never admit the previous text/filter query's placeholder results.
     if (!search.usesServiceSearch() || search.searchQuery.isPlaceholderData)
       return [];
-    return state.aliasFilter
+    return searchNeedsMembership()
       ? search.data().filter((entity) => aliasSearchIds().has(entity.id))
       : search.data();
   });
@@ -344,7 +371,7 @@ export function useEmailDataSource(
       () => buildEmailQuery(queryContext(), ids()),
       () => ({
         enabled:
-          filtersReady() && (!search.isSearching() || !!state.aliasFilter),
+          filtersReady() && (!search.isSearching() || searchNeedsMembership()),
         ...folderQueryOptions(state.tab),
       })
     );
@@ -369,7 +396,7 @@ export function useEmailDataSource(
             : undefined;
         if (!searchQuery.isSuccess || searchQuery.isPlaceholderData)
           return undefined;
-        if (!state.aliasFilter) return searchQuery.data;
+        if (!searchNeedsMembership()) return searchQuery.data;
         if (list.isPending || list.isPlaceholderData) return undefined;
         const members = list.data?.entities;
         // A failed membership read is unknown, not proof every row disappeared.
@@ -379,13 +406,14 @@ export function useEmailDataSource(
       },
       error: () =>
         search.isSearching()
-          ? (searchQuery.error ?? (state.aliasFilter ? list.error : undefined))
+          ? (searchQuery.error ??
+            (searchNeedsMembership() ? list.error : undefined))
           : list.error,
       refresh: async () => {
         if (search.usesServiceSearch()) {
           await Promise.all([
             searchQuery.refetch(),
-            ...(state.aliasFilter ? [list.refresh()] : []),
+            ...(searchNeedsMembership() ? [list.refresh()] : []),
           ]);
         } else if (!search.isSearching()) await list.refresh();
       },
@@ -440,8 +468,10 @@ export function useEmailDataSource(
   );
   // Working copies can exist before sender metadata allows a GraphQL save.
   // Keep them discoverable without waiting for the remote list/search.
+  // A saved view's conditions can't be checked against a local working copy.
   const recoverable = () =>
-    state.tab === 'drafts' || (state.tab === 'all' && !!state.search.trim())
+    !options.savedView?.() &&
+    (state.tab === 'drafts' || (state.tab === 'all' && !!state.search.trim()))
       ? localDraftEntities(localDrafts.drafts()).filter(
           (email) => email.ownerId === userId()
         )
@@ -530,7 +560,7 @@ export function useEmailDataSource(
   const aliasAdvance = advanceEmptyAliasPages({
     scope,
     enabled: () =>
-      sourceEnabled() && !!state.aliasFilter && usesServiceSearch(),
+      sourceEnabled() && searchNeedsMembership() && usesServiceSearch(),
     ready: () =>
       filtersReady() &&
       search.searchQuery.isSuccess &&
@@ -693,7 +723,7 @@ export function useEmailDataSource(
         // Refresh admission after search publishes its candidates: a refetch
         // can detach/recreate these readers even when their IDs stay the same.
         await Promise.all([
-          ...(usesServiceSearch() && state.aliasFilter
+          ...(usesServiceSearch() && searchNeedsMembership()
             ? aliasSearchQueries().map((lookup) => lookup.refresh())
             : []),
           ...retainedQueries().map((lookup) => lookup.refresh()),
