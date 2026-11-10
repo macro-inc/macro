@@ -9,7 +9,6 @@ import channelSections from './en/channel-sections';
 import commandMenu from './en/command-menu';
 import commands from './en/commands';
 import common from './en/common';
-import contactPhones from './en/contact-phones';
 import create from './en/create';
 import crm from './en/crm';
 import entityActions from './en/entity-actions';
@@ -42,7 +41,6 @@ export default {
   commandMenu,
   commands,
   common,
-  contactPhones,
   create,
   crm,
   entityActions,

@@ -1,24 +1,19 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
-import { t } from '@app/lib/i18n';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
-import { isMobile } from '@core/mobile/isMobile';
-import { readablePhone } from '@core/util/phone';
 import { formatDateAndTime, formatRelativeTimestamp } from '@entity';
 import ContactIcon from '@icon/system/regular/address-book.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
-import PhoneIcon from '@icon/system/regular/phone.svg';
-import { Avatar, Badge, badgeTriggerClasses, Tooltip } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
-import { ContactPhonesDialog } from '../components/contact-phones-dialog';
+import { Avatar, Badge, Tooltip } from '@ui';
+import { Show } from 'solid-js';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact as CrmContactResponse } from '../core/contact';
-import { ContactCompanyField, ContactEmailField } from './contact-properties';
-import { ContactVisibilityButton } from './contact-visibility-button';
 import {
-  useContactPhonesQuery,
-  useSetContactNameMutation,
-  useSetContactPhonesMutation,
-} from './use-crm';
+  ContactCompanyField,
+  ContactEmailField,
+  ContactPhonesField,
+} from './contact-properties';
+import { ContactVisibilityButton } from './contact-visibility-button';
+import { useSetContactNameMutation } from './use-crm';
 
 // Renames overwrite `crm_contacts.name`, which is already team-scoped —
 // no global directory involved (unlike company renames).
@@ -40,81 +35,6 @@ function TitleEditor(props: { contact: CrmContactResponse }) {
         })
       }
     />
-  );
-}
-
-/**
- * A number calls through the device's own dialer. On a phone the whole pill
- * dials; on a larger screen the number sits beside a Call link.
- */
-function PhonePill(props: { phone: string }) {
-  const href = () => `tel:${props.phone}`;
-  const number = () => readablePhone(props.phone);
-  return (
-    <Show
-      when={!isMobile()}
-      fallback={
-        <a
-          href={href()}
-          aria-label={t('contactPhones.callPhone', { phone: number() })}
-          class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
-        >
-          <PhoneIcon class="size-3" />
-          {number()}
-        </a>
-      }
-    >
-      <span class="inline-flex items-center gap-1">
-        <Badge variant="outline" size="sm">
-          <PhoneIcon class="size-3" />
-          {number()}
-        </Badge>
-        <a
-          href={href()}
-          aria-label={t('contactPhones.callPhone', { phone: number() })}
-          class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
-        >
-          {t('contactPhones.call')}
-        </a>
-      </span>
-    </Show>
-  );
-}
-
-/** The contact's numbers, and the button that edits them. */
-function ContactPhones(props: { contactId: string }) {
-  const phones = useContactPhonesQuery(() => props.contactId);
-  const setPhones = useSetContactPhonesMutation();
-  const [editing, setEditing] = createSignal(false);
-  const numbers = () => (phones.data ?? []).map((phone) => phone.phone);
-  return (
-    <>
-      <For each={numbers()}>{(phone) => <PhonePill phone={phone} />}</For>
-      <Show when={phones.isSuccess}>
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          class={badgeTriggerClasses({ variant: 'outline', size: 'sm' })}
-        >
-          <PhoneIcon class="size-3" />
-          {numbers().length
-            ? t('contactPhones.editPhones')
-            : t('contactPhones.addPhone')}
-        </button>
-      </Show>
-      <Show when={editing()}>
-        <ContactPhonesDialog
-          initial={numbers()}
-          onSave={async (next) => {
-            await setPhones.mutateAsync({
-              contactId: props.contactId,
-              phones: next,
-            });
-          }}
-          onClose={() => setEditing(false)}
-        />
-      </Show>
-    </>
   );
 }
 
@@ -178,7 +98,7 @@ export function ContactHeader(props: {
             aria-label="Contact details"
           >
             <ContactEmailField contact={contact()} />
-            <ContactPhones contactId={contact().id} />
+            <ContactPhonesField contact={contact()} />
             <ContactCompanyField
               contact={contact()}
               onOpenCompany={props.onOpenCompany}

@@ -23,6 +23,19 @@ export default {
     'This contact or company is no longer available to edit.',
   contactEditInvalid:
     'This change is unavailable. Check the value and try again.',
+  phoneNumbers: 'Phone numbers',
+  phoneNumbersDescription:
+    'Calls from these numbers are linked to this contact.',
+  phoneNumber: 'Phone number {{number}}',
+  removePhoneNumber: 'Remove phone number {{number}}',
+  phonePlaceholder: '+ country code and number',
+  addPhoneNumber: 'Add number',
+  contactPhonesInvalid:
+    'Write each number with its country code, starting with +. A contact holds up to 10.',
+  addPhone: 'Add phone',
+  editPhones: 'Edit phones',
+  callContact: 'Call',
+  callPhone: 'Call {{phone}}',
 
   navigation: 'CRM navigation',
   collapseSidebar: 'Collapse CRM sidebar',

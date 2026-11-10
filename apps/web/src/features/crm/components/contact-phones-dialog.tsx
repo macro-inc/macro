@@ -11,6 +11,7 @@ import { createSignal, Index, Show } from 'solid-js';
 export function ContactPhonesDialog(props: {
   initial: string[];
   onSave: (phones: string[]) => Promise<void>;
+  errorMessage: (error: unknown) => string;
   onClose: () => void;
 }) {
   const [phones, setPhones] = createSignal(
@@ -34,8 +35,8 @@ export function ContactPhonesDialog(props: {
     try {
       await props.onSave(phones().filter((phone) => phone.trim()));
       props.onClose();
-    } catch {
-      setError(t('contactPhones.saveFailed'));
+    } catch (error) {
+      setError(props.errorMessage(error));
     } finally {
       setPending(false);
     }
@@ -51,10 +52,10 @@ export function ContactPhonesDialog(props: {
         <Panel.Body>
           <form class="flex flex-col gap-4 p-5" onSubmit={save}>
             <Dialog.Title class="text-base font-semibold">
-              {t('contactPhones.title')}
+              {t('crm.phoneNumbers')}
             </Dialog.Title>
             <Dialog.Description class="text-sm text-ink-muted">
-              {t('contactPhones.description')}
+              {t('crm.phoneNumbersDescription')}
             </Dialog.Description>
             <div class="flex flex-col gap-2">
               <Index each={phones()}>
@@ -64,10 +65,10 @@ export function ContactPhonesDialog(props: {
                       type="tel"
                       inputmode="tel"
                       autocomplete="tel"
-                      aria-label={t('contactPhones.number', {
+                      aria-label={t('crm.phoneNumber', {
                         number: index + 1,
                       })}
-                      placeholder={t('contactPhones.placeholder')}
+                      placeholder={t('crm.phonePlaceholder')}
                       value={phone()}
                       disabled={pending()}
                       onInput={(e) => update(index, e.currentTarget.value)}
@@ -76,7 +77,7 @@ export function ContactPhonesDialog(props: {
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      aria-label={t('contactPhones.removeNumber', {
+                      aria-label={t('crm.removePhoneNumber', {
                         number: index + 1,
                       })}
                       disabled={pending()}
@@ -95,7 +96,7 @@ export function ContactPhonesDialog(props: {
                 disabled={pending()}
                 onClick={() => setPhones((current) => [...current, ''])}
               >
-                {t('contactPhones.addNumber')}
+                {t('crm.addPhoneNumber')}
               </Button>
             </div>
             <Show when={error()}>
@@ -110,10 +111,10 @@ export function ContactPhonesDialog(props: {
                 disabled={pending()}
                 onClick={props.onClose}
               >
-                {t('common.cancel')}
+                {t('crm.cancel')}
               </Button>
               <Button type="submit" variant="primary" disabled={pending()}>
-                {t('contactPhones.save')}
+                {t('crm.saveContact')}
               </Button>
             </div>
           </form>
