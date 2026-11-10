@@ -27,6 +27,7 @@ import { CodexHarness } from './codex/views/CodexHarness';
 import { ConnectedRuntimesSection } from './components/connected-runtimes-section';
 import { CursorDefaultModel } from './components/cursor-default-model';
 import { LocalRuntimeCard } from './components/local-runtime-card';
+import { PendingRequestsSection } from './components/pending-requests-section';
 import { SettingsSearchTarget } from './components/settings-search-target';
 import { TeammateRuntimesSection } from './components/teammate-runtimes-section';
 import { useTeamComputers } from './computers/primitives/team-computers';
@@ -190,6 +191,7 @@ export function Harness(
               </Button>
             }
           >
+            <PendingRequestsSection />
             <ConnectedRuntimesSection
               harnesses={
                 harnessesQuery.isSuccess

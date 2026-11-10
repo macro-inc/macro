@@ -319,6 +319,12 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 			...SoupPropertyFields
 		}
 	}
+	... on GraphqlSoupHarness {
+		harnessName: name
+		ownerId
+		createdAt
+		updatedAt
+	}
 	... on GraphqlSoupForeignEntity {
 		foreignEntityId
 		foreignEntitySource

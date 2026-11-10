@@ -353,6 +353,7 @@ lol_html = "2.4.0"
 loro = "1.16.2"
 lru = "0.16"
 md-5 = "0.10.6"
+mimalloc = { version = "0.1", default-features = false }
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
 nutype = { version = "0.8.0", features = ["serde", "derive_unchecked"] }

@@ -8,4 +8,5 @@
 //! tooling/xtask/.../scripts/ios_native_tree.sh).
 
 pub(crate) mod macrod;
+pub(crate) mod main_window;
 pub(crate) mod pasteboard;

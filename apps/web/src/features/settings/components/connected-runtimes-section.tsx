@@ -119,13 +119,10 @@ export function MachineRow(props: {
 }
 
 /**
- * The machines the viewer owns, connected ones first.
- *
- * Nothing is shown until at least one runtime is connected: with none, the
- * setup cards above are the only useful thing on the page, and a list of
- * machines that cannot run anything reads as a fault. Disconnected runtimes
- * stay listed once any sibling is connected, because removing a stale pairing
- * is the reason to come here.
+ * The machines the viewer owns, connected ones first. Offline machines are
+ * listed too, with when they last connected: their owner still shares,
+ * renames and removes them here, and decides their access requests. With no
+ * machines, the setup cards below are the page.
  */
 export function ConnectedRuntimesSection(props: {
   harnesses: readonly RegisteredHarness[];
@@ -137,17 +134,15 @@ export function ConnectedRuntimesSection(props: {
   sharing?: string;
   onSharingChange: (harnessId: string | undefined) => void;
 }) {
-  const connectedCount = () =>
-    props.harnesses.filter((harness) => harness.connected).length;
   const ordered = () => [
     ...props.harnesses.filter((harness) => harness.connected),
     ...props.harnesses.filter((harness) => !harness.connected),
   ];
 
   return (
-    <Show when={connectedCount() > 0 || props.error}>
+    <Show when={props.harnesses.length > 0 || props.error}>
       <div>
-        <Show when={connectedCount() > 0}>
+        <Show when={props.harnesses.length > 0}>
           <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
             {t('runtimeSharing.yourRuntimes')}
           </h2>

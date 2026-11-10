@@ -569,7 +569,10 @@ async fn a_dialed_runtime_is_initialized_once_and_lists_every_page_of_its_sessio
         listing
             .await
             .expect("list task")
-            .expect("the runtime listed"),
+            .expect("the runtime listed")
+            .into_iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>(),
         [SessionId::from("acp-1"), SessionId::from("acp-2")]
     );
     // Sessions binding afterwards reuse this handshake instead of sending
@@ -661,7 +664,9 @@ async fn a_handshake_a_session_runs_is_reused_for_listing() {
         .tx
         .send(answer(
             &list,
-            serde_json::json!({"sessions": [{"sessionId": "acp-1", "cwd": "/srv"}]}),
+            serde_json::json!({"sessions": [
+                {"sessionId": "acp-1", "cwd": "/srv", "updatedAt": "2026-11-10T17:05:00Z"},
+            ]}),
         ))
         .expect("list answer should send");
     assert_eq!(
@@ -669,7 +674,14 @@ async fn a_handshake_a_session_runs_is_reused_for_listing() {
             .await
             .expect("list task")
             .expect("the runtime listed"),
-        [SessionId::from("acp-1")]
+        [ListedSession {
+            id: SessionId::from("acp-1"),
+            updated_at: Some(
+                chrono::DateTime::parse_from_rfc3339("2026-11-10T17:05:00Z")
+                    .unwrap()
+                    .with_timezone(&chrono::Utc)
+            ),
+        }]
     );
 }
 

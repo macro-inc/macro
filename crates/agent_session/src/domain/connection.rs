@@ -441,7 +441,7 @@ where
     /// every session shares - or, when a session already claimed it, waits
     /// for that one. An agent that does not advertise
     /// `sessionCapabilities.list` lists nothing. The caller owns the deadline.
-    pub async fn list_sessions(&self) -> Result<Vec<SessionId>, ListSessionsError> {
+    pub async fn list_sessions(&self) -> Result<Vec<ListedSession>, ListSessionsError> {
         let mut ready = self.runtime_ready.subscribe();
         tokio::select! {
             ready = ready.wait_for(|ready| *ready) => {
@@ -479,7 +479,16 @@ where
             let (_, result) = self.request(method, params).await?;
             let page = serde_json::from_value::<ListSessionsResponse>(result)
                 .map_err(|error| ListSessionsError::Runtime(error.to_string()))?;
-            sessions.extend(page.sessions.into_iter().map(|session| session.session_id));
+            sessions.extend(page.sessions.into_iter().map(|session| {
+                ListedSession {
+                    updated_at: session
+                        .updated_at
+                        .as_deref()
+                        .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+                        .map(|at| at.with_timezone(&chrono::Utc)),
+                    id: session.session_id,
+                }
+            }));
             match page.next_cursor {
                 Some(next) => cursor = Some(next),
                 None => return Ok(sessions),
@@ -831,6 +840,16 @@ where
             }
         }
     }
+}
+
+/// One ACP session a runtime's agent listed as live.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ListedSession {
+    /// The agent's id for it.
+    pub id: SessionId,
+    /// When the agent last saw activity in it, when it says (`updatedAt`):
+    /// the only sign of work done outside Macro, such as in a terminal.
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// Why a runtime could not list the sessions it serves.

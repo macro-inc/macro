@@ -23740,6 +23740,471 @@
         }
       }
     },
+    "/saved_views/definitions": {
+      "get": {
+        "tags": ["saved_views"],
+        "operationId": "list_saved_view_definitions",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "description": "Only definitions of this consumer kind, such as `email`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "first",
+            "in": "query",
+            "description": "Page size, 1 to 50; defaults to 25.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "`nextCursor` from the previous page.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedViewDefinitionPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["saved_views"],
+        "operationId": "create_saved_view_definition",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSavedViewDefinitionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedViewDefinition"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/saved_views/definitions/order": {
+      "put": {
+        "tags": ["saved_views"],
+        "operationId": "reorder_saved_view_definitions",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReorderSavedViewDefinitionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SavedViewDefinition"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/saved_views/definitions/{saved_view_id}": {
+      "get": {
+        "tags": ["saved_views"],
+        "operationId": "get_saved_view_definition",
+        "parameters": [
+          {
+            "name": "saved_view_id",
+            "in": "path",
+            "description": "The saved view to read",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedViewDefinition"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["saved_views"],
+        "operationId": "delete_saved_view_definition",
+        "parameters": [
+          {
+            "name": "saved_view_id",
+            "in": "path",
+            "description": "The saved view to delete",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "expectedRevision",
+            "in": "query",
+            "description": "Revision that must still be current when the deletion commits.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["saved_views"],
+        "operationId": "update_saved_view_definition",
+        "parameters": [
+          {
+            "name": "saved_view_id",
+            "in": "path",
+            "description": "The saved view to update",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSavedViewDefinitionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedViewDefinition"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/saved_views/exclude_default": {
       "post": {
         "tags": ["saved_views"],
@@ -33498,6 +33963,30 @@
           "error": {
             "type": "boolean",
             "description": "Indicates if an error occurred"
+          }
+        }
+      },
+      "CreateSavedViewDefinitionRequest": {
+        "type": "object",
+        "required": ["name", "config"],
+        "properties": {
+          "config": {
+            "type": "object",
+            "description": "Consumer configuration with its `kind` and `version`, at most 32 KiB."
+          },
+          "id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Client-chosen ID, reused to retry the same creation; generated when absent."
+          },
+          "name": {
+            "type": "string",
+            "description": "Nonempty display name, at most 120 characters."
+          },
+          "sharedTeamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team to share with, which the creator must belong to."
           }
         }
       },
@@ -51350,6 +51839,24 @@
           }
         }
       },
+      "ReorderSavedViewDefinitionsRequest": {
+        "type": "object",
+        "required": ["kind", "ids"],
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Visible definitions of that kind in their new order, at most 200;\ndefinitions left out follow them by creation time."
+          },
+          "kind": {
+            "type": "string",
+            "description": "Consumer kind whose order is replaced, such as `email`."
+          }
+        }
+      },
       "RepeatUntil": {
         "type": "string",
         "description": "The event that ends a repeating animation.",
@@ -52228,6 +52735,84 @@
             "type": "string",
             "format": "uuid",
             "description": "Identifier."
+          }
+        }
+      },
+      "SavedViewDefinition": {
+        "type": "object",
+        "description": "A saved filter definition, not a snapshot of matching entities.",
+        "required": [
+          "id",
+          "ownerId",
+          "name",
+          "config",
+          "revision",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "config": {
+            "type": "object",
+            "description": "Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable identity of this definition."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name chosen by the owner."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "User who owns and can edit this definition."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Current revision, required by updates and deletion."
+          },
+          "sharedTeamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team with access, or absent when the definition is private."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SavedViewDefinitionPage": {
+        "type": "object",
+        "description": "A page in the viewer's own order, then by creation time and ID.",
+        "required": ["views"],
+        "properties": {
+          "nextCursor": {
+            "type": ["string", "null"],
+            "description": "Opaque cursor for the next page, absent when the listing is complete."
+          },
+          "views": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedViewDefinition"
+            },
+            "description": "Definitions the viewer can currently access."
+          }
+        }
+      },
+      "SavedViewSharingRequest": {
+        "type": "object",
+        "description": "An explicit sharing change: a team, or `null` to make the definition private.",
+        "properties": {
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid"
           }
         }
       },
@@ -54766,6 +55351,36 @@
           }
         }
       },
+      "SoupHarness": {
+        "type": "object",
+        "description": "A paired runtime (a macrod machine), listed only by attention feeds: its\naccess requests and removals are notifications filed under it, and it has\nno page of its own, so Settings → Machines opens it.",
+        "required": ["id", "name", "ownerId", "createdAt", "updatedAt"],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the machine was paired."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The harness uuid."
+          },
+          "name": {
+            "type": "string",
+            "description": "The machine's display name."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "The person or team that owns the machine."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the machine was last changed."
+          }
+        }
+      },
       "SoupInitiative_SoupPropertiesField": {
         "allOf": [
           {
@@ -55028,6 +55643,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["databaseRow"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Paired runtime, listed only by attention feeds.",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupHarness",
+                "description": "Paired runtime, listed only by attention feeds."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["harness"]
               }
             }
           }
@@ -59260,6 +59890,36 @@
       "UpdateOperation": {
         "type": "string",
         "enum": ["add", "remove", "replace"]
+      },
+      "UpdateSavedViewDefinitionRequest": {
+        "type": "object",
+        "required": ["expectedRevision"],
+        "properties": {
+          "config": {
+            "type": ["object", "null"],
+            "description": "Complete replacement configuration; absent keeps the current one."
+          },
+          "expectedRevision": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Revision that must still be current when the update commits."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Replacement name; absent keeps the current one."
+          },
+          "sharing": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/SavedViewSharingRequest",
+                "description": "Sharing change; absent keeps the current share."
+              }
+            ]
+          }
+        }
       },
       "UpdateSharePermissionRequestV2": {
         "type": "object",
