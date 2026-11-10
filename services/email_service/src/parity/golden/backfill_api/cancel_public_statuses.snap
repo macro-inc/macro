@@ -1,0 +1,1149 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: cancel Init
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": "<job:0>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","req_body":"CancelBackfillParams { job_id: <job:0> }","user_id":"<user:A>"}
+    INFO get_backfill_job_with_link_id {"job_id":"<job:0>","link_id":"<link:A>"}
+    INFO update_backfill_job_status {"job_id":"<job:0>","status":"Cancelled"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  1e94fab4c6f2 rows_affected=1 rows_returned=1
+  83157ebb76e7 rows_affected=1 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job:0>",
+          "status": {
+            "before": "Init",
+            "after": "Cancelled"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: repeat cancel Init
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": "<job:0>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job already cancelled"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "35"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","req_body":"CancelBackfillParams { job_id: <job:0> }","user_id":"<user:A>"}
+    INFO get_backfill_job_with_link_id {"job_id":"<job:0>","link_id":"<link:A>"}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  1e94fab4c6f2 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: cancel InProgress
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": "<job:1>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","req_body":"CancelBackfillParams { job_id: <job:1> }","user_id":"<user:A>"}
+    INFO get_backfill_job_with_link_id {"job_id":"<job:1>","link_id":"<link:A>"}
+    INFO update_backfill_job_status {"job_id":"<job:1>","status":"Cancelled"}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  1e94fab4c6f2 rows_affected=1 rows_returned=1
+  83157ebb76e7 rows_affected=1 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job:1>",
+          "status": {
+            "before": "InProgress",
+            "after": "Cancelled"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: repeat cancel InProgress
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": "<job:1>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job already cancelled"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "35"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","req_body":"CancelBackfillParams { job_id: <job:1> }","user_id":"<user:A>"}
+    INFO get_backfill_job_with_link_id {"job_id":"<job:1>","link_id":"<link:A>"}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  1e94fab4c6f2 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: cancel Complete
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": "<job:2>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job already completed"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "35"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","req_body":"CancelBackfillParams { job_id: <job:2> }","user_id":"<user:A>"}
+    INFO get_backfill_job_with_link_id {"job_id":"<job:2>","link_id":"<link:A>"}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  1e94fab4c6f2 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: repeat cancel Complete
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": "<job:2>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job already completed"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "35"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","req_body":"CancelBackfillParams { job_id: <job:2> }","user_id":"<user:A>"}
+    INFO get_backfill_job_with_link_id {"job_id":"<job:2>","link_id":"<link:A>"}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  1e94fab4c6f2 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: cancel Failed
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": "<job:3>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job already failed"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "32"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","req_body":"CancelBackfillParams { job_id: <job:3> }","user_id":"<user:A>"}
+    INFO get_backfill_job_with_link_id {"job_id":"<job:3>","link_id":"<link:A>"}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  1e94fab4c6f2 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: repeat cancel Failed
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": "<job:3>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job already failed"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "32"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","req_body":"CancelBackfillParams { job_id: <job:3> }","user_id":"<user:A>"}
+    INFO get_backfill_job_with_link_id {"job_id":"<job:3>","link_id":"<link:A>"}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  1e94fab4c6f2 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: cancel Cancelled
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": "<job:4>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job already cancelled"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "35"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","req_body":"CancelBackfillParams { job_id: <job:4> }","user_id":"<user:A>"}
+    INFO get_backfill_job_with_link_id {"job_id":"<job:4>","link_id":"<link:A>"}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  1e94fab4c6f2 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: repeat cancel Cancelled
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": "<job:4>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job already cancelled"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "35"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","req_body":"CancelBackfillParams { job_id: <job:4> }","user_id":"<user:A>"}
+    INFO get_backfill_job_with_link_id {"job_id":"<job:4>","link_id":"<link:A>"}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  1e94fab4c6f2 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: wrong inbox
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": "<job:8>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job does not exist"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "32"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 404
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":404,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","req_body":"CancelBackfillParams { job_id: <job:8> }","user_id":"<user:A>"}
+    INFO get_backfill_job_with_link_id {"job_id":"<job:8>","link_id":"<link:A>"}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "handler"
+      ],
+      "message": "job not found during cancel backfill request for link_id <link:A> job_id <job:8>",
+      "fields": {}
+    }
+  ]
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  1e94fab4c6f2 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: second own inbox
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": "<job:8>"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "x-email-link-id": [
+        "<link:A2>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","req_body":"CancelBackfillParams { job_id: <job:8> }","user_id":"<user:A>"}
+    INFO get_backfill_job_with_link_id {"job_id":"<job:8>","link_id":"<link:A2>"}
+    INFO update_backfill_job_status {"job_id":"<job:8>","status":"Cancelled"}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  1e94fab4c6f2 rows_affected=1 rows_returned=1
+  83157ebb76e7 rows_affected=1 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job:8>",
+          "status": {
+            "before": "Init",
+            "after": "Cancelled"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: inaccessible inbox
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user C",
+    "body": {
+      "job_id": "<job:9>"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "x-email-link-id": [
+        "<link:B>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Email link not found",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "20"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 404
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":404,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: delegated cancellation
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": "<job:9>"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "x-email-link-id": [
+        "<link:B>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","req_body":"CancelBackfillParams { job_id: <job:9> }","user_id":"<user:A>"}
+    INFO get_backfill_job_with_link_id {"job_id":"<job:9>","link_id":"<link:B>"}
+    INFO update_backfill_job_status {"job_id":"<job:9>","status":"Cancelled"}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  1e94fab4c6f2 rows_affected=1 rows_returned=1
+  83157ebb76e7 rows_affected=1 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job:9>",
+          "status": {
+            "before": "Init",
+            "after": "Cancelled"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: missing job
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": "<missing>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job does not exist"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "32"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 404
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":404,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","req_body":"CancelBackfillParams { job_id: <missing> }","user_id":"<user:A>"}
+    INFO get_backfill_job_with_link_id {"job_id":"<missing>","link_id":"<link:A>"}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "handler"
+      ],
+      "message": "job not found during cancel backfill request for link_id <link:A> job_id <missing>",
+      "fields": {}
+    }
+  ]
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  1e94fab4c6f2 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: internal acting user cancellation
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "internal",
+    "body": {
+      "job_id": "<job:10>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO agent_sdk_request {}
+  INFO inboxes_for_macro_id {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","req_body":"CancelBackfillParams { job_id: <job:10> }","user_id":"<user:A>"}
+    INFO get_backfill_job_with_link_id {"job_id":"<job:10>","link_id":"<link:A>"}
+    INFO update_backfill_job_status {"job_id":"<job:10>","status":"Cancelled"}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  1e94fab4c6f2 rows_affected=1 rows_returned=1
+  83157ebb76e7 rows_affected=1 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job:10>",
+          "status": {
+            "before": "Init",
+            "after": "Cancelled"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }

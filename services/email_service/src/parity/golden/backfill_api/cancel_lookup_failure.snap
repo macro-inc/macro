@@ -1,0 +1,102 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: database failure
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": "<job:1>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "error fetching job"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "32"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 500
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":500,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 500 Internal Server Error","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","req_body":"CancelBackfillParams { job_id: <job:1> }","user_id":"<user:A>"}
+    INFO get_backfill_job_with_link_id {"job_id":"<job:1>","link_id":"<link:A>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "handler",
+        "get_backfill_job_with_link_id"
+      ],
+      "message": null,
+      "fields": {
+        "error": "attempted to acquire a connection on a closed pool"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "handler"
+      ],
+      "message": "error fetching backfill job",
+      "fields": {
+        "error": "attempted to acquire a connection on a closed pool"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 500 Internal Server Error",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

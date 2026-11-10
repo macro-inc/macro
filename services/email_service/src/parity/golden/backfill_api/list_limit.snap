@@ -1,0 +1,1164 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: newest one hundred across owned inboxes
+request:
+  {
+    "method": "GET",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "jobs": [
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:102>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:101>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:100>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:99>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:98>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:97>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:96>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:95>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:94>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:93>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:92>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:91>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:90>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:89>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:88>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:87>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:86>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:85>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:84>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:83>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:82>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:81>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:80>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:79>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:78>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:77>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:76>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:75>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:74>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:73>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:72>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:71>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:70>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:69>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:68>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:67>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:66>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:65>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:64>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:63>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:62>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:61>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:60>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:59>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:58>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:57>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:56>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:55>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:54>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:53>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:52>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:51>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:50>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:49>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:48>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:47>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:46>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:45>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:44>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:43>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:42>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:41>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:40>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:39>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:38>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:37>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:36>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:35>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:34>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:33>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:32>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:31>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:30>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:29>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:28>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:27>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:26>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:25>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:24>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:23>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:22>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:21>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:20>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:19>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:18>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:17>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:16>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:15>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:14>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:13>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:12>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:11>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:10>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:9>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:8>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:7>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:6>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:5>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:4>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:3>",
+          "link_id": "<link:A2>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        }
+      ]
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "30210"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO list_handler {"fusionauth_user_id":"<fusion:A>","user_id":"<user:A>"}
+        INFO get_all_jobs_by_fusionauth_user_id {"fusionauth_user_id":"<fusion:A>"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  253c4a803c11 rows_affected=100 rows_returned=100
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

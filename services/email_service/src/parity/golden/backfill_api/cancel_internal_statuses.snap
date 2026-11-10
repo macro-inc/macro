@@ -1,0 +1,670 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: internal cancel Init
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "job_id": "<job:0>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillCancelParams { job_id: <job:0> }"}
+        INFO get_backfill_job {"job_id":"<job:0>"}
+        INFO update_backfill_job_status {"job_id":"<job:0>","status":"Cancelled"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  83157ebb76e7 rows_affected=1 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job:0>",
+          "status": {
+            "before": "Init",
+            "after": "Cancelled"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: repeat internal cancel Init
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal",
+    "body": {
+      "job_id": "<job:0>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job already cancelled"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "35"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillCancelParams { job_id: <job:0> }"}
+        INFO get_backfill_job {"job_id":"<job:0>"}
+logs:
+  []
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: internal cancel InProgress
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "job_id": "<job:1>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillCancelParams { job_id: <job:1> }"}
+        INFO get_backfill_job {"job_id":"<job:1>"}
+        INFO update_backfill_job_status {"job_id":"<job:1>","status":"Cancelled"}
+logs:
+  []
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  83157ebb76e7 rows_affected=1 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job:1>",
+          "status": {
+            "before": "InProgress",
+            "after": "Cancelled"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: repeat internal cancel InProgress
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal",
+    "body": {
+      "job_id": "<job:1>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job already cancelled"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "35"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillCancelParams { job_id: <job:1> }"}
+        INFO get_backfill_job {"job_id":"<job:1>"}
+logs:
+  []
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: internal cancel Complete
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "job_id": "<job:2>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job already completed"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "35"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillCancelParams { job_id: <job:2> }"}
+        INFO get_backfill_job {"job_id":"<job:2>"}
+logs:
+  []
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: repeat internal cancel Complete
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal",
+    "body": {
+      "job_id": "<job:2>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job already completed"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "35"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillCancelParams { job_id: <job:2> }"}
+        INFO get_backfill_job {"job_id":"<job:2>"}
+logs:
+  []
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: internal cancel Failed
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "job_id": "<job:3>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job already failed"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "32"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillCancelParams { job_id: <job:3> }"}
+        INFO get_backfill_job {"job_id":"<job:3>"}
+logs:
+  []
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: repeat internal cancel Failed
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal",
+    "body": {
+      "job_id": "<job:3>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job already failed"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "32"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillCancelParams { job_id: <job:3> }"}
+        INFO get_backfill_job {"job_id":"<job:3>"}
+logs:
+  []
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: internal cancel Cancelled
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "job_id": "<job:4>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job already cancelled"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "35"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillCancelParams { job_id: <job:4> }"}
+        INFO get_backfill_job {"job_id":"<job:4>"}
+logs:
+  []
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: repeat internal cancel Cancelled
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal",
+    "body": {
+      "job_id": "<job:4>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job already cancelled"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "35"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillCancelParams { job_id: <job:4> }"}
+        INFO get_backfill_job {"job_id":"<job:4>"}
+logs:
+  []
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: internal missing job
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "job_id": "<missing>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "job does not exist"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "32"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 404
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":404,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillCancelParams { job_id: <missing> }"}
+        INFO get_backfill_job {"job_id":"<missing>"}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "job not found for cancel backfill request: <missing>",
+      "fields": {}
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

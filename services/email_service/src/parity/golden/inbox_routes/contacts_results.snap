@@ -1,0 +1,782 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: own second delegated and Outlook inboxes
+request:
+  {
+    "method": "GET",
+    "path": "/email/contacts",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "contacts": {
+        "51000000-0000-0000-0000-00000000a08c": [
+          {
+            "email": "contact-0-1@example.com",
+            "email_address": "contact-0-1@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 1",
+            "photo_url": "https://example.com/photo.png"
+          },
+          {
+            "email": "contact-0-2@example.com",
+            "email_address": "contact-0-2@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 2",
+            "photo_url": null
+          },
+          {
+            "email": "contact-0-0@example.com",
+            "email_address": "contact-0-0@example.com",
+            "last_interaction": "<ts>",
+            "name": null,
+            "photo_url": null
+          }
+        ],
+        "51000000-0000-0000-0000-00000000a08d": [
+          {
+            "email": "contact-2-1@example.com",
+            "email_address": "contact-2-1@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 1",
+            "photo_url": "https://example.com/photo.png"
+          },
+          {
+            "email": "contact-2-2@example.com",
+            "email_address": "contact-2-2@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 2",
+            "photo_url": null
+          },
+          {
+            "email": "contact-2-0@example.com",
+            "email_address": "contact-2-0@example.com",
+            "last_interaction": "<ts>",
+            "name": null,
+            "photo_url": null
+          }
+        ],
+        "51000000-0000-0000-0000-00000000a08e": [
+          {
+            "email": "contact-1-1@example.com",
+            "email_address": "contact-1-1@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 1",
+            "photo_url": "https://example.com/photo.png"
+          },
+          {
+            "email": "contact-1-2@example.com",
+            "email_address": "contact-1-2@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 2",
+            "photo_url": null
+          },
+          {
+            "email": "contact-1-0@example.com",
+            "email_address": "contact-1-0@example.com",
+            "last_interaction": "<ts>",
+            "name": null,
+            "photo_url": null
+          }
+        ],
+        "58000000-0000-0000-0000-000000000001": [
+          {
+            "email": "contact-3-1@example.com",
+            "email_address": "contact-3-1@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 1",
+            "photo_url": "https://example.com/photo.png"
+          },
+          {
+            "email": "contact-3-2@example.com",
+            "email_address": "contact-3-2@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 2",
+            "photo_url": null
+          },
+          {
+            "email": "contact-3-0@example.com",
+            "email_address": "contact-3-0@example.com",
+            "last_interaction": "<ts>",
+            "name": null,
+            "photo_url": null
+          }
+        ]
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "2130"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/contacts","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/contacts"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO list_contacts_handler {"fusionauth_user_id":"<fusion:A>","user_id":"<user:A>"}
+        INFO fetch_contacts_by_link_id {"link_id":"<link:outlook>"}
+        INFO fetch_contacts_by_link_id {"link_id":"<link:A2>"}
+        INFO fetch_contacts_by_link_id {"link_id":"<link:B>"}
+        INFO fetch_contacts_by_link_id {"link_id":"<link:A>"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  40b69fc48c40 rows_affected=4 rows_returned=4
+  1635e9d89659 rows_affected=3 rows_returned=3
+  1635e9d89659 rows_affected=3 rows_returned=3
+  1635e9d89659 rows_affected=3 rows_returned=3
+  1635e9d89659 rows_affected=3 rows_returned=3
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: owner of delegated inbox
+request:
+  {
+    "method": "GET",
+    "path": "/email/contacts",
+    "auth": "user B",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "contacts": {
+        "51000000-0000-0000-0000-00000000a08d": [
+          {
+            "email": "contact-2-1@example.com",
+            "email_address": "contact-2-1@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 1",
+            "photo_url": "https://example.com/photo.png"
+          },
+          {
+            "email": "contact-2-2@example.com",
+            "email_address": "contact-2-2@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 2",
+            "photo_url": null
+          },
+          {
+            "email": "contact-2-0@example.com",
+            "email_address": "contact-2-0@example.com",
+            "last_interaction": "<ts>",
+            "name": null,
+            "photo_url": null
+          }
+        ]
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "543"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/contacts","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/contacts"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO list_contacts_handler {"fusionauth_user_id":"<fusion:B>","user_id":"<user:B>"}
+        INFO fetch_contacts_by_link_id {"link_id":"<link:B>"}
+logs:
+  []
+sql:
+  40b69fc48c40 rows_affected=1 rows_returned=1
+  1635e9d89659 rows_affected=3 rows_returned=3
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: no inboxes
+request:
+  {
+    "method": "GET",
+    "path": "/email/contacts",
+    "auth": "user C",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "contacts": {}
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "15"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/contacts","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/contacts"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO list_contacts_handler {"fusionauth_user_id":"<fusion:C>","user_id":"<user:C>"}
+logs:
+  []
+sql:
+  40b69fc48c40 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: internal acting user
+request:
+  {
+    "method": "GET",
+    "path": "/email/contacts",
+    "auth": "internal",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "contacts": {
+        "51000000-0000-0000-0000-00000000a08c": [
+          {
+            "email": "contact-0-1@example.com",
+            "email_address": "contact-0-1@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 1",
+            "photo_url": "https://example.com/photo.png"
+          },
+          {
+            "email": "contact-0-2@example.com",
+            "email_address": "contact-0-2@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 2",
+            "photo_url": null
+          },
+          {
+            "email": "contact-0-0@example.com",
+            "email_address": "contact-0-0@example.com",
+            "last_interaction": "<ts>",
+            "name": null,
+            "photo_url": null
+          }
+        ],
+        "51000000-0000-0000-0000-00000000a08d": [
+          {
+            "email": "contact-2-1@example.com",
+            "email_address": "contact-2-1@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 1",
+            "photo_url": "https://example.com/photo.png"
+          },
+          {
+            "email": "contact-2-2@example.com",
+            "email_address": "contact-2-2@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 2",
+            "photo_url": null
+          },
+          {
+            "email": "contact-2-0@example.com",
+            "email_address": "contact-2-0@example.com",
+            "last_interaction": "<ts>",
+            "name": null,
+            "photo_url": null
+          }
+        ],
+        "51000000-0000-0000-0000-00000000a08e": [
+          {
+            "email": "contact-1-1@example.com",
+            "email_address": "contact-1-1@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 1",
+            "photo_url": "https://example.com/photo.png"
+          },
+          {
+            "email": "contact-1-2@example.com",
+            "email_address": "contact-1-2@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 2",
+            "photo_url": null
+          },
+          {
+            "email": "contact-1-0@example.com",
+            "email_address": "contact-1-0@example.com",
+            "last_interaction": "<ts>",
+            "name": null,
+            "photo_url": null
+          }
+        ],
+        "58000000-0000-0000-0000-000000000001": [
+          {
+            "email": "contact-3-1@example.com",
+            "email_address": "contact-3-1@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 1",
+            "photo_url": "https://example.com/photo.png"
+          },
+          {
+            "email": "contact-3-2@example.com",
+            "email_address": "contact-3-2@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 2",
+            "photo_url": null
+          },
+          {
+            "email": "contact-3-0@example.com",
+            "email_address": "contact-3-0@example.com",
+            "last_interaction": "<ts>",
+            "name": null,
+            "photo_url": null
+          }
+        ]
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "2130"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/contacts","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/contacts"}
+    INFO agent_sdk_request {}
+      INFO list_contacts_handler {"fusionauth_user_id":"<fusion:A>","user_id":"<user:A>"}
+        INFO fetch_contacts_by_link_id {"link_id":"<link:outlook>"}
+        INFO fetch_contacts_by_link_id {"link_id":"<link:A2>"}
+        INFO fetch_contacts_by_link_id {"link_id":"<link:B>"}
+        INFO fetch_contacts_by_link_id {"link_id":"<link:A>"}
+logs:
+  []
+sql:
+  40b69fc48c40 rows_affected=4 rows_returned=4
+  1635e9d89659 rows_affected=3 rows_returned=3
+  1635e9d89659 rows_affected=3 rows_returned=3
+  1635e9d89659 rows_affected=3 rows_returned=3
+  1635e9d89659 rows_affected=3 rows_returned=3
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: repeat list
+request:
+  {
+    "method": "GET",
+    "path": "/email/contacts",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "contacts": {
+        "51000000-0000-0000-0000-00000000a08c": [
+          {
+            "email": "contact-0-1@example.com",
+            "email_address": "contact-0-1@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 1",
+            "photo_url": "https://example.com/photo.png"
+          },
+          {
+            "email": "contact-0-2@example.com",
+            "email_address": "contact-0-2@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 2",
+            "photo_url": null
+          },
+          {
+            "email": "contact-0-0@example.com",
+            "email_address": "contact-0-0@example.com",
+            "last_interaction": "<ts>",
+            "name": null,
+            "photo_url": null
+          }
+        ],
+        "51000000-0000-0000-0000-00000000a08d": [
+          {
+            "email": "contact-2-1@example.com",
+            "email_address": "contact-2-1@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 1",
+            "photo_url": "https://example.com/photo.png"
+          },
+          {
+            "email": "contact-2-2@example.com",
+            "email_address": "contact-2-2@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 2",
+            "photo_url": null
+          },
+          {
+            "email": "contact-2-0@example.com",
+            "email_address": "contact-2-0@example.com",
+            "last_interaction": "<ts>",
+            "name": null,
+            "photo_url": null
+          }
+        ],
+        "51000000-0000-0000-0000-00000000a08e": [
+          {
+            "email": "contact-1-1@example.com",
+            "email_address": "contact-1-1@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 1",
+            "photo_url": "https://example.com/photo.png"
+          },
+          {
+            "email": "contact-1-2@example.com",
+            "email_address": "contact-1-2@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 2",
+            "photo_url": null
+          },
+          {
+            "email": "contact-1-0@example.com",
+            "email_address": "contact-1-0@example.com",
+            "last_interaction": "<ts>",
+            "name": null,
+            "photo_url": null
+          }
+        ],
+        "58000000-0000-0000-0000-000000000001": [
+          {
+            "email": "contact-3-1@example.com",
+            "email_address": "contact-3-1@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 1",
+            "photo_url": "https://example.com/photo.png"
+          },
+          {
+            "email": "contact-3-2@example.com",
+            "email_address": "contact-3-2@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 2",
+            "photo_url": null
+          },
+          {
+            "email": "contact-3-0@example.com",
+            "email_address": "contact-3-0@example.com",
+            "last_interaction": "<ts>",
+            "name": null,
+            "photo_url": null
+          }
+        ]
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "2130"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/contacts","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/contacts"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO list_contacts_handler {"fusionauth_user_id":"<fusion:A>","user_id":"<user:A>"}
+        INFO fetch_contacts_by_link_id {"link_id":"<link:outlook>"}
+        INFO fetch_contacts_by_link_id {"link_id":"<link:A2>"}
+        INFO fetch_contacts_by_link_id {"link_id":"<link:B>"}
+        INFO fetch_contacts_by_link_id {"link_id":"<link:A>"}
+logs:
+  []
+sql:
+  40b69fc48c40 rows_affected=4 rows_returned=4
+  1635e9d89659 rows_affected=3 rows_returned=3
+  1635e9d89659 rows_affected=3 rows_returned=3
+  1635e9d89659 rows_affected=3 rows_returned=3
+  1635e9d89659 rows_affected=3 rows_returned=3
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: collection ignores malformed inbox header
+request:
+  {
+    "method": "GET",
+    "path": "/email/contacts",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        "bad"
+      ]
+    }
+  }
+response:
+  {
+    "body": {
+      "contacts": {
+        "51000000-0000-0000-0000-00000000a08c": [
+          {
+            "email": "contact-0-1@example.com",
+            "email_address": "contact-0-1@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 1",
+            "photo_url": "https://example.com/photo.png"
+          },
+          {
+            "email": "contact-0-2@example.com",
+            "email_address": "contact-0-2@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 2",
+            "photo_url": null
+          },
+          {
+            "email": "contact-0-0@example.com",
+            "email_address": "contact-0-0@example.com",
+            "last_interaction": "<ts>",
+            "name": null,
+            "photo_url": null
+          }
+        ],
+        "51000000-0000-0000-0000-00000000a08d": [
+          {
+            "email": "contact-2-1@example.com",
+            "email_address": "contact-2-1@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 1",
+            "photo_url": "https://example.com/photo.png"
+          },
+          {
+            "email": "contact-2-2@example.com",
+            "email_address": "contact-2-2@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 2",
+            "photo_url": null
+          },
+          {
+            "email": "contact-2-0@example.com",
+            "email_address": "contact-2-0@example.com",
+            "last_interaction": "<ts>",
+            "name": null,
+            "photo_url": null
+          }
+        ],
+        "51000000-0000-0000-0000-00000000a08e": [
+          {
+            "email": "contact-1-1@example.com",
+            "email_address": "contact-1-1@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 1",
+            "photo_url": "https://example.com/photo.png"
+          },
+          {
+            "email": "contact-1-2@example.com",
+            "email_address": "contact-1-2@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 2",
+            "photo_url": null
+          },
+          {
+            "email": "contact-1-0@example.com",
+            "email_address": "contact-1-0@example.com",
+            "last_interaction": "<ts>",
+            "name": null,
+            "photo_url": null
+          }
+        ],
+        "58000000-0000-0000-0000-000000000001": [
+          {
+            "email": "contact-3-1@example.com",
+            "email_address": "contact-3-1@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 1",
+            "photo_url": "https://example.com/photo.png"
+          },
+          {
+            "email": "contact-3-2@example.com",
+            "email_address": "contact-3-2@example.com",
+            "last_interaction": "<ts>",
+            "name": "Contact 2",
+            "photo_url": null
+          },
+          {
+            "email": "contact-3-0@example.com",
+            "email_address": "contact-3-0@example.com",
+            "last_interaction": "<ts>",
+            "name": null,
+            "photo_url": null
+          }
+        ]
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "2130"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/contacts","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/contacts"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO list_contacts_handler {"fusionauth_user_id":"<fusion:A>","user_id":"<user:A>"}
+        INFO fetch_contacts_by_link_id {"link_id":"<link:outlook>"}
+        INFO fetch_contacts_by_link_id {"link_id":"<link:A2>"}
+        INFO fetch_contacts_by_link_id {"link_id":"<link:B>"}
+        INFO fetch_contacts_by_link_id {"link_id":"<link:A>"}
+logs:
+  []
+sql:
+  40b69fc48c40 rows_affected=4 rows_returned=4
+  1635e9d89659 rows_affected=3 rows_returned=3
+  1635e9d89659 rows_affected=3 rows_returned=3
+  1635e9d89659 rows_affected=3 rows_returned=3
+  1635e9d89659 rows_affected=3 rows_returned=3
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

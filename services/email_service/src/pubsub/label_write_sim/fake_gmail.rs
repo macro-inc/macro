@@ -99,6 +99,10 @@ pub struct GmailState {
     pub default_read: Reply,
     pub log: Vec<Logged>,
     pub http_recording: Option<crate::parity::HttpRecording>,
+    /// Optional send-as response used by signature import parity scenarios.
+    pub send_as: Option<(u16, Value)>,
+    /// Abort the send-as response stream to exercise a dropped connection.
+    pub drop_send_as: bool,
     pause: Option<Pause>,
 }
 
@@ -351,6 +355,7 @@ impl GmailState {
 }
 
 async fn handle(State(gmail): State<FakeGmail>, method: Method, uri: Uri, body: Bytes) -> Response {
+    let dropped = gmail.lock().drop_send_as && uri.path() == "/gmail/v1/users/me/settings/sendAs";
     let recording = gmail.lock().http_recording.clone();
     // Reserve the entry at arrival so a paused request keeps its position.
     let entry = recording.as_ref().and_then(|recording| {
@@ -367,13 +372,35 @@ async fn handle(State(gmail): State<FakeGmail>, method: Method, uri: Uri, body: 
     });
     let response = reply(State(gmail.clone()), method, uri, body).await;
     if let (Some(recording), Some(index)) = (recording, entry) {
-        recording.lock().expect("HTTP recording")[index]["status"] =
-            serde_json::json!(response.status().as_u16());
+        let mut recording = recording.lock().expect("HTTP recording");
+        if dropped {
+            recording[index]["connection_dropped"] = json!(true);
+        } else {
+            recording[index]["status"] = json!(response.status().as_u16());
+        }
     }
     response
 }
 
 async fn reply(State(gmail): State<FakeGmail>, method: Method, uri: Uri, body: Bytes) -> Response {
+    if method == Method::GET && uri.path() == "/gmail/v1/users/me/settings/sendAs" {
+        let state = gmail.lock();
+        if state.drop_send_as {
+            return axum::body::Body::from_stream(futures::stream::once(async {
+                Err::<Bytes, _>(std::io::Error::new(
+                    std::io::ErrorKind::ConnectionReset,
+                    "scripted Gmail disconnect",
+                ))
+            }))
+            .into_response();
+        }
+        let (status, value) = state.send_as.clone().unwrap_or((200, json!({"sendAs":[]})));
+        return (
+            StatusCode::from_u16(status).expect("scripted Gmail status"),
+            axum::Json(value),
+        )
+            .into_response();
+    }
     let request = parse(&method, &uri, &body);
     // The answer is decided on arrival, even when it is applied later.
     let reply = gmail.choose_reply(&request);
@@ -494,3 +521,6 @@ fn history_record(entry: &HistoryEntry) -> Value {
     }
     record
 }
+
+#[cfg(test)]
+mod test;

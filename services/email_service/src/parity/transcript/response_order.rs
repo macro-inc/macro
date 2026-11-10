@@ -8,6 +8,8 @@ mod test;
 pub(in crate::parity) enum ResponseArrayRule {
     /// $.body.labels and $.body[*].labels: ORDER BY message_id only.
     MessageLabelsByProviderId,
+    /// $.body.messages[*] on scheduled drafts: bulk lookups do not order labels or recipients.
+    ScheduledMessageFields,
     /// $.body.{to,cc,bcc} and $.body[*].{to,cc,bcc}: no order within a role.
     MessageRecipientsByAddress,
     /// $.body on POST message batch routes: no ORDER BY.
@@ -22,6 +24,19 @@ impl ResponseArrayRule {
             return;
         };
         match self {
+            Self::ScheduledMessageFields => {
+                if request["method"] == "GET"
+                    && request["path"].as_str().is_some_and(|path| {
+                        path.split('?').next() == Some("/email/drafts/scheduled")
+                    })
+                    && let Some(messages) = body.get_mut("messages").and_then(Value::as_array_mut)
+                {
+                    for message in messages {
+                        Self::MessageLabelsByProviderId.sort_message_fields(message);
+                        Self::MessageRecipientsByAddress.sort_message_fields(message);
+                    }
+                }
+            }
             Self::MessageLabelsByProviderId | Self::MessageRecipientsByAddress => {
                 if let Some(messages) = body.as_array_mut() {
                     for message in messages {
@@ -79,7 +94,9 @@ impl ResponseArrayRule {
                     }
                 }
             }
-            Self::BatchMessagesById | Self::ThreadTimestampTiesById => unreachable!(),
+            Self::BatchMessagesById
+            | Self::ThreadTimestampTiesById
+            | Self::ScheduledMessageFields => unreachable!(),
         }
     }
 }

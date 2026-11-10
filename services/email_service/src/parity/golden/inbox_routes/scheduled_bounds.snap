@@ -1,0 +1,657 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: zero
+request:
+  {
+    "method": "GET",
+    "path": "/email/drafts/scheduled?limit=0",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "Validation error: Limit must be positive"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "54"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/drafts/scheduled","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/drafts/scheduled"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO inboxes_for_macro_id {}
+      INFO handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })","params":"GetScheduledQueryParams { offset: 0, limit: 0 }"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Validation error: Limit must be positive"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: over maximum
+request:
+  {
+    "method": "GET",
+    "path": "/email/drafts/scheduled?limit=1001",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "Validation error: Limit must not exceed 1000"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "58"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/drafts/scheduled","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/drafts/scheduled"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO inboxes_for_macro_id {}
+      INFO handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })","params":"GetScheduledQueryParams { offset: 0, limit: 1001 }"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Validation error: Limit must not exceed 1000"
+      }
+    }
+  ]
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: negative limit
+request:
+  {
+    "method": "GET",
+    "path": "/email/drafts/scheduled?limit=-1",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Failed to deserialize query string: limit: invalid digit found in string",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "72"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/drafts/scheduled","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/drafts/scheduled"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: overflow limit
+request:
+  {
+    "method": "GET",
+    "path": "/email/drafts/scheduled?limit=4294967296",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Failed to deserialize query string: limit: number too large to fit in target type",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "81"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/drafts/scheduled","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/drafts/scheduled"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: negative offset
+request:
+  {
+    "method": "GET",
+    "path": "/email/drafts/scheduled?offset=-1",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Failed to deserialize query string: offset: invalid digit found in string",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "73"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/drafts/scheduled","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/drafts/scheduled"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: overflow offset
+request:
+  {
+    "method": "GET",
+    "path": "/email/drafts/scheduled?offset=4294967296",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Failed to deserialize query string: offset: number too large to fit in target type",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "82"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/drafts/scheduled","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/drafts/scheduled"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty limit
+request:
+  {
+    "method": "GET",
+    "path": "/email/drafts/scheduled?limit=",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Failed to deserialize query string: limit: cannot parse integer from empty string",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "81"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/drafts/scheduled","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/drafts/scheduled"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: nonnumeric
+request:
+  {
+    "method": "GET",
+    "path": "/email/drafts/scheduled?limit=nan",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Failed to deserialize query string: limit: invalid digit found in string",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "72"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/drafts/scheduled","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/drafts/scheduled"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: fractional
+request:
+  {
+    "method": "GET",
+    "path": "/email/drafts/scheduled?limit=1.5",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Failed to deserialize query string: limit: invalid digit found in string",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "72"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/drafts/scheduled","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/drafts/scheduled"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: duplicate
+request:
+  {
+    "method": "GET",
+    "path": "/email/drafts/scheduled?limit=1&limit=2",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Failed to deserialize query string: duplicate field `limit`",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "59"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/drafts/scheduled","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/drafts/scheduled"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty result
+request:
+  {
+    "method": "GET",
+    "path": "/email/drafts/scheduled?offset=0&limit=1000",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "messages": []
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "15"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/drafts/scheduled","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/drafts/scheduled"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO inboxes_for_macro_id {}
+      INFO handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })","params":"GetScheduledQueryParams { offset: 0, limit: 1000 }"}
+        INFO get_scheduled_messages_by_link_id {"limit":1000,"link_id":"<link:A>","offset":0}
+          INFO get_scheduled_db_messages_by_link_id {"limit":1000,"link_id":"<link:A>","offset":0}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  2c66977b1e29 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

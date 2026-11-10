@@ -45,6 +45,8 @@ pub(super) struct Recording {
     sql: Vec<Value>,
     callsites: BTreeSet<(String, String, String)>,
     timing_event_counts: [u64; TIMING_THRESHOLD_EVENTS.len()],
+    open_requests: usize,
+    closed: Arc<tokio::sync::Notify>,
 }
 
 struct Span {
@@ -166,6 +168,9 @@ impl<S: tracing::Subscriber + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<
             attrs.record(&mut fields);
             let mut recording = location.recording.lock().expect("recording mutex");
             let index = recording.spans.len();
+            if attrs.metadata().name() == "http.request" {
+                recording.open_requests += 1;
+            }
             recording.callsites.insert((
                 "span".into(),
                 attrs.metadata().target().into(),
@@ -194,6 +199,21 @@ impl<S: tracing::Subscriber + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<
             location.recording.lock().expect("recording mutex").spans[index]
                 .fields
                 .extend(fields.0);
+        }
+    }
+
+    fn on_close(&self, id: Id, ctx: Context<'_, S>) {
+        let Some(span) = ctx.span(&id) else { return };
+        let extensions = span.extensions();
+        let Some(location) = extensions.get::<Location>() else {
+            return;
+        };
+        if let Some(index) = location.index {
+            let mut recording = location.recording.lock().expect("recording mutex");
+            if recording.spans[index].name == "http.request" {
+                recording.open_requests -= 1;
+                recording.closed.notify_one();
+            }
         }
     }
 
@@ -327,5 +347,19 @@ impl Recording {
                     json!({"target":target,"message":message,"count":count})).collect::<Vec<_>>() }),
             json!(full_spans),
         )
+    }
+}
+
+/// Wait on request-span ownership, including clones carried by detached work.
+/// Connection-pool spans can outlive requests and must not delay this boundary.
+/// Only suites with such work opt in; existing transcript boundaries stay intact.
+pub(super) async fn drain(recording: &Arc<Mutex<Recording>>) {
+    let closed = recording.lock().expect("recording mutex").closed.clone();
+    loop {
+        let notified = closed.notified();
+        if recording.lock().expect("recording mutex").open_requests == 0 {
+            return;
+        }
+        notified.await;
     }
 }

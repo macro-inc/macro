@@ -73,3 +73,27 @@ async fn concurrent_test_runtimes_do_not_enter_the_active_step() {
     stop();
     assert!(recording.lock().expect("recording").spans.is_empty());
 }
+
+#[tokio::test]
+async fn background_drain_waits_for_the_last_request_span_owner() {
+    if !crate::parity::process_per_test() {
+        return;
+    }
+    let _guard = exclusive_lab().await;
+    let (recording, root) = start();
+    let span = tracing::dispatcher::with_default(&dispatch(), || {
+        let _entered = root.enter();
+        tracing::info_span!("http.request")
+    });
+    let (release, released) = tokio::sync::oneshot::channel();
+    let task = tokio::spawn(async move {
+        released.await.expect("release background work");
+        drop(span);
+    });
+    assert_eq!(recording.lock().expect("recording").open_requests, 1);
+    release.send(()).expect("background receiver");
+    drain(&recording).await;
+    task.await.expect("background task");
+    stop();
+    assert_eq!(recording.lock().expect("recording").open_requests, 0);
+}

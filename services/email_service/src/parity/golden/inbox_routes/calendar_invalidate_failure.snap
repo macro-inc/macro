@@ -1,0 +1,113 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: calendar database failure
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/links/<link:A>/calendar",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "internal error"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "28"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 500
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":500,"http.route":"/email/links/{link_id}/calendar","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 500 Internal Server Error","request.id":"<volatile>","url.path":"/email/links/<link:A>/calendar"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO disable_link_calendar_handler {"fusionauth_user_id":"<fusion:A>","link_id":"<link:A>","user_id":"<user:A>"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO disconnect_calendar {"email_link_id":"<link:A>"}
+      INFO disconnect_provider_calendar {"email_link_id":"<link:A>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "disable_link_calendar_handler",
+        "disconnect_calendar",
+        "disconnect_provider_calendar"
+      ],
+      "message": null,
+      "fields": {
+        "error": "\n ● error returned from database: column \"grant_version\" does not exist\n ╰ crates/calendar_events/src/outbound/pg.rs:5244\n"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "disable_link_calendar_handler",
+        "disconnect_calendar"
+      ],
+      "message": null,
+      "fields": {
+        "error": "calendar mutation failed transiently: \n ● Database(PgDatabaseError { severity: Error, code: \"42703\", message: \"column \\\"grant_version\\\" does not exist\", detail: None, hint: None, position: Some(Original(424)), where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some(\"parse_relation.c\"), line: Some(<postgres-source-line>), routine: Some(\"errorMissingColumn\") })\n ╰ crates/calendar_events/src/outbound/pg.rs:5244\n"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "disable_link_calendar_handler"
+      ],
+      "message": null,
+      "fields": {
+        "error": "failed to disconnect the inbox calendar: Retryable(\"\\n ● Database(PgDatabaseError { severity: Error, code: \\\"42703\\\", message: \\\"column \\\\\\\"grant_version\\\\\\\" does not exist\\\", detail: None, hint: None, position: Some(Original(424)), where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some(\\\"parse_relation.c\\\"), line: Some(<postgres-source-line>), routine: Some(\\\"errorMissingColumn\\\") })\\n ╰ crates/calendar_events/src/outbound/pg.rs:5244\\n\")"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 500 Internal Server Error",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  afc57fbc6322 rows_affected=1 rows_returned=1
+  64a65ac11ac7 rows_affected=0 rows_returned=0
+  028228e479ae rows_affected=1 rows_returned=1
+  a0b3b4cba1f2 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

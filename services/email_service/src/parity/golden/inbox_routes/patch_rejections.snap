@@ -1,0 +1,578 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: absent content type
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Expected request with `Content-Type: application/json`",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "54"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 415
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":415,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid field type
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {},
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: missing field `settings` at line 1 column 2",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "101"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":422,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid field type
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": null
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: settings: invalid type: null, expected struct Settings at line 1 column 16",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "132"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":422,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid field type
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": [],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: invalid length 0, expected struct PatchSettingsRequest with 1 element at line 1 column 2",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "146"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":422,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid field type
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": {
+        "signature": true
+      }
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: settings.signature: invalid type: boolean `true`, expected a string at line 1 column 29",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "145"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":422,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid field type
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": {
+        "read_receipts_enabled": "yes"
+      }
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: settings.read_receipts_enabled: invalid type: string \"yes\", expected a boolean at line 1 column 42",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "156"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":422,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid field type
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": {
+        "signature_on_replies_forwards": 1
+      }
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: settings.signature_on_replies_forwards: invalid type: integer `1`, expected a boolean at line 1 column 46",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "163"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":422,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: malformed
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": "{",
+    "body_format": "raw",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to parse the request body as JSON: EOF while parsing an object at line 1 column 1",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "88"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":400,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": "",
+    "body_format": "raw",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to parse the request body as JSON: EOF while parsing a value at line 1 column 0",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "86"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":400,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: wrong media type
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": "{}",
+    "body_format": "raw",
+    "content-type": "text/plain"
+  }
+response:
+  {
+    "body": "Expected request with `Content-Type: application/json`",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "54"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 415
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":415,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

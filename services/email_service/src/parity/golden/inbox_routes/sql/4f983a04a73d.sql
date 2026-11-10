@@ -1,0 +1,1 @@
+UPDATE calendars SET is_deleted = true, sync_token = NULL, materialized_starts_at = NULL, materialized_ends_at = NULL, materialized_start_date = NULL, materialized_end_date = NULL, updated_at = now() WHERE account_id = $1 RETURNING id

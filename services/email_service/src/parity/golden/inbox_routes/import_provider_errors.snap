@@ -1,0 +1,1085 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: Gmail HTTP 400
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Failed to fetch Gmail signature",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "31"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 502
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":502,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 502 Bad Gateway","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO import_signature_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+      INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO fetch_gmail_access_token_no_cache {}
+          INFO fetch_token_from_auth_service {}
+            INFO get_google_access_token {"email":"parity-a@example.com","fusionauth_user_id":"<fusion:A>"}
+          INFO cache_token_in_redis {}
+    INFO list_send_as {}
+      INFO list_send_as {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider error\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider error\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 502 Bad Gateway",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=parity-a%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/settings/sendAs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 400
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: Gmail HTTP 401
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Failed to fetch Gmail signature",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "31"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 502
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":502,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 502 Bad Gateway","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO import_signature_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+      INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO fetch_gmail_access_token_no_cache {}
+          INFO fetch_token_from_auth_service {}
+            INFO get_google_access_token {"email":"parity-a@example.com","fusionauth_user_id":"<fusion:A>"}
+          INFO cache_token_in_redis {}
+    INFO list_send_as {}
+      INFO list_send_as {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider error\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider error\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 502 Bad Gateway",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=parity-a%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/settings/sendAs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 401
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: Gmail HTTP 403
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Failed to fetch Gmail signature",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "31"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 502
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":502,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 502 Bad Gateway","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO import_signature_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+      INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO fetch_gmail_access_token_no_cache {}
+          INFO fetch_token_from_auth_service {}
+            INFO get_google_access_token {"email":"parity-a@example.com","fusionauth_user_id":"<fusion:A>"}
+          INFO cache_token_in_redis {}
+    INFO list_send_as {}
+      INFO list_send_as {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 403 Forbidden: {\"error\":{\"code\":403,\"message\":\"scripted provider error\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 403 Forbidden: {\"error\":{\"code\":403,\"message\":\"scripted provider error\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 502 Bad Gateway",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=parity-a%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/settings/sendAs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 403
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: Gmail HTTP 404
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Failed to fetch Gmail signature",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "31"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 502
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":502,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 502 Bad Gateway","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO import_signature_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+      INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO fetch_gmail_access_token_no_cache {}
+          INFO fetch_token_from_auth_service {}
+            INFO get_google_access_token {"email":"parity-a@example.com","fusionauth_user_id":"<fusion:A>"}
+          INFO cache_token_in_redis {}
+    INFO list_send_as {}
+      INFO list_send_as {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 404 Not Found: {\"error\":{\"code\":404,\"message\":\"scripted provider error\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 404 Not Found: {\"error\":{\"code\":404,\"message\":\"scripted provider error\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 502 Bad Gateway",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=parity-a%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/settings/sendAs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 404
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: Gmail HTTP 429
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Failed to fetch Gmail signature",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "31"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 502
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":502,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 502 Bad Gateway","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO import_signature_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+      INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO fetch_gmail_access_token_no_cache {}
+          INFO fetch_token_from_auth_service {}
+            INFO get_google_access_token {"email":"parity-a@example.com","fusionauth_user_id":"<fusion:A>"}
+          INFO cache_token_in_redis {}
+    INFO list_send_as {}
+      INFO list_send_as {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 429 Too Many Requests: {\"error\":{\"code\":429,\"message\":\"scripted provider error\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 429 Too Many Requests: {\"error\":{\"code\":429,\"message\":\"scripted provider error\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 502 Bad Gateway",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=parity-a%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/settings/sendAs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 429
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: Gmail HTTP 500
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Failed to fetch Gmail signature",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "31"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 502
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":502,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 502 Bad Gateway","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO import_signature_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+      INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO fetch_gmail_access_token_no_cache {}
+          INFO fetch_token_from_auth_service {}
+            INFO get_google_access_token {"email":"parity-a@example.com","fusionauth_user_id":"<fusion:A>"}
+          INFO cache_token_in_redis {}
+    INFO list_send_as {}
+      INFO list_send_as {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 500 Internal Server Error: {\"error\":{\"code\":500,\"message\":\"scripted provider error\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 500 Internal Server Error: {\"error\":{\"code\":500,\"message\":\"scripted provider error\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 502 Bad Gateway",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=parity-a%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/settings/sendAs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 500
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: Gmail HTTP 503
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Failed to fetch Gmail signature",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "31"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 502
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":502,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 502 Bad Gateway","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO import_signature_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+      INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO fetch_gmail_access_token_no_cache {}
+          INFO fetch_token_from_auth_service {}
+            INFO get_google_access_token {"email":"parity-a@example.com","fusionauth_user_id":"<fusion:A>"}
+          INFO cache_token_in_redis {}
+    INFO list_send_as {}
+      INFO list_send_as {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider error\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider error\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 502 Bad Gateway",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=parity-a%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/settings/sendAs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 503
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid Gmail response schema
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Failed to fetch Gmail signature",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "31"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 502
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":502,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 502 Bad Gateway","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO import_signature_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+      INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO fetch_gmail_access_token_no_cache {}
+          INFO fetch_token_from_auth_service {}
+            INFO get_google_access_token {"email":"parity-a@example.com","fusionauth_user_id":"<fusion:A>"}
+          INFO cache_token_in_redis {}
+    INFO list_send_as {}
+      INFO list_send_as {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API response decode error: error decoding response body"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API response decode error: error decoding response body"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 502 Bad Gateway",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=parity-a%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/settings/sendAs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: Gmail drops connection
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Failed to fetch Gmail signature",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "31"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 502
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":502,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 502 Bad Gateway","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO import_signature_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+      INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO fetch_gmail_access_token_no_cache {}
+          INFO fetch_token_from_auth_service {}
+            INFO get_google_access_token {"email":"parity-a@example.com","fusionauth_user_id":"<fusion:A>"}
+          INFO cache_token_in_redis {}
+    INFO list_send_as {}
+      INFO list_send_as {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API transport error: error sending request"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "list_send_as"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API transport error: error sending request"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 502 Bad Gateway",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=parity-a%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/settings/sendAs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": null,
+      "connection_dropped": true
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

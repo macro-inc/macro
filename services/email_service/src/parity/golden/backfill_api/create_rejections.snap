@@ -1,0 +1,683 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: absent JSON content type
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Expected request with `Content-Type: application/json`",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "54"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 415
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":415,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid create JSON
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {},
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: missing field `link_ids` at line 1 column 2",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "101"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid create JSON
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": [],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: invalid length 0, expected struct BackfillParams with 2 elements at line 1 column 2",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "141"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid create JSON
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": null,
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: invalid type: null, expected struct BackfillParams at line 1 column 4",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "127"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid create JSON
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "link_ids": null
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: link_ids: invalid type: null, expected a sequence at line 1 column 16",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "127"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid create JSON
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "link_ids": [
+        "bad"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: link_ids[0]: UUID parsing failed: invalid length: expected length 32 for simple format, found 3 at line 1 column 18",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "173"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid create JSON
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "link_ids": [],
+      "num_threads": 2147483648
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: num_threads: invalid value: integer `2147483648`, expected i32 at line 1 column 39",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "140"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid create JSON
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "link_ids": [],
+      "num_threads": -2147483649
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: num_threads: invalid value: integer `-2147483649`, expected i32 at line 1 column 40",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "141"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid create JSON
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "link_ids": [],
+      "num_threads": 1.5
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: num_threads: invalid type: floating point `1.5`, expected i32 at line 1 column 32",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "139"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid create JSON
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "link_ids": [],
+      "num_threads": "1"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: num_threads: invalid type: string \"1\", expected i32 at line 1 column 32",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "129"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: malformed
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": "{",
+    "body_format": "raw",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to parse the request body as JSON: EOF while parsing an object at line 1 column 1",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "88"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":400,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": "",
+    "body_format": "raw",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to parse the request body as JSON: EOF while parsing a value at line 1 column 0",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "86"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":400,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: content type
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": "{}",
+    "body_format": "raw",
+    "content-type": "text/plain"
+  }
+response:
+  {
+    "body": "Expected request with `Content-Type: application/json`",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "54"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 415
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":415,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

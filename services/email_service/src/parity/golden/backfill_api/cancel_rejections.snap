@@ -1,0 +1,1116 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: absent JSON content type
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Expected request with `Content-Type: application/json`",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "54"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 415
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":415,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid cancel JSON shape
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {},
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: missing field `job_id` at line 1 column 2",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "99"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":422,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid cancel JSON shape
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": "bad"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: job_id: UUID parsing failed: invalid length: expected length 32 for simple format, found 3 at line 1 column 15",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "168"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":422,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid cancel JSON shape
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": null
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: job_id: invalid type: null, expected a formatted UUID string at line 1 column 14",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "138"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":422,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid cancel JSON shape
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": {
+      "job_id": 42
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: job_id: invalid type: integer `42`, expected a formatted UUID string at line 1 column 12",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "146"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":422,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid cancel JSON shape
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": [],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: invalid length 0, expected struct CancelBackfillParams with 1 element at line 1 column 2",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "146"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":422,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid cancel JSON shape
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": null,
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: invalid type: null, expected struct CancelBackfillParams at line 1 column 4",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "133"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":422,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: malformed JSON
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": "{",
+    "body_format": "raw",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to parse the request body as JSON: EOF while parsing an object at line 1 column 1",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "88"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty body
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": "",
+    "body_format": "raw",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to parse the request body as JSON: EOF while parsing a value at line 1 column 0",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "86"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: wrong content type
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": "{}",
+    "body_format": "raw",
+    "content-type": "text/plain"
+  }
+response:
+  {
+    "body": "Expected request with `Content-Type: application/json`",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "54"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 415
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":415,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: absent JSON content type
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Expected request with `Content-Type: application/json`",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "54"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 415
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":415,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid cancel JSON shape
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {},
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: missing field `job_id` at line 1 column 2",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "99"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":422,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid cancel JSON shape
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "job_id": "bad"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: job_id: UUID parsing failed: invalid length: expected length 32 for simple format, found 3 at line 1 column 15",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "168"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":422,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid cancel JSON shape
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "job_id": null
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: job_id: invalid type: null, expected a formatted UUID string at line 1 column 14",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "138"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":422,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid cancel JSON shape
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "job_id": 42
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: job_id: invalid type: integer `42`, expected a formatted UUID string at line 1 column 12",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "146"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":422,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid cancel JSON shape
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": [],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: invalid length 0, expected struct BackfillCancelParams with 1 element at line 1 column 2",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "146"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":422,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid cancel JSON shape
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": null,
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: invalid type: null, expected struct BackfillCancelParams at line 1 column 4",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "133"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":422,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: malformed JSON
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": "{",
+    "body_format": "raw",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to parse the request body as JSON: EOF while parsing an object at line 1 column 1",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "88"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty body
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": "",
+    "body_format": "raw",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to parse the request body as JSON: EOF while parsing a value at line 1 column 0",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "86"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: wrong content type
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": "{}",
+    "body_format": "raw",
+    "content-type": "text/plain"
+  }
+response:
+  {
+    "body": "Expected request with `Content-Type: application/json`",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "54"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 415
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":415,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

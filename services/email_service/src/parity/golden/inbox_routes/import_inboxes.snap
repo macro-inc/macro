@@ -1,0 +1,784 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: own
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "settings": {
+        "read_receipts_enabled": true,
+        "signature": "Imported",
+        "signature_on_replies_forwards": false
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "104"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO import_signature_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+      INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO fetch_gmail_access_token_no_cache {}
+          INFO fetch_token_from_auth_service {}
+            INFO get_google_access_token {"email":"parity-a@example.com","fusionauth_user_id":"<fusion:A>"}
+          INFO cache_token_in_redis {}
+    INFO list_send_as {}
+      INFO list_send_as {}
+    INFO rehost_html_images {}
+      INFO extract_all_image_urls {}
+    INFO patch_settings {}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  f680d1b52474 rows_affected=1 rows_returned=1
+  cd6c1c5b3421 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=parity-a%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/settings/sendAs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_settings": {
+      "removed": [],
+      "added": [
+        {
+          "link_id": "<link:A>",
+          "signature": "Imported",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "read_receipts_enabled": true,
+          "signature_on_replies_forwards": false
+        }
+      ],
+      "changed": []
+    }
+  }
+
+step: second own
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        "<link:A2>"
+      ]
+    }
+  }
+response:
+  {
+    "body": {
+      "settings": {
+        "read_receipts_enabled": true,
+        "signature": "Imported",
+        "signature_on_replies_forwards": false
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "104"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO import_signature_handler {"link":"Extension(Link { id: <link:A2>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO get_access_token {"freshness":"Fresh","link_id":"<link:A2>"}
+      INFO get_access_token {"freshness":"Fresh","link_id":"<link:A2>"}
+        INFO fetch_link_by_id {"link_id":"<link:A2>"}
+        INFO fetch_gmail_access_token_no_cache {}
+          INFO fetch_token_from_auth_service {}
+            INFO get_google_access_token {"email":"parity-41024-A2@example.com","fusionauth_user_id":"<fusion:A>"}
+          INFO cache_token_in_redis {}
+    INFO list_send_as {}
+      INFO list_send_as {}
+    INFO rehost_html_images {}
+      INFO extract_all_image_urls {}
+    INFO patch_settings {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  f680d1b52474 rows_affected=1 rows_returned=1
+  cd6c1c5b3421 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=parity-41024-A2%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/settings/sendAs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_settings": {
+      "removed": [],
+      "added": [
+        {
+          "link_id": "<link:A2>",
+          "signature": "Imported",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "read_receipts_enabled": true,
+          "signature_on_replies_forwards": false
+        }
+      ],
+      "changed": []
+    }
+  }
+
+step: delegated
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        "<link:B>"
+      ]
+    }
+  }
+response:
+  {
+    "body": {
+      "settings": {
+        "read_receipts_enabled": true,
+        "signature": "Imported",
+        "signature_on_replies_forwards": false
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "104"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO import_signature_handler {"link":"Extension(Link { id: <link:B>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO get_access_token {"freshness":"Fresh","link_id":"<link:B>"}
+      INFO get_access_token {"freshness":"Fresh","link_id":"<link:B>"}
+        INFO fetch_link_by_id {"link_id":"<link:B>"}
+        INFO fetch_gmail_access_token_no_cache {}
+          INFO fetch_token_from_auth_service {}
+            INFO get_google_access_token {"email":"parity-b@example.com","fusionauth_user_id":"<fusion:B>"}
+          INFO cache_token_in_redis {}
+    INFO list_send_as {}
+      INFO list_send_as {}
+    INFO rehost_html_images {}
+      INFO extract_all_image_urls {}
+    INFO patch_settings {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  f680d1b52474 rows_affected=1 rows_returned=1
+  cd6c1c5b3421 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:B>&email=parity-b%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/settings/sendAs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_settings": {
+      "removed": [],
+      "added": [
+        {
+          "link_id": "<link:B>",
+          "signature": "Imported",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "read_receipts_enabled": true,
+          "signature_on_replies_forwards": false
+        }
+      ],
+      "changed": []
+    }
+  }
+
+step: internal
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "internal",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "settings": {
+        "read_receipts_enabled": true,
+        "signature": "Imported",
+        "signature_on_replies_forwards": false
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "104"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO agent_sdk_request {}
+  INFO inboxes_for_macro_id {}
+  INFO import_signature_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+      INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO fetch_gmail_access_token_no_cache {}
+          INFO fetch_token_from_auth_service {}
+            INFO get_google_access_token {"email":"parity-a@example.com","fusionauth_user_id":"<fusion:A>"}
+          INFO cache_token_in_redis {}
+    INFO list_send_as {}
+      INFO list_send_as {}
+    INFO rehost_html_images {}
+      INFO extract_all_image_urls {}
+    INFO patch_settings {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  f680d1b52474 rows_affected=1 rows_returned=1
+  cd6c1c5b3421 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=parity-a%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/settings/sendAs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_settings": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "link_id": "<link:A>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: repeat
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "settings": {
+        "read_receipts_enabled": true,
+        "signature": "Imported",
+        "signature_on_replies_forwards": false
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "104"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO import_signature_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+      INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO fetch_gmail_access_token_no_cache {}
+          INFO fetch_token_from_auth_service {}
+            INFO get_google_access_token {"email":"parity-a@example.com","fusionauth_user_id":"<fusion:A>"}
+          INFO cache_token_in_redis {}
+    INFO list_send_as {}
+      INFO list_send_as {}
+    INFO rehost_html_images {}
+      INFO extract_all_image_urls {}
+    INFO patch_settings {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  f680d1b52474 rows_affected=1 rows_returned=1
+  cd6c1c5b3421 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=parity-a%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/settings/sendAs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_settings": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "link_id": "<link:A>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: Outlook stops before Graph
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        "<link:outlook>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Failed to get Gmail access token",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "32"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 502
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":502,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 502 Bad Gateway","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO import_signature_handler {"link":"Extension(Link { id: <link:outlook>, provider: Outlook, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO get_access_token {"freshness":"Fresh","link_id":"<link:outlook>"}
+      INFO get_access_token {"freshness":"Fresh","link_id":"<link:outlook>"}
+        INFO fetch_link_by_id {"link_id":"<link:outlook>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "get_access_token",
+        "get_access_token"
+      ],
+      "message": null,
+      "fields": {
+        "error": "access token acquisition failed: mailbox provider does not match Gmail credentials"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "import_signature_handler",
+        "get_access_token"
+      ],
+      "message": null,
+      "fields": {
+        "error": "permanent email provider failure: mailbox provider does not match Gmail credentials"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 502 Bad Gateway",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        "<missing>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Email link not found",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "20"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 404
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":404,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: inaccessible
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user C",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        "<link:A>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Email link not found",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "20"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 404
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":404,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

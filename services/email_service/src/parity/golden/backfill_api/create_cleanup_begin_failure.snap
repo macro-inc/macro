@@ -1,0 +1,206 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: database failure
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "link_ids": [
+        "<link:A>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "Failed to clean up backfill job for link <link:A>"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "91"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 500
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":500,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 500 Internal Server Error","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillParams { link_ids: [<link:A>], num_threads: None }"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO create_backfill_job {"fusionauth_user_id":"<fusion:A>","is_recovery":false,"link_id":"<link:A>","num_threads":"None"}
+        INFO enqueue_email_backfill_message {}
+          INFO enqueue_backfill_message {}
+        INFO fail_backfill_job {"job_id":"<uuid:1>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler",
+        "enqueue_email_backfill_message",
+        "enqueue_backfill_message"
+      ],
+      "message": "Connection encountered an issue and should not be re-used. Marking it for closure",
+      "fields": {
+        "see_for_more_info": "https://smithy-lang.github.io/smithy-rs/design/client/detailed_error_explanations.html"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler",
+        "enqueue_email_backfill_message",
+        "enqueue_backfill_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "service error"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler",
+        "enqueue_email_backfill_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "service error"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "Failed to enqueue backfill message",
+      "fields": {
+        "backfill_id": "<uuid:1>",
+        "error": "service error\n\nCaused by:\n    0: unhandled error (InternalError)\n    1: Error { code: \"InternalError\", message: \"injected outage\" }"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler",
+        "fail_backfill_job"
+      ],
+      "message": null,
+      "fields": {
+        "error": "attempted to acquire a connection on a closed pool"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "Failed to persist backfill publication failure",
+      "fields": {
+        "backfill_id": "<uuid:1>",
+        "error": "attempted to acquire a connection on a closed pool"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 500 Internal Server Error",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  dbffb37dae52 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "init": {
+              "link_id": "<link:A>",
+              "job_id": "<uuid:1>"
+            }
+          }
+        },
+        "DelaySeconds": 0,
+        "Entries": null
+      },
+      "status": 500,
+      "response": {
+        "__type": "com.amazonaws.sqs#InternalError",
+        "message": "injected outage"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:1>",
+          "status": "Init",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "is_recovery": false,
+          "total_threads": 0,
+          "initialized_at": null,
+          "init_lease_token": null,
+          "fusionauth_user_id": "<fusion:A>",
+          "init_lease_expires_at": null,
+          "threads_requested_limit": null,
+          "threads_retrieved_count": 0
+        }
+      ],
+      "changed": []
+    }
+  }

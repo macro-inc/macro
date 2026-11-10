@@ -1,0 +1,1 @@
+WITH deleted_sources AS ( DELETE FROM calendar_event_sources WHERE source_kind IN ('google','outlook') AND account_id = $1 RETURNING event_id ) SELECT DISTINCT event_id AS "event_id!" FROM deleted_sources

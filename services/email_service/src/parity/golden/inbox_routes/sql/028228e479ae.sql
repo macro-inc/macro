@@ -1,0 +1,1 @@
+INSERT INTO email_link_google_scopes ( link_id, granted_scopes, grant_version, calendar_disabled_at ) VALUES ($1, $2, 1, now()) ON CONFLICT (link_id) DO UPDATE SET granted_scopes = EXCLUDED.granted_scopes, grant_version = email_link_google_scopes.grant_version + 1, calendar_disabled_at = now(), updated_at = now() RETURNING grant_version AS "grant_version!"

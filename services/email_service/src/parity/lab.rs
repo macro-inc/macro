@@ -56,6 +56,7 @@ pub(super) struct Lab {
     pub gmail: FakeGmail,
     pub stub: Stub,
     pub sql_fault: SqlFault,
+    pub drain_background: bool,
     kafka: Kafka,
     redis: ::redis::aio::MultiplexedConnection,
     redis_scopes: Vec<String>,
@@ -235,6 +236,7 @@ impl Lab {
             gmail,
             stub,
             sql_fault,
+            drain_background: false,
             kafka,
             redis,
             redis_scopes,
@@ -245,6 +247,29 @@ impl Lab {
         // before internal callers try optional cookie authentication.
         lab.assert_missing_credentials().await;
         lab
+    }
+
+    /// Seed tokens after a suite changes the inbox address used as its cache key.
+    pub async fn seed_link_token(&mut self, link_id: uuid::Uuid) {
+        let link = email_db_client::links::get::fetch_link_by_id(&self.db, link_id)
+            .await
+            .expect("suite link query")
+            .expect("suite link");
+        let key = models_email::email::service::cache::TokenCacheKey::new(
+            &link.fusionauth_user_id,
+            link.email_address.0.as_ref(),
+            link.provider.as_str(),
+        )
+        .to_redis_key();
+        let _: () = ::redis::cmd("SET")
+            .arg(&key)
+            .arg("fake-access-token")
+            .arg("EX")
+            .arg(86_400)
+            .query_async(&mut self.redis)
+            .await
+            .expect("suite token");
+        self.redis_scopes.push(key);
     }
 
     pub async fn assert_missing_credentials(&self) {
@@ -281,6 +306,19 @@ impl Lab {
         path: &str,
         auth: Auth,
         body: RequestBody,
+    ) -> u16 {
+        self.request_with_headers(name, method, path, auth, body, &[])
+            .await
+    }
+
+    pub async fn request_with_headers(
+        &mut self,
+        name: &str,
+        method: &str,
+        path: &str,
+        auth: Auth,
+        body: RequestBody,
+        headers: &[(&str, &[u8])],
     ) -> u16 {
         let before = Snapshot::take(&self.db).await;
         let redis_before = redis::snapshot(&mut self.redis, &self.redis_scopes).await;
@@ -355,6 +393,9 @@ impl Lab {
             }
             Auth::MissingCredentials => {}
         }
+        for (name, value) in headers {
+            request = request.header(*name, *value);
+        }
         let request = request.body(wire_body).expect("request");
         let (recording, span) = capture::start();
         let response = capture::scope(
@@ -398,6 +439,14 @@ impl Lab {
             .with_subscriber(capture::dispatch()),
         )
         .await;
+        if self.drain_background {
+            tokio::time::timeout(
+                std::time::Duration::from_secs(20),
+                capture::drain(&recording),
+            )
+            .await
+            .expect("detached request spans drained");
+        }
         capture::stop();
         let after = Snapshot::take(&self.db).await;
         let redis_after = redis::snapshot(&mut self.redis, &self.redis_scopes).await;
@@ -423,14 +472,22 @@ impl Lab {
                 }
             }
         }
+        let mut recorded_request = json!({"method":method,"path":path,"auth":auth_name,
+            "body":recorded_body,"body_format":body_format,"content-type":content_type});
+        if !headers.is_empty() {
+            let mut recorded_headers = std::collections::BTreeMap::<&str, Vec<Value>>::new();
+            for (name, value) in headers {
+                let value = std::str::from_utf8(value)
+                    .map(|text| json!(text))
+                    .unwrap_or_else(|_| super::http_body(value));
+                recorded_headers.entry(name).or_default().push(value);
+            }
+            recorded_request["headers"] = json!(recorded_headers);
+        }
         self.transcript.step(
             name,
             vec![
-                (
-                    "request",
-                    json!({"method":method,"path":path,"auth":auth_name,
-                        "body":recorded_body,"body_format":body_format,"content-type":content_type}),
-                ),
+                ("request", recorded_request),
                 (
                     "response",
                     json!({"status":response.0,"headers":response.1,"body":response.2}),

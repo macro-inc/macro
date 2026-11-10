@@ -1,0 +1,921 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: num_threads -2147483648
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "link_ids": [
+        "<link:A>"
+      ],
+      "num_threads": -2147483648
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "pairs": [
+        {
+          "job_id": "<uuid:1>",
+          "link_id": "<link:A>"
+        }
+      ]
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "110"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillParams { link_ids: [<link:A>], num_threads: Some(-2147483648) }"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO create_backfill_job {"fusionauth_user_id":"<fusion:A>","is_recovery":false,"link_id":"<link:A>","num_threads":"Some(-2147483648)"}
+        INFO enqueue_email_backfill_message {}
+          INFO enqueue_backfill_message {}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  dbffb37dae52 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "init": {
+              "link_id": "<link:A>",
+              "job_id": "<uuid:1>"
+            }
+          }
+        },
+        "DelaySeconds": 0,
+        "Entries": null
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-1"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:1>",
+          "status": "Init",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "is_recovery": false,
+          "total_threads": 0,
+          "initialized_at": null,
+          "init_lease_token": null,
+          "fusionauth_user_id": "<fusion:A>",
+          "init_lease_expires_at": null,
+          "threads_requested_limit": -2147483648,
+          "threads_retrieved_count": 0
+        }
+      ],
+      "changed": []
+    }
+  }
+
+step: cancel bound 0
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "job_id": "<uuid:1>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillCancelParams { job_id: <uuid:1> }"}
+        INFO get_backfill_job {"job_id":"<uuid:1>"}
+        INFO update_backfill_job_status {"job_id":"<uuid:1>","status":"Cancelled"}
+logs:
+  []
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  83157ebb76e7 rows_affected=1 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<uuid:1>",
+          "status": {
+            "before": "Init",
+            "after": "Cancelled"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: num_threads -1
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "link_ids": [
+        "<link:A>"
+      ],
+      "num_threads": -1
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "pairs": [
+        {
+          "job_id": "<uuid:2>",
+          "link_id": "<link:A>"
+        }
+      ]
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "110"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillParams { link_ids: [<link:A>], num_threads: Some(-1) }"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO create_backfill_job {"fusionauth_user_id":"<fusion:A>","is_recovery":false,"link_id":"<link:A>","num_threads":"Some(-1)"}
+        INFO enqueue_email_backfill_message {}
+          INFO enqueue_backfill_message {}
+logs:
+  []
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  dbffb37dae52 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "init": {
+              "link_id": "<link:A>",
+              "job_id": "<uuid:2>"
+            }
+          }
+        },
+        "DelaySeconds": 0,
+        "Entries": null
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-2"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:2>",
+          "status": "Init",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "is_recovery": false,
+          "total_threads": 0,
+          "initialized_at": null,
+          "init_lease_token": null,
+          "fusionauth_user_id": "<fusion:A>",
+          "init_lease_expires_at": null,
+          "threads_requested_limit": -1,
+          "threads_retrieved_count": 0
+        }
+      ],
+      "changed": []
+    }
+  }
+
+step: cancel bound 1
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "job_id": "<uuid:2>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillCancelParams { job_id: <uuid:2> }"}
+        INFO get_backfill_job {"job_id":"<uuid:2>"}
+        INFO update_backfill_job_status {"job_id":"<uuid:2>","status":"Cancelled"}
+logs:
+  []
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  83157ebb76e7 rows_affected=1 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<uuid:2>",
+          "status": {
+            "before": "Init",
+            "after": "Cancelled"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: num_threads 0
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "link_ids": [
+        "<link:A>"
+      ],
+      "num_threads": 0
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "pairs": [
+        {
+          "job_id": "<uuid:3>",
+          "link_id": "<link:A>"
+        }
+      ]
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "110"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillParams { link_ids: [<link:A>], num_threads: Some(0) }"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO create_backfill_job {"fusionauth_user_id":"<fusion:A>","is_recovery":false,"link_id":"<link:A>","num_threads":"Some(0)"}
+        INFO enqueue_email_backfill_message {}
+          INFO enqueue_backfill_message {}
+logs:
+  []
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  dbffb37dae52 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "init": {
+              "link_id": "<link:A>",
+              "job_id": "<uuid:3>"
+            }
+          }
+        },
+        "DelaySeconds": 0,
+        "Entries": null
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-3"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:3>",
+          "status": "Init",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "is_recovery": false,
+          "total_threads": 0,
+          "initialized_at": null,
+          "init_lease_token": null,
+          "fusionauth_user_id": "<fusion:A>",
+          "init_lease_expires_at": null,
+          "threads_requested_limit": 0,
+          "threads_retrieved_count": 0
+        }
+      ],
+      "changed": []
+    }
+  }
+
+step: cancel bound 2
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "job_id": "<uuid:3>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillCancelParams { job_id: <uuid:3> }"}
+        INFO get_backfill_job {"job_id":"<uuid:3>"}
+        INFO update_backfill_job_status {"job_id":"<uuid:3>","status":"Cancelled"}
+logs:
+  []
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  83157ebb76e7 rows_affected=1 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<uuid:3>",
+          "status": {
+            "before": "Init",
+            "after": "Cancelled"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: num_threads 1
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "link_ids": [
+        "<link:A>"
+      ],
+      "num_threads": 1
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "pairs": [
+        {
+          "job_id": "<uuid:4>",
+          "link_id": "<link:A>"
+        }
+      ]
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "110"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillParams { link_ids: [<link:A>], num_threads: Some(1) }"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO create_backfill_job {"fusionauth_user_id":"<fusion:A>","is_recovery":false,"link_id":"<link:A>","num_threads":"Some(1)"}
+        INFO enqueue_email_backfill_message {}
+          INFO enqueue_backfill_message {}
+logs:
+  []
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  dbffb37dae52 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "init": {
+              "link_id": "<link:A>",
+              "job_id": "<uuid:4>"
+            }
+          }
+        },
+        "DelaySeconds": 0,
+        "Entries": null
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-4"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:4>",
+          "status": "Init",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "is_recovery": false,
+          "total_threads": 0,
+          "initialized_at": null,
+          "init_lease_token": null,
+          "fusionauth_user_id": "<fusion:A>",
+          "init_lease_expires_at": null,
+          "threads_requested_limit": 1,
+          "threads_retrieved_count": 0
+        }
+      ],
+      "changed": []
+    }
+  }
+
+step: cancel bound 3
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "job_id": "<uuid:4>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillCancelParams { job_id: <uuid:4> }"}
+        INFO get_backfill_job {"job_id":"<uuid:4>"}
+        INFO update_backfill_job_status {"job_id":"<uuid:4>","status":"Cancelled"}
+logs:
+  []
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  83157ebb76e7 rows_affected=1 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<uuid:4>",
+          "status": {
+            "before": "Init",
+            "after": "Cancelled"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: num_threads 2147483647
+request:
+  {
+    "method": "POST",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "link_ids": [
+        "<link:A>"
+      ],
+      "num_threads": 2147483647
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "pairs": [
+        {
+          "job_id": "<uuid:5>",
+          "link_id": "<link:A>"
+        }
+      ]
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "110"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillParams { link_ids: [<link:A>], num_threads: Some(2147483647) }"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO create_backfill_job {"fusionauth_user_id":"<fusion:A>","is_recovery":false,"link_id":"<link:A>","num_threads":"Some(2147483647)"}
+        INFO enqueue_email_backfill_message {}
+          INFO enqueue_backfill_message {}
+logs:
+  []
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  dbffb37dae52 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "init": {
+              "link_id": "<link:A>",
+              "job_id": "<uuid:5>"
+            }
+          }
+        },
+        "DelaySeconds": 0,
+        "Entries": null
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-5"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:5>",
+          "status": "Init",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "is_recovery": false,
+          "total_threads": 0,
+          "initialized_at": null,
+          "init_lease_token": null,
+          "fusionauth_user_id": "<fusion:A>",
+          "init_lease_expires_at": null,
+          "threads_requested_limit": 2147483647,
+          "threads_retrieved_count": 0
+        }
+      ],
+      "changed": []
+    }
+  }
+
+step: cancel bound 4
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/backfill/provider/gmail",
+    "auth": "internal key only",
+    "body": {
+      "job_id": "<uuid:5>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/internal/backfill/provider/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/backfill/provider/gmail"}
+    INFO agent_sdk_request {}
+      INFO handler {"req_body":"BackfillCancelParams { job_id: <uuid:5> }"}
+        INFO get_backfill_job {"job_id":"<uuid:5>"}
+        INFO update_backfill_job_status {"job_id":"<uuid:5>","status":"Cancelled"}
+logs:
+  []
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  83157ebb76e7 rows_affected=1 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<uuid:5>",
+          "status": {
+            "before": "Init",
+            "after": "Cancelled"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }

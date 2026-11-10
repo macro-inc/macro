@@ -1,0 +1,97 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: calendar database failure
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/links/<link:A>/calendar",
+    "auth": "user C",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "internal error"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "28"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 500
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":500,"http.route":"/email/links/{link_id}/calendar","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 500 Internal Server Error","request.id":"<volatile>","url.path":"/email/links/<link:A>/calendar"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO disable_link_calendar_handler {"fusionauth_user_id":"<fusion:C>","link_id":"<link:A>","user_id":"<user:C>"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO edge_exists {"child_macro_id":"<user:A>","link_id":"<link:A>","primary_macro_id":"<user:C>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "disable_link_calendar_handler",
+        "edge_exists"
+      ],
+      "message": null,
+      "fields": {
+        "error": "error returned from database: relation \"macro_user_links\" does not exist"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "disable_link_calendar_handler"
+      ],
+      "message": null,
+      "fields": {
+        "error": "error returned from database: relation \"macro_user_links\" does not exist"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 500 Internal Server Error",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  6733b9978d90 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

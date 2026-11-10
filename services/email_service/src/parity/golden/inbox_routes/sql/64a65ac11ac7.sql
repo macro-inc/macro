@@ -1,0 +1,1 @@
+SELECT c.watch_channel_id AS "channel_id!", c.watch_resource_id AS "resource_id!" FROM calendars c JOIN calendar_accounts a ON a.id = c.account_id WHERE a.email_link_id = $1 AND c.watch_channel_id IS NOT NULL AND c.watch_resource_id IS NOT NULL

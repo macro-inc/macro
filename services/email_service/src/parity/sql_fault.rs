@@ -12,7 +12,14 @@ pub(super) struct SqlFault(Arc<State>);
 #[derive(Default)]
 struct State {
     pool: OnceLock<PgPool>,
+    pause: std::sync::Mutex<Option<Pause>>,
     remaining: AtomicUsize,
+}
+
+struct Pause {
+    remaining: usize,
+    arrived: tokio::sync::oneshot::Sender<()>,
+    release: tokio::sync::oneshot::Receiver<()>,
 }
 
 impl SqlFault {
@@ -23,6 +30,23 @@ impl SqlFault {
             .before_acquire(move |_, _| {
                 let state = state.upgrade().expect("live lab SQL fault");
                 Box::pin(async move {
+                    let pause = {
+                        let mut slot = state.pause.lock().expect("acquisition pause");
+                        if let Some(pause) = slot.as_mut() {
+                            pause.remaining -= 1;
+                            if pause.remaining == 0 {
+                                slot.take()
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    };
+                    if let Some(pause) = pause {
+                        let _ = pause.arrived.send(());
+                        pause.release.await.expect("release acquisition");
+                    }
                     if state
                         .remaining
                         .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_sub(1))
@@ -45,6 +69,25 @@ impl SqlFault {
     pub fn fail_acquisition(&self, index: usize) {
         assert!(index > 0, "acquisitions are numbered from one");
         self.0.remaining.store(index, Ordering::SeqCst);
+    }
+
+    /// Pause exactly one acquisition so a scenario can reproduce a concurrent DB change.
+    pub fn pause_acquisition(
+        &self,
+        index: usize,
+    ) -> (
+        tokio::sync::oneshot::Receiver<()>,
+        tokio::sync::oneshot::Sender<()>,
+    ) {
+        assert!(index > 0);
+        let (arrived, receiver) = tokio::sync::oneshot::channel();
+        let (release, resume) = tokio::sync::oneshot::channel();
+        *self.0.pause.lock().expect("acquisition pause") = Some(Pause {
+            remaining: index,
+            arrived,
+            release: resume,
+        });
+        (receiver, release)
     }
 
     pub async fn drain(&self) {

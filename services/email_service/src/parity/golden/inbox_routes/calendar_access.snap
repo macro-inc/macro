@@ -1,0 +1,344 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: delegated may not disconnect
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/links/<link:B>/calendar",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "not authorized for this inbox"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "43"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 403
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":403,"http.route":"/email/links/{link_id}/calendar","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/links/<link:B>/calendar"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO disable_link_calendar_handler {"fusionauth_user_id":"<fusion:A>","link_id":"<link:B>","user_id":"<user:A>"}
+    INFO fetch_link_by_id {"link_id":"<link:B>"}
+    INFO edge_exists {"child_macro_id":"<user:B>","link_id":"<link:B>","primary_macro_id":"<user:A>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "disable_link_calendar_handler"
+      ],
+      "message": null,
+      "fields": {
+        "error": "not authorized for this inbox"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  6733b9978d90 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: unrelated user
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/links/<link:A>/calendar",
+    "auth": "user C",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "not authorized for this inbox"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "43"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 403
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":403,"http.route":"/email/links/{link_id}/calendar","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/links/<link:A>/calendar"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO disable_link_calendar_handler {"fusionauth_user_id":"<fusion:C>","link_id":"<link:A>","user_id":"<user:C>"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO edge_exists {"child_macro_id":"<user:A>","link_id":"<link:A>","primary_macro_id":"<user:C>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "disable_link_calendar_handler"
+      ],
+      "message": null,
+      "fields": {
+        "error": "not authorized for this inbox"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  6733b9978d90 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: other owner
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/links/<link:A>/calendar",
+    "auth": "user B",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "not authorized for this inbox"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "43"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 403
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":403,"http.route":"/email/links/{link_id}/calendar","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/links/<link:A>/calendar"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO disable_link_calendar_handler {"fusionauth_user_id":"<fusion:B>","link_id":"<link:A>","user_id":"<user:B>"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO edge_exists {"child_macro_id":"<user:A>","link_id":"<link:A>","primary_macro_id":"<user:B>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "disable_link_calendar_handler"
+      ],
+      "message": null,
+      "fields": {
+        "error": "not authorized for this inbox"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  6733b9978d90 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing link
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/links/<missing>/calendar",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "inbox not found"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "29"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 404
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":404,"http.route":"/email/links/{link_id}/calendar","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/links/<missing>/calendar"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO disable_link_calendar_handler {"fusionauth_user_id":"<fusion:A>","link_id":"<missing>","user_id":"<user:A>"}
+    INFO fetch_link_by_id {"link_id":"<missing>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "disable_link_calendar_handler"
+      ],
+      "message": null,
+      "fields": {
+        "error": "inbox not found"
+      }
+    }
+  ]
+sql:
+  f680d1b52474 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid path UUID
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/links/bad/calendar",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Invalid URL: Cannot parse `link_id` with value `bad`: UUID parsing failed: invalid length: expected length 32 for simple format, found 3",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "136"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/email/links/{link_id}/calendar","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/links/bad/calendar"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

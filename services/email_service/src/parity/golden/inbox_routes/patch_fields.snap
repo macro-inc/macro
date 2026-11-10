@@ -1,0 +1,964 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: new settings with defaults
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": {}
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "settings": {
+        "read_receipts_enabled": true,
+        "signature": null,
+        "signature_on_replies_forwards": false
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "98"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":200,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO patch_settings_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO patch_settings {}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  cd6c1c5b3421 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_settings": {
+      "removed": [],
+      "added": [
+        {
+          "link_id": "<link:A>",
+          "signature": null,
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "read_receipts_enabled": true,
+          "signature_on_replies_forwards": false
+        }
+      ],
+      "changed": []
+    }
+  }
+
+step: signature only
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": {
+        "signature": "<p>Signature</p><script>bad()</script>"
+      }
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "settings": {
+        "read_receipts_enabled": true,
+        "signature": "<p>Signature</p>",
+        "signature_on_replies_forwards": false
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "112"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":200,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO patch_settings_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO rehost_html_images {}
+      INFO extract_all_image_urls {}
+    INFO patch_settings {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  cd6c1c5b3421 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_settings": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "link_id": "<link:A>",
+          "signature": {
+            "before": null,
+            "after": "<p>Signature</p>"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: signature unchanged
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": {
+        "signature": "<p>Signature</p>"
+      }
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "settings": {
+        "read_receipts_enabled": true,
+        "signature": "<p>Signature</p>",
+        "signature_on_replies_forwards": false
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "112"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":200,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO patch_settings_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO rehost_html_images {}
+      INFO extract_all_image_urls {}
+    INFO patch_settings {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  cd6c1c5b3421 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_settings": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "link_id": "<link:A>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: enable replies
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": {
+        "signature_on_replies_forwards": true
+      }
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "settings": {
+        "read_receipts_enabled": true,
+        "signature": "<p>Signature</p>",
+        "signature_on_replies_forwards": true
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "111"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":200,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO patch_settings_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO patch_settings {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  cd6c1c5b3421 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_settings": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "link_id": "<link:A>",
+          "signature_on_replies_forwards": {
+            "before": false,
+            "after": true
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: disable replies
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": {
+        "signature_on_replies_forwards": false
+      }
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "settings": {
+        "read_receipts_enabled": true,
+        "signature": "<p>Signature</p>",
+        "signature_on_replies_forwards": false
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "112"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":200,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO patch_settings_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO patch_settings {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  cd6c1c5b3421 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_settings": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "link_id": "<link:A>",
+          "signature_on_replies_forwards": {
+            "before": true,
+            "after": false
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: disable read receipts
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": {
+        "read_receipts_enabled": false
+      }
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "settings": {
+        "read_receipts_enabled": false,
+        "signature": "<p>Signature</p>",
+        "signature_on_replies_forwards": false
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "113"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":200,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO patch_settings_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO patch_settings {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  cd6c1c5b3421 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_settings": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "link_id": "<link:A>",
+          "read_receipts_enabled": {
+            "before": true,
+            "after": false
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: enable read receipts
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": {
+        "read_receipts_enabled": true
+      }
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "settings": {
+        "read_receipts_enabled": true,
+        "signature": "<p>Signature</p>",
+        "signature_on_replies_forwards": false
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "112"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":200,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO patch_settings_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO patch_settings {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  cd6c1c5b3421 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_settings": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "link_id": "<link:A>",
+          "read_receipts_enabled": {
+            "before": false,
+            "after": true
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: all fields
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": {
+        "signature": "Combined",
+        "signature_on_replies_forwards": true,
+        "read_receipts_enabled": false
+      }
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "settings": {
+        "read_receipts_enabled": false,
+        "signature": "Combined",
+        "signature_on_replies_forwards": true
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "104"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":200,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO patch_settings_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO rehost_html_images {}
+      INFO extract_all_image_urls {}
+    INFO patch_settings {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  cd6c1c5b3421 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_settings": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "link_id": "<link:A>",
+          "read_receipts_enabled": {
+            "before": true,
+            "after": false
+          },
+          "signature": {
+            "before": "<p>Signature</p>",
+            "after": "Combined"
+          },
+          "signature_on_replies_forwards": {
+            "before": false,
+            "after": true
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: explicit null leaves fields unchanged
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": {
+        "signature": null,
+        "signature_on_replies_forwards": null,
+        "read_receipts_enabled": null
+      }
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "settings": {
+        "read_receipts_enabled": false,
+        "signature": "Combined",
+        "signature_on_replies_forwards": true
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "104"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":200,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO patch_settings_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO patch_settings {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  cd6c1c5b3421 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_settings": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "link_id": "<link:A>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: empty signature clears
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": {
+        "signature": ""
+      }
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "settings": {
+        "read_receipts_enabled": false,
+        "signature": "",
+        "signature_on_replies_forwards": true
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "96"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":200,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO patch_settings_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO rehost_html_images {}
+      INFO extract_all_image_urls {}
+    INFO patch_settings {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  cd6c1c5b3421 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_settings": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "link_id": "<link:A>",
+          "signature": {
+            "before": "Combined",
+            "after": ""
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: unknown fields ignored
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": {
+        "unknown": 123
+      }
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "settings": {
+        "read_receipts_enabled": false,
+        "signature": "",
+        "signature_on_replies_forwards": true
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "96"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":200,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO inboxes_for_macro_id {}
+  INFO patch_settings_handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })"}
+    INFO patch_settings {}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  cd6c1c5b3421 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_settings": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "link_id": "<link:A>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }

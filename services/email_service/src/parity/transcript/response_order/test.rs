@@ -92,3 +92,35 @@ fn thread_order_rule_keeps_primary_order_and_sorts_only_adjacent_timestamp_ties(
     );
     assert_eq!(response, original);
 }
+
+#[test]
+fn scheduled_rule_sorts_nested_fields_without_reordering_the_schedule() {
+    if !crate::parity::process_per_test() {
+        return;
+    }
+    let original = json!({"body":{"messages":[
+        {"db_id":"z","labels":[{"provider_id":"Z"},{"provider_id":"A"}],
+         "to":[{"email":"z@example.com"},{"email":"a@example.com"}]},
+        {"db_id":"a","labels":[]}
+    ]}});
+    let mut response = original.clone();
+    ResponseArrayRule::ScheduledMessageFields.apply(
+        &json!({"method":"GET","path":"/email/drafts/scheduled?limit=2"}),
+        &mut response,
+    );
+    assert_eq!(response["body"]["messages"][0]["db_id"], "z");
+    assert_eq!(
+        response["body"]["messages"][0]["labels"][0]["provider_id"],
+        "A"
+    );
+    assert_eq!(
+        response["body"]["messages"][0]["to"][0]["email"],
+        "a@example.com"
+    );
+    let mut unrelated = original.clone();
+    ResponseArrayRule::ScheduledMessageFields.apply(
+        &json!({"method":"GET","path":"/email/contacts"}),
+        &mut unrelated,
+    );
+    assert_eq!(unrelated, original);
+}

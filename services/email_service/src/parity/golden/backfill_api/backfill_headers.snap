@@ -1,0 +1,402 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: malformed
+request:
+  {
+    "method": "GET",
+    "path": "/email/backfill/gmail/active",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        "bad"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Invalid X-Email-Link-Id header",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "30"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/backfill/gmail/active","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail/active"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty
+request:
+  {
+    "method": "GET",
+    "path": "/email/backfill/gmail/active",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        ""
+      ]
+    }
+  }
+response:
+  {
+    "body": "Invalid X-Email-Link-Id header",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "30"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/backfill/gmail/active","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail/active"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: non UTF8
+request:
+  {
+    "method": "GET",
+    "path": "/email/backfill/gmail/active",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        {
+          "bytes": 1,
+          "sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89"
+        }
+      ]
+    }
+  }
+response:
+  {
+    "body": "Invalid X-Email-Link-Id header",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "30"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/backfill/gmail/active","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail/active"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: malformed
+request:
+  {
+    "method": "GET",
+    "path": "/email/backfill/gmail/<missing>",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        "bad"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Invalid X-Email-Link-Id header",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "30"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/backfill/gmail/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail/<missing>"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty
+request:
+  {
+    "method": "GET",
+    "path": "/email/backfill/gmail/<missing>",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        ""
+      ]
+    }
+  }
+response:
+  {
+    "body": "Invalid X-Email-Link-Id header",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "30"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/backfill/gmail/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail/<missing>"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: non UTF8
+request:
+  {
+    "method": "GET",
+    "path": "/email/backfill/gmail/<missing>",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        {
+          "bytes": 1,
+          "sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89"
+        }
+      ]
+    }
+  }
+response:
+  {
+    "body": "Invalid X-Email-Link-Id header",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "30"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/backfill/gmail/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail/<missing>"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: no primary for unrelated user
+request:
+  {
+    "method": "GET",
+    "path": "/email/backfill/gmail/active",
+    "auth": "user C",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "No inbox specified; provide the X-Email-Link-Id header",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "54"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/backfill/gmail/active","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail/active"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO inboxes_for_macro_id {}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  c44678edb7f6 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

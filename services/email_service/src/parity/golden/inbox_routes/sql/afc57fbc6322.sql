@@ -1,0 +1,1 @@
+SELECT l.fusionauth_user_id, l.email_address::text AS "email_address!", l.provider::text AS "provider!",l.id AS link_id,l.sync_generation,l.grant_generation, COALESCE(g.granted_scopes, '{}') AS "granted_scopes!" FROM email_links l LEFT JOIN email_link_google_scopes g ON g.link_id = l.id WHERE l.id = $1 AND l.macro_id = $2 FOR UPDATE OF l

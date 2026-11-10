@@ -1,0 +1,655 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: malformed header
+request:
+  {
+    "method": "GET",
+    "path": "/email/drafts/scheduled",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        "bad"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Invalid X-Email-Link-Id header",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "30"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/drafts/scheduled","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/drafts/scheduled"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty header
+request:
+  {
+    "method": "GET",
+    "path": "/email/drafts/scheduled",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        ""
+      ]
+    }
+  }
+response:
+  {
+    "body": "Invalid X-Email-Link-Id header",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "30"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/drafts/scheduled","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/drafts/scheduled"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: non UTF8 header
+request:
+  {
+    "method": "GET",
+    "path": "/email/drafts/scheduled",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        {
+          "bytes": 1,
+          "sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89"
+        }
+      ]
+    }
+  }
+response:
+  {
+    "body": "Invalid X-Email-Link-Id header",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "30"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/drafts/scheduled","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/drafts/scheduled"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: malformed header
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": {}
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "x-email-link-id": [
+        "bad"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Invalid X-Email-Link-Id header",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "30"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":400,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty header
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": {}
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "x-email-link-id": [
+        ""
+      ]
+    }
+  }
+response:
+  {
+    "body": "Invalid X-Email-Link-Id header",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "30"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":400,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: non UTF8 header
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/settings",
+    "auth": "user A",
+    "body": {
+      "settings": {}
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "x-email-link-id": [
+        {
+          "bytes": 1,
+          "sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89"
+        }
+      ]
+    }
+  }
+response:
+  {
+    "body": "Invalid X-Email-Link-Id header",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "30"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":400,"http.route":"/email/settings","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: malformed header
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        "bad"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Invalid X-Email-Link-Id header",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "30"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":400,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty header
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        ""
+      ]
+    }
+  }
+response:
+  {
+    "body": "Invalid X-Email-Link-Id header",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "30"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":400,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: non UTF8 header
+request:
+  {
+    "method": "POST",
+    "path": "/email/settings/import-signature",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        {
+          "bytes": 1,
+          "sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89"
+        }
+      ]
+    }
+  }
+response:
+  {
+    "body": "Invalid X-Email-Link-Id header",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "30"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":400,"http.route":"/email/settings/import-signature","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/settings/import-signature"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: header whitespace trimmed
+request:
+  {
+    "method": "GET",
+    "path": "/email/drafts/scheduled",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        "  <link:A2>  "
+      ]
+    }
+  }
+response:
+  {
+    "body": {
+      "messages": []
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "15"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/drafts/scheduled","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/drafts/scheduled"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO inboxes_for_macro_id {}
+      INFO handler {"link":"Extension(Link { id: <link:A2>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })","params":"GetScheduledQueryParams { offset: 0, limit: 100 }"}
+        INFO get_scheduled_messages_by_link_id {"limit":100,"link_id":"<link:A2>","offset":0}
+          INFO get_scheduled_db_messages_by_link_id {"limit":100,"link_id":"<link:A2>","offset":0}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  2c66977b1e29 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: compact UUID accepted
+request:
+  {
+    "method": "GET",
+    "path": "/email/drafts/scheduled",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        "5100000000000000000000000000a285"
+      ]
+    }
+  }
+response:
+  {
+    "body": {
+      "messages": []
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "15"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/drafts/scheduled","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/drafts/scheduled"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO inboxes_for_macro_id {}
+      INFO handler {"link":"Extension(Link { id: <link:A2>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })","params":"GetScheduledQueryParams { offset: 0, limit: 100 }"}
+        INFO get_scheduled_messages_by_link_id {"limit":100,"link_id":"<link:A2>","offset":0}
+          INFO get_scheduled_db_messages_by_link_id {"limit":100,"link_id":"<link:A2>","offset":0}
+logs:
+  []
+sql:
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  2c66977b1e29 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

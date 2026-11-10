@@ -172,13 +172,14 @@ inbox queries; the summaries and owner routes also have their own query faults.
 
 ## Order not defined by the query (canonicalized)
 
-Only `message_reads` and `internal_reads` declare these named `ResponseArrayRule`s.
+`message_reads`, `internal_reads`, and `inbox_routes` declare these named `ResponseArrayRule`s.
 They apply to the exact JSON paths below within the response section, before UUID
 and timestamp normalization. Other sections and other arrays retain their order.
 Paths start at the response object, so `$.body` is the decoded response body.
 
 | JSON path | Rule and stable key | Query |
 | --- | --- | --- |
+| `$.body.messages[*].labels`, `$.body.messages[*].{to,cc,bcc}` on GET `/email/drafts/scheduled` | `ScheduledMessageFields`: labels by provider ID/name, recipients by address/name/photo | The scheduled mapper uses the same bulk label and recipient queries as message reads. The surrounding messages stay in SQL `created_at DESC` order. |
 | `$.body.labels`, `$.body[*].labels` | `MessageLabelsByProviderId`: `provider_id`, then `name` | `crates/email_db_client/src/labels/get.rs:113` orders only by message ID, not labels within a message. |
 | `$.body.to`, `$.body.cc`, `$.body.bcc`, `$.body[*].to`, `$.body[*].cc`, `$.body[*].bcc` | `MessageRecipientsByAddress`: `email`, `name`, then `photo_url` | `crates/email_db_client/src/contacts/get.rs:298` orders by message ID and recipient role, not recipients within a role. |
 | `$.body` on POST `/email/messages/batch` and `/internal/messages/batch` | `BatchMessagesById`: `db_id` | `crates/email_db_client/src/messages/get_parsed.rs:154` has no `ORDER BY`. |
@@ -193,3 +194,82 @@ selection orders by `created_at` (`links/get.rs:61`, `:153`); fixtures give inbo
 distinct creation times. Thread-owner lookup returns one uniquely identified
 thread. These routes use the attachmentless mapper and never query attachments;
 seeded attachments deliberately have no response array.
+
+
+## Inbox and backfill routes
+
+`inbox_routes` characterizes calendar disconnect, contact listing, scheduled draft
+listing, settings patches, and Gmail signature import. `backfill_api` characterizes
+public job listing/get/active/cancel and internal job create/get/cancel. Each suite
+owns its fixture extensions; neither changes the original label/read fixtures.
+Both add an Outlook inbox. Inbox creation times, scheduled message creation times,
+and job creation times are distinct so ordered queries never depend on ties.
+Response-visible fixture timestamps are fixed, including update and attachment
+timestamps: variable fractional precision would otherwise change the real
+Content-Length header even though normalized JSON bodies matched.
+Contact arrays retain their defined interaction-time/address order. Backfill
+creation pairs retain request order, including repeated links.
+Scheduled provider, draft and forwarded attachments retain their queries'
+filename order; the fixture uses distinct filenames so ties are not pinned.
+
+`Lab::request_with_headers` records all values of supplied headers, including
+repeated and invalid UTF-8 values. The original `request` omits this section, so
+existing transcripts retain their bytes. Raw stub replies supply actual image
+bytes; FakeGmail scripts send-as status/body or aborts that response connection.
+Only signature scenarios explicitly enable the local Google credential reply.
+SFS failure tests use one remote source at a time to avoid assigning an order to
+independent concurrent image fetches. The multiple-unresolved case uses distinct
+URL fragments that produce identical HTTP requests after fragment removal.
+It opts into `sort_sfs_source_sets` for the `fetch_sfs_mappings` span's `sources`
+field: that field is Rust Debug output from a HashSet, so its URLs are retained
+and sorted. Other spans, response content, and existing suites are unchanged.
+Opt-in streamed replies cover advertised and streamed size limits, broken bodies,
+redirect loops, and the production request timeout without sleeps. Bound sockets
+that never listen exercise connection refusal without a port-reuse race.
+
+Calendar refresh tasks are detached by production code. Calendar success
+scenarios opt into `drain_background`, which waits for the last captured request-span
+owner through a notification before closing the step. Other suites retain their
+original step boundary. `SqlFault::pause_acquisition` provides an acquisition
+barrier for a real concurrent deletion between calendar authorization and the
+transaction; fixture SQL runs outside the request capture.
+
+The suites preserve these legacy behaviors:
+
+- Link middleware accepts explicit delegated inboxes; absent headers select only
+  the caller's own primary inbox. A delegate cannot disconnect a calendar. Key-only
+  internal calls use the configured internal identity: collection reads return
+  empty results, inbox-scoped routes report no selected inbox, and calendar
+  deletion is forbidden.
+- Contacts include owned and delegated inboxes, with entries only for recipients
+  of sent messages. Calendar-free inbox disconnects still persist the opt-out.
+- Signature import prefers the inbox address case-insensitively, then the primary
+  alias; an own alias with an empty signature does not fall back. Image fetch or
+  SFS upload failures reject the whole patch/import, while mapping-query errors
+  permit saving the sanitized original signature. An HTTP-looking relative image
+  path is counted as unresolved, while ordinary relative paths are ignored.
+  Source URLs longer than 2,000 characters are rehosted but never cached.
+- Job listing uses the caller's fusion ID across owned and deleted inboxes;
+  delegated jobs require the inbox-scoped get/active routes. Cancellation rejects
+  every terminal state. Internal creation reuses active jobs without enqueueing,
+  accepts negative thread limits and Outlook links, and retains earlier work
+  after a later link fails. Queue failure marks the newly inserted job failed.
+
+Some branches are unavailable over this HTTP surface:
+
+- The link middleware's unknown-provider arm is behind a typed PostgreSQL provider
+  decoder; invalid enum values fail before that arm. `InboxActionError::Conflict`
+  and its lifecycle conversions belong to other link routes, not calendar removal.
+- Coverage marks the first argument of the public backfill get/cancel
+  missing-job WARN as unexecuted in tracing's fallback to `log`. That fallback
+  is disabled after the lab installs its required subscriber; the tracing WARN
+  itself, including both IDs, is present in the goldens.
+- Closing a Google watch channel with valid credentials calls Google's fixed
+  public endpoint. Calendar watch scenarios use a deliberately uncached identity
+  and reject credentials locally; they cover the token-failure path and never
+  call that endpoint. Outlook calendar removal itself has no Graph call.
+- The image helper's `srcset` paths cannot be reached from settings/import: their
+  mandatory sanitizer removes `srcset`. It also removes unsupported schemes.
+  The literal selector and valid UTF-8 rewriter setup cannot be made invalid by
+  an HTTP request. The `sfs_map`-disabled branch is absent in the default-feature
+  test build.

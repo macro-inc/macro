@@ -1,0 +1,298 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: remove calendar and scopes without provider call
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/links/<link:A>/calendar",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/email/links/{link_id}/calendar","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/links/<link:A>/calendar"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO disable_link_calendar_handler {"fusionauth_user_id":"<fusion:A>","link_id":"<link:A>","user_id":"<user:A>"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO disconnect_calendar {"email_link_id":"<link:A>"}
+      INFO disconnect_provider_calendar {"email_link_id":"<link:A>"}
+      INFO refresh_calendar {"user_id":"<user:A>"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  afc57fbc6322 rows_affected=1 rows_returned=1
+  64a65ac11ac7 rows_affected=0 rows_returned=0
+  028228e479ae rows_affected=1 rows_returned=1
+  a0b3b4cba1f2 rows_affected=0 rows_returned=0
+  92e0d2273336 rows_affected=1 rows_returned=1
+  4f983a04a73d rows_affected=1 rows_returned=1
+  e068a47a5a83 rows_affected=0 rows_returned=0
+  0c6fb60aa101 rows_affected=0 rows_returned=0
+  de2f14210e29 rows_affected=1 rows_returned=0
+  cf20aff26b44 rows_affected=1 rows_returned=1
+  cdf0cd3b2c72 rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  2fb129dc03cb rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "POST",
+      "path": "/message/send/user/<user:A>",
+      "body": {
+        "message": {
+          "event": "synced",
+          "link_id": "<link:A>",
+          "team_ooo_changed": true
+        },
+        "message_type": "refresh_calendar"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "calendar_accounts": {
+      "removed": [
+        {
+          "id": "<calendar-account>",
+          "owner_id": "<user:A>",
+          "provider": "google",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "sync_status": "pending",
+          "email_link_id": "<link:A>",
+          "last_synced_at": null,
+          "last_sync_error": null,
+          "provider_account_id": "account"
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "calendar_change_counters": {
+      "removed": [],
+      "added": [
+        {
+          "seq": 1,
+          "link_id": "<link:A>",
+          "updated_at": "<ts>"
+        }
+      ],
+      "changed": []
+    },
+    "calendar_change_log": {
+      "removed": [],
+      "added": [
+        {
+          "seq": 1,
+          "kind": 4,
+          "link_id": "<link:A>",
+          "event_id": null,
+          "created_at": "<ts>",
+          "calendar_id": "<calendar>"
+        }
+      ],
+      "changed": []
+    },
+    "calendars": {
+      "removed": [
+        {
+          "id": "<calendar>",
+          "name": "Calendar",
+          "color": null,
+          "synced_at": null,
+          "time_zone": null,
+          "account_id": "<calendar-account>",
+          "created_at": "<ts>",
+          "is_deleted": false,
+          "is_primary": false,
+          "sync_token": "cursor",
+          "updated_at": "<ts>",
+          "access_role": null,
+          "description": null,
+          "is_selected": true,
+          "last_sync_error": null,
+          "watch_channel_id": null,
+          "watch_expires_at": null,
+          "default_reminders": [],
+          "watch_resource_id": null,
+          "last_sync_error_at": null,
+          "materialized_ends_at": null,
+          "provider_calendar_id": "calendar",
+          "watch_unsupported_at": null,
+          "materialized_end_date": null,
+          "materialized_starts_at": null,
+          "materialized_start_date": null,
+          "online_meeting_providers": [],
+          "consecutive_sync_failures": 0,
+          "snapshot_normalization_version": 0
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "email_link_google_scopes": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "calendar_disabled_at": {
+            "before": null,
+            "after": "<ts>"
+          },
+          "grant_version": {
+            "before": 2,
+            "after": 3
+          },
+          "granted_scopes": {
+            "before": [
+              "https://www.googleapis.com/auth/gmail.modify",
+              "https://www.googleapis.com/auth/calendar"
+            ],
+            "after": [
+              "https://www.googleapis.com/auth/gmail.modify"
+            ]
+          },
+          "link_id": "<link:A>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: repeat calendar disconnect
+request:
+  {
+    "method": "DELETE",
+    "path": "/email/links/<link:A>/calendar",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/email/links/{link_id}/calendar","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/links/<link:A>/calendar"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO disable_link_calendar_handler {"fusionauth_user_id":"<fusion:A>","link_id":"<link:A>","user_id":"<user:A>"}
+    INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO disconnect_calendar {"email_link_id":"<link:A>"}
+      INFO disconnect_provider_calendar {"email_link_id":"<link:A>"}
+      INFO refresh_calendar {"user_id":"<user:A>"}
+logs:
+  []
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  afc57fbc6322 rows_affected=1 rows_returned=1
+  64a65ac11ac7 rows_affected=0 rows_returned=0
+  028228e479ae rows_affected=1 rows_returned=1
+  a0b3b4cba1f2 rows_affected=0 rows_returned=0
+  92e0d2273336 rows_affected=0 rows_returned=0
+  de2f14210e29 rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  2fb129dc03cb rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "POST",
+      "path": "/message/send/user/<user:A>",
+      "body": {
+        "message": {
+          "event": "synced",
+          "link_id": "<link:A>",
+          "team_ooo_changed": true
+        },
+        "message_type": "refresh_calendar"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_link_google_scopes": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "calendar_disabled_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          },
+          "grant_version": {
+            "before": 3,
+            "after": 4
+          },
+          "link_id": "<link:A>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }

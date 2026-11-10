@@ -1,0 +1,139 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: database failure
+request:
+  {
+    "method": "GET",
+    "path": "/email/drafts/scheduled",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "Failed to fetch scheduled messages"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "48"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 500
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":500,"http.route":"/email/drafts/scheduled","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 500 Internal Server Error","request.id":"<volatile>","url.path":"/email/drafts/scheduled"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO inboxes_for_macro_id {}
+      INFO handler {"link":"Extension(Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. })","params":"GetScheduledQueryParams { offset: 0, limit: 100 }"}
+        INFO get_scheduled_messages_by_link_id {"limit":100,"link_id":"<link:A>","offset":0}
+          INFO get_scheduled_db_messages_by_link_id {"limit":100,"link_id":"<link:A>","offset":0}
+          INFO fetch_senders_by_message_ids {"message_ids":"[<scheduled:6>, <scheduled:5>, <scheduled:1>, <scheduled:0>]"}
+          INFO fetch_db_recipients_in_bulk {"message_ids":"[<scheduled:6>, <scheduled:5>, <scheduled:1>, <scheduled:0>]"}
+          INFO fetch_scheduled_messages_in_bulk {"message_ids":"[<scheduled:6>, <scheduled:5>, <scheduled:1>, <scheduled:0>]"}
+          INFO fetch_message_labels_in_bulk {"message_ids":"[<scheduled:6>, <scheduled:5>, <scheduled:1>, <scheduled:0>]"}
+          INFO fetch_db_attachments_in_bulk {"message_ids":"[<scheduled:6>, <scheduled:5>, <scheduled:1>, <scheduled:0>]"}
+          INFO fetch_db_draft_attachments_in_bulk {"draft_ids":"[<scheduled:5>, <scheduled:1>]"}
+          INFO fetch_forwarded_attachments_in_bulk {"draft_ids":"[<scheduled:5>, <scheduled:1>]"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler",
+        "get_scheduled_messages_by_link_id",
+        "fetch_forwarded_attachments_in_bulk"
+      ],
+      "message": null,
+      "fields": {
+        "error": "error returned from database: relation \"email_attachments_fwd\" does not exist"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler",
+        "get_scheduled_messages_by_link_id"
+      ],
+      "message": null,
+      "fields": {
+        "error": "error returned from database: relation \"email_attachments_fwd\" does not exist"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Failed to fetch scheduled messages"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 500 Internal Server Error",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  c44678edb7f6 rows_affected=4 rows_returned=4
+  2c66977b1e29 rows_affected=4 rows_returned=4
+  b87296c7edf3 rows_affected=0 rows_returned=0
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  9e3df57cee79 rows_affected=6 rows_returned=6
+  537ca0f332eb rows_affected=4 rows_returned=4
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  07da058600b3 rows_affected=2 rows_returned=2
+  17bb509f9a22 rows_affected=2 rows_returned=2
+  c39e30fd0516 rows_affected=2 rows_returned=2
+  4feeba54de03 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

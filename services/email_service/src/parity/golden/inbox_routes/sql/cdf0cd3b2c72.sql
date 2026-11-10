@@ -1,0 +1,1 @@
+INSERT INTO calendar_change_log (link_id, seq, kind, event_id, calendar_id) SELECT $1, change.seq, change.kind, change.event_id, change.calendar_id FROM unnest($2::bigint[], $3::smallint[], $4::uuid[], $5::uuid[]) AS change(seq, kind, event_id, calendar_id)

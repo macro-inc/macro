@@ -1,0 +1,769 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: all own inboxes including deleted link
+request:
+  {
+    "method": "GET",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "jobs": [
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:12>",
+          "link_id": null,
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:10>",
+          "link_id": "<link:A2>",
+          "status": "InProgress",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:3>",
+          "link_id": "<link:A>",
+          "status": "Cancelled",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:2>",
+          "link_id": "<link:A>",
+          "status": "Failed",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:1>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:0>",
+          "link_id": "<link:A>",
+          "status": "Init",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        }
+      ]
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "1785"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO list_handler {"fusionauth_user_id":"<fusion:A>","user_id":"<user:A>"}
+        INFO get_all_jobs_by_fusionauth_user_id {"fusionauth_user_id":"<fusion:A>"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  253c4a803c11 rows_affected=6 rows_returned=6
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: other owner
+request:
+  {
+    "method": "GET",
+    "path": "/email/backfill/gmail",
+    "auth": "user B",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "jobs": [
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:B>",
+          "id": "<job:11>",
+          "link_id": "<link:B>",
+          "status": "Init",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        }
+      ]
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "308"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO list_handler {"fusionauth_user_id":"<fusion:B>","user_id":"<user:B>"}
+        INFO get_all_jobs_by_fusionauth_user_id {"fusionauth_user_id":"<fusion:B>"}
+logs:
+  []
+sql:
+  253c4a803c11 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: no jobs
+request:
+  {
+    "method": "GET",
+    "path": "/email/backfill/gmail",
+    "auth": "user C",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "jobs": []
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "11"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO list_handler {"fusionauth_user_id":"<fusion:C>","user_id":"<user:C>"}
+        INFO get_all_jobs_by_fusionauth_user_id {"fusionauth_user_id":"<fusion:C>"}
+logs:
+  []
+sql:
+  253c4a803c11 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: internal acting user
+request:
+  {
+    "method": "GET",
+    "path": "/email/backfill/gmail",
+    "auth": "internal",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "jobs": [
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:12>",
+          "link_id": null,
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:10>",
+          "link_id": "<link:A2>",
+          "status": "InProgress",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:3>",
+          "link_id": "<link:A>",
+          "status": "Cancelled",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:2>",
+          "link_id": "<link:A>",
+          "status": "Failed",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:1>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:0>",
+          "link_id": "<link:A>",
+          "status": "Init",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        }
+      ]
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "1785"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO agent_sdk_request {}
+      INFO list_handler {"fusionauth_user_id":"<fusion:A>","user_id":"<user:A>"}
+        INFO get_all_jobs_by_fusionauth_user_id {"fusionauth_user_id":"<fusion:A>"}
+logs:
+  []
+sql:
+  253c4a803c11 rows_affected=6 rows_returned=6
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: collection ignores unknown query
+request:
+  {
+    "method": "GET",
+    "path": "/email/backfill/gmail?limit=0&offset=-1",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        "<missing>"
+      ]
+    }
+  }
+response:
+  {
+    "body": {
+      "jobs": [
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:12>",
+          "link_id": null,
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:10>",
+          "link_id": "<link:A2>",
+          "status": "InProgress",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:3>",
+          "link_id": "<link:A>",
+          "status": "Cancelled",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:2>",
+          "link_id": "<link:A>",
+          "status": "Failed",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:1>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:0>",
+          "link_id": "<link:A>",
+          "status": "Init",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        }
+      ]
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "1785"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO list_handler {"fusionauth_user_id":"<fusion:A>","user_id":"<user:A>"}
+        INFO get_all_jobs_by_fusionauth_user_id {"fusionauth_user_id":"<fusion:A>"}
+logs:
+  []
+sql:
+  253c4a803c11 rows_affected=6 rows_returned=6
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: collection ignores malformed inbox header
+request:
+  {
+    "method": "GET",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null,
+    "headers": {
+      "x-email-link-id": [
+        "bad"
+      ]
+    }
+  }
+response:
+  {
+    "body": {
+      "jobs": [
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:12>",
+          "link_id": null,
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:10>",
+          "link_id": "<link:A2>",
+          "status": "InProgress",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:3>",
+          "link_id": "<link:A>",
+          "status": "Cancelled",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:2>",
+          "link_id": "<link:A>",
+          "status": "Failed",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:1>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:0>",
+          "link_id": "<link:A>",
+          "status": "Init",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        }
+      ]
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "1785"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO list_handler {"fusionauth_user_id":"<fusion:A>","user_id":"<user:A>"}
+        INFO get_all_jobs_by_fusionauth_user_id {"fusionauth_user_id":"<fusion:A>"}
+logs:
+  []
+sql:
+  253c4a803c11 rows_affected=6 rows_returned=6
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: repeat collection
+request:
+  {
+    "method": "GET",
+    "path": "/email/backfill/gmail",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "jobs": [
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:12>",
+          "link_id": null,
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:10>",
+          "link_id": "<link:A2>",
+          "status": "InProgress",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:3>",
+          "link_id": "<link:A>",
+          "status": "Cancelled",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:2>",
+          "link_id": "<link:A>",
+          "status": "Failed",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:1>",
+          "link_id": "<link:A>",
+          "status": "Complete",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        },
+        {
+          "created_at": "<ts>",
+          "fusionauth_user_id": "<fusion:A>",
+          "id": "<job:0>",
+          "link_id": "<link:A>",
+          "status": "Init",
+          "threads_requested_limit": 37,
+          "threads_retrieved_count": 11,
+          "total_threads": 29,
+          "updated_at": "<ts>"
+        }
+      ]
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "1785"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/backfill/gmail","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/backfill/gmail"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO list_handler {"fusionauth_user_id":"<fusion:A>","user_id":"<user:A>"}
+        INFO get_all_jobs_by_fusionauth_user_id {"fusionauth_user_id":"<fusion:A>"}
+logs:
+  []
+sql:
+  253c4a803c11 rows_affected=6 rows_returned=6
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

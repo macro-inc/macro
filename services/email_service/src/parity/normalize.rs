@@ -16,7 +16,7 @@ static UUID: LazyLock<Regex> = LazyLock::new(|| {
 /// raised it. The line differs between server versions; the file and routine
 /// are kept.
 static POSTGRES_SOURCE_LINE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(file: Some\("[A-Za-z0-9_]+\.c"\), line: Some\()\d+(\))"#)
+    Regex::new(r#"(file: Some\((?:\\)*"[A-Za-z0-9_]+\.c(?:\\)*"\), line: Some\()\d+(\))"#)
         .expect("Postgres source line expression")
 });
 static TIMESTAMP: LazyLock<Regex> = LazyLock::new(|| {
@@ -28,6 +28,7 @@ static TIMESTAMP: LazyLock<Regex> = LazyLock::new(|| {
 pub(super) struct Normalizer {
     pub symbols: BTreeMap<String, String>,
     pub sort_response_keys: bool,
+    pub sort_sfs_source_sets: bool,
     replacements: BTreeMap<String, String>,
     uuids: BTreeMap<String, String>,
 }
@@ -88,7 +89,17 @@ impl Normalizer {
             Value::Array(values) => {
                 Value::Array(values.into_iter().map(|v| self.value(section, v)).collect())
             }
-            Value::Object(values) => {
+            Value::Object(mut values) => {
+                if self.sort_sfs_source_sets
+                    && section == "spans"
+                    && values.get("name").and_then(Value::as_str) == Some("fetch_sfs_mappings")
+                    && let Some(sources) = values
+                        .get_mut("fields")
+                        .and_then(|fields| fields.get_mut("sources"))
+                    && let Some(ordered) = sources.as_str().and_then(ordered_debug_string_set)
+                {
+                    *sources = Value::String(ordered);
+                }
                 let changed_timestamp = section == "db"
                     && values.get("before") != values.get("after")
                     && ["before", "after"].iter().all(|key| {
@@ -135,7 +146,31 @@ impl Normalizer {
     }
 }
 
+/// Rust Debug string sets have no order. URLs use JSON-compatible escapes;
+/// preserve every element and leave any unrecognized representation untouched.
+fn ordered_debug_string_set(text: &str) -> Option<String> {
+    let values = text.strip_prefix('{')?.strip_suffix('}')?;
+    let mut values: Vec<String> = serde_json::from_str(&format!("[{values}]")).ok()?;
+    values.sort();
+    let values = values
+        .iter()
+        .map(|value| serde_json::to_string(value).expect("source URL JSON"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    Some(format!("{{{values}}}"))
+}
+
 fn without_backtrace(text: &str) -> Cow<'_, str> {
+    // Some domain errors hold an anyhow Debug report inside a String. Their
+    // outer Debug rendering escapes the backtrace's newlines and adds a quote.
+    if let Some((message, backtrace)) = text.split_once("\\n\\nStack backtrace:") {
+        let backtrace = backtrace.trim_end();
+        let content = backtrace.trim_end_matches(')');
+        if content.ends_with('"') {
+            let closing = &backtrace[content.len()..];
+            return Cow::Owned(format!("{message}\"{closing}"));
+        }
+    }
     let Some((message, backtrace)) = text.split_once("\n\nStack backtrace:") else {
         return Cow::Borrowed(text);
     };
