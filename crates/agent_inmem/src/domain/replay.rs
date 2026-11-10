@@ -69,9 +69,10 @@ struct OpenTurn {
 /// in, naming the last turn it covers, so it replaces the same turns.
 ///
 /// The rebuilt entries are not always the live ones, which is why a summary
-/// goes by turn rather than by count. A prompt stopped before it ran is in
-/// the log but never entered the live history; a turn that failed before
-/// any output carries the error the agent said; reasoning is not replayed.
+/// goes by turn rather than by count: a prompt stopped before it ran is in
+/// the log but never entered the live history, and reasoning is not replayed
+/// (the model is never sent it). A failed turn rebuilds as the live agent kept
+/// it, without the failure reply it sent its reader.
 #[must_use]
 pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryEntry> {
     let mut history = Vec::new();
@@ -382,17 +383,22 @@ fn apply_update(
                     });
                 }
                 Some(ToolCallStatus::Failed) => {
-                    let description = update
+                    // A failure with no error is the live agent closing a call
+                    // its turn ended under. It recorded that close under the
+                    // call's own name when the turn ended, which is where
+                    // `close_turn` closes it here too.
+                    let Some(description) = update
                         .fields
                         .raw_output
                         .as_ref()
                         .and_then(|output| output.get("error"))
                         .and_then(|error| error.as_str())
-                        .unwrap_or("cancelled")
-                        .to_owned();
+                    else {
+                        return;
+                    };
                     parts.push(AssistantMessagePart::ToolCallErr {
                         name,
-                        description,
+                        description: description.to_owned(),
                         id,
                     });
                 }

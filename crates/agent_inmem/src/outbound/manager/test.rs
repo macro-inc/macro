@@ -1538,6 +1538,42 @@ async fn mcp_tool_calls_rebuild_identically_and_the_session_releases() {
     drop(servers);
 }
 
+/// Starts an MCP call, then fails the turn before it answers.
+struct FailingMidCallEngine;
+
+impl TurnEngine for FailingMidCallEngine {
+    fn supported_models(&self) -> &[&str] {
+        &["anthropic/claude-sonnet-5-5"]
+    }
+
+    fn run_turn(
+        &self,
+        _request: crate::domain::engine::TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(4);
+        tokio::spawn(async move {
+            let _ = parts
+                .send(Ok(StreamPart::ToolCall(agent::ToolCall {
+                    id: "call-code".to_owned(),
+                    name: "mcp__macro_internal__ExecuteCode".to_owned(),
+                    json: serde_json::json!({"code": "return 1"}),
+                    mcp: Some(agent::McpInfo {
+                        service: "macro_internal".to_owned(),
+                        tool_name: "ExecuteCode".to_owned(),
+                        display_name: None,
+                    }),
+                })))
+                .await;
+            let _ = parts
+                .send(Err(agent::AgentError::Other(anyhow::anyhow!(
+                    "the provider went away"
+                ))))
+                .await;
+        });
+        receiver
+    }
+}
+
 /// Says something, then fails the turn.
 struct FailingEngine;
 
@@ -1570,6 +1606,18 @@ impl TurnEngine for FailingEngine {
 /// failed turn still releases.
 #[tokio::test]
 async fn a_failed_turn_rebuilds_as_the_live_agent_kept_it() {
+    for engine in [
+        Arc::new(FailingEngine) as Arc<dyn TurnEngine>,
+        Arc::new(FailingMidCallEngine),
+    ] {
+        failed_turn_rebuilds_identically(engine).await;
+    }
+}
+
+/// The turn `engine` fails, after which the log still rebuilds what the live
+/// agent kept: the failure reply never in it, and an MCP call the failure
+/// left unanswered closed the way the live agent closed it.
+async fn failed_turn_rebuilds_identically(engine: Arc<dyn TurnEngine>) {
     let repo = InMemoryAgentSessionRepo::new();
     let (ended_tx, mut ended) = tokio::sync::mpsc::unbounded_channel();
     let sessions = AgentSessionServiceImpl::new(
@@ -1605,7 +1653,7 @@ async fn a_failed_turn_rebuilds_as_the_live_agent_kept_it() {
         .await
         .expect("the session row should create");
     let manager = InMemAgentManager::new(
-        Arc::new(FailingEngine),
+        engine,
         Arc::new(LogFrameSource::new(repo.clone())),
         Arc::new(crate::domain::mcp::NoMcpServers),
         Arc::new(crate::testing::TestModelAccess::paid()),
