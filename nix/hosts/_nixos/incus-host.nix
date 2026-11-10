@@ -87,7 +87,6 @@ in
             name = "macro-box";
             description = "Macro computer VM";
             config = {
-              "migration.stateful" = "true";
               "security.secureboot" = "false";
               # /dev/incus inside the guest, so macrod can read user.* keys.
               "security.guestapi" = "true";

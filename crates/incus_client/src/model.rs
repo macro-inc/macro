@@ -123,14 +123,10 @@ pub enum InstanceStatus {
     Running,
     /// 102.
     Stopped,
-    /// 110.
-    Frozen,
     /// 106.
     Starting,
     /// 107.
     Stopping,
-    /// 109.
-    Freezing,
     /// 108.
     Aborting,
     /// 112.
@@ -152,8 +148,6 @@ impl InstanceStatus {
             106 => InstanceStatus::Starting,
             107 => InstanceStatus::Stopping,
             108 => InstanceStatus::Aborting,
-            109 => InstanceStatus::Freezing,
-            110 => InstanceStatus::Frozen,
             112 => InstanceStatus::Error,
             code => InstanceStatus::Unknown { code, status },
         }
@@ -169,8 +163,6 @@ pub struct InstanceInfo {
     pub status: InstanceStatus,
     /// Container or VM.
     pub kind: InstanceKind,
-    /// Whether saved runtime state (from a stateful stop) is on disk.
-    pub stateful: bool,
     /// The instance's own config (not expanded with profiles).
     pub config: BTreeMap<String, String>,
     /// Instance device overrides, including root volume limits.
