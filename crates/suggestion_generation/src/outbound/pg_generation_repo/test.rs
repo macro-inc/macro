@@ -84,14 +84,7 @@ async fn onboarding_runs_once_one_run_at_a_time_and_nightly_once_a_night(pool: P
         begin(GenerationTrigger::Onboarding, later, stale, nightly_since).await,
         None
     );
-    // No nightly run the same night as onboarding.
-    assert_eq!(
-        begin(GenerationTrigger::Nightly, later, stale, nightly_since).await,
-        None
-    );
-    // The next night a nightly run starts, then not again within the night.
-    let later = later + TimeDelta::hours(21);
-    let nightly_since = later - TimeDelta::hours(20);
+    // The night of onboarding still gets its nightly run.
     let night = begin(GenerationTrigger::Nightly, later, stale, nightly_since)
         .await
         .unwrap();
