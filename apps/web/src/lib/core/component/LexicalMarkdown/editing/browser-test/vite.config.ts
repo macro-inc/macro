@@ -21,6 +21,13 @@ export default defineConfig({
     solidSvg({ defaultAsComponent: true }),
     wasm(),
   ],
+  worker: {
+    format: 'es',
+    plugins: () => [
+      tsconfigPaths({ projects: [`${WEB_DIRECTORY}/tsconfig.json`] }),
+      wasm(),
+    ],
+  },
   resolve: { dedupe: ['solid-js'] },
   build: {
     target: 'es2022',
@@ -28,6 +35,12 @@ export default defineConfig({
     emptyOutDir: true,
     minify: false,
     sourcemap: true,
+    rollupOptions: {
+      input: {
+        index: `${DIRECTORY}/index.html`,
+        userMentions: `${DIRECTORY}/user-mentions.html`,
+      },
+    },
   },
   preview: {
     host: '127.0.0.1',

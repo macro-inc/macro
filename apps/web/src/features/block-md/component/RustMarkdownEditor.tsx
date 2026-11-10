@@ -1,7 +1,10 @@
 import { startEditorScrollTelemetry } from '@app/observability/editor';
 import { useFlow } from '@app/observability/flow';
 import { allocateEditorNamespace } from '@core/component/LexicalMarkdown/context/editor-namespace';
+import { createNativeUserMentionContext } from '@core/component/LexicalMarkdown/decorator-host/native-user-mention-host';
+import { createNativeUserMentionViews } from '@core/component/LexicalMarkdown/decorator-host/native-user-mention-views';
 import { installNativeMarkdownOverlays } from '@core/component/LexicalMarkdown/editing/installNativeMarkdownOverlays';
+import { createNativeListenerScope } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-listeners';
 import { theme } from '@core/component/LexicalMarkdown/theme';
 import { loadDocumentSession } from '@core/document-session/load';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -10,6 +13,7 @@ import { isPlatform } from '@core/util/platform';
 import { SyncSourceStatus } from '@macro-inc/collaboration/collab/source';
 import {
   createBuiltinRegistry,
+  registerMacroDecoratorViews,
   registerMacroElementViews,
 } from '@macro-inc/lexical-wasm-view';
 import { Telemetry } from '@macro-inc/observability';
@@ -53,6 +57,9 @@ export default function RustMarkdownEditor(props: {
   const { documentId, permissions, state } = useMarkdownDocument();
   const [runtime, setRuntime] = createSignal<RustMarkdownRuntime>();
   const abort = new AbortController();
+  const userMentionContext = createNativeUserMentionContext(theme);
+  const overlayLifecycle = createNativeListenerScope();
+  overlayLifecycle.add(() => userMentionContext.dispose());
   let root: HTMLDivElement | undefined;
   let rejectReady: ((error: Error) => void) | undefined;
   let releaseCommit: (() => void) | undefined;
@@ -71,14 +78,19 @@ export default function RustMarkdownEditor(props: {
   };
   onCleanup(() => {
     abort.abort();
-    state.session.setStatus(undefined);
-    rejectReady?.(new Error('Editor open cancelled'));
-    releaseCommit?.();
-    releaseEmpty?.();
-    releaseScrollTelemetry?.();
-    props.onRuntime?.(undefined);
-    const current = runtime();
-    if (current) fireAndForget(current.close(), 'rust-editor.close');
+    try {
+      // Unmount UI and retire host callbacks before the asynchronous close starts.
+      overlayLifecycle.dispose();
+    } finally {
+      state.session.setStatus(undefined);
+      rejectReady?.(new Error('Editor open cancelled'));
+      releaseCommit?.();
+      releaseEmpty?.();
+      releaseScrollTelemetry?.();
+      props.onRuntime?.(undefined);
+      const current = runtime();
+      if (current) fireAndForget(current.close(), 'rust-editor.close');
+    }
   });
   createEffect(() => runtime()?.view.setEditable(permissions.canEdit()));
   onMount(() => {
@@ -99,11 +111,32 @@ export default function RustMarkdownEditor(props: {
             const mounted = await createRustEditorSession({
               module,
               root: element,
-              registry: registerMacroElementViews(createBuiltinRegistry()),
-              installOverlays: (view) =>
-                installNativeMarkdownOverlays(view, {
-                  canEdit: permissions.canEdit,
-                }),
+              registry: registerMacroDecoratorViews(
+                registerMacroElementViews(createBuiltinRegistry()),
+                createNativeUserMentionViews(userMentionContext)
+              ),
+              installOverlays(view) {
+                try {
+                  if (abort.signal.aborted)
+                    throw new Error('Editor open cancelled');
+                  const installed = installNativeMarkdownOverlays(view, {
+                    canEdit: permissions.canEdit,
+                    mentions: {
+                      sourceDocumentId: documentId(),
+                      disableMentionTracking: false,
+                    },
+                  });
+                  if (abort.signal.aborted) {
+                    const late = createNativeListenerScope();
+                    late.add(() => installed.dispose());
+                    return late.fail(new Error('Editor open cancelled'));
+                  }
+                  overlayLifecycle.add(() => installed.dispose());
+                  return { ...installed, dispose: overlayLifecycle.dispose };
+                } catch (error) {
+                  return overlayLifecycle.fail(error);
+                }
+              },
               view: {
                 namespace,
                 owner,
@@ -175,7 +208,13 @@ export default function RustMarkdownEditor(props: {
               mounted.view.focus();
           });
         })
-        .catch(showError),
+        .catch((error) => {
+          try {
+            overlayLifecycle.fail(error);
+          } catch (cause) {
+            showError(cause);
+          }
+        }),
       'rust-editor.open'
     );
   });

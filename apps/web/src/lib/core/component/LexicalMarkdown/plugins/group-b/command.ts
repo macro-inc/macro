@@ -1,5 +1,6 @@
 import { EditorInputMsg } from '@macro-inc/collaboration/session/abi.generated';
 import type { EditorView } from '@macro-inc/lexical-wasm-view';
+import type { InputSettlement } from '@macro-inc/lexical-wasm-view/view/port';
 import { readSelection } from '@macro-inc/lexical-wasm-view/view/selection';
 import {
   SessionPort,
@@ -88,4 +89,20 @@ export function queryApplication(
   });
   const value: unknown = JSON.parse(reply.text);
   return value;
+}
+
+/** Settle actual native execution; never infer completion from a dispatch return. */
+export function dispatchApplicationCommandSettled(
+  view: EditorView,
+  name: string,
+  payload: JsonValue,
+  event?: KeyboardEvent
+): Promise<InputSettlement> {
+  if (!(view.port instanceof SessionPort))
+    throw new Error(
+      'Settled application commands require the native session port'
+    );
+  const input = applicationInput(view, name, payload, event);
+  if (!input) throw new Error('Native view generation is unavailable');
+  return view.port.inputSettled(input, event);
 }
