@@ -129,7 +129,8 @@
         overdue: overdue
           .sort((a, b) => a.due! - b.due!)
           .slice(0, 4)
-          .map((task) => ({ name: task.name, daysLate: Math.ceil((now - task.due!) / DAY) })),
+          // Whole calendar days since the due date: due three days ago is 3d late.
+          .map((task) => ({ name: task.name, daysLate: Math.floor(now / DAY) - Math.floor(task.due! / DAY) })),
         overdueCount: overdue.length,
       };
     });
@@ -240,7 +241,7 @@
         const list = el('ul');
         for (const task of project.overdue) {
           const li = el('li', '', `${task.name} `);
-          li.append(el('span', '', `${task.daysLate}d late`));
+          li.append(el('span', '', task.daysLate === 0 ? 'due today' : `${task.daysLate}d late`));
           list.append(li);
         }
         card.append(list);
