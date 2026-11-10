@@ -124,11 +124,12 @@ export function ForYouView(props: {
                   <For each={entries()}>
                     {(entry) => (
                       <li
+                        class="scroll-mt-4"
                         ref={(element) => {
                           if (entry.idea.id !== props.focusedId) return;
 
                           onElementConnect(element, () =>
-                            element.scrollIntoView({ block: 'nearest' })
+                            element.scrollIntoView({ block: 'start' })
                           );
                         }}
                       >
