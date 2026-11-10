@@ -1,0 +1,1 @@
+DROP INDEX password_item_entities_member_removal;
