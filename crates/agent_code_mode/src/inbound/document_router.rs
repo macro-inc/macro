@@ -115,6 +115,14 @@ pub enum DocumentBuildResponse {
         /// Each problem, with where it is.
         diagnostics: Vec<BuildProblem>,
     },
+    /// No programs and no client script: show the stored page as it is,
+    /// with nothing injected.
+    #[serde(rename_all = "camelCase")]
+    Plain {
+        /// The source this verdict is for.
+        #[schema(value_type = String)]
+        source_hash: SourceHash,
+    },
 }
 
 /// One problem in a document's source.
@@ -138,6 +146,9 @@ impl From<DocumentBuild> for DocumentBuildResponse {
             BuildOutcome::Failed(diagnostics) => Self::Failed {
                 source_hash: build.source_hash,
                 diagnostics: diagnostics.iter().map(BuildProblem::from).collect(),
+            },
+            BuildOutcome::Plain => Self::Plain {
+                source_hash: build.source_hash,
             },
         }
     }

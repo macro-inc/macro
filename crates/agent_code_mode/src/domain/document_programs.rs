@@ -231,8 +231,10 @@ impl DocumentPrograms {
         if current.source_hash != request.source_hash {
             return Err(DocumentProgramError::Changed);
         }
-        let BuildOutcome::Built { programs, .. } = current.outcome.as_ref() else {
-            return Err(DocumentProgramError::BuildFailed);
+        let programs = match current.outcome.as_ref() {
+            BuildOutcome::Built { programs, .. } => programs,
+            BuildOutcome::Plain => return Err(DocumentProgramError::UnknownProgram),
+            BuildOutcome::Failed(_) => return Err(DocumentProgramError::BuildFailed),
         };
         let bundle = programs
             .get(&request.program)

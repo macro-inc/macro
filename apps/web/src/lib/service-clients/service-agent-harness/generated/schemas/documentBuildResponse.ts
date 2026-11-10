@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentBuildResponseOneOf } from './documentBuildResponseOneOf';
+import type { DocumentBuildResponseOneOfFive } from './documentBuildResponseOneOfFive';
 import type { DocumentBuildResponseOneOfThree } from './documentBuildResponseOneOfThree';
 
 /**
@@ -12,4 +13,5 @@ import type { DocumentBuildResponseOneOfThree } from './documentBuildResponseOne
  */
 export type DocumentBuildResponse =
   | DocumentBuildResponseOneOf
-  | DocumentBuildResponseOneOfThree;
+  | DocumentBuildResponseOneOfThree
+  | DocumentBuildResponseOneOfFive;

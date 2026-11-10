@@ -13,7 +13,8 @@ export interface PageProblem {
 /**
  * How a published page's build went.
  *
- * - `built`: it built, and its programs run when someone opens it.
+ * - `built`: it built, and its programs run when someone opens it (a page
+ *   with no programs or client script opens as it is).
  * - `failed`: it doesn't build; `problems` says why.
  * - `busy`: the build didn't finish in time. The page is saved; call
  *   `document.republishPage(html)` with the same page later to build it.
@@ -63,7 +64,8 @@ export async function publishedPage(
   if (status === BUILD_BUSY) return { document, build: 'busy', problems: [] };
 
   const build = unwrap(response);
-  if (build.status === 'built')
+  // A page with no program or client blocks is shown as it is.
+  if (build.status === 'built' || build.status === 'plain')
     return { document, build: 'built', problems: [] };
 
   const problems = build.diagnostics.map(({ file, message }) =>

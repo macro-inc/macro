@@ -228,6 +228,8 @@ export * from './discoveryResultOneOfThree';
 export * from './discoveryResultOneOfThreeOperation';
 export * from './documentBuildResponse';
 export * from './documentBuildResponseOneOf';
+export * from './documentBuildResponseOneOfFive';
+export * from './documentBuildResponseOneOfFiveStatus';
 export * from './documentBuildResponseOneOfStatus';
 export * from './documentBuildResponseOneOfThree';
 export * from './documentBuildResponseOneOfThreeStatus';

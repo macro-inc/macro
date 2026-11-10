@@ -1733,6 +1733,12 @@ export type DocumentBuildResponse = {
      */
     sourceHash: string;
     status: 'failed';
+} | {
+    /**
+     * The source this verdict is for.
+     */
+    sourceHash: string;
+    status: 'plain';
 };
 
 /**

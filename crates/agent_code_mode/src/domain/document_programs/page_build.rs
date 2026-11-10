@@ -174,6 +174,8 @@ pub enum BuildOutcome {
     },
     /// The author's problems: invalid blocks, type errors, failed bundles.
     Failed(Vec<Diagnostic>),
+    /// Neither programs nor a client script: an ordinary page, shown as it is.
+    Plain,
 }
 
 /// The source's blocks, before checking.
@@ -192,6 +194,9 @@ pub async fn build(
         Ok(extracted) => extracted,
         Err(diagnostics) => return Ok(BuildOutcome::Failed(diagnostics)),
     };
+    if extracted.programs.is_empty() && extracted.client.is_none() {
+        return Ok(BuildOutcome::Plain);
+    }
     let ids: Vec<ProgramId> = extracted
         .programs
         .iter()

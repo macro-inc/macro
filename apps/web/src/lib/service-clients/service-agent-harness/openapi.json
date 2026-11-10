@@ -6232,6 +6232,21 @@
                 "enum": ["failed"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "No programs and no client script: show the stored page as it is,\nwith nothing injected.",
+            "required": ["sourceHash", "status"],
+            "properties": {
+              "sourceHash": {
+                "type": "string",
+                "description": "The source this verdict is for."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["plain"]
+              }
+            }
           }
         ],
         "description": "A document's build: the page to render, or why it doesn't build."

@@ -111,6 +111,17 @@ async fn removes_programs_and_inlines_the_client_bundle() {
 }
 
 #[tokio::test]
+async fn a_page_without_programs_or_a_client_script_is_plain() {
+    let toolchain = Toolchain::default();
+    let html = r#"<script src="https://cdn.example.com/chart.js"></script><script type="module">go();</script>"#;
+
+    let outcome = build(html, &toolchain, &toolchain).await.unwrap();
+
+    assert_eq!(outcome, BuildOutcome::Plain);
+    assert_eq!(toolchain.checks.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
 async fn refuses_a_client_bundle_that_would_close_its_own_script() {
     let toolchain = Toolchain {
         client_code: Some("const s = '</SCRIPT>';"),
