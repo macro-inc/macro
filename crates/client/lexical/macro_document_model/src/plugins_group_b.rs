@@ -6,6 +6,7 @@ mod clipboard;
 pub use clipboard::{FACTS_MIME as PASTE_FACTS_MIME, PasteFacts};
 mod code;
 mod decorator_actions;
+mod decorator_content_actions;
 mod diff;
 mod focus;
 mod keyboard;
