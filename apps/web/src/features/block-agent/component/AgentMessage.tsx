@@ -45,7 +45,7 @@ import {
   WorkingLine,
 } from '../ui';
 import { LiveToolGroup } from '../views/LiveToolGroup';
-import { PromptFooter } from './PromptFooter';
+import { PromptFooter, ReplyFooter } from './PromptFooter';
 import { AttachmentPart } from './parts/AttachmentPart';
 import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
@@ -231,6 +231,24 @@ function showsWorkingLine(message: FoldedMessage): boolean {
       () => false
     )
     .otherwise(() => true);
+}
+
+/**
+ * When a finished agent reply was sent, for the line under it. A turn stopped
+ * before the agent said anything leaves only an empty placeholder reply,
+ * which has nothing to put a time under unless it failed.
+ */
+function replySentAt(message: FoldedMessage): string | undefined {
+  if (message.author.kind !== 'agent' || message.postedAt === null) {
+    return undefined;
+  }
+
+  const placeholder = message.parts.every(
+    (part) => part.kind === 'text' && part.text.trim() === ''
+  );
+  if (placeholder && message.stop?.kind !== 'failed') return undefined;
+
+  return message.postedAt;
 }
 
 /**
@@ -422,6 +440,9 @@ export function Message(props: {
                   )}
                 </Show>
               )}
+            </Show>
+            <Show when={!inFlight() && replySentAt(props.message)}>
+              {(sentAt) => <ReplyFooter sentAt={sentAt()} />}
             </Show>
           </div>
         </AgentReplyLinks>

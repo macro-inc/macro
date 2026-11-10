@@ -4,7 +4,7 @@
 
 Org-global Datadog monitors, synthetics, and rollout dashboards. This stack is
 manual and has only a prod stack, even for monitors covering both environments.
-Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions,outlook-sync}.ts`
+Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions,outlook-sync,routine-suggestions,harness-runtimes}.ts`
 (`prodMonitor()` in `prod-monitor.ts`), each file with a dashboard graphing its
 monitors that their messages link to; every monitor notifies through `notify.ts`.
 `dashboards/web-performance.ts` holds the web app performance dashboard with the
@@ -68,6 +68,17 @@ From `infra/`:
   It finds the Graph and token spans by `@outlook.throttle_origin` and
   `@outlook.token_cache`, not by name: Datadog renames an HTTP client span to
   `http.client.request` with its method as the resource.
+- `monitors/routine-suggestions.ts` reads the `routine_suggestions.*` log
+  events (`@event`) that `crates/scheduled_action` emits; its header is the
+  field contract. Its failure monitor does not page while suggestions are
+  behind their flag.
+- `monitors/harness-runtimes.ts` reads the `agent.runtime.reattach` span fields
+  in `crates/agent_harness/src/domain/service.rs` and matches the text of the
+  `tokio runtime starvation detected` warning in `crates/macro_tower_layers`;
+  its header is the field contract.
 - `monitors/calls.ts` matches the text of the `voip push: SNS delivery failed`
   log in `crates/notification/src/domain/service/voip.rs` and the
   `PushEndpointUnavailable` message. Rewording either silently breaks it.
+- Keep `monitors/oauth.ts` in sync with the linked-token, native MCP OAuth,
+  and Pipedream failure logs it names; preserve channel-only routing and
+  exclude normal authentication challenges and explicit consent cancellations.

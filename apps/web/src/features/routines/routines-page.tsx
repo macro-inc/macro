@@ -12,6 +12,7 @@ import {
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { Show, Suspense } from 'solid-js';
+import { useRoutinesDiscover } from '../routine-suggestions/routine-suggestions';
 import { getErrorMessage } from './core/routine-draft';
 import {
   featuredTemplates,
@@ -57,6 +58,7 @@ function RoutinesContent() {
   const hasPaidAccess = useHasPaidAccess();
   const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
   const catalog = useRoutineCatalog();
+  const discover = useRoutinesDiscover();
   /** New routine: describe it, pick a template, or start fresh. */
   function create() {
     layout.popoverSplit({
@@ -92,6 +94,7 @@ function RoutinesContent() {
               : []
           }
           onTemplate={startFrom}
+          discover={discover()}
         />
       }
     >
