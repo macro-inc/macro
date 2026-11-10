@@ -337,7 +337,7 @@ fn encode_inner(
     let mut observation = None;
     if let Some(mut combined) = combined {
         if let Some(observer) = observer.as_ref() {
-            observation = Some(observer.prepare(&mut combined, remount)?);
+            observation = observer.prepare(&mut combined, remount)?;
         }
         combined.encode(&mut diff);
     }

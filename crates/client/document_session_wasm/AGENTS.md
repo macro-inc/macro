@@ -239,7 +239,9 @@ Resolve signature-cached decorator policies after coalescing native Diff sidecar
 retain only per-node signatures and revisions, never historical editor snapshots.
 Stage observations until takeOutput transfers to an attached synchronous view;
 defer pre-mount admissions and apply each packet before the next admission. Retire
-the baseline on view detach. Direct initialize is a full-remount exposure and
+the baseline on view detach and suspend further observations while control and
+I/O continue to drain; reactivate only through an explicit initialize_view remount
+transfer, never a queued sync/reset initialization while detached. Direct initialize is a full-remount exposure and
 requires prior queued output to be consumed, preserving its real I/O. Renderer
 failure requires remount recovery, not a successful-paint acknowledgement. Custom
 asynchronous consumers require an explicit consumption acknowledgement.

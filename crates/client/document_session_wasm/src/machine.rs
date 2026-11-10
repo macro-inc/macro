@@ -43,14 +43,9 @@ impl Machine {
             ..Default::default()
         };
         let mut bytes = vec![];
-        output::encode_observed(
-            &out,
-            false,
-            &mut bytes,
-            None,
-            None,
-            &mut self.decorator_observer,
-        )?;
+        self.decorator_observer.with_initialization(|observer| {
+            output::encode_observed(&out, false, &mut bytes, None, None, observer)
+        })?;
         self.decorator_observer.expose()?;
         Ok(bytes)
     }

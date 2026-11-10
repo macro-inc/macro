@@ -73,6 +73,70 @@ fn coalesced_and_untransferred_signatures_compare_only_last_exposed_value() {
         [12, 3, 2, 0]
     );
 }
+
+#[test]
+fn detach_keeps_io_live_without_observation_until_initialize_is_transferred() {
+    use document_session::InitialView;
+    use lexical_model::{Editor, EditorMode};
+    let mut observer = DecoratorObserver::default();
+    encode(&mut observer, vec![patch(signature("A"))]);
+    observer.expose().unwrap();
+    let key = patch(None).decorator_renders[0].key;
+    observer.retire();
+    let output = SessionOutput {
+        view: vec![ViewEffect::Diff(patch(signature("B")))],
+        io: vec![doc_sync_core::IoEffect::SocketPing {
+            conn: doc_sync_core::ConnId(17),
+        }],
+        ..Default::default()
+    };
+    let mut bytes = Vec::new();
+    let flags =
+        output::encode_observed(&output, false, &mut bytes, None, None, &mut observer).unwrap();
+    assert_eq!(flags & 3, 3, "view/control output and I/O still drain");
+    assert!(!bytes.is_empty());
+    observer.expose().unwrap();
+    assert!(observer.pending.is_none());
+    assert!(observer.retired);
+    assert_eq!(observer.view.exposed_revision(key), None);
+    let editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let initialize = SessionOutput {
+        view: vec![ViewEffect::Initialize(InitialView::Editor {
+            diff: patch(signature("A")),
+            state: editor.state().to_json().unwrap(),
+        })],
+        ..Default::default()
+    };
+    output::encode_observed(&initialize, false, &mut bytes, None, None, &mut observer).unwrap();
+    observer.expose().unwrap();
+    assert!(
+        observer.retired,
+        "queued initialization while detached cannot remount"
+    );
+    observer
+        .with_initialization(|observer| {
+            output::encode_observed(&initialize, false, &mut bytes, None, None, observer)
+        })
+        .unwrap();
+    assert!(observer.retired, "encoding alone is not exposure");
+    assert_eq!(observer.view.exposed_revision(key), None);
+    // An untransferred initialization replaced by a control packet cannot remount.
+    assert_eq!(encode(&mut observer, vec![patch(signature("B"))])[4], 0);
+    observer.expose().unwrap();
+    assert!(observer.retired);
+    observer
+        .with_initialization(|observer| {
+            output::encode_observed(&initialize, false, &mut bytes, None, None, observer)
+        })
+        .unwrap();
+    observer.expose().unwrap();
+    assert!(!observer.retired);
+    assert_eq!(observer.view.exposed_revision(key), Some(0));
+    assert_eq!(
+        encode(&mut observer, vec![patch(signature("B"))])[5..],
+        [12, 3, 1, 0]
+    );
+}
 #[test]
 fn eager_precision_removal_generation_and_remount_have_distinct_lifetimes() {
     let mut observer = DecoratorObserver::default();
@@ -109,7 +173,7 @@ fn eager_precision_removal_generation_and_remount_have_distinct_lifetimes() {
         changed.ops.last(),
         Some(DiffOp::SetDecoratorRevision { revision: 0, .. })
     ));
-    observer.stage(Some(observation));
+    observer.stage(observation);
     observer.expose().unwrap();
     let mut next = patch(signature("C"));
     next.generation = 8;
@@ -118,7 +182,7 @@ fn eager_precision_removal_generation_and_remount_have_distinct_lifetimes() {
         index: 3,
     });
     let observation = observer.prepare(&mut next, false).unwrap();
-    observer.stage(Some(observation));
+    observer.stage(observation);
     observer.expose().unwrap();
     assert_eq!(
         observer
