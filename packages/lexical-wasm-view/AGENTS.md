@@ -19,7 +19,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 - Install common Macro element views once; register group-owned decorators through registerMacroDecoratorViews and keep full registerMacroViews completeness checks strict.
 - Let NodeView.createDecoratorHost preserve application mount wrappers; Macro uses the Source Portal div and mount class while portable views retain their default host.
 - Keep opted-in decoratorRevision metadata outside JSON; unchanged revisions preserve captured props, and changed revisions dispose and remount the component inside its retained Portal host, matching Source.
-- Set the HTML-render mount display before its mount class to preserve the Source block wrapper and Chromium-observed attribute order; verify other engines against their own captures.
+- Set the HTML-render mount display before its mount class to preserve the Source block wrapper. Assert jsdom attribute order in its unit test and compare Chromium literally against Source in the browser parity test.
 - Project Await's local class from node state: only boolean false disables it; missing, null and nonboolean values use the Source local default.
 - The Diff applier owns mirror writes; renderers and view plugins read it.
 - Assemble wholly created subtrees off DOM in the existing slot-walk order; keep reused-node moves and trees with DOM-slot hooks on the ordinary path and resolve dynamic slot boundaries when attaching, before selection and commit notifications.
