@@ -4855,6 +4855,12 @@ export type CountedReaction = {
      */
     emoji: string;
     /**
+     * Display names for reactors whose account identity is not visible to this viewer.
+     */
+    names?: {
+        [key: string]: string;
+    };
+    /**
      * User identifiers.
      */
     users: Array<string>;
@@ -12293,6 +12299,16 @@ export type GuestChatPage = {
 };
 
 /**
+ * Text-only update to a guest-authored message.
+ */
+export type GuestChatPatch = {
+    /**
+     * Replacement message body.
+     */
+    content: string;
+};
+
+/**
  * Guests may send text only; attribution and parent are server-owned.
  */
 export type GuestChatPost = {
@@ -12304,6 +12320,17 @@ export type GuestChatPost = {
      * UUIDv7 used to deduplicate retries, including the first message.
      */
     id: string;
+};
+
+/**
+ * A call thread and the verified viewer's sender identity.
+ */
+export type GuestChatThread = {
+    thread?: null | MessageThread;
+    /**
+     * Guest sender ID used for own-message controls.
+     */
+    viewer_id: string;
 };
 
 /**
@@ -23803,6 +23830,104 @@ export type GuestCallChatPostResponses = {
 };
 
 export type GuestCallChatPostResponse = GuestCallChatPostResponses[keyof GuestCallChatPostResponses];
+
+export type GuestCallChatPostMessageData = {
+    body: GuestChatPost;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/guest-chat/{call_id}/messages';
+};
+
+export type GuestCallChatPostMessageErrors = {
+    403: unknown;
+};
+
+export type GuestCallChatPostMessageResponses = {
+    200: Message;
+};
+
+export type GuestCallChatPostMessageResponse = GuestCallChatPostMessageResponses[keyof GuestCallChatPostMessageResponses];
+
+export type GuestCallChatDeleteMessageData = {
+    body?: never;
+    path: {
+        call_id: string;
+        message_id: string;
+    };
+    query?: never;
+    url: '/call/guest-chat/{call_id}/messages/{message_id}';
+};
+
+export type GuestCallChatDeleteMessageErrors = {
+    403: unknown;
+};
+
+export type GuestCallChatDeleteMessageResponses = {
+    204: void;
+};
+
+export type GuestCallChatDeleteMessageResponse = GuestCallChatDeleteMessageResponses[keyof GuestCallChatDeleteMessageResponses];
+
+export type GuestCallChatPatchMessageData = {
+    body: GuestChatPatch;
+    path: {
+        call_id: string;
+        message_id: string;
+    };
+    query?: never;
+    url: '/call/guest-chat/{call_id}/messages/{message_id}';
+};
+
+export type GuestCallChatPatchMessageErrors = {
+    403: unknown;
+};
+
+export type GuestCallChatPatchMessageResponses = {
+    200: Message;
+};
+
+export type GuestCallChatPatchMessageResponse = GuestCallChatPatchMessageResponses[keyof GuestCallChatPatchMessageResponses];
+
+export type GuestCallChatReactMessageData = {
+    body: ReactionInput;
+    path: {
+        call_id: string;
+        message_id: string;
+    };
+    query?: never;
+    url: '/call/guest-chat/{call_id}/messages/{message_id}/reactions';
+};
+
+export type GuestCallChatReactMessageErrors = {
+    403: unknown;
+};
+
+export type GuestCallChatReactMessageResponses = {
+    200: Message;
+};
+
+export type GuestCallChatReactMessageResponse = GuestCallChatReactMessageResponses[keyof GuestCallChatReactMessageResponses];
+
+export type GuestCallChatReadThreadData = {
+    body?: never;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/guest-chat/{call_id}/thread';
+};
+
+export type GuestCallChatReadThreadErrors = {
+    403: unknown;
+};
+
+export type GuestCallChatReadThreadResponses = {
+    200: GuestChatThread;
+};
+
+export type GuestCallChatReadThreadResponse = GuestCallChatReadThreadResponses[keyof GuestCallChatReadThreadResponses];
 
 export type MeetingLookupData = {
     body?: never;

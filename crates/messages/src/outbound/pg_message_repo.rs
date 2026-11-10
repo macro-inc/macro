@@ -191,6 +191,7 @@ impl PgMessageRepository {
                 .push(CountedReaction {
                     emoji: r.emoji,
                     users: r.users,
+                    names: None,
                 });
         }
         let string_ids: Vec<String> = ids.iter().map(ToString::to_string).collect();
