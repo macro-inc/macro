@@ -71,3 +71,6 @@ From `infra/`:
 - `monitors/calls.ts` matches the text of the `voip push: SNS delivery failed`
   log in `crates/notification/src/domain/service/voip.rs` and the
   `PushEndpointUnavailable` message. Rewording either silently breaks it.
+- Keep `monitors/oauth.ts` in sync with the linked-token, native MCP OAuth,
+  and Pipedream failure logs it names; preserve channel-only routing and
+  exclude normal authentication challenges and explicit consent cancellations.
