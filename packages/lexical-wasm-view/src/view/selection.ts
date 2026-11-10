@@ -6,6 +6,7 @@
 import { textLeaf } from './dom';
 import { externalEditorRootOwner } from './editor-roots';
 import { EditorView } from './editor-view';
+import { markSelectionChangeFromDOMUpdate } from './selection-change';
 import type { Point, ViewSelection } from './types';
 
 export function resolvePoint(
@@ -208,6 +209,7 @@ export function writeSelection(
   )
     return;
   dom.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
+  markSelectionChangeFromDOMUpdate();
 }
 
 /** LSEL-50: make a forward DOM range without moving the browser selection. */
