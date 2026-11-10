@@ -61,6 +61,13 @@ use crate::{
                 unsubscribe::unsubscribe_email::handler,
                 unsubscribe::remove_unsubscribe_all::handler,
                 unsubscribe::unsubscribe_all::handler,
+
+                /// /notification_stacks
+                notification_routing::inbound::axum_router::list_notification_stacks_handler,
+                notification_routing::inbound::axum_router::create_notification_stack_handler,
+                notification_routing::inbound::axum_router::reorder_notification_stacks_handler,
+                notification_routing::inbound::axum_router::update_notification_stack_handler,
+                notification_routing::inbound::axum_router::delete_notification_stack_handler,
         ),
         components(
             schemas(
@@ -118,6 +125,16 @@ use crate::{
                         notification_crate::domain::models::queue_message::ConnGatewayNotificationPayload,
                         notification_crate::inbound::http::BulkGetByEventItemIdsRequest,
                         notification_crate::inbound::http::preferences::GetNotificationTypePreferencesResponse,
+
+                        // Notification stacks
+                        notification_routing::domain::models::NotificationStack,
+                        notification_routing::domain::models::StackRule,
+                        notification_routing::domain::models::StackSource,
+                        notification_routing::domain::models::StackKind,
+                        notification_routing::domain::models::NewStack,
+                        notification_routing::domain::models::StackChanges,
+                        notification_routing::inbound::axum_router::NotificationStacks,
+                        notification_routing::inbound::axum_router::NotificationStackOrder,
                 ),
         ),
         tags(

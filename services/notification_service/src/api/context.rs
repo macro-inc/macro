@@ -13,11 +13,21 @@ pub(crate) type ItemPreferences =
         notification::outbound::item_preferences::PgItemNotificationPreferenceRepository,
     >;
 
+pub type Stacks = notification_routing::inbound::axum_router::NotificationStackRouterState<
+    notification_routing::domain::service::NotificationStackServiceImpl<
+        notification_routing::outbound::pg_stack_repo::PgStackRepository,
+        crate::stack_flags::StackFlags,
+    >,
+    AuthorizationService,
+>;
+
 #[derive(Clone, FromRef)]
 pub struct ApiContext {
     /// Signed invocation validation and propagation.
     pub correlation: agent_correlation::inbound::CorrelationState,
     pub item_preferences: ItemPreferences,
+    /// A person's notification stacks.
+    pub stacks: Stacks,
     pub db: PgPool,
     pub sns_client: Arc<sns_client::SNS>,
     pub config: Arc<Config>,
