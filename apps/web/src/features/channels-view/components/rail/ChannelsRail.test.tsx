@@ -14,7 +14,7 @@ import {
 import { createSignal, getOwner, type JSX, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsSources } from '../../queries';
-import type { ChannelRailRow } from './ChannelsRailContext';
+import type { ChannelRailRow, SectionDraft } from './ChannelsRailContext';
 
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => mocks.userId,
@@ -74,6 +74,7 @@ const mocks = vi.hoisted(() => ({
   },
   hotkeys: new Map<string, () => unknown>(),
   realRenderer: false,
+  sectionDraft: undefined as (() => SectionDraft | undefined) | undefined,
 }));
 vi.mock('@app/components/list', () => ({
   createListController: (options: {
@@ -360,7 +361,11 @@ vi.mock('./next/ExpandedChannelsRail', async (importOriginal) => {
   const { useChannelsRail } = await import('./ChannelsRailContext');
   return {
     ExpandedChannelsRail: (props: Parameters<typeof RealRenderer>[0]) => {
-      if (mocks.realRenderer) return <RealRenderer {...props} />;
+      if (mocks.realRenderer) {
+        const rail = useChannelsRail();
+        if (mocks.sectionDraft) rail.sectionDraft = mocks.sectionDraft;
+        return <RealRenderer {...props} />;
+      }
       const rail = useChannelsRail();
       onCleanup(
         rail.registerBrowseScrollHandle({ scrollToIndex: mocks.scrollBrowse })
@@ -378,6 +383,9 @@ vi.mock('./next/ExpandedChannelsRail', async (importOriginal) => {
     },
   };
 });
+vi.mock('./next/InlineSectionDraft', () => ({
+  InlineSectionDraft: () => <div data-inline-section-draft />,
+}));
 
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({}),
@@ -521,6 +529,7 @@ const mount = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.realRenderer = false;
+  mocks.sectionDraft = undefined;
   mocks.focusedRow = undefined;
   mocks.favorites = [];
   mocks.referencedChannels = [];
@@ -767,6 +776,131 @@ it('opens search over mounted section rows', async () => {
 
   expect(screen.getByRole('button', { name: 'Found' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'One' })).toBeNull();
+});
+
+it('keeps nested rows aligned when the inline editor opens and changes height', async () => {
+  mocks.realRenderer = true;
+  vi.useFakeTimers();
+  const [draft, setDraft] = createSignal<SectionDraft>();
+  mocks.sectionDraft = draft;
+  let draftHeight = 0;
+  let prefix: Element | undefined;
+  let stack: Element | undefined;
+  const observers: ResizeObserver[] = [];
+  const targets = new Map<ResizeObserver, Set<Element>>();
+  const callbacks = new Map<ResizeObserver, ResizeObserverCallback>();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class implements ResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        observers.push(this);
+        callbacks.set(this, callback);
+        targets.set(this, new Set());
+      }
+      observe(target: Element) {
+        targets.get(this)?.add(target);
+      }
+      unobserve(target: Element) {
+        targets.get(this)?.delete(target);
+      }
+      disconnect() {
+        targets.get(this)?.clear();
+      }
+    }
+  );
+  vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.parentElement;
+    }
+  );
+  vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      if (this === stack) return draftHeight;
+      return this.hasAttribute('data-index')
+        ? Number.parseFloat(this.style.top) || 0
+        : 0;
+    }
+  );
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(200);
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(300);
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      if (this === prefix) return draftHeight;
+      if (this === stack) return 1700;
+      if (this.hasAttribute('data-index'))
+        return this.firstElementChild?.classList.contains('shrink-0')
+          ? 1700
+          : 34;
+      return 200;
+    }
+  );
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+    function (this: HTMLElement) {
+      return new DOMRect(0, 0, 300, this.offsetHeight);
+    }
+  );
+  mocks.listRows = [
+    { kind: 'section', id: 'section:channels', group: 'channels' },
+    ...Array.from(
+      { length: 50 },
+      (_, index): ChannelRailRow => ({
+        kind: 'conversation',
+        id: `channel:item-${index}`,
+        group: 'channels',
+        scope: 'channels',
+        localIndex: index,
+        channel: { ...channel, id: `item-${index}`, name: `Channel ${index}` },
+      })
+    ),
+  ];
+  const view = mount();
+  const viewport = view.container.querySelector<HTMLDivElement>(
+    '.scrollbar-hidden.overflow-y-auto'
+  );
+  if (!viewport) throw new Error('Missing sidebar viewport');
+  prefix = viewport.firstElementChild ?? undefined;
+  stack = viewport.lastElementChild ?? undefined;
+  const measure = () => {
+    for (const observer of observers) {
+      const entries = [...(targets.get(observer) ?? [])].map((target) => ({
+        target,
+        contentRect: target.getBoundingClientRect(),
+        borderBoxSize: [
+          { inlineSize: 300, blockSize: target.getBoundingClientRect().height },
+        ],
+        contentBoxSize: [],
+        devicePixelContentBoxSize: [],
+      }));
+      if (entries.length) callbacks.get(observer)?.(entries, observer);
+    }
+  };
+  for (let pass = 0; pass < 3; pass++) {
+    await Promise.resolve();
+    measure();
+    await vi.advanceTimersByTimeAsync(20);
+  }
+  viewport.scrollTop = 680;
+  fireEvent.scroll(viewport);
+  await vi.advanceTimersByTimeAsync(20);
+  expect(screen.queryByRole('button', { name: 'Channel 12' })).toBeNull();
+
+  draftHeight = 136;
+  setDraft({ initialChannelIds: [], scope: 'personal' });
+  measure();
+  await vi.advanceTimersByTimeAsync(20);
+  expect(screen.getByRole('button', { name: 'Channel 12' })).toBeTruthy();
+
+  draftHeight = 68;
+  measure();
+  await vi.advanceTimersByTimeAsync(20);
+  expect(screen.queryByRole('button', { name: 'Channel 10' })).toBeNull();
+  expect(screen.getByRole('button', { name: 'Channel 12' })).toBeTruthy();
+
+  draftHeight = 0;
+  setDraft(undefined);
+  measure();
+  await vi.advanceTimersByTimeAsync(20);
+  expect(screen.queryByRole('button', { name: 'Channel 12' })).toBeNull();
 });
 
 describe('section heading navigation', () => {

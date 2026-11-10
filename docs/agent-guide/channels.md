@@ -1163,7 +1163,8 @@ list, and search results. Rows retain stable identities and measured positions
 through live refreshes and section reordering; focused and dragged rows remain
 mounted when they leave the visible range. Each section tracks its own measured
 position, including when other sections change height without changing the total
-stack height, so rows do not leave blank gaps behind.
+stack height, so rows do not leave blank gaps behind. Opening, resizing, or closing
+the inline section editor also updates the nested list positions.
 Keyboard navigation scrolls immediately, without animation, only when the
 highlighted row enters the viewport's two-row context margin, leaving neighboring
 rows visible above and below. The margin shrinks in short sections.
