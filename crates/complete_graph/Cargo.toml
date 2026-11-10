@@ -78,6 +78,9 @@ agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 apollo-compiler = { workspace = true }
 calendar_events = { path = "../calendar_events" }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
+ideas = { path = "../ideas" }
+macro_uuid = { path = "../macro_uuid" }
 model_owner = { path = "../model_owner" }
 model_user = { path = "../model_user" }
 models_pagination = { path = "../models_pagination" }
@@ -85,6 +88,7 @@ models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
 models_soup = { path = "../models_soup" }
 rootcause = { workspace = true }
+routine_program = { path = "../routine_program" }
 scheduled_action = { path = "../scheduled_action" }
 serde = { workspace = true }
 uuid = { workspace = true }

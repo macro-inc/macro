@@ -7,23 +7,28 @@ use ideas::domain::{
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
-pub(crate) type IdeaFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, IdeaError>> + Send + 'a>>;
+/// A boxed ideas call.
+pub type IdeaFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, IdeaError>> + Send + 'a>>;
 
-/// Object-safe view of the ideas service, so request data does not carry its
-/// type parameters.
-pub(crate) trait IdeasGraphql: Send + Sync {
+/// Ideas as GraphQL serves them. Object-safe, so request data does not carry
+/// the service's type parameters.
+pub trait IdeasGraphql: Send + Sync {
+    /// The user's feed; `NotFound` when ideas are off for them.
     fn feed(&self, user: MacroUserIdStr<'static>) -> IdeaFuture<'_, Ideas>;
 
+    /// The user opened the app in `timezone`.
     fn seen(&self, user: MacroUserIdStr<'static>, timezone: chrono_tz::Tz) -> IdeaFuture<'_, ()>;
 
+    /// The user acts on idea `id`; the idea as that left it.
     fn accept(&self, user: MacroUserIdStr<'static>, id: Uuid) -> IdeaFuture<'_, Idea>;
 
+    /// The user isn't interested in idea `id`; the idea as that left it.
     fn dismiss(&self, user: MacroUserIdStr<'static>, id: Uuid) -> IdeaFuture<'_, Idea>;
 }
 
 /// Type-erased ideas service stored in GraphQL request data.
 #[derive(Clone)]
-pub struct IdeasGraphqlContext(pub(crate) Arc<dyn IdeasGraphql>);
+pub struct IdeasGraphqlContext(pub Arc<dyn IdeasGraphql>);
 
 impl IdeasGraphqlContext {
     /// Erase `service` so request data does not carry its type parameters.

@@ -7,7 +7,7 @@ mod mutation;
 mod objects;
 mod user_query;
 
-pub use context::IdeasGraphqlContext;
+pub use context::{IdeaFuture, IdeasGraphql, IdeasGraphqlContext};
 pub use mutation::IdeasMutationRoot;
 pub use objects::{
     GraphqlEntityIdea, GraphqlIdea, GraphqlIdeaCategory, GraphqlIdeaEntityAction, GraphqlIdeaFeed,

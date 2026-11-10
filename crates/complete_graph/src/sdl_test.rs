@@ -840,6 +840,52 @@ fn scheduled_actions_hang_off_the_authenticated_user() {
 }
 
 #[test]
+fn ideas_and_routine_suggestions_hang_off_the_authenticated_user() {
+    let sdl = crate::build_schema().sdl();
+    for expected in [
+        "ideaFeed: GraphqlIdeaFeed",
+        "ideas: [GraphqlIdea!]!",
+        "kind: GraphqlIdeaKind!",
+        "union GraphqlIdeaKind = GraphqlPromptIdea | GraphqlEntityIdea | GraphqlRoutineIdea",
+        "run: GraphqlIdeaRun",
+        "entityType: GraphqlEntityType!",
+        "acceptIdea(ideaId: ID!): GraphqlIdea!",
+        "dismissIdea(ideaId: ID!): GraphqlIdea!",
+        "recordIdeasSeen(timezone: String!): Boolean!",
+        "routineSuggestions(surface: GraphqlRoutineSurface): GraphqlRoutineSuggestions",
+        "status: GraphqlSuggestionGenerationStatus!",
+        "suggestions: [GraphqlRoutineSuggestion!]!",
+        "union GraphqlRoutineSuggestionPick = GraphqlCatalogRoutinePick | GraphqlDraftedRoutinePick",
+        "dismissRoutineSuggestion(suggestionId: ID!): GraphqlRoutineSuggestionDismissed!",
+        "startSuggestionGeneration(timezone: String!): GraphqlSuggestionGenerationStarted!",
+    ] {
+        assert_sdl_line(&sdl, expected);
+    }
+
+    // Embedded values carry no `id`: only the idea and the suggestion are
+    // cache entities.
+    let schema = apollo_compiler::Schema::parse_and_validate(sdl.as_str(), "schema.graphql")
+        .expect("generated SDL is valid");
+    for (name, keyed) in [
+        ("GraphqlIdea", true),
+        ("GraphqlRoutineSuggestion", true),
+        ("GraphqlIdeaFeed", false),
+        ("GraphqlIdeaRun", false),
+        ("GraphqlIdeaTarget", false),
+        ("GraphqlPromptIdea", false),
+        ("GraphqlEntityIdea", false),
+        ("GraphqlRoutineIdea", false),
+        ("GraphqlRoutineSuggestions", false),
+        ("GraphqlCatalogRoutinePick", false),
+        ("GraphqlDraftedRoutinePick", false),
+        ("GraphqlRoutineSuggestionDismissed", false),
+    ] {
+        let object = schema.get_object(name).expect(name);
+        assert_eq!(object.fields.contains_key("id"), keyed, "{name}");
+    }
+}
+
+#[test]
 fn calendar_reads_hang_off_the_authenticated_user() {
     use apollo_compiler::schema::ExtendedType;
 
