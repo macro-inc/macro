@@ -41,6 +41,8 @@ function Entry(props: {
   tutorial: Tutorial;
   variant: 'row' | 'pill' | 'sidebar';
   class?: string;
+  /** Label the entry with the block's name, among other tutorials. */
+  named?: boolean;
 }) {
   const state: TutorialState = createTutorialState(props.tutorial.id);
   const shown = () => TUTORIALS[state.shown()] ?? props.tutorial;
@@ -67,7 +69,10 @@ function Entry(props: {
           <TutorialPillView {...entry()} class={props.class} />
         </Match>
         <Match when={props.variant === 'sidebar'}>
-          <TutorialSidebarItemView {...entry()} />
+          <TutorialSidebarItemView
+            {...entry()}
+            label={props.named ? props.tutorial.block : undefined}
+          />
         </Match>
       </Switch>
       <TutorialVideoDialog
@@ -117,11 +122,19 @@ export function TutorialPill(props: { tutorial: TutorialId; class?: string }) {
   );
 }
 
-/** The entry as a sidebar item, at the top of a block's sidebar. */
-export function TutorialSidebarItem(props: { tutorial: TutorialId }) {
+/**
+ * The entry as a sidebar item, at the top of a block's sidebar. `named` labels
+ * it with the block ("Macro Docs") for a sidebar that lists several tutorials.
+ */
+export function TutorialSidebarItem(props: {
+  tutorial: TutorialId;
+  named?: boolean;
+}) {
   return (
     <Show when={TUTORIALS[props.tutorial]}>
-      {(tutorial) => <Entry tutorial={tutorial()} variant="sidebar" />}
+      {(tutorial) => (
+        <Entry tutorial={tutorial()} variant="sidebar" named={props.named} />
+      )}
     </Show>
   );
 }

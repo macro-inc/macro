@@ -56,6 +56,8 @@ import {
   loadKrisp,
   loadLivekit,
 } from './livekit-loader';
+import { isMicrophoneAccessError } from './microphone-access';
+import { showMicrophoneBlockedToast } from './microphone-blocked-toast';
 import { bindNativeCallLifecycle } from './native-call-lifecycle';
 import {
   type NativeCallConnectionState,
@@ -207,6 +209,9 @@ function screenShareCaptureOptions(
       echoCancellation: false,
       noiseSuppression: false,
       autoGainControl: false,
+      // System audio otherwise includes the call itself, so everyone hears
+      // themselves echoed back through the share.
+      restrictOwnAudio: true,
     },
     // Chromium offers system audio only when asked (Windows, ChromeOS); other
     // platforms and browsers capture tab audio or none.
@@ -1324,8 +1329,10 @@ function createCallState() {
       }
     } catch (e) {
       console.error('failed to enable microphone', e);
-      if (isCurrentMediaSetup(targetRoom, setupVersion))
+      if (isCurrentMediaSetup(targetRoom, setupVersion)) {
         setStore('isAudioMuted', true);
+        if (isMicrophoneAccessError(e)) showMicrophoneBlockedToast('join');
+      }
     }
     if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
     if (store.isAudioMuted) {
@@ -1541,6 +1548,7 @@ function createCallState() {
       if (room() === r) setStore('isAudioMuted', newMuted);
     } catch (e) {
       console.error('failed to toggle audio', e);
+      if (isMicrophoneAccessError(e)) showMicrophoneBlockedToast('unmute');
       throw e;
     }
   }
@@ -1756,6 +1764,7 @@ function createCallState() {
     beginJoin: beginOptimisticJoin,
     rollbackJoin: rollbackOptimisticJoin,
     setError: setJoinError,
+    microphoneBlocked: () => showMicrophoneBlockedToast('join'),
     watch: (_call, disconnected, nativeEnded) => {
       // Capture the room: its own disconnect handler resets the store first.
       const currentRoom = room();

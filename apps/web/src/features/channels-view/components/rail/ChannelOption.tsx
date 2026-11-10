@@ -189,19 +189,10 @@ export function ChannelOption(props: {
           </ViewSidebar.Icon>
           <span class="min-w-0 flex-1 truncate">{props.channel.name}</span>
           <span class="flex shrink-0 items-center gap-2">
-            <ChannelMutedIndicator muted={item().muted} />
+            {/* The hover timestamp leads so call and unread indicators stay put. */}
             <Show
-              when={!item().incomingCallId && item().callStatus === 'active'}
+              when={!item().incomingCallId && !item().callStatus && timestamp()}
             >
-              <ChannelLiveCallBadge channelId={props.channel.id} />
-            </Show>
-            <Show when={item().unread}>
-              <span
-                aria-label="Unread"
-                class="size-2 shrink-0 rounded-full bg-accent"
-              />
-            </Show>
-            <Show when={!item().callStatus && timestamp()}>
               {(value) => (
                 <span class="relative hidden shrink-0 group-hover/channel-option:block touch:hidden">
                   <span
@@ -227,6 +218,18 @@ export function ChannelOption(props: {
                   </Tooltip>
                 </span>
               )}
+            </Show>
+            <ChannelMutedIndicator muted={item().muted} />
+            <Show
+              when={!item().incomingCallId && item().callStatus === 'active'}
+            >
+              <ChannelLiveCallBadge channelId={props.channel.id} />
+            </Show>
+            <Show when={item().unread}>
+              <span
+                aria-label="Unread"
+                class="size-2 shrink-0 rounded-full bg-accent"
+              />
             </Show>
           </span>
           <IncomingCallActions

@@ -11,6 +11,7 @@ import android.os.Build
 import android.net.Uri
 import android.os.Bundle
 import android.os.SystemClock
+import android.provider.Settings
 import android.telecom.*
 import androidx.core.content.ContextCompat
 import app.tauri.plugin.Channel
@@ -58,6 +59,10 @@ internal object Calls {
     var video = false
         private set
     var error: String? = null
+    /** After repeated denials Android stops asking, so only the app's settings page can grant a permission. */
+    fun openAppSettings(ctx: Context) {
+        ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")))
+    }
     /** Where the call UI is, as on iOS: the drawer (expanded), the in-app thumbnail (minimized), or an edge tab (hidden). */
     var overlay = "hidden"
         private set

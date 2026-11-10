@@ -24,7 +24,7 @@ import { registerClient } from '@core/util/mockClient';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
 import type { ResultError } from '@core/util/result';
-import type { SafeFetchInit } from '@core/util/safeFetch';
+import { type SafeFetchInit, statusError } from '@core/util/safeFetch';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { SerializedEditorState } from 'lexical';
 import { err, ok, type Result } from 'neverthrow';
@@ -172,6 +172,8 @@ import type { SearchContactsResponse } from './generated/schemas/searchContactsR
 import type { SetChannelLabelRequest } from './generated/schemas/setChannelLabelRequest';
 import type { SetChannelPictureRequest } from './generated/schemas/setChannelPictureRequest';
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
+import type { SetContactCompanyRequest } from './generated/schemas/setContactCompanyRequest';
+import type { SetContactEmailRequest } from './generated/schemas/setContactEmailRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
 import type { SkillDescriptionBody } from './generated/schemas/skillDescriptionBody';
@@ -278,6 +280,16 @@ async function calendarJoinRequestErrorHandler(response: Response) {
   };
 }
 
+async function contactEditErrorHandler(response: Response) {
+  if (response.status === 400) {
+    return {
+      code: 'BAD_REQUEST' as const,
+      message: 'Contact change unavailable',
+    };
+  }
+  return statusError(response.status);
+}
+
 export async function getDocumentPermissionToken(
   documentId: string
 ): Promise<string> {
@@ -339,10 +351,16 @@ type WithBotId = { bot_id: string };
 type WithAgentId = { agent_id: string };
 type WithChannelId = { channel_id: string };
 
-/** Who owns a registered harness: the registering user or their team. */
-export type HarnessOwner =
-  | { type: 'user'; user_id: string }
-  | { type: 'team'; team_id: string };
+/** Who owns a registered harness: always one person. */
+export type HarnessOwner = { type: 'user'; user_id: string };
+
+/** An agent living on a runtime. */
+export type HarnessResident = {
+  bot_id: string;
+  name: string;
+  owner_user_id?: string | null;
+  team_id?: string | null;
+};
 
 /** A macrod harness registered with the workspace. */
 export type Harness = {
@@ -351,6 +369,10 @@ export type Harness = {
   kind: 'macrod';
   name: string;
   owner: HarnessOwner;
+  /** The viewer's role. Only `owner` and `user` can run agents on it. */
+  access: 'owner' | 'user' | 'read' | 'none';
+  /** Teams it is a team machine for: their every member is a user of it. */
+  shared_team_ids: string[];
   created_by: string;
   created_at: string;
   updated_at: string;
@@ -856,6 +878,34 @@ export const storageServiceClient = {
         method: 'GET',
       })
     ).map((result) => result);
+  },
+
+  async getHarnessDirectory() {
+    return (
+      await dssFetch<Harness[]>(`/harnesses/directory`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async getHarnessResidents(args: { harness_id: string }) {
+    return (
+      await dssFetch<HarnessResident[]>(
+        `/harnesses/${args.harness_id}/residents`,
+        { method: 'GET' }
+      )
+    ).map((result) => result);
+  },
+
+  async setHarnessTeamAccess(args: {
+    harness_id: string;
+    team_id: string;
+    enabled: boolean;
+  }) {
+    return await dssFetch(`/harnesses/${args.harness_id}/team-access`, {
+      method: 'PUT',
+      body: JSON.stringify({ team_id: args.team_id, enabled: args.enabled }),
+    });
   },
 
   async getHarnessPairing(args: { code: string }) {
@@ -2979,6 +3029,32 @@ export const storageServiceClient = {
       method: 'PUT',
       body: JSON.stringify(body),
     });
+  },
+  async setContactEmail({
+    contactId,
+    ...body
+  }: { contactId: string } & SetContactEmailRequest) {
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/email`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        errorResponseHandler: contactEditErrorHandler,
+      }
+    );
+  },
+  async setContactCompany({
+    contactId,
+    ...body
+  }: { contactId: string } & SetContactCompanyRequest) {
+    return await fetchWithToken<CrmContactResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/company`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        errorResponseHandler: contactEditErrorHandler,
+      }
+    );
   },
   async setContactHidden({
     contactId,

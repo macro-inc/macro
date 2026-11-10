@@ -16,18 +16,19 @@ use macro_uuid::Uuid;
 use model_owner::{CreationPrincipal, Owner};
 use tokio::sync::mpsc::Sender;
 
-use super::code_check::{StarterRoutine, checked_task, named_steps, same_task};
+use super::code_check::{CodeCheckError, checked_task, named_steps, same_task};
 use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades};
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
-    DispatchEvent, InProgressExecution, ListedAction, MAX_DESCRIPTION_CHARS, OwnerNotUserError,
-    ScheduledAction,
+    CheckedStepProblems, CreatedItem, DispatchEvent, InProgressExecution, ListedAction,
+    MAX_DESCRIPTION_CHARS, OwnerNotUserError, RoutineCheck, ScheduledAction,
 };
 use super::ports::{
-    CodeUpgrades, NoRoutineCode, RoutineCode, ScheduledActionExecutor, ScheduledActionRepo,
-    ScheduledActionService, TaskTargetValidator,
+    CodeUpgrades, DraftHandBacks, NoRoutineCode, RequestSessions, RoutineCode,
+    ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, StepProblems,
+    SuggestionOrigins, TaskTargetValidator,
 };
 use super::target_validation::{ModelOnlyTargets, require_explicit_selection};
 
@@ -55,6 +56,17 @@ pub struct ScheduledActionServiceImpl<
     code: Arc<Code>,
     /// How code steps were brought to new SDKs.
     upgrades: Arc<Upgrades>,
+    /// Where a routine draft's session hands its check back.
+    drafts: Option<DraftChecks>,
+    /// What a suggestion a routine is saved from was, for its log.
+    origins: Option<Arc<dyn SuggestionOrigins>>,
+}
+
+/// What keeps a draft session's check as its answer.
+#[derive(Clone)]
+struct DraftChecks {
+    hand_backs: Arc<dyn DraftHandBacks>,
+    sessions: Arc<dyn RequestSessions>,
 }
 
 /// Composition without GitHub: no owner counts as linked, so GitHub triggers
@@ -94,6 +106,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             github: NoGithubLinks,
             code: Arc::new(NoRoutineCode),
             upgrades: Arc::new(NoCodeUpgrades),
+            drafts: None,
+            origins: None,
         }
     }
 }
@@ -116,6 +130,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
             github: self.github,
             code: self.code,
             upgrades: self.upgrades,
+            drafts: self.drafts,
+            origins: self.origins,
         }
     }
 
@@ -135,6 +151,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
             github,
             code: self.code,
             upgrades: self.upgrades,
+            drafts: self.drafts,
+            origins: self.origins,
         }
     }
 
@@ -156,7 +174,29 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
             github: self.github,
             code,
             upgrades,
+            drafts: self.drafts,
+            origins: self.origins,
         }
+    }
+
+    /// Keep a routine draft's session's checks as its answer, finding the
+    /// session behind a request through `sessions`.
+    pub fn with_draft_hand_backs(
+        mut self,
+        hand_backs: Arc<dyn DraftHandBacks>,
+        sessions: Arc<dyn RequestSessions>,
+    ) -> Self {
+        self.drafts = Some(DraftChecks {
+            hand_backs,
+            sessions,
+        });
+        self
+    }
+
+    /// Log what suggestion a routine is saved from, found through `origins`.
+    pub fn with_suggestion_origins(mut self, origins: Arc<dyn SuggestionOrigins>) -> Self {
+        self.origins = Some(origins);
+        self
     }
 
     pub fn with_event_management_enabled(mut self, enabled: bool) -> Self {
@@ -210,6 +250,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         principal: &CreationPrincipal,
         input: ActionConfiguration,
         template_id: Option<Uuid>,
+        suggestion_id: Option<Uuid>,
     ) -> Result<ScheduledAction>
     where
         Targets: TaskTargetValidator,
@@ -251,6 +292,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
                 next_run_at,
                 claimed: None,
                 template_id,
+                suggestion_id,
                 description,
             })
             .await?;
@@ -259,6 +301,88 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
             .await
             .map_err(|e| anyhow::anyhow!("failed to dispatch create event: {e}"))?;
         Ok(created)
+    }
+
+    /// What saving `input` would find wrong, by the same checks [`Self::create`]
+    /// makes, and the routine as it would be stored. Nothing is saved.
+    async fn check(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        input: ActionConfiguration,
+    ) -> Result<RoutineCheck>
+    where
+        Targets: TaskTargetValidator,
+        Github: GithubInstallationClaims,
+        Code: RoutineCode,
+    {
+        let mut input = input;
+        input.task = named_steps(&input.task);
+        let mut problems = Vec::new();
+        let mut steps = Vec::new();
+        let found = [
+            description(&input.description).map(|_| ()),
+            self.check_event_management(&input.trigger),
+            self.check_conditions(&input.trigger),
+            self.targets.validate_task(&input.task, owner).await,
+        ];
+        for result in found {
+            if let Err(error) = result {
+                problems.push(check_problem(error)?);
+            }
+        }
+        match checked_task(self.code.as_ref(), &input.task, None).await {
+            Ok(task) => input.task = task,
+            Err(CodeCheckError::DoesNotCheck { steps: failing }) => {
+                steps = step_positions(&input.task, failing);
+            }
+            Err(CodeCheckError::Unavailable(reason)) => problems.push(reason),
+        }
+        if input.enabled
+            && let Err(error) = self.check_github(&input.trigger, owner).await
+        {
+            problems.push(check_problem(error)?);
+        }
+        if let Err(error) = next_run(&input.trigger, Utc::now(), |_| false) {
+            problems.push(check_problem(error)?);
+        }
+        Ok(RoutineCheck {
+            ok: problems.is_empty() && steps.is_empty(),
+            problems,
+            steps,
+            routine: input,
+        })
+    }
+
+    /// Keep `check` as the answer of the routine draft whose session made
+    /// the request `correlation` names, when it is `owner`'s draft. A check
+    /// that isn't a draft's, or a store that fails, leaves the check's own
+    /// answer alone.
+    async fn hand_back(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        correlation: Option<Uuid>,
+        check: &RoutineCheck,
+        created: &[CreatedItem],
+    ) {
+        let (Some(drafts), Some(correlation)) = (&self.drafts, correlation) else {
+            return;
+        };
+        let recorded = async {
+            let Some(session) = drafts.sessions.session_of(correlation).await? else {
+                return Ok(false);
+            };
+            drafts
+                .hand_backs
+                .record(session, owner, check, created)
+                .await
+        }
+        .await;
+        match recorded {
+            Ok(recorded) => {
+                tracing::Span::current().record("routine.check.draft", recorded);
+            }
+            Err(error) => tracing::warn!(error = ?error, "could not keep a draft's check"),
+        }
     }
 
     /// An enabled GitHub trigger needs its owner to have linked GitHub.
@@ -379,6 +503,63 @@ pub(crate) async fn granted_action<R: ScheduledActionRepo, T: RequiredPermission
         }
         _ => Err(ActionPolicyError::NotFound.into()),
     }
+}
+
+/// An error the routine's author can fix, as a problem to show them; any
+/// other error is the check's own failure.
+fn check_problem(error: anyhow::Error) -> Result<String> {
+    use super::target_validation::TargetValidationError;
+    use agent_session::domain::routines::RoutineSessionError;
+    let theirs = match error.downcast_ref::<ActionPolicyError>() {
+        Some(ActionPolicyError::NotFound | ActionPolicyError::UpdateConflict) => false,
+        Some(_) => true,
+        None => {
+            error.downcast_ref::<TargetValidationError>().is_some()
+                || matches!(
+                    error.downcast_ref::<RoutineSessionError>(),
+                    Some(
+                        RoutineSessionError::InvalidCommand
+                            | RoutineSessionError::ModelMismatch
+                            | RoutineSessionError::PersonaUnavailable
+                            | RoutineSessionError::Forbidden
+                            | RoutineSessionError::AppNotConnected
+                            | RoutineSessionError::AppsUnsupported
+                    )
+                )
+        }
+    };
+    if theirs {
+        Ok(error.to_string())
+    } else {
+        Err(error)
+    }
+}
+
+/// Failing code steps by their place among `task`'s steps; the checker
+/// counts code steps alone.
+pub(crate) fn step_positions(
+    task: &serde_json::Value,
+    failing: Vec<StepProblems>,
+) -> Vec<CheckedStepProblems> {
+    let positions: Vec<usize> = routine_program::RoutineProgram::from_task(task)
+        .map(|program| {
+            program
+                .steps
+                .iter()
+                .enumerate()
+                .filter(|(_, step)| matches!(step, routine_program::Step::Code(_)))
+                .map(|(index, _)| index)
+                .collect()
+        })
+        .unwrap_or_default();
+    failing
+        .into_iter()
+        .map(|step| CheckedStepProblems {
+            index: positions.get(step.index).copied().unwrap_or(step.index),
+            title: step.title,
+            problems: step.problems,
+        })
+        .collect()
 }
 
 /// A description as stored: trimmed, and within the limit.
@@ -503,7 +684,34 @@ where
         principal: &CreationPrincipal,
         input: ActionConfiguration,
     ) -> Result<ScheduledAction> {
-        self.create(principal, input, None).await
+        self.create(principal, input, None, None).await
+    }
+
+    #[tracing::instrument(name = "routine.check", skip_all, fields(
+        routine.check.ok = tracing::field::Empty,
+        routine.check.problems = tracing::field::Empty,
+        routine.check.failing_steps = tracing::field::Empty,
+        routine.check.draft = tracing::field::Empty,
+    ), err)]
+    async fn check_action(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        created: Vec<CreatedItem>,
+        correlation: Option<Uuid>,
+    ) -> Result<RoutineCheck> {
+        let owner = principal.owner();
+        let owner_user = owner.as_user().ok_or(OwnerNotUserError {
+            owner_type: owner.owner_type(),
+        })?;
+        let check = self.check(owner_user, input).await?;
+        let span = tracing::Span::current();
+        span.record("routine.check.ok", check.ok);
+        span.record("routine.check.problems", check.problems.len());
+        span.record("routine.check.failing_steps", check.steps.len());
+        self.hand_back(owner_user, correlation, &check, &created)
+            .await;
+        Ok(check)
     }
 
     async fn create_action_from_template(
@@ -512,7 +720,38 @@ where
         input: ActionConfiguration,
         template_id: Uuid,
     ) -> Result<ScheduledAction> {
-        self.create(principal, input, Some(template_id)).await
+        self.create(principal, input, Some(template_id), None).await
+    }
+
+    async fn create_action_from_suggestion(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        suggestion_id: Uuid,
+    ) -> Result<ScheduledAction> {
+        let created = self
+            .create(principal, input, None, Some(suggestion_id))
+            .await?;
+        // Accepts by who suggested, kind and surface, for the suggestions
+        // dashboard. A failed lookup only leaves those fields out.
+        let origin = match (&self.origins, principal.owner().as_user()) {
+            (Some(origins), Some(owner)) => origins
+                .origin(owner, suggestion_id)
+                .await
+                .inspect_err(|error| tracing::warn!(error = ?error, "could not read the suggestion a routine was saved from"))
+                .ok()
+                .flatten(),
+            _ => None,
+        };
+        tracing::info!(
+            event = "routine_suggestions.saved",
+            routine.suggestion.id = %suggestion_id,
+            from = origin.map(|origin| origin.from),
+            kind = origin.map(|origin| origin.kind),
+            surface = origin.and_then(|origin| origin.surface),
+            enabled = created.enabled,
+        );
+        Ok(created)
     }
 
     async fn get_actions(
@@ -606,8 +845,8 @@ where
         self.repo.get_execution_records(&id).await
     }
 
-    fn code_starters(&self) -> Vec<StarterRoutine> {
-        super::code_check::starters(self.code.as_ref())
+    fn catalog(&self, timezone: chrono_tz::Tz) -> Vec<super::catalog::CatalogEntry> {
+        super::catalog::catalog(self.code.as_ref(), timezone)
     }
 
     async fn get_code_upgrades(

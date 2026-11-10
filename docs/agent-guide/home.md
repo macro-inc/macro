@@ -99,6 +99,8 @@ message. Channel names
 prefer the current channel cache, then a matching thread notification's name,
 then **Unknown channel** if neither source has a name. Selecting a
 thread opens that thread in the channel preview; Shift-click opens it in a split.
+A click or Enter gives the conversation's composer focus, and Esc returns to the
+row; see [composer focus and Esc](channels.md#composer-focus-and-esc).
 If the channel is already open in another split or preview, clicking a message
 or reply notification focuses that view and jumps to the specific message,
 without a **Content already open** warning. Verify with two splits and a reply

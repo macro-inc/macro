@@ -30,6 +30,8 @@ const COMMANDS: &[&str] = &[
     "switch_camera",
     "can_use_full_screen_intent",
     "open_full_screen_intent_settings",
+    "open_microphone_settings",
+    "request_microphone_permission",
 ];
 
 struct BuildEnv {

@@ -70,20 +70,29 @@ fn a_poll_tallies_current_votes_per_option_and_marks_the_viewers() {
     let ana = StoredVote {
         message_id: message,
         selected: vec!["aa".to_owned()],
-        voter: person("Ana", Some("macro|ana@example.com")),
+        voter: StoredPerson {
+            person_id: Uuid::from_u128(10),
+            user_id: Some("macro|ana@example.com".to_owned()),
+        },
     };
     let ben = StoredVote {
         message_id: message,
         selected: vec!["aa".to_owned()],
-        voter: person("Ben", None),
+        voter: StoredPerson {
+            person_id: Uuid::from_u128(11),
+            user_id: None,
+        },
     };
+    let mut people = People::default();
+    people.name_person(Uuid::from_u128(10), "Ana".to_owned());
+    people.name_person(Uuid::from_u128(11), "Ben".to_owned());
 
     let view = rich_view(
         poll,
         &person("Ana", None),
         &[&ana, &ben],
         "macro|ana@example.com",
-        &People::default(),
+        &people,
     );
 
     assert_eq!(

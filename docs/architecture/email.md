@@ -158,7 +158,7 @@ The compose controllers now assemble these smaller responsibilities:
 | `attachment-persistence.ts` | Upload/remove operations and completion tracking. Receives attachment state and three transport capabilities. A saved attachment ID does not mean its content upload has finished; every save waits for outstanding uploads. |
 | `email-send-schedule.ts` | Confirmed send time, pending changes, unscheduling and archive feedback. Send Later and schedule updates save the draft first, then schedule it through the REST endpoint. Cancellation only unlocks editing after confirmation. |
 | `draft-session.ts` / `draft-persistence.ts` | Shared draft identity, queued-write status, rejection policy, and save/delete ordering. Server identity and a committed latest save are separate facts; uploads and updates to existing legacy schedules wait for a committed save. |
-| `send-readiness.ts` | Outbox admission allows offline delivery with complete attachment references and rejects unfinished uploads. |
+| `send-readiness.ts` | Outbox admission allows offline delivery with complete attachment references and rejects unfinished uploads. A failed, unconfirmed or pending draft sync never blocks an outbox send: the send carries the saved local copy under the draft's handles and the server validates it. Only legacy REST delivery waits for a committed save. Each refusal logs `email_send.refused` with its reason. |
 | `draft-autosave.ts` | One debounce and serialized write queue used by reply and standalone compose. Captures editor values before queueing, flushes pending edits when visibility changes and on disposal, retries a failed local write on visibility changes and disposal unless cancelled, and exposes cancellation and completion for send/discard. |
 | `reply-recipient-fields.ts` | Recipient field expansion, drag/drop and outside interaction. Receives values, a setter and a change callback; it knows nothing about saving or sending. |
 | `reply-composer-focus.ts` | Deferred editor/recipient focus and the forward focus guard. Receives DOM accessors and an editor `focus()` capability. Its timers, animation frames and event listeners end with its owner. |
@@ -376,6 +376,12 @@ sanitization/color helpers delegate to the package through `@core/email`.
 8. Renderer resources follow their Solid owner. Source changes or disposal release
    image blob URLs, resize observers and image listeners, and abort pending adapter
    work.
+9. A reopened reply draft seeds its composer through
+   `email-compose/core/draft-editor-html.ts`. A draft another client wrote
+   carries that client's quoted thread as plain markup; it seeds from the
+   server's replyless body, so the composer's own appended quote is the only one
+   sent. Bodies with a `.macro_quote` or only editor (`md-quote`) quotes seed
+   unchanged.
 
 ## Shared UI and explicit exceptions
 
@@ -553,7 +559,13 @@ and permits restoration. Timeouts, mixed/nested errors, and later status rejecti
 never provide that proof. Retry backoff and authentication
 pauses do not discard approval. `email-send-restoration.ts` restores content,
 fences the prior local lifetime, and retires send authority atomically. Newer
-local edits and file bytes survive restoration. Sign-out retains approved sends
+local edits and file bytes survive restoration. Removing a sent intent keeps the
+working-copy generation and revision it carried under the draft's IDs. A composer
+in another tab that sees the draft sent compares that version with its own last
+local write: text the send carried or a committed save holds goes with the sent
+draft, and anything newer is kept as a new draft. A send from another device
+carries no such version, so only text the server acknowledged counts. A composer
+that opened no working copy cannot overwrite one another tab wrote. Sign-out retains approved sends
 under their original account and stops dispatch; ordinary drafts retain their
 existing sign-out policy.
 Signing into another account without signing out ends the previous account's

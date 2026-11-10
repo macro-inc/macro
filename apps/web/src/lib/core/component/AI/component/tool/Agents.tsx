@@ -40,7 +40,7 @@ function agentDetails(agent: AgentSummary): Detail[] {
     { label: 'Agent ID', value: agent.bot.botId, secret: true },
     { label: 'Handle', value: `@${agent.bot.handle}` },
     { label: 'Owner', value: ownerLabel(agent.bot.owner) },
-    { label: 'Runtime', value: harnessLabel(agent) },
+    { label: 'Runs on', value: harnessLabel(agent) },
     { label: 'Model', value: agent.defaultModel },
     { label: 'Channels', value: channelsLabel(agent) },
     { label: 'Connected apps', value: appsLabel(agent) },

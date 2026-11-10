@@ -1,7 +1,10 @@
 use super::*;
 use rmcp::{
     ServerHandler,
-    model::{CallToolRequestParams, CallToolResult, Content, ServerCapabilities, ServerInfo},
+    model::{
+        CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ServerCapabilities,
+        ServerConfig,
+    },
     transport::streamable_http_server::{
         StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
     },
@@ -13,17 +16,18 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 struct StatefulTool(Arc<AtomicUsize>);
 
 impl ServerHandler for StatefulTool {
-    fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
     }
     async fn call_tool(
         &self,
         _: CallToolRequestParams,
         _: rmcp::service::RequestContext<rmcp::RoleServer>,
-    ) -> Result<CallToolResult, rmcp::ErrorData> {
-        Ok(CallToolResult::success(vec![Content::text(
+    ) -> Result<CallToolResponse, rmcp::ErrorData> {
+        Ok(CallToolResult::success(vec![ContentBlock::text(
             (self.0.fetch_add(1, Ordering::SeqCst) + 1).to_string(),
-        )]))
+        )])
+        .into())
     }
 }
 

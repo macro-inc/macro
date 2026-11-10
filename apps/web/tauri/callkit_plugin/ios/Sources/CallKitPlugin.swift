@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Tauri
 import UIKit
@@ -311,6 +312,36 @@ class CallKitPlugin: Plugin, @unchecked Sendable {
                 args.channel.send(state)
             }
             invoke.resolve()
+        }
+    }
+    /// Asked before the join so the prompt appears over the call the user just
+    /// started, not after the room connects, possibly behind the lock screen.
+    @objc public func requestMicrophonePermission(_ invoke: Invoke) {
+        let session = AVAudioSession.sharedInstance()
+        guard session.recordPermission == .undetermined else {
+            invoke.resolve(["granted": session.recordPermission == .granted])
+            return
+        }
+        callKitLog("JS requested microphone permission before joining")
+        session.requestRecordPermission { granted in
+            callKitLog("Microphone permission request before joining completed granted=\(granted)")
+            invoke.resolve(["granted": granted])
+        }
+    }
+
+    @objc public func openMicrophoneSettings(_ invoke: Invoke) {
+        onMain {
+            guard let url = URL(string: UIApplication.openSettingsURLString) else {
+                invoke.reject("Unable to open microphone settings")
+                return
+            }
+            UIApplication.shared.open(url) { opened in
+                if opened {
+                    invoke.resolve()
+                } else {
+                    invoke.reject("Unable to open microphone settings")
+                }
+            }
         }
     }
 
