@@ -41,6 +41,10 @@ async fn an_idle_in_process_session_is_released_and_its_next_prompt_resumes_it()
     prompted.expect("the first prompt resumes the session and runs");
     signals.settled(id).await;
     assert!(service.inner.sessions.attached_mcp_servers(id).is_some());
+    let lifecycle = signals.lifecycle();
+    let frames = repo.list_by_session(id).await.expect("the log reads").len();
+    let row = repo.get(id).await.expect("the row reads");
+    let turn_state = repo.turn_state(id);
 
     tokio::time::pause();
     tokio::time::timeout(WORKER_IDLE_TIMEOUT * 2, containers.wait_for_release(id))
@@ -53,6 +57,19 @@ async fn an_idle_in_process_session_is_released_and_its_next_prompt_resumes_it()
         service.inner.sessions.attached_mcp_servers(id).is_none(),
         "the session's actor is closed"
     );
+    // Nobody outside this process can tell: no lifecycle event (so no
+    // `agent_session.stopped` webhook), nothing in the log, and the state the
+    // app shows is as it was.
+    assert_eq!(signals.lifecycle(), lifecycle);
+    assert_eq!(
+        repo.list_by_session(id).await.expect("the log reads").len(),
+        frames,
+        "the release writes no frame"
+    );
+    let released = repo.get(id).await.expect("the row reads");
+    assert_eq!(released.status, row.status);
+    assert_eq!(released.modified_at, row.modified_at);
+    assert_eq!(repo.turn_state(id), turn_state);
 
     let (prompted, resumed) = tokio::join!(
         service.execute(
@@ -67,6 +84,13 @@ async fn an_idle_in_process_session_is_released_and_its_next_prompt_resumes_it()
     );
     prompted.expect("the next prompt resumes the released session");
     assert_eq!(containers.resumed(), 2);
+    assert!(
+        !signals
+            .lifecycle()
+            .iter()
+            .any(|event| matches!(event, AgentSessionLifecycleEvent::Stopped(_))),
+        "nothing ever says the session stopped"
+    );
     assert_eq!(
         prompts(&resumed.agent()),
         vec![vec![ContentBlock::from(context_prompt("after a while"))]],
@@ -98,6 +122,23 @@ async fn a_session_with_a_turn_running_and_a_prompt_queued_is_never_released() {
     assert!(containers.released().is_empty());
     assert!(service.inner.sessions.attached_mcp_servers(id).is_some());
     assert_eq!(service.inner.queues.list(id).len(), 1, "the queue is kept");
+
+    // The actor refuses on its own too: its turn is still on the wire.
+    let frames = repo.list_by_session(id).await.expect("the log reads").len();
+    assert_eq!(
+        service
+            .inner
+            .sessions
+            .release_session(id)
+            .await
+            .expect("the actor answers"),
+        agent_session::domain::model::SessionRelease::Busy
+    );
+    assert!(service.inner.sessions.attached_mcp_servers(id).is_some());
+    assert_eq!(
+        repo.list_by_session(id).await.expect("the log reads").len(),
+        frames
+    );
 }
 
 /// A replica that took the session over holds its lease under a newer fence.
@@ -121,6 +162,8 @@ async fn releasing_a_session_another_replica_took_over_keeps_that_replicas_lease
         .await
         .expect("this replica drains");
     let peer = claim_as_peer(&repo, id).await;
+    let lifecycle = signals.lifecycle();
+    let frames = repo.list_by_session(id).await.expect("the log reads").len();
 
     tokio::time::pause();
     tokio::time::timeout(WORKER_IDLE_TIMEOUT * 2, containers.wait_for_release(id))
@@ -137,6 +180,38 @@ async fn releasing_a_session_another_replica_took_over_keeps_that_replicas_lease
         Some(peer.replica),
         "the peer still manages the session"
     );
+    // Nothing that would reach the peer's viewers or its held tool calls.
+    assert_eq!(signals.lifecycle(), lifecycle);
+    assert_eq!(
+        repo.list_by_session(id).await.expect("the log reads").len(),
+        frames
+    );
+}
+
+#[tokio::test]
+async fn a_session_whose_rebuild_would_differ_is_never_released() {
+    let ((service, repo, containers, _announcer, _runtimes), mut signals) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = disconnected_in_memory_session(&repo, &containers).await;
+    let (prompted, ()) = tokio::join!(
+        service.execute(id, HarnessCommand::Deliver(forward_message("first"))),
+        async {
+            complete_resume(&containers.wait_for_resumes(id, 1).await).await;
+        },
+    );
+    prompted.expect("the first prompt runs");
+    signals.settled(id).await;
+    containers.keep_on_release(id);
+
+    tokio::time::pause();
+    tokio::time::sleep(WORKER_IDLE_TIMEOUT * 3).await;
+    tokio::time::resume();
+
+    assert!(containers.released().is_empty());
+    assert!(
+        service.inner.sessions.attached_mcp_servers(id).is_some(),
+        "its actor keeps running"
+    );
 }
 
 #[tokio::test]
@@ -144,6 +219,8 @@ async fn a_session_another_replica_manages_is_left_alone() {
     let (service, repo, containers, _announcer, _runtimes) = harness();
     let id = disconnected_in_memory_session(&repo, &containers).await;
     let peer = claim_as_peer(&repo, id).await;
+    // Whatever this process still holds for it is behind the peer's log.
+    containers.keep_on_release(id);
     let _ = service
         .execute(id, HarnessCommand::Deliver(forward_message("for the peer")))
         .await;
@@ -154,6 +231,11 @@ async fn a_session_another_replica_manages_is_left_alone() {
     tokio::time::resume();
 
     assert_eq!(service.command_workers(), 0, "this replica's worker exits");
+    assert_eq!(
+        containers.released(),
+        vec![id],
+        "the copy left behind is dropped"
+    );
     assert_eq!(
         containers.resumed(),
         0,

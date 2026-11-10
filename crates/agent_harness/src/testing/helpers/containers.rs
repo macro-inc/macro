@@ -214,6 +214,8 @@ pub struct MockContainerManager {
     /// Sessions handed to `release_idle`, in order.
     released: Arc<Mutex<Vec<AgentSessionId>>>,
     released_signal: Arc<tokio::sync::Notify>,
+    /// Sessions whose state a release would lose.
+    kept: Arc<Mutex<Vec<AgentSessionId>>>,
 }
 
 impl MockContainerManager {
@@ -307,6 +309,14 @@ impl MockContainerManager {
             }
             waited.await;
         }
+    }
+
+    /// Report that releasing `session` would lose state its agent runs on.
+    pub fn keep_on_release(&self, session: AgentSessionId) {
+        self.kept
+            .lock()
+            .expect("kept lock should not be poisoned")
+            .push(session);
     }
 
     /// Sessions the harness released as idle, in order.
@@ -484,6 +494,18 @@ impl ContainerManager for MockContainerManager {
         self.teardowns.fetch_add(1, Ordering::Relaxed);
         self.lock().remove(&session);
         Ok(())
+    }
+
+    /// Lossless unless a test said otherwise with [`Self::keep_on_release`].
+    async fn idle_release_is_lossless(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<bool, HarnessError> {
+        Ok(!self
+            .kept
+            .lock()
+            .expect("kept lock should not be poisoned")
+            .contains(&session))
     }
 
     /// Records the release and keeps the container, as an in-process

@@ -101,6 +101,11 @@ impl ContainerManager for TaggedManager {
         Ok(())
     }
 
+    async fn idle_release_is_lossless(&self, _session: AgentSessionId) -> Result<bool> {
+        self.record("idle_release_is_lossless");
+        Ok(true)
+    }
+
     fn resize_effect(&self, _from: SandboxSize, _to: SandboxSize) -> SandboxResizeEffect {
         unimplemented!("these tests never resize")
     }

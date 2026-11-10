@@ -770,6 +770,11 @@ where
         Ok(())
     }
 
+    /// Holds nothing in this process for an idle session.
+    async fn idle_release_is_lossless(&self, _session: AgentSessionId) -> Result<bool> {
+        Ok(true)
+    }
+
     // A Cursor session's compute is Cursor's: there is no sandbox here whose
     // size this manager could change, so every resize is unsupported and the
     // domain persists the preference without touching anything.

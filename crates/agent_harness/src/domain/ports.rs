@@ -609,4 +609,14 @@ pub trait ContainerManager: Send + Sync + 'static {
     /// replica holds. A provider whose sessions keep nothing in this process
     /// (sandboxes stop through their own idle reapers) has nothing to do.
     fn release_idle(&self, session: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
+
+    /// Whether [`Self::release_idle`] followed by [`Self::resume`] would give
+    /// the session's agent exactly the state it runs on now. Asked before the
+    /// harness closes anything: a session that would come back different is
+    /// not released. A provider that holds nothing for idle sessions answers
+    /// yes.
+    fn idle_release_is_lossless(
+        &self,
+        session: AgentSessionId,
+    ) -> impl Future<Output = Result<bool>> + Send;
 }

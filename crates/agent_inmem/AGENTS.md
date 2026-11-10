@@ -16,7 +16,11 @@ milliseconds instead of waiting on container provisioning.
   agent tasks, implements the container-manager port the harness expects.
   `teardown` drops a session's conversation, agent task and token; the
   harness calls it on delete and when it releases an idle session, and the
-  next `attach` rebuilds the conversation from the log.
+  next `attach` rebuilds the conversation from the log (`rebuilt_state`).
+  `rebuilds_identically` gates the idle release: the rebuilt model context
+  (history without reasoning parts, model, effort, speed, identity,
+  instructions) must equal the live one, with no summary in flight, failed, or
+  image descriptions cached, since none of that is in the log.
 - `src/domain/tool_stream.rs`: throttled, bounded argument previews for pending
   calls; replay ignores previews and retains only calls that began execution.
 - `src/domain/session.rs` / `src/domain/replay.rs`: in-process session state

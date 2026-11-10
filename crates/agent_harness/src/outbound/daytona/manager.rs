@@ -557,6 +557,11 @@ impl ContainerManager for DaytonaContainerManager {
     async fn release_idle(&self, _session: AgentSessionId) -> Result<()> {
         Ok(())
     }
+
+    /// Holds nothing in this process for an idle session.
+    async fn idle_release_is_lossless(&self, _session: AgentSessionId) -> Result<bool> {
+        Ok(true)
+    }
 }
 
 async fn reap_idle_containers(client: DaytonaClient, managed: Arc<DaytonaContainerManagerState>) {

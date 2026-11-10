@@ -1169,23 +1169,41 @@ async fn an_idle_release_rebuilds_the_conversation_without_losing_or_repeating_i
         assert_eq!(ended.recv().await, Some(id));
     }
 
+    let row = sessions.get_session(id).await.expect("the row reads");
+    let row_facts = SessionFacts {
+        acp_session_id: row.acp_session_id.clone(),
+        ..facts(id)
+    };
+    assert!(
+        manager
+            .rebuilds_identically(&row_facts)
+            .await
+            .expect("the log reads"),
+        "the log rebuilds the live conversation exactly"
+    );
+
     // What the harness's idle release does for an in-process session.
-    sessions.close_session(id).await.expect("the actor closes");
+    let frames = repo.list_by_session(id).await.expect("the log reads").len();
+    assert_eq!(
+        sessions
+            .release_session(id)
+            .await
+            .expect("the actor releases"),
+        agent_session::domain::model::SessionRelease::Released
+    );
     manager.teardown(id);
+    assert_eq!(
+        repo.list_by_session(id).await.expect("the log reads").len(),
+        frames,
+        "the release writes nothing to the log"
+    );
     assert_eq!(manager.conversations(), 0);
     assert_eq!(manager.live_agents(), 0);
     assert_eq!(manager.session_token(id), None);
 
     // What its next prompt's resume does.
-    let row = sessions.get_session(id).await.expect("the row reads");
     let transport = manager
-        .attach(
-            SessionFacts {
-                acp_session_id: row.acp_session_id.clone(),
-                ..facts(id)
-            },
-            Some("second-token".to_owned()),
-        )
+        .attach(row_facts, Some("second-token".to_owned()))
         .await
         .expect("the conversation rebuilds from the log");
     sessions
@@ -1203,6 +1221,56 @@ async fn an_idle_release_rebuilds_the_conversation_without_losing_or_repeating_i
         .expect("the prompt sends on the rebuilt session");
     assert_eq!(ended.recv().await, Some(id));
 
+    assert!(
+        !repo
+            .list_by_session(id)
+            .await
+            .expect("the log reads")
+            .iter()
+            .any(|stored| matches!(
+                &stored.entry.content,
+                Message::ToServer(
+                    agent_runtime_protocol::domain::schema::v0::ToServerMessage::Event {
+                        event:
+                            agent_runtime_protocol::domain::schema::v0::SystemEvent::Disconnected
+                    }
+                )
+            )),
+        "the session's history never shows it disconnecting"
+    );
+    // The transcript readers see: every message once, in order.
+    let transcript = sessions
+        .folded_session_log(id)
+        .await
+        .expect("the log folds")
+        .messages
+        .into_iter()
+        .map(|message| {
+            let text = message
+                .parts
+                .iter()
+                .filter_map(|part| match part {
+                    agent_fold::domain::model::MessagePart::Text { text } => {
+                        Some(without_invocation_context(text).to_owned())
+                    }
+                    _ => None,
+                })
+                .collect::<String>();
+            (message.author.kind(), text)
+        })
+        .collect::<Vec<_>>();
+    use agent_fold::domain::model::AuthorKind::{Agent, User};
+    assert_eq!(
+        transcript,
+        vec![
+            (User, "first question".to_owned()),
+            (Agent, "a reply".to_owned()),
+            (User, "second question".to_owned()),
+            (Agent, "a reply".to_owned()),
+            (User, "third question".to_owned()),
+            (Agent, "a reply".to_owned()),
+        ]
+    );
     let turns = engine.requests();
     assert_eq!(turns.len(), 3);
     assert_eq!(
@@ -1218,5 +1286,42 @@ async fn an_idle_release_rebuilds_the_conversation_without_losing_or_repeating_i
             "a reply".to_owned(),
             "third question".to_owned(),
         ]
+    );
+}
+
+/// Summary state is not in the log, so a session holding any keeps it.
+#[tokio::test]
+async fn a_failed_summary_keeps_the_session_from_rebuilding_identically() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let manager = manager(
+        &repo,
+        Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+            "a reply".to_owned(),
+        )])),
+    );
+    let id = AgentSessionId::new();
+    let _transport = manager
+        .attach(facts(id), None)
+        .await
+        .expect("an empty conversation starts");
+    assert!(
+        manager
+            .rebuilds_identically(&facts(id))
+            .await
+            .expect("the log reads")
+    );
+
+    manager
+        .store
+        .get_mut(&id)
+        .expect("the conversation is held")
+        .summarizing
+        .failed_at = Some(120_000);
+
+    assert!(
+        !manager
+            .rebuilds_identically(&facts(id))
+            .await
+            .expect("the log reads")
     );
 }
