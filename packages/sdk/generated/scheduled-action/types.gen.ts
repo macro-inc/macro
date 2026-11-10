@@ -1741,7 +1741,7 @@ export type AcceptIdeaData = {
 export type AcceptIdeaErrors = {
     401: string;
     /**
-     * No proposed idea with this id for the caller, or ideas are off
+     * No open or done idea with this id for the caller, or ideas are off
      */
     404: string;
     500: string;
@@ -1751,7 +1751,7 @@ export type AcceptIdeaError = AcceptIdeaErrors[keyof AcceptIdeaErrors];
 
 export type AcceptIdeaResponses = {
     /**
-     * Accepted
+     * Accepted: a background prompt idea is taken on, any other idea is done; accepting a done idea again changes nothing
      */
     204: void;
 };
