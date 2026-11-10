@@ -265,11 +265,24 @@ async fn a_run_of_a_paused_routine_creates_sub_routines_that_wait_for_it() {
     // Its owner ran it by hand while it was off.
     start_run(&service, &parent, PARENT_RUN);
 
-    let child = create(&service, "child", from_code(&parent), None)
+    let child = create(&service, "child", from_code(&parent), Some("task-1"))
         .await
         .unwrap()
         .into_action();
     assert!(!child.enabled);
+    // Creating it again under its key updates it, still off with its parent.
+    let again = create(
+        &service,
+        "child, renamed",
+        from_code(&parent),
+        Some("task-1"),
+    )
+    .await
+    .unwrap()
+    .into_action();
+    assert_eq!(again.id, child.id);
+    assert!(!again.enabled);
+    assert!(again.sub_routine.unwrap().paused_by_parent);
 
     service
         .set_enabled(edit_receipt(parent.id.unwrap()), true)
@@ -357,4 +370,31 @@ async fn a_routines_history_names_what_each_run_created() {
 
 fn at_time(seconds: i64) -> DateTime<Utc> {
     DateTime::from_timestamp(1_800_000_000 + seconds, 0).unwrap()
+}
+
+#[tokio::test]
+async fn a_parents_list_holds_every_trigger_type_without_asking_for_events() {
+    let service = service(true);
+    let parent = top_level(&service, "parent").await;
+    start_run(&service, &parent, PARENT_RUN);
+    let on_events = ActionConfiguration {
+        name: "on events".into(),
+        ..configuration(true)
+    };
+    service
+        .create_action_from(&user_principal(), on_events, from_code(&parent), None)
+        .await
+        .unwrap();
+
+    let children = service
+        .get_actions(user(), false, ListScope::ChildrenOf(parent.id.unwrap()))
+        .await
+        .unwrap();
+    let with_children = service
+        .get_actions(user(), false, ListScope::WithChildren)
+        .await
+        .unwrap();
+
+    assert_eq!(children.len(), 1);
+    assert_eq!(with_children.len(), 2);
 }

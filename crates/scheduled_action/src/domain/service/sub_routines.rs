@@ -61,13 +61,8 @@ where
             tracing::field::display(run.routine_id),
         );
 
-        if let Some(key) = &key
-            && let Some(existing) = self.repo.child_by_key(&parent_id, key).await?
-        {
-            return self.update_keyed(existing, input).await;
-        }
-
-        // A parent that is off keeps what its runs create off with it.
+        // A parent that is off keeps what its runs create or update off
+        // with it.
         let parent = self
             .repo
             .get_action(&parent_id)
@@ -76,6 +71,12 @@ where
         let paused_by_parent = input.enabled && !parent.enabled;
         if paused_by_parent {
             input.enabled = false;
+        }
+
+        if let Some(key) = &key
+            && let Some(existing) = self.repo.child_by_key(&parent_id, key).await?
+        {
+            return self.update_keyed(existing, input, paused_by_parent).await;
         }
         let link = SubRoutine {
             parent_id,
@@ -96,7 +97,7 @@ where
                     .child_by_key(&parent_id, key)
                     .await?
                     .ok_or(error)?;
-                self.update_keyed(existing, input).await
+                self.update_keyed(existing, input, paused_by_parent).await
             }
             (Err(error), _) => Err(error),
         }
@@ -106,8 +107,9 @@ where
         &self,
         existing: ScheduledAction,
         input: ActionConfiguration,
+        paused_by_parent: bool,
     ) -> Result<SavedAction> {
-        self.replace_one(existing, input, false)
+        self.replace_one(existing, input, paused_by_parent)
             .await
             .map(SavedAction::Updated)
     }
