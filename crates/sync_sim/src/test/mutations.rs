@@ -1,4 +1,5 @@
 use super::*;
+use bebop::Record;
 
 fn baseline() -> Outcome {
     verify(
@@ -316,4 +317,163 @@ fn oversized_storage_query_rejects_incomplete_or_unbounded_physical_rows() {
         *chunks = vec![*bytes];
     }
     assert!(invariants::oversized_operations_complete(&outcome).is_err());
+}
+
+#[test]
+fn activated_duplicate_ack_requires_real_prior_durability_and_atomic_put_evidence() {
+    let mut config = SimConfig::calm(61);
+    config.server_operation_archive_writes = true;
+    config.net.break_per_frame = 0.0;
+    let mut outcome = verify(
+        config,
+        &[
+            Step::Open(OpenSpec::form("a", "one")),
+            Step::Run(Millis(500)),
+            Step::Net(NetStep::LoseAcks {
+                client: ClientName("a".into()),
+                count: 1,
+            }),
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::FormSet {
+                    field: 1,
+                    value: 42,
+                },
+            },
+            Step::Run(Millis(12000)),
+            Step::Settle,
+        ],
+    );
+    let receipts = outcome
+        .events
+        .iter()
+        .filter_map(|event| match &event.fact {
+            Fact::AckSent { update, .. } => Some(update),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        receipts.len() >= 2,
+        "lost ACK must exercise a real duplicate"
+    );
+    let original_events = outcome.events.clone();
+    assert!(invariants::gate_releases_after_durable(&outcome).is_ok());
+    for boundary in ["durable", "ack"] {
+        outcome.events = original_events.clone();
+        let mut rows = Vec::new();
+        outcome.events.retain(|event| {
+            if matches!(event.fact, Fact::PendingStored { .. }) {
+                rows.push(event.clone());
+                false
+            } else {
+                true
+            }
+        });
+        let after = outcome
+            .events
+            .iter()
+            .rposition(|event| {
+                matches!(
+                    (&event.fact, boundary),
+                    (Fact::ServerDurable { .. }, "durable") | (Fact::AckSent { .. }, "ack")
+                )
+            })
+            .unwrap()
+            + 1;
+        outcome.events.splice(after..after, rows);
+        assert!(
+            invariants::core_acks_after_writes(&outcome).is_err(),
+            "future storage cannot prove prior {boundary}"
+        );
+    }
+    outcome.events = original_events.clone();
+    outcome
+        .events
+        .retain(|event| !matches!(event.fact, Fact::ServerDurable { .. }));
+    assert!(
+        invariants::core_acks_after_writes(&outcome).is_err(),
+        "a duplicate cannot rely on final VV or an unconfirmed write"
+    );
+    assert!(
+        invariants::gate_releases_after_durable(&outcome).is_err(),
+        "a duplicate still needs prior durable history"
+    );
+    outcome.events = original_events.clone();
+    outcome
+        .events
+        .retain(|event| !matches!(event.fact, Fact::GateReleased { .. }));
+    assert!(
+        invariants::gate_releases_after_durable(&outcome).is_err(),
+        "prior history cannot replace the actual current output gate"
+    );
+    outcome.events = original_events;
+    outcome
+        .server_ports
+        .retain(|port| port.effect.operation != "storage.operation.put");
+    assert!(
+        invariants::core_acks_after_writes(&outcome).is_err(),
+        "missing atomic append is never accepted"
+    );
+}
+
+#[test]
+fn activated_duplicate_ack_cancelled_behind_another_write_keeps_prior_proof() {
+    let mut config = SimConfig::calm(61);
+    config.server_operation_archive_writes = true;
+    config.net.break_per_frame = 0.0;
+    let outcome = verify(
+        config,
+        &[
+            Step::Open(OpenSpec::form("a", "one")),
+            Step::Open(OpenSpec::form("b", "two")),
+            Step::Run(Millis(500)),
+            Step::Net(NetStep::LoseAcks {
+                client: ClientName("a".into()),
+                count: 1,
+            }),
+            Step::Edit {
+                client: ClientName("a".into()),
+                op: AbstractOp::FormSet {
+                    field: 1,
+                    value: 42,
+                },
+            },
+            Step::Run(Millis(1000)),
+            Step::Server(ServerStep::DelayStorage(Millis(7000))),
+            Step::Edit {
+                client: ClientName("b".into()),
+                op: AbstractOp::FormSet {
+                    field: 2,
+                    value: 43,
+                },
+            },
+            Step::Run(Millis(5500)),
+            Step::Server(ServerStep::Crash {
+                after_port_calls: 0,
+            }),
+            Step::Edit {
+                client: ClientName("b".into()),
+                op: AbstractOp::FormSet {
+                    field: 3,
+                    value: 44,
+                },
+            },
+            Step::Run(Millis(1000)),
+            Step::Settle,
+        ],
+    );
+    let cancelled_duplicate = outcome.events.iter().any(|event| {
+        let Fact::ServerReceived { doc, callback, update, .. } = &event.fact else { return false };
+        !outcome.events.iter().any(|event| matches!(&event.fact, Fact::PendingStored { doc: at_doc, callback: at, .. } if at_doc == doc && at == callback))
+        && !outcome.events.iter().any(|event| matches!(&event.fact, Fact::AckSent { callback: at, .. } if at == callback))
+        && outcome.server_ports.iter().any(|port| {
+            if port.doc != *doc || port.callback != *callback || port.effect.operation != "connections.send_binary" { return false }
+            let frame = serde_json::from_value::<Vec<u8>>(port.effect.value["frame"].clone()).unwrap();
+            matches!(sync_protocol::FromRemote::deserialize(&frame[1..]), Ok(sync_protocol::FromRemote::RemoteUpdateAck { id }) if id == update)
+        })
+    });
+    assert!(
+        cancelled_duplicate,
+        "must exercise an actual no-write duplicate ACK attempt dropped by crash"
+    );
 }

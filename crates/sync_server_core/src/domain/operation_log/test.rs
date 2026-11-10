@@ -130,3 +130,5 @@ fn snapshot_is_saved_before_its_version_vector() {
         assert!(snapshots.bytes.borrow().is_some());
     });
 }
+
+mod fanout;

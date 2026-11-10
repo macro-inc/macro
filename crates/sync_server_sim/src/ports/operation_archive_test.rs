@@ -44,6 +44,7 @@ fn writer_off_reader_accepts_all_valid_states_and_skips_orphan_complete_receipts
             .pending_operations()
             .await
             .unwrap()
+            .entries
             .into_iter()
             .collect::<Result<Vec<_>, _>>()
             .unwrap();

@@ -159,6 +159,7 @@ impl<P: RoomPorts> Room<P> {
             .pending_operations()
             .await
             .map_err(store_error)?
+            .entries
             .into_iter()
             .map(|entry| entry.map(|op| op.update).map_err(store_error))
             .collect::<Result<_>>()?;

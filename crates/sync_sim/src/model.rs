@@ -256,6 +256,8 @@ pub struct SimConfig {
     pub ties: TieMode,
     /// Server storage completion latency.
     pub server_storage_latency: Millis,
+    /// Simulate the existing default-off operation writer activation.
+    pub server_operation_archive_writes: bool,
     /// Run all applicable per-step checks.
     pub per_step: bool,
 }
@@ -275,6 +277,7 @@ impl SimConfig {
             budgets: Budgets::default(),
             ties: TieMode::Fifo,
             server_storage_latency: Millis(2),
+            server_operation_archive_writes: false,
             per_step: true,
         }
     }

@@ -52,7 +52,24 @@ fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> 
         } else if let Some(port) = record["port"].as_str() {
             let next = match port {
                 "storage.get" => effect("storage.get", args[0].clone()),
-                "storage.put" => effect("storage.put", json!({"key":args[0],"value":args[1]})),
+                "storage.put" => {
+                    // The Worker serializes this bounded metadata as Uint8Array;
+                    // the native port uses Vec<u8>. Decode the capture wrapper
+                    // losslessly, preserving every underlying metadata byte.
+                    let value = if args[0] == sync_server_core::domain::fanout::FANOUT_DEBT_KEY {
+                        if args.as_array().is_none_or(|args| args.len() != 2)
+                            || args[1].as_object().is_none_or(|object| {
+                                object.len() != 1 || !object.contains_key("bytes_b64")
+                            })
+                        {
+                            return Err(invalid("invalid fanout byte capture wrapper"));
+                        }
+                        json!(decode(&args[1]["bytes_b64"])?)
+                    } else {
+                        args[1].clone()
+                    };
+                    effect("storage.put", json!({"key":args[0],"value":value}))
+                }
                 "storage.operation.put" => effect(
                     "storage.operation.put",
                     json!({"key":args[0],"value":args[1],"attribution":args[2]}),

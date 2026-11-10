@@ -29,6 +29,8 @@ pub const ENABLED: &[&str] = &[
     "delete_endpoint.test/delete_endpoint_succeeds_for_a_document_that_never_had_a_session.jsonl",
     "raw_endpoint.test/raw_endpoint_tests_should_return_404_for_non-existent_document.jsonl",
     "awareness.test/awareness_sync_tests_should_include_awareness_on_connection_if_available.jsonl",
+    "resolved_pending.test/joined_reader_receives_a_durable_suffix_when_its_missing_parent_arrives_through_websocket.jsonl",
+    "resolved_pending.test/joined_reader_receives_a_durable_suffix_when_its_missing_parent_arrives_through_http.jsonl",
 ];
 
 /// Parsing, unsupported-callback and parity failures stay distinguishable.

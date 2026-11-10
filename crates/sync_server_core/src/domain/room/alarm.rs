@@ -1,6 +1,8 @@
 //! Alarm snapshot, compaction and deferred blame policy.
 use super::{PortName, Room, RoomError};
 use crate::domain::{ports::*, types::InteractionReason};
+use bebop::SliceWrapper;
+use sync_protocol::FromRemote;
 
 /// The exact successful response selected for the durable alarm callback.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -21,6 +23,32 @@ impl<P: RoomPorts> Room<P> {
         // A failed state load must not retry the alarm or re-arm it (A3).
         if self.load_document().await.is_err() {
             return Ok(AlarmOutcome::Skipped);
+        }
+        // A transient send failure after ACK must heal without another edit.
+        // The existing alarm retries only applied durable history; no debt means
+        // no extra storage calls, export or notifications on the ordinary path.
+        let retry = self
+            .memory
+            .operation_log
+            .as_ref()
+            .expect("log initialized")
+            .pending_fanout(self.memory.document.as_ref().expect("document loaded"))?;
+        if let Some(update) = retry {
+            let mut sent = true;
+            for socket in self.active_sockets() {
+                if let Err(error) = self.send(
+                    &socket,
+                    FromRemote::RemoteUpdate {
+                        update: SliceWrapper::Raw(&update),
+                    },
+                ) {
+                    sent = false;
+                    tracing::warn!(error = ?error, "alarm retaining resolved-history notification debt");
+                }
+            }
+            if sent {
+                self.complete_fanout().await?;
+            }
         }
         if self
             .memory

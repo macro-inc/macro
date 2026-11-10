@@ -67,18 +67,34 @@ impl<P: RoomPorts> Room<P> {
             .expect("loaded")
             .loro_doc
             .clone();
-        let prepared = document::update(
+        let mut released_pending = false;
+        let mut prepared = document::update(
             access,
             &mut AtomicEffects {
                 room: self,
                 document,
                 attribution: attribution.as_ref(),
                 store_attribution: is_agent,
+                resolved_pending: None,
+                fanout_sent: false,
+                released_pending: &mut released_pending,
             },
             revision,
             update,
         )
         .await?;
+        if released_pending {
+            // The validation fork need not retain the live document's pending
+            // imports. Report the actual revision after their durable resolution.
+            prepared.revision = self
+                .memory
+                .document
+                .as_ref()
+                .expect("loaded")
+                .loro_doc
+                .oplog_vv()
+                .encode();
+        }
         let writers = document::writing_peers(update)?
             .into_iter()
             .map(PeerId)
@@ -104,6 +120,9 @@ struct AtomicEffects<'a, P: RoomPorts> {
     document: loro::LoroDoc,
     attribution: Option<&'a DocumentAttribution>,
     store_attribution: bool,
+    resolved_pending: Option<Vec<u8>>,
+    fanout_sent: bool,
+    released_pending: &'a mut bool,
 }
 fn notification_error(error: impl std::fmt::Debug) -> DocumentError {
     tracing::error!(error = ?error, "failed to notify document update");
@@ -111,14 +130,19 @@ fn notification_error(error: impl std::fmt::Debug) -> DocumentError {
 }
 impl<P: RoomPorts> DocumentUpdateEffects for AtomicEffects<'_, P> {
     fn broadcast(&mut self, update: &[u8]) -> Result<(), DocumentError> {
-        for socket in self.room.active_sockets() {
-            if let Err(error) = self.room.send(
-                &socket,
-                FromRemote::RemoteUpdate {
-                    update: SliceWrapper::Raw(update),
-                },
-            ) {
-                tracing::warn!(error = ?error, "failed to broadcast document update; continuing");
+        let resolved_pending = self.resolved_pending.take();
+        self.fanout_sent = resolved_pending.is_some();
+        for update in std::iter::once(update).chain(resolved_pending.as_deref()) {
+            for socket in self.room.active_sockets() {
+                if let Err(error) = self.room.send(
+                    &socket,
+                    FromRemote::RemoteUpdate {
+                        update: SliceWrapper::Raw(update),
+                    },
+                ) {
+                    self.fanout_sent = false;
+                    tracing::warn!(error = ?error, "failed to broadcast document update; continuing");
+                }
             }
         }
         Ok(())
@@ -151,6 +175,12 @@ impl<P: RoomPorts> DocumentUpdateEffects for AtomicEffects<'_, P> {
         Ok(())
     }
     async fn keep_alive(&mut self) -> Result<(), DocumentError> {
+        if self.fanout_sent {
+            self.room
+                .complete_fanout()
+                .await
+                .map_err(notification_error)?;
+        }
         self.room.bump_alarm().await.map_err(notification_error)
     }
 }
@@ -162,7 +192,10 @@ impl<P: RoomPorts> DocumentUpdatePort for AtomicEffects<'_, P> {
         self.room
             .apply_update(update, self.attribution.filter(|_| self.store_attribution))
             .await
-            .map(|_| ())
+            .map(|imported| {
+                *self.released_pending = imported.resolved_pending.is_some();
+                self.resolved_pending = imported.resolved_pending;
+            })
             .map_err(|error| {
                 tracing::error!(error = ?error, "failed to persist document update");
                 DocumentError::Persistence

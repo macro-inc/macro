@@ -45,6 +45,12 @@ clients and real `sync_server_core::Room` callbacks over `sync_server_sim` ports
   sleeps, environment reads, threads or random identity generation.
 - Run real cores; never infer server outputs from expected outcomes.
 - Supply actual Loro causal frontiers through SyncDoc; keep snapshot cutoffs captured by the core at confirmation time.
+- Select activated server writes explicitly with `server_operation_archive_writes`;
+  keep the default false. Observe `ServerReceived` from actual decoded input and
+  exclude typed storage metadata from edit facts. Prove every released ACK from
+  earlier physical write/durability evidence and its adjacent actual output gate;
+  a crashed gated attempt is not a released ACK. Never use eventual VV coverage
+  or future stored facts to justify an earlier receipt.
 - The direct SimDoc host accepts already-staged comment updates; a `CommentReady`
   event requires the document_session host and fails loudly here.
 - Apply `Room::gate_request` before legacy connect/atomic handlers. Record

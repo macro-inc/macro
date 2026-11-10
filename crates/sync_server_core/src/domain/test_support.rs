@@ -10,6 +10,7 @@ use crate::domain::{
     ports::*,
     types::{OperationId, SessionKey},
 };
+use crate::domain::{fanout::FanoutDebt, types::PendingOperations};
 use std::{
     cell::{Cell, RefCell},
     collections::BTreeMap,
@@ -31,8 +32,10 @@ pub(crate) struct Store {
     pub(crate) archives: RefCell<BTreeMap<String, Vec<u8>>>,
     pub(crate) archive_status: RefCell<BTreeMap<String, OperationArchive>>,
     pub(crate) saved: RefCell<Option<Vec<u8>>>,
+    pub(crate) fanout: RefCell<Option<FanoutDebt>>,
     pub(crate) unreadable: Cell<bool>,
     pub(crate) fail_pending: Cell<bool>,
+    pub(crate) fail_fanout_delete: Cell<bool>,
     pub(crate) fail_archive: Cell<bool>,
     pub(crate) delete_count: Cell<Option<usize>>,
 }
@@ -90,7 +93,7 @@ impl RoomStorage for Store {
         *self.saved.borrow_mut() = Some(encoded.to_vec());
         Ok(())
     }
-    async fn pending_operations(&self) -> io::Result<Vec<io::Result<PendingOperation>>> {
+    async fn pending_operations(&self) -> io::Result<PendingOperations<io::Error>> {
         self.events.borrow_mut().push("pending-read");
         let mut entries: Vec<_> = self
             .pending
@@ -112,7 +115,23 @@ impl RoomStorage for Store {
         if self.unreadable.get() {
             entries.push(Err(io::Error::other("unreadable entry")));
         }
-        Ok(entries)
+        Ok(PendingOperations {
+            entries,
+            fanout: self.fanout.borrow().clone(),
+        })
+    }
+    async fn put_fanout_debt(&self, debt: &FanoutDebt) -> io::Result<()> {
+        self.events.borrow_mut().push("fanout-put");
+        *self.fanout.borrow_mut() = Some(debt.clone());
+        Ok(())
+    }
+    async fn delete_fanout_debt(&self) -> io::Result<()> {
+        self.events.borrow_mut().push("fanout-delete");
+        if self.fail_fanout_delete.get() {
+            return Err(io::Error::other("fanout delete failed"));
+        }
+        self.fanout.borrow_mut().take();
+        Ok(())
     }
     fn operation_archive_writes(&self) -> bool {
         self.archive_writes.get()

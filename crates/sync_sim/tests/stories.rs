@@ -107,3 +107,6 @@ mod close_termination;
 
 #[path = "stories/editor_replay_fixup.rs"]
 mod editor_replay_fixup;
+
+#[path = "stories/resolved_pending.rs"]
+mod resolved_pending;

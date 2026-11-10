@@ -22,6 +22,9 @@ const COMMENT_NODE_TYPE: &str = "comment";
 pub struct ImportedUpdate {
     /// Whether the operation log gained new operations.
     pub changed: bool,
+    /// Applied history released from older durable pending rows by this import.
+    /// Includes the new parent too; duplicate imports on peers are idempotent.
+    pub resolved_pending: Option<Vec<u8>>,
     /// Lexical node IDs the update edited, for blame tracking. Empty when the
     /// update only adds or removes a comment mark.
     pub touched_nodes: Vec<String>,
@@ -129,6 +132,7 @@ impl DocumentState {
 
         Ok(ImportedUpdate {
             changed: before != after,
+            resolved_pending: None,
             touched_nodes: self.touched_lexical_ids(&before, &after),
         })
     }

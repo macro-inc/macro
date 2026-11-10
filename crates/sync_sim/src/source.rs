@@ -31,6 +31,10 @@ impl Outcome {
         ] {
             writeln!(out, "    config.{field} = {value};").expect("String write");
         }
+        if self.config.server_operation_archive_writes {
+            writeln!(out, "    config.server_operation_archive_writes = true;")
+                .expect("String write");
+        }
         for client in &self.config.faulty_editor_clients {
             writeln!(
                 out,

@@ -340,6 +340,17 @@ pub enum Fact {
         /// Own byte count.
         own_bytes: u64,
     },
+    /// Actual decoded request ranges, independent of whether import was a duplicate.
+    ServerReceived {
+        /// Physical room route.
+        doc: DocIx,
+        /// Actual serialized server callback.
+        callback: u64,
+        /// Wire request ID.
+        update: String,
+        /// Ranges decoded from the actual submitted update bytes.
+        spans: Vec<IdSpan>,
+    },
     /// A successfully imported server update.
     ServerApplied {
         /// Wire request.

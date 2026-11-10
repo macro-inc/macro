@@ -137,3 +137,18 @@ pub const OPERATION_ARCHIVE_PREFIX: &str = "o/!archive-status-v1/";
 pub fn operation_archive_key(id: &OperationId) -> String {
     format!("{OPERATION_ARCHIVE_PREFIX}{}", id.as_str())
 }
+
+/// One authoritative pending-prefix read, including notification metadata.
+pub struct PendingOperations<E> {
+    /// Legacy and modern logical updates, preserving per-entry legacy errors.
+    pub entries: Vec<Result<PendingOperation, E>>,
+    /// Durable fanout debt; never imported or garbage-collected as an operation.
+    pub fanout: Option<super::fanout::FanoutDebt>,
+}
+
+impl<E> std::ops::Deref for PendingOperations<E> {
+    type Target = [Result<PendingOperation, E>];
+    fn deref(&self) -> &Self::Target {
+        &self.entries
+    }
+}

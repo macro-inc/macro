@@ -4,6 +4,7 @@ use std::{cell::Cell, rc::Rc};
 use sync_server_core::domain::{
     connection::{ConnectionMetadata, SurfaceLifecycle},
     document::DocumentAttribution,
+    fanout::{FANOUT_DEBT_KEY, FanoutDebt},
     migration::{SourceState, TargetState},
     operation_chunks::{
         CHUNK_BYTES, ChunkBytes, CompleteInline, FORMAT_MARKER_KEY, FORMAT_MARKER_VALUE,
@@ -12,8 +13,8 @@ use sync_server_core::domain::{
     ports::{OperationAppendError, RoomStorage},
     socket::WebSocketId,
     types::{
-        OPERATION_ARCHIVE_PREFIX, OperationArchive, OperationId, PendingOperation, SessionKey,
-        operation_archive_key,
+        OPERATION_ARCHIVE_PREFIX, OperationArchive, OperationId, PendingOperation,
+        PendingOperations, SessionKey, operation_archive_key,
     },
 };
 use wasm_bindgen::{JsCast, JsValue};
@@ -234,6 +235,14 @@ impl DurableKVStorage {
         bytes: Vec<u8>,
         inline_complete: bool,
     ) -> Result<OperationBytes> {
+        if key == FANOUT_DEBT_KEY {
+            let debt: FanoutDebt = serde_json::from_slice(&bytes).context("invalid fanout debt")?;
+            debt.vectors().context("invalid fanout versions")?;
+            return Ok(OperationBytes {
+                bytes,
+                archive_complete: false,
+            });
+        }
         if key.starts_with(OPERATION_ARCHIVE_PREFIX) {
             let status: OperationArchive =
                 serde_json::from_slice(&bytes).context("invalid operation archive status")?;
@@ -423,10 +432,17 @@ impl RoomStorage for DurableKVStorage {
             .put(LAST_VERSION_VECTOR_KEY, encoded.to_vec())
             .await
     }
-    async fn pending_operations(&self) -> Result<Vec<Result<PendingOperation>>> {
+    async fn pending_operations(&self) -> Result<PendingOperations<worker::Error>> {
         // Completion facts are scoped to this one authoritative prefix read;
         // retaining an ID cache would outlive pending GC and grow indefinitely.
         let entries = self.operation_entries(PENDING_OP_PREFIX).await?;
+        let fanout = entries
+            .iter()
+            .filter_map(|entry| entry.as_ref().ok())
+            .find(|entry| entry.key == FANOUT_DEBT_KEY)
+            .map(|entry| serde_json::from_slice::<FanoutDebt>(&entry.update))
+            .transpose()
+            .context("invalid fanout debt")?;
         let mut statuses = std::collections::BTreeMap::new();
         for entry in entries.iter().filter_map(|entry| entry.as_ref().ok()) {
             if let Some(id) = entry.key.strip_prefix(OPERATION_ARCHIVE_PREFIX) {
@@ -435,14 +451,25 @@ impl RoomStorage for DurableKVStorage {
                 statuses.insert(id.to_owned(), status);
             }
         }
-        Ok(entries.into_iter()
-            .filter(|entry| !matches!(entry,Ok(entry) if entry.key==FORMAT_MARKER_KEY || entry.key.starts_with(OPERATION_ARCHIVE_PREFIX)))
+        let operations = entries.into_iter()
+            .filter(|entry| !matches!(entry,Ok(entry) if entry.key==FANOUT_DEBT_KEY || entry.key==FORMAT_MARKER_KEY || entry.key.starts_with(OPERATION_ARCHIVE_PREFIX)))
             .map(|entry| entry.map(|entry| {
                 let id=entry.key.strip_prefix(PENDING_OP_PREFIX).unwrap_or(&entry.key);
                 PendingOperation { id:OperationId::new(id.to_owned()),update:entry.update,
                     archive:statuses.remove(id).unwrap_or(if entry.archive_complete {OperationArchive::Complete} else {OperationArchive::Legacy}),
                 }
-            })).collect())
+            })).collect();
+        Ok(PendingOperations {
+            entries: operations,
+            fanout,
+        })
+    }
+    async fn put_fanout_debt(&self, debt: &FanoutDebt) -> Result<()> {
+        let bytes = serde_json::to_vec(debt).context("failed to encode fanout debt")?;
+        self.inner.put(FANOUT_DEBT_KEY, ChunkBytes(&bytes)).await
+    }
+    async fn delete_fanout_debt(&self) -> Result<()> {
+        self.inner.delete(FANOUT_DEBT_KEY).await.map(|_| ())
     }
     fn operation_archive_writes(&self) -> bool {
         matches!(self.operation_writes, OperationWrites::Chunked)

@@ -104,3 +104,8 @@ one durable generation. Failed-append pending bytes and Incomplete sidecar share
 one generation. GC removes sidecars with logical rows and retains archive history.
 
 Keep default-OFF `tests/transcripts` unchanged and writer-ON `tests/transcripts-activated` separate. Replay activated fixtures with explicit deployment configuration, never infer policy from recorded outputs. Transaction projection validates exact supported calls/returns/retries and publishes the logical effect only at commit, so premature ACKs remain observable. Keep unrecognized transactions fail-closed.
+
+Discover typed `o/~fanout` debt in the existing pending-prefix read and exclude it
+from logical operations. Keep reader support unconditional, with new debt creation
+behind the same operation-writer activation. Alarm retries must use only applied
+durable history and preserve debt on send or storage failure.

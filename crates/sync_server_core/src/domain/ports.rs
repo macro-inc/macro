@@ -11,7 +11,7 @@ use super::{
     socket::{SocketTagError, WebSocketId},
     state::RootChange,
     types::{
-        BlameEvent, DocumentKey, InteractionReason, OperationId, PeerId, PendingOperation,
+        BlameEvent, DocumentKey, InteractionReason, OperationId, PeerId, PendingOperations,
         SessionKey,
     },
 };
@@ -171,7 +171,14 @@ pub trait RoomStorage {
     /// New-format receipt, marker or chunk corruption fails the outer load; never replay a partial operation.
     fn pending_operations(
         &self,
-    ) -> impl Future<Output = Result<Vec<Result<PendingOperation, Self::Error>>, Self::Error>>;
+    ) -> impl Future<Output = Result<PendingOperations<Self::Error>, Self::Error>>;
+    /// Atomically persist notification debt before the resolving parent's pending write.
+    fn put_fanout_debt(
+        &self,
+        debt: &super::fanout::FanoutDebt,
+    ) -> impl Future<Output = Result<(), Self::Error>>;
+    /// Clear only after all resolved-history notifications were accepted.
+    fn delete_fanout_debt(&self) -> impl Future<Output = Result<(), Self::Error>>;
     /// Enable archive completion receipts and duplicate suppression. Readers are unconditional.
     fn operation_archive_writes(&self) -> bool;
     /// Atomically append pending, archive, original attribution and Complete status.

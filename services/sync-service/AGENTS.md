@@ -150,7 +150,11 @@ outside the existing small-message golden corpus. They still run with the
 transcript feature built; all existing 155 scenarios retain unchanged capture.
 Never disable recording for an existing corpus scenario to conceal a difference.
 
-The same default-off writer switch activates dedup and per-row archive receipts.
+The same default-off writer switch activates dedup, per-row archive receipts and
+`o/~fanout` resolved-history notification debt. Include the debt reader in the
+rollback floor; the production legacy reader imports that key as Loro and fails.
+Keep its reader unconditional and discover metadata in the existing pending-prefix
+read, with no additional I/O for ordinary updates.
 Deploy the reader for chunks, embedded Complete receipts and failure sidecars
 before activation; an earlier chunk-only reader is below the new rollback floor.
 Common appends atomically write pending, archive and original attribution with an

@@ -55,7 +55,11 @@ fn failed_import_persistence_reloads_only_durable_history_and_retains_log_ids() 
             );
             let pending = ports.pending_operations().await.unwrap();
             assert_eq!(pending.len(), failed_call);
-            let old_id = pending.into_iter().next().map(|entry| entry.unwrap().id);
+            let old_id = pending
+                .entries
+                .into_iter()
+                .next()
+                .map(|entry| entry.unwrap().id);
             // Same activation/time: retain the allocator and every durable prefix.
             room.room_mut().apply_update(&update, None).await.unwrap();
             let pending = ports.pending_operations().await.unwrap();

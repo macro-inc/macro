@@ -234,6 +234,22 @@ impl<P: RoomPorts> Room<P> {
         }
         result.map_err(|e| RoomError::port(PortName::Storage, e))
     }
+    pub(super) async fn complete_fanout(&mut self) -> Result<()> {
+        let known = self
+            .memory
+            .document
+            .as_ref()
+            .expect("loaded")
+            .loro_doc
+            .oplog_vv();
+        self.memory
+            .operation_log
+            .as_mut()
+            .expect("loaded")
+            .complete_fanout(self.ports.storage(), &known)
+            .await
+            .map_err(|error| RoomError::port(PortName::Storage, error))
+    }
     async fn register_peer(
         &mut self,
         socket: &SocketOf<P>,
@@ -393,8 +409,12 @@ async fn process_message<P: RoomPorts>(
             let peer_id = peer_ids.first().copied();
             telemetry.peer_id = peer_id;
             let now_ms = dss.ports.clock().unix_time_for(WallClock::Blame).0;
+            let mut resolved_pending = Vec::new();
             for update in &updates {
                 let imported = dss.apply_update(update, None).await?;
+                if let Some(resolved) = imported.resolved_pending {
+                    resolved_pending.push(resolved);
+                }
                 if imported.changed
                     && let Some(attribution) = &attribution
                 {
@@ -448,6 +468,34 @@ async fn process_message<P: RoomPorts>(
                         tracing::warn!(error = ?error, "failed to send update to a peer; continuing");
                     }
                 }
+            }
+            // A joining reader's snapshot/catch-up cannot include causally
+            // pending operations. Once their parent arrives, send the applied
+            // delta to every socket, including that parent's sender. Peers that
+            // already buffered the suffix import this delta as an idempotent no-op.
+            if !resolved_pending.is_empty() {
+                tracing::debug!(
+                    resolved.updates = resolved_pending.len(),
+                    resolved.bytes = resolved_pending.iter().map(Vec::len).sum::<usize>(),
+                    "broadcasting resolved pending history"
+                );
+            }
+            let mut all_sent = true;
+            for update in &resolved_pending {
+                for socket in &sockets {
+                    if let Err(error) = dss.send(
+                        socket,
+                        FromRemote::RemoteUpdate {
+                            update: SliceWrapper::Raw(update),
+                        },
+                    ) {
+                        all_sent = false;
+                        tracing::warn!(error = ?error, "failed to send resolved pending history; retaining durable debt");
+                    }
+                }
+            }
+            if !resolved_pending.is_empty() && all_sent {
+                dss.complete_fanout().await?;
             }
         }
         // Handle an incoming awareness update from a peer

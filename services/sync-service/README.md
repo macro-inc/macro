@@ -381,17 +381,37 @@ unchanged import containing novel operations waiting for causal dependencies is
 not a duplicate and remains durable. Logical updates, framing and ACK payloads
 are unchanged; no client-side update splitting is required.
 
-The rollback reader floor includes chunk manifests, embedded Complete receipts
-and archive-status sidecars. Earlier chunk-only readers are below this floor and
+The rollback reader floor includes chunk manifests, embedded Complete receipts,
+archive-status sidecars and reserved `o/~fanout` notification debt. Earlier
+chunk-only readers are below this floor and
 would attempt to import receipt metadata as Loro. Reader-only rollback accepts
 legacy unwrapped rows, embedded receipts, Incomplete and Complete sidecars, and
 retains incomplete pending rows. It does not activate dedup or new receipts;
 subsequent legacy writes remain distinguishable because receipts are per row.
-Do not use the earlier chunk reader as the first deployment for this activation.
+Do not use an earlier chunk/archive reader as the first deployment for this activation.
+
+The same writer activation records typed fanout debt before persisting a parent
+that releases earlier causally pending operations. The existing pending-prefix
+read loads its base and required vectors without an extra storage read. A cold
+retry exports the applied durable history from that base; debt is cleared only
+after every notification is accepted and the required history is covered. The
+existing alarm retries retained applied history after a transient send failure,
+without requiring another edit or reconnect. An
+unavailable earlier parent cannot block an independent resolved suffix: successful
+partial fanout advances the retained base while preserving its remaining debt. Duplicate delta imports are no-ops. Socket
+and atomic HTTP ingress share this policy. The writer-OFF build still reads, advances and drains existing debt; only new
+debt creation requires activation. This fixes stale joined readers; it does not alter framing,
+ACK payloads or ordinary update bytes.
+
+The production release `v2026.11.6.1` and earlier readers do not understand this
+key: their `o/` scan treats its bytes as a Loro operation and fails replay. The
+rollback reader floor therefore includes fanout debt as well as chunks/receipts.
+Keep the writer OFF until every room runs this complete reader-capable release;
+a rollback below that floor is unsafe. No additional activation switch is used.
 
 Required deployment order (operator authorization is separate from this guide):
 
-1. Deploy this chunk-and-archive-status reader-capable release with `chunked-operation-writes` absent.
+1. Deploy this chunk/archive/fanout reader-capable release with `chunked-operation-writes` absent.
    This configuration writes only the legacy format and can still be rolled back
    to the preceding release. Wait for the Durable Object code-update deferral to
    expire and verify that all rooms are on the reader-capable version.
@@ -403,7 +423,7 @@ Required deployment order (operator authorization is separate from this guide):
    alone is insufficient to permit downgrade because archived operations remain.
    Downgrading below reader support requires a separately reviewed history-
    preserving migration and proof that no chunk manifests remain, including in
-   archives, and that the reserved activation marker and archive statuses have
+   archives, and that the reserved activation marker, archive statuses and fanout debt have
    been migrated too.
    Legacy readers also attempt to import that marker as Loro. Do not delete
    archive history or activation metadata as an ad hoc downgrade workaround.

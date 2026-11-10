@@ -3,6 +3,7 @@ use super::*;
 use base64::{Engine, engine::general_purpose::STANDARD};
 use sync_server_core::domain::{
     document::DocumentAttribution,
+    fanout::{FANOUT_DEBT_KEY, FanoutDebt},
     migration::{SourceState, TargetState},
     operation_chunks::{
         CHUNK_BYTES, FORMAT_MARKER_KEY, FORMAT_MARKER_VALUE, INLINE_BYTES, INLINE_COMPLETE_TAG,
@@ -272,9 +273,7 @@ impl RoomStorage for SimPorts {
         s.write();
         Ok(())
     }
-    async fn pending_operations(
-        &self,
-    ) -> Result<Vec<Result<PendingOperation, SimError>>, SimError> {
+    async fn pending_operations(&self) -> Result<PendingOperations<SimError>, SimError> {
         self.enter("storage.list", json!("o/")).await?;
         if let Some(marker) = self.read::<Vec<u8>>(FORMAT_MARKER_KEY)?
             && marker != FORMAT_MARKER_VALUE
@@ -315,6 +314,7 @@ impl RoomStorage for SimPorts {
             .filter(|key| {
                 key.starts_with("o/")
                     && key.as_str() != FORMAT_MARKER_KEY
+                    && key.as_str() != FANOUT_DEBT_KEY
                     && !key.starts_with(OPERATION_ARCHIVE_PREFIX)
             })
             .cloned()
@@ -358,9 +358,36 @@ impl RoomStorage for SimPorts {
                 }),
             }));
         }
-        Ok(operations)
+        {
+            let fanout = self
+                .read::<Vec<u8>>(FANOUT_DEBT_KEY)?
+                .map(|bytes| serde_json::from_slice::<FanoutDebt>(&bytes))
+                .transpose()
+                .map_err(|e| SimError::Failure(e.to_string()))?;
+            if let Some(debt) = &fanout {
+                debt.vectors()
+                    .map_err(|e| SimError::Failure(e.to_string()))?;
+            }
+            Ok(PendingOperations {
+                entries: operations,
+                fanout,
+            })
+        }
     }
 
+    async fn put_fanout_debt(&self, debt: &FanoutDebt) -> Result<(), SimError> {
+        let bytes = serde_json::to_vec(debt).map_err(|e| SimError::Failure(e.to_string()))?;
+        self.enter("storage.put", json!({"key":FANOUT_DEBT_KEY,"value":bytes}))
+            .await?;
+        self.put(FANOUT_DEBT_KEY, &bytes)
+    }
+    async fn delete_fanout_debt(&self) -> Result<(), SimError> {
+        self.enter("storage.delete", json!(FANOUT_DEBT_KEY)).await?;
+        let mut state = self.0.borrow_mut();
+        state.data.values.remove(FANOUT_DEBT_KEY);
+        state.write();
+        Ok(())
+    }
     fn operation_archive_writes(&self) -> bool {
         self.0.borrow().operation_archive_writes
     }

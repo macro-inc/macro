@@ -285,3 +285,6 @@ mod frame;
 
 mod http;
 mod surface;
+
+mod fanout_faults;
+mod resolved_pending;

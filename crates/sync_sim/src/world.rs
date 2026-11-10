@@ -110,6 +110,9 @@ impl Sim {
                             callback: 0,
                             effect,
                         }));
+                    server
+                        .ports
+                        .set_operation_archive_writes(sim.config.server_operation_archive_writes);
                     sim.servers.insert(doc, server);
                 }
                 Err(error) => sim.fail(error),

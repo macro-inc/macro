@@ -372,7 +372,11 @@ impl SimServer {
         let mut updates = Vec::new();
         let mut written = Vec::new();
         for (key, value, generation) in self.ports.take_completed_puts() {
-            if !key.starts_with("o/") {
+            if !key.starts_with("o/")
+                || key == sync_server_core::domain::fanout::FANOUT_DEBT_KEY
+                || key == sync_server_core::domain::operation_chunks::FORMAT_MARKER_KEY
+                || key.starts_with(sync_server_core::domain::types::OPERATION_ARCHIVE_PREFIX)
+            {
                 continue;
             }
             let parsed = serde_json::from_value::<Vec<u8>>(value)
@@ -402,6 +406,12 @@ impl SimServer {
             }
         }
         if let Some((update, ranges)) = received {
+            facts.push(Fact::ServerReceived {
+                doc: self.doc,
+                callback: index,
+                update: update.clone(),
+                spans: ranges.clone(),
+            });
             let stored = ranges
                 .iter()
                 .all(|range| crate::invariants::ranges_cover(&written, range));
@@ -436,6 +446,7 @@ impl SimServer {
             matches!(
                 effect.operation.as_str(),
                 "storage.put"
+                    | "storage.operation.put"
                     | "storage.delete"
                     | "storage.delete_multiple"
                     | "storage.delete_all"

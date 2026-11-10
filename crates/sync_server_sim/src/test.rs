@@ -521,6 +521,40 @@ fn golden_replay_rejects_reordered_writes_and_changed_final_storage() {
 }
 
 #[test]
+fn fanout_golden_capture_rejects_extra_fields_and_changed_bytes() {
+    let name = "resolved_pending.test/joined_reader_receives_a_durable_suffix_when_its_missing_parent_arrives_through_websocket.jsonl";
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/transcripts-activated")
+        .join(format!("{name}.gz"));
+    let original = Transcript::load(&path, name).unwrap();
+    replay_activated(&original).unwrap();
+    for mutation in ["field", "arg", "bytes"] {
+        let mut changed = Transcript {
+            name: original.name.clone(),
+            records: original.records.clone(),
+        };
+        let put = changed
+            .records
+            .iter_mut()
+            .find(|record| {
+                record["port"] == "storage.put"
+                    && record["args"][0] == sync_server_core::domain::fanout::FANOUT_DEBT_KEY
+            })
+            .unwrap();
+        match mutation {
+            "field" => put["args"][1]["contradictory"] = serde_json::json!(true),
+            "arg" => put["args"]
+                .as_array_mut()
+                .unwrap()
+                .push(serde_json::json!(true)),
+            "bytes" => put["args"][1]["bytes_b64"] = serde_json::json!("AA=="),
+            _ => unreachable!(),
+        }
+        assert!(replay_activated(&changed).is_err(), "{mutation}");
+    }
+}
+
+#[test]
 fn gzip_transcript_loads_every_member_and_rejects_corrupt_trailing_data() {
     use std::io::Write;
     let directory = std::env::temp_dir().join(format!("sync-gzip-members-{}", std::process::id()));
@@ -839,6 +873,7 @@ fn confirming_an_earlier_generation_keeps_its_overwritten_values_and_snapshots()
             cold.pending_operations()
                 .await
                 .unwrap()
+                .entries
                 .remove(0)
                 .unwrap()
                 .update,
@@ -849,6 +884,7 @@ fn confirming_an_earlier_generation_keeps_its_overwritten_values_and_snapshots()
                 .pending_operations()
                 .await
                 .unwrap()
+                .entries
                 .remove(0)
                 .unwrap()
                 .update,
@@ -860,6 +896,7 @@ fn confirming_an_earlier_generation_keeps_its_overwritten_values_and_snapshots()
                 .pending_operations()
                 .await
                 .unwrap()
+                .entries
                 .remove(0)
                 .unwrap()
                 .update,
@@ -897,7 +934,7 @@ fn confirming_an_earlier_generation_keeps_its_overwritten_values_and_snapshots()
 fn activated_golden_fixtures_load_and_enabled_callbacks_replay() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/transcripts-activated");
     let paths = fixtures(&root).unwrap();
-    assert_eq!(paths.len(), 155);
+    assert_eq!(paths.len(), 157);
     for path in paths {
         let name = path.strip_prefix(&root).unwrap().to_str().unwrap();
         let name = name.strip_suffix(".gz").unwrap_or(name);

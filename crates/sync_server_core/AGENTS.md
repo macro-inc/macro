@@ -39,6 +39,8 @@ Cloudflare Durable Objects and native simulation.
 
 - Keep this crate excluded from hakari so it remains wasm-safe.
 - Import/export server documents without committing local operations.
+- Fan out the applied delta when an import resolves older durable pending rows, including to the parent sender; initial snapshots and catch-ups cannot include unresolved history. Use the same resolver for socket and atomic HTTP ingress.
+- Retry retained applied fanout debt from the existing alarm after a send failure, without requiring another edit; clear it only after notifications succeed.
 - Presence uses clock-injected `sync_protocol::presence`, vendored from Loro 1.16.2.
 - Supply UUIDs through ports and `uuid-types`; ambient randomness belongs to adapters.
 - Production adapters always select `FaultPlan::None`; fault headers are test-only.

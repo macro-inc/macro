@@ -69,6 +69,7 @@ pub struct OperationLog {
     applied: BTreeSet<OperationId>,
     unresolved: BTreeMap<OperationId, VersionVector>,
     archive_debt: BTreeMap<OperationId, PendingOperation>,
+    fanout_debt: Option<super::fanout::FanoutDebt>,
 }
 impl OperationLog {
     /// Start a fresh log for a session identity.
@@ -80,6 +81,7 @@ impl OperationLog {
             applied: BTreeSet::new(),
             unresolved: BTreeMap::new(),
             archive_debt: BTreeMap::new(),
+            fanout_debt: None,
         }
     }
 
@@ -115,8 +117,57 @@ impl OperationLog {
             .context("failed to read update metadata")
             .map(|meta| meta.partial_end_vv);
         let known = document.loro_doc.oplog_vv();
+        let new_debt = if storage.operation_archive_writes()
+            && self
+                .unresolved
+                .values()
+                .any(|required| known.includes_vv(required))
+        {
+            (|| {
+                let mut required = known.clone();
+                if let Some(debt) = &self.fanout_debt {
+                    required.merge(&debt.vectors()?.1);
+                }
+                Ok(Some(super::fanout::FanoutDebt {
+                    base: self
+                        .fanout_debt
+                        .as_ref()
+                        .map_or_else(|| before.encode(), |debt| debt.base.clone()),
+                    required: required.encode(),
+                }))
+            })()
+        } else {
+            Ok(None)
+        };
+        let ready_delta = match &new_debt {
+            Ok(new) => new
+                .as_ref()
+                .or(self.fanout_debt.as_ref())
+                .map(|debt| {
+                    let (base, _) = debt.vectors()?;
+                    if !known.includes_vv(&base) {
+                        return Err(StateError::InvalidSnapshot);
+                    }
+                    if known != base {
+                        document.export_updates_since(&base).map(Some)
+                    } else {
+                        Ok(None)
+                    }
+                })
+                .transpose()
+                .map(Option::flatten),
+            Err(_) => Ok(None), // The metadata error is returned before any storage write below.
+        };
         async move {
-            let imported = imported.map_err(OperationError::State)?;
+            let mut imported = imported.map_err(OperationError::State)?;
+            imported.resolved_pending = ready_delta.map_err(OperationError::State)?;
+            if let Some(debt) = new_debt.map_err(OperationError::State)? {
+                storage
+                    .put_fanout_debt(&debt)
+                    .await
+                    .map_err(OperationError::Storage)?;
+                self.fanout_debt = Some(debt);
+            }
             let required = required.map_err(OperationError::State)?;
             // A causal-pending import may report unchanged while containing new
             // operations. Only coverage BEFORE import proves a duplicate.
@@ -212,6 +263,58 @@ impl OperationLog {
         Ok(())
     }
 
+    /// Read the applied portion of retained debt without importing or writing.
+    pub fn pending_fanout(&self, document: &DocumentState) -> Result<Option<Vec<u8>>, StateError> {
+        let Some(debt) = &self.fanout_debt else {
+            return Ok(None);
+        };
+        let (base, _) = debt.vectors()?;
+        let known = document.loro_doc.oplog_vv();
+        if !known.includes_vv(&base) {
+            return Err(StateError::InvalidSnapshot);
+        }
+        if known == base {
+            return Ok(None);
+        }
+        document.export_updates_since(&base).map(Some)
+    }
+
+    /// Clear durable notification debt only after its full delta reached every socket.
+    pub async fn complete_fanout<S: RoomStorage>(
+        &mut self,
+        storage: &S,
+        known: &VersionVector,
+    ) -> Result<(), OperationError<S::Error>> {
+        if let Some(debt) = &self.fanout_debt {
+            let (base, mut required) = debt.vectors().map_err(OperationError::State)?;
+            if !known.includes_vv(&base) {
+                return Err(OperationError::State(StateError::InvalidSnapshot));
+            }
+            if known.includes_vv(&required) {
+                storage
+                    .delete_fanout_debt()
+                    .await
+                    .map_err(OperationError::Storage)?;
+                self.fanout_debt = None;
+            } else {
+                // A prior parent's write may still be unavailable. Publish the
+                // independently durable progress without forgetting that debt,
+                // then move the baseline so retries do not re-export it forever.
+                required.merge(known);
+                let advanced = super::fanout::FanoutDebt {
+                    base: known.encode(),
+                    required: required.encode(),
+                };
+                storage
+                    .put_fanout_debt(&advanced)
+                    .await
+                    .map_err(OperationError::Storage)?;
+                self.fanout_debt = Some(advanced);
+            }
+        }
+        Ok(())
+    }
+
     fn mark_resolved(&mut self, known: &VersionVector) {
         self.unresolved.retain(|id, required| {
             if matches!(
@@ -236,6 +339,11 @@ impl OperationLog {
             .pending_operations()
             .await
             .map_err(OperationError::PendingRead)?;
+        self.fanout_debt = pending.fanout;
+        if let Some(debt) = &self.fanout_debt {
+            debt.vectors().map_err(OperationError::Replay)?;
+        }
+        let pending = pending.entries;
         trace!(
             pending_ops_len = pending.len(),
             "Applying [{}] pending ops",
