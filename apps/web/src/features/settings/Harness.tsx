@@ -13,9 +13,9 @@ import {
   useSaveCursorApiKey,
 } from '@queries/auth/cursor-api-key';
 import {
+  invalidateHarnesses,
   useDeleteHarnessMutation,
   useHarnessesQuery,
-  invalidateHarnesses,
   usePatchHarnessMutation,
 } from '@queries/harnesses/harnesses';
 import { useIsTeamOwner } from '@queries/team/teams';
@@ -194,11 +194,14 @@ export function Harness(
               harnesses={
                 harnessesQuery.isSuccess
                   ? harnessesQuery.data.filter(
-                      (harness) => harness.access === 'owner'
+                      // A Macro computer is listed once, under Macro computers.
+                      (harness) =>
+                        harness.access === 'owner' &&
+                        !harness.computer_id &&
+                        !computerHarnessIds().has(harness.id)
                     )
                   : []
               }
-              computerHarnessIds={computerHarnessIds()}
               error={harnessesQuery.isError}
               onRename={setRenamingHarness}
               onRemove={setRemovingHarness}
@@ -209,7 +212,11 @@ export function Harness(
               canRemoveShared={isTeamOwner()}
               onRemove={setRemovingHarness}
             />
-            <MacroComputers harnesses={harnesses()} />
+            <MacroComputers
+              harnesses={harnesses()}
+              sharing={sharing()}
+              onSharingChange={setSharing}
+            />
             <LocalRuntimeCard />
             <div>
               <h2 class="mb-3 px-6 text-sm font-semibold text-ink">

@@ -19,9 +19,16 @@ const modeKey = (harnessId: string) =>
 const harnessUrl = (harnessId: string, path: string) =>
   `${SERVER_HOSTS['agent-harness']}/harnesses/${encodeURIComponent(harnessId)}/${path}`;
 
-const claudeSignInError: ErrorResponseHandler<'CLAUDE_INVALID_CODE'> = async (
-  response
-) => {
+const claudeSignInError: ErrorResponseHandler<
+  'CLAUDE_INVALID_CODE' | 'CLAUDE_SIGN_IN_EXPIRED'
+> = async (response) => {
+  // The pending sign-in is gone: it timed out, or another tab replaced it.
+  if (response.status === 404 || response.status === 410) {
+    return {
+      code: 'CLAUDE_SIGN_IN_EXPIRED',
+      message: 'The Claude sign-in expired',
+    };
+  }
   if (response.status === 422) {
     const body: unknown = await response.json();
     if (
@@ -87,16 +94,16 @@ export function useClaudeCompleteMutation() {
         span.setAttr('harness.id', vars.harnessId);
         const body: ClaudeSignInComplete = { code: vars.code.trim() };
         const result = await throwOnErr(() =>
-          fetchWithToken<ClaudeSignedIn, 'CLAUDE_INVALID_CODE'>(
-            harnessUrl(vars.harnessId, 'claude-sign-in/complete'),
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(body),
-              errorResponseHandler: claudeSignInError,
-              signal: vars.signal,
-            }
-          )
+          fetchWithToken<
+            ClaudeSignedIn,
+            'CLAUDE_INVALID_CODE' | 'CLAUDE_SIGN_IN_EXPIRED'
+          >(harnessUrl(vars.harnessId, 'claude-sign-in/complete'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+            errorResponseHandler: claudeSignInError,
+            signal: vars.signal,
+          })
         );
         if (!result.signedIn)
           throw new Error('Claude sign-in was not completed.');

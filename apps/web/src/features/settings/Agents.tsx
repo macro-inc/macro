@@ -4,6 +4,7 @@ import {
   isCoderHarness,
 } from '@app/features/agents-view/core/agent-kind';
 import { AGENTS_TOUR } from '@app/features/agents-view/tour';
+import { t } from '@app/lib/i18n';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { modelLabel } from '@core/component/AI/constant/model-label';
@@ -21,6 +22,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import MacroLogo from '@icon/macro-logo.svg';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
+import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
@@ -86,6 +88,11 @@ import { AgentInstructionsEditor } from './components/instructions-editor';
 import { SettingsSelect } from './components/settings-select';
 import { WhereItRunsOption } from './components/where-it-runs-option';
 import {
+  RunOnComputerRow,
+  useComputerOffer,
+} from './computers/views/agent-computer-entry';
+import { ComputerBuyFlow } from './computers/views/computer-buy-flow';
+import {
   type ApiKeyProvider,
   apiKeyProviderName,
   apiKeyProviderOf,
@@ -125,6 +132,8 @@ type ConnectedHarness = {
   allowPermissionBypass: boolean;
   target: AgentModelTarget;
   connected?: boolean;
+  /** A team's Macro computer rather than a machine someone paired. */
+  computer?: boolean;
 };
 
 type ChannelOption = ReturnType<typeof botAssignableChannelOptions>[number];
@@ -205,6 +214,23 @@ export function Agents(props: {
         const harness = harnesses.find(
           (candidate) => candidate.id === target.harnessId
         );
+        if (harness?.computer_id) {
+          // A computer away is turned off; its agents start once it is on.
+          return {
+            id: harness.id,
+            name: [
+              harness.name,
+              harness.connected ? undefined : t('computers.stopped'),
+            ]
+              .filter(Boolean)
+              .join(' · '),
+            kind: 'macrod',
+            allowPermissionBypass: harness.allow_permission_bypass ?? false,
+            target,
+            connected: harness.connected,
+            computer: true,
+          };
+        }
         return {
           id: target.harnessId ?? '',
           // Offline runtimes stay selectable: binding an agent to a machine
@@ -389,6 +415,7 @@ export function Agents(props: {
                     />
                   )}
                 </For>
+                <RunOnComputerRow />
                 <Show when={agentsQuery.isPending}>
                   <p class="px-6 py-4 text-sm text-ink-muted">
                     Loading agents…
@@ -489,6 +516,8 @@ function whereItRunsLabel(id: string, harness?: ConnectedHarness): string {
   if (id === 'cursor') return 'In Cursor';
   // Any other id is a registered macrod harness uuid; if it is not in the
   // connected list any more, the harness has been removed.
+  if (harness?.computer)
+    return `${t('computers.onComputer')} · ${harness.name}`;
   return harness ? `On your machine · ${harness.name}` : 'Disconnected machine';
 }
 
@@ -784,9 +813,14 @@ function AgentEditorPage(props: {
     rememberedMcpServers = servers;
     setMcp({ scope: 'selected', servers });
   };
-  const [autoAcceptChoice, setAutoAcceptChoice] = createSignal(
-    props.agent?.auto_accept_permissions === true
-  );
+  // A Macro computer is the team's own sandbox, so its agents bypass
+  // permission prompts unless someone chooses otherwise.
+  const [autoAcceptPick, setAutoAcceptChoice] = createSignal<boolean>();
+  const autoAcceptChoice = () =>
+    autoAcceptPick() ??
+    (props.agent
+      ? props.agent.auto_accept_permissions === true
+      : selectedHarness()?.computer === true);
   const allowPermissionBypass = () =>
     selectedHarness()?.allowPermissionBypass === true;
   const autoAcceptPermissions = () =>
@@ -811,7 +845,25 @@ function AgentEditorPage(props: {
   const cursorHarness = () =>
     props.connectedHarnesses.find((harness) => harness.id === 'cursor');
   const macrodHarnesses = () =>
-    props.connectedHarnesses.filter((harness) => harness.kind === 'macrod');
+    props.connectedHarnesses.filter(
+      (harness) => harness.kind === 'macrod' && !harness.computer
+    );
+  const computerHarnesses = () =>
+    props.connectedHarnesses.filter((harness) => harness.computer);
+  const computerOffer = useComputerOffer();
+  const [buyingComputer, setBuyingComputer] = createSignal(false);
+  // Back from buying one, select the new computer once its runtime registers.
+  const [boughtHarnessId, setBoughtHarnessId] = createSignal<string>();
+  createEffect(() => {
+    const bought = boughtHarnessId();
+    if (
+      bought &&
+      computerHarnesses().some((harness) => harness.id === bought)
+    ) {
+      handleHarnessChange(bought);
+      setBoughtHarnessId(undefined);
+    }
+  });
   // Back from a setup guide, land on what was just set up.
   const finishSetup = () => {
     const finished = setup();
@@ -864,23 +916,32 @@ function AgentEditorPage(props: {
             <Show
               when={!query.isError}
               fallback={
-                <div class="flex items-center gap-2">
-                  <p class="min-w-0 flex-1 text-xs text-negative">
-                    Could not load models for{' '}
-                    {selectedHarness()?.name ?? 'this machine'}.
-                  </p>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    aria-label={`Retry models for ${selectedHarness()?.name ?? 'this machine'}`}
-                    onClick={() =>
-                      fireAndForget(query.refetch(), 'agent-settings')
-                    }
-                  >
-                    Retry
-                  </Button>
-                </div>
+                <Show
+                  when={!selectedHarness()?.computer}
+                  fallback={
+                    <p class="settings-input text-ink-muted">
+                      {t('computers.modelsWhenOn')}
+                    </p>
+                  }
+                >
+                  <div class="flex items-center gap-2">
+                    <p class="min-w-0 flex-1 text-xs text-negative">
+                      Could not load models for{' '}
+                      {selectedHarness()?.name ?? 'this machine'}.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      aria-label={`Retry models for ${selectedHarness()?.name ?? 'this machine'}`}
+                      onClick={() =>
+                        fireAndForget(query.refetch(), 'agent-settings')
+                      }
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                </Show>
               }
             >
               <Show
@@ -1326,7 +1387,10 @@ function AgentEditorPage(props: {
                     title="On your machine"
                     description="Your own agent on your own machine. Local Claude Code, Codex, or other harness, via Macrod."
                     icon={<TerminalIcon />}
-                    checked={selectedHarness()?.kind === 'macrod'}
+                    checked={
+                      selectedHarness()?.kind === 'macrod' &&
+                      !selectedHarness()?.computer
+                    }
                     disabled={macrodHarnesses().length === 0}
                     action={
                       <Show when={macrodHarnesses().length === 0}>
@@ -1363,7 +1427,90 @@ function AgentEditorPage(props: {
                       {modelPicker()}
                     </div>
                   </WhereItRunsOption>
+                  <Show
+                    when={computerHarnesses().length > 0}
+                    fallback={
+                      <Show when={computerOffer.canBuy()}>
+                        <WhereItRunsOption
+                          value="new-computer"
+                          title={t('computers.newComputer')}
+                          description={
+                            computerOffer.fromLine() ??
+                            t('computers.onComputerHint')
+                          }
+                          icon={<HardDrivesIcon />}
+                          checked={false}
+                          disabled
+                          action={
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              class="text-ink"
+                              disabled={busy()}
+                              onClick={() => setBuyingComputer(true)}
+                            >
+                              {t('computers.getComputerAction')}
+                            </Button>
+                          }
+                          onSelect={() => setBuyingComputer(true)}
+                        />
+                      </Show>
+                    }
+                  >
+                    <WhereItRunsOption
+                      value="computer"
+                      title={t('computers.onComputer')}
+                      description={t('computers.onComputerHint')}
+                      icon={<HardDrivesIcon />}
+                      checked={selectedHarness()?.computer === true}
+                      onSelect={() => {
+                        const first = computerHarnesses()[0];
+                        if (first) handleHarnessChange(first.id);
+                      }}
+                    >
+                      <div class="grid grid-cols-1 gap-3 @min-[440px]:grid-cols-[repeat(2,minmax(0,280px))]">
+                        <div class="flex min-w-0 flex-col gap-1.5">
+                          <span class="text-xs font-medium text-ink-muted">
+                            {t('computers.computerKind')}
+                          </span>
+                          <SettingsSelect
+                            label={t('computers.computerKind')}
+                            options={computerHarnesses()}
+                            value={harnessId()}
+                            onChange={handleHarnessChange}
+                          />
+                        </div>
+                        {modelPicker()}
+                      </div>
+                      <Show when={computerOffer.canBuy()}>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          class="mt-2 -ml-2"
+                          disabled={busy()}
+                          onClick={() => setBuyingComputer(true)}
+                        >
+                          <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
+                          {[
+                            t('computers.newComputer'),
+                            computerOffer.fromLine(),
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </Button>
+                      </Show>
+                    </WhereItRunsOption>
+                  </Show>
                 </fieldset>
+                <ComputerBuyFlow
+                  open={buyingComputer()}
+                  onClose={() => setBuyingComputer(false)}
+                  onFinished={(computer) =>
+                    setBoughtHarnessId(computer.harnessId ?? undefined)
+                  }
+                />
                 <Show when={!keyProvider() ? savedApiKey() : undefined}>
                   {(saved) => (
                     <div class="mt-3 flex items-center justify-between gap-3 text-xs text-ink-muted">

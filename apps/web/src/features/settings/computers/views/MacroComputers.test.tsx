@@ -3,9 +3,9 @@
  */
 
 import { ThrownResultError } from '@core/util/result';
-import type { AgentWithHarnessId } from '@queries/agents/agents';
 import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { For } from 'solid-js';
 import { beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { MacroComputers } from './MacroComputers';
 
@@ -13,7 +13,6 @@ const mocks = vi.hoisted(() => ({
   rollout: true,
   offers: [] as SizeOffer[],
   computers: [] as ComputerStatus[],
-  agents: [] as AgentWithHarnessId[],
   release: vi.fn(),
   toastFailure: vi.fn(),
   purchase: vi.fn(),
@@ -48,17 +47,33 @@ vi.mock('@queries/computers/computers', () => ({
   }),
 }));
 
-vi.mock('@queries/agents/agents', () => ({
-  useAgentsQuery: () => ({
-    isSuccess: true,
-    get data() {
-      return mocks.agents;
-    },
-  }),
+vi.mock('@queries/computers/claude', () => ({
+  useClaudeModeQuery: () => ({ isSuccess: false }),
+  useClaudeSignOutMutation: () => ({ isPending: false }),
 }));
 
-vi.mock('./computer-claude-access', () => ({
-  ComputerClaudeAccess: () => null,
+vi.mock('./computer-setup-dialog', () => ({
+  ComputerSetupDialog: () => null,
+}));
+
+vi.mock('./claude-sign-in-dialog', () => ({
+  ClaudeSignInDialog: () => null,
+}));
+
+// The menu's own rendering is the design system's; these tests cover which
+// items a computer offers.
+vi.mock('../components/computer-actions-menu', () => ({
+  ComputerActionsMenu: (props: {
+    items: { label: string; onSelect: () => void }[];
+  }) => (
+    <For each={props.items}>
+      {(item) => (
+        <button type="button" role="menuitem" onClick={item.onSelect}>
+          {item.label}
+        </button>
+      )}
+    </For>
+  ),
 }));
 
 vi.mock('../primitives/team-computers', () => ({
@@ -75,6 +90,15 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 }));
 
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
+
+vi.mock('@core/user', () => ({
+  getDisplayNameParts: () => ({
+    firstName: 'Maya',
+    lastName: '',
+    fullName: '',
+  }),
+  tryMacroId: (id: string) => id,
+}));
 
 vi.mock('@queries/team/teams', () => ({
   useIsTeamAdmin: () => () => true,
@@ -93,7 +117,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.rollout = true;
   mocks.computers = [];
-  mocks.agents = [];
   mocks.offers = [
     {
       size: 'standard',
@@ -153,10 +176,10 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
     .mockResolvedValueOnce({ computerId: 'computer-1' });
   mocks.notify.mockResolvedValue({});
 
-  render(() => <MacroComputers harnesses={[]} />);
+  render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
 
-  const continueButton = screen.getByRole('button', { name: 'Continue' });
-  expect(continueButton).toHaveProperty('disabled', true);
+  fireEvent.click(screen.getByRole('button', { name: 'Get a computer' }));
+  await screen.findByText('Get a Macro computer', { selector: 'h2' });
   expect(screen.getByRole('radio', { name: 'XL' })).toHaveProperty(
     'disabled',
     true
@@ -166,10 +189,6 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
   await waitFor(() => expect(mocks.notify).toHaveBeenCalledWith('xl'));
 
   fireEvent.click(screen.getByRole('radio', { name: 'Large' }));
-  expect(continueButton).toHaveProperty('disabled', false);
-  fireEvent.click(continueButton);
-
-  await screen.findByText('Buy a Large Macro computer?');
   const buyButton = screen.getByRole('button', { name: 'Buy · $80.00/month' });
 
   fireEvent.click(buyButton);
@@ -178,25 +197,22 @@ it('buys the chosen size after confirming its price, and keeps sold-out sizes ou
   );
   expect(mocks.purchase).toHaveBeenNthCalledWith(1, {
     size: 'large',
-    name: undefined,
+    name: "Maya's Agent Box",
   });
 
-  fireEvent.input(screen.getByLabelText('Name (optional)'), {
+  fireEvent.input(screen.getByLabelText('Name'), {
     target: { value: '  Build machine  ' },
   });
   fireEvent.click(buyButton);
   await waitFor(() =>
     expect(mocks.toastSuccess).toHaveBeenCalledWith(
-      'Computer purchased. Setting it up now.'
+      'Computer purchased. Provisioning now.'
     )
   );
   expect(mocks.purchase).toHaveBeenNthCalledWith(2, {
     size: 'large',
     name: 'Build machine',
   });
-  await waitFor(() =>
-    expect(screen.queryByText('Buy a Large Macro computer?')).toBeNull()
-  );
 });
 
 it('removes a failed payment with the stored confirmation name and allows retry after an error', async () => {
@@ -219,9 +235,9 @@ it('removes a failed payment with the stored confirmation name and allows retry 
     .mockRejectedValueOnce(new Error('Request failed'))
     .mockResolvedValueOnce({});
 
-  render(() => <MacroComputers harnesses={[]} />);
+  render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
 
-  const remove = screen.getByRole('button', { name: 'Remove' });
+  const remove = screen.getByRole('menuitem', { name: 'Remove' });
   fireEvent.click(remove);
   await waitFor(() =>
     expect(mocks.toastFailure).toHaveBeenCalledWith(
@@ -260,97 +276,92 @@ it('keeps existing computers and release available with rollout off while hiding
       createdAt: '2026-01-01T00:00:00Z',
     },
   ];
-  render(() => <MacroComputers harnesses={[]} />);
+  render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
   expect(screen.getByText('Build machine')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Continue' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Get a computer' })).toBeNull();
   expect(
-    screen.getByRole('button', { name: 'Cancel at period end' })
+    screen.getByRole('menuitem', { name: 'Cancel at period end' })
   ).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'Release now' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Release now' }));
   expect(await screen.findByLabelText(/Type/)).toBeTruthy();
 });
 
 it('keeps a zero-price offer included through review and purchase', async () => {
   mocks.offers[0].quote.amount = 0;
-  render(() => <MacroComputers harnesses={[]} />);
-  fireEvent.click(screen.getByRole('radio', { name: 'Standard' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-  expect(screen.getByText('Included for Macro')).toBeTruthy();
+  render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Get a computer' }));
+  await screen.findByText('Included for Macro');
   expect(screen.queryByText(/\$0\.00/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Buy' }));
   await waitFor(() =>
     expect(mocks.purchase).toHaveBeenCalledWith({
       size: 'standard',
-      name: undefined,
+      name: "Maya's Agent Box",
     })
   );
 });
 
-it("lists the agents bound to each computer's runtime", () => {
-  mocks.computers = [
-    {
-      id: 'computer-1',
-      name: 'Build machine',
-      size: 'standard',
-      vcpus: 4,
-      memoryGib: 8,
-      diskGib: 100,
-      catalogEntry: 'standard@2026-11',
-      status: 'ready',
-      payment: 'paid',
-      poweredOn: true,
-      createdAt: '2026-01-01T00:00:00Z',
-      harnessId: 'harness-build',
-    },
-  ];
-  mocks.agents = [
-    {
-      bot: {
-        id: 'bot-default',
-        kind: 'owned',
-        has_agent: true,
-        name: 'Claude Code · Build machine',
-        handle: 'claude-code-build-machine',
-        owner: { type: 'team', team_id: 'team-1' },
-        created_at: '2026-01-01T00:00:00Z',
-        updated_at: '2026-01-01T00:00:00Z',
-      },
-      instructions: '',
-      harness: 'macrod',
-      harness_id: 'harness-build',
-      default_model: 'default',
-      channel_scope: 'all',
-      channel_ids: [],
-      mcp: { scope: 'owner_connections' },
-      auto_accept_permissions: false,
-      is_coding: true,
-    },
-    {
-      bot: {
-        id: 'bot-laptop',
-        kind: 'owned',
-        has_agent: true,
-        name: 'Laptop agent',
-        handle: 'laptop',
-        owner: { type: 'user', user_id: 'viewer' },
-        created_at: '2026-01-01T00:00:00Z',
-        updated_at: '2026-01-01T00:00:00Z',
-      },
-      instructions: '',
-      harness: 'macrod',
-      harness_id: 'harness-laptop',
-      default_model: 'default',
-      channel_scope: 'all',
-      channel_ids: [],
-      mcp: { scope: 'owner_connections' },
-      auto_accept_permissions: false,
-      is_coding: true,
-    },
-  ] as AgentWithHarnessId[];
+it('offers Finish setup before Claude sign-in, and nothing once both are done', () => {
+  const harness = {
+    id: 'harness-build',
+    name: 'Build machine',
+    kind: 'macrod' as const,
+    owner: { type: 'user' as const, user_id: 'viewer' },
+    access: 'owner' as const,
+    shared_team_ids: [],
+    created_by: 'viewer',
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+    connected: true,
+    last_connected_at: null,
+    allow_permission_bypass: true,
+    computer_id: 'computer-1',
+    claude_mode: 'own_account' as const,
+    capabilities: { claude: { status: 'signed_out' as const } },
+  };
+  const computer: ComputerStatus = {
+    id: 'computer-1',
+    name: 'Build machine',
+    size: 'standard',
+    vcpus: 4,
+    memoryGib: 8,
+    diskGib: 100,
+    catalogEntry: 'standard@2026-11',
+    status: 'ready',
+    payment: 'paid',
+    poweredOn: true,
+    createdAt: '2026-01-01T00:00:00Z',
+    harnessId: 'harness-build',
+    setupCompletedAt: null,
+  };
+  mocks.computers = [computer];
+  const first = render(() => (
+    <MacroComputers harnesses={[harness]} onSharingChange={() => {}} />
+  ));
+  expect(screen.getByRole('button', { name: 'Finish setup' })).toBeTruthy();
+  expect(
+    screen.queryByRole('button', { name: 'Sign in with Claude' })
+  ).toBeNull();
+  first.unmount();
 
-  render(() => <MacroComputers harnesses={[]} />);
+  mocks.computers = [{ ...computer, setupCompletedAt: '2026-01-02T00:00:00Z' }];
+  const second = render(() => (
+    <MacroComputers harnesses={[harness]} onSharingChange={() => {}} />
+  ));
+  expect(
+    screen.getByRole('button', { name: 'Sign in with Claude' })
+  ).toBeTruthy();
+  second.unmount();
 
-  expect(screen.getByText('Claude Code · Build machine')).toBeTruthy();
-  expect(screen.getByText('@claude-code-build-machine')).toBeTruthy();
-  expect(screen.queryByText('Laptop agent')).toBeNull();
+  render(() => (
+    <MacroComputers
+      harnesses={[{ ...harness, claude_mode: 'macro_credits' }]}
+      onSharingChange={() => {}}
+    />
+  ));
+  expect(
+    screen.queryByRole('button', { name: 'Sign in with Claude' })
+  ).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Finish setup' })).toBeNull();
+  expect(screen.getByText(/Claude: Macro credits/)).toBeTruthy();
 });

@@ -13,6 +13,8 @@ import type { LoadAgentModelsResponseCurrentModel } from './loadAgentModelsRespo
  * Successful model-discovery response.
  */
 export interface LoadAgentModelsResponse {
+  /** When the list was last read from the machine; null when it is live. */
+  cachedAt?: string | null;
   /** Current provider model, if model selection is available. */
   currentModel?: LoadAgentModelsResponseCurrentModel;
   /** Ordered model catalog. */

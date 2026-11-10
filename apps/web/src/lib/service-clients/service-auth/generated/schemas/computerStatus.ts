@@ -24,6 +24,8 @@ export interface ComputerStatus {
   compReason?: ComputerStatusCompReason;
   /** Time the computer was reserved. */
   createdAt: string;
+  /** Bot id of the coding agent created on it; null until its harness is claimed. */
+  defaultAgentId?: string | null;
   /** Root disk limit saved at purchase. */
   diskGib: number;
   /** Harness claimed by this guest. */
@@ -40,6 +42,8 @@ export interface ComputerStatus {
   /** When the disk is destroyed, for a canceled computer. */
   retainedUntil?: ComputerStatusRetainedUntil;
   setup?: ComputerStatusSetup;
+  /** When guided setup was finished; absent while it is incomplete. */
+  setupCompletedAt?: string | null;
   /** Purchased catalog size. */
   size: string;
   /** Observed guest status. */

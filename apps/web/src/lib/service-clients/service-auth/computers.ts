@@ -103,6 +103,10 @@ export const computersClient = {
         errorResponseHandler: releaseError,
       }
     ),
+  completeSetup: (id: string) =>
+    fetchWithToken<ComputerStatus>(computerUrl(id, 'setup-complete'), {
+      method: 'POST',
+    }),
   notify: (size: ComputerSize) =>
     fetchWithToken(`${base}/notify`, {
       method: 'POST',

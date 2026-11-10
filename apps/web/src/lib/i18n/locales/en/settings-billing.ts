@@ -31,8 +31,6 @@ export default {
   settingUp: 'Setting up…',
   failed: 'Failed',
   dead: 'Dead',
-  asleep: 'Asleep',
-  waking: 'Waking',
   stopping: 'Stopping',
   stopped: 'Stopped',
   released: 'Released',

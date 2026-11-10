@@ -162,3 +162,13 @@ export function useReleaseComputerMutation() {
     },
   }));
 }
+
+/** Marks guided setup finished, so the card stops offering Finish setup. */
+export function useCompleteComputerSetupMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: (computerId: string) =>
+      throwOnErr(() => computersClient.completeSetup(computerId)),
+    onSuccess: storeComputer,
+  }));
+}

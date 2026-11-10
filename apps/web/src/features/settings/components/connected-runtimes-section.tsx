@@ -8,7 +8,7 @@ import { ConnectAction, StatusDot } from '../integration-ui';
 import { SettingsCard } from '../primitives';
 import { RuntimeOptions } from './runtime-options';
 
-const RuntimeShareDialog = lazy(async () => ({
+export const RuntimeShareDialog = lazy(async () => ({
   default: (
     await import('@app/features/runtime-sharing/views/RuntimeShareDialog')
   ).RuntimeShareDialog,
@@ -85,8 +85,6 @@ export function RuntimeName(props: { harness: RegisteredHarness }) {
  */
 export function ConnectedRuntimesSection(props: {
   harnesses: readonly RegisteredHarness[];
-  /** Runtimes that are the team's Macro computers; release them, not remove. */
-  computerHarnessIds: ReadonlySet<string>;
   /** The runtimes could not be loaded; say so rather than show an empty page. */
   error: boolean;
   onRename: (harness: RegisteredHarness) => void;
@@ -115,10 +113,6 @@ export function ConnectedRuntimesSection(props: {
             {(harness) => (
               <PairedRuntimeRow
                 harness={harness}
-                isComputer={
-                  !!harness.computer_id ||
-                  props.computerHarnessIds.has(harness.id)
-                }
                 onRename={() => props.onRename(harness)}
                 onRemove={() => props.onRemove(harness)}
                 sharing={props.sharing === harness.id}
@@ -147,7 +141,6 @@ export function ConnectedRuntimesSection(props: {
  */
 function PairedRuntimeRow(props: {
   harness: RegisteredHarness;
-  isComputer: boolean;
   onRename: () => void;
   onRemove: () => void;
   sharing: boolean;
@@ -174,12 +167,6 @@ function PairedRuntimeRow(props: {
         <RuntimeName harness={props.harness} />
         <p class="mt-0.5 pl-4 text-xs text-ink-extra-muted">
           {access()}
-          <Show when={props.isComputer}>
-            {' · '}
-            <span class="font-medium text-accent-ink">
-              {t('computers.badge')}
-            </span>
-          </Show>
           <Show when={pending() > 0}>
             {' · '}
             <span data-runtime-pending class="font-medium text-accent-ink">
@@ -200,8 +187,7 @@ function PairedRuntimeRow(props: {
           />
         </Show>
         <RuntimeOptions harness={props.harness} />
-        {/* A Macro computer is renamed and released from its own row. */}
-        <Show when={isOwner() && !props.isComputer}>
+        <Show when={isOwner()}>
           <ConnectAction
             label="Rename"
             variant="neutral"

@@ -18,15 +18,17 @@ export function sizeLabel(size: string): string {
 
 export function offerSpecs(offer: SizeOffer): string {
   return t('computers.computerSpecs', {
+    size: sizeLabel(offer.size),
     cpus: offer.vcpus,
     memory: offer.memoryGb,
     disk: offer.diskGb,
   });
 }
 
-/** The resources recorded when this computer was purchased. */
+/** "Standard · 4 vCPU · 8 GB · 100 GB", as recorded at purchase. */
 export function computerSpecs(computer: ComputerStatus): string {
   return t('computers.computerSpecs', {
+    size: sizeLabel(computer.size),
     cpus: computer.vcpus,
     memory: computer.memoryGib,
     disk: computer.diskGib,
@@ -57,7 +59,7 @@ export function formatComputerDate(value: string): string {
   });
 }
 
-function setupStepLabel(step: SetupStep): string | undefined {
+export function setupStepLabel(step: SetupStep): string | undefined {
   return match(step)
     .with('creating', () => t('computers.stepCreating'))
     .with('booting', () => t('computers.stepBooting'))
@@ -73,59 +75,78 @@ export function computerStatusLabel(computer: ComputerStatus): {
   detail?: string;
   tone: StatusTone;
 } {
-  return match(computer.status)
-    .returnType<{ label: string; detail?: string; tone: StatusTone }>()
-    .with('setting_up', () => {
-      const setup = computer.setup;
-      const step = setup && setupStepLabel(setup.step);
-      return {
-        label: t('computers.settingUp'),
-        detail:
-          setup && step
-            ? t('computers.setupProgress', {
-                step,
-                position: setup.position,
-                total: setup.total,
-              })
-            : undefined,
+  return (
+    match(computer.status)
+      .returnType<{ label: string; detail?: string; tone: StatusTone }>()
+      .with('setting_up', () => {
+        const setup = computer.setup;
+        const step = setup && setupStepLabel(setup.step);
+        return {
+          label: t('computers.settingUp'),
+          detail:
+            setup && step
+              ? t('computers.setupProgress', {
+                  step,
+                  position: setup.position,
+                  total: setup.total,
+                })
+              : undefined,
+          tone: 'progress',
+        };
+      })
+      .with('waiting_for_capacity', () => ({
+        label: t('computers.waitingForCapacity'),
+        detail: t('computers.waitingForCapacityHint'),
+        tone: 'muted',
+      }))
+      .with('needs_attention', () => ({
+        label: t('computers.needsAttention'),
+        tone: 'failure',
+      }))
+      // Computers no longer sleep; a record still reporting it is running.
+      .with('ready', 'asleep', 'waking', () => ({
+        label: t('computers.ready'),
+        tone: 'success',
+      }))
+      .with('stopping', () => ({
+        label: t('computers.stopping'),
         tone: 'progress',
-      };
-    })
-    .with('waiting_for_capacity', () => ({
-      label: t('computers.waitingForCapacity'),
-      detail: t('computers.waitingForCapacityHint'),
-      tone: 'muted',
-    }))
-    .with('needs_attention', () => ({
-      label: t('computers.needsAttention'),
-      tone: 'failure',
-    }))
-    .with('ready', () => ({ label: t('computers.ready'), tone: 'success' }))
-    .with('asleep', () => ({
-      label: t('computers.asleep'),
-      detail: t('computers.wakeHint'),
-      tone: 'muted',
-    }))
-    .with('waking', () => ({ label: t('computers.waking'), tone: 'progress' }))
-    .with('stopping', () => ({
-      label: t('computers.stopping'),
-      tone: 'progress',
-    }))
-    .with('stopped', () => ({ label: t('computers.stopped'), tone: 'muted' }))
-    .with('failed', () => ({
-      label: t('computers.failed'),
-      detail: t('computers.failedHint'),
-      tone: 'failure',
-    }))
-    .with('payment_failed', () => ({
-      label: t('computers.paymentFailed'),
-      tone: 'failure',
-    }))
-    .with('released', () => ({
-      label: t('computers.releasedStatus'),
-      tone: 'muted',
-    }))
-    .exhaustive((unknown) => ({ label: String(unknown), tone: 'muted' }));
+      }))
+      .with('stopped', () => ({ label: t('computers.stopped'), tone: 'muted' }))
+      .with('failed', () => ({
+        label: t('computers.failed'),
+        detail: t('computers.failedHint'),
+        tone: 'failure',
+      }))
+      .with('payment_failed', () => ({
+        label: t('computers.paymentFailed'),
+        tone: 'failure',
+      }))
+      .with('released', () => ({
+        label: t('computers.releasedStatus'),
+        tone: 'muted',
+      }))
+      .exhaustive((unknown) => ({ label: String(unknown), tone: 'muted' }))
+  );
+}
+
+/** The status dot every machine row uses, for this computer's state. */
+export function computerDotState(
+  computer: ComputerStatus
+): 'connected' | 'attention' | 'disconnected' {
+  return match(computerStatusLabel(computer).tone)
+    .with('success', () => 'connected' as const)
+    .with('failure', () => 'attention' as const)
+    .with('progress', 'muted', () => 'disconnected' as const)
+    .exhaustive();
+}
+
+/** Provisioning, before the computer first reports ready. */
+export function isProvisioning(computer: ComputerStatus): boolean {
+  return (
+    computer.status === 'setting_up' ||
+    computer.status === 'waiting_for_capacity'
+  );
 }
 
 /** Power can change only once a computer is set up and before it is gone. */
