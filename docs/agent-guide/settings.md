@@ -849,14 +849,14 @@ shows **Waiting for space on the host**, with "Turn off or release another
 computer on this host to make room". It has no setup step; admins can turn it
 off or release it. This applies both before and after first enrollment, on
 desktop and mobile. The list polls every 3 seconds
-while any computer is setting up, waiting for capacity, waking or stopping. Once ready a row shows
-its size, the vCPU/memory/disk resources recorded at purchase, status (**Ready**, **Asleep**, **Waking**, **Stopping**,
+while any computer is setting up, waiting for capacity, starting or stopping. Once ready a row shows
+its size, the vCPU/memory/disk resources recorded at purchase, status (**Ready**, **Starting**, **Stopping**,
 **Stopped**, **Failed**), its Claude access mode, and the runtime it
 registered as with a connection dot; that runtime's row under **Connected
 runtimes** carries a **Macro computer** badge and no Remove. Admin controls
 on each row:
 
-- **Power** switch: on/off, available when Ready, Asleep, Stopped or waiting for capacity.
+- **Power** switch: on/off, available when Ready, Stopped or waiting for capacity.
 - **Cancel at period end**: billing stops at the period end, shown as
   "Cancels <date>"; **Keep computer** undoes it until then. After the period
   a canceled computer shows "Disk deleted <date>".

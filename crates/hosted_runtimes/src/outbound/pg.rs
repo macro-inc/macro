@@ -271,7 +271,7 @@ impl PgComputerRepo {
                     SELECT id, 'capacity_changed', $2 FROM hosted_runtime
                     WHERE host_id = $1 AND id <> $3
                         AND state->>'power' = 'on' AND state->>'wake_requested' = 'true'
-                        AND state->'phase'->>'phase' IN ('stopped', 'suspended', 'provisioning')
+                        AND state->'phase'->>'phase' IN ('stopped', 'provisioning')
                     ON CONFLICT (computer_id, kind) DO UPDATE SET fire_at = LEAST(hosted_runtime_timer.fire_at, EXCLUDED.fire_at)
                     "#,
                     host.into_inner(), now, computer_id.as_uuid(),
@@ -288,7 +288,7 @@ impl PgComputerRepo {
         {
             tracing::info!(computer_id = %computer_id, host_id = ?state.host(),
                 backoff_step = wait.backoff_step, retry_at = %wait.retry_at,
-                room_unavailable = wait.room_unavailable, "computer waiting for host capacity");
+                "computer waiting for host capacity");
         }
         if let Some(setup) = &state.setup {
             crate::domain::telemetry::record_setup_waits(
@@ -314,7 +314,7 @@ impl PgComputerRepo {
     }
 
     /// Whether `computer` fits among the host's other awake computers. Locks
-    /// the host row so concurrent wakes on one host are serialized.
+    /// the host row so concurrent starts on one host are serialized.
     async fn host_has_room(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         host: HostId,
@@ -657,45 +657,6 @@ impl ComputerRepo for PgComputerRepo {
         .execute(&self.pool)
         .await?;
         Ok(())
-    }
-
-    async fn running(&self) -> Result<Vec<ComputerRecord>, PgComputerError> {
-        let rows = sqlx::query_as!(
-            ComputerRow,
-            r#"
-            SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by,
-                   created_at, enrolled_at, enrollment_generation
-            FROM hosted_runtime
-            WHERE awake
-            "#,
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        Ok(self
-            .fetch_many(rows)
-            .await?
-            .into_iter()
-            .filter(|record| {
-                record
-                    .healthy()
-                    .is_none_or(|computer| matches!(computer.state.phase, Phase::Running { .. }))
-            })
-            .collect())
-    }
-
-    async fn coldest_frozen(&self, host: HostId) -> Result<Option<ComputerId>, PgComputerError> {
-        let rows = sqlx::query_as!(ComputerRow,
-            r#"SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by, created_at, enrolled_at, enrollment_generation
-            FROM hosted_runtime
-            WHERE host_id = $1 AND awake AND state->'phase'->>'phase' = 'frozen'
-            ORDER BY updated_at"#,
-            host.into_inner(),
-        ).fetch_all(&self.pool).await?;
-        Ok(self
-            .fetch_many(rows)
-            .await?
-            .iter()
-            .find_map(|record| record.healthy().map(|computer| computer.id)))
     }
 
     async fn instances_expected(

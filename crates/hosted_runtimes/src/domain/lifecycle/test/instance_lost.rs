@@ -6,15 +6,6 @@ fn loss_recreates_every_paid_phase_according_to_power_and_capacity() {
         Phase::Running { host: HOST },
         Phase::Booting { host: HOST },
         Phase::Restarting { host: HOST },
-        Phase::Frozen { host: HOST },
-        Phase::Suspended {
-            host: HOST,
-            saved_state: true,
-        },
-        Phase::Suspended {
-            host: HOST,
-            saved_state: false,
-        },
         Phase::Stopped { host: HOST },
         Phase::Stopping { host: HOST },
         Phase::Failed { host: HOST },

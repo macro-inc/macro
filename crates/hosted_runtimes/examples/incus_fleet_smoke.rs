@@ -1,5 +1,5 @@
 //! Drive one throwaway computer through `IncusFleet` on a dev Incus host:
-//! create → freeze → unfreeze → suspend → resume → destroy, timing each step.
+//! create → stop → start → destroy, timing each step.
 //!
 //! ```sh
 //! cargo run -p hosted_runtimes --example incus_fleet_smoke -- \
@@ -193,23 +193,13 @@ async fn run(
     print_status(fleet, id).await?;
 
     let started = Instant::now();
-    fleet.freeze(id).await?;
-    println!("freeze       {:>8.1?}", started.elapsed());
+    fleet.stop(id).await?;
+    println!("stop         {:>8.1?}", started.elapsed());
     print_status(fleet, id).await?;
 
     let started = Instant::now();
-    fleet.unfreeze(id).await?;
-    println!("unfreeze     {:>8.1?}", started.elapsed());
-    print_status(fleet, id).await?;
-
-    let started = Instant::now();
-    fleet.suspend(id).await?;
-    println!("suspend      {:>8.1?}", started.elapsed());
-    print_status(fleet, id).await?;
-
-    let started = Instant::now();
-    fleet.resume(id).await?;
-    println!("resume       {:>8.1?}", started.elapsed());
+    fleet.start(id).await?;
+    println!("start        {:>8.1?}", started.elapsed());
     print_status(fleet, id).await?;
 
     let started = Instant::now();

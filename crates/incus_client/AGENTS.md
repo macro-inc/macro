@@ -68,7 +68,6 @@ and operation waiting.
 - `delete` and `instance` return `IncusError::NotFound` for a missing
   instance; the caller decides whether that is success. Incus refuses to delete
   a running instance; stop it first.
-- A stateful stop needs `migration.stateful=true` on the VM (set it at create).
 - Require explicit `IncusEndpoint::timeouts` (request, connect, operation wait
   seconds/count and state-change seconds); no transport defaults. `run_operation`
   gives up with `OperationTimedOut` at the configured limit; the operation

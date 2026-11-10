@@ -212,8 +212,8 @@ async fn a_computers_effects_run_one_at_a_time_in_order(pool: PgPool) {
         .unwrap();
     repo.apply(id, Event::InstanceStarted, now()).await.unwrap();
     repo.apply(id, Event::MacrodConnected, now()).await.unwrap();
-    repo.apply(id, Event::SessionsIdle, now()).await.unwrap();
-    repo.apply(id, Event::PromptArrived, now()).await.unwrap();
+    repo.apply(id, Event::PowerOff, now()).await.unwrap();
+    repo.apply(id, Event::PowerOn, now()).await.unwrap();
 
     let first = repo
         .lease_effects(EffectWorker::Fleet, 10, now(), now() + Duration::minutes(1))
@@ -228,7 +228,7 @@ async fn a_computers_effects_run_one_at_a_time_in_order(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(second.len(), 1);
-    assert!(matches!(second[0].effect, Effect::Freeze { .. }));
+    assert!(matches!(second[0].effect, Effect::Stop { .. }));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -305,21 +305,6 @@ async fn lifecycle_selectors_read_the_nested_phase_tag(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(repo.instances_expected(host.id).await.unwrap().len(), 1);
-    repo.apply(id, Event::InstanceStarted, now()).await.unwrap();
-    repo.apply(id, Event::MacrodConnected, now()).await.unwrap();
-    assert_eq!(
-        repo.running()
-            .await
-            .unwrap()
-            .iter()
-            .map(|c| c.id())
-            .collect::<Vec<_>>(),
-        vec![id]
-    );
-    assert_eq!(repo.coldest_frozen(host.id).await.unwrap(), None);
-    repo.apply(id, Event::SessionsIdle, now()).await.unwrap();
-    assert!(repo.running().await.unwrap().is_empty());
-    assert_eq!(repo.coldest_frozen(host.id).await.unwrap(), Some(id));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

@@ -30,8 +30,6 @@ enum StateAction {
     Start,
     Stop,
     Restart,
-    Freeze,
-    Unfreeze,
 }
 
 impl IncusClient {
@@ -198,45 +196,22 @@ impl IncusClient {
         Ok(())
     }
 
-    /// Starts a stopped instance, restoring saved state after a stateful stop.
+    /// Starts a stopped instance.
     #[tracing::instrument(name = "incus.start", skip(self), err)]
     pub async fn start(&self, name: &InstanceName) -> Result<(), IncusError> {
-        self.change_state(name, StateAction::Start, false, false)
-            .await
+        self.change_state(name, StateAction::Start, false).await
     }
 
-    /// Stops an instance. `stateful` saves memory to disk (the VM needs
-    /// `migration.stateful=true`); `force` kills instead of shutting down.
+    /// Stops an instance; `force` kills instead of shutting down.
     #[tracing::instrument(name = "incus.stop", skip(self), err)]
-    pub async fn stop(
-        &self,
-        name: &InstanceName,
-        stateful: bool,
-        force: bool,
-    ) -> Result<(), IncusError> {
-        self.change_state(name, StateAction::Stop, stateful, force)
-            .await
+    pub async fn stop(&self, name: &InstanceName, force: bool) -> Result<(), IncusError> {
+        self.change_state(name, StateAction::Stop, force).await
     }
 
     /// Restarts a running instance; `force` kills instead of shutting down.
     #[tracing::instrument(name = "incus.restart", skip(self), err)]
     pub async fn restart(&self, name: &InstanceName, force: bool) -> Result<(), IncusError> {
-        self.change_state(name, StateAction::Restart, false, force)
-            .await
-    }
-
-    /// Pauses a running instance in memory.
-    #[tracing::instrument(name = "incus.freeze", skip(self), err)]
-    pub async fn freeze(&self, name: &InstanceName) -> Result<(), IncusError> {
-        self.change_state(name, StateAction::Freeze, false, false)
-            .await
-    }
-
-    /// Resumes a frozen instance.
-    #[tracing::instrument(name = "incus.unfreeze", skip(self), err)]
-    pub async fn unfreeze(&self, name: &InstanceName) -> Result<(), IncusError> {
-        self.change_state(name, StateAction::Unfreeze, false, false)
-            .await
+        self.change_state(name, StateAction::Restart, force).await
     }
 
     /// Deletes a stopped instance with its snapshots and volumes. A missing
@@ -494,12 +469,11 @@ impl IncusClient {
         &self,
         name: &InstanceName,
         action: StateAction,
-        stateful: bool,
         force: bool,
     ) -> Result<(), IncusError> {
         let body = types::InstanceStatePut {
             action: Some(action.as_ref().to_owned()),
-            stateful: Some(stateful),
+            stateful: None,
             force: Some(force),
             timeout: Some(i64::from(self.timeouts.state_change_secs)),
         };
@@ -546,7 +520,6 @@ fn instance_info(instance: types::Instance) -> Result<InstanceInfo, IncusError> 
         name: instance.name.ok_or_else(|| missing("instance name"))?,
         status: InstanceStatus::from_incus(code, instance.status.unwrap_or_default()),
         kind: parse_kind(instance.type_)?,
-        stateful: instance.stateful.unwrap_or(false),
         config: instance.config.map(|config| config.0).unwrap_or_default(),
         devices: instance
             .devices

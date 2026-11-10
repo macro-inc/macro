@@ -12,13 +12,6 @@ async fn capacity_wait_is_visible_before_and_after_first_enrollment() {
         ),
         (Phase::Stopped { host: HOST }, false),
         (Phase::Stopped { host: HOST }, true),
-        (
-            Phase::Suspended {
-                host: HOST,
-                saved_state: true,
-            },
-            true,
-        ),
     ] {
         let service = ComputerService::new(
             FakeRepo {
