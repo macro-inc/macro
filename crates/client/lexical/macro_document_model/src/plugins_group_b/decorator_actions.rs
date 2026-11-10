@@ -20,10 +20,27 @@ struct DisplayNames {
     names: IndexMap<String, String>,
 }
 
+#[derive(Clone, Debug, serde::Deserialize)]
+struct NodeDelete {
+    key: u32,
+}
+
+static DELETE: CommandKey<NodeKey> = CommandKey::new("group-b.decorator-delete");
+
 static EQUATION: CommandKey<EquationCommand> = CommandKey::new("group-b.equation");
 static DISPLAY_NAMES: CommandKey<DisplayNames> = CommandKey::new("group-b.user-display-names");
 
 pub(super) fn decode(name: &str, json: &str, generation: u32) -> Result<Option<Command>, Error> {
+    if name == DELETE.name() {
+        let update: NodeDelete = serde_json::from_str(json)?;
+        return Ok(Some(Command::Extension(ExtensionCommand::new(
+            &DELETE,
+            NodeKey::from_parts(KeyParts {
+                index: update.key,
+                generation,
+            }),
+        ))));
+    }
     if name == EQUATION.name() {
         let update: EquationUpdate = serde_json::from_str(json)?;
         return Ok(Some(Command::Extension(ExtensionCommand::new(
@@ -50,7 +67,12 @@ pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
     builder.plugin(DecoratorActions)
 }
 
-static COMMANDS: [CommandRegistration; 2] = [
+static COMMANDS: [CommandRegistration; 3] = [
+    CommandRegistration {
+        command: CommandKind::Extension(&DELETE),
+        priority: CommandPriority::Normal,
+        placement: Placement::After,
+    },
     CommandRegistration {
         command: CommandKind::Extension(&EQUATION),
         priority: CommandPriority::Normal,
@@ -78,6 +100,13 @@ impl Plugin for DecoratorActions {
         let Command::Extension(command) = command else {
             return Ok(Handled::No);
         };
+        if let Some(key) = command.payload(&DELETE) {
+            if tx.view().node(*key).is_none() {
+                return Ok(Handled::No);
+            }
+            super::structure::remove_and_restore_selection(tx, *key)?;
+            return Ok(Handled::Yes);
+        }
         if let Some(update) = command.payload(&EQUATION) {
             if update.equation.is_empty() || !tx.is::<EquationNode>(update.key) {
                 return Ok(Handled::No);

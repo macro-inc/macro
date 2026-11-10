@@ -95,14 +95,20 @@ It uses the real records view with a local source and picker to exercise opening
 replacement, cancellation, keyboard editing, and read-only references. Navigation
 adapter tests separately check file types, access failures, and split selection.
 
-Keep shared mention, image and equation components on `DecoratorHost`; preserve
-the source host's command order, transaction boundaries and cached media props.
+Keep shared mention, image, equation and horizontal-rule components on
+`DecoratorHost`; preserve the source host's command order, transaction boundaries
+and cached media props.
 Register attached Source roots through `createLexicalWrapper`'s actual root
 listener so native selection projection preserves nested editor ownership.
-Their backend-free source interaction check is
+The mention/image/equation backend-free source interaction check is
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/decorator-host/browser-test/playwright.config.ts`.
 Compare its raw model and DOM captures before and after host refactors in all
 three engines; source results do not establish native binding acceptance.
+Merge the actual horizontal-rule leaf into the complete `registerMacroViews`
+record; preserve its missing-component checks rather than supplying placeholders.
+Run `native-horizontal-rule.test.ts` against an own-source document-session WASM
+build for selection, admitted deletion and sibling component disposal checks;
+this focused host check does not establish complete Macro registry acceptance.
 
 Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
 backend-free desktop/phone regression: the card reserves its height from

@@ -12,6 +12,10 @@ export interface DecoratorHost {
   isEditable(): boolean;
   isInteractable(): boolean;
   updateUserDisplayName(userId: string, displayName: string): void;
+  readonly horizontalRule: {
+    select(key: string): void;
+    remove(key: string): void;
+  };
   readonly equation: {
     requestEdit(key: string): void;
     current(key: string): { equation: string; inline: boolean } | null;
@@ -36,5 +40,11 @@ export interface DecoratorHost {
     mounted(key: string): void;
   };
 }
+
+/** Capabilities used by the shared horizontal-rule component. */
+export type HorizontalRuleHost = Pick<
+  DecoratorHost,
+  'isSelected' | 'isEditable' | 'horizontalRule'
+>;
 
 export const DecoratorHostContext = createContext<DecoratorHost>();

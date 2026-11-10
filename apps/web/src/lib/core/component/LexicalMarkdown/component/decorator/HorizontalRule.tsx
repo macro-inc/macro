@@ -2,40 +2,19 @@ import Trash from '@icon/system/regular/x.svg';
 import type { HorizontalRuleDecoratorProps } from '@macro-inc/lexical-core';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button } from '@ui';
-import { $createNodeSelection, $setSelection } from 'lexical';
-import { createSignal, useContext } from 'solid-js';
-import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
-import { removeNodeAndRestoreSelection } from '../../plugins/shared/removeNodeAndRestoreSelection';
+import { createSignal } from 'solid-js';
+import type { HorizontalRuleHost } from '../../context/DecoratorHostContext';
+import { useDecoratorHost } from '../../decorator-host/use-decorator-host';
 
-export function HorizontalRule(props: HorizontalRuleDecoratorProps) {
-  const lexicalWrapper = useContext(LexicalWrapperContext);
-  const selection = () => lexicalWrapper?.selection;
-  const editor = () => lexicalWrapper?.editor;
-
+export function HorizontalRule(
+  props: HorizontalRuleDecoratorProps & { host?: HorizontalRuleHost }
+) {
+  const host = props.host ?? useDecoratorHost();
   const [ruleHover, setRuleHover] = createSignal(false);
+  const isSelectedAsNode = () => host.isSelected(props.key);
 
-  const isSelectedAsNode = () => {
-    const sel = selection();
-    if (!sel) return false;
-    return sel.type === 'node' && sel.nodeKeys.has(props.key);
-  };
-
-  const clickRuleHandler = () => {
-    const currentEditor = editor();
-    if (currentEditor === undefined) return;
-    if (isSelectedAsNode()) return;
-    currentEditor.update(() => {
-      const sel = $createNodeSelection();
-      sel.add(props.key);
-      $setSelection(sel);
-    });
-  };
-
-  const deleteRule = () => {
-    const currentEditor = editor();
-    if (currentEditor === undefined) return;
-    removeNodeAndRestoreSelection(currentEditor, props.key);
-  };
+  const clickRuleHandler = () => host.horizontalRule.select(props.key);
+  const deleteRule = () => host.horizontalRule.remove(props.key);
 
   const debouncedSetHover = debounce((state: boolean) => {
     setRuleHover(state);
@@ -65,7 +44,7 @@ export function HorizontalRule(props: HorizontalRuleDecoratorProps) {
 
       {(isSelectedAsNode() || ruleHover()) && (
         <div class="absolute h-full top-0 right-2 flex flex-row gap-1 items-center">
-          {editor()?.isEditable() && (
+          {host.isEditable() && (
             <Button
               variant="ghost"
               class="size-8 p-0 border-0 bg-transparent hover:bg-hover"

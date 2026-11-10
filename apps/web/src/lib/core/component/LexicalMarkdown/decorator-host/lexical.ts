@@ -40,6 +40,20 @@ export function createLexicalDecoratorHost(
         [userId]: displayName,
       });
     },
+    horizontalRule: {
+      select(key) {
+        const editor = wrapper?.editor;
+        if (!editor || isSelected(key)) return;
+        editor.update(() => {
+          const selection = $createNodeSelection();
+          selection.add(key);
+          $setSelection(selection);
+        });
+      },
+      remove(key) {
+        if (wrapper?.editor) removeNodeAndRestoreSelection(wrapper.editor, key);
+      },
+    },
     equation: {
       requestEdit(key) {
         wrapper?.editor.dispatchCommand(TRY_UPDATE_EQUATION_COMMAND, key);

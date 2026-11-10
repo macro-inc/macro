@@ -64,7 +64,7 @@ nested array nulls, unknown nulls and every nonnull value; never erase the under
 Loro fields. Admit literal null own text only for Await through SyncPolicy;
 keep the value in both editor JSON and Loro, and reject malformed text everywhere else.
 
-- Keep decorator host actions in shared model policy: equation updates change only the expression, and user display names preserve ID keys, attached traversal and source history/selection/scroll tags.
+- Keep decorator host actions in shared model policy: equation updates change only the expression, and user display names preserve ID keys, attached traversal and source history/selection/scroll tags. Route decorator deletion through the shared sibling/parent selection-restoration helper.
 
 Keep source paragraph export rules comparison-only after projected children;
 retain the writer draft-stripped cache fields and every persisted value.

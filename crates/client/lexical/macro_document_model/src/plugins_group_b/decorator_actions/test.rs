@@ -167,3 +167,88 @@ fn legacy_missing_and_null_ids_use_source_property_lookup_keys() -> Result<(), E
     })?;
     Ok(())
 }
+
+#[test]
+fn decorator_delete_selects_next_then_previous_and_restores_an_empty_root() -> Result<(), Error> {
+    let mut editor = surface::preset_builder_with_mode(EditorType::Markdown, EditorMode::Headless)
+        .build()
+        .expect("surface");
+    let ((before, rule, after), _) = editor.update(|tx| {
+        let before = tx.create(Paragraph {})?;
+        let before_text = tx.create_text("before")?;
+        tx.append(before, &[before_text.key()])?;
+        let rule = tx.create(HorizontalRuleNode::default())?;
+        let after = tx.create(Paragraph {})?;
+        let after_text = tx.create_text("after")?;
+        tx.append(after, &[after_text.key()])?;
+        tx.append(NodeKey::ROOT, &[before.key(), rule.key(), after.key()])?;
+        Ok((before_text.key(), rule.key(), after_text.key()))
+    })?;
+    let command = decode_command(
+        "group-b.decorator-delete",
+        &format!("{{\"key\":{}}}", rule.index()),
+        rule.generation(),
+        None,
+    )?
+    .expect("delete");
+    editor.update(|tx| {
+        assert_eq!(tx.dispatch(&command)?, Handled::Yes);
+        assert!(!tx.is_attached(rule));
+        assert_eq!(
+            tx.selection()
+                .and_then(Selection::as_range)
+                .expect("range")
+                .anchor,
+            Point::text(after, Utf16Offset(0))
+        );
+        Ok(())
+    })?;
+    editor.update(|tx| {
+        let paragraph = tx.parent(after).expect("paragraph");
+        tx.remove(paragraph, false)?;
+        let rule = tx.create(HorizontalRuleNode::default())?;
+        tx.append(NodeKey::ROOT, &[rule.key()])?;
+        let command = decode_command(
+            "group-b.decorator-delete",
+            &format!("{{\"key\":{}}}", rule.key().index()),
+            rule.key().generation(),
+            None,
+        )?
+        .expect("delete");
+        assert_eq!(tx.dispatch(&command)?, Handled::Yes);
+        assert_eq!(
+            tx.selection()
+                .and_then(Selection::as_range)
+                .expect("range")
+                .anchor,
+            Point::text(before, Utf16Offset(6))
+        );
+        Ok(())
+    })?;
+    editor.update(|tx| {
+        let paragraph = tx.parent(before).expect("paragraph");
+        tx.remove(paragraph, false)?;
+        let rule = tx.create(HorizontalRuleNode::default())?;
+        tx.append(NodeKey::ROOT, &[rule.key()])?;
+        let command = decode_command(
+            "group-b.decorator-delete",
+            &format!("{{\"key\":{}}}", rule.key().index()),
+            rule.key().generation(),
+            None,
+        )?
+        .expect("delete");
+        assert_eq!(tx.dispatch(&command)?, Handled::Yes);
+        let paragraph = tx.first_child(NodeKey::ROOT).expect("restored paragraph");
+        assert!(tx.is::<Paragraph>(paragraph));
+        assert_eq!(tx.children_size(NodeKey::ROOT), 1);
+        assert_eq!(
+            tx.selection()
+                .and_then(Selection::as_range)
+                .expect("range")
+                .anchor,
+            Point::element(paragraph, ChildIndex(0))
+        );
+        Ok(())
+    })?;
+    Ok(())
+}
