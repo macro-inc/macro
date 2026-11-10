@@ -2,7 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import { Button, CopyButton, Input } from '@ui';
-import { Match, Show, Switch } from 'solid-js';
+import { createRenderEffect, Match, on, Show, Switch } from 'solid-js';
 import type { RoutineWebhookState } from '../core/webhook';
 
 async function copy(text: string) {
@@ -24,6 +24,14 @@ export function RoutineWebhookUrl(props: {
   /** Undefined until the routine is saved. */
   state: RoutineWebhookState | undefined;
 }) {
+  createRenderEffect(
+    on(
+      () => props.state !== undefined,
+      (saved) => {
+        if (saved) props.state?.load();
+      }
+    )
+  );
   return (
     <div class="grid gap-2">
       <span class="text-xs font-medium text-ink-muted">Webhook URL</span>

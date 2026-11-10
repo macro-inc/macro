@@ -24,6 +24,7 @@ function webhookState() {
     createdUrl: createdUrl(),
     failed: false,
     pending: false,
+    load: () => {},
     create: () => {
       setWebhook({
         tokenPrefix: TOKEN.slice(0, 16),

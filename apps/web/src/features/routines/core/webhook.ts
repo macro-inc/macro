@@ -6,6 +6,8 @@ export type RoutineWebhookState = {
   createdUrl: string | undefined;
   failed: boolean;
   pending: boolean;
+  /** Loads the URL until the calling owner is disposed. */
+  load: () => void;
   create: () => void;
   remove: () => void;
 };
