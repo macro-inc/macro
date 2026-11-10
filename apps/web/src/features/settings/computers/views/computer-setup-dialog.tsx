@@ -207,9 +207,13 @@ export function ComputerSetupSteps(props: {
       return;
     finishing = true;
     fireAndForget(
-      finish().finally(() => {
-        finishing = false;
-      }),
+      (async () => {
+        try {
+          await finish();
+        } finally {
+          finishing = false;
+        }
+      })(),
       'computer-setup'
     );
   });
