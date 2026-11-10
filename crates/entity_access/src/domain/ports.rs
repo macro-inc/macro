@@ -698,6 +698,64 @@ pub trait EntityAccessService: Clone + Send + Sync + 'static {
         user_org_id: Option<i64>,
     ) -> impl Future<Output = Result<EntityPermission, AccessError>> + Send;
 
+    /// Mint view receipts for a batch of entities, in their order.
+    ///
+    /// Implementations may override this to share authorization work across
+    /// the batch. The default preserves correctness for test and alternate
+    /// adapters by delegating to the single-entity API.
+    fn generate_view_access_receipts<'a>(
+        &'a self,
+        user_id: &'a MacroUserId<Lowercase<'_>>,
+        user_org_id: Option<i64>,
+        entities: &'a [model_entity::Entity<'_>],
+    ) -> impl Future<Output = Vec<Result<EntityAccessReceipt<ViewAccessLevel>, AccessError>>> + Send + 'a
+    {
+        async move {
+            let mut receipts = Vec::with_capacity(entities.len());
+            for entity in entities {
+                receipts.push(
+                    self.generate_entity_access_receipt::<ViewAccessLevel>(
+                        user_id,
+                        user_org_id,
+                        &entity.entity_id,
+                        entity.entity_type,
+                    )
+                    .await,
+                );
+            }
+            receipts
+        }
+    }
+
+    /// Get the user's permission for each of `entities`, in their order.
+    ///
+    /// Every result is what [`Self::get_entity_permission`] returns for that
+    /// entity. Implementations may override this to share lookups across the
+    /// batch. The default preserves correctness for test and alternate
+    /// adapters by delegating to the single-entity API.
+    fn get_entity_permissions<'a>(
+        &'a self,
+        user_id: &'a MacroUserId<Lowercase<'_>>,
+        user_org_id: Option<i64>,
+        entities: &'a [model_entity::Entity<'_>],
+    ) -> impl Future<Output = Vec<Result<EntityPermission, AccessError>>> + Send + 'a {
+        async move {
+            let mut permissions = Vec::with_capacity(entities.len());
+            for entity in entities {
+                permissions.push(
+                    self.get_entity_permission(
+                        Some(user_id),
+                        &entity.entity_id,
+                        entity.entity_type,
+                        user_org_id,
+                    )
+                    .await,
+                );
+            }
+            permissions
+        }
+    }
+
     /// Resolve a user's permission for a CRM company or contact **together
     /// with the entity's owning `team_id` and the user's role on that team**
     /// — all resolved from the same ownership lookup that grants access.

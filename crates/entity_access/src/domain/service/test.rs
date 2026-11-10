@@ -25,6 +25,9 @@ use tokio::sync::Mutex;
 #[derive(Clone)]
 struct MockRepo {
     document_access: Arc<Mutex<Option<AccessLevel>>>,
+    /// Lookups of one document, then lookups of a batch of documents.
+    document_access_calls: Arc<AtomicUsize>,
+    documents_access_calls: Arc<AtomicUsize>,
     chat_access: Arc<Mutex<Option<AccessLevel>>>,
     project_access: Arc<Mutex<Option<AccessLevel>>>,
     thread_access: Arc<Mutex<Option<AccessLevel>>>,
@@ -85,6 +88,8 @@ impl MockRepo {
     fn new() -> Self {
         Self {
             document_access: Arc::new(Mutex::new(None)),
+            document_access_calls: Arc::default(),
+            documents_access_calls: Arc::default(),
             chat_access: Arc::new(Mutex::new(None)),
             project_access: Arc::new(Mutex::new(None)),
             thread_access: Arc::new(Mutex::new(None)),
@@ -351,6 +356,7 @@ impl AccessRepository for MockRepo {
         _document_id: &str,
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
+        self.document_access_calls.fetch_add(1, Ordering::SeqCst);
         Ok(*self.document_access.lock().await)
     }
 
@@ -359,6 +365,7 @@ impl AccessRepository for MockRepo {
         document_ids: &[String],
         _user_id: &MacroUserId<Lowercase<'_>>,
     ) -> Result<HashMap<String, AccessLevel>, AccessError> {
+        self.documents_access_calls.fetch_add(1, Ordering::SeqCst);
         let level = *self.document_access.lock().await;
         Ok(document_ids
             .iter()
@@ -1645,6 +1652,154 @@ async fn test_check_access_with_none_user_id_and_no_access() {
         .await;
 
     assert!(matches!(result, Err(AccessError::Unauthorized)));
+}
+
+// --- get_entity_permissions tests ---
+
+fn entity(entity_type: EntityType, entity_id: impl ToString) -> model_entity::Entity<'static> {
+    entity_type.with_entity_string(entity_id.to_string())
+}
+
+fn level(access_level: AccessLevel) -> EntityPermission {
+    EntityPermission::AccessLevel { access_level }
+}
+
+#[tokio::test]
+async fn batch_permissions_read_all_documents_in_one_lookup() {
+    let repo = MockRepo::new().with_document_access(AccessLevel::Edit);
+    let single = repo.document_access_calls.clone();
+    let batch = repo.documents_access_calls.clone();
+    let service = EntityAccessServiceImpl::new(repo);
+    let entities = [
+        entity(EntityType::Document, Uuid::new_v4()),
+        entity(EntityType::Document, Uuid::new_v4()),
+        entity(EntityType::Document, Uuid::new_v4()),
+    ];
+
+    let permissions = service
+        .get_entity_permissions(&test_user_id(), None, &entities)
+        .await;
+
+    assert_eq!(permissions.len(), 3);
+    for permission in permissions {
+        assert_eq!(permission.unwrap(), level(AccessLevel::Edit));
+    }
+    assert_eq!(batch.load(Ordering::SeqCst), 1);
+    assert_eq!(single.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn batch_permissions_refuse_a_document_without_access() {
+    let repo = MockRepo::new();
+    let single = repo.document_access_calls.clone();
+    let service = EntityAccessServiceImpl::new(repo);
+    let entities = [entity(EntityType::Document, Uuid::new_v4())];
+
+    let permissions = service
+        .get_entity_permissions(&test_user_id(), None, &entities)
+        .await;
+
+    assert!(matches!(
+        permissions.as_slice(),
+        [Err(AccessError::Unauthorized)]
+    ));
+    assert_eq!(single.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn batch_permissions_settle_owned_threads_and_look_up_the_rest() {
+    let owned = Uuid::new_v4();
+    let shared = Uuid::new_v4();
+    let repo = MockRepo::new()
+        .with_owned_email_thread_ids(vec![owned])
+        .with_thread_access(AccessLevel::View);
+    let thread_lookups = repo.thread_access_calls.clone();
+    let service = EntityAccessServiceImpl::new(repo);
+    let entities = [
+        entity(EntityType::EmailThread, shared),
+        entity(EntityType::EmailThread, owned),
+    ];
+
+    let permissions = service
+        .get_entity_permissions(&test_user_id(), None, &entities)
+        .await;
+
+    // In the order asked, and only the thread the user does not own was
+    // looked up on its own.
+    assert_eq!(
+        permissions
+            .into_iter()
+            .map(Result::unwrap)
+            .collect::<Vec<_>>(),
+        vec![level(AccessLevel::View), level(AccessLevel::Owner)]
+    );
+    assert_eq!(thread_lookups.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn batch_permissions_answer_other_kinds_as_the_single_lookup_does() {
+    let repo = MockRepo::new()
+        .with_document_access(AccessLevel::Comment)
+        .with_chat_access(AccessLevel::View);
+    let single = repo.document_access_calls.clone();
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+    let entities = [
+        entity(EntityType::Chat, Uuid::new_v4()),
+        // Not a UUID: a legacy document id, which the batch lookup does not take.
+        entity(EntityType::Document, "doc-1"),
+        entity(EntityType::Project, Uuid::new_v4()),
+        entity(EntityType::EmailThread, "not-a-uuid"),
+        entity(EntityType::Document, Uuid::new_v4()),
+    ];
+
+    let permissions = service
+        .get_entity_permissions(&user_id, None, &entities)
+        .await;
+
+    assert_eq!(permissions.len(), entities.len());
+    for (entity, batched) in entities.iter().zip(permissions) {
+        let alone = service
+            .get_entity_permission(Some(&user_id), &entity.entity_id, entity.entity_type, None)
+            .await;
+        match (batched, alone) {
+            (Ok(batched), Ok(alone)) => assert_eq!(batched, alone),
+            (Err(batched), Err(alone)) => assert_eq!(batched.to_string(), alone.to_string()),
+            (batched, alone) => panic!("{entity:?}: batch {batched:?}, alone {alone:?}"),
+        }
+    }
+    // The legacy id once in the batch and once alone, then the UUID alone.
+    assert_eq!(single.load(Ordering::SeqCst), 3);
+}
+
+#[tokio::test]
+async fn batch_view_receipts_match_the_single_receipt() {
+    let repo = MockRepo::new().with_document_access(AccessLevel::Comment);
+    let batch = repo.documents_access_calls.clone();
+    let service = EntityAccessServiceImpl::new(repo);
+    let user_id = test_user_id();
+    let document = entity(EntityType::Document, Uuid::new_v4());
+    let chat = entity(EntityType::Chat, Uuid::new_v4());
+
+    let receipts = service
+        .generate_view_access_receipts(&user_id, None, &[document.clone(), chat])
+        .await;
+
+    let [Ok(receipt), Err(AccessError::Unauthorized)] = receipts.as_slice() else {
+        panic!("a receipt for the document and a refusal for the chat: {receipts:?}");
+    };
+    let alone = service
+        .generate_entity_access_receipt::<ViewAccessLevel>(
+            &user_id,
+            None,
+            &document.entity_id,
+            EntityType::Document,
+        )
+        .await
+        .unwrap();
+    assert_eq!(receipt.entity(), alone.entity());
+    assert_eq!(receipt.entity_permission(), alone.entity_permission());
+    assert_eq!(batch.load(Ordering::SeqCst), 1);
 }
 
 // --- generate_entity_access_receipt tests ---

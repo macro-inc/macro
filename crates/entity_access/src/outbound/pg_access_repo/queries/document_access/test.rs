@@ -712,3 +712,161 @@ async fn explain_team_link_matches_access_level(pool: PgPool) -> anyhow::Result<
     )));
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// The batch lookup answers each document as the single lookup does
+// ---------------------------------------------------------------------------
+
+const REQUESTER: &str = "macro|requester@batch.test";
+
+/// A document attached to a message in the discussion on
+/// `parent_document_id`. Returns the attachment's document id.
+async fn insert_discussion_attachment_document(
+    pool: &PgPool,
+    owner: &str,
+    parent_document_id: Uuid,
+) -> anyhow::Result<Uuid> {
+    let document_id = insert_document(pool, owner).await;
+    let message_id = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO comms_messages (id, sender_id, content, parent_entity_type, parent_entity_id)
+           VALUES ($1, $2, 'attachment', 'document', $3)"#,
+        message_id,
+        owner,
+        parent_document_id.to_string(),
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO comms_attachments (id, message_id, entity_type, entity_id)
+           VALUES ($1, $2, 'document', $3)"#,
+        Uuid::now_v7(),
+        message_id,
+        document_id.to_string(),
+    )
+    .execute(pool)
+    .await?;
+    Ok(document_id)
+}
+
+/// Runs the batch lookup for `document_ids`, checks that it answers every one
+/// as `get_document_access` does, and returns its answers in the order asked.
+async fn batch_access(
+    pool: &PgPool,
+    document_ids: &[Uuid],
+    user_id: &str,
+    source_ids: &SourceIds,
+) -> anyhow::Result<Vec<Option<AccessLevel>>> {
+    let requester = user(user_id);
+    let batch = get_documents_access(pool, document_ids, source_ids, &requester).await?;
+
+    let mut answers = Vec::new();
+    for document_id in document_ids {
+        let single = get_document_access(pool, document_id, source_ids, Some(&*requester)).await?;
+        let batched = batch.get(document_id).copied();
+        assert_eq!(batched, single, "document {document_id}");
+        answers.push(batched);
+    }
+    assert!(
+        batch.keys().all(|answered| document_ids.contains(answered)),
+        "the batch answers only documents it was asked about"
+    );
+    Ok(answers)
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn batch_answers_every_source_as_the_single_lookup(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
+    insert_user(&pool, OWNER_WITH_TEAM).await?;
+    add_owner_to_team(&pool, OWNER_WITH_TEAM, team_id).await?;
+    insert_user(&pool, OWNER_WITHOUT_TEAM).await?;
+    insert_user(&pool, REQUESTER).await?;
+    insert_user(&pool, INBOX_OWNER).await?;
+    insert_user(&pool, OTHER_USER).await?;
+    // The requester is on the team of `OWNER_WITH_TEAM`.
+    let source_ids = SourceIds(vec![REQUESTER.to_string(), team_id.to_string()]);
+
+    let owned = insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, None, None).await?;
+    insert_document_entity_access(&pool, owned, REQUESTER, AccessLevel::Owner).await?;
+    let granted_below_link =
+        insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, Some("PUBLIC"), Some("edit"))
+            .await?;
+    insert_document_entity_access(&pool, granted_below_link, REQUESTER, AccessLevel::View).await?;
+    let team_link =
+        insert_link_shared_document(&pool, OWNER_WITH_TEAM, Some("TEAM"), Some("comment")).await?;
+    let other_team_link =
+        insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, Some("TEAM"), Some("comment"))
+            .await?;
+    let someone_elses = insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, None, None).await?;
+    insert_document_entity_access(&pool, someone_elses, OWNER_WITHOUT_TEAM, AccessLevel::Owner)
+        .await?;
+    let (_, _, own_inbox_attachment) = insert_attachment_document(&pool, REQUESTER).await;
+    let (_, shared_thread, shared_thread_attachment) =
+        insert_attachment_document(&pool, INBOX_OWNER).await;
+    insert_thread_entity_access(&pool, shared_thread, REQUESTER, AccessLevel::Edit).await;
+    let (_, _, unreachable_attachment) = insert_attachment_document(&pool, OTHER_USER).await;
+    // A bare document: its owner reads its discussion's attachments without a
+    // grant on the document itself.
+    let discussed = insert_document(&pool, REQUESTER).await;
+    let discussion_attachment =
+        insert_discussion_attachment_document(&pool, OWNER_WITHOUT_TEAM, discussed).await?;
+    let unknown = Uuid::new_v4();
+
+    let answers = batch_access(
+        &pool,
+        &[
+            owned,
+            granted_below_link,
+            team_link,
+            other_team_link,
+            someone_elses,
+            own_inbox_attachment,
+            shared_thread_attachment,
+            unreachable_attachment,
+            discussed,
+            discussion_attachment,
+            unknown,
+            // Asked twice: answered once.
+            granted_below_link,
+        ],
+        REQUESTER,
+        &source_ids,
+    )
+    .await?;
+
+    assert_eq!(
+        answers,
+        vec![
+            Some(AccessLevel::Owner),
+            Some(AccessLevel::Edit),
+            Some(AccessLevel::Comment),
+            None,
+            None,
+            Some(AccessLevel::Edit),
+            Some(AccessLevel::View),
+            None,
+            None,
+            Some(AccessLevel::View),
+            None,
+            Some(AccessLevel::Edit),
+        ]
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn batch_of_owned_documents_is_all_owner(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, REQUESTER).await?;
+    let source_ids = SourceIds(vec![REQUESTER.to_string()]);
+    let mut owned = Vec::new();
+    for _ in 0..3 {
+        let document_id = insert_document(&pool, REQUESTER).await;
+        insert_document_entity_access(&pool, document_id, REQUESTER, AccessLevel::Owner).await?;
+        owned.push(document_id);
+    }
+
+    let answers = batch_access(&pool, &owned, REQUESTER, &source_ids).await?;
+
+    assert_eq!(answers, vec![Some(AccessLevel::Owner); 3]);
+    Ok(())
+}
