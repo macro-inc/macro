@@ -19,6 +19,7 @@ pub(crate) struct Machine {
     terminal: bool,
     initial_telemetry: Vec<wire::TelemetryMsg>,
     constructor_clock: Option<Arc<AtomicI64>>,
+    view_commands: Option<Arc<crate::view_command_scope::Registry>>,
 }
 impl Machine {
     pub(crate) fn take_output(&mut self) -> Vec<u8> {
@@ -137,6 +138,7 @@ impl Machine {
             terminal: false,
             initial_telemetry: capture.finish(),
             constructor_clock,
+            view_commands: None,
         })
     }
     pub(crate) fn generation(&self) -> u32 {
@@ -145,7 +147,65 @@ impl Machine {
             Session::Doc(_) => 0,
         }
     }
+    pub(crate) fn view_commands(
+        &mut self,
+    ) -> Result<Arc<crate::view_command_scope::Registry>, BoundaryError> {
+        if let Some(registry) = &self.view_commands {
+            return Ok(registry.clone());
+        }
+        let registry = crate::view_command_scope::Registry::new()?;
+        self.bind_view_commands(registry.clone())?;
+        Ok(registry)
+    }
+    pub(crate) fn bind_view_commands(
+        &mut self,
+        registry: Arc<crate::view_command_scope::Registry>,
+    ) -> Result<(), BoundaryError> {
+        if self.view_commands.is_some() {
+            return Err(BoundaryError::Invalid(
+                "view command registry already bound",
+            ));
+        }
+        let Session::Editor(session) = &mut self.session else {
+            return Err(BoundaryError::Invalid("view commands require an editor"));
+        };
+        session.observe_reported_model_errors(registry.clone());
+        self.view_commands = Some(registry);
+        Ok(())
+    }
+    pub(crate) fn take_view_command_failure(
+        &self,
+    ) -> Result<Option<crate::ViewCommandFailure>, BoundaryError> {
+        self.view_commands
+            .as_ref()
+            .map(|registry| registry.take_failure())
+            .transpose()
+            .map(Option::flatten)
+            .map_err(Into::into)
+    }
     pub(crate) fn call(
+        &mut self,
+        input: SessionInput,
+        mono: f64,
+        wall: Option<f64>,
+    ) -> Result<u32, BoundaryError> {
+        if let Some(registry) = self.view_commands.clone() {
+            let Session::Editor(session) = &mut self.session else {
+                return Err(BoundaryError::Invalid("view commands require an editor"));
+            };
+            if !matches!(&input, SessionInput::Sync(_) | SessionInput::AddPeerIds(_)) {
+                registry.ensure_local()?;
+            }
+            registry.rebind(session)?;
+            let access = session.effective_access();
+            if matches!(&input, SessionInput::Sync(_) | SessionInput::AddPeerIds(_)) {
+                return registry.invoke_control(access, || self.call_inner(input, mono, wall))?;
+            }
+            return registry.invoke(access, || self.call_inner(input, mono, wall))?;
+        }
+        self.call_inner(input, mono, wall)
+    }
+    fn call_inner(
         &mut self,
         input: SessionInput,
         mono: f64,
@@ -335,6 +395,9 @@ impl Machine {
             &mut self.decorator_observer,
         )?;
         flags |= crate::telemetry::append(messages, &mut self.output)?;
+        if let Some(registry) = &self.view_commands {
+            registry.bind_output(&out.view);
+        }
         if command
             && flags & 16 == 0
             && surface.is_some_and(|s| s.command_handled() == lexical_model::Handled::Yes)

@@ -10,6 +10,15 @@ pub struct EditorSession {
     #[cfg(feature = "compatibility")]
     pub(crate) compatibility: Option<crate::compatibility::Host>,
 }
+impl EditorSession {
+    fn reject_compat_view_commands(&self) -> Result<(), BoundaryError> {
+        #[cfg(feature = "compatibility")]
+        if self.compatibility.is_some() {
+            return Err(BoundaryError::Invalid("ordinary view commands do not use compatibility scopes"));
+        }
+        Ok(())
+    }
+}
 #[wasm_bindgen]
 impl EditorSession {
     /// Construct the application's MarkdownSync registry and projection policy.
@@ -62,6 +71,59 @@ impl EditorSession {
     #[wasm_bindgen(js_name=effectiveAccess)]
     pub fn effective_access(&self) -> u8 {
         u8::from(self.machine.effective_access())
+    }
+    /// Return this session's checked ordinary view-command owner identity.
+    #[wasm_bindgen(js_name=viewCommandOwner)]
+    pub fn view_command_owner(&mut self) -> Result<u64, JsError> {
+        self.reject_compat_view_commands().map_err(js)?;
+        Ok(self.machine.view_commands().map_err(js)?.owner())
+    }
+    /// Register Enter at the named native priority, after existing equal listeners.
+    #[wasm_bindgen(js_name=registerViewEnter)]
+    pub fn register_view_enter(&mut self, callback: u64, priority: u8) -> Result<u64, JsError> {
+        self.reject_compat_view_commands().map_err(js)?;
+        let registry = self.machine.view_commands().map_err(js)?;
+        let machine::Session::Editor(session) = &mut self.machine.session else {
+            return Err(js(BoundaryError::Invalid("editor required")));
+        };
+        registry
+            .register(session, callback, priority)
+            .map_err(|error| js(error.into()))
+    }
+    /// Remove a stable logical Enter registration; repeated cleanup is harmless.
+    #[wasm_bindgen(js_name=unregisterViewEnter)]
+    pub fn unregister_view_enter(&mut self, handle: u64) -> Result<(), JsError> {
+        self.reject_compat_view_commands().map_err(js)?;
+        let registry = self.machine.view_commands().map_err(js)?;
+        let machine::Session::Editor(session) = &mut self.machine.session else {
+            return Err(js(BoundaryError::Invalid("editor required")));
+        };
+        registry
+            .unregister(session, handle)
+            .map_err(|error| js(error.into()))
+    }
+    /// Take only the actual reported callback-failure scope after consuming output.
+    #[wasm_bindgen(js_name=takeViewCommandFailure)]
+    pub fn take_view_command_failure(&self) -> Result<Option<crate::ViewCommandFailure>, JsError> {
+        self.machine.take_view_command_failure().map_err(js)
+    }
+    /// Admit a genuine programmatic Enter with an explicit null JS event payload.
+    #[wasm_bindgen(js_name=viewCommandEnter)]
+    pub fn view_command_enter(&mut self, now: f64, wall: f64) -> Result<u32, JsError> {
+        self.reject_compat_view_commands().map_err(js)?;
+        self.machine
+            .call(
+                document_session::SessionInput::Editor(Input::Command {
+                    command: Command::Key {
+                        command: KeyCommand::Enter,
+                        event: None,
+                    },
+                    selection: ViewSelection::KeepModel,
+                }),
+                now,
+                Some(wall),
+            )
+            .map_err(js)
     }
     /// Deliver a cold Bebop input.
     pub fn input(&mut self, msg: &[u8], now: f64, wall: f64) -> Result<u32, JsError> {
