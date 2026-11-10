@@ -45,7 +45,7 @@ const ROUTINE: ActionConfiguration = {
   name: 'Daily brief',
   kind: 'Agent',
   enabled: true,
-  task: {},
+  task: { steps: [] },
   trigger: { type: 'cron', schedule: '0 0 9 * * *', timezone: 'UTC' },
 };
 
