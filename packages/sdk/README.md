@@ -759,8 +759,9 @@ throws `DocumentEditRefusedError` with the writer's reason when it can't do it.
 ### Document lifecycle and other resources
 
 `documents.createUpload(options)` reserves a binary document and returns upload
-instructions. `document.prepareSave(parts)`, `save(options)` and `simpleSave()` expose
-the existing content lifecycle; upload bytes before committing. Version handles
+instructions. `document.prepareSave(parts)`, `save(options)` and `simpleSave(content)`
+expose the existing content lifecycle; upload bytes before committing, or
+pass `simpleSave` the new content to save it as the next version. Version handles
 come from `document.version(number)`. PDF highlights and comment anchors are scoped
 handles from `anchors()` / `createHighlight(options)`, with kind-checked edits and
 deletion. `documents.byTeamSlug('ENG-42')` resolves a task reference.

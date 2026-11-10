@@ -2811,7 +2811,15 @@ export class Sdk extends HeyApiClient {
      * simple_save is different than the save_document endpoint because it does not return a presigned URL, Instead, it simply saves the file to S3 directly (and returns the document metadata).
      */
     public simpleSave<ThrowOnError extends boolean = false>(options: Options<SimpleSaveData, ThrowOnError>): RequestResult<SimpleSaveResponses, SimpleSaveErrors, ThrowOnError> {
-        return (options.client ?? this.client).put<SimpleSaveResponses, SimpleSaveErrors, ThrowOnError>({ url: '/documents/{document_id}/simple_save', ...options });
+        return (options.client ?? this.client).put<SimpleSaveResponses, SimpleSaveErrors, ThrowOnError>({
+            ...formDataBodySerializer,
+            url: '/documents/{document_id}/simple_save',
+            ...options,
+            headers: {
+                'Content-Type': null,
+                ...options.headers
+            }
+        });
     }
 
     /**
