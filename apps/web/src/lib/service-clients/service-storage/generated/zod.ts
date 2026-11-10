@@ -48947,6 +48947,28 @@ export const getItemsSoupResponse = zod
               tag: zod.enum(['databaseRow']),
             })
             .describe('Database row item.'),
+          zod
+            .object({
+              data: zod
+                .object({
+                  createdAt: zod.iso
+                    .datetime({})
+                    .describe('When the machine was paired.'),
+                  id: zod.uuid().describe('The harness uuid.'),
+                  name: zod.string().describe("The machine's display name."),
+                  ownerId: zod
+                    .string()
+                    .describe('The person or team that owns the machine.'),
+                  updatedAt: zod.iso
+                    .datetime({})
+                    .describe('When the machine was last changed.'),
+                })
+                .describe(
+                  'A paired runtime (a macrod machine), listed only by attention feeds: its\naccess requests and removals are notifications filed under it, and it has\nno page of its own, so Settings → Machines opens it.'
+                ),
+              tag: zod.enum(['harness']),
+            })
+            .describe('Paired runtime, listed only by attention feeds.'),
         ])
         .describe('A single item in the Soup feed.')
         .and(
@@ -53923,6 +53945,28 @@ export const postItemsSoupResponse = zod
               tag: zod.enum(['databaseRow']),
             })
             .describe('Database row item.'),
+          zod
+            .object({
+              data: zod
+                .object({
+                  createdAt: zod.iso
+                    .datetime({})
+                    .describe('When the machine was paired.'),
+                  id: zod.uuid().describe('The harness uuid.'),
+                  name: zod.string().describe("The machine's display name."),
+                  ownerId: zod
+                    .string()
+                    .describe('The person or team that owns the machine.'),
+                  updatedAt: zod.iso
+                    .datetime({})
+                    .describe('When the machine was last changed.'),
+                })
+                .describe(
+                  'A paired runtime (a macrod machine), listed only by attention feeds: its\naccess requests and removals are notifications filed under it, and it has\nno page of its own, so Settings → Machines opens it.'
+                ),
+              tag: zod.enum(['harness']),
+            })
+            .describe('Paired runtime, listed only by attention feeds.'),
         ])
         .describe('A single item in the Soup feed.')
         .and(
@@ -58340,6 +58384,28 @@ export const postItemsSoupAstResponse = zod
               tag: zod.enum(['databaseRow']),
             })
             .describe('Database row item.'),
+          zod
+            .object({
+              data: zod
+                .object({
+                  createdAt: zod.iso
+                    .datetime({})
+                    .describe('When the machine was paired.'),
+                  id: zod.uuid().describe('The harness uuid.'),
+                  name: zod.string().describe("The machine's display name."),
+                  ownerId: zod
+                    .string()
+                    .describe('The person or team that owns the machine.'),
+                  updatedAt: zod.iso
+                    .datetime({})
+                    .describe('When the machine was last changed.'),
+                })
+                .describe(
+                  'A paired runtime (a macrod machine), listed only by attention feeds: its\naccess requests and removals are notifications filed under it, and it has\nno page of its own, so Settings → Machines opens it.'
+                ),
+              tag: zod.enum(['harness']),
+            })
+            .describe('Paired runtime, listed only by attention feeds.'),
         ])
         .describe('A single item in the Soup feed.')
         .and(
@@ -63340,6 +63406,32 @@ export const postItemsSoupAstGroupedResponse = zod
                     tag: zod.enum(['databaseRow']),
                   })
                   .describe('Database row item.'),
+                zod
+                  .object({
+                    data: zod
+                      .object({
+                        createdAt: zod.iso
+                          .datetime({})
+                          .describe('When the machine was paired.'),
+                        id: zod.uuid().describe('The harness uuid.'),
+                        name: zod
+                          .string()
+                          .describe("The machine's display name."),
+                        ownerId: zod
+                          .string()
+                          .describe(
+                            'The person or team that owns the machine.'
+                          ),
+                        updatedAt: zod.iso
+                          .datetime({})
+                          .describe('When the machine was last changed.'),
+                      })
+                      .describe(
+                        'A paired runtime (a macrod machine), listed only by attention feeds: its\naccess requests and removals are notifications filed under it, and it has\nno page of its own, so Settings → Machines opens it.'
+                      ),
+                    tag: zod.enum(['harness']),
+                  })
+                  .describe('Paired runtime, listed only by attention feeds.'),
               ])
               .describe('A single item in the Soup feed.')
               .and(
@@ -67724,6 +67816,32 @@ export const postItemsSoupAstGroupedResponse = zod
                     tag: zod.enum(['databaseRow']),
                   })
                   .describe('Database row item.'),
+                zod
+                  .object({
+                    data: zod
+                      .object({
+                        createdAt: zod.iso
+                          .datetime({})
+                          .describe('When the machine was paired.'),
+                        id: zod.uuid().describe('The harness uuid.'),
+                        name: zod
+                          .string()
+                          .describe("The machine's display name."),
+                        ownerId: zod
+                          .string()
+                          .describe(
+                            'The person or team that owns the machine.'
+                          ),
+                        updatedAt: zod.iso
+                          .datetime({})
+                          .describe('When the machine was last changed.'),
+                      })
+                      .describe(
+                        'A paired runtime (a macrod machine), listed only by attention feeds: its\naccess requests and removals are notifications filed under it, and it has\nno page of its own, so Settings → Machines opens it.'
+                      ),
+                    tag: zod.enum(['harness']),
+                  })
+                  .describe('Paired runtime, listed only by attention feeds.'),
               ])
               .describe('A single item in the Soup feed.')
               .and(

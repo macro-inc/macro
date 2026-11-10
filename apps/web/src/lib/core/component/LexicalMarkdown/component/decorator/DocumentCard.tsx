@@ -1,8 +1,9 @@
-import { pollCardHeight } from '@app/features/block-form/core/poll-card-layout';
+import { pollBodyHeight } from '@app/features/block-form/core/poll-card-layout';
 import { openChatWithAgent } from '@app/features/chat/ChatWithAgentButton';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { isInBlock, type PreviewState, useMaybeBlockName } from '@core/block';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { useItemPreviewData } from '@core/component/ItemPreview';
 import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
@@ -41,7 +42,7 @@ import {
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
-import { Card, cn, Dropdown, Item } from '@ui';
+import { Button, Card, cn, Dropdown, Item } from '@ui';
 import {
   $addUpdateTag,
   $createNodeSelection,
@@ -91,27 +92,97 @@ const stringifyPreviewBox = ([width, height]: PreviewBox): [string, string] => {
   return [widthStr, heightStr];
 };
 
+/**
+ * A card's header row: icon, title and description, actions. The loading
+ * poll card draws the same row, so its question wraps as the loaded one does.
+ */
+function CardHeaderRow(props: {
+  icon: JSX.Element;
+  title: JSX.Element;
+  description?: JSX.Element;
+  actions: JSX.Element;
+}) {
+  return (
+    <Card.Header class="shrink-0 py-2.5">
+      <Item class="grid grid-cols-[1rem_minmax(0,1fr)_auto] items-start gap-x-2 border-0 p-0">
+        <Item.Icon class="col-start-1 row-start-1">{props.icon}</Item.Icon>
+        <Item.Content class="col-start-2 row-start-1">
+          <Item.Title>{props.title}</Item.Title>
+          <Show when={props.description}>
+            {(description) => (
+              <Item.Description class="text-left wrap-anywhere">
+                {description()}
+              </Item.Description>
+            )}
+          </Show>
+        </Item.Content>
+        <Item.Actions class="col-start-3 row-start-1 h-5">
+          {props.actions}
+        </Item.Actions>
+      </Item>
+    </Card.Header>
+  );
+}
+
+const CardActionsIcon = () => (
+  <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+);
+
+/**
+ * A poll card before its preview loads: the question (the card's name) in
+ * the header, a line for its owner, and the body's reserved height.
+ */
+function PollCardPlaceholder(props: { name: string; bodyHeight: string }) {
+  return (
+    <>
+      <CardHeaderRow
+        icon={<EntityIcon targetType="form" size="xs" />}
+        title={<span class="wrap-anywhere">{props.name}</span>}
+        description={'\u00a0'}
+        actions={
+          <Button
+            size="icon-sm"
+            variant="ghost"
+            disabled
+            aria-label="Document card actions"
+          >
+            <CardActionsIcon />
+          </Button>
+        }
+      />
+      <Card.Body class="mx-3 mt-2 mb-3 p-0">
+        <Card
+          variant="filled"
+          offset={1}
+          role="status"
+          class="w-full items-center justify-center overflow-hidden rounded-lg text-sm text-ink-muted"
+          style={{ 'min-height': props.bodyHeight }}
+        >
+          Loading poll…
+        </Card>
+      </Card.Body>
+    </>
+  );
+}
+
 export function DocumentCard(props: DocumentCardDecoratorProps) {
   if (props.blockName === 'database') return <DatabaseCard {...props} />;
   return (
     <Suspense
       fallback={
         <Show
-          when={props.blockName === 'form' && pollCardHeight(props.previewData)}
+          when={props.blockName === 'form' && pollBodyHeight(props.previewData)}
         >
           {(height) => (
             <Card
               variant="filled"
               depth={2}
-              class="my-2 overflow-hidden"
-              style={{ height: height() }}
+              class="my-2 overflow-hidden rounded-xl"
             >
-              <div
-                role="status"
-                class="flex flex-1 items-center justify-center text-sm text-ink-muted"
-              >
-                Loading poll…
-              </div>
+              <PollCardPlaceholder
+                name={props.documentName}
+                bodyHeight={height()}
+              />
             </Card>
           )}
         </Show>
@@ -432,18 +503,11 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   // A form fits its content (a poll is a few rows); other previews keep a
   // resizable box.
   const resizable = () => isPreviewable() && props.blockName !== 'form';
-  const isPoll = () =>
-    props.blockName === 'form' && Boolean(pollCardHeight(props.previewData));
-  // A poll reserves its space before its form loads, then grows to fit. A
-  // form the viewer can't open renders no body, so it reserves nothing.
-  const pollMinHeight = () => {
-    if (!isPoll()) return;
-    const i = item();
-    if (i && !i.loading && !isAccessiblePreviewItem(i)) return;
-    return pollCardHeight(props.previewData);
-  };
+  // A poll's body keeps the height reserved for it until its form loads.
+  const pollBody = () =>
+    props.blockName === 'form' ? pollBodyHeight(props.previewData) : undefined;
   const cardNoun = () => {
-    if (isPoll()) return 'poll';
+    if (pollBody()) return 'poll';
     return props.blockName === 'form' ? 'form' : 'item';
   };
 
@@ -490,128 +554,126 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     blockParams: DocumentCardDecoratorProps['blockParams'];
   }) => {
     return (
-      <Card.Header class="shrink-0 py-2.5">
-        <Item class="grid grid-cols-[1rem_minmax(0,1fr)_auto] items-start gap-x-2 border-0 p-0">
-          <Item.Icon class="col-start-1 row-start-1">
-            <Show
-              when={props.blockName === 'task'}
-              fallback={<ItemEntityIcon size="xs" />}
+      <CardHeaderRow
+        icon={
+          <Show
+            when={props.blockName === 'task'}
+            fallback={<ItemEntityIcon size="xs" />}
+          >
+            <Suspense
+              fallback={
+                <LoadingSpinner class="size-4 animate-spin text-ink-muted" />
+              }
             >
-              <Suspense
-                fallback={
-                  <LoadingSpinner class="size-4 animate-spin text-ink-muted" />
+              <TaskPropertiesPreview
+                taskId={props.item.id}
+                taskName={props.item.name}
+                previewProperties={documentProperties()}
+                mode="status"
+              />
+            </Suspense>
+          </Show>
+        }
+        title={
+          <BlockLink
+            id={props.item.id}
+            blockOrFileName={props.blockName}
+            params={props.blockParams}
+          >
+            <span
+              role="link"
+              tabIndex={0}
+              class="wrap-anywhere rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                event.stopPropagation();
+                event.currentTarget.click();
+              }}
+            >
+              {props.item.name}
+            </span>
+          </BlockLink>
+        }
+        description={
+          props.item.owner || props.item.updatedAt ? (
+            <>
+              <Show when={props.item.owner}>
+                {(owner) =>
+                  getDisplayName(tryMacroId(owner())) ||
+                  owner().replace('macro|', '')
                 }
-              >
-                <TaskPropertiesPreview
-                  taskId={props.item.id}
-                  taskName={props.item.name}
-                  previewProperties={documentProperties()}
-                  mode="status"
-                />
-              </Suspense>
-            </Show>
-          </Item.Icon>
-          <Item.Content class="col-start-2 row-start-1">
-            <Item.Title>
-              <BlockLink
-                id={props.item.id}
-                blockOrFileName={props.blockName}
-                params={props.blockParams}
-              >
-                <span
-                  role="link"
-                  tabIndex={0}
-                  class="wrap-anywhere rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-accent"
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter') return;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    event.currentTarget.click();
-                  }}
-                >
-                  {props.item.name}
-                </span>
-              </BlockLink>
-            </Item.Title>
-            <Show when={props.item.owner || props.item.updatedAt}>
-              <Item.Description class="text-left wrap-anywhere">
-                <Show when={props.item.owner}>
-                  {(owner) =>
-                    getDisplayName(tryMacroId(owner())) ||
-                    owner().replace('macro|', '')
-                  }
-                </Show>
-                <Show when={props.item.owner && props.item.updatedAt}>
-                  {' - '}
-                </Show>
-                <Show when={props.item.updatedAt}>
-                  {(updatedAt) => formatDate(updatedAt())}
-                </Show>
-              </Item.Description>
-            </Show>
-          </Item.Content>
-          <Item.Actions class="col-start-3 row-start-1 h-5">
-            <Dropdown open={dropdownOpen()} onOpenChange={setDropdownOpen}>
-              <Dropdown.Trigger
-                size="icon-sm"
-                variant="ghost"
-                aria-label="Document card actions"
-              >
-                <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-              </Dropdown.Trigger>
-              <Dropdown.Content mount={portalMount()}>
-                <Dropdown.Group>
-                  <Show when={editable()}>
-                    <Dropdown.Item onSelect={convertToMention}>
-                      <Minimize class="size-4 shrink-0" />
-                      <span class="flex-1 truncate">
-                        Convert to Inline Mention
-                      </span>
-                    </Dropdown.Item>
-                  </Show>
-                  <Show when={canOpenInChat()}>
-                    <Dropdown.Item onSelect={handleOpenInChat}>
-                      <Sparkle class="size-4 shrink-0" />
-                      <span class="flex-1 truncate">Ask Macro</span>
-                    </Dropdown.Item>
-                  </Show>
-                  <Dropdown.Item onSelect={handleCopy}>
-                    <Link class="size-4 shrink-0" />
-                    <span class="flex-1 truncate">Copy Link</span>
-                  </Dropdown.Item>
-                  <Show when={props.blockName === 'task'}>
-                    <Dropdown.Item
-                      onSelect={() =>
-                        fireAndForget(
-                          copyBranchNameToClipboard(props.item.id),
-                          'document-card'
-                        )
-                      }
-                    >
-                      <GitBranch class="size-4 shrink-0" />
-                      <span class="flex-1 truncate">Copy Branch Name</span>
-                    </Dropdown.Item>
-                  </Show>
-                  <Show when={!isSplitAlreadyOpen()}>
-                    <Dropdown.Item onSelect={openInNewSplit}>
-                      <ColumnsPlusRight class="size-4 shrink-0" />
-                      <span class="flex-1 truncate">Open in New Split</span>
-                    </Dropdown.Item>
-                  </Show>
-                </Dropdown.Group>
+              </Show>
+              <Show when={props.item.owner && props.item.updatedAt}>
+                {' - '}
+              </Show>
+              <Show when={props.item.updatedAt}>
+                {(updatedAt) => formatDate(updatedAt())}
+              </Show>
+            </>
+          ) : undefined
+        }
+        actions={
+          <Dropdown open={dropdownOpen()} onOpenChange={setDropdownOpen}>
+            <Dropdown.Trigger
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Document card actions"
+            >
+              <CardActionsIcon />
+            </Dropdown.Trigger>
+            <Dropdown.Content mount={portalMount()}>
+              <Dropdown.Group>
                 <Show when={editable()}>
-                  <Dropdown.Group>
-                    <Dropdown.Item onSelect={deleteCard}>
-                      <TrashSimple class="size-4 shrink-0" />
-                      <span class="flex-1 truncate">Delete</span>
-                    </Dropdown.Item>
-                  </Dropdown.Group>
+                  <Dropdown.Item onSelect={convertToMention}>
+                    <Minimize class="size-4 shrink-0" />
+                    <span class="flex-1 truncate">
+                      Convert to Inline Mention
+                    </span>
+                  </Dropdown.Item>
                 </Show>
-              </Dropdown.Content>
-            </Dropdown>
-          </Item.Actions>
-        </Item>
-      </Card.Header>
+                <Show when={canOpenInChat()}>
+                  <Dropdown.Item onSelect={handleOpenInChat}>
+                    <Sparkle class="size-4 shrink-0" />
+                    <span class="flex-1 truncate">Ask Macro</span>
+                  </Dropdown.Item>
+                </Show>
+                <Dropdown.Item onSelect={handleCopy}>
+                  <Link class="size-4 shrink-0" />
+                  <span class="flex-1 truncate">Copy Link</span>
+                </Dropdown.Item>
+                <Show when={props.blockName === 'task'}>
+                  <Dropdown.Item
+                    onSelect={() =>
+                      fireAndForget(
+                        copyBranchNameToClipboard(props.item.id),
+                        'document-card'
+                      )
+                    }
+                  >
+                    <GitBranch class="size-4 shrink-0" />
+                    <span class="flex-1 truncate">Copy Branch Name</span>
+                  </Dropdown.Item>
+                </Show>
+                <Show when={!isSplitAlreadyOpen()}>
+                  <Dropdown.Item onSelect={openInNewSplit}>
+                    <ColumnsPlusRight class="size-4 shrink-0" />
+                    <span class="flex-1 truncate">Open in New Split</span>
+                  </Dropdown.Item>
+                </Show>
+              </Dropdown.Group>
+              <Show when={editable()}>
+                <Dropdown.Group>
+                  <Dropdown.Item onSelect={deleteCard}>
+                    <TrashSimple class="size-4 shrink-0" />
+                    <span class="flex-1 truncate">Delete</span>
+                  </Dropdown.Item>
+                </Dropdown.Group>
+              </Show>
+            </Dropdown.Content>
+          </Dropdown>
+        }
+      />
     );
   };
 
@@ -633,7 +695,6 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
       )}
       style={{
         height: resizable() ? previewBoxHeight() : 'auto',
-        'min-height': pollMinHeight(),
       }}
       onClick={(e) => {
         if (channelMessageId()) return;
@@ -651,9 +712,21 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
     >
       <Switch>
         <Match when={item().loading}>
-          <div class="flex flex-1 items-center justify-center p-4 text-ink-muted">
-            <LoadingSpinner class="size-6 animate-spin" />
-          </div>
+          <Show
+            when={pollBody()}
+            fallback={
+              <div class="flex flex-1 items-center justify-center p-4 text-ink-muted">
+                <LoadingSpinner class="size-6 animate-spin" />
+              </div>
+            }
+          >
+            {(height) => (
+              <PollCardPlaceholder
+                name={props.documentName}
+                bodyHeight={height()}
+              />
+            )}
+          </Show>
         </Match>
         <Match when={matches(item(), isAccessiblePreviewItem)}>
           {(item) => (
@@ -696,6 +769,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                       'w-full overflow-hidden rounded-lg',
                       resizable() && 'min-h-0 flex-1'
                     )}
+                    style={{ 'min-height': pollBody() }}
                   >
                     <div
                       class={cn(

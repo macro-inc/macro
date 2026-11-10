@@ -1329,7 +1329,7 @@ where
 
     /// Load the durable queue the first time this process handles the session,
     /// so a later persist cannot wipe waiting actions this replica never saw.
-    async fn ensure_hydrated(&self, session_id: AgentSessionId) -> Result<()> {
+    pub(super) async fn ensure_hydrated(&self, session_id: AgentSessionId) -> Result<()> {
         if self.hydrated.contains(&session_id) {
             return Ok(());
         }

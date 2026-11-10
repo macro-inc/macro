@@ -2802,16 +2802,44 @@
       "crates/workspace-hack"
     ],
     "cache-core": [
+      "crates/bot_id",
       "crates/client/cache-core",
+      "crates/cowlike",
+      "crates/database_sql",
+      "crates/document_sub_type",
+      "crates/filter_ast",
+      "crates/item_filters",
+      "crates/macro_user_id",
+      "crates/macro_uuid",
       "crates/maybe_send",
-      "crates/predicate_index"
+      "crates/model_file_type",
+      "crates/model_owner",
+      "crates/models_databases",
+      "crates/non_empty",
+      "crates/notification_state",
+      "crates/predicate_index",
+      "crates/subsequence_match"
     ],
     "cache-turso": [
+      "crates/bot_id",
       "crates/client/cache-core",
       "crates/client/cache-turso",
       "crates/client/turso-opfs",
+      "crates/cowlike",
+      "crates/database_sql",
+      "crates/document_sub_type",
+      "crates/filter_ast",
+      "crates/item_filters",
+      "crates/macro_user_id",
+      "crates/macro_uuid",
       "crates/maybe_send",
-      "crates/predicate_index"
+      "crates/model_file_type",
+      "crates/model_owner",
+      "crates/models_databases",
+      "crates/non_empty",
+      "crates/notification_state",
+      "crates/predicate_index",
+      "crates/subsequence_match"
     ],
     "cache-wasm": [
       "crates/activity",
@@ -4509,6 +4537,10 @@
       "crates/upstream_error",
       "crates/user_quota",
       "crates/work_feed",
+      "crates/workspace-hack"
+    ],
+    "computer_id": [
+      "crates/computer_id",
       "crates/workspace-hack"
     ],
     "connect_client": [
@@ -10332,6 +10364,10 @@
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
+    "incus_client": [
+      "crates/incus_client",
+      "crates/workspace-hack"
+    ],
     "initiative": [
       "crates/activity",
       "crates/agent",
@@ -12433,6 +12469,10 @@
       "crates/sqs_client",
       "crates/workspace-hack",
       "services/organization_retention_trigger"
+    ],
+    "pairing_id": [
+      "crates/pairing_id",
+      "crates/workspace-hack"
     ],
     "pipedream_mcp": [
       "crates/ai_toolset",
@@ -14807,8 +14847,7 @@
       "crates/workspace-hack"
     ],
     "subsequence_match": [
-      "crates/subsequence_match",
-      "crates/workspace-hack"
+      "crates/subsequence_match"
     ],
     "sync_router": [
       "crates/sync_router",
