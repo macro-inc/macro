@@ -329,6 +329,7 @@ function BrowseSection(props: {
   resizingEnabled: boolean;
   outerScrollRoot: HTMLDivElement | undefined;
   layoutVersion: number;
+  sectionStart: number;
   sectionOrder: readonly ChannelSectionKey[];
   scrollVersion: number;
   savedScrollTop: number;
@@ -375,6 +376,7 @@ function BrowseSection(props: {
         scrollRoot,
         outerScroll,
         () => props.layoutVersion,
+        () => props.sectionStart,
         () => props.sectionOrder,
         () => size.height,
       ],
@@ -883,7 +885,7 @@ function ExpandedBrowse() {
             keepMounted={keepSections()}
             overscan={3}
           >
-            {(key) => (
+            {(key, start) => (
               <Show when={sections().get(key)}>
                 {(section) => (
                   <BrowseSection
@@ -893,6 +895,7 @@ function ExpandedBrowse() {
                     resizingEnabled={resizeFlag().enabled}
                     outerScrollRoot={scrollRoot()}
                     layoutVersion={stackSize.height ?? 0}
+                    sectionStart={start()}
                     sectionOrder={keys()}
                     scrollVersion={scrollVersion()}
                     savedScrollTop={scrollOffsets.get(key) ?? 0}
