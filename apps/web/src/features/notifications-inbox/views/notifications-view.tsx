@@ -176,7 +176,9 @@ const decisionFailure = (decision: InboxDecision) =>
 const previewSelection = (
   entity: EntityData
 ): PreviewPanelSelection | undefined =>
-  entity.type === 'calendar_event' || entity.type === 'initiative'
+  entity.type === 'calendar_event' ||
+  entity.type === 'initiative' ||
+  entity.type === 'harness'
     ? undefined
     : entity;
 

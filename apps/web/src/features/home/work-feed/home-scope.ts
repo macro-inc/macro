@@ -30,6 +30,7 @@ const ALL_ITEM_TYPES: WorkFeedItemType[] = [
   'calendar_event',
   'pull_request',
   'agent_session',
+  'runtime',
 ];
 
 export type HomeWorkFeedCapabilities = {

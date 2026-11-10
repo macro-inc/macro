@@ -95,9 +95,12 @@ members = [
   "crates/graphql_registered_work",
   "crates/graphql_work_feed",
   "crates/gtm_invite",
+  "crates/computer_id",
+  "crates/pairing_id",
   "crates/harness_id",
   "crates/harness_token",
   "crates/harnesses",
+  "crates/incus_client",
   "crates/import",
   "crates/import_notion",
   "crates/import_tracker",
@@ -348,6 +351,7 @@ lol_html = "2.4.0"
 loro = "1.16.2"
 lru = "0.16"
 md-5 = "0.10.6"
+mimalloc = { version = "0.1", default-features = false }
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
 mockall = "0.13"
 nutype = { version = "0.8.0", features = ["serde", "derive_unchecked"] }
@@ -375,6 +379,7 @@ pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 png = "0.18"
 postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
+progenitor-client = "0.15.1"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
 prost = "0.14"
 prost-build = "0.14"

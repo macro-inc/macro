@@ -18820,6 +18820,34 @@ export type SoupForeignEntity = {
 };
 
 /**
+ * A paired runtime (a macrod machine), listed only by attention feeds: its
+ * access requests and removals are notifications filed under it, and it has
+ * no page of its own, so Settings → Machines opens it.
+ */
+export type SoupHarness = {
+    /**
+     * When the machine was paired.
+     */
+    createdAt: string;
+    /**
+     * The harness uuid.
+     */
+    id: string;
+    /**
+     * The machine's display name.
+     */
+    name: string;
+    /**
+     * The person or team that owns the machine.
+     */
+    ownerId: string;
+    /**
+     * When the machine was last changed.
+     */
+    updatedAt: string;
+};
+
+/**
  * An initiative (called a project in the frontend) in the Soup feed.
  */
 export type SoupInitiativeSoupPropertiesField = {
@@ -18941,6 +18969,12 @@ export type SoupItem = {
      */
     data: SoupDatabaseRowSoupPropertiesField;
     tag: 'databaseRow';
+} | {
+    /**
+     * Paired runtime, listed only by attention feeds.
+     */
+    data: SoupHarness;
+    tag: 'harness';
 };
 
 /**
