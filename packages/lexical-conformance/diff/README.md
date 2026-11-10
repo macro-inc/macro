@@ -52,7 +52,20 @@ allocator and mirrors these setup operations outside its captured command.
 Fake timers provide a deterministic clock and drain all updates.
 Geometry stubs return empty rectangles; no layout movement is generated in v0.
 
-R uses `lexical_conformance_wasm` directly, never the shim. JSON, selection,
+R uses `lexical_conformance_wasm` directly, never the shim. Lockstep DOM-input
+commands additionally pass through `DOMInputCore`: a keyed projection of R's own
+snapshot in an isolated jsdom document, with the production native-view
+selection-change mark/consume guard. Hydration notifications remain outside the
+command. The explicit input event and any actual jsdom range-change event both
+run that guard. The adapter logs every decision and admits the logical command
+at most once, coalescing only identical accepted endpoints/context and rejecting
+changes. This does not measure production per-event admissions or prove their
+parity. The raw profile has no post-delete or marked-selection context; extra
+selection-input fields reject before native admission. A direction-only reversal does not manufacture another event. This is an
+event-route change, not a CoreHandle model
+semantics change. `loader.ts` still exposes the unchanged direct model route.
+The original direct-route six-operation failure is retained in external run
+evidence; do not relabel it as a native model fix. JSON, selection,
 root text, persistent key bijection, commit presence, dirty sets including
 intent, mutations, normalized keys and tags are compared after every command.
 No document fields are ignored. Transient identities also enter the bijection;

@@ -19,6 +19,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 - `diff/host-packet.generated.ts`: Specta declaration; regenerate with the conformance_wasm export_host_types example.
 - `diff/debug.test.ts`: actual optimized export crossings, allocator/free traps and editor-facade lifetimes.
 - `diff/compat.test.ts`: real Node/web WASM compatibility constants and per-instance key stream checks.
+- `diff/dom-input.ts`: isolated native-snapshot DOM-input routing through the production selection-change guard; keep the direct loader model-only.
 - `diff/README.md`: WP-07 raw-model WASM loader and Tier C text/paragraph harness.
 - `record/initial.ts`: partial-state key layout and selection restoration.
 - `coverage/README.md`: traceability evidence, pending ratchet and CI gates.
