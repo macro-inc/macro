@@ -8,8 +8,8 @@ vi.mock('@core/codex/flag', () => ({
  */
 
 import { ThrownResultError } from '@core/util/result';
-import { invalidateHarnesses } from '@queries/harnesses/harnesses';
 import { useAgentModelsQuery } from '@queries/agents/models';
+import { invalidateHarnesses } from '@queries/harnesses/harnesses';
 import type { LoadAgentModelsResponse } from '@service-agent-harness/generated/schemas';
 import {
   fireEvent,
@@ -605,7 +605,9 @@ describe('Harness', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
     harnessMocks.deleteHarness.mockRejectedValueOnce(
-      new ThrownResultError([{ code: 'NOT_FOUND', message: 'Resource not found' }])
+      new ThrownResultError([
+        { code: 'NOT_FOUND', message: 'Resource not found' },
+      ])
     );
     fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
     fireEvent.click(
