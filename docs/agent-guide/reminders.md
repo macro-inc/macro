@@ -75,8 +75,9 @@ Archived conversations remain here while snoozed. Each row has one clock; click,
 tap, or keyboard-activate it to reopen that conversation's reminder menu.
 Opening the row itself opens the email.
 
-Inbox, Read, Done, Calendar, Tags, and attachment filters apply to the original
-conversation before pagination. Text search is unavailable in this view.
+Inbox, Read status, Done, Has (calendar invite), Attachments, and Tags filters
+apply to the original conversation before pagination. Text search is
+unavailable in this view.
 Back/forward and reload retain the Email tab and inbox scope. Other Email and
 Soup views do not make reminder collection requests.
 

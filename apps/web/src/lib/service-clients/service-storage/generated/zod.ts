@@ -74196,6 +74196,217 @@ export const createViewHandlerResponse = zod.object({
   userId: zod.string(),
 });
 
+export const listSavedViewDefinitionsQueryFirstMin = 0;
+
+export const listSavedViewDefinitionsQueryParams = zod.object({
+  kind: zod
+    .string()
+    .optional()
+    .describe('Only definitions of this consumer kind, such as `email`.'),
+  first: zod
+    .number()
+    .min(listSavedViewDefinitionsQueryFirstMin)
+    .optional()
+    .describe('Page size, 1 to 50; defaults to 25.'),
+  after: zod
+    .string()
+    .optional()
+    .describe('`nextCursor` from the previous page.'),
+});
+
+export const listSavedViewDefinitionsResponse = zod
+  .object({
+    nextCursor: zod
+      .string()
+      .nullish()
+      .describe(
+        'Opaque cursor for the next page, absent when the listing is complete.'
+      ),
+    views: zod
+      .array(
+        zod
+          .object({
+            config: zod
+              .object({})
+              .describe(
+                'Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`.'
+              ),
+            createdAt: zod.iso.datetime({}),
+            id: zod.uuid().describe('Stable identity of this definition.'),
+            name: zod.string().describe('Display name chosen by the owner.'),
+            ownerId: zod
+              .string()
+              .describe('User who owns and can edit this definition.'),
+            revision: zod
+              .number()
+              .describe('Current revision, required by updates and deletion.'),
+            sharedTeamId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Team with access, or absent when the definition is private.'
+              ),
+            updatedAt: zod.iso.datetime({}),
+          })
+          .describe(
+            'A saved filter definition, not a snapshot of matching entities.'
+          )
+      )
+      .describe('Definitions the viewer can currently access.'),
+  })
+  .describe("A page in the viewer's own order, then by creation time and ID.");
+
+export const createSavedViewDefinitionBody = zod.object({
+  config: zod
+    .object({})
+    .describe(
+      'Consumer configuration with its `kind` and `version`, at most 32 KiB.'
+    ),
+  id: zod
+    .uuid()
+    .nullish()
+    .describe(
+      'Client-chosen ID, reused to retry the same creation; generated when absent.'
+    ),
+  name: zod.string().describe('Nonempty display name, at most 120 characters.'),
+  sharedTeamId: zod
+    .uuid()
+    .nullish()
+    .describe('Team to share with, which the creator must belong to.'),
+});
+
+export const reorderSavedViewDefinitionsBody = zod.object({
+  ids: zod
+    .array(zod.uuid())
+    .describe(
+      'Visible definitions of that kind in their new order, at most 200;\ndefinitions left out follow them by creation time.'
+    ),
+  kind: zod
+    .string()
+    .describe('Consumer kind whose order is replaced, such as `email`.'),
+});
+
+export const reorderSavedViewDefinitionsResponseItem = zod
+  .object({
+    config: zod
+      .object({})
+      .describe(
+        'Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`.'
+      ),
+    createdAt: zod.iso.datetime({}),
+    id: zod.uuid().describe('Stable identity of this definition.'),
+    name: zod.string().describe('Display name chosen by the owner.'),
+    ownerId: zod
+      .string()
+      .describe('User who owns and can edit this definition.'),
+    revision: zod
+      .number()
+      .describe('Current revision, required by updates and deletion.'),
+    sharedTeamId: zod
+      .uuid()
+      .nullish()
+      .describe('Team with access, or absent when the definition is private.'),
+    updatedAt: zod.iso.datetime({}),
+  })
+  .describe('A saved filter definition, not a snapshot of matching entities.');
+export const reorderSavedViewDefinitionsResponse = zod.array(
+  reorderSavedViewDefinitionsResponseItem
+);
+
+export const getSavedViewDefinitionParams = zod.object({
+  saved_view_id: zod.uuid().describe('The saved view to read'),
+});
+
+export const getSavedViewDefinitionResponse = zod
+  .object({
+    config: zod
+      .object({})
+      .describe(
+        'Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`.'
+      ),
+    createdAt: zod.iso.datetime({}),
+    id: zod.uuid().describe('Stable identity of this definition.'),
+    name: zod.string().describe('Display name chosen by the owner.'),
+    ownerId: zod
+      .string()
+      .describe('User who owns and can edit this definition.'),
+    revision: zod
+      .number()
+      .describe('Current revision, required by updates and deletion.'),
+    sharedTeamId: zod
+      .uuid()
+      .nullish()
+      .describe('Team with access, or absent when the definition is private.'),
+    updatedAt: zod.iso.datetime({}),
+  })
+  .describe('A saved filter definition, not a snapshot of matching entities.');
+
+export const deleteSavedViewDefinitionParams = zod.object({
+  saved_view_id: zod.uuid().describe('The saved view to delete'),
+});
+
+export const deleteSavedViewDefinitionQueryParams = zod.object({
+  expectedRevision: zod
+    .number()
+    .describe('Revision that must still be current when the deletion commits.'),
+});
+
+export const updateSavedViewDefinitionParams = zod.object({
+  saved_view_id: zod.uuid().describe('The saved view to update'),
+});
+
+export const updateSavedViewDefinitionBody = zod.object({
+  config: zod
+    .object({})
+    .nullish()
+    .describe(
+      'Complete replacement configuration; absent keeps the current one.'
+    ),
+  expectedRevision: zod
+    .number()
+    .describe('Revision that must still be current when the update commits.'),
+  name: zod
+    .string()
+    .nullish()
+    .describe('Replacement name; absent keeps the current one.'),
+  sharing: zod
+    .union([
+      zod.null(),
+      zod
+        .object({
+          teamId: zod.uuid().nullish(),
+        })
+        .describe(
+          'An explicit sharing change: a team, or `null` to make the definition private.'
+        ),
+    ])
+    .optional(),
+});
+
+export const updateSavedViewDefinitionResponse = zod
+  .object({
+    config: zod
+      .object({})
+      .describe(
+        'Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`.'
+      ),
+    createdAt: zod.iso.datetime({}),
+    id: zod.uuid().describe('Stable identity of this definition.'),
+    name: zod.string().describe('Display name chosen by the owner.'),
+    ownerId: zod
+      .string()
+      .describe('User who owns and can edit this definition.'),
+    revision: zod
+      .number()
+      .describe('Current revision, required by updates and deletion.'),
+    sharedTeamId: zod
+      .uuid()
+      .nullish()
+      .describe('Team with access, or absent when the definition is private.'),
+    updatedAt: zod.iso.datetime({}),
+  })
+  .describe('A saved filter definition, not a snapshot of matching entities.');
+
 export const excludeDefaultViewHandlerBody = zod.object({
   defaultViewId: zod.string(),
 });

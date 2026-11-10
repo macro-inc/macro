@@ -3,7 +3,12 @@ import {
   ViewBreadcrumbs,
   ViewShell,
 } from '@app/components/view-shell';
+import {
+  useSavedView,
+  useSavedViews,
+} from '@app/features/saved-views/queries/saved-views';
 import { ViewTour } from '@app/features/tours/ViewTour';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { SplitRouter } from '@app/lib/split-router';
 import { TraceFlow } from '@app/observability/flow';
 import { usePreference } from '@app/preferences/use-preference';
@@ -12,16 +17,20 @@ import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHe
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { enableEmailSavedViews } from '@core/constant/featureFlags';
+import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import {
   createSignal,
   type JSX,
+  Match,
   onMount,
   type ParentProps,
   Show,
   Suspense,
+  Switch,
 } from 'solid-js';
 import { EmailFilterDrawer } from './components/EmailFilterDrawer';
 import { EmailHeader, EmailViewBreadcrumbItem } from './components/EmailHeader';
@@ -30,12 +39,18 @@ import { EmailReader } from './components/EmailReader';
 import { EmailSidebar } from './components/EmailSidebar';
 import { EMAIL_TABS } from './constants';
 import { EmailViewProvider, useEmailView } from './email-view-context';
+import { EMAIL_SAVED_VIEW_KIND } from './filters/email-saved-view';
 import type { EmailListPane } from './reader-pane';
 import { emailTour } from './tour';
 import type { EmailTab, EmailViewStateOptions } from './types';
 import { useEmailViewHotkeys } from './use-email-view-hotkeys';
 import { useReadingPaneHotkey } from './use-reading-pane-hotkey';
 import { useVisibleEmailTab } from './use-visible-email-tab';
+import {
+  EmailSavedViewsPicker,
+  EmailSavedViewUnavailable,
+  EmailSavedViewWarning,
+} from './views/email-saved-views';
 
 export type EmailViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -185,7 +200,7 @@ const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = [
 
 function EmailMobileLayout(props: ParentProps) {
   const isVisible = useVisibleEmailTab();
-  const { state, setTab } = useEmailView();
+  const { state, setTab, savedViewActive } = useEmailView();
 
   return (
     <>
@@ -195,9 +210,14 @@ function EmailMobileLayout(props: ParentProps) {
             scrollable
             class="-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none"
             contentClass="px-(--mobile-chrome-gutter)"
-            leading={<EmailFilterDrawer />}
+            leading={
+              <>
+                <EmailFilterDrawer />
+                <EmailSavedViewsPicker />
+              </>
+            }
             items={MOBILE_EMAIL_TABS.filter((tab) => isVisible(tab.value))}
-            value={state.tab}
+            value={savedViewActive() ? undefined : state.tab}
             onChange={setTab}
           />
         </div>
@@ -225,7 +245,10 @@ function EmailViewRoot() {
     list: listController,
     readingPane,
     setReadingPane,
+    savedViews,
+    savedViewScope,
   } = useEmailView();
+  const savedViewKey = () => savedViewScope()?.id;
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
   const [listPane, setListPane] = createSignal<EmailListPane>();
   const focusList = () => listElement()?.focus();
@@ -254,12 +277,31 @@ function EmailViewRoot() {
     hasSelection: () => listController.selection.count() > 0,
   });
 
+  const savedViewKind = () => savedViews?.view().kind;
   const list = () => (
-    <Suspense fallback={<EmailListFallback />}>
-      <TraceFlow name="email.list" key={() => state.tab}>
-        <EmailList ref={setListElement} pane={listPane()} />
-      </TraceFlow>
-    </Suspense>
+    <Switch>
+      <Match when={savedViewKind() === 'unavailable'}>
+        <EmailSavedViewUnavailable />
+      </Match>
+      <Match when={savedViewKind() === 'loading'}>
+        <EmailListFallback />
+      </Match>
+      <Match when={true}>
+        <div class="flex size-full min-h-0 min-w-0 flex-col">
+          <EmailSavedViewWarning />
+          <div class="min-h-0 flex-1">
+            <Suspense fallback={<EmailListFallback />}>
+              <TraceFlow
+                name="email.list"
+                key={() => `${state.tab}:${savedViewKey() ?? ''}`}
+              >
+                <EmailList ref={setListElement} pane={listPane()} />
+              </TraceFlow>
+            </Suspense>
+          </div>
+        </div>
+      </Match>
+    </Switch>
   );
 
   return (
@@ -286,9 +328,21 @@ function EmailViewRoot() {
 
 /** Email shares one list across desktop sidebar and mobile pill layouts. */
 export function EmailView(props: EmailViewProps) {
+  const savedViewsFlag = useFeatureFlag(enableEmailSavedViews);
+  const userId = useUserId();
+  // A loading flag is not off; it only keeps saved views hidden meanwhile.
+  const savedViewsEnabled = () => savedViewsFlag().enabled;
+  const viewerId = () => (savedViewsEnabled() ? userId() : undefined);
   return (
     <ListEntityMetadataQueryProvider>
-      <EmailViewProvider initialState={props.initialState}>
+      <EmailViewProvider
+        initialState={props.initialState}
+        savedViewsEnabled={savedViewsEnabled}
+        savedViewsSource={() =>
+          useSavedViews({ viewerId, kind: EMAIL_SAVED_VIEW_KIND })
+        }
+        savedViewSource={(id) => useSavedView({ viewerId, id })}
+      >
         <EmailViewBreadcrumbs>
           <EmailViewRoot />
         </EmailViewBreadcrumbs>
