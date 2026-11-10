@@ -37,3 +37,13 @@ resumes at the committed frontiers even on native unwinding.
 Local undo patch (`src/undo.rs`): skip the group-disjoint container scan when
 the remote diff map is empty; retain the same merge and remote-conflict rules.
 Upstream rationale: an empty remote row cannot conflict, so local undo pushes need no scan of the group.
+
+Local shallow-export optimization: reconstruct an eligible requested root from
+its cached shallow state plus a bounded retained prefix, avoiding reverse
+checkout of a large tail. Keep the existing frontier, retention/redaction,
+latest-state overlay and encoder; reproduce reverse checkout's empty future
+container headers. Reject oversized cached state or prefixes before copying,
+and retain ordinary checkout for ineligible or unreadable seeds. Compare exact
+snapshot bytes with the existing replay path, including rich/deleted containers,
+multiple peers and detached documents; validate retained snapshot/WAL controls
+through a production-mode decoder as well as the library tests.

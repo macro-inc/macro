@@ -518,6 +518,10 @@ impl InnerStore {
         self.kv.set_all(updates);
     }
 
+    pub(crate) fn kv_content_bytes_capped(&self, cap: usize) -> usize {
+        self.kv.content_bytes_capped(cap)
+    }
+
     pub(crate) fn get_kv_clone(&self) -> KvWrapper {
         self.kv.clone()
     }

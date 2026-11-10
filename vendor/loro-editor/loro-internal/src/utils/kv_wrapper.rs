@@ -62,6 +62,19 @@ impl KvWrapper {
             .collect()
     }
 
+    /// Bound a copied snapshot by decoded KV payloads, without cloning those payloads.
+    pub(crate) fn content_bytes_capped(&self, cap: usize) -> usize {
+        let kv = self.kv.lock();
+        let mut bytes = 0usize;
+        for (key, value) in kv.scan(Bound::Unbounded, Bound::Unbounded) {
+            bytes = bytes.saturating_add(key.len()).saturating_add(value.len());
+            if bytes > cap {
+                break;
+            }
+        }
+        bytes
+    }
+
     /// Snapshot all entries while holding only the KV lock.
     ///
     /// Callers that also need the arena lock must use this instead of entering arena code from

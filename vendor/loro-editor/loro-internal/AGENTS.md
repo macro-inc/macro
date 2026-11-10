@@ -15,6 +15,7 @@ See ../README.md for exact upstream provenance and the local range-fill patch.
 - Suppress local event materialization only with empty recorder queues and explicit undo checkpoint ownership; retain remote, excluded and history event delivery.
 - Check for a nonempty remote diff before scanning an undo group's touched containers; an empty remote row cannot conflict.
 - Preserve upstream guides as data under UPSTREAM-AGENTS.md.
+- Reconstruct cached shallow roots only through bounded forward prefixes; preserve exact replay-path snapshot bytes, empty future-container headers and live logical state/frontiers/attachment.
 
 ## Checks
 
