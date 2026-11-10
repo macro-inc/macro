@@ -1,0 +1,69 @@
+crates/webhook/README.md
+  s_8eae06070a422c::t_3329c0cced9eee 125,132,136-137
+  s_8eae06070a422c::t_6e035141aa41c1 141-142
+  s_8eae06070a422c::t_aab01f5f910758 138
+  s_8eae06070a422c::t_d59a7ccb674146 139
+  s_8eae06070a422c::t_23dc444a267ff2 126-131
+  s_154e7eadce3a09::t_20c865487f235d 80-81,104-110,119-124,133-135,143-147,208-211,249-250
+  s_8eae06070a422c::t_a2e556c6c7b7e1 140
+crates/email/AGENTS.md
+  s_154e7eadce3a09::t_20c865487f235d 59-63
+  s_09eb32e13d88b8::t_cfe8bd14be3080 67-70
+  s_09eb32e13d88b8::t_6f314d727fecb3 64-66
+crates/webhook/AGENTS.md
+  s_df4bdd5665ce87::t_77c12768adc281 20,42-45
+  s_154e7eadce3a09::t_20c865487f235d 18,31,39-41
+docs/guides/add-kafka-event.md
+  s_83a5a60110c311::t_423692361df405 51,79
+  s_83a5a60110c311::t_ec2d2a6422c87d 80-81
+  s_83a5a60110c311::t_c05fde768a1d3d 206-211
+  s_154e7eadce3a09::t_20c865487f235d 61-63,189-205,221-227
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "eb4adb9a19fe7b88e311a8eb6ea935f9fb0de38d",
+  "prompts": {},
+  "sessions": {
+    "s_09eb32e13d88b8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f4b5-7591-8b31-6484a8a64db2",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_154e7eadce3a09": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad735192-5c05-45ca-a84d-09b5ccc7f8bc",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_83a5a60110c311": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f57d-7ef3-b5b3-8ee1b516494d",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_8eae06070a422c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f512-70d1-8e41-b83f686da86f",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_df4bdd5665ce87": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f4a0-7162-84bf-0673700181eb",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
