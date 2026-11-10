@@ -1,4 +1,285 @@
 use super::*;
+use proptest::prelude::*;
+use std::cell::Cell;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OrderPath {
+    Memo,
+    Legacy,
+    ReversedLegacy,
+}
+
+thread_local! {
+    static ORDER_PATH: Cell<OrderPath> = const { Cell::new(OrderPath::Memo) };
+}
+
+pub(super) fn legacy_order_enabled() -> bool {
+    ORDER_PATH.with(|path| path.get() != OrderPath::Memo)
+}
+
+pub(super) fn legacy_order_for_diff(
+    view: StateRef<'_>,
+    keys: impl IntoIterator<Item = NodeKey>,
+) -> Vec<NodeKey> {
+    let mut ordered = legacy_preorder_sort(view, keys);
+    if ORDER_PATH.with(|path| path.get() == OrderPath::ReversedLegacy) {
+        ordered.reverse();
+    }
+    ordered
+}
+
+fn with_order_path<T>(path: OrderPath, run: impl FnOnce() -> T) -> T {
+    struct Restore(OrderPath);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            ORDER_PATH.with(|path| path.set(self.0));
+        }
+    }
+    let previous = ORDER_PATH.with(|current| current.replace(path));
+    let _restore = Restore(previous);
+    run()
+}
+
+fn encoded_with_order(commit: &Commit, options: &DiffOptions, path: OrderPath) -> DiffBuffer {
+    with_order_path(path, || {
+        let mut encoded = DiffBuffer::default();
+        commit.diff(options).unwrap().encode(&mut encoded);
+        let mut direct = DiffBuffer::default();
+        commit.encode_diff(options, &mut direct).unwrap();
+        assert_eq!(
+            encoded.words, direct.words,
+            "diff versus direct encoder words"
+        );
+        assert_eq!(
+            encoded.strings, direct.strings,
+            "diff versus direct encoder strings"
+        );
+        encoded
+    })
+}
+
+fn assert_ordered_buffers(commit: &Commit) {
+    for include_state in [false, true] {
+        let options = DiffOptions { include_state };
+        let memo = encoded_with_order(commit, &options, OrderPath::Memo);
+        let legacy = encoded_with_order(commit, &options, OrderPath::Legacy);
+        assert_eq!(
+            memo.words, legacy.words,
+            "same-commit words; include_state={include_state}"
+        );
+        assert_eq!(
+            memo.strings, legacy.strings,
+            "same-commit UTF-8 bytes; include_state={include_state}"
+        );
+    }
+}
+
+static ORDER_STATE: StateKey<u32> = StateKey::new("diff-order", |value| {
+    value.and_then(serde_json::Value::as_u64).unwrap_or(0) as u32
+});
+
+fn append_branch(
+    tx: &mut Transaction<'_>,
+    parent: NodeKey,
+    width: usize,
+    nested: usize,
+) -> Result<NodeKey, Error> {
+    let branch = tx.create(Paragraph::default())?.key();
+    let mut leaf = branch;
+    for _ in 0..nested {
+        let child = tx.create(Paragraph::default())?.key();
+        tx.append(leaf, &[child])?;
+        leaf = child;
+    }
+    let mut children = Vec::new();
+    for index in 0..width {
+        let text = tx.create_text(&format!("{index}:é😀"))?.key();
+        tx.text(text)?.set_detail(TextDetail::UNMERGEABLE)?;
+        tx.set_state(text, &ORDER_STATE, index as u32 + 1)?;
+        children.push(text);
+    }
+    tx.append(leaf, &children)?;
+    // Assemble the whole subtree while detached, then admit it in one append.
+    tx.append(parent, &[branch])?;
+    Ok(branch)
+}
+
+#[derive(Clone, Debug)]
+enum TreeEdit {
+    Bulk(u16, u8),
+    Nested(u16, u8),
+    Move(u16, u16),
+    Remove(u16),
+    Reorder(u16),
+    Replace(u16),
+    Text(u16, u16),
+    Format(u16, bool),
+    State(u16, u8),
+}
+
+fn tree_edit() -> impl Strategy<Value = TreeEdit> {
+    prop_oneof![
+        (any::<u16>(), any::<u8>()).prop_map(|(a, b)| TreeEdit::Bulk(a, b)),
+        (any::<u16>(), any::<u8>()).prop_map(|(a, b)| TreeEdit::Nested(a, b)),
+        (any::<u16>(), any::<u16>()).prop_map(|(a, b)| TreeEdit::Move(a, b)),
+        any::<u16>().prop_map(TreeEdit::Remove),
+        any::<u16>().prop_map(TreeEdit::Reorder),
+        any::<u16>().prop_map(TreeEdit::Replace),
+        (any::<u16>(), any::<u16>()).prop_map(|(a, b)| TreeEdit::Text(a, b)),
+        (any::<u16>(), any::<bool>()).prop_map(|(a, b)| TreeEdit::Format(a, b)),
+        (any::<u16>(), any::<u8>()).prop_map(|(a, b)| TreeEdit::State(a, b)),
+    ]
+}
+
+fn tree_edit_commit(editor: &mut Editor, edit: &TreeEdit) -> Commit {
+    let view = editor.state().view();
+    let nodes: Vec<_> = view
+        .descendants(NodeKey::ROOT)
+        .map(|(key, _)| key)
+        .collect();
+    let mut parents = vec![NodeKey::ROOT];
+    parents.extend(nodes.iter().copied().filter(|key| view.is_element(*key)));
+    let texts: Vec<_> = nodes
+        .iter()
+        .copied()
+        .filter(|key| view.kind(*key) == Some(NodeKind::Text))
+        .collect();
+    editor
+        .update(|tx| {
+            match *edit {
+                TreeEdit::Bulk(parent, count) | TreeEdit::Nested(parent, count) => {
+                    if nodes.len() > 512 {
+                        if let Some(key) = nodes.first() {
+                            tx.remove(*key, true)?;
+                        }
+                    } else {
+                        let parent = parents[usize::from(parent) % parents.len()];
+                        let depth = if matches!(edit, TreeEdit::Nested(..)) {
+                            usize::from(count % 4) + 1
+                        } else {
+                            0
+                        };
+                        append_branch(tx, parent, usize::from(count % 12) + 1, depth)?;
+                    }
+                }
+                TreeEdit::Move(node, parent) if !nodes.is_empty() => {
+                    let key = nodes[usize::from(node) % nodes.len()];
+                    let target = parents[usize::from(parent) % parents.len()];
+                    if key != target
+                        && !tx.view().ancestors(target).any(|ancestor| ancestor == key)
+                        && (target != NodeKey::ROOT || tx.view().is_element(key))
+                    {
+                        tx.append(target, &[key])?;
+                    }
+                }
+                TreeEdit::Remove(node) if !nodes.is_empty() => {
+                    tx.remove(nodes[usize::from(node) % nodes.len()], true)?
+                }
+                TreeEdit::Reorder(parent) => {
+                    let parent = parents[usize::from(parent) % parents.len()];
+                    let mut children = tx.view().children_keys(parent)?;
+                    children.reverse();
+                    tx.append(parent, &children)?;
+                }
+                TreeEdit::Replace(node) if parents.len() > 1 => {
+                    let old = parents[1 + usize::from(node) % (parents.len() - 1)];
+                    let new = tx.create(Paragraph::default())?.key();
+                    tx.set_state(new, &ORDER_STATE, 17)?;
+                    tx.replace(old, new, true)?;
+                }
+                TreeEdit::Text(node, value) if !texts.is_empty() => {
+                    tx.text(texts[usize::from(node) % texts.len()])?
+                        .set_text_content(&format!("edit-{value}😀"))?;
+                }
+                TreeEdit::Format(node, bold) if !texts.is_empty() => {
+                    tx.text(texts[usize::from(node) % texts.len()])?
+                        .set_format(if bold {
+                            TextFormat::BOLD
+                        } else {
+                            TextFormat::ITALIC
+                        })?;
+                }
+                TreeEdit::State(node, value) if !nodes.is_empty() => tx.set_state(
+                    nodes[usize::from(node) % nodes.len()],
+                    &ORDER_STATE,
+                    u32::from(value) + 1,
+                )?,
+                _ => {}
+            }
+            Ok(())
+        })
+        .unwrap()
+        .1
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 128, max_shrink_iters: 4096, ..ProptestConfig::default() })]
+    #[test]
+    fn whole_commit_buffers_match_legacy_for_random_trees_and_edits(
+        siblings in 2usize..96,
+        nesting in prop::collection::vec(0u16..128, 0..12),
+        edits in prop::collection::vec(tree_edit(), 16..80),
+    ) {
+        let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+        let (_, initial) = editor.update(|tx| {
+            let mut parents = vec![NodeKey::ROOT];
+            for _ in 0..siblings { parents.push(append_branch(tx, NodeKey::ROOT, 2, 0)?); }
+            for parent in &nesting {
+                let parent = parents[usize::from(*parent) % parents.len()];
+                parents.push(append_branch(tx, parent, 3, 2)?);
+            }
+            Ok(())
+        }).unwrap();
+        assert!(initial.diff(&DiffOptions { include_state: true }).unwrap().ops.iter().any(|op| matches!(op, DiffOp::State { .. })));
+        assert_ordered_buffers(&initial);
+        let mut snapshots = vec![initial.next.clone()];
+        let mut chain: Option<Commit> = None;
+        for (index, edit) in edits.iter().enumerate() {
+            let commit = if index % 17 == 16 {
+                editor.set_editor_state(snapshots[index % snapshots.len()].clone(), TagSet::from_tags([UpdateTag::Historic])).unwrap()
+            } else { tree_edit_commit(&mut editor, edit) };
+            assert_ordered_buffers(&commit);
+            if let Some(mut earlier) = chain.take() {
+                earlier.following.push(commit);
+                assert_ordered_buffers(&earlier);
+                chain = Some(earlier);
+            } else { chain = Some(commit); }
+            if index % 5 == 4 { chain = None; }
+            if index % 13 == 12 { snapshots.push(editor.state().clone()); }
+        }
+    }
+}
+
+#[test]
+fn whole_commit_buffer_control_detects_reversed_reference_order() {
+    let mut editor = Editor::builder(EditorMode::Headless).build().unwrap();
+    let (_, commit) = editor
+        .update(|tx| {
+            for _ in 0..4 {
+                append_branch(tx, NodeKey::ROOT, 3, 2)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    let options = DiffOptions {
+        include_state: true,
+    };
+    let memo = encoded_with_order(&commit, &options, OrderPath::Memo);
+    let reversed = encoded_with_order(&commit, &options, OrderPath::ReversedLegacy);
+    assert_ne!(
+        memo.words, reversed.words,
+        "ordered buffer comparator must reject the mutant"
+    );
+    assert_ordered_buffers(&commit);
+}
+
+#[test]
+fn reference_order_scope_restores_after_panic() {
+    let result =
+        std::panic::catch_unwind(|| with_order_path(OrderPath::Legacy, || panic!("scope control")));
+    assert!(result.is_err());
+    assert!(!legacy_order_enabled());
+}
 
 // Frozen sibling-walk oracle for the ordering contract. Every model unit-test
 // sort also checks this independently of the per-diff position memo.
