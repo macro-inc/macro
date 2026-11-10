@@ -71,9 +71,12 @@ pub(super) async fn by_ids(
             WHERE h.id = ANY($2) AND {visible}"#,
         visible = visible_harness("h"),
     );
-    sqlx::query(&sql)
+    sqlx::QueryBuilder::<sqlx::Postgres>::new(sql)
+        .build()
         .bind(req.user_id.as_ref())
         .bind(&ids)
+        // Unnamed statement, as for the attention query it shares a gate with.
+        .persistent(false)
         .try_map(|row: sqlx::postgres::PgRow| {
             let owner_user_id: Option<String> = row.try_get("owner_user_id")?;
             let team_id: Option<Uuid> = row.try_get("team_id")?;
