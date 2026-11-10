@@ -108,6 +108,7 @@ fn unchanged_hook_dispatch_does_not_allocate_a_commit_copy() -> Result<(), Error
     let (control, baseline) = measured(|| editor.transaction().commit());
     assert!(control?.is_noop());
     let (result, actual) = measured(|| editor.run_after_commit(main));
+    eprintln!("after_commit {actual:?}; unchanged transaction {baseline:?}");
     assert_eq!(calls.load(Ordering::Relaxed), 1);
     assert!(result.following.is_empty());
     assert!(result.follow_up_error.is_none());

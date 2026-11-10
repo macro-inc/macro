@@ -248,11 +248,21 @@ impl Editor {
         if plugins.is_empty() {
             return commit;
         }
-        let mut previous = commit
-            .chain()
-            .filter(|c| !c.is_noop())
-            .cloned()
-            .collect::<Vec<_>>();
+        fn append_prior<'commit>(
+            commit: &'commit Commit,
+            prior: &mut smallvec::SmallVec<[&'commit Commit; 1]>,
+        ) {
+            if let Some(preceding) = commit.preceding.as_deref() {
+                append_prior(preceding, prior);
+            }
+            if !commit.is_noop() {
+                prior.push(commit);
+            }
+            for following in &commit.following {
+                append_prior(following, prior);
+            }
+        }
+        let mut previous_range: Option<std::ops::Range<usize>> = None;
         let isolated: Vec<_> = plugins
             .iter()
             .filter_map(|plugin| {
@@ -262,7 +272,18 @@ impl Editor {
             })
             .collect();
         let mut rounds = 0;
-        'rounds: while !previous.is_empty() {
+        loop {
+            let mut previous = smallvec::SmallVec::<[&Commit; 1]>::new();
+            if let Some(range) = previous_range.take() {
+                for following in &commit.following[range] {
+                    append_prior(following, &mut previous);
+                }
+            } else {
+                append_prior(&commit, &mut previous);
+            }
+            if previous.is_empty() {
+                break;
+            }
             let state = self.state.clone();
             let extensions = self.extensions.clone();
             let tags = self.carried_tags.clone();
@@ -298,6 +319,7 @@ impl Editor {
             if let Some(error) = failed {
                 drop(tx);
                 rollback(self);
+                drop(previous);
                 commit.follow_up_error = Some(error);
                 break;
             }
@@ -312,6 +334,7 @@ impl Editor {
             {
                 drop(tx);
                 rollback(self);
+                drop(previous);
                 commit.follow_up_error = Some(FollowUpError {
                     plugin: "follow-up",
                     error: Arc::new(Error::EndlessFollowUps),
@@ -322,6 +345,7 @@ impl Editor {
                 Ok(next) => next,
                 Err(error) => {
                     rollback(self);
+                    drop(previous);
                     commit.follow_up_error = Some(FollowUpError {
                         plugin: "pipeline",
                         error: Arc::new(error),
@@ -356,25 +380,23 @@ impl Editor {
             }
             if let Some(error) = failed {
                 rollback(self);
+                drop(previous);
                 commit.follow_up_error = Some(error);
                 break;
             }
             if rounds >= 99 && !following.is_empty() {
                 rollback(self);
+                drop(previous);
                 commit.follow_up_error = Some(FollowUpError {
                     plugin: "follow-up",
                     error: Arc::new(Error::EndlessFollowUps),
                 });
                 break;
             }
-            let mut next_previous = following
-                .iter()
-                .flat_map(Commit::chain)
-                .filter(|c| !c.is_noop())
-                .cloned()
-                .collect::<Vec<_>>();
-            commit.following.extend(following);
-            for prior in &previous {
+            // Keep each prior's following/preceding structure unchanged through
+            // all phases. Attach the accepted round only after its borrows end.
+            let mut isolated_failure = None;
+            'isolated: for prior in &previous {
                 for (name, hook) in &isolated {
                     let state = self.state.clone();
                     let extensions = self.extensions.clone();
@@ -403,11 +425,11 @@ impl Editor {
                         Err(error) => {
                             drop(tx);
                             restore(self);
-                            commit.follow_up_error = Some(FollowUpError {
+                            isolated_failure = Some(FollowUpError {
                                 plugin: name,
                                 error: Arc::new(error),
                             });
-                            break 'rounds;
+                            break 'isolated;
                         }
                     }
                     if rounds >= 99
@@ -420,34 +442,40 @@ impl Editor {
                     {
                         drop(tx);
                         restore(self);
-                        commit.follow_up_error = Some(FollowUpError {
+                        isolated_failure = Some(FollowUpError {
                             plugin: "follow-up",
                             error: Arc::new(Error::EndlessFollowUps),
                         });
-                        break 'rounds;
+                        break 'isolated;
                     }
                     let next = match tx.commit() {
                         Ok(next) => next,
                         Err(error) => {
                             restore(self);
-                            commit.follow_up_error = Some(FollowUpError {
+                            isolated_failure = Some(FollowUpError {
                                 plugin: name,
                                 error: Arc::new(error),
                             });
-                            break 'rounds;
+                            break 'isolated;
                         }
                     };
                     if !next.is_noop() {
-                        next_previous.extend(next.chain().filter(|c| !c.is_noop()).cloned());
-                        commit.following.push(next);
+                        following.push(next);
                     }
                 }
             }
-            if next_previous.is_empty() {
+            drop(previous);
+            let start = commit.following.len();
+            commit.following.extend(following);
+            if let Some(error) = isolated_failure {
+                commit.follow_up_error = Some(error);
                 break;
             }
+            if start == commit.following.len() {
+                break;
+            }
+            previous_range = Some(start..commit.following.len());
             rounds += 1;
-            previous = next_previous;
         }
         commit
     }
