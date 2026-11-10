@@ -20,6 +20,9 @@ export default {
   muteForWeek: 'For a week',
   matchByName: 'Match by name',
   matchedByName: 'Matched by name',
+  replacePickedChannels: 'Replace channel list',
+  replacePickedChannelsWarning:
+    'Saving this name rule will replace your hand-picked channel list. Only channels whose names match the rule will appear.',
   visibleTo: 'Visible to',
   onlyMe: 'Only me',
   favorites: 'Favorites',

@@ -104,15 +104,19 @@ export function MobileSectionOptions(props: {
                   <PencilIcon class="size-5" />
                   {t('channelSections.renameSection')}
                 </MobileDrawer.Item>
-                <MobileDrawer.Item
-                  disabled={props.disabled}
-                  onPointerDown={(event) => event.preventDefault()}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => fireAndForget(props.onAdd(), 'channels-view')}
-                >
-                  <PlusIcon class="size-5" />
-                  {t('channelSections.addChannels')}
-                </MobileDrawer.Item>
+                <Show when={!props.label.rule}>
+                  <MobileDrawer.Item
+                    disabled={props.disabled}
+                    onPointerDown={(event) => event.preventDefault()}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() =>
+                      fireAndForget(props.onAdd(), 'channels-view')
+                    }
+                  >
+                    <PlusIcon class="size-5" />
+                    {t('channelSections.addChannels')}
+                  </MobileDrawer.Item>
+                </Show>
                 <MobileDrawer.Item
                   disabled={props.disabled}
                   onClick={() =>

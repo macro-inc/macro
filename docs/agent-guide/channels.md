@@ -1222,19 +1222,24 @@ Use **New → New section** to create a focused name field directly in the sideb
 Enter or the Save control persists it; Escape or Cancel discards it. Rename edits
 the section name in place. Failed saves retain the draft.
 
-The header's **+** and empty **Add channels** action open an anchored searchable
+A manual section's header **+** and empty **Add channels** action open an anchored searchable
 checkbox picker. Additions retain successful writes when part of a batch fails.
 **Match by name** opens a separate anchored editor with **Name contains**, a live
 preview, a match count, and Save. Matching is literal and case-insensitive.
 Shared sections show a people icon; saved name rules show a funnel.
 
-Picked channels and name matches form a union. Updating the rule retains explicit
-picks. Shared sections can include viewable unjoined channels in their verified
-team; personal sections remain participant-only. The additive section API keeps
-these semantics separate from the legacy labels used when the flag is off.
+A section uses either hand-picked channels or a name rule, never both. Applying
+**Match by name** to a populated manual section warns that the rule replaces the
+hand-picked list; **Replace channel list** confirms the change. Cancel leaves
+picks untouched. Saving clears the manual assignments without deleting channels.
+Rule-based sections hide Add channels and reject manual assignment or drag-and-drop;
+edit their rule to change membership. Shared sections can include viewable unjoined
+channels in their verified team; personal sections remain participant-only. The
+additive section API keeps unjoined visibility separate from legacy labels used
+when the flag is off.
 
-Custom section menus contain Rename, Add channels, Match by name, Visible to,
-Sort, Display, notification controls, and Delete. Click and right-click menus
+Custom section menus contain Rename, Add channels for manual sections, Match by
+name, Visible to, Sort, Display, notification controls, and Delete. Click and right-click menus
 share the same controls. **Visible to** uses a checkbox layout but permits only
 **Only me** or the current team. Checking one replaces the other. Multiple-team
 visibility needs a separate storage-model change. Scope transfers preserve the

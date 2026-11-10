@@ -203,7 +203,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
         throw new Error(t('channelSections.noAccess'));
       }
 
-      const members = rule && !sectionMode ? [] : channelIds;
+      const members = rule ? [] : channelIds;
       if (
         !members.every(
           (id) =>
@@ -535,6 +535,10 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
         throw new Error(t('channelSections.unavailable'));
       }
 
+      if (current.rule) {
+        throw new Error(t('channelSections.smartSectionDropHint'));
+      }
+
       const additions = [...new Set(channelIds)].filter(
         (id) => !current.channelIds.includes(id)
       );
@@ -627,14 +631,13 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
 
     const from = labels().find(
       (label) =>
-        (sectionMode
-          ? (label.explicitChannelIds ?? label.channelIds).includes(channelId)
-          : !label.rule && label.channelIds.includes(channelId)) &&
+        !label.rule &&
+        label.channelIds.includes(channelId) &&
         scopeForLabel(label) === scope
     );
 
     if (
-      (!sectionMode && to?.rule) ||
+      to?.rule ||
       from?.id === labelId ||
       (!labelId && previous && from?.id !== previous.id)
     ) {

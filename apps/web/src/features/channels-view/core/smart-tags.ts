@@ -25,7 +25,7 @@ export function resolveChannelLabelMemberships(
     channels.map((channel) => [channel.id, channel])
   );
   return labels.map((label) => {
-    // Only the additive sections API returns explicit picks alongside effective membership.
+    // Only the additive sections API marks its viewer-authorized memberships.
     if (label.explicitChannelIds != null) {
       const serverIds = new Set(label.channelIds);
       const explicitIds = new Set(label.explicitChannelIds);
@@ -43,9 +43,9 @@ export function resolveChannelLabelMemberships(
             .filter(
               (channel) =>
                 eligible(channel) &&
-                (explicitIds.has(channel.id) ||
-                  (label.rule &&
-                    channelMatchesSmartTag(channel, label.rule, label)))
+                (label.rule
+                  ? channelMatchesSmartTag(channel, label.rule, label)
+                  : explicitIds.has(channel.id))
             )
             .map((channel) => channel.id),
         ]),
@@ -53,10 +53,12 @@ export function resolveChannelLabelMemberships(
       return {
         ...label,
         channelIds,
-        explicitChannelIds: label.explicitChannelIds.filter((id) => {
-          const channel = channelsById.get(id);
-          return !channel || eligible(channel);
-        }),
+        explicitChannelIds: label.rule
+          ? []
+          : label.explicitChannelIds.filter((id) => {
+              const channel = channelsById.get(id);
+              return !channel || eligible(channel);
+            }),
         channelCount: channelIds.length,
       };
     }

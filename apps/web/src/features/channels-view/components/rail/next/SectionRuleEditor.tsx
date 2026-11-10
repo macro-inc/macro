@@ -20,6 +20,8 @@ export function SectionRuleEditor(props: {
   );
   const [saving, setSaving] = createSignal(false);
   const [error, setError] = createSignal('');
+  const replacesPickedChannels = () =>
+    !props.label.rule && props.label.channelCount > 0;
   const save = async (event: SubmitEvent) => {
     event.preventDefault();
     if (saving() || !pattern().trim()) return;
@@ -49,6 +51,11 @@ export function SectionRuleEditor(props: {
           placeholder={t('channelSections.patternExample')}
         />
       </label>
+      <Show when={replacesPickedChannels()}>
+        <p class="text-xs leading-5 text-warning">
+          {t('channelSections.replacePickedChannelsWarning')}
+        </p>
+      </Show>
       <div class="max-h-64 overflow-y-auto" aria-busy={preview.isFetching}>
         <For
           each={queryReadyGate(preview) ? (preview.data?.channels ?? []) : []}
@@ -107,7 +114,9 @@ export function SectionRuleEditor(props: {
           size="sm"
           disabled={saving() || !pattern().trim()}
         >
-          {t('channelSections.saveSection')}
+          {replacesPickedChannels()
+            ? t('channelSections.replacePickedChannels')
+            : t('channelSections.saveSection')}
         </Button>
       </div>
     </form>

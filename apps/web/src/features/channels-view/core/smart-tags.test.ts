@@ -29,7 +29,7 @@ const label = (id: string, channelIds: string[]): ChannelLabel => ({
   rule,
 });
 
-it('unions explicit picks and authorized shared rules without hiding unjoined members', () => {
+it('uses only name matches in rule sections while retaining authorized unjoined members', () => {
   const result = resolveChannelLabelMemberships(
     [
       {
@@ -54,9 +54,9 @@ it('unions explicit picks and authorized shared rules without hiding unjoined me
       { ...channel('unknown', 'Support'), isParticipant: true },
     ]
   );
-  expect(result[0].channelIds).toEqual(['unloaded', 'picked', 'new-match']);
-  expect(result[0].explicitChannelIds).toEqual(['picked']);
-  expect(result[0].channelCount).toBe(3);
+  expect(result[0].channelIds).toEqual(['unloaded', 'new-match']);
+  expect(result[0].explicitChannelIds).toEqual([]);
+  expect(result[0].channelCount).toBe(2);
 });
 
 it('keeps personal section membership participant-only even for explicit picks', () => {
@@ -64,6 +64,7 @@ it('keeps personal section membership participant-only even for explicit picks',
     [
       {
         ...label('personal', ['picked', 'not-joined']),
+        rule: null,
         explicitChannelIds: ['picked', 'not-joined'],
       },
     ],

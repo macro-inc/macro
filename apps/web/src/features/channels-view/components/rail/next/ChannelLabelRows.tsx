@@ -169,12 +169,14 @@ function ChannelLabelActions(props: {
             fireAndForget(rail.renameLabel(props.label), 'channels-view')
           }
         />
-        <MenuItem
-          icon={PlusIcon}
-          text={t('channelSections.addChannels')}
-          disabled={!rail.labelsAvailable()}
-          onClick={() => props.onEdit('add')}
-        />
+        <Show when={!props.label.rule}>
+          <MenuItem
+            icon={PlusIcon}
+            text={t('channelSections.addChannels')}
+            disabled={!rail.labelsAvailable()}
+            onClick={() => props.onEdit('add')}
+          />
+        </Show>
         <MenuItem
           icon={FunnelIcon}
           text={t('channelSections.matchByName')}
@@ -266,18 +268,20 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
                 </>
               }
             >
-              <ViewSidebar.Control
-                variant="ghost"
-                size="icon-sm"
-                aria-label={t('channelSections.addChannelsTo', {
-                  name: props.label.name,
-                })}
-                tooltip={t('channelSections.addChannels')}
-                disabled={!rail.labelsAvailable()}
-                onClick={() => setEditor('add')}
-              >
-                <PlusIcon class="size-3.5" />
-              </ViewSidebar.Control>
+              <Show when={!props.label.rule}>
+                <ViewSidebar.Control
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={t('channelSections.addChannelsTo', {
+                    name: props.label.name,
+                  })}
+                  tooltip={t('channelSections.addChannels')}
+                  disabled={!rail.labelsAvailable()}
+                  onClick={() => setEditor('add')}
+                >
+                  <PlusIcon class="size-3.5" />
+                </ViewSidebar.Control>
+              </Show>
               <ChannelSectionDropdown
                 section={rowKeyForLabel(props.label.id)}
                 label={props.label.name}
@@ -321,15 +325,17 @@ export function ChannelLabelEmptyState(props: { label: ChannelLabel }) {
           when={unreadOnly()}
           fallback={
             <>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={!rail.labelsAvailable()}
-                onClick={() => setEditor('add')}
-              >
-                <PlusIcon class="size-3.5" />
-                {t('channelSections.addChannels')}
-              </Button>
+              <Show when={!props.label.rule}>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!rail.labelsAvailable()}
+                  onClick={() => setEditor('add')}
+                >
+                  <PlusIcon class="size-3.5" />
+                  {t('channelSections.addChannels')}
+                </Button>
+              </Show>
               <Button
                 variant="ghost"
                 size="sm"
@@ -360,10 +366,6 @@ export function ChannelLabelEmptyState(props: { label: ChannelLabel }) {
   );
 }
 
-function explicitIds(label: ChannelLabel): readonly string[] {
-  return label.explicitChannelIds ?? (label.rule ? [] : label.channelIds);
-}
-
 function SectionMenuItems(props: { channel: ChannelEntity }) {
   const rail = useChannelsRail();
   const labels = () =>
@@ -387,10 +389,7 @@ function SectionMenuItems(props: { channel: ChannelEntity }) {
         <ContextMenuContent submenu class="min-w-56 max-w-[22rem]">
           <For each={labels()}>
             {(label) => {
-              const automatic = () =>
-                Boolean(label.rule) &&
-                label.channelIds.includes(props.channel.id) &&
-                !explicitIds(label).includes(props.channel.id);
+              const automatic = () => Boolean(label.rule);
               const labelText = (
                 <span class="flex min-w-0 flex-1 flex-col">
                   <span class="truncate">{label.name}</span>
