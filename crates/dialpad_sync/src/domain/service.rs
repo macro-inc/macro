@@ -498,6 +498,7 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> SyncService
         if !self.delivers() {
             return Ok(());
         }
+        self.repo.forget_quiet_calls().await?;
         for connection in self.repo.awaiting_setup(RECONCILE_BATCH).await? {
             if let Err(error) = self.setup(connection).await {
                 tracing::warn!(error = %error, "Dialpad sync setup failed; will retry");

@@ -265,8 +265,7 @@ impl SyncRepository for PgSyncRepository {
                     AND last_error IS NOT DISTINCT FROM $6
                 RETURNING id
             )
-            DELETE FROM dialpad_sync_events
-            WHERE connection_id IN (SELECT id FROM stopped) AND completed_at IS NULL"#,
+            DELETE FROM dialpad_sync_events WHERE connection_id IN (SELECT id FROM stopped)"#,
             connection.id,
             issue.as_ref(),
             connection.enrolled_at,
@@ -301,8 +300,7 @@ impl SyncRepository for PgSyncRepository {
                 WHERE id = $1 AND enrolled_at = $4
                 RETURNING id
             )
-            DELETE FROM dialpad_sync_events
-            WHERE connection_id IN (SELECT id FROM disconnected) AND completed_at IS NULL"#,
+            DELETE FROM dialpad_sync_events WHERE connection_id IN (SELECT id FROM disconnected)"#,
             connection.id,
             SyncIssue::Disconnected.as_ref(),
             unregistered,
@@ -579,20 +577,23 @@ impl SyncRepository for PgSyncRepository {
             .execute(tx.as_mut())
             .await?;
         }
-        // Forget a call once all its events are done and it has gone quiet.
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn forget_quiet_calls(&self) -> Result<()> {
         sqlx::query!(
-            r#"DELETE FROM dialpad_sync_events WHERE connection_id = $1 AND call_id IN (
-                SELECT call_id FROM dialpad_sync_events WHERE connection_id = $1
-                GROUP BY call_id
+            r#"DELETE FROM dialpad_sync_events e USING (
+                SELECT connection_id, call_id FROM dialpad_sync_events
+                GROUP BY connection_id, call_id
                 HAVING bool_and(completed_at IS NOT NULL)
-                    AND max(received_at) < now() - make_interval(days => $2)
-            )"#,
-            job.connection.id,
+                    AND max(received_at) < now() - make_interval(days => $1)
+            ) quiet
+            WHERE e.connection_id = quiet.connection_id AND e.call_id = quiet.call_id"#,
             EVENT_RETENTION_DAYS
         )
-        .execute(tx.as_mut())
+        .execute(&self.pool)
         .await?;
-        tx.commit().await?;
         Ok(())
     }
 }

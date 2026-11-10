@@ -43,8 +43,8 @@ the call from all of its events, fetches the transcript, and ingests through
 - An import replaces the stored call wholesale, so build it from every stored
   event of the call, and never import without a transcript Dialpad could not
   serve: that deletes the stored one (only 403/404 mean none).
-- Stopping or disconnecting drops a sync's pending events; a call's events
-  are forgotten once it has been done and quiet for 30 days.
+- Events carry the caller's details: stopping or disconnecting deletes them,
+  and reconcile forgets a call once it has been done and quiet for 30 days.
 - Setup success and failure must match the lease that stored the secret. A
   registration activation did not record is retired before returning; setup
   first removes one a stopped sync left behind, and keeps its ids if that

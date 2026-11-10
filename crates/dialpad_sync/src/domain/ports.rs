@@ -47,14 +47,15 @@ pub trait SyncRepository: Send + Sync {
     /// deliveries. The `max_attempts`th failure in a row stops retrying as
     /// [`SyncIssue::SetupAbandoned`].
     async fn failed_setup(&self, id: Uuid, lease: SetupLease, max_attempts: i32) -> Result<()>;
-    /// Stop the observed connection state and drop pending deliveries only if
+    /// Stop the observed connection state and drop its stored events only if
     /// its enrollment, setup and enabled state still match.
     async fn stop(&self, connection: &Connection, issue: SyncIssue) -> Result<()>;
     /// Record an issue only on the observed running enrollment.
     async fn flag(&self, connection: &Connection, issue: SyncIssue) -> Result<()>;
-    /// Stop as [`SyncIssue::Disconnected`], keeping the row and its import
-    /// namespace. `unregistered` forgets the Dialpad resources once they
-    /// were removed; otherwise the next setup removes them.
+    /// Stop as [`SyncIssue::Disconnected`] and drop its stored events,
+    /// keeping the row and its import namespace. `unregistered` forgets the
+    /// Dialpad resources once they were removed; otherwise the next setup
+    /// removes them.
     async fn disconnect(&self, connection: &Connection, unregistered: bool) -> Result<()>;
     /// Running syncs with past calls left to import and due for a page,
     /// least recently tried first.
@@ -85,6 +86,9 @@ pub trait SyncRepository: Send + Sync {
     /// Complete the job's leased deliveries, schedule their retry with
     /// backoff, or park them until a new event for the call arrives.
     async fn finish(&self, job: &Job, outcome: JobOutcome) -> Result<()>;
+    /// Forget every call whose events are all done and that has been quiet
+    /// for the retention period: events carry the caller's details.
+    async fn forget_quiet_calls(&self) -> Result<()>;
 }
 
 /// The user's Dialpad grant, held by Macro Connect.

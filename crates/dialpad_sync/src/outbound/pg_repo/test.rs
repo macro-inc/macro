@@ -430,6 +430,9 @@ async fn a_removed_connect_grant_stops_sync_and_drops_pending_deliveries(pool: P
     service.complete(&user()).await.unwrap();
     let connection = service.repo.by_user(&user()).await.unwrap().unwrap();
     let secret = service.dialpad.secret();
+    let imported = signed(&secret, call_event(8, "hangup", 1), json!({}));
+    service.receive(connection.id, &imported).await.unwrap();
+    drain(&service).await;
     service
         .receive(
             connection.id,
@@ -440,7 +443,16 @@ async fn a_removed_connect_grant_stops_sync_and_drops_pending_deliveries(pool: P
 
     service.grants.set(GrantState::NotConnected);
     drain(&service).await;
-    assert!(calls.0.lock().unwrap().is_empty());
+    assert_eq!(calls.0.lock().unwrap().len(), 1);
+    assert!(
+        service
+            .repo
+            .events(connection.id, DialpadId(8))
+            .await
+            .unwrap()
+            .is_empty(),
+        "a stopped sync forgets the details of calls it imported"
+    );
     assert_eq!(
         service.status(&user()).await.unwrap(),
         SyncStatus::Failed {
@@ -1312,4 +1324,53 @@ async fn setup_gives_up_after_its_attempts_until_the_user_reconnects(pool: PgPoo
         service.status(&user()).await.unwrap(),
         SyncStatus::Connected { issue: None, .. }
     ));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn call_details_are_forgotten_on_disconnect_and_after_a_quiet_month(pool: PgPool) {
+    let calls = Arc::new(Calls::default());
+    let service = service(pool, GrantState::Active, calls.clone());
+    for user in [user(), other_user()] {
+        service.connect(&user, Backfill::None).await.unwrap();
+        service.complete(&user).await.unwrap();
+    }
+    let quiet = service.repo.by_user(&user()).await.unwrap().unwrap();
+    let leaving = service.repo.by_user(&other_user()).await.unwrap().unwrap();
+    for (connection, call_id) in [(&quiet, 1), (&quiet, 2), (&leaving, 3)] {
+        let event = serde_json::from_value(call_event(call_id, "hangup", 2)).unwrap();
+        service
+            .repo
+            .enqueue(connection.id, event, None)
+            .await
+            .unwrap();
+    }
+    drain(&service).await;
+    assert_eq!(calls.0.lock().unwrap().len(), 3);
+    let stored = |connection: Uuid, call_id: i64| {
+        let repo = &service.repo;
+        async move {
+            repo.events(connection, DialpadId(call_id))
+                .await
+                .unwrap()
+                .len()
+        }
+    };
+
+    // Disconnecting forgets what its imported calls carried.
+    service.disconnect(&other_user()).await.unwrap();
+    assert_eq!(stored(leaving.id, 3).await, 0);
+
+    // A sync that goes quiet still forgets a call a month after its last event.
+    sqlx::query!(
+        "UPDATE dialpad_sync_events SET received_at = now() - interval '31 days' WHERE call_id = 1"
+    )
+    .execute(&service.repo.pool)
+    .await
+    .unwrap();
+    service.reconcile().await.unwrap();
+    assert_eq!(stored(quiet.id, 1).await, 0);
+    assert_eq!(stored(quiet.id, 2).await, 1, "a recent call is kept");
 }
