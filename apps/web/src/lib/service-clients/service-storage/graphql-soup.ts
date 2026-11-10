@@ -1518,7 +1518,8 @@ function mapGraphqlNotificationMetadata(
               .with('EXPIRES_SOON', () => 'expires_soon' as const)
               .with('EXPIRES_TODAY', () => 'expires_today' as const)
               .with('EXPIRED', () => 'expired' as const)
-              .exhaustive(),
+              // A stage this build doesn't know still asks for a new sign-in.
+              .exhaustive(() => 'expires_soon' as const),
             expiresAt: metadata.claudeSignInExpiryExpiresAt,
           },
         }) satisfies NotifEventMember<'claude_sign_in_expiry'>
