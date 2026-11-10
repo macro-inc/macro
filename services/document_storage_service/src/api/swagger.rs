@@ -106,12 +106,12 @@ use databases::inbound::axum_router::ops::{
     OpRefusalResponse as DatabaseOpRefusalResponse,
 };
 use databases::inbound::axum_router::views::ViewPositionsResponse as DatabaseViewPositionsResponse;
-use databases::inbound::axum_router::{
-    CreateDatabaseRequest, duplicate::DuplicateDatabaseRequest,
-    saved_queries::SaveQueryRequest as DatabaseSaveQueryRequest,
-};
+use databases::inbound::axum_router::{CreateDatabaseRequest, duplicate::DuplicateDatabaseRequest};
 use databases::outbound::gateway_event_publisher::{
     AwarenessRelay as DatabaseAwarenessRelay, TableChanged as DatabaseTableChanged,
+};
+use databases_sql::inbound::axum_router::{
+    SaveQueryChart as DatabaseSaveQueryChart, SaveQueryRequest as DatabaseSaveQueryRequest,
 };
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
@@ -135,6 +135,10 @@ use initiative::domain::models::{
     CreateInitiativeRequest, InitialPropertyValue, InitiativeDetail, InitiativeId, InitiativeList,
     InitiativeSummary, UpdateInitiativeRequest,
 };
+use initiative::domain::reads::{
+    InitiativePage, InitiativePageRow, InitiativePropertySnapshot, InitiativeSort,
+};
+use initiative::inbound::axum_router::description::InitiativeDescription;
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
     DocumentResponseMetadata,
@@ -231,6 +235,7 @@ use utoipa::OpenApi;
         calendar_events::inbound::join_request_router::list_join_requests,
         calendar_events::inbound::axum_router::list_team_out_of_office,
         calendar_events::inbound::team_router::list_team_calendar,
+        calendar_events::inbound::team_router::get_team_availability,
 
         // annotations
         annotations::get::get_document_anchors_handler,
@@ -261,6 +266,18 @@ use utoipa::OpenApi;
         documents_hex::inbound::axum_router::get_location::get_location_v3_handler,
         documents_hex::inbound::axum_router::get_text::get_text_handler,
         documents_hex::inbound::axum_router::ai_edit::ai_edit_handler,
+        documents_hex::inbound::axum_router::markdown_body::get_markdown_handler,
+        documents_hex::inbound::axum_router::markdown_body::write_markdown_handler,
+        documents_hex::inbound::axum_router::comment_on_text::comment_on_text_handler,
+        documents_hex::inbound::axum_router::canvas::canvas_scene_handler,
+        documents_hex::inbound::axum_router::canvas::render_canvas_handler,
+        documents_hex::inbound::axum_router::canvas::apply_canvas_edits_handler,
+        documents_hex::inbound::axum_router::canvas::edit_canvas_with_ai_handler,
+        documents_hex::inbound::axum_router::spreadsheet::create_spreadsheet_handler,
+        documents_hex::inbound::axum_router::spreadsheet::read_spreadsheet_handler,
+        documents_hex::inbound::axum_router::spreadsheet::calculate_spreadsheet_handler,
+        documents_hex::inbound::axum_router::spreadsheet::edit_spreadsheet_handler,
+        documents_hex::inbound::axum_router::spreadsheet::ai_edit_spreadsheet_handler,
         documents_hex::inbound::axum_router::presentation::read_presentation_handler,
         documents_hex::inbound::axum_router::presentation::edit_presentation_handler,
         documents_hex::inbound::axum_router::presentation::copy_presentation_handler,
@@ -543,8 +560,11 @@ use utoipa::OpenApi;
         reminders::inbound::axum_router::email_collection::list_email_reminders_handler,
         // initiatives
         initiative::inbound::axum_router::list::list_initiatives_handler,
+        initiative::inbound::axum_router::page::page_initiatives_handler,
+        initiative::inbound::axum_router::description::get_initiative_description_handler,
         initiative::inbound::axum_router::create::create_initiative_handler,
         initiative::inbound::axum_router::get::get_initiative_handler,
+        initiative::inbound::axum_router::activity::get_initiative_activity_handler,
         initiative::inbound::axum_router::update::update_initiative_handler,
         initiative::inbound::axum_router::delete::delete_initiative_handler,
         // databases
@@ -563,7 +583,7 @@ use utoipa::OpenApi;
         databases::inbound::axum_router::duplicate::duplicate_database_handler,
         databases::inbound::axum_router::sharing::get_permissions_handler,
         databases::inbound::axum_router::sharing::update_permissions_handler,
-        databases::inbound::axum_router::saved_queries::save_query_handler,
+        databases_sql::inbound::axum_router::save_query_handler,
         databases::inbound::axum_router::saved_queries::get_query_handler,
         databases::inbound::axum_router::casts::column_casts_handler,
         databases::inbound::axum_router::casts::column_conversion_handler,
@@ -617,11 +637,26 @@ use utoipa::OpenApi;
         crm::inbound::pipelines::permissions,
         crm::inbound::pipelines::update_permissions,
         crm::inbound::pipelines::trash,
+        crm::inbound::pipeline_workflows::find_entries,
+        crm::inbound::pipeline_workflows::record_entries,
+        crm::inbound::pipeline_workflows::search_entries,
+        crm::inbound::pipeline_workflows::add_entries,
+        crm::inbound::pipeline_workflows::update_entries,
+        crm::inbound::pipeline_workflows::remove_entries,
+        crm::inbound::pipeline_workflows::edit,
+        crm::inbound::pipeline_workflows::import_pipeline,
+        crm::inbound::pipeline_workflows::import_companies,
+        crm::inbound::pipeline_workflows::pipeline_csv,
+        crm::inbound::pipeline_workflows::export_pipeline,
         crm::inbound::axum_router::set_email_sync::handler,
+        crm::inbound::axum_router::email_privacy::get_handler,
+        crm::inbound::axum_router::email_privacy::update_handler,
         crm::inbound::axum_router::set_company_hidden::handler,
         crm::inbound::axum_router::set_company_name::handler,
         crm::inbound::axum_router::set_contact_hidden::handler,
         crm::inbound::axum_router::set_contact_name::handler,
+        crm::inbound::axum_router::set_contact_email::handler,
+        crm::inbound::axum_router::set_contact_company::handler,
         crm::inbound::axum_router::list_company_contacts::handler,
         crm::inbound::axum_router::get_contact::handler,
         crm::inbound::axum_router::get_contact_by_email::handler,
@@ -733,6 +768,12 @@ use utoipa::OpenApi;
             calendar_events::inbound::axum_router::TeamOutOfOfficeItem,
             calendar_events::inbound::axum_router::TeamOutOfOfficeResponse,
             calendar_events::domain::team::TeamCalendarPage,
+            calendar_events::inbound::team_router::TeamAvailabilityRequest,
+            calendar_events::domain::team_availability::TeamAvailability,
+            calendar_events::domain::team_availability::TeamMemberAvailability,
+            calendar_events::domain::team_availability::AvailabilityInterval,
+            calendar_events::domain::team_availability::AvailabilityCoverage,
+            calendar_events::domain::team_availability::AvailabilityUnknownReason,
             calendar_events::domain::team::TeamCalendarItem,
             calendar_events::domain::team::TeamCalendarContent,
             calendar_events::domain::team::TeamCalendarDetails,
@@ -870,10 +911,19 @@ use utoipa::OpenApi;
             DatabaseQueryDefinition,
             DatabaseSavedQuery,
             DatabaseSaveQueryRequest,
+            DatabaseSaveQueryChart,
             InitiativeId,
             InitiativeSummary,
             InitiativeDetail,
+            initiative::domain::history::InitiativeActivityPage,
+            initiative::domain::history::InitiativeActivityRecord,
+            initiative::domain::history::InitiativeActivityCursor,
             InitiativeList,
+            InitiativePage,
+            InitiativePageRow,
+            InitiativePropertySnapshot,
+            InitiativeSort,
+            InitiativeDescription,
             CreateInitiativeRequest,
             InitialPropertyValue,
             UpdateInitiativeRequest,
@@ -1148,6 +1198,8 @@ use utoipa::OpenApi;
             crm::inbound::axum_router::set_company_name::SetCompanyNameRequest,
             crm::inbound::axum_router::set_contact_hidden::SetContactHiddenRequest,
             crm::inbound::axum_router::set_contact_name::SetContactNameRequest,
+            crm::inbound::axum_router::set_contact_email::SetContactEmailRequest,
+            crm::inbound::axum_router::set_contact_company::SetContactCompanyRequest,
             crm::inbound::axum_router::list_company_contacts::CrmContactResponse,
             crm::inbound::axum_router::get_company::CrmCompanyResponse,
             crm::inbound::axum_router::get_company::CrmDomainResponse,

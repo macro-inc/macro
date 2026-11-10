@@ -10,11 +10,13 @@ use std::collections::HashMap;
 #[cfg(test)]
 mod test;
 
-/// Who provider ids are, as far as the chat knows: people seen in it (with
-/// their verified Macro user) and the roster's names.
+/// Who the people of a chat are, as far as the chat knows: by the provider
+/// ids that mentions, system lines and votes name, and by the stored person
+/// that sent, reacted or voted.
 #[derive(Debug)]
 pub struct People {
     by_id: HashMap<String, ExternalChatPersonRef>,
+    by_person: HashMap<Uuid, String>,
     unnamed: fn(&str) -> Option<String>,
 }
 
@@ -30,6 +32,7 @@ impl People {
     pub fn new(unnamed: fn(&str) -> Option<String>) -> Self {
         Self {
             by_id: HashMap::new(),
+            by_person: HashMap::new(),
             unnamed,
         }
     }
@@ -38,6 +41,11 @@ impl People {
     /// the better sources first.
     pub fn learn(&mut self, id: &str, person: ExternalChatPersonRef) {
         self.by_id.entry(id.to_owned()).or_insert(person);
+    }
+
+    /// Learn what a stored person is called.
+    pub fn name_person(&mut self, person: Uuid, name: String) {
+        self.by_person.insert(person, name);
     }
 
     /// The person behind an id: their name when known, else what `unnamed`
@@ -49,6 +57,19 @@ impl People {
         ExternalChatPersonRef {
             name: (self.unnamed)(id).unwrap_or_else(|| UNKNOWN_PERSON.to_owned()),
             user_id: None,
+        }
+    }
+
+    /// A stored person by the name the provider gave them, else a generic
+    /// name.
+    pub fn person(&self, person: &StoredPerson) -> ExternalChatPersonRef {
+        ExternalChatPersonRef {
+            name: self
+                .by_person
+                .get(&person.person_id)
+                .cloned()
+                .unwrap_or_else(|| UNKNOWN_PERSON.to_owned()),
+            user_id: person.user_id.clone(),
         }
     }
 }
@@ -64,7 +85,7 @@ pub struct StoredVote {
     /// Hashes of the options chosen.
     pub selected: Vec<String>,
     /// Who voted.
-    pub voter: ExternalChatPersonRef,
+    pub voter: StoredPerson,
 }
 
 /// The mentions of a body, by name.
@@ -81,11 +102,16 @@ pub fn mentions_view(mentions: &[String], people: &People) -> Vec<ExternalChatMe
         .collect()
 }
 
-fn poll_option(option: &PollOption, votes: &[&StoredVote], viewer: &str) -> ExternalChatPollOption {
+fn poll_option(
+    option: &PollOption,
+    votes: &[&StoredVote],
+    viewer: &str,
+    people: &People,
+) -> ExternalChatPollOption {
     let voters: Vec<ExternalChatPersonRef> = votes
         .iter()
         .filter(|vote| vote.selected.contains(&option.hash))
-        .map(|vote| vote.voter.clone())
+        .map(|vote| people.person(&vote.voter))
         .collect();
     ExternalChatPollOption {
         name: option.name.clone(),
@@ -132,7 +158,7 @@ pub fn rich_view(
             options: poll
                 .options
                 .iter()
-                .map(|option| poll_option(option, votes, viewer))
+                .map(|option| poll_option(option, votes, viewer, people))
                 .collect(),
             question: poll.question,
             selectable_count: poll.selectable_count,
@@ -167,10 +193,7 @@ pub fn message_view(
     viewer: &str,
     people: &People,
 ) -> ExternalChatMessage {
-    let sender = ExternalChatPersonRef {
-        name: message.sender.name.clone(),
-        user_id: message.sender.user_id.clone(),
-    };
+    let sender = people.person(&message.sender);
     let votes: Vec<&StoredVote> = message.votes.iter().collect();
     ExternalChatMessage {
         id: message.id,
@@ -178,18 +201,48 @@ pub fn message_view(
         rich: message
             .rich
             .and_then(|content| rich_view(content, &sender, &votes, viewer, people)),
-        sender: message.sender,
+        sender: ExternalChatSender {
+            person_id: message.sender.person_id,
+            user_id: sender.user_id,
+            name: sender.name,
+        },
         body: message.body,
         reply_to: message.reply_to,
         sent_at: message.sent_at,
         received_at: message.received_at,
         edited_at: message.edited_at,
         deleted: message.deleted,
-        reactions: message.reactions,
+        reactions: message
+            .reactions
+            .into_iter()
+            .map(|reaction| ExternalChatReaction {
+                emoji: reaction.emoji,
+                reactors: reaction
+                    .reactors
+                    .iter()
+                    .map(|reactor| people.person(reactor))
+                    .collect(),
+                mine: reaction.mine,
+            })
+            .collect(),
         attachments: message.attachments,
         delivery_state,
         kind: message.kind,
         forwarded: message.forwarded,
         view_once: message.view_once,
     }
+}
+
+/// The stored people a message names by person: its sender, reactors and
+/// voters.
+pub fn stored_people(message: &StoredMessage) -> impl Iterator<Item = Uuid> + '_ {
+    let reactors = message
+        .reactions
+        .iter()
+        .flat_map(|reaction| &reaction.reactors);
+    let voters = message.votes.iter().map(|vote| &vote.voter);
+    std::iter::once(&message.sender)
+        .chain(reactors)
+        .chain(voters)
+        .map(|person| person.person_id)
 }

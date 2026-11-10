@@ -12,6 +12,7 @@ import { raceTimeout } from '@solid-primitives/promise';
 import { addPluginListener, Channel, invoke } from '@tauri-apps/api/core';
 import { createEffect, createMemo, on, onCleanup, onMount } from 'solid-js';
 import { joinChannelCall } from './join-channel-call';
+import { requestIosMicrophonePermission } from './microphone-access';
 import { isNativeCallEnabled } from './native-call-platform';
 import {
   type NativeCallSnapshot,
@@ -919,11 +920,19 @@ export async function endCallKitCall(): Promise<void> {
 
 const pendingAndroidJoins = new Map<string, string>();
 
-/** Pause ring resolution before the join API marks this user as answered. */
+/**
+ * Ask for the microphone, and on Android pause ring resolution, before the
+ * join API marks this user as answered.
+ */
 export async function prepareNativeCallJoin(
   channelId: string
 ): Promise<() => Promise<void>> {
-  if (!isNativeCallEnabled() || !isPlatform('android')) return async () => {};
+  if (!isNativeCallEnabled()) return async () => {};
+  if (isPlatform('ios')) {
+    await requestIosMicrophonePermission();
+    return async () => {};
+  }
+  if (!isPlatform('android')) return async () => {};
   const { lease } = await invoke<{ lease: string }>(
     'plugin:call-kit|prepare_join',
     { channelId }

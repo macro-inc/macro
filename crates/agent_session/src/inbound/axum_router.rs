@@ -75,6 +75,12 @@ pub mod pull_requests;
 /// Auto-archive defaults and per-session choices.
 pub mod auto_archive;
 
+/// Linking a session to the Macro task it works on.
+pub mod task;
+
+/// The caller's coding sessions waiting for them or stalled.
+pub mod updates;
+
 /// Registering sessions as an account's work.
 pub mod work_registration;
 
@@ -2376,6 +2382,7 @@ pub async fn create_agent_session_handler<
         let session = state
             .opener
             .open_managed_session(OpenManagedSession {
+                billing: Default::default(),
                 id: request.id.map(AgentSessionId::new_from_uuid),
                 repo_url: request.repo_url,
                 repo_branch: request

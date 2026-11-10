@@ -196,6 +196,13 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// Get a persisted agent session by id.
     fn get_session(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
+    /// Whether the session's in-process turns are billed to its owner, set
+    /// by whoever opened it.
+    fn session_billing(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<crate::domain::model::SessionBilling>> + Send;
+
     /// A persisted agent session by id, or `None` when there is none.
     fn find_session(
         &self,
@@ -925,6 +932,13 @@ where
 
     async fn get_session(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn session_billing(
+        &self,
+        id: AgentSessionId,
+    ) -> Result<crate::domain::model::SessionBilling> {
+        self.repo.billing(id).await
     }
 
     async fn find_session(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
@@ -2124,6 +2138,10 @@ where
 
     async fn get(&self, id: AgentSessionId) -> Result<AgentSession> {
         self.repo.get(id).await
+    }
+
+    async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
+        self.repo.billing(id).await
     }
 
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {

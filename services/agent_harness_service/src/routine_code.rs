@@ -5,7 +5,7 @@
 //! operation and how it ended, never its arguments or results.
 
 use std::{
-    collections::{BTreeMap, HashMap, VecDeque},
+    collections::{HashMap, VecDeque},
     sync::{Arc, LazyLock},
     time::{Duration, Instant},
 };
@@ -16,7 +16,7 @@ use agent_code_mode::domain::symbol_reference;
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
 use code_execution::domain::{
     CheckError, ExecuteRequest, Outcome, ProgramChecker, ProgramExecutor, RunEnvironment,
-    SourceFile, Unattended, operations, sdk_declarations,
+    SdkEndpoints, SourceFile, Unattended, operations, sdk_declarations,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -124,7 +124,7 @@ pub struct SdkRoutineCode<Credentials = MacroApiTokenSigner> {
     executor: Arc<dyn ProgramExecutor>,
     checker: Arc<dyn ProgramChecker>,
     credentials: Credentials,
-    hosts: BTreeMap<String, String>,
+    endpoints: SdkEndpoints,
     recorder: Arc<dyn ai_usage::UsageRecorder>,
     /// Chooses the SDK entities relevant to a task, as code mode does.
     cognition: Option<Arc<dyn cognition::domain::Cognition>>,
@@ -143,7 +143,7 @@ impl<Credentials> SdkRoutineCode<Credentials> {
         executor: Arc<dyn ProgramExecutor>,
         checker: Arc<dyn ProgramChecker>,
         credentials: Credentials,
-        hosts: BTreeMap<String, String>,
+        endpoints: SdkEndpoints,
         recorder: Arc<dyn ai_usage::UsageRecorder>,
         cognition: Option<Arc<dyn cognition::domain::Cognition>>,
         time_zones: Arc<dyn OwnerTimeZones>,
@@ -152,7 +152,7 @@ impl<Credentials> SdkRoutineCode<Credentials> {
             executor,
             checker,
             credentials,
-            hosts,
+            endpoints,
             recorder,
             cognition,
             time_zones,
@@ -289,7 +289,7 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
         let environment = RunEnvironment {
             token,
             trace_headers: crate::code_mode::trace_headers(),
-            hosts: self.hosts.clone(),
+            endpoints: self.endpoints.clone(),
             session_id: None,
             execution_id: None,
             unattended: Some(Unattended {
