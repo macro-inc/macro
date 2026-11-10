@@ -136,6 +136,7 @@ export * from './payloadConditionIn';
 export * from './payloadConditionNotIn';
 export * from './payloadScalar';
 export * from './propertySelector';
+export * from './recordSuggestionsSeenParams';
 export * from './retireIdea';
 export * from './retireSuggestion';
 export * from './reviewedState';

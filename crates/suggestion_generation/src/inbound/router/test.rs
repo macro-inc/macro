@@ -59,6 +59,18 @@ impl StartGeneration for Starts {
         Ok(true)
     }
 
+    async fn seen(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        timezone: chrono_tz::Tz,
+    ) -> Result<(), GenerationError> {
+        self.0
+            .lock()
+            .unwrap()
+            .push((format!("seen {}", user.as_ref()), timezone));
+        Ok(())
+    }
+
     async fn routine_suggestions(
         &self,
         _: &MacroUserIdStr<'static>,
@@ -84,6 +96,26 @@ fn app(starts: &Arc<Starts>) -> Router {
         service: Arc::clone(starts),
         authorization_state: MacroAuthorizationState::new(Arc::new(auth)),
     })
+}
+
+/// Loading the app tells the service the caller was seen, in their zone.
+#[tokio::test]
+async fn an_app_load_records_the_caller_as_seen() {
+    let starts = Arc::new(Starts::default());
+    let response = app(&starts)
+        .oneshot(
+            Request::post("/suggestions/seen?timezone=Asia/Tokyo")
+                .header(header::AUTHORIZATION, "Bearer valid")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(
+        *starts.0.lock().unwrap(),
+        [(format!("seen {USER}"), chrono_tz::Asia::Tokyo)]
+    );
 }
 
 /// Bundles from before the unified generation still call the old route: it

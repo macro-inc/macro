@@ -30,6 +30,13 @@ pub trait StartGeneration: Send + Sync + 'static {
         timezone: chrono_tz::Tz,
     ) -> impl Future<Output = Result<bool, GenerationError>> + Send;
 
+    /// The person loaded the app in `timezone`.
+    fn seen(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        timezone: chrono_tz::Tz,
+    ) -> impl Future<Output = Result<(), GenerationError>> + Send;
+
     /// The person's routine suggestions, as the retired generate route
     /// answered with them.
     fn routine_suggestions(
@@ -70,6 +77,7 @@ where
 {
     Router::new()
         .route("/suggestions/generate", post(start_generation::<S, Auth>))
+        .route("/suggestions/seen", post(seen::<S, Auth>))
         // Web and app bundles from before the unified generation still
         // call this. Remove once none does.
         .route(
@@ -154,12 +162,50 @@ where
             .await
     }
 
+    async fn seen(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        timezone: chrono_tz::Tz,
+    ) -> Result<(), GenerationError> {
+        self.seen(user, timezone).await
+    }
+
     async fn routine_suggestions(
         &self,
         user: &macro_user_id::user_id::MacroUserIdStr<'static>,
     ) -> Result<RoutineSuggestions, GenerationError> {
         self.routine_suggestions(user).await
     }
+}
+
+#[utoipa::path(
+    post,
+    path = "/suggestions/seen",
+    tag = "suggestions",
+    operation_id = "record_suggestions_seen",
+    params(GenerateQuery),
+    responses(
+        (status = 204, description = "Recorded: with ideas on and a paid plan, the caller counts as active for nightly generations in their time zone; otherwise nothing changes"),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// The caller loaded the app in their time zone.
+pub async fn seen<S, Auth>(
+    State(state): State<GenerationRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(query): Query<GenerateQuery>,
+) -> Result<StatusCode, GenerationApiError>
+where
+    S: StartGeneration,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .service
+        .seen(&user.authorization.macro_user_id, query.timezone)
+        .await
+        .map_err(GenerationApiError)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// The retired `POST /scheduled-actions/suggestions/generate`: start the

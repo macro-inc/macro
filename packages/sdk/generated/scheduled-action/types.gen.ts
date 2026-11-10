@@ -2474,3 +2474,31 @@ export type StartSuggestionGenerationResponses = {
 };
 
 export type StartSuggestionGenerationResponse = StartSuggestionGenerationResponses[keyof StartSuggestionGenerationResponses];
+
+export type RecordSuggestionsSeenData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * IANA time zone, e.g. `America/New_York`.
+         */
+        timezone: string;
+    };
+    url: '/suggestions/seen';
+};
+
+export type RecordSuggestionsSeenErrors = {
+    401: string;
+    500: string;
+};
+
+export type RecordSuggestionsSeenError = RecordSuggestionsSeenErrors[keyof RecordSuggestionsSeenErrors];
+
+export type RecordSuggestionsSeenResponses = {
+    /**
+     * Recorded: with ideas on and a paid plan, the caller counts as active for nightly generations in their time zone; otherwise nothing changes
+     */
+    204: void;
+};
+
+export type RecordSuggestionsSeenResponse = RecordSuggestionsSeenResponses[keyof RecordSuggestionsSeenResponses];

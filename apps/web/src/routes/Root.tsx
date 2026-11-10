@@ -1,5 +1,6 @@
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { usePendingInviteRedemption } from '@app/features/gtm-invite/usePendingInviteRedemption';
+import { useRecordIdeasActivity } from '@app/features/ideas/queries/use-record-ideas-activity';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { MeetingSessionProvider } from '@app/features/meetings/meeting-session-provider';
 import {
@@ -188,6 +189,7 @@ const BOOT_SHELL_MAX_WAIT_MS = 8000;
  */
 function AppRouteFrame(props: RouteSectionProps) {
   useUserInfoSideEffects();
+  useRecordIdeasActivity();
   useSessionWebsockets();
   useNotificationCoverTimeout();
   onMount(() => {

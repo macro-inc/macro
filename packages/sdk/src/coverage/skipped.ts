@@ -280,6 +280,7 @@ export const scheduledActionExcluded = [
   'routineCatalog', // The new-routine flow's templates.
   'listRoutineSuggestions', // The app's suggestion surfaces; agents use CreateRoutine.
   'startSuggestionGeneration', // Onboarding starts the person's generation once the inbox connects.
+  'recordSuggestionsSeen', // The app records each load; agents have no use for it.
   'dismissRoutineSuggestion', // The app's suggestion surfaces.
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];

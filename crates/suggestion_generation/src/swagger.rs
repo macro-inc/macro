@@ -6,7 +6,7 @@ use utoipa::OpenApi;
 /// The generation route's OpenAPI.
 #[derive(OpenApi)]
 #[openapi(
-    paths(crate::inbound::router::start_generation),
+    paths(crate::inbound::router::start_generation, crate::inbound::router::seen),
     components(schemas(crate::domain::model::GenerationStarted)),
     tags((name = "suggestions", description = "Generations of each person's ideas and routine suggestions")),
 )]

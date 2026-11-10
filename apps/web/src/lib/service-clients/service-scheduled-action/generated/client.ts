@@ -25,6 +25,7 @@ import type {
   ListIdeasParams,
   ListRoutineSuggestionsParams,
   ListScheduledActionsParams,
+  RecordSuggestionsSeenParams,
   RetireIdea,
   RetireSuggestion,
   RewriteIdea,
@@ -2116,4 +2117,76 @@ export const startSuggestionGeneration = async (
     status: res.status,
     headers: res.headers,
   } as startSuggestionGenerationResponse;
+};
+
+/**
+ * @summary The caller loaded the app in their time zone.
+ */
+export type recordSuggestionsSeenResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type recordSuggestionsSeenResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type recordSuggestionsSeenResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type recordSuggestionsSeenResponseSuccess =
+  recordSuggestionsSeenResponse204 & {
+    headers: Headers;
+  };
+export type recordSuggestionsSeenResponseError = (
+  | recordSuggestionsSeenResponse401
+  | recordSuggestionsSeenResponse500
+) & {
+  headers: Headers;
+};
+
+export type recordSuggestionsSeenResponse =
+  | recordSuggestionsSeenResponseSuccess
+  | recordSuggestionsSeenResponseError;
+
+export const getRecordSuggestionsSeenUrl = (
+  params: RecordSuggestionsSeenParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/suggestions/seen?${stringifiedParams}`
+    : `/suggestions/seen`;
+};
+
+export const recordSuggestionsSeen = async (
+  params: RecordSuggestionsSeenParams,
+  options?: RequestInit
+): Promise<recordSuggestionsSeenResponse> => {
+  const res = await fetch(getRecordSuggestionsSeenUrl(params), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: recordSuggestionsSeenResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as recordSuggestionsSeenResponse;
 };
