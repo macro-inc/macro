@@ -1,8 +1,23 @@
 # Flake outputs for the Macro computer guest, a NixOS configuration; see
 # AGENTS.md.
-{ inputs, withSystem, ... }:
+{
+  inputs,
+  withSystem,
+  lib,
+  ...
+}:
 let
   system = "x86_64-linux";
+  # herdr and its skill come from one tagged source; the tag must be the
+  # version that source builds.
+  herdrTag = (lib.importJSON ../../flake.lock).nodes.herdr.original.ref;
+  herdrVersion = (lib.importTOML "${inputs.herdr}/Cargo.toml").package.version;
+  herdr =
+    assert lib.assertMsg (herdrTag == "v${herdrVersion}")
+      "the herdr input is pinned to ${herdrTag}, but its source builds herdr ${herdrVersion}; pin the input to the v${herdrVersion} tag";
+    {
+      macro.box.herdrSource = inputs.herdr;
+    };
   guest =
     module:
     withSystem system (
@@ -11,6 +26,7 @@ let
         inherit system;
         modules = [
           module
+          herdr
           { macro.box.macrod = self'.packages.macrod; }
         ];
       }
@@ -71,7 +87,12 @@ in
             '';
         macro-box = import ./_vm-test.nix {
           inherit pkgs;
-          guest = ./_guest.nix;
+          guest = {
+            imports = [
+              ./_guest.nix
+              herdr
+            ];
+          };
           inherit (self'.packages) macrod;
         };
       };

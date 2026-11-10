@@ -1,8 +1,7 @@
 //! `CI Gate Reminder` — on every new PR commit, sets the `CI gate` status to
 //! pending with the command that runs CI, so the commit reads as not passed
-//! until someone runs [`pr_ci`](crate::workflows::pr_ci). A base change, such
-//! as a stacked PR retargeted to `main`, resets it too: the result was for the
-//! old base. Generated into `ci-gate-reminder.yml`.
+//! until someone runs [`pr_ci`](crate::workflows::pr_ci). Generated into
+//! `ci-gate-reminder.yml`.
 
 use gh_workflow::{
     Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Workflow,
@@ -15,10 +14,10 @@ pub fn ci_gate_reminder() -> Workflow {
     Workflow::new("CI Gate Reminder")
         .on(Event::default().pull_request(
             PullRequest::default()
+                .add_branch("main")
                 .add_type(PullRequestType::Opened)
                 .add_type(PullRequestType::Synchronize)
-                .add_type(PullRequestType::Reopened)
-                .add_type(PullRequestType::Edited),
+                .add_type(PullRequestType::Reopened),
         ))
         .add_job("remind", remind())
 }
@@ -30,7 +29,7 @@ fn remind() -> Job {
     Job::default()
         .name("CI not run yet")
         .cond(Expression::new(
-            "github.event.pull_request.head.repo.full_name == github.repository && (github.event.action != 'edited' || github.event.changes.base != null)",
+            "github.event.pull_request.head.repo.full_name == github.repository",
         ))
         .runs_on("ubuntu-latest")
         .timeout_minutes(5u32)
@@ -42,7 +41,6 @@ fn remind() -> Job {
             pr_ci::gate_step("Mark the commit as not run", "remind")
                 .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
                 .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
-                .add_env(("BASE_CHANGED", "${{ github.event.action == 'edited' }}"))
                 .add_env(("CI_GATE_DOCS_URL", pr_ci::GATE_DOCS_URL)),
         )
 }

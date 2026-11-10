@@ -13,10 +13,11 @@ let
   home = config.users.users.macro.home;
   workspace = "${home}/work";
   macrodConfig = "${home}/.macrod/macrod.toml";
-  # macrod writes this marker when enrollment succeeds.
+  # macrod writes "<computer id>\n<generation>" here when enrollment succeeds.
   enrolledMarker = "/var/lib/macrod/enrolled";
   # /var/lib/macrod links here when there is a data disk.
   persistentMacrodState = if cfg.dataDisk == null then "/var/lib/macrod" else "/home/.system/macrod";
+  herdr = pkgs.callPackage "${cfg.herdrSource}/nix/package.nix" { };
   adapterDirectory = "${home}/.macrod/adapters/${cfg.claudeAgentAcp.adapterDirectory}";
   display = ":0";
   waitForDisplay = pkgs.writeShellScript "wait-for-display" ''
@@ -43,6 +44,15 @@ let
   skel = {
     "skel/.claude.json" = {
       source = claudeUserConfig;
+      mode = "0644";
+    };
+    # herdr's official skill (Apache-2.0), with its license alongside.
+    "skel/.claude/skills/herdr/SKILL.md" = {
+      source = "${cfg.herdrSource}/skills/herdr/SKILL.md";
+      mode = "0644";
+    };
+    "skel/.claude/skills/herdr/LICENSE" = {
+      source = "${cfg.herdrSource}/LICENSE";
       mode = "0644";
     };
   }
@@ -92,6 +102,10 @@ in
       type = lib.types.package;
       default = import ./_chrome-devtools-mcp.nix { inherit pkgs; };
       description = "The chrome-devtools MCP server.";
+    };
+    herdrSource = lib.mkOption {
+      type = lib.types.path;
+      description = "herdr's source at a release tag: its package and official agent skill.";
     };
     enrollFrom = lib.mkOption {
       type = lib.types.str;
@@ -203,9 +217,9 @@ in
       cfg.macrod
       cfg.claudeCode
       cfg.chromeDevtoolsMcp
+      herdr
     ]
     ++ (with pkgs; [
-      herdr
       chromium
       nodejs_24
       python3
@@ -313,16 +327,26 @@ in
         "incus-agent.service"
       ];
       before = [ "macrod.service" ];
-      unitConfig.ConditionPathExists = "!${enrolledMarker}";
+      # Runs on every boot: `macrod enroll` re-enrolls for a newer
+      # generation and keeps the existing enrollment otherwise.
+      unitConfig = {
+        # A retry that succeeds still starts macrod.
+        OnSuccess = "macrod.service";
+        StartLimitIntervalSec = 0;
+      };
       path = systemPath;
       # Agent discovery records adapter paths usable by the daemon user.
       environment = {
         HOME = home;
         MACRO_ENROLL_FROM = cfg.enrollFrom;
+        MACRO_ENROLLED_MARKER = enrolledMarker;
       };
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
+        # macrod requires it; keep trying until the source shows up.
+        Restart = "on-failure";
+        RestartSec = 10;
         ExecStartPre = lib.getExe (
           pkgs.writeShellApplication {
             name = "check-enrollment-source";

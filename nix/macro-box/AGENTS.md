@@ -32,6 +32,13 @@ PID 1 (for the dev-only DockerFleet).
   `~macro/.macrod/adapters/<package>@<version>`, so macrod never runs npm.
 - `files/` holds the enrollment probe script and `/etc/claude-code/CLAUDE.md`;
   `skills/` is copied into `/etc/skel/.claude/skills` and macro's home.
+- herdr is built from the `herdr` flake input (`github:herdrdev/herdr/v<version>`)
+  with its own `nix/package.nix`, and its official skill
+  (`skills/herdr/SKILL.md`, Apache-2.0, with `LICENSE` beside it) comes from
+  the same source. Evaluation fails when the input's tag differs from the
+  version in its `Cargo.toml`. herdr sets `HERDR_ENV=1` in its panes, which
+  the skill requires. To upgrade, change the tag in `flake.nix` and run
+  `nix flake lock --update-input herdr`.
 
 ## Outputs
 
@@ -44,14 +51,18 @@ PID 1 (for the dev-only DockerFleet).
 
 ## Contract with macrod and the computers control plane
 
-- `macrod-enroll.service` (oneshot, root, `ConditionPathExists=!/var/lib/macrod/enrolled`,
-  `Before=macrod.service`) runs `macrod enroll --from $MACRO_ENROLL_FROM
-  --config /home/macro/.macrod/macrod.toml`. `macro.box.enrollFrom` sets it
-  (`incus`, or `file:<path>`); `check-enrollment-source` fails first, with a
-  reason, when the source is missing. Enroll writes only `macrod.toml` (owned by
-  `macro`), the credential and the markers, ending with
-  `/var/lib/macrod/enrolled`; it installs no units (`/etc/systemd/system` is
-  read-only on NixOS).
+- `macrod-enroll.service` (oneshot, root, `Before=macrod.service`) runs on
+  every boot: `macrod enroll --from $MACRO_ENROLL_FROM --config
+  /home/macro/.macrod/macrod.toml`. `macro.box.enrollFrom` sets the source
+  (`incus`, or `file:<path>`). The marker `/var/lib/macrod/enrolled` holds
+  `<computer id>\n<generation>`; a newer generation re-enrolls, and no source
+  with a marker means already enrolled. `check-enrollment-source` runs first:
+  it fails with a reason when there is no source and no marker, and passes
+  when the marker exists, leaving the decision to `macrod enroll`. Enroll
+  writes only `macrod.toml` (owned by `macro`), the credential and the
+  marker; it installs no units (`/etc/systemd/system` is read-only on
+  NixOS). It restarts on failure every 10 s with no start limit, and
+  `OnSuccess=` starts macrod once a retry succeeds.
 - `macrod.service` runs `macrod service` as `macro` (Claude Code refuses
   permission bypass as root), workspace `/home/macro/work`, after
   `macrod-enroll.service`. It restarts after 1 s, backing off to 30 s, and
@@ -117,9 +128,9 @@ The control plane, per computer:
    `macro-box/<date>`, and keep the old alias for rollback.
 3. Update: `stop` → `rebuild(instance, new alias)` → `start`. Rebuild keeps
    config (`user.macro.enrollment`), profiles and the data volume.
-   `macrod-enroll` is skipped because the marker is on the data disk, and
-   macrod reconnects with its existing credentials: no new pairing and no
-   Claude login.
+   `macrod-enroll` runs, finds the marker on the data disk and no newer
+   generation, and keeps the enrollment; macrod reconnects with its existing
+   credentials: no new pairing and no Claude login.
 4. Rollback: the same steps with the old alias.
 5. On deletion, `delete` the instance, then `delete_volume`; Incus does not
    delete attached custom volumes with the instance.
@@ -144,7 +155,7 @@ The control plane, per computer:
   tools are on macro's PATH, a downloaded glibc binary runs through nix-ld,
   and Xvnc and Chromium's CDP port come up. A second image then boots from
   the first one's data disk and keeps the home files, Claude credentials and
-  enrollment marker without running enrollment again.
+  enrollment marker; enrollment runs and its check passes without a source.
 - `nix build .#checks.x86_64-linux.macro-box-claude-agent-acp` runs ACP
   `initialize` against the adapter. Evaluation fails when its version differs
   from macrod's pin in `crates/coding_agent_worker/src/tui/agent_catalog/claude_code.rs`;
