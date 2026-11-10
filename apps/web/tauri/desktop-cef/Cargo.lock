@@ -4660,6 +4660,7 @@ dependencies = [
  "jni 0.21.1",
  "ndk-context",
  "objc2 0.5.3",
+ "objc2-foundation 0.2.2",
  "reqwest",
  "rootcause",
  "semver",
