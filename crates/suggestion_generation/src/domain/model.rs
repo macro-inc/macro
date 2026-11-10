@@ -114,6 +114,8 @@ pub struct AudienceMember {
     pub user: MacroUserIdStr<'static>,
     /// The zone their browser last reported.
     pub timezone: Tz,
+    /// When they last loaded the app with suggestions on.
+    pub seen_at: chrono::DateTime<chrono::Utc>,
 }
 
 /// What starting a generation did.

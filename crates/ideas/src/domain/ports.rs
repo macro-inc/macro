@@ -72,8 +72,13 @@ pub trait IdeaRepo: Send + Sync + 'static {
     /// How many ideas generation `generation` added or brought back.
     fn added_in(&self, generation: Uuid) -> impl Future<Output = Result<u32, Self::Err>> + Send;
 
-    /// How many changes session `session` logged.
-    fn kept_by(&self, session: Uuid) -> impl Future<Output = Result<u32, Self::Err>> + Send;
+    /// How many changes session `session` of generation `generation`
+    /// logged.
+    fn kept_by(
+        &self,
+        generation: Uuid,
+        session: Uuid,
+    ) -> impl Future<Output = Result<u32, Self::Err>> + Send;
 
     /// Add a proposed idea `id` with `content` for the person, within
     /// `limits`, logging `change`.
@@ -197,8 +202,13 @@ pub trait IdeaApi: Send + Sync + 'static {
     /// for a person in `timezone`.
     fn brief(&self, trigger: GenerationTrigger, timezone: chrono_tz::Tz) -> String;
 
-    /// How many changes ideas session `session` made.
-    fn kept(&self, session: Uuid) -> impl Future<Output = Result<u32, IdeaError>> + Send;
+    /// How many changes ideas session `session` of generation `generation`
+    /// made.
+    fn kept(
+        &self,
+        generation: Uuid,
+        session: Uuid,
+    ) -> impl Future<Output = Result<u32, IdeaError>> + Send;
 
     /// Every idea of the person's, for the ideas session the request
     /// `correlation` names.

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT count(*) AS \"count!\" FROM suggestion_change\n               WHERE session_id = $1 AND subject = 'idea'",
+  "query": "SELECT count(*) AS \"count!\" FROM routine_suggestion\n               WHERE user_id = $1 AND session_id = $2",
   "describe": {
     "columns": [
       {
@@ -11,6 +11,7 @@
     ],
     "parameters": {
       "Left": [
+        "Text",
         "Uuid"
       ]
     },
@@ -18,5 +19,5 @@
       null
     ]
   },
-  "hash": "ed4ed89c76bbf4032585d2b55183b4c93fea7403f5e47f5e832776dc2c98e4a4"
+  "hash": "8d076fb3abf5c36e9a25b96d06ea96cd288286d7e67cb2fddf4a5067be2c940c"
 }

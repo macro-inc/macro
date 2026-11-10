@@ -43,6 +43,7 @@ use super::model::{
     AudienceMember, GenerationAgent, GenerationError, GenerationOutcome, SessionLayout,
     StaleSession,
 };
+use super::night;
 use super::ports::{GenerationRepo, Plans};
 
 #[cfg(test)]
@@ -66,15 +67,20 @@ pub const STALE_SESSION: Duration = Duration::from_secs(20 * 60);
 pub const STALE_GENERATION: Duration = Duration::from_secs(25 * 60);
 /// Who counts as active for a nightly run: seen in the last week.
 pub const ACTIVE_WITHIN: chrono::TimeDelta = chrono::TimeDelta::days(7);
-/// The local hours a nightly run starts in: 2 to 5 am.
-pub const NIGHT: (u8, u8) = (2, 5);
+pub use super::night::NIGHT;
 /// Nightly runs at most once in this long, whatever the zone does.
 pub const NIGHTLY_EVERY: chrono::TimeDelta = chrono::TimeDelta::hours(20);
 /// How often a person's nightly run includes a routines session: once a
 /// week. Other nights run only the ideas session.
 pub const ROUTINES_EVERY: chrono::TimeDelta = chrono::TimeDelta::days(7);
-/// Nightly generations one process runs at once.
-pub const MAX_NIGHTLY_RUNS: usize = 2;
+/// Nightly generations one process runs at once. A nightly run is one
+/// ideas session of up to 15 minutes (a routines one too, weekly), so with
+/// the harness's two processes and a tick every 5 minutes this starts about
+/// 48 people an hour, roughly 150 per zone's three-hour night: sized for
+/// the flagged rollout. `suggestion.nightly_short` says when it falls short.
+pub const MAX_NIGHTLY_RUNS: usize = 6;
+/// How many times a tick reads who is due while it has room.
+const DUE_BATCHES: usize = 4;
 const SWEEP_BATCH: u16 = 64;
 const FIRST_POLL: Duration = Duration::from_millis(500);
 const MAX_POLL: Duration = Duration::from_secs(2);
@@ -251,9 +257,14 @@ where
             return Ok(false);
         }
         if trigger == GenerationTrigger::Onboarding && self.paid(user).await {
-            repo.see(user, timezone.name(), now)
-                .await
-                .map_err(GenerationError::internal)?;
+            repo.see(
+                user,
+                timezone.name(),
+                now,
+                night::upcoming(user, timezone, now),
+            )
+            .await
+            .map_err(GenerationError::internal)?;
         }
         let stale =
             chrono::Duration::from_std(STALE_GENERATION).map_err(GenerationError::internal)?;
@@ -306,52 +317,87 @@ where
     /// Start nightly generations for the people due one, as many as this
     /// process has room for. How many started.
     #[tracing::instrument(name = "suggestion.nightly", skip_all, fields(
-        suggestion.nightly.due = tracing::field::Empty,
         suggestion.nightly.started = tracing::field::Empty,
+        suggestion.nightly.dropped = tracing::field::Empty,
+        suggestion.nightly.missed = tracing::field::Empty,
+        suggestion.nightly.waiting = tracing::field::Empty,
     ), err)]
     pub async fn nightly(&self) -> Result<usize, GenerationError> {
-        let room = self.nightly.available_permits();
-        if room == 0 {
-            return Ok(0);
-        }
         let now = Utc::now();
         let stale =
             chrono::Duration::from_std(STALE_GENERATION).map_err(GenerationError::internal)?;
-        let due: Vec<AudienceMember> = self
-            .runner
-            .repo
-            .due(
-                now,
-                now - ACTIVE_WITHIN,
-                now - NIGHTLY_EVERY,
-                now - stale,
-                NIGHT,
-                u16::try_from(room).unwrap_or(u16::MAX),
-            )
-            .await
-            .map_err(GenerationError::internal)?;
-        let span = tracing::Span::current();
-        span.record("suggestion.nightly.due", due.len());
-        let mut started = 0;
-        for member in due {
-            // Nightly runs are for paid plans; the rest wait to be seen
-            // again on one.
-            if !self.paid(&member.user).await {
-                if let Err(error) = self.runner.repo.forget(&member.user).await {
-                    tracing::warn!(?error, "could not drop an unpaid person from the audience");
-                }
-                continue;
+        let (mut started, mut dropped, mut missed, mut waiting) = (0, 0, 0, 0);
+        // People dropped or passed over don't use up the tick: keep reading
+        // who is due while there is room, a bounded number of times.
+        'batches: for _ in 0..DUE_BATCHES {
+            let room = self.nightly.available_permits();
+            if room == 0 {
+                break;
             }
-            match self
-                .start(&member.user, GenerationTrigger::Nightly, member.timezone)
+            let due: Vec<AudienceMember> = self
+                .runner
+                .repo
+                .due(
+                    now,
+                    now - stale,
+                    u16::try_from(room * 2).unwrap_or(u16::MAX),
+                )
                 .await
-            {
-                Ok(true) => started += 1,
-                Ok(false) | Err(GenerationError::NotFound) => {}
-                Err(error) => tracing::warn!(?error, "could not start a nightly generation"),
+                .map_err(GenerationError::internal)?;
+            if due.is_empty() {
+                break;
+            }
+            for (index, member) in due.iter().enumerate() {
+                if self.nightly.available_permits() == 0 {
+                    waiting += due.len() - index;
+                    break 'batches;
+                }
+                let repo = &self.runner.repo;
+                // Nightly runs are for people active this week on a paid
+                // plan; the rest wait to be seen again on one.
+                if member.seen_at <= now - ACTIVE_WITHIN || !self.paid(&member.user).await {
+                    if let Err(error) = repo.forget(&member.user).await {
+                        tracing::warn!(?error, "could not drop someone from the audience");
+                    }
+                    dropped += 1;
+                    continue;
+                }
+                let next = night::following(&member.user, member.timezone, now);
+                // Their night ended before there was room: the next one.
+                if !night::in_night(member.timezone, now) {
+                    missed += 1;
+                } else {
+                    match self
+                        .start(&member.user, GenerationTrigger::Nightly, member.timezone)
+                        .await
+                    {
+                        Ok(true) => started += 1,
+                        Ok(false) | Err(GenerationError::NotFound) => {}
+                        Err(error) => {
+                            tracing::warn!(?error, "could not start a nightly generation");
+                            continue;
+                        }
+                    }
+                }
+                if let Err(error) = repo.reschedule(&member.user, next).await {
+                    tracing::warn!(?error, "could not schedule someone's next nightly run");
+                }
             }
         }
+        let span = tracing::Span::current();
         span.record("suggestion.nightly.started", started);
+        span.record("suggestion.nightly.dropped", dropped);
+        span.record("suggestion.nightly.missed", missed);
+        span.record("suggestion.nightly.waiting", waiting);
+        if missed > 0 || waiting > 0 {
+            // Due but not started: nightly capacity is short.
+            tracing::warn!(
+                event = "suggestion.nightly_short",
+                missed,
+                waiting,
+                "people due a nightly generation weren't started"
+            );
+        }
         Ok(started)
     }
 
@@ -386,9 +432,15 @@ where
         if !ideas || !self.paid(user).await {
             return Ok(());
         }
+        let now = Utc::now();
         self.runner
             .repo
-            .see(user, timezone.name(), Utc::now())
+            .see(
+                user,
+                timezone.name(),
+                now,
+                night::upcoming(user, timezone, now),
+            )
             .await
             .map_err(GenerationError::internal)
     }
@@ -541,7 +593,7 @@ where
             .await;
         let kept = self
             .ideas
-            .kept(session.as_uuid())
+            .kept(run.generation, session.as_uuid())
             .await
             .inspect_err(|error| {
                 tracing::warn!(?error, "could not count an ideas session's changes")
@@ -625,7 +677,7 @@ where
             .await;
         let kept = self
             .routines
-            .kept(session.as_uuid())
+            .kept(&run.user, session.as_uuid())
             .await
             .inspect_err(|error| tracing::warn!(error = ?error, "could not count a routines session's suggestions"))
             .unwrap_or(0);

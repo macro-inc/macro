@@ -23,7 +23,7 @@ struct FakeRepo {
 }
 
 impl SuggestionRepo for FakeRepo {
-    async fn kept_by(&self, session: Uuid) -> Result<u32> {
+    async fn kept_by(&self, _: &MacroUserIdStr<'_>, session: Uuid) -> Result<u32> {
         Ok(self
             .kept
             .lock()
@@ -770,6 +770,21 @@ async fn a_routines_session_reviews_and_retires_and_a_retired_pick_may_return() 
     assert_eq!(review.suggestions[0].state, ReviewedState::Open);
     assert_eq!(review.kept_left, MAX_KEPT_PER_SESSION - 1);
 
+    // A reason naming someone's details is refused, and nothing is retired.
+    let detailed = h
+        .service
+        .retire(
+            &principal,
+            Some(night),
+            id,
+            RetireSuggestion {
+                reason: format!("No more mail from {}@{}.com", "sam", "example"),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(!detailed.ok);
+    assert!(detailed.problems[0].contains("names"), "{detailed:?}");
     let retired = h
         .service
         .retire(

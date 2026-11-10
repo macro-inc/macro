@@ -5,7 +5,7 @@
 use bot_id::BotId;
 use chrono::{DateTime, Utc};
 use ideas::domain::model::{GenerationSession, GenerationTrigger, SessionKind};
-use ideas::domain::ports::{GenerationSessions, SuggestionAudience};
+use ideas::domain::ports::GenerationSessions;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use scheduled_action::domain::suggestions::model::GenerationStatus;
@@ -200,13 +200,36 @@ impl GenerationRepo for PgGenerationRepo {
         user: &MacroUserIdStr<'_>,
         timezone: &str,
         now: DateTime<Utc>,
+        next_run: DateTime<Utc>,
     ) -> Result<(), Self::Err> {
         sqlx::query!(
-            r#"INSERT INTO suggestion_audience (user_id, timezone, seen_at) VALUES ($1, $2, $3)
-               ON CONFLICT (user_id) DO UPDATE SET timezone = EXCLUDED.timezone, seen_at = EXCLUDED.seen_at"#,
+            r#"INSERT INTO suggestion_audience (user_id, timezone, seen_at, next_run_at)
+               VALUES ($1, $2, $3, $4)
+               ON CONFLICT (user_id) DO UPDATE SET
+                   seen_at = EXCLUDED.seen_at,
+                   timezone = EXCLUDED.timezone,
+                   next_run_at = CASE WHEN suggestion_audience.timezone = EXCLUDED.timezone
+                                      THEN suggestion_audience.next_run_at
+                                      ELSE EXCLUDED.next_run_at END"#,
             user.as_ref(),
             timezone,
             now,
+            next_run,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn reschedule(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        at: DateTime<Utc>,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            "UPDATE suggestion_audience SET next_run_at = $2 WHERE user_id = $1",
+            user.as_ref(),
+            at,
         )
         .execute(&self.pool)
         .await?;
@@ -243,35 +266,29 @@ impl GenerationRepo for PgGenerationRepo {
     async fn due(
         &self,
         now: DateTime<Utc>,
-        seen_since: DateTime<Utc>,
-        nightly_since: DateTime<Utc>,
         stale_before: DateTime<Utc>,
-        night: (u8, u8),
         limit: u16,
     ) -> Result<Vec<AudienceMember>, Self::Err> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *tx)
+            .await?;
         let rows = sqlx::query!(
-            r#"SELECT a.user_id, a.timezone FROM suggestion_audience a
-               WHERE a.seen_at > $2
-                 AND extract(hour FROM $1 AT TIME ZONE a.timezone)::int >= $4
-                 AND extract(hour FROM $1 AT TIME ZONE a.timezone)::int < $5
+            r#"SELECT a.user_id, a.timezone, a.seen_at FROM suggestion_audience a
+               WHERE a.next_run_at <= $1
                  AND NOT EXISTS (
                      SELECT 1 FROM suggestion_generation g
-                     WHERE g.user_id = a.user_id
-                       AND ((g.status = 'generating' AND g.started_at >= $7)
-                            OR (g.trigger = 'nightly' AND g.started_at > $3
-                                AND NOT (g.status = 'generating' AND g.started_at < $7))))
-               ORDER BY a.seen_at
-               LIMIT $6"#,
+                     WHERE g.user_id = a.user_id AND g.status = 'generating'
+                       AND g.started_at >= $2)
+               ORDER BY a.next_run_at
+               LIMIT $3"#,
             now,
-            seen_since,
-            nightly_since,
-            i32::from(night.0),
-            i32::from(night.1),
-            i64::from(limit),
             stale_before,
+            i64::from(limit),
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *tx)
         .await?;
+        tx.commit().await?;
         rows.into_iter()
             .map(|row| {
                 Ok(AudienceMember {
@@ -280,6 +297,7 @@ impl GenerationRepo for PgGenerationRepo {
                         .timezone
                         .parse()
                         .map_err(|_| PgGenerationRepoError::Decode("a time zone".to_owned()))?,
+                    seen_at: row.seen_at,
                 })
             })
             .collect()
@@ -315,20 +333,6 @@ impl GenerationSessions for PgGenerationRepo {
             })
         })
         .transpose()
-    }
-}
-
-#[async_trait::async_trait]
-impl SuggestionAudience for PgGenerationRepo {
-    async fn seen(
-        &self,
-        user: &MacroUserIdStr<'_>,
-        timezone: &str,
-        now: DateTime<Utc>,
-    ) -> Result<(), rootcause::Report> {
-        self.see(user, timezone, now)
-            .await
-            .map_err(|error| rootcause::Report::new(error).into_dynamic())
     }
 }
 

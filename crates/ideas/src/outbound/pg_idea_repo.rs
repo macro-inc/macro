@@ -383,10 +383,12 @@ async fn log(
 impl IdeaRepo for PgIdeaRepo {
     type Err = PgIdeaRepoError;
 
-    async fn kept_by(&self, session: Uuid) -> Result<u32, Self::Err> {
+    async fn kept_by(&self, generation: Uuid, session: Uuid) -> Result<u32, Self::Err> {
+        // By generation first: its index bounds the scan to one generation.
         let count = sqlx::query_scalar!(
             r#"SELECT count(*) AS "count!" FROM suggestion_change
-               WHERE session_id = $1 AND subject = 'idea'"#,
+               WHERE generation_id = $1 AND session_id = $2 AND subject = 'idea'"#,
+            generation,
             session,
         )
         .fetch_one(&self.pool)

@@ -309,9 +309,9 @@ where
         prompt::brief(trigger, timezone.name(), Utc::now(), &self.sdk_reference)
     }
 
-    async fn kept(&self, session: Uuid) -> Result<u32, IdeaError> {
+    async fn kept(&self, generation: Uuid, session: Uuid) -> Result<u32, IdeaError> {
         self.repo
-            .kept_by(session)
+            .kept_by(generation, session)
             .await
             .map_err(IdeaError::internal)
     }
