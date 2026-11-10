@@ -518,12 +518,21 @@ impl NodeState {
     }
     /// s2: NS-08
     pub(crate) fn export(&self, layout: &StateLayout, json: &mut crate::SerializedNode) {
-        let mut values: crate::SerializedNode = self
-            .unknown
-            .iter()
-            .flatten()
-            .map(|(k, v)| (k.clone(), v.as_ref().clone()))
-            .collect();
+        drop(self.export_reusing(layout, json, crate::SerializedNode::new()));
+    }
+    pub(crate) fn export_reusing(
+        &self,
+        layout: &StateLayout,
+        json: &mut crate::SerializedNode,
+        mut values: crate::SerializedNode,
+    ) -> crate::SerializedNode {
+        values.clear();
+        values.extend(
+            self.unknown
+                .iter()
+                .flatten()
+                .map(|(key, value)| (key.clone(), value.as_ref().clone())),
+        );
         for (key, value) in &self.known {
             if key.equal_any(value.as_ref(), key.default_any().as_ref()) {
                 values.shift_remove(key.name());
@@ -541,8 +550,9 @@ impl NodeState {
             }
         }
         if !values.is_empty() {
-            json.insert("$".into(), Value::Object(values));
+            json.insert("$".into(), Value::Object(std::mem::take(&mut values)));
         }
+        values
     }
 }
 
