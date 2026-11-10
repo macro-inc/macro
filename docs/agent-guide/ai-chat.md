@@ -934,8 +934,9 @@ appears and the row returns to its normal status.
 
 Chats from before agent sessions (`/app/chat/<uuid>`) still open and render
 their full history, including tool cards, but nothing can be sent to them. The
-composer is replaced by a notice, **This chat is read-only. Continue the
-conversation in an agent.**, and a **Continue in an agent** button that opens
+composer is replaced by a notice headed **Macro Chats are now Agents.**, the
+text **This chat is read-only. Continue it in Agents to keep going.**, and a
+**Continue in Agents** button that opens
 the new-conversation composer (or, without `enable-chat-v3-agents`, a new
 agent session) with the chat mentioned as an unsent draft. A response that was
 already streaming when the chat opened shows **Stop** beside it; Ctrl+C also

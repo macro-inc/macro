@@ -29,7 +29,7 @@ import { createEffect, createSignal, Show, Suspense } from 'solid-js';
 /**
  * A legacy AI chat, read-only: its history renders and a response already
  * streaming can be stopped, but nothing new is sent. New conversations are
- * agent sessions, and "Continue in an agent" starts one that mentions this
+ * agent sessions, and "Continue in Agents" starts one that mentions this
  * chat.
  */
 export function Chat(props: { data: ChatData }) {
@@ -162,9 +162,10 @@ function ChatInner(props: { data: ChatData }) {
             role="status"
             class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-edge-muted bg-surface px-4 py-3 text-sm text-ink-muted"
           >
-            <span class="min-w-0">
-              This chat is read-only. Continue the conversation in an agent.
-            </span>
+            <div class="min-w-0">
+              <p class="font-medium text-ink">Macro Chats are now Agents.</p>
+              <p>This chat is read-only. Continue it in Agents to keep going.</p>
+            </div>
             <div class="flex shrink-0 items-center gap-2">
               <Show when={chat.isGenerating()}>
                 <Button
@@ -183,7 +184,7 @@ function ChatInner(props: { data: ChatData }) {
                   fireAndForget(continueInAgent(), 'chat-continue-in-agent')
                 }
               >
-                Continue in an agent
+                Continue in Agents
               </Button>
             </div>
           </div>
