@@ -23,6 +23,8 @@ milliseconds instead of waiting on container provisioning.
   meter as the session's feature (`AgentState::feature`, from
   `SessionFacts::billing` via `session_feature`): `AgentSession`, or
   `NonBillableAgentSession` when the opener set `SessionBilling::NonBillable`.
+  Every usage row a turn records, its tools' included, carries the session
+  id (`ai_usage.agent_session_id`).
 - `src/domain/model_access.rs` (`SessionModels`) and `AgentState::turn_agent_key`:
   an agent with its own usable API key (`agent_api_keys`) runs every turn on
   it without admission, and its session offers only that provider's models.

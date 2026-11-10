@@ -2216,6 +2216,7 @@ impl FromRef<ToolServiceContext> for web_search::inbound::toolset::WebToolContex
                 context.recorder.clone(),
             )),
             entity: context.usage_context.entity,
+            agent_session_id: context.usage_context.agent_session_id,
         }
     }
 }

@@ -38,6 +38,7 @@ fn usage_for_request(
 ) -> ai_usage::UsageContext {
     ai_usage::UsageContext::new(inherited.feature, request.user_id.clone())
         .with_entity(inherited.entity)
+        .with_agent_session(inherited.agent_session_id)
 }
 
 fn operation_error(error: AiOperationError) -> ToolCallError {

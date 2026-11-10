@@ -24,6 +24,8 @@ pub struct WebToolContext {
     pub service: Arc<WebSearchService>,
     /// Entity usage is attributed to (the chat or agent session), if any.
     pub entity: Option<Uuid>,
+    /// Agent session usage is attributed to, if any.
+    pub agent_session_id: Option<Uuid>,
 }
 
 /// The web tools.
@@ -67,6 +69,7 @@ impl AsyncTool<WebToolContext> for WebSearch {
                 WebCaller {
                     user: request_context.user_id,
                     entity: service_context.entity,
+                    agent_session_id: service_context.agent_session_id,
                 },
                 self.clone(),
             )
@@ -90,6 +93,7 @@ impl AsyncTool<WebToolContext> for WebFetch {
                 WebCaller {
                     user: request_context.user_id,
                     entity: service_context.entity,
+                    agent_session_id: service_context.agent_session_id,
                 },
                 self.clone(),
             )

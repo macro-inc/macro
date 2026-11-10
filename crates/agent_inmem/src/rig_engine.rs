@@ -571,7 +571,8 @@ async fn drive_turn(
 
     // Started before anything else so its line is out before the turn's
     // model has a first token.
-    let usage_ctx = ai_usage::UsageContext::new(feature, owner.clone());
+    let usage_ctx = ai_usage::UsageContext::new(feature, owner.clone())
+        .with_agent_session(Some(session_id.as_uuid()));
     let agent = identity.as_ref().map_or_else(
         || "Macro".to_owned(),
         |identity| format!("{} (@{})", identity.name, identity.handle),
