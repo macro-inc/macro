@@ -1991,22 +1991,31 @@ async fn agent_session_activity_appended_routes_only_the_requested_session(pool:
     let session_id = Uuid::new_v4();
     let other_session_id = Uuid::new_v4();
     let bot_id = Uuid::new_v4();
-    let correlation_id = Uuid::new_v4();
-    let other_correlation_id = Uuid::new_v4();
+    let correlation_id = Uuid::now_v7();
+    let other_correlation_id = Uuid::now_v7();
     for id in [session_id, other_session_id] {
-        sqlx::query("INSERT INTO agent_session (id, owner_id, bot_id, model, harness, workspace, status) VALUES ($1, $2, $3, 'test', 'test', '/workspace', 'disconnected')")
-            .bind(id).bind(VALID_USER_ID).bind(bot_id).execute(&pool).await.unwrap();
+        sqlx::query!(
+            "INSERT INTO agent_session (id, owner_id, bot_id, model, harness, workspace, status) VALUES ($1, $2, $3, 'test', 'test', '/workspace', 'disconnected')",
+            id,
+            VALID_USER_ID,
+            bot_id,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
     }
     for (correlation, session) in [
         (correlation_id, session_id),
         (other_correlation_id, other_session_id),
     ] {
-        sqlx::query("INSERT INTO agent_correlations (id, agent_session_id) VALUES ($1, $2)")
-            .bind(correlation)
-            .bind(session)
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query!(
+            "INSERT INTO agent_correlations (id, agent_session_id) VALUES ($1, $2)",
+            correlation,
+            session,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
     }
 
     let (sender, receiver) = tokio::sync::mpsc::channel(4);

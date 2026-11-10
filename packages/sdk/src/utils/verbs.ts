@@ -60,6 +60,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       agentSessionsForPullRequest getAgentSessionActivity listExecutionConnectedApps
       listConnectedAppTools listExecutionReviews listAgentSessionPullRequests getAgentSessionQueue
       listAgentWorkRegistrations
+      listAgentSessionUpdates listCodingAgents
     `,
     searched: 'discoverConnectedApps searchConnectedAppTools',
     created: 'createAgentSession createSessionReview',
@@ -75,7 +76,10 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       startFreshAgentConversation retryAgentConversationTurn refreshAgentSessionChanges
       callConnectedAppTool controlAgentSession steerQueuedAction
     `,
-    linked: 'linkAgentSessionPullRequest',
+    linked: `
+      linkAgentSessionPullRequest
+      linkAgentSessionTask
+    `,
     unlinked: 'unlinkAgentSessionPullRequest',
     added: 'addConnectedMcpServer',
     removed: 'removeQueuedAction unregisterAgentSessionWork',
@@ -85,6 +89,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     registered: 'registerAgentSessionWork',
   },
   'scheduled-action': {
+    generated: 'suggestRoutine',
+    checked: 'checkScheduledAction',
     listed: 'listScheduledActions listScheduledActionHistory',
     read: 'getScheduledAction getScheduledActionTemplate',
     created: 'createScheduledAction',
@@ -126,12 +132,19 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     cancelled: 'discardCalendarReplacement',
   },
   cognition: {
-    read: 'getUsageHandler getChatHistoryHandler getChat fetchWebPage',
+    listed: 'listSkills',
+    read: `
+      getUsageHandler getChatHistoryHandler getChat fetchWebPage
+      getChatPermissions getUserActivity readExplicitMemory readMyActivity readSkill
+    `,
     searched: 'searchWeb',
     queried: 'decisions structuredCompletion',
     created: 'createConfirmedCalendarEvent createChat',
     deleted: 'deleteChat permanentlyDeleteChat',
-    edited: 'patchChat',
+    edited: `
+      patchChat
+      editExplicitMemory
+    `,
     copied: 'copyChat',
     restored: 'revertDeleteChat',
     sent: 'sendConfirmedEmail sendChatMessage',
@@ -168,15 +181,20 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     copied: 'copyThreadCalendarInvitation',
   },
   notification: {
+    removed: 'removeUnsubscribeItem',
     listed: 'listTypedNotifications getNotificationTypePreferences',
     read: 'getTypedNotificationById',
     deleted: 'bulkDeleteUserNotificationsV2 deleteUserNotificationV2',
     marked:
       'bulkMarkNotificationsDone bulkMarkNotificationsSeen bulkMarkNotificationsUndone',
-    disabled: 'disableNotificationType',
+    disabled: `
+      disableNotificationType
+      unsubscribeItem
+    `,
     enabled: 'enableNotificationType',
   },
   properties: {
+    labeled: 'ensureTagSet',
     listed: 'listProperties getPropertyOptions listTags',
     read: 'getPropertyDefinition getBulkEntityProperties getEntityProperties',
     created: 'createPropertyDefinition',
@@ -191,6 +209,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
   },
   search: { searched: 'unifiedSearch' },
   storage: {
+    generated: 'renderCanvas',
+    rejected: 'declineCall',
     read: `
       getAccountManagerGrant getDocumentAnchors getSelfBot getBot meetingLookup
       meetingInvitePermissions getCallRecord previewSmartTag getActivity getChannel
@@ -208,6 +228,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       getProjectUserAccessLevel getProjectPermissionsV2 getEmailFollowup getDocumentPermissionsV2
       getWebhook whatsappAccount eventIcs getChannelJoinLink getCrmPipelineViewPositions
       exportDocument streamEvents
+      exportCrmPipelineCsv getBatchCallRecordPreview getCallRecording getCrmPipelineCsv getDatabaseQuery getDocumentMarkdown getInitiativeActivity getInitiativeDescription getSavedViewDefinition readCanvasScene readDesign readIllustratorDocument readPhotoshopDocument readPresentation readSpreadsheet readWordDocument
     `,
     listed: `
       listAccountManagers listAgents listBots listBotChannels listBotTokens listOccurrences
@@ -220,11 +241,20 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       listHarnessAgents listHarnessSessions listInitiatives messageTimeline messageTimelineEntries
       getPinsHandler getProjectContentHandler recentlyDeleted listEmailReminders listUserApiKeys
       listWebhooks whatsappChats
+      getCallParticipants getLiveCalls listCrmRecordPipelineEntries listHarnessDirectory listHarnessResidents listSavedViewDefinitions pageInitiatives
     `,
-    searched: 'searchContacts taskSimilaritySearchHandler',
-    queried: 'queryCrmPipelineRows queryDatabases postItemsSoupAst',
-    checked:
-      'inferDatabaseColumnType validateWebhook validateDocumentPermissionsToken',
+    searched: `
+      searchContacts taskSimilaritySearchHandler
+      findCrmPipelineEntries searchCrmPipelineEntries
+    `,
+    queried: `
+      queryCrmPipelineRows queryDatabases postItemsSoupAst
+      calculateSpreadsheet
+    `,
+    checked: `
+      inferDatabaseColumnType validateWebhook validateDocumentPermissionsToken
+      checkActiveCall getCallRingState getTeamAvailability
+    `,
     requested:
       'requestAccountManager requestChannelAccess accessRequestsSubmit',
     created: `
@@ -234,6 +264,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       createCanvasHandler createMarkdownHandler createSkillHandler createSnippetHandler
       createTaskHandler externalChatAdd createForm createHarnessPairing createInitiative
       entityMessageCreate createProjectHandler createUserApiKey createWebhook
+      createSavedViewDefinition createSpreadsheet saveDatabaseQuery startCall
     `,
     edited: `
       resetCrmTeamStages updateAgent editAnchor patchBot meetingUpdate editCallRecord
@@ -246,6 +277,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       updateForm putFormLayout updateFormPermissions editMyFormResponse patchHarness
       updateInitiative entityMessageEdit entityMessagePatchThread editThreadV2 editProjectV2
       patchWebhook
+      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition writeDocumentMarkdown
     `,
     renamed: 'renameChannelLabel renameCrmPipeline',
     deleted: `
@@ -254,34 +286,63 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       externalChatRemove deleteDatabaseWebhook deleteSelfHarness deleteHarness deleteInitiative
       entityMessageDeleteMessage entityMessageDeleteThread deleteProjectHandler
       permanentlyDeleteProject deleteUserApiKey deleteWebhook
+      deleteSavedViewDefinition
     `,
-    removed:
-      'removeBotFromChannelByBot removeParticipants removeFavoriteByEntity removePinHandler',
-    added: 'addChannelBot addParticipants addFavorite addPinHandler',
+    removed: `
+      removeBotFromChannelByBot removeParticipants removeFavoriteByEntity removePinHandler
+      removeCrmPipelineEntries
+    `,
+    added: `
+      addChannelBot addParticipants addFavorite addPinHandler
+      addCrmPipelineEntries
+    `,
     blocked: 'blockCrmDomain',
     unblocked: 'unblockCrmDomain',
-    copied: 'copyDocument duplicateDatabase',
-    imported: 'importDatabaseTable',
+    copied: `
+      copyDocument duplicateDatabase
+      copyPresentation
+    `,
+    imported: `
+      importDatabaseTable
+      importCrmCompaniesCsv importCrmPipelineCsv
+    `,
     uploaded: 'uploadFile externalChatUpload',
     archived: 'trashCrmPipeline',
     restored: 'revertDeleteDocument revertDeleteProject',
-    shared:
-      'meetingShare toggleShareWithTeam shareCrmPipeline accessRequestsDirect',
+    shared: `
+      meetingShare toggleShareWithTeam shareCrmPipeline accessRequestsDirect
+      shareWithChannel
+    `,
     unshared: 'revokeAccountManagerGrant',
     invited: 'meetingInvite meetingInviteUsers',
     cancelled: 'meetingCancel cancelChannelAccessRequest accessRequestsCancel',
-    joined: 'joinChannel',
-    left: 'leaveChannel',
+    joined: `
+      joinChannel
+      joinCall meetingGuestJoin meetingJoin
+    `,
+    left: `
+      leaveChannel
+      leaveCall
+    `,
     confirmed: `
       respondToAccountManagerRequest resolveChannelAccessRequest accessRequestsResolve
       approveHarnessPairing claimHarnessPairing
     `,
     submitted: 'submitFormResponse',
     sent: 'postChannelBotWebhook externalChatSend externalChatSends',
-    posted: 'postActivity entityMessageTyping',
+    posted: `
+      postActivity entityMessageTyping
+      commentOnDocumentText
+    `,
     reacted: 'entityMessageReact',
-    linked: 'createEntityMention',
-    reordered: 'reorderFavorites reorderPinsHandler',
+    linked: `
+      createEntityMention
+      setCrmContactCompany
+    `,
+    reordered: `
+      reorderFavorites reorderPinsHandler
+      reorderSavedViewDefinitions
+    `,
     labeled: 'setChannelLabel',
     marked: 'setEmailFollowup externalChatRead',
     ran: 'claimAccountManagerToken',
