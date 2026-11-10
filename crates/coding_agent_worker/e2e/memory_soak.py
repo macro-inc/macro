@@ -58,6 +58,7 @@ SESSIONS = [
     for n in range(50)
 ]
 SAMPLE_EVERY = 10
+MIN_SAMPLES = 6
 
 
 class Storage(http.server.BaseHTTPRequestHandler):
@@ -104,11 +105,15 @@ class Storage(http.server.BaseHTTPRequestHandler):
 
 
 def resident_kb(pid):
-    with open(f"/proc/{pid}/status") as status:
-        for line in status:
-            if line.startswith("VmRSS:"):
-                return int(line.split()[1])
-    raise AssertionError(f"macrod {pid} has no VmRSS")
+    # An exited child is a zombie (status without VmRSS) until reaped, then gone.
+    try:
+        with open(f"/proc/{pid}/status") as status:
+            for line in status:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1])
+    except FileNotFoundError:
+        pass
+    raise AssertionError(f"macrod {pid} exited before the soak finished")
 
 
 def main():
@@ -180,6 +185,9 @@ auto = false
             samples.append((time.monotonic() - started, resident_kb(pid)))
             print(f"   {samples[-1][0]:6.0f}s  {samples[-1][1] / 1024:7.1f} MB", flush=True)
             time.sleep(SAMPLE_EVERY)
+        assert len(samples) >= MIN_SAMPLES, (
+            f"only {len(samples)} samples, too few to measure growth; raise --minutes"
+        )
         settled = samples[len(samples) // 3][1]
         growth_mb = (samples[-1][1] - settled) / 1024
         late_minutes = (samples[-1][0] - samples[len(samples) // 3][0]) / 60
