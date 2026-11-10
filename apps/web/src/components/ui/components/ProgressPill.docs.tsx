@@ -38,6 +38,7 @@ function ReactiveDemo() {
 }
 // #endregion
 
+// #region demo:rings
 function RingSizesDemo() {
   return (
     <div class="flex items-center gap-3">
@@ -47,6 +48,7 @@ function RingSizesDemo() {
     </div>
   );
 }
+// #endregion
 export default defineDoc({
   name: 'ProgressPill',
   category: 'Data Display',
