@@ -11,6 +11,7 @@ import {
 import { emptyInput } from '@macro-inc/collaboration/session/input';
 import { expect, test, vi } from 'vitest';
 import {
+  assertNativeSessionReceiverAdmission,
   installNativeSessionReceiverGuard,
   type NativeSessionConstructor,
 } from './native-session-guard';
@@ -106,6 +107,7 @@ test('real callbacks fence same/other-owner receivers and static admission befor
   };
   const oldFree = Object.getOwnPropertyDescriptor(ctor.prototype, 'free');
   const controller = installNativeSessionReceiverGuard(ctor, hooks);
+  expect(controller.completedEntryToken()).toBe(0n);
   expect(installNativeSessionReceiverGuard(ctor, { ...hooks })).toBe(
     controller
   );
@@ -133,6 +135,10 @@ test('real callbacks fence same/other-owner receivers and static admission befor
       active = true;
       try {
         const before = returns;
+        const completed = controller.completedEntryToken();
+        expect(() => assertNativeSessionReceiverAdmission(first)).toThrow(
+          'scoped callback'
+        );
         for (const session of [first, other]) {
           expect(() => invoke(session, 'effectiveAccess')).toThrow(
             'scoped callback'
@@ -166,6 +172,7 @@ test('real callbacks fence same/other-owner receivers and static admission befor
           'root'
         );
         expect(returns).toBe(before);
+        expect(controller.completedEntryToken()).toBe(completed);
         callbackCalls++;
         return true;
       } catch (error) {
@@ -182,20 +189,27 @@ test('real callbacks fence same/other-owner receivers and static admission befor
   try {
     invoke(first, 'registerViewEnter', [1n, 4]);
     const before = returns;
+    const completed = controller.completedEntryToken();
     const flags = invoke(first, 'viewCommandEnter', [2, 2]);
     if (unexpected.length) throw unexpected[0].error;
     expect(callbackCalls).toBe(1);
     expect(typeof flags).toBe('number');
     expect(returns).toBe(before + 1);
+    expect(controller.completedEntryToken()).toBe(completed + 1n);
     invoke(first, 'takeOutput');
     expect(invoke(first, 'effectiveAccess')).toBe(Access.Edit);
     const beforeAccess = returns;
+    const beforeNested = controller.completedEntryToken();
     expect(Reflect.get(first, 'guardAccess')).toBe(Access.Edit);
     expect(returns).toBe(beforeAccess + 1);
+    expect(controller.completedEntryToken()).toBe(beforeNested + 1n);
     expect(controller.takeCleanupFailure()).toBeUndefined();
   } finally {
+    const beforeFree = controller.completedEntryToken();
     invoke(first, 'free');
+    expect(controller.completedEntryToken()).toBe(beforeFree + 1n);
     invoke(other, 'free');
+    expect(controller.completedEntryToken()).toBe(beforeFree + 2n);
   }
 });
 
@@ -225,6 +239,7 @@ test('cleanup cannot replace real native results or opaque primary argument fail
         },
       };
       let thrown = false;
+      const before = guard.completedEntryToken();
       failCleanup = true;
       try {
         invoke(session, 'viewCommandEnter', [badNow, 3]);
@@ -233,6 +248,7 @@ test('cleanup cannot replace real native results or opaque primary argument fail
         expect(error).toBe(original);
       }
       expect(thrown).toBe(true);
+      expect(guard.completedEntryToken()).toBe(before + 1n);
       invoke(session, 'takeOutput');
       expect(guard.takeCleanupFailure()?.error).toBe(secondary);
     }
@@ -240,6 +256,58 @@ test('cleanup cannot replace real native results or opaque primary argument fail
   } finally {
     invoke(session, 'free');
   }
+});
+
+test('completed entry token advances after cleanup and excludes cleaning rejections', async () => {
+  const { ctor, createArgs } = await fixture();
+  const observed: bigint[] = [];
+  const rejected: boolean[] = [];
+  const admissionRejected: boolean[] = [];
+  let current: object | undefined;
+  const hooks = {
+    active: () => false,
+    afterReturn() {
+      observed.push(guard.completedEntryToken());
+      try {
+        invoke(ctor, 'create', createArgs);
+        rejected.push(false);
+      } catch {
+        rejected.push(true);
+      }
+      if (current) {
+        try {
+          assertNativeSessionReceiverAdmission(current);
+          admissionRejected.push(false);
+        } catch {
+          admissionRejected.push(true);
+        }
+      }
+      expect(guard.completedEntryToken()).toBe(observed.at(-1));
+    },
+  };
+  const guard = installNativeSessionReceiverGuard(ctor, hooks);
+  expect(guard.completedEntryToken()).toBe(0n);
+  const session = invoke(ctor, 'create', createArgs);
+  if (typeof session !== 'object' || session === null)
+    throw new Error('Missing actual native session');
+  current = session;
+  try {
+    expect(guard.completedEntryToken()).toBe(1n);
+    expect(observed).toEqual([0n]);
+    expect(rejected).toEqual([true]);
+    assertNativeSessionReceiverAdmission(session);
+    expect(invoke(session, 'effectiveAccess')).toBe(Access.Edit);
+    expect(guard.completedEntryToken()).toBe(2n);
+    expect(admissionRejected).toEqual([true]);
+    expect(installNativeSessionReceiverGuard(ctor, hooks)).toBe(guard);
+    expect(guard.completedEntryToken()).toBe(2n);
+  } finally {
+    invoke(session, 'free');
+  }
+  expect(observed).toEqual([0n, 1n, 2n]);
+  expect(rejected).toEqual([true, true, true]);
+  expect(admissionRejected).toEqual([true, true]);
+  expect(guard.completedEntryToken()).toBe(3n);
 });
 
 test('descriptor preflight refuses an immutable real native method without changes', async () => {
@@ -285,4 +353,42 @@ test('failed installation restores real native descriptors and preserves undefin
   expect(Object.getOwnPropertyDescriptors(ctor)).toEqual(staticBefore);
   installNativeSessionReceiverGuard(ctor, hooks);
   invoke(create(), 'free');
+});
+
+// Descriptor contract only: the pinned ordinary artifact has no validation export.
+test('existing static validation shares admission, cleanup and completion observation', () => {
+  let calls = 0;
+  const cause = { reason: 'validation failure' };
+  class DescriptorFixture {
+    static validateHostedCallbacks(fail: boolean): void {
+      calls++;
+      if (fail) throw cause;
+    }
+  }
+  let active = false;
+  const observed: bigint[] = [];
+  const hooks = {
+    active: () => active,
+    afterReturn() {
+      observed.push(guard.completedEntryToken());
+      expect(() => DescriptorFixture.validateHostedCallbacks(false)).toThrow(
+        'scoped callback or cleanup'
+      );
+    },
+  };
+  const guard = installNativeSessionReceiverGuard(DescriptorFixture, hooks);
+  active = true;
+  expect(() => DescriptorFixture.validateHostedCallbacks(false)).toThrow(
+    'scoped callback or cleanup'
+  );
+  expect(guard.completedEntryToken()).toBe(0n);
+  expect(calls).toBe(0);
+  active = false;
+  DescriptorFixture.validateHostedCallbacks(false);
+  expect(guard.completedEntryToken()).toBe(1n);
+  expect(() => DescriptorFixture.validateHostedCallbacks(true)).toThrow(cause);
+  expect(guard.completedEntryToken()).toBe(2n);
+  expect(observed).toEqual([0n, 1n]);
+  expect(calls).toBe(2);
+  expect(guard.takeCleanupFailure()).toBeUndefined();
 });

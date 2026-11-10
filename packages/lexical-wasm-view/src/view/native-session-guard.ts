@@ -10,6 +10,8 @@ export interface NativeSessionReceiverHooks {
 }
 
 export interface NativeSessionReceiverGuard {
+  /** Pure JS accepted-wrapper completion count; not native admission or output ACK. */
+  readonly completedEntryToken: () => bigint;
   /** Read secondary cleanup failures only after the normal native output drain. */
   readonly takeCleanupFailure: () => { readonly error: unknown } | undefined;
 }
@@ -17,6 +19,7 @@ export interface NativeSessionReceiverGuard {
 type Callable = (this: unknown, ...args: unknown[]) => unknown;
 interface Installation {
   readonly active: () => boolean;
+  readonly blocked: () => boolean;
   readonly afterReturn: (() => void) | undefined;
   readonly controller: NativeSessionReceiverGuard;
 }
@@ -37,8 +40,10 @@ export function assertNativeSessionReceiverAdmission(session: object): void {
     'constructor'
   )?.value;
   if (typeof sessionConstructor !== 'function') return;
-  if (installations.get(sessionConstructor)?.active())
-    throw new Error('Ordinary native admission during scoped callback');
+  if (installations.get(sessionConstructor)?.blocked())
+    throw new Error(
+      'Ordinary native admission during scoped callback or cleanup'
+    );
 }
 
 function callable(value: unknown): value is Callable {
@@ -86,7 +91,9 @@ export function installNativeSessionReceiverGuard(
   let depth = 0;
   let cleaning = false;
   const cleanupFailures: { readonly error: unknown }[] = [];
+  let completedEntries = 0n;
   const controller: NativeSessionReceiverGuard = Object.freeze({
+    completedEntryToken: () => completedEntries,
     takeCleanupFailure: () => cleanupFailures.shift(),
   });
   const wrappers = new Map<Callable, Callable>();
@@ -105,16 +112,19 @@ export function installNativeSessionReceiverGuard(
           return Reflect.apply(original, this, args);
         } finally {
           depth--;
-          if (depth === 0 && afterReturn !== undefined) {
-            cleaning = true;
-            try {
-              afterReturn();
-            } catch (error) {
-              // Preserve both native return flags and primary opaque exceptions.
-              cleanupFailures.push({ error });
-            } finally {
-              cleaning = false;
+          if (depth === 0) {
+            if (afterReturn !== undefined) {
+              cleaning = true;
+              try {
+                afterReturn();
+              } catch (error) {
+                // Preserve both native return flags and primary opaque exceptions.
+                cleanupFailures.push({ error });
+              } finally {
+                cleaning = false;
+              }
             }
+            completedEntries += 1n;
           }
         }
       },
@@ -153,7 +163,10 @@ export function installNativeSessionReceiverGuard(
   for (const key of Reflect.ownKeys(prototype))
     if (key !== 'constructor') prepare(prototype, key);
   for (const key of Reflect.ownKeys(nativeConstructor))
-    if (typeof key === 'string' && key.startsWith('create'))
+    if (
+      typeof key === 'string' &&
+      (key.startsWith('create') || key === 'validateHostedCallbacks')
+    )
       prepare(nativeConstructor, key);
 
   const attempted: Change[] = [];
@@ -172,6 +185,11 @@ export function installNativeSessionReceiverGuard(
     }
     throw error;
   }
-  installations.set(nativeConstructor, { active, afterReturn, controller });
+  installations.set(nativeConstructor, {
+    active,
+    blocked: () => active() || cleaning,
+    afterReturn,
+    controller,
+  });
   return controller;
 }
