@@ -36,7 +36,8 @@ pub struct ComputerResources {
     pub vcpus: Vcpus,
     /// Memory limit saved at purchase.
     pub memory_gib: MemoryGib,
-    /// Root disk limit saved at purchase.
+    /// Disk quota saved at purchase, split between the root disk and the
+    /// data disk (see [`crate::domain::image::data_disk_gib`]).
     pub disk_gib: DiskGib,
 }
 

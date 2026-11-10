@@ -1,5 +1,6 @@
 //! Drive one throwaway computer through `IncusFleet` on a dev Incus host:
-//! create → stop → start → destroy, timing each step.
+//! create → stop → start → (rebuild with `--update-image`) → destroy,
+//! timing each step. Destroy also deletes the computer's data volume.
 //!
 //! ```sh
 //! cargo run -p hosted_runtimes --example incus_fleet_smoke -- \
@@ -8,14 +9,15 @@
 //!   --client-cert ~/.config/macro-computers/dev-client.crt \
 //!   --client-key ~/.config/macro-computers/dev-client.key \
 //!   --server-cert server.crt \
-//!   --image macro-box --profile macro-box --storage-pool default \
+//!   --image macro-box/2026-11-10 --profile macro-box --storage-pool default \
 //!   --reserve-gb 4 --oversell-factor 3 \
 //!   --request-timeout-secs 90 --connect-timeout-secs 10 \
 //!   --operation-wait-secs 60 --operation-waits 15 \
 //!   --state-change-timeout-secs 60 --shutdown-grace-secs 60
 //! ```
 //!
-//! Without `--image-server` the image is the host's local `--image` alias.
+//! Without `--image-server` the image is the host's local `--image` alias,
+//! e.g. `macro-box/2026-11-10`.
 
 use std::path::PathBuf;
 use std::time::Instant;
@@ -56,6 +58,9 @@ struct Args {
     /// `https://images.linuxcontainers.org` with `--image ubuntu/24.04`.
     #[arg(long)]
     image_server: Option<String>,
+    /// Rebuild the root disk from this local alias after starting.
+    #[arg(long)]
+    update_image: Option<String>,
     #[arg(long)]
     profile: String,
     #[arg(long)]
@@ -137,6 +142,8 @@ async fn main() -> Result<(), rootcause::Report> {
         enrolled_at: None,
         setup_completed_at: None,
         default_agent_id: None,
+        image: None,
+        previous_image: None,
         enrollment_generation: Default::default(),
     };
     computer.state.phase = hosted_runtimes::domain::lifecycle::Phase::Provisioning {
@@ -161,7 +168,12 @@ async fn main() -> Result<(), rootcause::Report> {
     println!("instance {}", instance_name(id));
     println!("host {:?}", fleet.host().await?);
 
-    let result = run(&fleet, &computer, &enrollment).await;
+    let update_image = args
+        .update_image
+        .as_deref()
+        .map(hosted_runtimes::domain::image::GuestImage::try_new)
+        .transpose()?;
+    let result = run(&fleet, &computer, &enrollment, update_image.as_ref()).await;
     // Always clean up, even after a failed step.
     let started = Instant::now();
     fleet.destroy(id).await?;
@@ -180,10 +192,11 @@ async fn run(
     fleet: &IncusFleet,
     computer: &Computer,
     enrollment: &Enrollment,
+    update_image: Option<&hosted_runtimes::domain::image::GuestImage>,
 ) -> Result<(), rootcause::Report> {
     let id = computer.id;
     let started = Instant::now();
-    fleet
+    let image = fleet
         .create(
             computer,
             enrollment.generation,
@@ -191,7 +204,7 @@ async fn run(
             true,
         )
         .await?;
-    println!("create+start {:>8.1?}", started.elapsed());
+    println!("create+start {:>8.1?} ({image})", started.elapsed());
     print_status(fleet, id).await?;
 
     let started = Instant::now();
@@ -203,6 +216,13 @@ async fn run(
     fleet.start(id).await?;
     println!("start        {:>8.1?}", started.elapsed());
     print_status(fleet, id).await?;
+
+    if let Some(update_image) = update_image {
+        let started = Instant::now();
+        fleet.rebuild(computer, update_image, true).await?;
+        println!("rebuild      {:>8.1?} ({update_image})", started.elapsed());
+        print_status(fleet, id).await?;
+    }
 
     let started = Instant::now();
     fleet.clear_enrollment(id).await?;

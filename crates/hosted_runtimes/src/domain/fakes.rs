@@ -146,6 +146,8 @@ impl ComputerRepo for FakeRepo {
             enrolled_at: None,
             setup_completed_at: None,
             default_agent_id: None,
+            image: None,
+            previous_image: None,
             enrollment_generation: Default::default(),
         };
         let (effects, run_after) = match computer.billing {
@@ -312,6 +314,20 @@ impl ComputerRepo for FakeRepo {
             .iter()
             .filter_map(|id| counts.get(id).map(|count| (*id, *count)))
             .collect())
+    }
+
+    async fn record_image(
+        &self,
+        computer_id: ComputerId,
+        image: &crate::domain::image::GuestImage,
+    ) -> Result<(), FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        if let Some(computer) = self.computers.lock().unwrap().get_mut(&computer_id)
+            && computer.image.as_ref() != Some(image)
+        {
+            computer.previous_image = computer.image.replace(image.clone());
+        }
+        Ok(())
     }
 
     async fn set_default_agent(

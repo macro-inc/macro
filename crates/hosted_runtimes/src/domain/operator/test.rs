@@ -1,4 +1,5 @@
 use std::str::FromStr;
+mod image_update;
 mod redeploy;
 
 use macro_user_id::user_id::MacroUserIdStr;
@@ -7,6 +8,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::domain::enrollment::DeviceSecret;
 use crate::domain::ids::PairingId;
+use crate::domain::image::GuestImage;
 use crate::domain::models::ComputerName;
 use uuid::Uuid;
 
@@ -50,8 +52,12 @@ struct FakeFleet {
     calls: Mutex<Vec<String>>,
     enrollments: Mutex<Vec<(Enrollment, bool)>>,
     created: Mutex<HashMap<ComputerId, (EnrollmentGeneration, PairingId)>>,
+    /// Each guest's data disk, named by the generation that created it.
+    volumes: Mutex<HashMap<ComputerId, String>>,
     instances: Mutex<Vec<FleetInstance>>,
 }
+
+const BASE_IMAGE: &str = "macro-box/2026-11-01";
 
 impl Fleet for FakeFleet {
     type Err = FakeFleetError;
@@ -68,7 +74,8 @@ impl Fleet for FakeFleet {
         generation: EnrollmentGeneration,
         enrollment: &impl FleetEnrollment,
         start: bool,
-    ) -> Result<(), FakeFleetError> {
+    ) -> Result<GuestImage, FakeFleetError> {
+        let image = GuestImage::try_new(BASE_IMAGE).unwrap();
         {
             let mut failures = self.failures.lock().unwrap();
             if *failures > 0 {
@@ -84,7 +91,7 @@ impl Fleet for FakeFleet {
         if let Some((stored, pairing)) = existing {
             assert_eq!(stored, generation);
             if enrollment.claimed(pairing).await? {
-                return Ok(());
+                return Ok(image);
             }
         }
         let enrollment = enrollment.issue().await?;
@@ -98,7 +105,28 @@ impl Fleet for FakeFleet {
         self.enrollments.lock().unwrap().push((enrollment, start));
         if existing.is_some() {
             self.restart(computer.id).await?;
+        } else {
+            self.volumes
+                .lock()
+                .unwrap()
+                .insert(computer.id, format!("data-{}", generation.get()));
         }
+        Ok(image)
+    }
+
+    async fn rebuild(
+        &self,
+        computer: &Computer,
+        image: &GuestImage,
+        start: bool,
+    ) -> Result<(), FakeFleetError> {
+        if self.missing {
+            return Err(FakeFleetError::Missing);
+        }
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("rebuild {} {image} start={start}", computer.id));
         Ok(())
     }
 
@@ -136,6 +164,7 @@ impl Fleet for FakeFleet {
 
     async fn destroy(&self, id: ComputerId) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("destroy {id}"));
+        self.volumes.lock().unwrap().remove(&id);
         Ok(())
     }
 

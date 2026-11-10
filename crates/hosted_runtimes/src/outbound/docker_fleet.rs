@@ -3,6 +3,12 @@
 //! Each computer is a `macro-box` container running systemd.
 //! The disk size is not enforced (overlayfs has no per-container quota).
 //!
+//! Like an Incus computer's data disk, two named volumes keep `/home` and
+//! `/var/lib/macrod` (the enrollment marker and Claude token store) across
+//! an image update, which recreates the container from the new image.
+//! Destroy deletes them; a new guest replaces any left by a lost one. They
+//! carry the computer and control-plane labels, so a stack reset finds them.
+//!
 //! Enrollment is a file: `<enrollment_dir>/<computer id>/enrollment.json` on
 //! the host. The computer's directory, not the file, is bind-mounted read-only
 //! at `/run/macro`, so deleting the file is visible inside the container and a
@@ -20,6 +26,7 @@ use macro_env::Environment;
 
 use crate::domain::enrollment::{Enrollment, EnrollmentGeneration, EnrollmentIssueError};
 use crate::domain::ids::{ComputerId, PairingId};
+use crate::domain::image::{GuestImage, InvalidGuestImage};
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
 use crate::domain::ports::{Fleet, FleetEnrollment, FleetError, FleetInstance, InstanceStatus};
 
@@ -31,6 +38,7 @@ pub const CONTROL_PLANE_LABEL: &str = "macro.control_plane";
 const CREATED_AT_LABEL: &str = "macro.created_at";
 const GENERATION_LABEL: &str = "macro.enrollment_generation";
 const PAIRING_LABEL: &str = "macro.pairing_id";
+const IMAGE_LABEL: &str = "macro.image";
 
 /// Label every computer container carries, valued with its computer id.
 pub const COMPUTER_ID_LABEL: &str = "macro.computer_id";
@@ -50,8 +58,9 @@ trait DockerCommand: std::fmt::Debug + Send + Sync {
 pub struct DockerFleetConfig {
     /// Owner identity shared by control-plane replicas.
     pub control_plane_id: ControlPlaneId,
-    /// The computer image, e.g. `macro-box:latest` (`nix build .#macro-box-docker`).
-    pub image: String,
+    /// The image new computers are created from, e.g. `macro-box:latest`
+    /// (`nix build .#macro-box-docker`).
+    pub image: GuestImage,
     /// The local stack's Docker network, so computers reach its services by name.
     pub network: String,
     /// Host directory holding one enrollment directory per computer.
@@ -109,6 +118,9 @@ pub enum DockerFleetError {
     /// Enrollment JSON could not be encoded.
     #[error("could not encode the enrollment: {0}")]
     Encode(#[from] serde_json::Error),
+    /// A container label holds an invalid image name.
+    #[error(transparent)]
+    Image(#[from] InvalidGuestImage),
     /// Docker returned invalid output.
     #[error("unexpected docker output: {0}")]
     Malformed(String),
@@ -186,6 +198,12 @@ impl DockerFleet {
             .map_err(io_error(&file))?;
         Ok(dir)
     }
+    /// The identity labels of an existing container.
+    async fn labels(&self, computer_id: ComputerId) -> Result<ContainerLabels, DockerFleetError> {
+        let output = self.docker("inspect", &labels_args(computer_id)).await?;
+        ContainerLabels::parse(output.trim_end_matches('\n'))
+    }
+
     async fn docker(&self, command: &str, args: &[String]) -> Result<String, DockerFleetError> {
         #[cfg(test)]
         if let Some(runner) = &self.command {
@@ -216,26 +234,16 @@ impl Fleet for DockerFleet {
         generation: EnrollmentGeneration,
         enrollment: &impl FleetEnrollment,
         start: bool,
-    ) -> Result<(), DockerFleetError> {
+    ) -> Result<GuestImage, DockerFleetError> {
         if let Some(state) = self.state(computer.id).await? {
-            let identity = self.docker("inspect", &[
-                "inspect".to_owned(), "--format".to_owned(),
-                format!("{{{{index .Config.Labels \"{CONTROL_PLANE_LABEL}\"}}}} {{{{index .Config.Labels \"{GENERATION_LABEL}\"}}}} {{{{index .Config.Labels \"{PAIRING_LABEL}\"}}}}"),
-                container_name(computer.id),
-            ]).await?;
-            let fields: Vec<_> = identity.split_whitespace().collect();
-            let pairing = match fields.as_slice() {
-                [owner, stored_generation, pairing]
-                    if *owner == self.config.control_plane_id.as_str()
-                        && *stored_generation == generation.get().to_string() =>
-                {
-                    pairing.parse::<PairingId>().ok()
-                }
-                _ => None,
+            let labels = self.labels(computer.id).await?;
+            if labels.control_plane_id != self.config.control_plane_id
+                || labels.generation != generation
+            {
+                return Err(DockerFleetError::EnrollmentMismatch);
             }
-            .ok_or(DockerFleetError::EnrollmentMismatch)?;
-            if enrollment.claimed(pairing).await? {
-                return Ok(());
+            if enrollment.claimed(labels.pairing_id).await? {
+                return Ok(labels.image);
             }
             let enrollment = enrollment.issue().await?;
             self.write_enrollment(computer.id, &enrollment).await?;
@@ -257,6 +265,7 @@ impl Fleet for DockerFleet {
                 )
                 .await?;
             }
+            Ok(labels.image)
         } else {
             if !matches!(
                 computer.state.phase,
@@ -266,6 +275,9 @@ impl Fleet for DockerFleet {
                     computer_id: computer.id,
                 });
             }
+            // Volumes left by a lost guest hold its enrollment marker.
+            self.docker("volume", &remove_volumes_args(computer.id))
+                .await?;
             let enrollment = enrollment.issue().await?;
             let dir = self.write_enrollment(computer.id, &enrollment).await?;
             let spec = CreateSpec {
@@ -284,8 +296,47 @@ impl Fleet for DockerFleet {
             if start {
                 self.start(computer.id).await?;
             }
+            Ok(self.config.image.clone())
         }
-        Ok(())
+    }
+
+    /// Recreates the container from `image` with the same identity, volumes
+    /// and enrollment directory; Docker has no in-place rebuild.
+    #[tracing::instrument(name = "docker_fleet.rebuild", skip_all, fields(computer_id = %computer.id, image = %image, start), err)]
+    async fn rebuild(
+        &self,
+        computer: &Computer,
+        image: &GuestImage,
+        start: bool,
+    ) -> Result<(), DockerFleetError> {
+        if self.state(computer.id).await?.is_none() {
+            return Err(DockerFleetError::Missing {
+                computer_id: computer.id,
+            });
+        }
+        let labels = self.labels(computer.id).await?;
+        if labels.image != *image {
+            let spec = CreateSpec {
+                image: image.clone(),
+                network: self.config.network.clone(),
+                computer_id: computer.id,
+                control_plane_id: labels.control_plane_id,
+                created_at: labels.created_at,
+                generation: labels.generation,
+                pairing_id: labels.pairing_id,
+                memory_gb: computer.resources.memory_gib.get(),
+                vcpus: computer.resources.vcpus.get(),
+                enrollment_dir: self.enrollment_dir(computer.id),
+            };
+            self.stop(computer.id).await?;
+            self.docker("rm", &remove_args(computer.id)).await?;
+            self.docker("create", &create_args(&spec)).await?;
+        }
+        if start {
+            self.start(computer.id).await
+        } else {
+            self.stop(computer.id).await
+        }
     }
 
     #[tracing::instrument(name = "docker_fleet.start", skip(self), err)]
@@ -340,6 +391,9 @@ impl Fleet for DockerFleet {
         {
             return Err(error);
         }
+        // Only once the container is gone: Docker keeps volumes in use.
+        self.docker("volume", &remove_volumes_args(computer_id))
+            .await?;
         let dir = self.enrollment_dir(computer_id);
         match tokio::fs::remove_dir_all(&dir).await {
             Err(source) if source.kind() != std::io::ErrorKind::NotFound => {
@@ -437,6 +491,37 @@ impl ContainerState {
     }
 }
 
+/// The identity a container was created with, kept across rebuilds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ContainerLabels {
+    control_plane_id: ControlPlaneId,
+    generation: EnrollmentGeneration,
+    pairing_id: PairingId,
+    created_at: DateTime<Utc>,
+    image: GuestImage,
+}
+
+impl ContainerLabels {
+    /// Parse [`labels_args`]'s tab-separated output.
+    fn parse(output: &str) -> Result<Self, DockerFleetError> {
+        let malformed = || DockerFleetError::Malformed(format!("container labels {output:?}"));
+        let [owner, generation, pairing, created_at, image] = output
+            .split('\t')
+            .collect::<Vec<_>>()
+            .try_into()
+            .map_err(|_| malformed())?;
+        Ok(Self {
+            control_plane_id: ControlPlaneId::parse(owner.to_owned()).map_err(|_| malformed())?,
+            generation: EnrollmentGeneration::new(generation.parse().map_err(|_| malformed())?),
+            pairing_id: pairing.parse().map_err(|_| malformed())?,
+            created_at: DateTime::parse_from_rfc3339(created_at)
+                .map_err(|_| malformed())?
+                .with_timezone(&Utc),
+            image: GuestImage::try_new(image)?,
+        })
+    }
+}
+
 /// What `docker create` needs for one computer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct CreateSpec {
@@ -444,7 +529,7 @@ struct CreateSpec {
     pairing_id: PairingId,
     control_plane_id: ControlPlaneId,
     created_at: DateTime<Utc>,
-    image: String,
+    image: GuestImage,
     network: String,
     computer_id: ComputerId,
     memory_gb: u32,
@@ -454,6 +539,15 @@ struct CreateSpec {
 
 fn container_name(computer_id: ComputerId) -> String {
     format!("macro-computer-{computer_id}")
+}
+
+/// The named volumes that outlive the container, and where they mount.
+fn volumes(computer_id: ComputerId) -> [(String, &'static str); 2] {
+    let name = container_name(computer_id);
+    [
+        (format!("{name}-home"), "/home"),
+        (format!("{name}-macrod"), "/var/lib/macrod"),
+    ]
 }
 
 /// `docker create` for one computer. The image boots systemd as PID 1, which
@@ -476,6 +570,8 @@ fn create_args(spec: &CreateSpec) -> Vec<String> {
         format!("{GENERATION_LABEL}={}", spec.generation.get()),
         "--label".to_owned(),
         format!("{PAIRING_LABEL}={}", spec.pairing_id),
+        "--label".to_owned(),
+        format!("{IMAGE_LABEL}={}", spec.image),
         "--network".to_owned(),
         spec.network.clone(),
         "--memory".to_owned(),
@@ -492,7 +588,44 @@ fn create_args(spec: &CreateSpec) -> Vec<String> {
             "type=bind,source={},target={ENROLLMENT_MOUNT},readonly",
             spec.enrollment_dir.display()
         ),
-        spec.image.clone(),
+    ]
+    .into_iter()
+    .chain(volumes(spec.computer_id).into_iter().flat_map(|(volume, target)| {
+        [
+            "--mount".to_owned(),
+            format!(
+                "type=volume,source={volume},target={target},volume-label={COMPUTER_ID_LABEL}={},volume-label={CONTROL_PLANE_LABEL}={}",
+                spec.computer_id,
+                spec.control_plane_id.as_str()
+            ),
+        ]
+    }))
+    .chain([spec.image.as_str().to_owned()])
+    .collect()
+}
+
+/// `volume rm --force` succeeds for missing volumes too.
+fn remove_volumes_args(computer_id: ComputerId) -> Vec<String> {
+    ["volume".to_owned(), "rm".to_owned(), "--force".to_owned()]
+        .into_iter()
+        .chain(volumes(computer_id).into_iter().map(|(volume, _)| volume))
+        .collect()
+}
+
+fn labels_args(computer_id: ComputerId) -> Vec<String> {
+    vec![
+        "inspect".to_owned(),
+        "--format".to_owned(),
+        [
+            CONTROL_PLANE_LABEL,
+            GENERATION_LABEL,
+            PAIRING_LABEL,
+            CREATED_AT_LABEL,
+            IMAGE_LABEL,
+        ]
+        .map(|label| format!("{{{{index .Config.Labels \"{label}\"}}}}"))
+        .join("\t"),
+        container_name(computer_id),
     ]
 }
 

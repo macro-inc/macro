@@ -245,6 +245,16 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
                 format!("/internal/computers/{id}?teamId={TEAM}"),
                 String::new(),
             ),
+            (
+                Method::POST,
+                format!("/internal/computers/{id}/image"),
+                serde_json::json!({"teamId": TEAM, "image": "macro-box/2026-11-10"}).to_string(),
+            ),
+            (
+                Method::POST,
+                format!("/internal/computers/{id}/image/rollback?teamId={TEAM}"),
+                String::new(),
+            ),
         ] {
             let mut request = Request::builder()
                 .method(method)
@@ -316,8 +326,10 @@ async fn registered_routes_preserve_rollout_and_internal_authentication_denials(
         "/internal/computers".to_owned(),
         format!("/internal/computers/quote?teamId={TEAM}&size=standard"),
         format!("/internal/computers/{id}?teamId={TEAM}"),
+        format!("/internal/computers/{id}/image"),
+        format!("/internal/computers/{id}/image/rollback?teamId={TEAM}"),
     ] {
-        let method = if path == "/internal/computers" {
+        let method = if path == "/internal/computers" || path.contains("/image") {
             Method::POST
         } else {
             Method::GET

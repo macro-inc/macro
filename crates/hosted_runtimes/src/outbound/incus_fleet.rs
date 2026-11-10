@@ -1,6 +1,12 @@
-//! [`Fleet`] on one Incus host: each computer is a VM from the `macro-box`
-//! image, carrying its [`Enrollment`] in the [`INCUS_ENROLLMENT_KEY`] config
-//! key that macrod reads through `/dev/incus`.
+//! [`Fleet`] on one Incus host: each computer is a VM from a versioned
+//! `macro-box/<version>` image, carrying its [`Enrollment`] in the
+//! [`INCUS_ENROLLMENT_KEY`] config key that macrod reads through `/dev/incus`.
+//!
+//! Each VM has a root disk of [`ROOT_DISK_GIB`] rebuilt by image updates, and
+//! a custom block volume `<instance>-data` (disk device `data`, the rest of
+//! the quota) that the guest mounts at `/home` and that survives updates.
+//! Incus does not delete custom volumes with their instance, so destroy
+//! deletes it afterwards.
 //!
 //! Verbs check the instance's status first so a retried effect is a no-op
 //! instead of an Incus "already running" error.
@@ -11,12 +17,13 @@ use std::time::Duration;
 use chrono::{DateTime, Utc};
 use incus_client::generated::types;
 use incus_client::{
-    ImageReference, ImageSource, IncusClient, IncusEndpoint, IncusError, InstanceInfo,
-    InstanceKind, InstanceName, ProfileName, StoragePoolName,
+    ImageAlias, ImageReference, ImageSource, IncusClient, IncusEndpoint, IncusError, InstanceInfo,
+    InstanceKind, InstanceName, InvalidName, ProfileName, StoragePoolName, StorageVolumeName,
 };
 
 use crate::domain::enrollment::{EnrollmentGeneration, EnrollmentIssueError, INCUS_ENROLLMENT_KEY};
 use crate::domain::ids::{ComputerId, PairingId};
+use crate::domain::image::{GuestImage, ROOT_DISK_GIB, data_disk_gib};
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
 use crate::domain::ports::{Fleet, FleetEnrollment, FleetError, FleetInstance, InstanceStatus};
 use crate::domain::size::ComputerResources;
@@ -29,6 +36,10 @@ pub const CONTROL_PLANE_KEY: &str = "user.macro.control_plane";
 const CREATED_AT_KEY: &str = "user.macro.created_at";
 const GENERATION_KEY: &str = "user.macro.enrollment_generation";
 const PAIRING_KEY: &str = "user.macro.pairing_id";
+/// The image the root disk was last built from, set at create and rebuild.
+const IMAGE_KEY: &str = "user.macro.image";
+/// Disk device of the data volume; the guest finds it by this name.
+const DATA_DEVICE: &str = "data";
 
 /// Instance config key carrying the computer id.
 pub const COMPUTER_ID_KEY: &str = "user.macro.computer_id";
@@ -42,11 +53,12 @@ pub struct IncusFleetConfig {
     pub control_plane_id: ControlPlaneId,
     /// Incus endpoint and request limits.
     pub endpoint: IncusEndpoint,
-    /// Usually the local alias `macro-box`.
+    /// Image new computers are created from: a versioned local alias such
+    /// as `macro-box/2026-11-10`.
     pub image: ImageSource,
     /// Profile carrying the NIC and `security.guestapi`.
     pub profile: ProfileName,
-    /// Storage pool of the root disk override; Incus requires it.
+    /// Storage pool of the root disk override and the data volumes.
     pub storage_pool: StoragePoolName,
     /// Name used to register host capacity.
     pub host_name: String,
@@ -87,6 +99,30 @@ pub enum IncusFleetError {
         /// Invalid computer identity from instance metadata.
         value: String,
     },
+    /// An Incus resource name could not be built.
+    #[error(transparent)]
+    Name(#[from] InvalidName),
+    /// The configured or requested image is not a valid image name.
+    #[error(transparent)]
+    Image(#[from] crate::domain::image::InvalidGuestImage),
+    /// The requested image alias is not on the host.
+    #[error("image {image} is not on the Incus host")]
+    ImageMissing {
+        /// The image that was requested.
+        image: GuestImage,
+    },
+    /// The instance does not record the image it runs.
+    #[error("instance {name} has no {IMAGE_KEY}")]
+    UnknownImage {
+        /// Incus instance name.
+        name: String,
+    },
+    /// The disk quota leaves no room for a data disk beside the root disk.
+    #[error("a {disk_gib} GiB disk quota leaves no data disk beside the {ROOT_DISK_GIB} GiB root")]
+    DiskTooSmall {
+        /// The recorded disk quota.
+        disk_gib: u32,
+    },
     /// Incus returned an unsupported guest status.
     #[error("instance {name} is in a state this fleet does not know: {status:?}")]
     UnknownStatus {
@@ -102,6 +138,7 @@ pub enum IncusFleetError {
 pub struct IncusFleet {
     client: IncusClient,
     config: Box<IncusFleetConfig>,
+    image: GuestImage,
 }
 
 impl IncusFleet {
@@ -114,9 +151,14 @@ impl IncusFleet {
             .into());
         }
         let client = IncusClient::new(config.endpoint.clone())?;
+        let image = GuestImage::try_new(match &config.image.reference {
+            ImageReference::Alias(alias) => alias.as_str(),
+            ImageReference::Fingerprint(fingerprint) => fingerprint,
+        })?;
         Ok(Self {
             client,
             config: Box::new(config),
+            image,
         })
     }
 
@@ -137,6 +179,18 @@ impl IncusFleet {
             .await?
             .map(|instance| observed_status(&instance))
             .transpose()
+    }
+
+    /// Delete the computer's data volume; a missing one is not an error.
+    async fn delete_data_volume(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
+        match self
+            .client
+            .delete_volume(&self.config.storage_pool, &volume_name(computer_id)?)
+            .await
+        {
+            Ok(()) | Err(IncusError::NotFound { .. }) => Ok(()),
+            Err(error) => Err(error.into()),
+        }
     }
 
     async fn force_stop(&self, name: &InstanceName) -> Result<(), IncusFleetError> {
@@ -170,7 +224,7 @@ impl Fleet for IncusFleet {
         generation: EnrollmentGeneration,
         enrollment: &impl FleetEnrollment,
         start: bool,
-    ) -> Result<(), IncusFleetError> {
+    ) -> Result<GuestImage, IncusFleetError> {
         let name = instance_name(computer.id);
         match self.find(computer.id).await? {
             Some(instance) => {
@@ -185,8 +239,9 @@ impl Fleet for IncusFleet {
                     .get(PAIRING_KEY)
                     .and_then(|value| value.parse::<PairingId>().ok())
                     .ok_or(IncusFleetError::EnrollmentMismatch)?;
+                let image = running_image(&instance)?;
                 if enrollment.claimed(pairing).await? {
-                    return Ok(());
+                    return Ok(image);
                 }
                 let enrollment = enrollment.issue().await?;
                 let enrollment_json = zeroize::Zeroizing::new(serde_json::to_string(&enrollment)?);
@@ -213,6 +268,7 @@ impl Fleet for IncusFleet {
                             .await?;
                     }
                 }
+                Ok(image)
             }
             None => {
                 if !matches!(
@@ -223,9 +279,31 @@ impl Fleet for IncusFleet {
                         computer_id: computer.id,
                     });
                 }
+                let data_gib =
+                    data_disk_gib(computer.resources).ok_or(IncusFleetError::DiskTooSmall {
+                        disk_gib: computer.resources.disk_gib.get(),
+                    })?;
+                let volume = volume_name(computer.id)?;
+                // A volume left by a lost guest (or by an attempt that failed
+                // before creating the instance) is replaced: its enrollment
+                // marker would skip the new pairing.
+                self.delete_data_volume(computer.id).await?;
+                self.client
+                    .create_block_volume(
+                        &self.config.storage_pool,
+                        &volume,
+                        &format!("{data_gib}GiB"),
+                    )
+                    .await?;
                 let enrollment = enrollment.issue().await?;
                 let enrollment_json = zeroize::Zeroizing::new(serde_json::to_string(&enrollment)?);
-                let mut body = instance_body(&self.config, computer, &enrollment_json, Utc::now());
+                let mut body = instance_body(
+                    &self.config,
+                    &self.image,
+                    computer,
+                    &enrollment_json,
+                    Utc::now(),
+                )?;
                 {
                     let config = body
                         .config
@@ -248,9 +326,49 @@ impl Fleet for IncusFleet {
                 if start {
                     self.start(computer.id).await?;
                 }
+                Ok(self.image.clone())
             }
         }
-        Ok(())
+    }
+
+    #[tracing::instrument(name = "incus_fleet.rebuild", skip_all, fields(computer_id = %computer.id, image = %image, start), err)]
+    async fn rebuild(
+        &self,
+        computer: &Computer,
+        image: &GuestImage,
+        start: bool,
+    ) -> Result<(), IncusFleetError> {
+        let computer_id = computer.id;
+        let name = instance_name(computer_id);
+        let instance = self
+            .find(computer_id)
+            .await?
+            .ok_or(IncusFleetError::Missing { computer_id })?;
+        // The key is set only after a rebuild succeeds, so a retry after it
+        // does not rebuild (and reboot) the guest again.
+        if instance.config.get(IMAGE_KEY).map(String::as_str) != Some(image.as_str()) {
+            let alias = ImageAlias::try_new(image.as_str())?;
+            // A missing alias must not read as a lost instance.
+            match self.client.image_alias(&alias).await {
+                Ok(_) => {}
+                Err(IncusError::NotFound { .. }) => {
+                    return Err(IncusFleetError::ImageMissing {
+                        image: image.clone(),
+                    });
+                }
+                Err(error) => return Err(error.into()),
+            }
+            self.stop(computer_id).await?;
+            self.client.rebuild(&name, &alias).await?;
+            self.client
+                .set_config_key(&name, IMAGE_KEY, image.as_str())
+                .await?;
+        }
+        if start {
+            self.start(computer_id).await
+        } else {
+            self.stop(computer_id).await
+        }
     }
 
     #[tracing::instrument(name = "incus_fleet.start", skip(self), err)]
@@ -314,16 +432,19 @@ impl Fleet for IncusFleet {
     async fn destroy(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
         let name = instance_name(computer_id);
         match self.status(computer_id).await? {
-            None => return Ok(()),
-            Some(InstanceStatus::Stopped) => {}
-            Some(InstanceStatus::Running) => {
-                self.force_stop(&name).await?;
+            None => {}
+            Some(status) => {
+                if status == InstanceStatus::Running {
+                    self.force_stop(&name).await?;
+                }
+                match self.client.delete(&name).await {
+                    Ok(()) | Err(IncusError::NotFound { .. }) => {}
+                    Err(error) => return Err(error.into()),
+                }
             }
         }
-        match self.client.delete(&name).await {
-            Ok(()) | Err(IncusError::NotFound { .. }) => Ok(()),
-            Err(error) => Err(error.into()),
-        }
+        // Only once the instance is gone: an attached volume cannot be deleted.
+        self.delete_data_volume(computer_id).await
     }
 
     #[tracing::instrument(name = "incus_fleet.clear_enrollment", skip(self), err)]
@@ -386,15 +507,33 @@ pub fn instance_name(computer_id: ComputerId) -> InstanceName {
     InstanceName::from_uuid(computer_id.as_uuid())
 }
 
-/// The instance config: identity, enrollment and limits.
+/// The computer's data volume.
+fn volume_name(computer_id: ComputerId) -> Result<StorageVolumeName, InvalidName> {
+    StorageVolumeName::try_new(&format!("{}-data", instance_name(computer_id)))
+}
+
+/// The image an existing instance's root disk was built from.
+fn running_image(instance: &InstanceInfo) -> Result<GuestImage, IncusFleetError> {
+    let image = instance
+        .config
+        .get(IMAGE_KEY)
+        .ok_or_else(|| IncusFleetError::UnknownImage {
+            name: instance.name.clone(),
+        })?;
+    Ok(GuestImage::try_new(image)?)
+}
+
+/// The instance config: identity, image, enrollment and limits.
 fn instance_config(
     control_plane_id: &ControlPlaneId,
     created_at: DateTime<Utc>,
     computer_id: ComputerId,
+    image: &GuestImage,
     resources: ComputerResources,
     enrollment_json: &str,
 ) -> BTreeMap<String, String> {
     BTreeMap::from([
+        (IMAGE_KEY.to_owned(), image.as_str().to_owned()),
         (COMPUTER_ID_KEY.to_owned(), computer_id.to_string()),
         (
             CONTROL_PLANE_KEY.to_owned(),
@@ -410,28 +549,37 @@ fn instance_config(
     ])
 }
 
-/// The root disk, sized to the computer.
-fn root_device(pool: &str, resources: ComputerResources) -> BTreeMap<String, String> {
+/// The root disk: the image's share of the disk quota.
+fn root_device(pool: &str) -> BTreeMap<String, String> {
     BTreeMap::from([
         ("type".to_owned(), "disk".to_owned()),
         ("path".to_owned(), "/".to_owned()),
         ("pool".to_owned(), pool.to_owned()),
-        (
-            "size".to_owned(),
-            format!("{}GiB", resources.disk_gib.get()),
-        ),
+        ("size".to_owned(), format!("{ROOT_DISK_GIB}GiB")),
     ])
 }
 
-/// `POST /1.0/instances` for one computer, created stopped. Built here rather
+/// The data volume as a disk device with no path: the guest formats and
+/// mounts it itself.
+fn data_device(pool: &str, volume: &StorageVolumeName) -> BTreeMap<String, String> {
+    BTreeMap::from([
+        ("type".to_owned(), "disk".to_owned()),
+        ("pool".to_owned(), pool.to_owned()),
+        ("source".to_owned(), volume.as_str().to_owned()),
+    ])
+}
+
+/// `POST /1.0/instances` for one computer, created stopped with its data
+/// volume attached, so no instance exists without it. Built here rather
 /// than through `IncusClient::create_instance` so creation can stamp the
 /// enrollment generation and pairing before posting.
 fn instance_body(
     config: &IncusFleetConfig,
+    image: &GuestImage,
     computer: &Computer,
     enrollment_json: &str,
     created_at: DateTime<Utc>,
-) -> types::InstancesPost {
+) -> Result<types::InstancesPost, InvalidName> {
     let computer_id = computer.id;
     let resources = computer.resources;
     let (alias, fingerprint) = match &config.image.reference {
@@ -446,7 +594,8 @@ fn instance_body(
         None => (None, None),
     };
 
-    types::InstancesPost {
+    let volume = volume_name(computer_id)?;
+    Ok(types::InstancesPost {
         name: Some(instance_name(computer_id).into_inner()),
         type_: Some(types::InstanceType(
             InstanceKind::VirtualMachine.as_ref().to_owned(),
@@ -456,13 +605,17 @@ fn instance_body(
             &config.control_plane_id,
             created_at,
             computer_id,
+            image,
             resources,
             enrollment_json,
         ))),
-        devices: Some(types::DevicesMap(BTreeMap::from([(
-            "root".to_owned(),
-            root_device(config.storage_pool.as_str(), resources),
-        )]))),
+        devices: Some(types::DevicesMap(BTreeMap::from([
+            ("root".to_owned(), root_device(config.storage_pool.as_str())),
+            (
+                DATA_DEVICE.to_owned(),
+                data_device(config.storage_pool.as_str(), &volume),
+            ),
+        ]))),
         source: Some(types::InstanceSource {
             type_: Some("image".to_owned()),
             alias,
@@ -472,7 +625,7 @@ fn instance_body(
             ..Default::default()
         }),
         ..Default::default()
-    }
+    })
 }
 
 /// Transitional states count as where they are heading.
@@ -533,7 +686,8 @@ fn limits_match(instance: &InstanceInfo, resources: ComputerResources) -> bool {
     instance.config.get("limits.cpu") == Some(&resources.vcpus.get().to_string())
         && instance.config.get("limits.memory")
             == Some(&format!("{}GiB", resources.memory_gib.get()))
-        && instance.devices.get("root").is_some_and(|root| {
-            root.get("size") == Some(&format!("{}GiB", resources.disk_gib.get()))
-        })
+        && instance
+            .devices
+            .get("root")
+            .is_some_and(|root| root.get("size") == Some(&format!("{ROOT_DISK_GIB}GiB")))
 }

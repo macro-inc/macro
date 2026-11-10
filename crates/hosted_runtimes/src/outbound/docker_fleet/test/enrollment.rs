@@ -25,8 +25,8 @@ impl DockerCommand for FakeDocker {
         Ok(match command {
             "ps" if self.exists => "running".to_owned(),
             "ps" => String::new(),
-            "inspect" => "test-a 1 00000000-0000-0000-0000-000000000001".to_owned(),
-            "create" | "start" | "restart" | "stop" | "exec" => String::new(),
+            "inspect" => "test-a\t1\t00000000-0000-0000-0000-000000000001\t2026-11-05T10:00:00+00:00\tfixture-image\n".to_owned(),
+            "create" | "start" | "restart" | "stop" | "exec" | "volume" => String::new(),
             _ => panic!("unexpected Docker command"),
         })
     }
@@ -60,7 +60,7 @@ impl FleetEnrollment for TestEnrollment {
 #[tokio::test]
 async fn docker_create_replays_refresh_unclaimed_enrollment_without_rebooting() {
     for (exists, claimed, expected_issue_calls, expected_commands) in [
-        (false, false, 1, vec!["ps", "create", "start"]),
+        (false, false, 1, vec!["ps", "volume", "create", "start"]),
         (true, false, 1, vec!["ps", "inspect", "exec"]),
         (true, true, 0, vec!["ps", "inspect"]),
     ] {
@@ -72,7 +72,7 @@ async fn docker_create_replays_refresh_unclaimed_enrollment_without_rebooting() 
         let mut fleet = DockerFleet::new(
             DockerFleetConfig {
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
-                image: "fixture-image".to_owned(),
+                image: GuestImage::try_new("fixture-image").unwrap(),
                 network: "fixture-network".to_owned(),
                 enrollment_dir: root.path().to_owned(),
                 host_name: "fixture-host".to_owned(),
@@ -124,16 +124,19 @@ async fn docker_create_replays_refresh_unclaimed_enrollment_without_rebooting() 
             enrolled_at: None,
             setup_completed_at: None,
             default_agent_id: None,
+            image: None,
+            previous_image: None,
             enrollment_generation: EnrollmentGeneration::new(if exists { 1 } else { 0 }),
         };
         let source = TestEnrollment {
             claimed,
             calls: AtomicU32::new(0),
         };
-        fleet
+        let image = fleet
             .create(&computer, EnrollmentGeneration::new(1), &source, true)
             .await
             .unwrap();
+        assert_eq!(image.as_str(), "fixture-image");
         assert_eq!(source.calls.load(Ordering::SeqCst), expected_issue_calls);
         assert_eq!(*runner.calls.lock().unwrap(), expected_commands);
         let file = fleet.enrollment_dir(COMPUTER_ID).join(ENROLLMENT_FILE);
@@ -154,4 +157,117 @@ async fn docker_create_replays_refresh_unclaimed_enrollment_without_rebooting() 
             );
         }
     }
+}
+
+#[derive(Debug, Default)]
+struct RecordingDocker {
+    calls: Mutex<Vec<Vec<String>>>,
+}
+
+impl DockerCommand for RecordingDocker {
+    fn run(&self, _command: &str, args: &[String]) -> Result<String, DockerFleetError> {
+        self.calls.lock().unwrap().push(args.to_vec());
+        Ok(match args[0].as_str() {
+            "ps" => "running".to_owned(),
+            "inspect" => "test-a\t1\t00000000-0000-0000-0000-000000000001\t2026-11-05T10:00:00+00:00\tmacro-box:2026-11-01\n".to_owned(),
+            _ => String::new(),
+        })
+    }
+}
+
+#[tokio::test]
+async fn docker_rebuild_recreates_the_container_on_its_volumes_and_destroy_removes_them() {
+    let root = tempfile::tempdir().unwrap();
+    let runner = Arc::new(RecordingDocker::default());
+    let mut fleet = DockerFleet::new(
+        DockerFleetConfig {
+            control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+            image: GuestImage::try_new("macro-box:2026-11-01").unwrap(),
+            network: "fixture-network".to_owned(),
+            enrollment_dir: root.path().to_owned(),
+            host_name: "fixture-host".to_owned(),
+            memory_gb: 31,
+            reserve_gb: 7,
+            oversell_factor: 3,
+        },
+        Environment::Local,
+    )
+    .unwrap();
+    fleet.command = Some(runner.clone());
+    let computer = Computer {
+        id: COMPUTER_ID,
+        team_id: Uuid::nil(),
+        name: ComputerName::try_new("Fixture computer").unwrap(),
+        size: crate::domain::size::ComputerSize::Standard,
+        resources: crate::domain::size::ComputerResources {
+            vcpus: crate::domain::size::Vcpus::new(6),
+            memory_gib: crate::domain::size::MemoryGib::new(12),
+            disk_gib: crate::domain::size::DiskGib::new(100),
+        },
+        catalog_entry: crate::domain::size::CatalogEntryId::try_new("standard@2026-11".to_owned())
+            .unwrap(),
+        price_id: None,
+        state: crate::domain::lifecycle::ComputerState::reserved(
+            crate::domain::ids::HostId::new(Uuid::nil()),
+            Utc::now(),
+        ),
+        harness_id: None,
+        created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
+        created_at: Utc::now(),
+        enrolled_at: None,
+        setup_completed_at: None,
+        default_agent_id: None,
+        image: None,
+        previous_image: None,
+        enrollment_generation: EnrollmentGeneration::new(1),
+    };
+    let container = container_name(COMPUTER_ID);
+
+    // Already on the image: only the power state is applied.
+    fleet
+        .rebuild(
+            &computer,
+            &GuestImage::try_new("macro-box:2026-11-01").unwrap(),
+            true,
+        )
+        .await
+        .unwrap();
+    let verbs =
+        |calls: &[Vec<String>]| calls.iter().map(|call| call[0].clone()).collect::<Vec<_>>();
+    assert_eq!(
+        verbs(&runner.calls.lock().unwrap()),
+        ["ps", "inspect", "start"]
+    );
+    runner.calls.lock().unwrap().clear();
+
+    fleet
+        .rebuild(
+            &computer,
+            &GuestImage::try_new("macro-box:2026-11-10").unwrap(),
+            true,
+        )
+        .await
+        .unwrap();
+    let calls = runner.calls.lock().unwrap().clone();
+    assert_eq!(
+        verbs(&calls),
+        ["ps", "inspect", "ps", "stop", "rm", "create", "start"]
+    );
+    let create = &calls[5];
+    assert!(create.contains(&format!("macro.image=macro-box:2026-11-10")));
+    assert!(create.contains(&"macro.enrollment_generation=1".to_owned()));
+    assert!(create.contains(&"macro.created_at=2026-11-05T10:00:00+00:00".to_owned()));
+    assert!(create.iter().any(|arg| arg.starts_with(&format!(
+        "type=volume,source={container}-home,target=/home,"
+    ))));
+    assert_eq!(create.last().unwrap(), "macro-box:2026-11-10");
+    // The rebuild never touches the volumes.
+    assert!(!calls.iter().any(|call| call[0] == "volume"));
+    runner.calls.lock().unwrap().clear();
+
+    fleet.destroy(COMPUTER_ID).await.unwrap();
+    assert_eq!(
+        *runner.calls.lock().unwrap(),
+        [remove_args(COMPUTER_ID), remove_volumes_args(COMPUTER_ID)]
+    );
 }

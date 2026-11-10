@@ -51,8 +51,10 @@ Pulumi stacks; they do not host extra agent processes.
   on their TaskTracker; fleet effects drain for up to thirty seconds and release
   unfinished leases. See hosted_runtimes' AGENTS.md for redeploy grace,
   bounded effect execution, and hard-kill recovery.
-  `COMPUTERS_IMAGE` selects the local Incus image alias or Docker image;
-  an Incus override must not silently use the shared `macro-box` alias.
+  `COMPUTERS_IMAGE` names the versioned image new computers are created
+  from: an Incus alias such as `macro-box/2026-11-10`, or a Docker tag. Each
+  computer records its own image; updates go through hosted_runtimes' image
+  update routes, never by changing this value for existing computers.
   HostedHarnesses pairing retains the buying admin as the harness owner and
   grants the computer's team User access, so every teammate can run agents on it.
   `src/computers/default_agent.rs` creates the team's `<buyer first name>'s Agent`

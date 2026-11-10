@@ -121,6 +121,11 @@ pub struct Computer {
     /// The coding agent the computer came with, once created. Bots are
     /// soft-deleted, so it can name an agent the team since deleted.
     pub default_agent_id: Option<BotId>,
+    /// The image the guest's root disk was last built from; `None` until
+    /// the first creation finishes.
+    pub image: Option<crate::domain::image::GuestImage>,
+    /// The image before the last update: the rollback target.
+    pub previous_image: Option<crate::domain::image::GuestImage>,
 }
 
 /// A persisted row, including identities whose payload cannot be trusted.
@@ -518,7 +523,10 @@ impl Computer {
             _ if waiting_for_capacity => ComputerStatusKind::WaitingForCapacity,
             _ if setup_step.is_some() => ComputerStatusKind::SettingUp,
             Phase::Running { .. } => ComputerStatusKind::Ready,
-            Phase::Booting { .. } | Phase::Restarting { .. } => ComputerStatusKind::Starting,
+            Phase::Booting { .. }
+            | Phase::Restarting { .. }
+            | Phase::Updating { start: true, .. } => ComputerStatusKind::Starting,
+            Phase::Updating { start: false, .. } => ComputerStatusKind::Stopped,
             Phase::Stopped { .. } if self.state.power_on_requested => ComputerStatusKind::Starting,
             Phase::Stopping { .. } => ComputerStatusKind::Stopping,
             Phase::Stopped { .. } => ComputerStatusKind::Stopped,

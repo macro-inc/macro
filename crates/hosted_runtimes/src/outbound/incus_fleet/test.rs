@@ -60,7 +60,7 @@ fn recorded_limits_and_units_survive_catalog_changes() {
         shutdown_grace: Duration::from_secs(60),
         image: ImageSource {
             reference: ImageReference::Alias(
-                incus_client::ImageAlias::try_new("macro-box").unwrap(),
+                incus_client::ImageAlias::try_new("macro-box/2026-11-10").unwrap(),
             ),
             remote: None,
         },
@@ -104,14 +104,18 @@ fn recorded_limits_and_units_survive_catalog_changes() {
         enrolled_at: None,
         setup_completed_at: None,
         default_agent_id: None,
+        image: None,
+        previous_image: None,
         enrollment_generation: Default::default(),
     };
     let body = instance_body(
         &config,
+        &GuestImage::try_new("macro-box/2026-11-10").unwrap(),
         &computer,
         r#"{"x":1}"#,
         "2026-11-05T10:00:00Z".parse().unwrap(),
-    );
+    )
+    .unwrap();
 
     let mut observed = instance("mc-test", incus_client::InstanceStatus::Stopped, &[]);
     observed.config = body.config.as_ref().unwrap().0.clone();
@@ -122,7 +126,7 @@ fn recorded_limits_and_units_survive_catalog_changes() {
         .devices
         .get_mut("root")
         .unwrap()
-        .insert("size".to_owned(), "100GiB".to_owned());
+        .insert("size".to_owned(), "200GiB".to_owned());
     assert!(!limits_match(&observed, purchased));
 
     assert_eq!(
@@ -138,18 +142,24 @@ fn recorded_limits_and_units_survive_catalog_changes() {
                 "user.macro.enrollment": "{\"x\":1}",
                 "user.macro.control_plane": "test-a",
                 "user.macro.created_at": "2026-11-05T10:00:00+00:00",
+                "user.macro.image": "macro-box/2026-11-10",
             },
             "devices": {
                 "root": {
                     "type": "disk",
                     "path": "/",
                     "pool": "default",
-                    "size": "200GiB",
+                    "size": "32GiB",
+                },
+                "data": {
+                    "type": "disk",
+                    "pool": "default",
+                    "source": "mc-01900000000070008000000000000001-data",
                 },
             },
             "source": {
                 "type": "image",
-                "alias": "macro-box",
+                "alias": "macro-box/2026-11-10",
             },
         })
     );
@@ -200,14 +210,18 @@ fn a_remote_image_names_its_server_and_protocol() {
         enrolled_at: None,
         setup_completed_at: None,
         default_agent_id: None,
+        image: None,
+        previous_image: None,
         enrollment_generation: Default::default(),
     };
     let body = instance_body(
         &config,
+        &GuestImage::try_new("ubuntu/24.04").unwrap(),
         &computer,
         "{}",
         "2026-11-05T10:00:00Z".parse().unwrap(),
-    );
+    )
+    .unwrap();
 
     assert_eq!(
         serde_json::to_value(body.source).unwrap(),

@@ -252,6 +252,8 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
         enrolled_at: None,
         setup_completed_at: None,
         default_agent_id: None,
+        image: None,
+        previous_image: None,
     };
     let harnesses = HostedHarnesses {
         service: Arc::new(HarnessServiceImpl::new(PgHarnessRepo::new(pool.clone()))),

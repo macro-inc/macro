@@ -7,7 +7,7 @@ const COMPUTER_ID: ComputerId =
 fn config() -> DockerFleetConfig {
     DockerFleetConfig {
         control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
-        image: "macro-box:latest".to_owned(),
+        image: GuestImage::try_new("macro-box:latest").unwrap(),
         network: "macro_services".to_owned(),
         enrollment_dir: PathBuf::from("/var/lib/macro/enrollments"),
         host_name: "docker-local".to_owned(),
@@ -24,7 +24,7 @@ fn create_runs_systemd_with_the_enrollment_directory_mounted_read_only() {
         pairing_id: PairingId::new_from_uuid(Uuid::from_u128(1)),
         control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
         created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
-        image: "macro-box:latest".to_owned(),
+        image: GuestImage::try_new("macro-box:latest").unwrap(),
         network: "macro_services".to_owned(),
         computer_id: COMPUTER_ID,
         memory_gb: 8,
@@ -52,6 +52,8 @@ fn create_runs_systemd_with_the_enrollment_directory_mounted_read_only() {
             "macro.enrollment_generation=1",
             "--label",
             "macro.pairing_id=00000000-0000-0000-0000-000000000001",
+            "--label",
+            "macro.image=macro-box:latest",
             "--network",
             "macro_services",
             "--memory",
@@ -65,6 +67,10 @@ fn create_runs_systemd_with_the_enrollment_directory_mounted_read_only() {
             "/run/lock",
             "--mount",
             "type=bind,source=/var/lib/macro/enrollments/01900000-0000-7000-8000-000000000001,target=/run/macro,readonly",
+            "--mount",
+            "type=volume,source=macro-computer-01900000-0000-7000-8000-000000000001-home,target=/home,volume-label=macro.computer_id=01900000-0000-7000-8000-000000000001,volume-label=macro.control_plane=test-a",
+            "--mount",
+            "type=volume,source=macro-computer-01900000-0000-7000-8000-000000000001-macrod,target=/var/lib/macrod,volume-label=macro.computer_id=01900000-0000-7000-8000-000000000001,volume-label=macro.control_plane=test-a",
             "macro-box:latest",
         ]
     );
@@ -91,6 +97,44 @@ fn remove_forces_so_a_missing_container_is_not_an_error() {
             "--volumes",
             "macro-computer-01900000-0000-7000-8000-000000000001"
         ]
+    );
+}
+
+#[test]
+fn volume_removal_names_both_volumes_and_tolerates_missing_ones() {
+    assert_eq!(
+        remove_volumes_args(COMPUTER_ID),
+        [
+            "volume",
+            "rm",
+            "--force",
+            "macro-computer-01900000-0000-7000-8000-000000000001-home",
+            "macro-computer-01900000-0000-7000-8000-000000000001-macrod",
+        ]
+    );
+}
+
+#[test]
+fn labels_keep_the_identity_a_rebuild_reuses() {
+    assert_eq!(
+        ContainerLabels::parse(
+            "test-a\t3\t00000000-0000-0000-0000-000000000001\t2026-11-05T10:00:00+00:00\tmacro-box:2026-11-10"
+        )
+        .unwrap(),
+        ContainerLabels {
+            control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
+            generation: EnrollmentGeneration::new(3),
+            pairing_id: PairingId::new_from_uuid(Uuid::from_u128(1)),
+            created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
+            image: GuestImage::try_new("macro-box:2026-11-10").unwrap(),
+        }
+    );
+    // A container from before images were labelled.
+    assert!(
+        ContainerLabels::parse(
+            "test-a\t3\t00000000-0000-0000-0000-000000000001\t2026-11-05T10:00:00+00:00\t<no value>"
+        )
+        .is_err()
     );
 }
 

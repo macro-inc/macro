@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 use super::PgComputerRepo;
 use crate::domain::ids::ComputerId;
+use crate::domain::image::GuestImage;
 use crate::domain::lifecycle::HostId;
 use crate::domain::models::{
     Computer, ComputerDisplayMetadata, ComputerName, ComputerRecord, SanitizedReason,
@@ -35,6 +36,8 @@ pub(super) struct ComputerRow {
     pub(super) enrollment_generation: i64,
     pub(super) setup_completed_at: Option<DateTime<Utc>>,
     pub(super) default_agent_id: Option<Uuid>,
+    pub(super) image: Option<String>,
+    pub(super) previous_image: Option<String>,
 }
 
 fn invalid_row(rule: &'static str) -> SanitizedReason {
@@ -87,6 +90,16 @@ impl TryFrom<ComputerRow> for Computer {
             enrolled_at: row.enrolled_at,
             setup_completed_at: row.setup_completed_at,
             default_agent_id: row.default_agent_id.map(BotId::new_from_uuid),
+            image: row
+                .image
+                .map(GuestImage::try_from)
+                .transpose()
+                .map_err(|_| invalid_row("image must be a valid image name"))?,
+            previous_image: row
+                .previous_image
+                .map(GuestImage::try_from)
+                .transpose()
+                .map_err(|_| invalid_row("previous_image must be a valid image name"))?,
             enrollment_generation: crate::domain::enrollment::EnrollmentGeneration::new(
                 u32::try_from(row.enrollment_generation).map_err(|_| {
                     invalid_row("enrollment_generation must fit an unsigned generation")

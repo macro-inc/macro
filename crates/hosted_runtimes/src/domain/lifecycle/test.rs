@@ -6,6 +6,7 @@ use proptest::prelude::*;
 use super::*;
 
 mod comped;
+mod image_update;
 mod instance_lost;
 mod payment;
 
@@ -792,7 +793,11 @@ fn cases() -> Vec<Case> {
 
 #[test]
 fn transitions() {
-    for case in cases() {
+    check(cases());
+}
+
+fn check(cases: Vec<Case>) {
+    for case in cases {
         let payment = match case.phase {
             Phase::PendingPayment { .. } => PaymentOutcome::Pending,
             Phase::PaymentFailed => PaymentOutcome::Unbilled,
@@ -879,6 +884,9 @@ fn any_event() -> impl Strategy<Value = Event> {
         Just(Event::OperatorRetry),
         Just(Event::EffectFailed {
             reason: "boom".to_owned()
+        }),
+        Just(Event::UpdateImage {
+            image: crate::domain::image::GuestImage::try_new("macro-box/2026-11-10").unwrap()
         }),
     ]
 }

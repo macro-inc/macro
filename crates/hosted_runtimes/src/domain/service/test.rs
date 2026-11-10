@@ -424,6 +424,8 @@ async fn webhook_count_below_ours_cancels_the_newest_computer() {
                 enrolled_at: Some(created_at),
                 setup_completed_at: None,
                 default_agent_id: None,
+                image: None,
+                previous_image: None,
                 enrollment_generation: Default::default(),
             },
         );
@@ -509,6 +511,8 @@ async fn retry_failed_computer_restarts_without_billing() {
             enrolled_at: Some(now()),
             setup_completed_at: None,
             default_agent_id: None,
+            image: None,
+            previous_image: None,
             enrollment_generation: Default::default(),
         },
     );
@@ -597,6 +601,8 @@ async fn retry_running_computer_is_rejected_without_applying_events() {
             enrolled_at: Some(now()),
             setup_completed_at: None,
             default_agent_id: None,
+            image: None,
+            previous_image: None,
             enrollment_generation: Default::default(),
         },
     );
@@ -656,6 +662,8 @@ async fn retry_another_teams_computer_is_not_found() {
             enrolled_at: Some(now()),
             setup_completed_at: None,
             default_agent_id: None,
+            image: None,
+            previous_image: None,
             enrollment_generation: Default::default(),
         },
     );
@@ -961,3 +969,5 @@ mod capacity;
 mod waiting;
 
 pub(crate) mod availability;
+
+mod image;

@@ -18,6 +18,8 @@ use crate::domain::ports::{
 };
 use crate::domain::size::ComputerSize;
 
+mod image;
+pub use image::ImageUpdate;
 #[cfg(test)]
 pub(crate) mod test;
 
@@ -40,6 +42,12 @@ pub enum ComputerError {
     /// Only failed computers may be retried.
     #[error("only a failed computer can be retried")]
     NotFailed,
+    /// Only a running or stopped computer can move to another image.
+    #[error("only a running or stopped computer can be updated")]
+    NotUpdatable,
+    /// The computer has not been updated, so there is nothing to roll back to.
+    #[error("the computer has no previous image")]
+    NoPreviousImage,
     /// No host has enough sale capacity.
     #[error("this size is sold out")]
     SoldOut,

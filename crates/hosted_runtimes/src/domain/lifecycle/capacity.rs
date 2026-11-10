@@ -25,7 +25,7 @@ pub(super) fn power_on(
 ) {
     match next.phase {
         Phase::Stopped { .. } => {}
-        Phase::Stopping { .. } => {
+        Phase::Stopping { .. } | Phase::Updating { start: false, .. } => {
             next.power_on_requested = true;
             return;
         }

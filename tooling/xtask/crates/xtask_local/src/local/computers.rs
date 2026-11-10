@@ -31,8 +31,9 @@ mod test;
 
 /// Tag `nix build .#macro-box-docker` loads as.
 pub const DOCKER_IMAGE: &str = "macro-box:latest";
-/// Image alias imported on the Incus host (see `nix/macro-box/AGENTS.md`).
-pub const INCUS_IMAGE: &str = "macro-box";
+/// Names the versioned image alias new Incus computers are created from,
+/// e.g. `macro-box/2026-11-10` (see `nix/macro-box/AGENTS.md`).
+pub const INCUS_IMAGE_VARIABLE: &str = "COMPUTERS_INCUS_IMAGE";
 pub const DOCKER_HOST_NAME: &str = "local-docker";
 pub const INCUS_HOST_NAME: &str = "runtime-dev-1";
 /// SHA-256 of the DER certificate `runtime-dev-1`'s Incus API serves.
@@ -173,7 +174,10 @@ impl Computers {
             Fleet::Docker => self.docker_env(env)?,
             Fleet::Incus => {
                 let network = IncusNetwork::load()?;
-                self.incus_env(env, &IncusCredentials::load(&network)?, &network)?
+                let image = macro_env_var::maybe_read_env(INCUS_IMAGE_VARIABLE).with_context(|| {
+                    format!("set {INCUS_IMAGE_VARIABLE} to the macro-box/<version> alias on runtime-dev-1")
+                })?;
+                self.incus_env(env, &IncusCredentials::load(&network)?, &network, &image)?
             }
         };
         env.retain(|key, _| !key.starts_with("COMPUTERS_"));
@@ -222,6 +226,7 @@ impl Computers {
         env: &BTreeMap<String, String>,
         credentials: &IncusCredentials,
         network: &IncusNetwork,
+        image: &str,
     ) -> Result<BTreeMap<String, String>> {
         let overrides = MACROD_SERVICES
             .iter()
@@ -260,7 +265,7 @@ impl Computers {
                 network.control_plane.to_string(),
             ),
             ("COMPUTERS_HOST_NAME".into(), INCUS_HOST_NAME.into()),
-            ("COMPUTERS_IMAGE".into(), INCUS_IMAGE.into()),
+            ("COMPUTERS_IMAGE".into(), image.into()),
             ("COMPUTERS_HOST_RESERVE_GB".into(), "7".into()),
             ("COMPUTERS_OVERSELL_FACTOR".into(), "3".into()),
             ("COMPUTERS_INCUS_PROFILE".into(), "macro-box".into()),
@@ -630,8 +635,8 @@ fn image_id() -> Result<Option<String>> {
         .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned()))
 }
 
-/// Remove this instance's Docker computers: a fresh stack has no rows for
-/// them, and they would hold its `services` network open.
+/// Remove this instance's Docker computers and their data volumes: a fresh
+/// stack has no rows for them, and they would hold its `services` network open.
 pub fn remove_containers(instance: &Instance) {
     let Ok(listed) = Command::new("docker")
         .args(["ps", "--all", "--quiet"])
@@ -654,5 +659,31 @@ pub fn remove_containers(instance: &Instance) {
     let _ = Command::new("docker")
         .args(["rm", "--force", "--volumes"])
         .args(&ids)
+        .output();
+    remove_volumes(instance);
+}
+
+/// The data volumes DockerFleet labels with this instance's control plane.
+fn remove_volumes(instance: &Instance) {
+    let Ok(listed) = Command::new("docker")
+        .args(["volume", "ls", "--quiet"])
+        .args([
+            "--filter",
+            &format!("label=macro.control_plane=local-{}", instance.name()),
+        ])
+        .output()
+    else {
+        return;
+    };
+    let volumes: Vec<String> = String::from_utf8_lossy(&listed.stdout)
+        .split_whitespace()
+        .map(str::to_owned)
+        .collect();
+    if volumes.is_empty() {
+        return;
+    }
+    let _ = Command::new("docker")
+        .args(["volume", "rm", "--force"])
+        .args(&volumes)
         .output();
 }

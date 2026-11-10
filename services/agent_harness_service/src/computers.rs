@@ -110,7 +110,9 @@ pub(crate) async fn operator(
                     control_plane_id: ControlPlaneId::parse(
                         settings.computers_control_plane_id.clone(),
                     )?,
-                    image: settings.computers_image.clone(),
+                    image: hosted_runtimes::domain::image::GuestImage::try_new(
+                        &settings.computers_image,
+                    )?,
                     network: settings.computers_docker_network.clone(),
                     enrollment_dir: settings.computers_docker_enrollment_dir.clone().into(),
                     host_name: settings.computers_host_name.clone(),

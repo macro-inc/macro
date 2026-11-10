@@ -105,13 +105,14 @@ fn incus_control_and_all_persona_urls_use_the_tailnet() {
             &base,
             &credentials(),
             &IncusNetwork::parse("100.101.102.103", "100.116.73.13").unwrap(),
+            "macro-box/2026-11-10",
         )
         .unwrap();
 
     assert_eq!(env["COMPUTERS_FLEET"], "incus");
     assert_eq!(env["COMPUTERS_CONTROL_PLANE_ID"], "local-computers");
     assert_eq!(env["COMPUTERS_HOST_NAME"], "runtime-dev-1");
-    assert_eq!(env["COMPUTERS_IMAGE"], "macro-box");
+    assert_eq!(env["COMPUTERS_IMAGE"], "macro-box/2026-11-10");
     assert_eq!(env["COMPUTERS_HOST_RESERVE_GB"], "7");
     assert_eq!(env["COMPUTERS_OVERSELL_FACTOR"], "3");
     assert_eq!(env["COMPUTERS_INCUS_PROFILE"], "macro-box");
@@ -264,7 +265,12 @@ fn incus_uses_the_discovered_devbox_address() {
     let computers = Computers::new(Mode::Local, Fleet::Incus, &instance);
     let network = IncusNetwork::parse("100.101.102.103\n", "100.104.105.106").unwrap();
     let env = computers
-        .incus_env(&local_env(&instance), &credentials(), &network)
+        .incus_env(
+            &local_env(&instance),
+            &credentials(),
+            &network,
+            "macro-box/2026-11-10",
+        )
         .unwrap();
     assert_eq!(env["COMPUTERS_CONTROL_PLANE_ADDRESS"], "100.104.105.106");
     let overrides: BTreeMap<String, String> = env
@@ -324,7 +330,7 @@ fn incus_overrides_use_only_direct_tailnet_service_urls() {
         let base = local_env(&instance);
         let network = IncusNetwork::parse("100.101.102.103", "100.116.73.13").unwrap();
         let env = Computers::new(Mode::Local, Fleet::Incus, &instance)
-            .incus_env(&base, &credentials(), &network)
+            .incus_env(&base, &credentials(), &network, "macro-box/2026-11-10")
             .unwrap();
         let overrides: BTreeMap<_, _> = env
             .into_iter()
@@ -427,7 +433,12 @@ fn incus_guest_ports_are_allowed_by_nix() {
         }));
     for instance in instances {
         let env = Computers::new(Mode::Local, Fleet::Incus, &instance)
-            .incus_env(&local_env(&instance), &credentials(), &network)
+            .incus_env(
+                &local_env(&instance),
+                &credentials(),
+                &network,
+                "macro-box/2026-11-10",
+            )
             .unwrap();
         let mut emitted_ports = std::collections::BTreeSet::new();
         for (key, value) in env {

@@ -4,6 +4,7 @@
 
 use crate::domain::enrollment::EnrollmentGeneration;
 use crate::domain::ids::ComputerId;
+use crate::domain::image::GuestImage;
 use crate::domain::models::{Computer, ControlPlaneId, HostRegistration};
 use crate::domain::ports::{Fleet, FleetEnrollment, FleetError, FleetInstance};
 use crate::outbound::docker_fleet::{DockerFleet, DockerFleetError};
@@ -53,7 +54,7 @@ impl Fleet for ConfiguredFleet {
         generation: EnrollmentGeneration,
         enrollment: &impl FleetEnrollment,
         start: bool,
-    ) -> Result<(), Self::Err> {
+    ) -> Result<GuestImage, Self::Err> {
         match self {
             Self::Incus(fleet) => Ok(fleet
                 .create(computer, generation, enrollment, start)
@@ -61,6 +62,18 @@ impl Fleet for ConfiguredFleet {
             Self::Docker(fleet) => Ok(fleet
                 .create(computer, generation, enrollment, start)
                 .await?),
+        }
+    }
+
+    async fn rebuild(
+        &self,
+        computer: &Computer,
+        image: &GuestImage,
+        start: bool,
+    ) -> Result<(), Self::Err> {
+        match self {
+            Self::Incus(fleet) => Ok(fleet.rebuild(computer, image, start).await?),
+            Self::Docker(fleet) => Ok(fleet.rebuild(computer, image, start).await?),
         }
     }
 

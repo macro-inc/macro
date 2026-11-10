@@ -15,6 +15,7 @@ use crate::domain::enrollment::{
     DeviceSecret, Enrollment, EnrollmentGeneration, EnrollmentIssueError,
 };
 use crate::domain::ids::{ComputerId, PairingId};
+use crate::domain::image::GuestImage;
 use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, TimerKind};
 use crate::domain::models::{
     BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostRegistration, NewComputer,
@@ -171,6 +172,14 @@ pub trait ComputerRepo: Send + Sync + 'static {
         &self,
         computer_ids: &[ComputerId],
     ) -> impl Future<Output = Result<HashMap<ComputerId, u32>, Self::Err>> + Send;
+
+    /// Record the image the guest's root disk was built from; a different
+    /// image moves the current one to `previous_image`, the rollback target.
+    fn record_image(
+        &self,
+        computer_id: ComputerId,
+        image: &GuestImage,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Record the coding agent the computer came with.
     fn set_default_agent(
@@ -361,11 +370,23 @@ pub trait Fleet: Send + Sync + 'static {
     /// Create lazily: an existing guest with the same generation and claimed
     /// pairing completes without polling `enrollment.issue()`. An unclaimed
     /// guest gets a fresh payload and restarts its enrollment units, preserving guest uptime.
+    /// A new guest gets a fresh data disk (any left from a lost guest is
+    /// deleted) and the fleet's configured image. Returns the image the guest runs.
     fn create(
         &self,
         computer: &Computer,
         generation: EnrollmentGeneration,
         enrollment: &impl FleetEnrollment,
+        start: bool,
+    ) -> impl Future<Output = Result<GuestImage, Self::Err>> + Send;
+
+    /// Stop the guest, rebuild its root disk from `image` keeping its data
+    /// disk and enrollment, then start it when `start`. A guest already on
+    /// `image` is only brought to the requested power state.
+    fn rebuild(
+        &self,
+        computer: &Computer,
+        image: &GuestImage,
         start: bool,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
@@ -383,7 +404,7 @@ pub trait Fleet: Send + Sync + 'static {
         &self,
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-    /// Delete the instance and its disk. A missing instance is not an error.
+    /// Delete the instance, then its data disk. Missing ones are not an error.
     fn destroy(
         &self,
         computer_id: ComputerId,
