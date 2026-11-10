@@ -107,7 +107,7 @@ async fn allocation_counts_every_computer_holding_units_until_released(pool: PgP
             start: true
         })
     );
-    // Turned off: holds its disk and sold units, not host RAM.
+    // Turned off: still holds its disk and sold units.
     let mut large = standard(3);
     large.resources.memory_gib = crate::domain::size::MemoryGib::new(16);
     repo.reserve(large, now()).await.unwrap();
@@ -142,7 +142,6 @@ async fn allocation_counts_every_computer_holding_units_until_released(pool: PgP
         vec![HostAllocation {
             host,
             sold_units: 4,
-            awake_units: 1,
             vcpus: 12,
             memory_gib: 32,
             disk_gib: 300,

@@ -217,7 +217,6 @@ fn capacity_gauges_each_host_and_the_fleet_sum() {
             HostAllocation {
                 host: host(1, "box-1", 3, 9),
                 sold_units: 8,
-                awake_units: 2,
                 vcpus: 32,
                 memory_gib: 64,
                 disk_gib: 800,
@@ -225,7 +224,6 @@ fn capacity_gauges_each_host_and_the_fleet_sum() {
             HostAllocation {
                 host: host(2, "box-2", 3, 9),
                 sold_units: 1,
-                awake_units: 0,
                 vcpus: 4,
                 memory_gib: 8,
                 disk_gib: 100,
@@ -267,12 +265,10 @@ fn capacity_gauges_each_host_and_the_fleet_sum() {
     assert_eq!(
         fleet,
         vec![
-            "computer.capacity.allocated resource=awake_units,scope=fleet 2",
             "computer.capacity.allocated resource=disk_gib,scope=fleet 900",
             "computer.capacity.allocated resource=memory_gib,scope=fleet 72",
             "computer.capacity.allocated resource=sold_units,scope=fleet 9",
             "computer.capacity.allocated resource=vcpus,scope=fleet 36",
-            "computer.capacity.total resource=awake_units,scope=fleet 6",
             "computer.capacity.total resource=sold_units,scope=fleet 18",
         ]
     );
@@ -291,5 +287,5 @@ fn capacity_gauges_each_host_and_the_fleet_sum() {
             .any(|point| point.starts_with("computer.capacity.total")
                 && point.contains("resource=disk_gib"))
     );
-    assert_eq!(points.len(), 21);
+    assert_eq!(points.len(), 15);
 }

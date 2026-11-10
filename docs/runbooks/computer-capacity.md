@@ -9,7 +9,7 @@ with Notify me.
 
 agent_harness_service gauges this every reconcile pass as
 `computer.capacity.allocated` and `computer.capacity.total`
-(`scope:host|fleet`, `resource:sold_units|awake_units|vcpus|memory_gib|disk_gib`).
+(`scope:host|fleet`, `resource:sold_units|vcpus|memory_gib|disk_gib`).
 The monitors in `infra/stacks/monitoring/monitors/computers.ts` warn at 70% and
 alert at 85% of sold units, per host and across the fleet.
 

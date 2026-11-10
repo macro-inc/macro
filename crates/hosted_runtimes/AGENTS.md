@@ -356,6 +356,6 @@ One computer's first setup is one trace, rooted at the purchase (Buy computer). 
   `computer.effect.failures` (by phase) and `computer.incus.reachable` (0/1).
 - Capacity gauges, every reconcile pass: `computer.capacity.allocated` and
   `computer.capacity.total` by `scope` (`host`/`fleet`), `host_id`, `host`
-  and `resource` (`sold_units`, `awake_units`, `vcpus`, `memory_gib`,
+  and `resource` (`sold_units`, `vcpus`, `memory_gib`,
   `disk_gib`). Only units have a total; hosts record no disk capacity. The
   monitoring stack's capacity monitors read these names.

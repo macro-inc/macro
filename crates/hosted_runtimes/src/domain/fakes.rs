@@ -479,11 +479,6 @@ impl ComputerRepo for FakeRepo {
                 sold_capacity_units: self.sold_units,
             },
             sold_units: held.iter().map(|c| c.resources.units()).sum(),
-            awake_units: held
-                .iter()
-                .filter(|c| c.state.is_awake())
-                .map(|c| c.resources.units())
-                .sum(),
             vcpus: held.iter().map(|c| c.resources.vcpus.get()).sum(),
             memory_gib: held.iter().map(|c| c.resources.memory_gib.get()).sum(),
             disk_gib: held.iter().map(|c| c.resources.disk_gib.get()).sum(),

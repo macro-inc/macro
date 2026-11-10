@@ -189,7 +189,6 @@ fn seconds(started: chrono::DateTime<chrono::Utc>, ended: chrono::DateTime<chron
 #[strum(serialize_all = "snake_case")]
 enum CapacityResource {
     SoldUnits,
-    AwakeUnits,
     Vcpus,
     MemoryGib,
     DiskGib,
@@ -200,8 +199,6 @@ enum CapacityResource {
 struct Held {
     sold_units: u64,
     sold_capacity_units: u64,
-    awake_units: u64,
-    awake_capacity_units: u64,
     vcpus: u64,
     memory_gib: u64,
     disk_gib: u64,
@@ -211,8 +208,6 @@ impl Held {
     fn add(&mut self, allocation: &HostAllocation) {
         self.sold_units += u64::from(allocation.sold_units);
         self.sold_capacity_units += u64::from(allocation.host.sold_capacity_units);
-        self.awake_units += u64::from(allocation.awake_units);
-        self.awake_capacity_units += u64::from(allocation.host.awake_capacity_units);
         self.vcpus += u64::from(allocation.vcpus);
         self.memory_gib += u64::from(allocation.memory_gib);
         self.disk_gib += u64::from(allocation.disk_gib);
@@ -221,17 +216,12 @@ impl Held {
     /// Each resource's allocation, and its capacity where the model bounds it.
     /// Hosts record no separate vCPU, memory or disk capacity: units bound
     /// vCPU and memory together, and disk is not bounded.
-    fn readings(&self) -> [(CapacityResource, u64, Option<u64>); 5] {
+    fn readings(&self) -> [(CapacityResource, u64, Option<u64>); 4] {
         [
             (
                 CapacityResource::SoldUnits,
                 self.sold_units,
                 Some(self.sold_capacity_units),
-            ),
-            (
-                CapacityResource::AwakeUnits,
-                self.awake_units,
-                Some(self.awake_capacity_units),
             ),
             (CapacityResource::Vcpus, self.vcpus, None),
             (CapacityResource::MemoryGib, self.memory_gib, None),

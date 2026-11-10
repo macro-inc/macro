@@ -6,12 +6,12 @@
 // (crates/hosted_runtimes/src/domain/telemetry.rs), so these are their contract:
 //
 // - `computer.capacity.allocated`: what computers hold, from reservation until
-//   payment refusal or destruction, asleep or stopped included.
+//   payment refusal or destruction, stopped ones included.
 // - `computer.capacity.total`: the host's capacity, for the resources the
 //   capacity model bounds.
 //
 // Tags: `scope` (`host` or `fleet`), `host_id` and `host` (host scope only),
-// `resource` (`sold_units`, `awake_units`, `vcpus`, `memory_gib`, `disk_gib`).
+// `resource` (`sold_units`, `vcpus`, `memory_gib`, `disk_gib`).
 // Purchases are refused once `sold_units` reaches its total, so that is what
 // these alert on. Every replica records the same values; `max` dedupes them.
 import * as datadog from '@pulumi/datadog';
