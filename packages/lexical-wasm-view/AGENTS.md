@@ -11,6 +11,8 @@ tests are separate from Rust-backed production compatibility acceptance.
 
 ## Boundaries
 
+- Set the decorator marker before contentEditable, preserving Source DOM attribute order.
+
 - Capture ViewOptions.owner before asynchronous mounts so native decorator roots inherit application providers; dispose each decorator root when its keyed node is removed.
 - Install common Macro element views once; register group-owned decorators through registerMacroDecoratorViews and keep full registerMacroViews completeness checks strict.
 - Let NodeView.createDecoratorHost preserve application mount wrappers; Macro uses the Source Portal div and mount class while portable views retain their default host.
