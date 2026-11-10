@@ -314,20 +314,7 @@ function getSupportedHandler(
                   harnessId,
                   meta.tag === 'entity_access_requested'
                 );
-                openContent(
-                  lm,
-                  {
-                    type: 'component',
-                    id: 'settings',
-                    entryMetadata: {
-                      route: paneRoute({
-                        id: 'settings',
-                        params: { tab: 'harness' },
-                      }),
-                    },
-                  },
-                  { newSplit, sourceHandle, onApplied }
-                );
+                openRuntimesSettings(lm, { newSplit, sourceHandle, onApplied });
               }
             );
         }
@@ -694,7 +681,33 @@ function getSupportedHandler(
             onApplied,
           });
       })
+      // Its machine has no page of its own; Settings → Runtimes points it out.
+      .with('runtime_access_removed', () => {
+        const harnessId = notification.entity_id;
+        return async (lm: SplitManager, newSplit = false) => {
+          requestRuntimeShare(harnessId, false);
+          openRuntimesSettings(lm, { newSplit, sourceHandle, onApplied });
+        };
+      })
       .exhaustive(() => null)
+  );
+}
+
+/** Settings → Runtimes, where a runtime's sharing and access live. */
+function openRuntimesSettings(
+  layoutManager: SplitManager,
+  options: OpenOptions
+) {
+  openContent(
+    layoutManager,
+    {
+      type: 'component',
+      id: 'settings',
+      entryMetadata: {
+        route: paneRoute({ id: 'settings', params: { tab: 'harness' } }),
+      },
+    },
+    options
   );
 }
 

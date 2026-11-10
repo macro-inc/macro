@@ -417,6 +417,7 @@ export function describeInboxCard(
       'calendar_join_request',
       'access_requested',
       'access_granted',
+      'access_removed',
       () => ({ who: single.action, what: single.subject })
     )
     .with('other', () => ({ who: single.action, body: single.subject }))
@@ -452,7 +453,12 @@ export function inboxCardKind(row: NotificationInboxRow): InboxCardKind {
     .with('task', () => 'task')
     .with('pull_request', () => 'pull_request')
     .with('calendar_event', 'calendar_join_request', () => 'event')
-    .with('access_requested', 'access_granted', () => 'access')
+    .with(
+      'access_requested',
+      'access_granted',
+      'access_removed',
+      () => 'access'
+    )
     .with('other', () =>
       metadata?.tag === 'invite_to_team' ? 'invite' : 'other'
     )
