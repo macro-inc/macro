@@ -14,7 +14,12 @@ use macro_authorization::{
 use serde::Deserialize;
 use utoipa::IntoParams;
 
+use scheduled_action::domain::suggestions::model::RoutineSuggestions;
+
 use crate::domain::model::{GenerationError, GenerationStarted};
+
+#[cfg(test)]
+mod test;
 
 /// Starts generations; implemented by the generation service.
 pub trait StartGeneration: Send + Sync + 'static {
@@ -24,6 +29,13 @@ pub trait StartGeneration: Send + Sync + 'static {
         user: &macro_user_id::user_id::MacroUserIdStr<'static>,
         timezone: chrono_tz::Tz,
     ) -> impl Future<Output = Result<bool, GenerationError>> + Send;
+
+    /// The person's routine suggestions, as the retired generate route
+    /// answered with them.
+    fn routine_suggestions(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<RoutineSuggestions, GenerationError>> + Send;
 }
 
 /// What the route shares.
@@ -58,6 +70,12 @@ where
 {
     Router::new()
         .route("/suggestions/generate", post(start_generation::<S, Auth>))
+        // Web and app bundles from before the unified generation still
+        // call this. Remove once none does.
+        .route(
+            "/scheduled-actions/suggestions/generate",
+            post(legacy_generate::<S, Auth>),
+        )
         .with_state(state)
 }
 
@@ -135,4 +153,37 @@ where
         self.start(user, GenerationTrigger::Onboarding, timezone)
             .await
     }
+
+    async fn routine_suggestions(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Result<RoutineSuggestions, GenerationError> {
+        self.routine_suggestions(user).await
+    }
+}
+
+/// The retired `POST /scheduled-actions/suggestions/generate`: start the
+/// caller's onboarding generation and answer with their routine
+/// suggestions, as that route did. Not in the API spec.
+pub async fn legacy_generate<S, Auth>(
+    State(state): State<GenerationRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Query(query): Query<GenerateQuery>,
+) -> Result<Json<RoutineSuggestions>, GenerationApiError>
+where
+    S: StartGeneration,
+    Auth: MacroAuthorizationService,
+{
+    let user = &user.authorization.macro_user_id;
+    state
+        .service
+        .start_onboarding(user, query.timezone)
+        .await
+        .map_err(GenerationApiError)?;
+    let suggestions = state
+        .service
+        .routine_suggestions(user)
+        .await
+        .map_err(GenerationApiError)?;
+    Ok(Json(suggestions))
 }
