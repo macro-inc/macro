@@ -298,7 +298,10 @@ function TouchChannelDetailTopBar(props: ChannelDetailHeaderProps) {
   const tabs = useChannelTabItems(props.channelId);
 
   return (
-    <ViewShell.TopBar class="gap-2 py-0 touch:flex touch:h-10 touch:px-0 touch:py-0">
+    <ViewShell.TopBar
+      floating
+      class="gap-2 py-0 touch:flex touch:h-10 touch:px-0 touch:py-0"
+    >
       <HeaderIsland class="min-w-0 shrink px-1">
         <DebugSuspense name="ChannelDetail.touch-title-menu">
           <ChannelTitleMenu

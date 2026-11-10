@@ -52,14 +52,38 @@ calling `onBack`, in place of Show navigation. The list stays mounted, hidden
 and inert, so it keeps its scroll, and takes focus when Back returns to it.
 Collapse controls and `Cmd+.` are off there; wide layouts are unchanged.
 
-Workspace sidebars use the shared 720px container breakpoint on touch and desktop.
-Wide panes dock navigation; narrow panes open it as an overlay. The title header
-places collapse on the right; collapsed touch navigation uses the leading pill
-control, before filters. Wide touch panes use the same 1px dividers as desktop
-between docked navigation, lists, and inline details.
+Workspace layouts share a 720px container breakpoint. Desktop navigation docks
+above it and overlays below it. Wide touch has two compositions:
 
-`ViewShell.Main` and `ViewShell.Detail` scope floating mobile accessory chrome
-to their pane through `FloatRegionScope`. The app-wide host follows the winning
+- A list aside (Chat, Agents, Notifications) stays left of its detail.
+- A collection (Mail, Drive, Tasks, CRM, Calls, Reviews) passes
+  `contentLayout="collection"`. Its list stays left and its empty or selected
+  preview stays right. The leading **Show sidebar** control opens the existing
+  sub-view navigation in `NavigationSheet`, built on `MobileDrawer`.
+
+Use `CollectionPanes` with the host's `list`, `hasDetail`, and detail children.
+It owns one pair of resize frames and pane-scoped floating regions; breakpoint
+changes preserve the mounted detail/editor. The list stays mounted while wide
+selections or the navigation sheet change. Replacement layouts unmount their
+hidden list to retire its keyboard handlers, preserving desktop behavior.
+Hosts continue to own queries, selection, route admission, and loading states.
+Mail retains its custom desktop reading-pane composition by declaring a root
+`detail` layout; the same collection policy sizes its wide touch columns and
+honors the host's chosen list width. Mail normalizes touch resizing into its
+existing reading-pane width preference's desktop units.
+
+Sheet visibility is temporary and independent of the saved desktop sidebar
+preference. `ViewSidebar.Item` dismisses a sheet after destination activation;
+disclosure controls keep it open. Focus returns to the registered list trigger.
+The sheet occupies no resize track and does not resize or remount the list or
+preview. Each detail header owns safe-area clearance without another sidebar
+trigger; floating channel headers keep their measured local chrome.
+
+Narrow touch navigation is unchanged, including Chat's full-frame feed without a
+sidebar control. Wide touch retains the desktop 1px list/detail dividers.
+
+`ViewShell.Main`, `ViewShell.Detail`, and `CollectionPanes` frames scope floating
+mobile accessory chrome to their pane through `FloatRegionScope`. The app-wide host follows the winning
 contribution's pane as navigation collapses or resizes; editors remain mounted.
 The navigation dock and app-wide overlays keep their global placement.
 

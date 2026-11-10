@@ -17,6 +17,8 @@ export type AsideLayout = {
 };
 
 /** Base navigation sizes; docked wide-touch sidebars scale these bounds. */
+export const WIDE_TOUCH_ASIDE_SCALE = 1.57421875;
+
 export const DEFAULT_ASIDE_LAYOUT: AsideLayout = {
   width: 256,
   min: 224,

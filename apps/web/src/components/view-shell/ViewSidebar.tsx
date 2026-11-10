@@ -2,6 +2,7 @@ import { SplitHeaderContextMenu } from '@components/app/split-layout/components/
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import { callHandler } from '@kobalte/utils';
 import { Button, type ButtonProps, cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import type { Component, JSX } from 'solid-js';
@@ -13,7 +14,11 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { ViewSidebarCloseButton, ViewSidebarToggle } from './ViewShell';
+import {
+  ViewSidebarCloseButton,
+  ViewSidebarToggle,
+} from './ViewNavigationControls';
+import { ViewShellContext } from './view-shell-context';
 
 function Root(props: JSX.HTMLAttributes<HTMLElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
@@ -243,7 +248,9 @@ function Item(
     'aria-current',
     'class',
     'type',
+    'onClick',
   ]);
+  const shell = useContext(ViewShellContext);
   const ariaCurrent = () => {
     if (local['aria-current'] !== undefined) return local['aria-current'];
     if (local.active) return 'page';
@@ -255,6 +262,16 @@ function Item(
       {...rest}
       type={local.type ?? 'button'}
       aria-current={ariaCurrent()}
+      onClick={(
+        event: MouseEvent & {
+          currentTarget: HTMLButtonElement;
+          target: Element;
+        }
+      ) => {
+        callHandler(event, local.onClick);
+        if (!event.defaultPrevented && shell?.aside.isSheet())
+          shell.aside.collapse();
+      }}
       class={cn(
         'flex h-(--sidebar-row-height) w-full min-w-0 shrink-0 items-center justify-start gap-(--sidebar-label-gap) rounded-lg border-0 px-(--sidebar-item-inset) py-0 text-left text-sm leading-5 font-normal transition-none touch:h-11',
         'outline-none focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50',

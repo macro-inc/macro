@@ -1,3 +1,4 @@
+import { CollectionPanes } from '../CollectionPanes';
 import '@app/index.css';
 import { ListViewport } from '@app/components/list/ListViewport';
 import { ChannelsTouchSidebar } from '@app/features/channels-view/components/ChannelsTouchSidebar';
@@ -160,6 +161,151 @@ function ChannelsWorkspaceFixture() {
   );
 }
 
+function ReaderWorkspaceFixture() {
+  const [width, setWidth] = createSignal(403);
+  return (
+    <div class="h-dvh bg-panel text-ink">
+      <ViewShell.Root
+        contentLayout="collection"
+        asidePreferenceKey="reader-workspace-fixture"
+        resizable
+        main={{ width: width(), min: 320, max: 720 }}
+        detail={{ initialWidth: 'auto', min: 320, width: 640, max: 4000 }}
+      >
+        <ViewShell.Aside>
+          <ViewSidebar.Root aria-label="Reader navigation" />
+        </ViewShell.Aside>
+        <ViewShell.Main onWidthChangeEnd={setWidth}>
+          <MobileListLayout
+            header={<ViewSidebar.Toggle action="expand" presentation="pill" />}
+          >
+            <div data-testid="reader-list" class="flex-1">
+              Reading-pane list
+            </div>
+          </MobileListLayout>
+        </ViewShell.Main>
+        <ViewShell.Detail>
+          <textarea class="size-full" aria-label="Reader draft" />
+        </ViewShell.Detail>
+      </ViewShell.Root>
+    </div>
+  );
+}
+
+function CollectionWorkspaceFixture() {
+  const [selected, setSelected] = createSignal<string>();
+  const [view, setView] = createSignal('all');
+  const selectView = (next: string) => {
+    setView(next);
+    setSelected(undefined);
+  };
+  return (
+    <div
+      class="relative h-dvh bg-panel text-ink"
+      style={{ '--safe-top': '24px' }}
+    >
+      <SplitPanel.Root
+        controller={{
+          canGoBack: () => false,
+          goBack: () => {},
+          canGoForward: () => false,
+          goForward: () => {},
+          canClose: () => false,
+          close: () => {},
+        }}
+      >
+        <ViewShell.Root
+          contentLayout="collection"
+          asidePreferenceKey="collection-workspace-fixture"
+          resizable
+        >
+          <ViewShell.Aside>
+            <ViewSidebar.Root aria-label="Collection navigation">
+              <ViewSidebar.Header>
+                <ViewSidebar.Title caret={false}>Collection</ViewSidebar.Title>
+              </ViewSidebar.Header>
+              <ViewSidebar.Content>
+                <ViewSidebar.Item
+                  active={view() === 'all'}
+                  onClick={() => selectView('all')}
+                >
+                  All items
+                </ViewSidebar.Item>
+                <ViewSidebar.Item
+                  active={view() === 'recent'}
+                  onClick={() => selectView('recent')}
+                >
+                  Recent items
+                </ViewSidebar.Item>
+              </ViewSidebar.Content>
+            </ViewSidebar.Root>
+          </ViewShell.Aside>
+          <CollectionPanes
+            hasDetail={selected() !== undefined}
+            list={
+              <MobileListLayout
+                header={
+                  <div class="flex h-10 items-center gap-2">
+                    <ViewSidebar.Toggle action="expand" presentation="pill" />
+                    <span class="island flex h-10 items-center rounded-full px-3">
+                      {view()}
+                    </span>
+                  </div>
+                }
+              >
+                <div
+                  data-testid="workspace-list"
+                  class="size-full min-h-0 overflow-auto"
+                >
+                  <div
+                    aria-hidden="true"
+                    class="h-(--mobile-content-inset-top)"
+                  />
+                  <For
+                    each={Array.from({ length: 40 }, (_, index) =>
+                      String(index)
+                    )}
+                  >
+                    {(id) => (
+                      <button
+                        type="button"
+                        data-workspace-row={id}
+                        class="block h-18 w-full border-b border-edge p-4 text-left"
+                        onClick={() => setSelected(id)}
+                      >
+                        Item {id}
+                      </button>
+                    )}
+                  </For>
+                </div>
+              </MobileListLayout>
+            }
+          >
+            <div
+              class="flex size-full min-h-0 flex-col"
+              data-testid="workspace-preview"
+            >
+              <ViewShell.TopBar class="touch:flex">
+                <span>Preview {selected()}</span>
+              </ViewShell.TopBar>
+              <textarea class="min-h-0 flex-1" aria-label="Preview draft" />
+              <FloatRegion region="accessory">
+                <div class="pointer-events-auto px-(--mobile-chrome-gutter)">
+                  <input
+                    class="island block h-10 w-full rounded-full"
+                    aria-label="Collection reply"
+                  />
+                </div>
+              </FloatRegion>
+            </div>
+          </CollectionPanes>
+        </ViewShell.Root>
+      </SplitPanel.Root>
+      <FloatRegionHost navigationEdge="bottom" />
+    </div>
+  );
+}
+
 function CollectionFixture() {
   const [extra, setExtra] = createSignal(false);
   const [tab, setTab] = createSignal('all');
@@ -292,6 +438,10 @@ function HomeWorkspaceFixture() {
 }
 
 function Fixture() {
+  if (new URLSearchParams(location.search).has('reader-workspace'))
+    return <ReaderWorkspaceFixture />;
+  if (new URLSearchParams(location.search).has('workspace'))
+    return <CollectionWorkspaceFixture />;
   const [tab, setTab] = createSignal('all');
   const channels = new URLSearchParams(location.search).has('channels');
   if (channels) return <ChannelsWorkspaceFixture />;

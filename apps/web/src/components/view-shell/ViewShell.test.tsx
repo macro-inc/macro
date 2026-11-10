@@ -1226,3 +1226,35 @@ describe('list navigation', () => {
     ).toBeTruthy();
   });
 });
+
+it('keeps collection sheet visibility independent of the saved desktop sidebar preference', () => {
+  const [touch, setTouch] = createSignal(true);
+  measurement.touch = touch;
+  let shell: ReturnType<typeof useViewShell> | undefined;
+  function Probe() {
+    shell = useViewShell();
+    return null;
+  }
+  render(() => (
+    <ViewShell.Root
+      contentLayout="collection"
+      asidePreferenceKey="collection-preference"
+    >
+      <Probe />
+    </ViewShell.Root>
+  ));
+  expect(shell?.aside.isSheet()).toBe(true);
+  expect(shell?.aside.isCollapsed()).toBe(true);
+  shell?.aside.expand();
+  expect(shell?.aside.isOverlay()).toBe(true);
+  setTouch(false);
+  expect(shell?.aside.isCollapsed()).toBe(false);
+  shell?.aside.collapse();
+  expect(shell?.aside.isCollapsed()).toBe(true);
+  setTouch(true);
+  expect(shell?.aside.isOverlay()).toBe(false);
+  shell?.aside.expand();
+  expect(shell?.aside.isOverlay()).toBe(true);
+  setTouch(false);
+  expect(shell?.aside.isCollapsed()).toBe(true);
+});

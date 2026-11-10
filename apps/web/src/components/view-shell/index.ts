@@ -3,6 +3,7 @@ export {
   CollapsibleSection,
   type CollapsibleSectionRootProps,
 } from './CollapsibleSection';
+export { CollectionEmpty, CollectionPanes } from './CollectionPanes';
 export {
   createCollapsedSidebarSectionsStorage,
   setSidebarSectionCollapsed,

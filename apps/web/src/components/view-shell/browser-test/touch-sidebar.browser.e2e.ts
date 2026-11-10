@@ -568,3 +568,126 @@ test('floating chrome hands ownership back when a detail closes', async ({
     `${width}px`
   );
 });
+
+test('wide touch collections keep their list beside an empty or selected preview and open navigation in a sheet', async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  await page.setViewportSize({ width: 1000, height: 844 });
+  await page.goto(
+    '/src/components/view-shell/browser-test/touch-sidebar.html?workspace'
+  );
+  const list = page.getByTestId('workspace-list');
+  const listFrame = page.locator('[data-view-shell-list]');
+  const detail = page.locator('[data-view-shell-detail]');
+  const expand = page.getByRole('button', { name: 'Show sidebar' });
+  await expect(list).toBeVisible();
+  await expect(detail).toContainText('Select an item to preview');
+  expect((await listFrame.boundingBox())!.width).toBe(403);
+  expect((await detail.boundingBox())!.x).toBe(404);
+  await expect(
+    page.getByRole('complementary', { name: 'Collection navigation' })
+  ).toBeHidden();
+  await page.locator('[data-workspace-row="0"]').tap();
+  const draft = page.getByRole('textbox', { name: 'Preview draft' });
+  await draft.fill('Keep this draft');
+  const editor = await draft.elementHandle();
+  const listNode = await list.elementHandle();
+  const detailBox = await detail.boundingBox();
+  const chrome = detail.locator('[data-view-shell-top-bar]');
+  expect((await chrome.boundingBox())!.y).toBe(0);
+  expect(
+    await chrome.evaluate((element) => getComputedStyle(element).paddingTop)
+  ).toBe('32px');
+  await list.evaluate((element) => {
+    element.scrollTop = 200;
+  });
+  await expand.tap();
+  const sheet = page.getByRole('dialog', { name: 'Sidebar' });
+  await expect(sheet).toBeInViewport({ ratio: 1 });
+  await expect(sheet).not.toHaveAttribute('data-transitioning');
+  expect(await detail.boundingBox()).toEqual(detailBox);
+  expect(
+    await list.evaluate((element, original) => element === original, listNode)
+  ).toBe(true);
+  expect(await list.evaluate((element) => element.scrollTop)).toBe(200);
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await expect(expand).toBeFocused();
+  expect(
+    await draft.evaluate((element, original) => element === original, editor)
+  ).toBe(true);
+  await expect(draft).toHaveValue('Keep this draft');
+  const reply = page.getByRole('textbox', { name: 'Collection reply' });
+  await expect(reply).toBeVisible();
+  await expect(page.locator('[data-float-region="accessory"]')).toHaveCSS(
+    'margin-left',
+    '404px'
+  );
+  await expand.tap();
+  await expect(sheet).toBeInViewport({ ratio: 1 });
+  await expect(sheet).not.toHaveAttribute('data-transitioning');
+  await sheet.getByRole('button', { name: 'Recent items' }).tap();
+  await expect(sheet).toBeHidden();
+  await expect(detail).toContainText('Select an item to preview');
+  await expect(listFrame).toContainText('recent');
+  expect((await listFrame.boundingBox())!.width).toBe(403);
+});
+
+test('folding a collection preserves the mounted detail and its draft', async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  await page.setViewportSize({ width: 1000, height: 844 });
+  await page.goto(
+    '/src/components/view-shell/browser-test/touch-sidebar.html?workspace'
+  );
+  await page.locator('[data-workspace-row="0"]').tap();
+  const draft = page.getByRole('textbox', { name: 'Preview draft' });
+  await draft.fill('Draft through a fold');
+  const editor = await draft.elementHandle();
+  await page.setViewportSize({ width: 700, height: 844 });
+  await expect(page.getByTestId('workspace-list')).toBeHidden();
+  await expect(draft).toBeVisible();
+  expect(
+    await draft.evaluate((element, original) => element === original, editor)
+  ).toBe(true);
+  await expect(draft).toHaveValue('Draft through a fold');
+  await page.setViewportSize({ width: 1000, height: 844 });
+  await expect(page.getByTestId('workspace-list')).toBeVisible();
+  expect(
+    await draft.evaluate((element, original) => element === original, editor)
+  ).toBe(true);
+  await expect(draft).toHaveValue('Draft through a fold');
+  await expect(
+    page.getByRole('button', { name: 'Show sidebar' })
+  ).toBeVisible();
+});
+
+test('custom reading panes retain a resized wide touch list across container resizing', async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  await page.setViewportSize({ width: 1100, height: 844 });
+  await page.goto(
+    '/src/components/view-shell/browser-test/touch-sidebar.html?reader-workspace'
+  );
+  const main = page.locator('[data-view-shell-main]');
+  await expect(main).toHaveCSS('width', '403px');
+  const draft = page.getByRole('textbox', { name: 'Reader draft' });
+  await draft.fill('Keep the reader draft');
+  const editor = await draft.elementHandle();
+  const divider = page.getByRole('separator', { name: 'resize at 0' });
+  await divider.press('ArrowRight');
+  await divider.press('ArrowRight');
+  await expect(main).toHaveCSS('width', '443px');
+  await page.setViewportSize({ width: 1200, height: 844 });
+  await expect(main).toHaveCSS('width', '443px');
+  expect(
+    await draft.evaluate((element, original) => element === original, editor)
+  ).toBe(true);
+  await expect(draft).toHaveValue('Keep the reader draft');
+  await page.setViewportSize({ width: 700, height: 844 });
+  await page.setViewportSize({ width: 1100, height: 844 });
+  await expect(main).toHaveCSS('width', '443px');
+});

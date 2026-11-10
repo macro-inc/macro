@@ -1,32 +1,24 @@
-import { t } from '@app/lib/i18n';
+import { startUiOperation } from '@app/observability/ui-operation';
 import { usePreference } from '@app/preferences/use-preference';
 import {
-  type BreakpointAccessors,
   type BreakpointThresholds,
   createSizeBreakpoints,
 } from '@app/util/create-size-breakpoints';
 import { FloatRegionScope } from '@components/app/mobile/float-regions/FloatRegionScope';
 import { SplitHeaderContextMenu } from '@components/app/split-layout/components/SplitHeaderContextMenu';
 import { SplitPanelContext } from '@components/app/split-layout/context';
-import { SplitPanel } from '@components/app/split-panel';
 import { Resize } from '@core/component/Resize';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
-import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
-import CloseIcon from '@icon/system/regular/x.svg';
 import { createWritableMemo } from '@solid-primitives/memo';
 import { mergeRefs } from '@solid-primitives/refs';
-import { Button, cn } from '@ui';
+import { cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import { tourTarget } from '@ui/components/Tour';
 import {
-  type Accessor,
   batch,
-  type ComponentProps,
   createComputed,
-  createContext,
   createEffect,
   createMemo,
   createSignal,
@@ -43,6 +35,21 @@ import {
 } from 'solid-js';
 import { createFrameWidth } from './create-frame-width';
 import { createSidebarMotion } from './create-sidebar-motion';
+import { NavigationSheet } from './NavigationSheet';
+import { ViewNavigationControls } from './ViewNavigationControls';
+import {
+  useViewShellInternal,
+  ViewShellContext,
+  type ViewShellInternal,
+  ViewShellPaneContext,
+} from './view-shell-context';
+
+export {
+  ViewNavigationControls,
+  ViewSidebarCloseButton,
+  ViewSidebarToggle,
+} from './ViewNavigationControls';
+
 import { VIEW_SHELL_TOUR } from './tour';
 import {
   type AsideLayout,
@@ -55,72 +62,12 @@ import {
   type DetailLayout,
   type DetailPlacement,
   type MainLayout,
+  WIDE_TOUCH_ASIDE_SCALE,
 } from './view-shell-layout';
 
-export type ViewShellLayout = {
-  width: Accessor<number | undefined>;
-  /**
-   * Keyed reactive breakpoints from {@link createSizeBreakpoints}.
-   * Read as `breakpoints.narrow?.()`, `breakpoints.dense?.()`, …
-   */
-  breakpoints: BreakpointAccessors;
-  aside: {
-    layout: Accessor<AsideLayout>;
-    mode: Accessor<AsideMode>;
-    isCollapsed: Accessor<boolean>;
-    canCollapse: Accessor<boolean>;
-    isOverlay: Accessor<boolean>;
-    collapse: () => void;
-    expand: () => void;
-    toggle: () => void;
-  };
-  main: {
-    layout: Accessor<MainLayout>;
-  };
-  detail: {
-    layout: Accessor<DetailLayout>;
-    isOpen: Accessor<boolean>;
-    placement: Accessor<DetailPlacement>;
-    open: () => void;
-    close: () => void;
-    toggle: () => void;
-  };
-};
-
-type ViewShellInternal = ViewShellLayout & {
-  id: string;
-  root: Accessor<HTMLDivElement | undefined>;
-  atLayoutBreakpoint: Accessor<boolean>;
-  asideHost: Accessor<'docked' | 'closing' | 'overlay'>;
-  /** Which of a list aside and Main fills a narrow shell; undefined otherwise. */
-  narrowList: Accessor<'list' | 'main' | undefined>;
-  returnToList: () => void;
-  chooseAsideWidth: (width: number) => void;
-};
-
 const RESIZE_GUTTER = 1;
-const WIDE_TOUCH_ASIDE_SCALE = 1.57421875;
 
-const ViewShellContext = createContext<ViewShellInternal>();
-
-function useViewShellInternal(): ViewShellInternal {
-  const ctx = useContext(ViewShellContext);
-  if (!ctx) {
-    throw new Error('ViewShell slots require <ViewShell.Root>');
-  }
-  return ctx;
-}
-
-export function useViewShell(): ViewShellLayout {
-  const ctx = useViewShellInternal();
-  return {
-    width: ctx.width,
-    breakpoints: ctx.breakpoints,
-    aside: ctx.aside,
-    main: ctx.main,
-    detail: ctx.detail,
-  };
-}
+export { useViewShell, type ViewShellLayout } from './view-shell-context';
 
 export type ViewShellRootProps = Omit<
   JSX.HTMLAttributes<HTMLDivElement>,
@@ -143,6 +90,9 @@ export type ViewShellRootProps = Omit<
    * Defaults to false — panels still size via the Resize solver, without handles.
    */
   resizable?: boolean;
+  /** Collection views keep their list beside details and put sub-view navigation
+   * in a sheet on wide touch. Desktop and narrow layouts keep their own behavior. */
+  contentLayout?: 'collection';
   /** Set to false when the workspace has no navigation region. */
   aside?: false | Partial<AsideLayout>;
   /**
@@ -194,6 +144,7 @@ function Root(props: ViewShellRootProps) {
     'breakpoints',
     'layoutBreakpoint',
     'resizable',
+    'contentLayout',
     'aside',
     'asidePreferenceKey',
     'asideRequired',
@@ -231,6 +182,8 @@ function Root(props: ViewShellRootProps) {
     : createSignal<number>();
   const id = createUniqueId();
   const [root, setRoot] = createSignal<HTMLDivElement>();
+  const [navigationTrigger, setNavigationTrigger] =
+    createSignal<HTMLButtonElement>();
   const animateSidebar = createSidebarMotion(root);
   const width = createFrameWidth(root);
 
@@ -266,14 +219,39 @@ function Root(props: ViewShellRootProps) {
     };
   };
 
+  const collectionLayout = () =>
+    local.contentLayout === 'collection' &&
+    isTouchDevice() &&
+    !atLayoutBreakpoint();
+  // Custom reading panes declare a root Detail; CollectionPanes owns its
+  // nested columns so its list and editor can survive breakpoint changes.
+  const collectionColumns = () =>
+    collectionLayout() && local.detail !== undefined;
   const mainLayout = (): MainLayout => ({
     ...DEFAULT_MAIN_LAYOUT,
     ...local.main,
+    ...(collectionColumns()
+      ? {
+          width:
+            local.main?.width ??
+            DEFAULT_ASIDE_LAYOUT.width * WIDE_TOUCH_ASIDE_SCALE,
+          min: 320,
+          max: local.main?.max ?? 720,
+        }
+      : {}),
   });
 
   const detailLayout = (): DetailLayout => ({
     ...DEFAULT_DETAIL_LAYOUT,
     ...local.detail,
+    ...(collectionColumns()
+      ? {
+          initialWidth: 'auto' as const,
+          min: 320,
+          max: 4000,
+          whenNarrow: 'hide' as const,
+        }
+      : {}),
   });
 
   const controlled = () => local.detailOpen !== undefined;
@@ -282,7 +260,8 @@ function Root(props: ViewShellRootProps) {
   );
 
   const isOpen = () =>
-    controlled() ? (local.detailOpen ?? false) : uncontrolledOpen();
+    collectionColumns() ||
+    (controlled() ? (local.detailOpen ?? false) : uncontrolledOpen());
 
   const setOpen = (next: boolean) => {
     if (isOpen() === next) return;
@@ -303,6 +282,9 @@ function Root(props: ViewShellRootProps) {
     'docked' | 'closing' | 'overlay'
   >(untrack(atLayoutBreakpoint) ? 'overlay' : 'docked');
   const asideRequired = () => local.asideRequired ?? false;
+  const [sheetOpen, setSheetOpen] = createWritableMemo<boolean>(
+    on(collectionLayout, () => false)
+  );
   // Each narrow layout starts closed, independently of the saved wide layout,
   // unless navigation is required, which opens the overlay until dismissed.
   const [narrowAsideOpen, setNarrowAsideOpen] = createWritableMemo<boolean>(
@@ -311,7 +293,9 @@ function Root(props: ViewShellRootProps) {
   // Only a docked aside can be pinned open: a pinned overlay would hide Main
   // behind a backdrop with no way to dismiss it.
   const asidePinned = () =>
-    (asideRequired() || (local.asidePinned ?? false)) && !atLayoutBreakpoint();
+    (asideRequired() || (local.asidePinned ?? false)) &&
+    !atLayoutBreakpoint() &&
+    !collectionLayout();
   // A list aside takes turns with Main in narrow layouts rather than
   // overlaying it, so the overlay and its open state don't apply there.
   const narrowList = (): 'list' | 'main' | undefined => {
@@ -322,6 +306,7 @@ function Root(props: ViewShellRootProps) {
   };
 
   const asideMode = (): AsideMode => {
+    if (collectionLayout()) return sheetOpen() ? 'docked' : 'collapsed';
     const list = narrowList();
     if (list) return list === 'list' ? 'docked' : 'collapsed';
 
@@ -333,9 +318,20 @@ function Root(props: ViewShellRootProps) {
       : 'docked';
   };
   const asideOverlay = () =>
-    atLayoutBreakpoint() && !narrowList() && asideMode() === 'docked';
+    (atLayoutBreakpoint() || collectionLayout()) &&
+    !narrowList() &&
+    asideMode() === 'docked';
 
   const setAsideOpen = (open: boolean) => {
+    if (collectionLayout()) {
+      if (sheetOpen() === open) return;
+      const operation = startUiOperation('workspace.navigation-sheet', {
+        attributes: { 'navigation.open': open },
+      });
+      setSheetOpen(open);
+      operation.afterPaint();
+      return;
+    }
     if (narrowList()) return;
     if (!open && asidePinned()) return;
     // Repeated requests must not cancel an exit that still owns host cleanup.
@@ -431,7 +427,17 @@ function Root(props: ViewShellRootProps) {
     width,
     breakpoints,
     atLayoutBreakpoint,
-    asideHost,
+    asideHost: () => (collectionLayout() ? 'sheet' : asideHost()),
+    collectionLayout,
+    navigationTrigger,
+    registerNavigationTrigger: (element) => {
+      setNavigationTrigger(element);
+      onCleanup(() =>
+        setNavigationTrigger((current) =>
+          current === element ? undefined : current
+        )
+      );
+    },
     narrowList,
     returnToList: () => local.asideList?.onBack(),
     chooseAsideWidth: (width) => setChosenAsideWidth(width / asideScale()),
@@ -445,6 +451,7 @@ function Root(props: ViewShellRootProps) {
         !asidePinned() &&
         !narrowList(),
       isOverlay: asideOverlay,
+      isSheet: collectionLayout,
       collapse: () => setAsideOpen(false),
       expand: () => setAsideOpen(true),
       toggle: () => {
@@ -518,9 +525,19 @@ function Root(props: ViewShellRootProps) {
 function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const ws = useViewShellInternal();
   return (
-    <Show when={ws.narrowList()} fallback={<AsideHost {...props} />}>
-      <NarrowListAside {...props} />
-    </Show>
+    <ViewShellPaneContext.Provider value="aside">
+      <Switch>
+        <Match when={ws.asideHost() === 'sheet'}>
+          <NavigationSheet {...props} />
+        </Match>
+        <Match when={ws.narrowList()}>
+          <NarrowListAside {...props} />
+        </Match>
+        <Match when={true}>
+          <AsideHost {...props} />
+        </Match>
+      </Switch>
+    </ViewShellPaneContext.Provider>
   );
 }
 
@@ -714,123 +731,6 @@ function AsideHost(props: JSX.HTMLAttributes<HTMLDivElement>) {
   );
 }
 
-/** Keep split close available in both docked and overlay navigation. */
-export function ViewSidebarCloseButton(
-  props: ComponentProps<typeof SplitPanel.CloseButton>
-) {
-  const [local, rest] = splitProps(props, ['children', 'size']);
-  return (
-    <SplitPanel.CloseButton {...rest} size={local.size ?? 'icon-xs'}>
-      {local.children ?? <CloseIcon class="size-4" />}
-    </SplitPanel.CloseButton>
-  );
-}
-
-/** Safe outside a shell so block preview headers can share this control. */
-export function ViewSidebarToggle(props: {
-  action: 'collapse' | 'expand';
-  presentation?: 'pill';
-}) {
-  const ws = useContext(ViewShellContext);
-  // A conditional expression as `ref` is dropped by the Solid compiler, so
-  // only the expand toggle registers, from inside the callback.
-  const toggleTarget = tourTarget(VIEW_SHELL_TOUR.sidebarToggle);
-  const visible = () =>
-    ws?.aside.canCollapse() &&
-    (props.action === 'expand'
-      ? ws.aside.isCollapsed() || ws.aside.isOverlay()
-      : !ws.aside.isCollapsed());
-  // Show and Hide are separate actions, not a persistently pressed toggle.
-  return (
-    <Show when={visible()}>
-      <Button
-        aria-label={
-          props.action === 'expand' ? 'Show navigation' : 'Hide navigation'
-        }
-        tooltip={{
-          content:
-            props.action === 'expand' ? 'Show navigation' : 'Hide navigation',
-          hotkey: TOKENS.workspace.toggleNavigation,
-        }}
-        variant={props.presentation === 'pill' ? 'secondary' : 'ghost'}
-        size={props.presentation === 'pill' ? 'icon-lg' : 'icon-xs'}
-        class={cn(
-          'shrink-0',
-          props.presentation === 'pill' && 'size-10 rounded-full',
-          props.action === 'collapse' && 'ml-auto',
-          props.action === 'collapse' &&
-            ws?.aside.isOverlay() &&
-            'motion-safe:animate-[dialog-overlay-open_60ms_ease-out_80ms_both]'
-        )}
-        ref={(element) => {
-          if (props.action === 'expand') toggleTarget(element);
-        }}
-        data-view-sidebar-toggle={props.action}
-        onClick={() => {
-          const shell = ws?.root();
-          if (props.action === 'expand') ws?.aside.expand();
-          else ws?.aside.collapse();
-          const nextAction = props.action === 'expand' ? 'collapse' : 'expand';
-          queueMicrotask(() =>
-            shell
-              ?.querySelector<HTMLButtonElement>(
-                `[data-view-sidebar-toggle="${nextAction}"]`
-              )
-              ?.focus({ preventScroll: true })
-          );
-        }}
-      >
-        <SidebarIcon class="size-4" />
-      </Button>
-    </Show>
-  );
-}
-
-/** Takes a narrow list view from the open entity back to its list. */
-function ViewListBackButton(props: { onClick: () => void }) {
-  return (
-    <Button
-      aria-label={t('common.back')}
-      tooltip={t('common.back')}
-      variant="ghost"
-      size="icon-xs"
-      class="shrink-0"
-      // The way out of an inline preview is reachable before it is used.
-      data-allow-focus-in-preview
-      onClick={() => props.onClick()}
-    >
-      <ArrowLeftIcon class="size-4" />
-    </Button>
-  );
-}
-
-/** Shared leading controls, kept in place beneath navigation overlays. */
-export function ViewNavigationControls() {
-  const ws = useContext(ViewShellContext);
-  return (
-    <Show when={ws?.aside.isCollapsed() || ws?.aside.isOverlay()}>
-      <SplitPanel.ControlGroup
-        class="pointer-events-auto"
-        inert={ws?.aside.isOverlay()}
-        aria-hidden={ws?.aside.isOverlay()}
-      >
-        <SplitPanel.CloseButton />
-        <Show
-          when={ws?.narrowList() === 'main'}
-          fallback={
-            <ViewSidebarToggle
-              action="expand"
-              presentation={isTouchDevice() ? 'pill' : undefined}
-            />
-          }
-        >
-          <ViewListBackButton onClick={() => ws?.returnToList()} />
-        </Show>
-      </SplitPanel.ControlGroup>
-    </Show>
-  );
-}
-
 type ViewShellMainProps = JSX.HTMLAttributes<HTMLElement> & {
   /** Called with the solved width after a drag beside an inline detail. */
   onWidthChangeEnd?: (width: number) => void;
@@ -861,29 +761,46 @@ function Main(props: ViewShellMainProps) {
       minSize={layout().min}
       maxSize={ws.detail.placement() === 'inline' ? layout().max : undefined}
       target={target()}
+      redistributionPreferredSize={
+        ws.detail.placement() === 'inline' ? layout().width : undefined
+      }
       onSizeChangeEnd={local.onWidthChangeEnd}
     >
-      <FloatRegionScope
-        anchor={frame}
-        active={() => ws.narrowList() !== 'list'}
-      >
-        <main
-          {...rest}
-          ref={mergeRefs(setFrame, local.ref, tourTarget(VIEW_SHELL_TOUR.main))}
-          class={cn('flex size-full min-h-0 min-w-0 flex-col', local.class)}
-          data-view-shell-main=""
-          inert={ws.narrowList() === 'list'}
-          aria-hidden={ws.narrowList() === 'list'}
+      <ViewShellPaneContext.Provider value="main">
+        <FloatRegionScope
+          anchor={frame}
+          active={() => ws.narrowList() !== 'list'}
         >
-          {local.children}
-        </main>
-      </FloatRegionScope>
+          <main
+            {...rest}
+            ref={mergeRefs(
+              setFrame,
+              local.ref,
+              tourTarget(VIEW_SHELL_TOUR.main)
+            )}
+            class={cn('flex size-full min-h-0 min-w-0 flex-col', local.class)}
+            data-view-shell-main=""
+            inert={ws.narrowList() === 'list'}
+            aria-hidden={ws.narrowList() === 'list'}
+          >
+            {local.children}
+          </main>
+        </FloatRegionScope>
+      </ViewShellPaneContext.Provider>
     </Resize.Panel>
   );
 }
 
-function TopBar(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class', 'ref']);
+function TopBar(
+  props: JSX.HTMLAttributes<HTMLDivElement> & { floating?: boolean }
+) {
+  const [local, rest] = splitProps(props, [
+    'children',
+    'class',
+    'ref',
+    'floating',
+  ]);
+  const pane = useContext(ViewShellPaneContext);
   return (
     <SplitHeaderContextMenu>
       <div
@@ -891,7 +808,11 @@ function TopBar(props: JSX.HTMLAttributes<HTMLDivElement>) {
         ref={mergeRefs(local.ref, tourTarget(VIEW_SHELL_TOUR.topBar))}
         class={cn(
           '@container/split-header flex h-12 min-w-0 shrink-0 items-center gap-1 px-2 py-3 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden',
-          local.class
+          local.class,
+          isTouchDevice() &&
+            pane === 'detail' &&
+            !local.floating &&
+            'touch:h-auto touch:min-h-[calc(var(--safe-top,0px)+3.5rem)] touch:pt-[calc(var(--safe-top,0px)+0.5rem)] touch:pb-2'
         )}
         data-view-shell-top-bar=""
       >
@@ -956,58 +877,63 @@ function Detail(props: JSX.HTMLAttributes<HTMLDivElement>) {
   };
 
   return (
-    <FloatRegionScope
-      anchor={frame}
-      active={() => ws.detail.placement() !== 'hidden'}
-    >
-      <Switch>
-        <Match when={ws.detail.placement() === 'inline'}>
-          <Resize.Panel
-            id={`${ws.id}-detail`}
-            index={2}
-            minSize={layout().min}
-            maxSize={layout().max}
-            target={target()}
-          >
+    <ViewShellPaneContext.Provider value="detail">
+      <FloatRegionScope
+        anchor={frame}
+        active={() => ws.detail.placement() !== 'hidden'}
+      >
+        <Switch>
+          <Match when={ws.detail.placement() === 'inline'}>
+            <Resize.Panel
+              id={`${ws.id}-detail`}
+              index={2}
+              minSize={layout().min}
+              maxSize={layout().max}
+              target={target()}
+            >
+              <div
+                {...rest}
+                ref={mergeRefs(setDetailFrame, local.ref)}
+                class={cn(
+                  'size-full min-h-0 min-w-0 touch:[--mobile-content-inset-top:0px]',
+                  local.class
+                )}
+                data-view-shell-detail=""
+                data-view-shell-detail-placement="inline"
+              >
+                {local.children}
+              </div>
+            </Resize.Panel>
+          </Match>
+          <Match when={ws.detail.placement() === 'overlay'}>
             <div
               {...rest}
               ref={mergeRefs(setDetailFrame, local.ref)}
-              class={cn('size-full min-h-0 min-w-0', local.class)}
+              class={cn(
+                'absolute inset-y-0 right-0 z-10 min-h-0 border-l border-edge-frame bg-panel shadow-menu',
+                local.class
+              )}
+              style={{ width: `${layout().width}px`, 'max-width': '100%' }}
               data-view-shell-detail=""
-              data-view-shell-detail-placement="inline"
+              data-view-shell-detail-placement="overlay"
             >
               {local.children}
             </div>
-          </Resize.Panel>
-        </Match>
-        <Match when={ws.detail.placement() === 'overlay'}>
-          <div
-            {...rest}
-            ref={mergeRefs(setDetailFrame, local.ref)}
-            class={cn(
-              'absolute inset-y-0 right-0 z-10 min-h-0 border-l border-edge-frame bg-panel shadow-menu',
-              local.class
-            )}
-            style={{ width: `${layout().width}px`, 'max-width': '100%' }}
-            data-view-shell-detail=""
-            data-view-shell-detail-placement="overlay"
-          >
-            {local.children}
-          </div>
-        </Match>
-        <Match when={ws.detail.placement() === 'replace'}>
-          <div
-            {...rest}
-            ref={mergeRefs(setDetailFrame, local.ref)}
-            class={cn('absolute inset-0 z-10 min-h-0 min-w-0', local.class)}
-            data-view-shell-detail=""
-            data-view-shell-detail-placement="replace"
-          >
-            {local.children}
-          </div>
-        </Match>
-      </Switch>
-    </FloatRegionScope>
+          </Match>
+          <Match when={ws.detail.placement() === 'replace'}>
+            <div
+              {...rest}
+              ref={mergeRefs(setDetailFrame, local.ref)}
+              class={cn('absolute inset-0 z-10 min-h-0 min-w-0', local.class)}
+              data-view-shell-detail=""
+              data-view-shell-detail-placement="replace"
+            >
+              {local.children}
+            </div>
+          </Match>
+        </Switch>
+      </FloatRegionScope>
+    </ViewShellPaneContext.Provider>
   );
 }
 
