@@ -4,7 +4,7 @@ import { getDefaultTimezone } from '@core/util/cron';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { scheduledActionClient } from '@service-scheduled-action/client';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { createMemo } from 'solid-js';
 import type { IdeasSource } from '../context/ideas-source';
 import { type Idea, ideaStatus } from '../core/idea';
@@ -15,6 +15,23 @@ import { ideasKeys } from './keys';
 /** How often to read again while a run is under way. */
 const RUNNING_POLL_MS = 5_000;
 
+function feedOptions(userId: string, enabled: boolean) {
+  return queryOptions({
+    ...ideasKeys.feed(userId),
+    queryFn: async () =>
+      toIdeas(
+        await throwOnErr(() =>
+          scheduledActionClient.listIdeas({ timezone: getDefaultTimezone() })
+        )
+      ),
+    enabled,
+    refetchInterval: (query) =>
+      query.state.data?.some((idea) => ideaStatus(idea) === 'running')
+        ? RUNNING_POLL_MS
+        : false,
+  });
+}
+
 /**
  * The person's ideas from the scheduler service. Nothing is read while ideas
  * are off. The feed is read again after each write, since the server decides
@@ -23,20 +40,9 @@ const RUNNING_POLL_MS = 5_000;
 export function useIdeasSource(): IdeasSource {
   const enabled = useIdeasFlag();
   const userId = useUserId();
-  const feed = useQuery(() => ({
-    ...ideasKeys.feed(userId() ?? ''),
-    queryFn: async () =>
-      toIdeas(
-        await throwOnErr(() =>
-          scheduledActionClient.listIdeas({ timezone: getDefaultTimezone() })
-        )
-      ),
-    enabled: enabled() && userId() !== undefined,
-    refetchInterval: (query) =>
-      query.state.data?.some((idea) => ideaStatus(idea) === 'running')
-        ? RUNNING_POLL_MS
-        : false,
-  }));
+  const feed = useQuery(() =>
+    feedOptions(userId() ?? '', enabled() && userId() !== undefined)
+  );
   const refresh = async () => {
     await feed.refetch();
   };
