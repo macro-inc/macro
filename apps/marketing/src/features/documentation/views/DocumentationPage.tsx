@@ -92,7 +92,6 @@ export default function DocumentationPage() {
               {(page) => (
                 <>
                   <header class="documentation-heading">
-                    <a href="/docs">Documentation</a>
                     <h1>{page().title}</h1>
                     <p>{page().description}</p>
                     <Show

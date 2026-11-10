@@ -197,42 +197,45 @@ export const workspaceFeatures: Record<string, WorkspaceFeature> = {
     title: 'Say hello to more time.',
     tone: 'calls',
     description:
-      'Google Calendar, in Macro. Share events in chat and ask agents to schedule meetings.',
-    heading: 'Sync with Google Calendar.',
+      'All your Google and Microsoft calendars in one view. Find time with your team and ask agents to handle the invites.',
+    heading: 'All your accounts in one view.',
     detail:
-      'Create an event, invite guests, add a Google Meet link, or set it to repeat. Drag it to another time or resize it on the calendar; changes sync both ways with Google.',
-    sceneTitle: 'Tuesday, October 20',
-    rows: [
-      '09:00  Team check-in',
-      '11:00  Customer demo',
-      '14:30  Design review',
-    ],
-    message: 'Can you find time for a follow-up after the design review?',
+      'Connect multiple Google and Microsoft accounts. See your work, personal, and shared calendars together, and choose which calendars to show.',
+    sceneTitle: 'Your calendars',
+    rows: [],
+    message: '',
     sections: [
       {
-        title: 'Find and share calendar events.',
+        title: 'Find a time with your team.',
         description:
-          'Search for an event or mention it in a conversation, the same way you would a doc or task. Hand it to an agent when you need to move the meeting or follow up.',
+          'Ask an agent in a channel to find a time when everyone is free. Turn on team availability sharing in Calendar settings and choose which calendars count as busy.',
       },
       {
-        title: 'Send the times you’re free.',
+        title: 'Let agents send and edit invites.',
         description:
-          'Copy your open times into a reply in Macro Mail, with your time zone included. Set working hours, or use a booking link so the other person can choose a time themselves.',
-      },
-      {
-        title: 'Ask an agent to schedule a meeting.',
-        description:
-          'Ask for an open slot, a new meeting, a time change, or an RSVP. The agent shows you the event before writing the change to your calendar.',
+          'Ask an agent to invite your team, move a meeting, or update the guest list. Review the details before it sends the invitation or changes your calendar.',
       },
     ],
     faq: [
       {
         q: 'Can I see calendars from several accounts?',
-        a: 'Yes. Enable Calendar in Settings → Connections for each Google account. Show or hide individual calendars from the calendar settings.',
+        a: 'Yes. Connect multiple Google and Microsoft accounts in Calendar settings. Show or hide individual calendars to choose what appears in your view.',
+      },
+      {
+        q: 'What can my teammates see?',
+        a: 'In Calendar settings, choose to share busy blocks, event details, or nothing. Private events stay as busy blocks. Choose which calendars count as busy when teammates or agents check your availability.',
+      },
+      {
+        q: 'Can I send someone my available times?',
+        a: 'Copy your open times into a reply in Macro Mail, with your time zone included. Set working hours, or use a booking link so the other person can choose a time.',
+      },
+      {
+        q: 'Can I link an event to other work?',
+        a: 'Search for an event or mention it in a conversation, just like a doc or task. An agent can use that event when you ask it to reschedule or follow up.',
       },
       {
         q: 'What happens if I disconnect?',
-        a: 'Macro removes its local calendar copy and permissions. Your Google Calendar remains, and email can keep syncing.',
+        a: 'Macro removes its local calendar copy and permissions. Your calendar stays with Google or Microsoft, and email can keep syncing.',
       },
     ],
   },

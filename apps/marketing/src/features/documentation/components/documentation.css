@@ -1,7 +1,7 @@
 .documentation-page { width: min(640px, 100%); margin: 150px auto 100px; color: var(--doc-copy-color, var(--color-ink-muted, var(--c2))); font-family: 'Inter Variable', Inter, sans-serif; font-size: 17.5px; font-weight: 370; line-height: 1.8; overflow-wrap: anywhere; }
 .documentation-heading { margin-bottom: 40px; }
 .documentation-heading > a { font-size: 13px; text-decoration: none; color: var(--color-ink-muted, var(--c2)); }
-.documentation-heading h1 { color: var(--color-ink, var(--c0)); font-family: 'Roboto Slab Variable', display, serif; font-size: 40px; font-weight: calc(320 + var(--cream-slab-weight-increase, 0)); line-height: 1.2; letter-spacing: -.035em; margin: 24px 0 20px; }
+.documentation-heading h1 { color: var(--color-ink, var(--c0)); font-family: 'Roboto Slab Variable', display, serif; font-size: 40px; font-weight: calc(320 + var(--cream-slab-weight-increase, 0)); line-height: 1.2; letter-spacing: -.035em; margin: 0 0 20px; }
 .documentation-heading p { color: inherit; font-size: inherit; line-height: 1.8; }
 .documentation-body :is(h2,h3,h4):not(.guide-graphic *, .tutorial-video-embed *) { scroll-margin-top: 110px; color: var(--color-ink, var(--c0)); font-family: 'Roboto Slab Variable', display, serif; font-weight: calc(320 + var(--cream-slab-weight-increase, 0)); letter-spacing: -.02em; line-height: 1.4; margin: 48px 0 16px; }
 .documentation-body h2:not(.guide-graphic *, .tutorial-video-embed *) { font-size: 40px; line-height: 1.2; letter-spacing: -.035em; }

@@ -1,12 +1,12 @@
 ---
 title: "Calendar"
 icon: "calendar"
-description: "Your Google Calendar as a Macro block alongside the email it came from."
+description: "Your Google and Microsoft calendars together, with team availability and agent scheduling."
 ---
 
 <GuideGraphic kind="calendar" label="Calendar events and a related team conversation." />
 
-Calendar is a Macro block that syncs with Google Calendar. Events are entities in your workspace, so you can search them, @mention them, and hand them to the [Macro agent](/product/agents) the same way you would a doc or a task. Edits you make in Macro sync back to Google.
+Calendar is a Macro block that brings your Google and Microsoft calendars into one view. Events are entities in your workspace, so you can search them, @mention them, and hand them to the [Macro agent](/product/agents) the same way you would a doc or a task. Edits you make in Macro sync back to the connected calendar.
 
 Open it from **Calendar** in the sidebar, or press <kbd>g</kbd> \+ <kbd>r</kbd>.
 
@@ -16,11 +16,15 @@ Watch a 0:54 walkthrough of Macro Calendar.
 
 ### Connecting your calendar
 
-Connect your calendar by going to **Settings → Connections**, finding the account you want, and clicking **Enable calendar**.
+Open **Settings → Calendar** to connect your Google or Microsoft accounts. Connect more than one account to see work, personal, and shared calendars together.
 
-Macro supports [multiple email accounts in one inbox](/product/email#multi-account-inbox) and multiple email calendar views. **You have to enable calendar for each account separately.** Every linked inbox in **Settings → Connections** carries its own **Enable calendar** button.
+Choose which calendars appear in your view from the calendar settings.
 
-Use the settings gear in the calendar topbar to toggle each calendar on or off, so you can view several at once or focus on just one.
+### Find time with your team
+
+Ask the Macro agent in a channel to find a time with your teammates. It checks shared availability across the selected people and returns times when everyone is free.
+
+Under **Team sharing** in Calendar settings, use **Share with teammates** to choose **Busy blocks**, **Event details**, or **Nothing**. Private events stay as busy blocks. Under **Calendars that count as busy**, choose which calendars should block your time when teammates or agents check availability.
 
 ### Creating and editing events
 
@@ -42,7 +46,7 @@ You edit details inline on the event itself. Type the title and description dire
   <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}><Icon icon="circle-dot" iconType="regular" color="#9ca3af" size={10} /> <span><strong>Location</strong> — where it's happening</span></div>
 </div>
 
-Once an event exists, you can also drag it to a new time and drag its edges to change its length, straight from the grid. Both sync back to Google.
+Once an event exists, you can also drag it to a new time and drag its edges to change its length, straight from the grid. Both sync back to the connected calendar.
 
 ### Copy availability
 
@@ -58,6 +62,7 @@ You can use the same tools over Macro's MCP server:
 
 - `ListCalendars`
 - `ListCalendarEvents`
+- `GetTeamAvailability`
 - `CreateCalendarEvent`
 - `UpdateCalendarEvent`
 - `DeleteCalendarEvent`
@@ -66,6 +71,6 @@ To connect it, go to **Settings → MCP server**.
 
 ### Turning calendar off
 
-You can turn calendar off for a single account from **Settings → Connections**, or from the calendar's settings menu.
+You can disconnect a calendar account from **Settings → Calendar**.
 
-Macro deletes its copy of that account's events and gives up calendar access. Your Google Calendar stays untouched and the inbox keeps syncing mail as normal. To turn calendar back on, grant access again.
+Macro deletes its copy of that account's events and gives up calendar access. Your calendar stays with Google or Microsoft and the inbox keeps syncing mail as normal. To turn calendar back on, grant access again.

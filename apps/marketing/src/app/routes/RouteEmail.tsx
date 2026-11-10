@@ -14,11 +14,8 @@ import { HomepageClosing } from '../../features/marketing/components/HomepageClo
 import { PaperEmailAccounts } from '../../features/marketing/components/paper/PaperEmailAccounts';
 import { PaperEmailTask } from '../../features/marketing/components/paper/PaperEmailTask';
 import { PaperFeatureGraphic } from '../../features/marketing/components/paper/PaperFeatureGraphic';
-import { ProductHeroVideo } from '../../features/marketing/components/product/ProductHeroVideo';
-import {
-  ProductBrand,
-  ProductComparisonLink,
-} from '../../features/marketing/components/product/ProductPage';
+import { ProductBrand } from '../../features/marketing/components/product/ProductPage';
+import { TutorialVideoEmbed } from '../../features/marketing/components/TutorialVideoEmbed';
 import { setPageSeo } from '../utils/utilSeo';
 import '../../features/marketing/components/email/email-hero.css';
 
@@ -129,8 +126,7 @@ export function RouteEmail() {
           <FeaturePageCta name="email_hero_get_started" />
         </div>
       </header>
-      <ProductHeroVideo tutorial="mail" />
-      <ProductComparisonLink product="Email" />
+      <TutorialVideoEmbed tutorial="mail" />
       <FeaturePageSection
         id="email-accounts"
         title="See your accounts in one inbox."

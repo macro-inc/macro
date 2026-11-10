@@ -1032,7 +1032,7 @@ Keep the outdated Tool Reference unpublished and redirect its former URLs to MCP
 Keep concise FAQs on feature pages and put the full written setup, shortcut, and limitation reference in the expandable Setup and reference section below. Do not replace interactive demos
 with documentation screenshots. Desktop navigation remains open and pushes the content aside. Phones keep the article visible and use a full-screen drawer on demand; Escape closes it and restores focus. Keep the hamburger-to-Macro morph on the mobile toggle. The desktop mark is static. Use the foreground color for the mark (white in dark mode). Reduced-motion mode skips drawer transitions.
 
-`src/features/documentation` owns the reading page, MDX components, and sidebar.
+`src/features/documentation` owns the reading page, MDX components, and sidebar. Start guide headers with the title and description, without a Documentation eyebrow.
 Use the matching app block icons beside feature links, block guides, and their
 search results; keep them 16px, monochrome, and decorative for screen readers.
 Its typography matches the blog and feature pages: 40px/320 slab titles and
@@ -1057,7 +1057,7 @@ live docs; these do not change the visual feature pages.
 
 ### Product comparison links
 
-Place small, muted “Versus [product]” links below the feature video, separated by “°” when there are multiple. Tasks links to Linear and ClickUp, Docs to Notion, Email to Superhuman, and Chat to Slack. Keep comparison navigation in `ProductComparisonLink`; do not use a separate founder card.
+Keep feature videos free of below-video competitor strips and comparison links. Comparison articles remain accessible through the sidebar.
 
 ### Product tutorial videos
 
@@ -1162,6 +1162,8 @@ its homepage animation. The other pages pair a product example with a
 related conversation over the shared grain and gradient. Register new routes in
 App, its preload map, and the prerender list/module map.
 
+`CalendarStories` gives Calendar three static illustrations for multiple Google and Microsoft accounts, finding shared free time in a channel, and reviewing agent-written invitations. Match the app’s Team sharing choices (Busy blocks, Event details, Nothing) and selected calendars that count as busy.
+
 `BookingLinkStories` gives booking links separate guest-booking, team-availability,
 and agent-approval examples below its tutorial video. Keep these illustrations
 non-interactive and base their copy on `apps/docs/product/booking-links.mdx`.
@@ -1187,7 +1189,7 @@ Projects are part of Tasks: `/projects` and the former Projects guide redirect t
 
 Page backgrounds use `page-aura.css` for static, diffuse gradients and fine grain throughout the full content height. Feature pages reuse their tutorial wallpaper palette; benefit pages use neutral gray auras; the homepage and other editorial pages use the home video's blue palette. Keep the video wallpaper vivid, with its wave shapes confined to the video. Fade every backdrop edge, keep it non-interactive and behind the content, and avoid layering a second backdrop over the Wall of love or a nested feature page.
 
-Feature hero videos use `ProductHeroVideo` for a right-aligned handwritten Replaces note below the player. Keep these notes out of benefits and article embeds. Use competitor logos with accessible names and hover labels; keep only Replaces handwritten. Icons wrap on mobile; Caveat is bundled with its OFL license.
+Feature hero videos render with `TutorialVideoEmbed`, using the shared player dimensions and spacing.
 
 `/replace-apps` is the first Main benefits link. It shares feature hero typography, combines app selection with the existing pricing `SavingsCalculator`. Keep its route registered for preload, prerender, and site search.
 

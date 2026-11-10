@@ -21,12 +21,12 @@ import SnippetIcon from '@phosphor/brackets-curly.svg';
 import ChatIcon from '@phosphor/chats-circle.svg';
 import GraphIcon from '@phosphor/graph.svg';
 import StackIcon from '@phosphor/stack.svg';
-import { For, type JSX, type ParentProps, Show } from 'solid-js';
+import { type JSX, type ParentProps, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { TutorialVideoId } from '../../core/tutorial-videos';
 import { DemoInteractionBoundary } from '../DemoInteractionBoundary';
 import { FeaturePage, FeaturePageCta } from '../FeaturePage';
-import { ProductHeroVideo } from './ProductHeroVideo';
+import { TutorialVideoEmbed } from '../TutorialVideoEmbed';
 import '../email/email-hero.css';
 import './product-page.css';
 import './product-demo-stage.css';
@@ -81,44 +81,6 @@ export function ProductBrand(props: { product: ProductName }) {
   );
 }
 
-const productComparisons: Partial<
-  Record<ProductName, { name: string; href: string }[]>
-> = {
-  Tasks: [
-    { name: 'Linear', href: '/posts/linear-alternative' },
-    { name: 'ClickUp', href: '/posts/clickup-alternative' },
-  ],
-  Docs: [{ name: 'Notion', href: '/posts/notion-alternative' }],
-  Email: [{ name: 'Superhuman', href: '/posts/superhuman-alternative' }],
-  Chat: [{ name: 'Slack', href: '/posts/slack-alternative' }],
-};
-
-export function ProductComparisonLink(props: { product: ProductName }) {
-  return (
-    <Show when={productComparisons[props.product]}>
-      {(comparisons) => (
-        <nav
-          class="product-comparison-links"
-          aria-label={`${props.product} comparisons`}
-        >
-          <For each={comparisons()}>
-            {(comparison, index) => (
-              <>
-                <Show when={index() > 0}>
-                  <span aria-hidden="true">°</span>
-                </Show>
-                <a class="product-comparison-link" href={comparison.href}>
-                  Versus {comparison.name}
-                </a>
-              </>
-            )}
-          </For>
-        </nav>
-      )}
-    </Show>
-  );
-}
-
 export function ProductHero(props: {
   product: ProductName;
   title: string;
@@ -148,13 +110,12 @@ export function ProductHero(props: {
       </header>
       <Show when={props.tutorial} keyed>
         {(tutorial) => (
-          <ProductHeroVideo
+          <TutorialVideoEmbed
             tutorial={tutorial}
             backdrop={props.tutorialBackdrop}
           />
         )}
       </Show>
-      <ProductComparisonLink product={props.product} />
     </>
   );
 }
