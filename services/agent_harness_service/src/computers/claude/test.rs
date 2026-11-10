@@ -163,7 +163,6 @@ async fn computer_route_access(
         MacroAuthorizationState::new(Arc::new(authorization)),
         hosted_runtimes::domain::rollout::ComputerRollout::new(flags),
         fleet_attachment,
-        None,
         &tasks,
     );
     let mode_url = format!("/harnesses/{}/claude-mode", HarnessId::TEST_A);
@@ -368,7 +367,6 @@ async fn dropped_submit_reconciles(acknowledge_cancel: bool) {
             })
         });
     let state = super::ClaudeAccessState {
-        waker: None,
         harnesses: Arc::new(HarnessServiceImpl::new(repo)),
         rollout: hosted_runtimes::domain::rollout::ComputerRollout::new(
             feature_flags::outbound::fake::FakeFeatureFlags::default(),
@@ -446,87 +444,4 @@ async fn dropped_submit_reconciles(acknowledge_cancel: bool) {
         .release()
         .await
         .unwrap();
-}
-
-mod waking {
-    use std::sync::Arc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::time::Duration;
-
-    use agent_runtime_protocol::domain::schema::v0::ComputerControlResult;
-    use harness_id::HarnessId;
-
-    use super::super::{ComputerRouteError, ComputerWaker, send_waking};
-
-    #[derive(Default)]
-    struct CountingWaker(AtomicUsize);
-
-    impl ComputerWaker for CountingWaker {
-        fn wake(
-            &self,
-            _harness: HarnessId,
-        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send + '_>>
-        {
-            self.0.fetch_add(1, Ordering::SeqCst);
-            Box::pin(async { Ok(()) })
-        }
-    }
-
-    fn not_connected() -> Result<ComputerControlResult, ComputerRouteError> {
-        Err(ComputerRouteError::Conflict(
-            "the computer is not connected".to_owned(),
-        ))
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn an_asleep_computer_is_woken_once_and_the_command_retried() {
-        let waker = CountingWaker::default();
-        let attempts = Arc::new(AtomicUsize::new(0));
-        let result = send_waking(
-            Some(&waker),
-            HarnessId::TEST_A,
-            Duration::from_secs(90),
-            || {
-                let attempts = Arc::clone(&attempts);
-                async move {
-                    if attempts.fetch_add(1, Ordering::SeqCst) < 3 {
-                        not_connected()
-                    } else {
-                        Ok(ComputerControlResult::SignedOut)
-                    }
-                }
-            },
-        )
-        .await;
-        assert!(matches!(result, Ok(ComputerControlResult::SignedOut)));
-        assert_eq!(waker.0.load(Ordering::SeqCst), 1);
-        assert_eq!(attempts.load(Ordering::SeqCst), 4);
-    }
-
-    #[tokio::test(start_paused = true)]
-    async fn a_computer_that_never_connects_times_out() {
-        let waker = CountingWaker::default();
-        let result = send_waking(
-            Some(&waker),
-            HarnessId::TEST_A,
-            Duration::from_secs(5),
-            || async { not_connected() },
-        )
-        .await;
-        assert!(matches!(result, Err(ComputerRouteError::Timeout)));
-    }
-
-    #[tokio::test]
-    async fn a_connected_computer_is_not_woken() {
-        let waker = CountingWaker::default();
-        let result = send_waking(
-            Some(&waker),
-            HarnessId::TEST_A,
-            Duration::from_secs(5),
-            || async { Ok(ComputerControlResult::SignedOut) },
-        )
-        .await;
-        assert!(result.is_ok());
-        assert_eq!(waker.0.load(Ordering::SeqCst), 0);
-    }
 }

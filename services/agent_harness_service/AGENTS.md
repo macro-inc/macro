@@ -44,8 +44,7 @@ Pulumi stacks; they do not host extra agent processes.
   only under `ENABLE_AI_USAGE_BILLING`. Span: `anthropic_gateway.messages`.
 - `src/computers.rs`: passes shared computer/pairing IDs and validated Macro buyer IDs
   directly between the hosted-runtime and harness services; configures the optional fleet operator, runs fleet effects,
-  timers, reconciliation and idle sleep, reports macrod presence, and wakes
-  sleeping computers before forwarding prompts. `COMPUTERS_FLEET` selects
+  timers and reconciliation, and reports macrod presence. `COMPUTERS_FLEET` selects
   `incus` or local-only `docker`; absence means no attached fleet, emits one startup
   warning and starts no operator. Selected groups remain strictly validated.
   Shutdown stops computer passes through the shared CancellationToken and waits
