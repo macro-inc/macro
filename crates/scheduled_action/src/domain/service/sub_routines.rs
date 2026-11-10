@@ -205,13 +205,17 @@ where
 
     /// Make a sub-routine a top-level routine.
     #[tracing::instrument(name = "routine.detach", skip_all, fields(
-        routine.id = ?action.id,
-        routine.parent_id = ?action.parent_id(),
+        routine.id = tracing::field::Empty,
+        routine.parent_id = tracing::field::Empty,
     ), err)]
     pub(super) async fn detach(&self, action: ScheduledAction) -> Result<ScheduledAction> {
-        let (Some(id), Some(_)) = (action.id, &action.sub_routine) else {
+        let (Some(id), Some(link)) = (action.id, &action.sub_routine) else {
             return Err(ActionPolicyError::NotSubRoutine.into());
         };
+        let span = tracing::Span::current();
+        span.record("routine.id", tracing::field::display(id));
+        span.record("routine.parent_id", tracing::field::display(link.parent_id));
+
         // Detached by another request meanwhile: it is top-level already.
         match self.repo.detach(&id).await? {
             Some(detached) => Ok(detached),
