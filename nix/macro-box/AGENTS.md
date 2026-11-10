@@ -83,12 +83,44 @@ missing-file message (`docker exec <id> journalctl -u macrod-enroll`).
 nix build .#macro-box-incus
 scp -L result/metadata.tar.xz result/disk.qcow2 root@runtime-dev-1:/tmp/
 ssh root@runtime-dev-1 \
-  'incus image import /tmp/metadata.tar.xz /tmp/disk.qcow2 --alias macro-box --reuse && rm /tmp/metadata.tar.xz /tmp/disk.qcow2'
+  'incus image import /tmp/metadata.tar.xz /tmp/disk.qcow2 --alias macro-box/<date> && rm /tmp/metadata.tar.xz /tmp/disk.qcow2'
 ```
 
-Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
+Smoke test: `incus storage volume create default t-data --type=block size=10GiB`,
+`incus init macro-box/<date> t --vm --profile macro-box`,
+`incus storage volume attach default t-data t data`, `incus start t`, then
 `incus exec t -- systemctl is-system-running` and
 `incus exec t -- curl -s --unix-socket /dev/incus/sock http://custom.socket/1.0/config`.
+
+## Data disk and image updates
+
+A running computer is updated by replacing its root disk with a new image,
+never by `nixos-rebuild` inside the guest. Everything that must survive lives
+on the data disk: an Incus custom block volume attached as disk device `data`
+(`/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_incus_data`, `macro.box.dataDisk`),
+formatted ext4 on first boot, grown with the volume, and mounted at `/home` in
+the initrd. It holds every home (`~macro/work`, `~/.claude`, `~/.macrod`
+with `macrod.toml`, the Chromium profile) and `/home/.system/macrod`, which
+`/var/lib/macrod` links to (the enrollment marker and the Claude token
+store). The root disk, `/etc/passwd` included, comes from the image: users
+created at runtime, Docker images and `nix profile` installs do not survive.
+
+The control plane, per computer:
+
+1. Once: `create_block_volume(pool, "<instance>-data", size)` and
+   `attach_volume(instance, "data", pool, volume)` (or put the device in the
+   instance's create request) before its first start. Without it the guest
+   does not boot.
+2. Build and import the new image under a new alias (below), e.g.
+   `macro-box/<date>`, and keep the old alias for rollback.
+3. Update: `stop` → `rebuild(instance, new alias)` → `start`. Rebuild keeps
+   config (`user.macro.enrollment`), profiles and the data volume.
+   `macrod-enroll` is skipped because the marker is on the data disk, and
+   macrod reconnects with its existing credentials: no new pairing and no
+   Claude login.
+4. Rollback: the same steps with the old alias.
+5. On deletion, `delete` the instance, then `delete_volume`; Incus does not
+   delete attached custom volumes with the instance.
 
 ## Boot path
 
@@ -108,7 +140,9 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
   test VM: enrollment fails with its reason, macrod's ordering and user,
   `macrod detect-agents` reports Claude Code with nothing to install, the
   tools are on macro's PATH, a downloaded glibc binary runs through nix-ld,
-  and Xvnc and Chromium's CDP port come up.
+  and Xvnc and Chromium's CDP port come up. A second image then boots from
+  the first one's data disk and keeps the home files, Claude credentials and
+  enrollment marker without running enrollment again.
 - `nix build .#checks.x86_64-linux.macro-box-claude-agent-acp` runs ACP
   `initialize` against the adapter. Evaluation fails when its version differs
   from macrod's pin in `crates/coding_agent_worker/src/tui/agent_catalog/claude_code.rs`;
@@ -130,6 +164,11 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
   fail. Declare fixed units here instead.
 - Keep `users.mutableUsers` on: with it off, activation deletes the users
   enrollment creates.
+- Keep state that must survive an update on the data disk; a token store
+  unit with `ProtectHome=yes` cannot see `/home/.system`, so it needs
+  `BindPaths` or `ProtectHome=tmpfs` with that path.
+- The NixOS test VMs replace `fileSystems`, so `_vm-test.nix` declares the
+  data disk mount again.
 - `environment.etc` entries that `useradd` copies or programs rewrite need a
   `mode`, or they are symlinks into the store.
 - DockerFleet enforces recorded vCPU and memory limits through cgroups without

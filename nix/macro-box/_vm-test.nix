@@ -1,6 +1,7 @@
 # Boots the guest module in a NixOS test VM and checks the macrod contract,
 # the agent tools and nix-ld. Incus enrollment cannot run here, so
-# macrod-enroll must fail with its readable reason.
+# macrod-enroll must fail with its readable reason. Then a second image
+# boots from the same data disk, as an image update does.
 {
   pkgs,
   guest,
@@ -13,15 +14,55 @@ let
     install -Dm0755 ${pkgs.hello}/bin/hello $out/bin/hello
     patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 --remove-rpath $out/bin/hello
   '';
+  # The test VMs' own fileSystems replace the guest's, so the data disk is
+  # declared again here.
+  dataDisk = {
+    macro.box.dataDisk = "/dev/disk/by-id/virtio-data";
+    virtualisation.fileSystems."/home" = {
+      device = "/dev/disk/by-id/virtio-data";
+      fsType = "ext4";
+      autoFormat = true;
+      neededForBoot = true;
+    };
+  };
 in
 pkgs.testers.runNixOSTest {
   name = "macro-box";
+  # The guest sets nixpkgs.config (Claude Code is unfree).
+  node.pkgsReadOnly = false;
   nodes.machine = {
-    imports = [ guest ];
+    imports = [
+      guest
+      dataDisk
+    ];
     macro.box.macrod = macrod;
     virtualisation.memorySize = 4096;
     virtualisation.diskSize = 4096;
+    virtualisation.emptyDiskImages = [
+      {
+        size = 1024;
+        driveConfig.deviceExtraOpts.serial = "data";
+      }
+    ];
     environment.etc."macro-box-test/hello".source = "${downloadedBinary}/bin/hello";
+  };
+  # The next image: a fresh root disk and machine's data disk.
+  nodes.updated = {
+    imports = [
+      guest
+      dataDisk
+    ];
+    macro.box.macrod = macrod;
+    virtualisation.memorySize = 4096;
+    virtualisation.diskSize = 4096;
+    virtualisation.qemu.drives = [
+      {
+        name = "data";
+        file = ''"$TMPDIR"/../vm-state-machine/empty0.qcow2'';
+        deviceExtraOpts.serial = "data";
+      }
+    ];
+    environment.etc."macro-box-image".text = "v2";
   };
   testScript = ''
     machine.wait_for_unit("multi-user.target")
@@ -58,5 +99,19 @@ pkgs.testers.runNixOSTest {
         machine.wait_for_open_port(5900)
         machine.wait_for_open_port(9222)
         machine.succeed("curl --fail http://127.0.0.1:9222/json/version")
+
+    with subtest("an image update keeps homes, credentials and enrollment"):
+        machine.succeed("findmnt --noheadings --output SOURCE /home | grep -F /dev/vd")
+        machine.succeed("su - macro -c 'echo token > ~/.claude/.credentials.json && echo notes > ~/work/notes.txt'")
+        # What a successful enrollment leaves behind.
+        machine.succeed("echo enrolled > /var/lib/macrod/enrolled")
+        machine.shutdown()
+
+        updated.wait_for_unit("multi-user.target")
+        updated.succeed("grep -Fx v2 /etc/macro-box-image")
+        updated.succeed("su - macro -c 'grep -Fx token ~/.claude/.credentials.json && grep -Fx notes ~/work/notes.txt'")
+        updated.succeed("grep -Fx enrolled /var/lib/macrod/enrolled")
+        updated.succeed("[ $(systemctl show macrod-enroll.service --property=ConditionResult --value) = no ]")
+        updated.succeed("[ $(systemctl show macrod.service --property=ConditionResult --value) = yes ]")
   '';
 }

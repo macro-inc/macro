@@ -6,6 +6,8 @@
 
   boot.isContainer = true;
   macro.box.enrollFrom = "file:/run/macro/enrollment.json";
+  # A Docker guest is recreated rather than updated.
+  macro.box.dataDisk = null;
   networking.useNetworkd = lib.mkForce false;
   networking.useDHCP = false;
   services.resolved.enable = false;

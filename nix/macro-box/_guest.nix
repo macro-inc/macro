@@ -15,6 +15,8 @@ let
   macrodConfig = "${home}/.macrod/macrod.toml";
   # macrod writes this marker when enrollment succeeds.
   enrolledMarker = "/var/lib/macrod/enrolled";
+  # /var/lib/macrod links here when there is a data disk.
+  persistentMacrodState = if cfg.dataDisk == null then "/var/lib/macrod" else "/home/.system/macrod";
   adapterDirectory = "${home}/.macrod/adapters/${cfg.claudeAgentAcp.adapterDirectory}";
   display = ":0";
   waitForDisplay = pkgs.writeShellScript "wait-for-display" ''
@@ -38,20 +40,19 @@ let
   };
   # Real copies (mode), not store symlinks: useradd copies /etc/skel and
   # Claude Code rewrites ~/.claude.json.
-  skel =
-    {
-      "skel/.claude.json" = {
-        source = claudeUserConfig;
-        mode = "0644";
-      };
+  skel = {
+    "skel/.claude.json" = {
+      source = claudeUserConfig;
+      mode = "0644";
+    };
+  }
+  // lib.mapAttrs' (
+    skill: _:
+    lib.nameValuePair "skel/.claude/skills/${skill}/SKILL.md" {
+      source = ./skills/${skill}/SKILL.md;
+      mode = "0644";
     }
-    // lib.mapAttrs' (
-      skill: _:
-      lib.nameValuePair "skel/.claude/skills/${skill}/SKILL.md" {
-        source = ./skills/${skill}/SKILL.md;
-        mode = "0644";
-      }
-    ) (builtins.readDir ./skills);
+  ) (builtins.readDir ./skills);
   macroOwner = {
     user = "macro";
     group = "macro";
@@ -96,6 +97,16 @@ in
       type = lib.types.str;
       default = "incus";
       description = "`macrod enroll --from`: `incus` or `file:<path>`.";
+    };
+    dataDisk = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      # The Incus disk device named `data`.
+      default = "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_incus_data";
+      description = ''
+        Block device mounted at /home, formatted on first boot. It keeps
+        homes and macrod's state across image updates; null keeps them on
+        the root disk.
+      '';
     };
   };
 
@@ -152,8 +163,22 @@ in
       };
     };
 
+    # Everything that must survive an image update lives on the data disk.
+    fileSystems."/home" = lib.mkIf (cfg.dataDisk != null) {
+      device = cfg.dataDisk;
+      fsType = "ext4";
+      autoFormat = true;
+      autoResize = true;
+      # Mounted before activation creates macro's home.
+      neededForBoot = true;
+    };
+    systemd.tmpfiles.settings."05-macro-box-state" = lib.mkIf (cfg.dataDisk != null) {
+      # The enrollment marker and Claude token store.
+      "/var/lib/macrod"."L+".argument = persistentMacrodState;
+    };
+
     systemd.tmpfiles.settings."10-macro-box" = {
-      "/var/lib/macrod".d.mode = "0755";
+      ${persistentMacrodState}.d.mode = "0755";
       # Enrollment writes persona environment files here.
       "/etc/macro/personas".d.mode = "0700";
       ${workspace}.d = macroDirectory;
@@ -342,9 +367,11 @@ in
       };
     };
 
-    systemd.user.services.macro-display = userService "Macro computer display (Xvnc :0 on 127.0.0.1:5900)" {
-      ExecStart = "${pkgs.tigervnc}/bin/Xvnc ${display} -geometry 1920x1080 -depth 24 -rfbport 5900 -interface 127.0.0.1 -localhost -SecurityTypes None -UseBlacklist 0 -AlwaysShared -nolisten tcp";
-    };
+    systemd.user.services.macro-display =
+      userService "Macro computer display (Xvnc :0 on 127.0.0.1:5900)"
+        {
+          ExecStart = "${pkgs.tigervnc}/bin/Xvnc ${display} -geometry 1920x1080 -depth 24 -rfbport 5900 -interface 127.0.0.1 -localhost -SecurityTypes None -UseBlacklist 0 -AlwaysShared -nolisten tcp";
+        };
     systemd.user.services.macro-openbox =
       userService "Openbox window manager on the Macro display" {
         ExecStartPre = waitForDisplay;
