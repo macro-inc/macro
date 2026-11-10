@@ -152,9 +152,7 @@ async fn a_kept_workspace_survives_and_moving_harness_drops_it(pool: PgPool) -> 
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn another_users_harness_does_not_reveal_its_workspaces(
-    pool: PgPool,
-) -> anyhow::Result<()> {
+async fn another_users_harness_does_not_reveal_its_workspaces(pool: PgPool) -> anyhow::Result<()> {
     insert_user(&pool, USER_OWNER).await?;
     insert_user(&pool, USER_OTHER).await?;
     let harness = insert_harness(&pool, Some(USER_OWNER), None).await?;
