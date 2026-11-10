@@ -566,26 +566,31 @@ function SidePanelOutlet(props: {
     </Accordion>
   );
 
+  // The panel's own boundary: a section that reads data while the panel
+  // opens must not suspend the content beside it, which would detach and
+  // reattach the main view (reloading any frame in it).
   return (
-    <Show
-      when={props.floating}
-      fallback={
-        <Scroll class="flex flex-col min-h-0">
+    <Suspense fallback={<Loading />}>
+      <Show
+        when={props.floating}
+        fallback={
+          <Scroll class="flex flex-col min-h-0">
+            <Metadata />
+            <Sections />
+          </Scroll>
+        }
+      >
+        <div
+          class={cn(
+            'min-h-0',
+            props.scrollable !== false && 'overflow-y-auto overscroll-contain'
+          )}
+        >
           <Metadata />
           <Sections />
-        </Scroll>
-      }
-    >
-      <div
-        class={cn(
-          'min-h-0',
-          props.scrollable !== false && 'overflow-y-auto overscroll-contain'
-        )}
-      >
-        <Metadata />
-        <Sections />
-      </div>
-    </Show>
+        </div>
+      </Show>
+    </Suspense>
   );
 
   function Metadata() {
