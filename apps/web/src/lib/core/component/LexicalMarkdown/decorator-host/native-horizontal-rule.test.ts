@@ -15,6 +15,47 @@ import {
 
 beforeAll(initializeNativeSurfaceTests);
 
+test('selection-only commits update the rule outline and remove control without hover', () => {
+  const fixture = nativeSurface();
+  registerMacroDecoratorViews(
+    fixture.view.registry,
+    createNativeHorizontalRuleViews(() => {})
+  );
+  try {
+    fixture.port.setState(
+      JSON.stringify({
+        root: {
+          type: 'root',
+          version: 1,
+          children: [{ type: 'horizontalrule', version: 1 }],
+        },
+      })
+    );
+    const rule = fixture.root.querySelector('.h-10');
+    const line = rule?.querySelector('.h-px');
+    const key = fixture.view.node(0)?.children[0];
+    if (!rule || !line || key === undefined)
+      throw new Error('Missing actual horizontal rule');
+    expect(line.classList.contains('outline-4')).toBe(false);
+    expect(rule.querySelector('button')).toBeNull();
+
+    fixture.port.selectionFromView({ kind: 'node', keys: [key] });
+    expect(fixture.view.selection().selection).toEqual({
+      kind: 'node',
+      keys: [key],
+    });
+    expect(line.classList.contains('outline-4')).toBe(true);
+    expect(rule.querySelector('button')).not.toBeNull();
+
+    fixture.port.selectionFromView({ kind: 'none' });
+    expect(fixture.view.selection().selection.kind).toBe('none');
+    expect(line.classList.contains('outline-4')).toBe(false);
+    expect(rule.querySelector('button')).toBeNull();
+  } finally {
+    fixture.close();
+  }
+});
+
 test('actual Macro HTML paste preserves a horizontal rule between paragraphs', async () => {
   const fixture = nativeSurface();
   let bound: EditorView | undefined;
@@ -131,11 +172,17 @@ test('native rule removal uses one admission and preserves sibling component hos
     expect(fixture.view.selection().selection.kind).toBe('none');
     const remaining = fixture.root.querySelector('.h-10');
     if (!remaining) throw new Error('Missing surviving rule component');
+    const line = remaining.querySelector('.h-px');
+    if (!line) throw new Error('Missing surviving rule line');
+    expect(line.classList.contains('outline-4')).toBe(false);
+    expect(remaining.querySelector('button')).toBeNull();
     remaining.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(fixture.view.selection().selection).toEqual({
       kind: 'node',
       keys: [second],
     });
+    expect(line.classList.contains('outline-4')).toBe(true);
+    expect(remaining.querySelector('button')).not.toBeNull();
   } finally {
     fixture.close();
   }

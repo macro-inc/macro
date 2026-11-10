@@ -3,14 +3,27 @@ import type {
   EditorView,
   MacroDecorators,
 } from '@macro-inc/lexical-wasm-view';
-import { type Accessor, createComponent, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createComponent,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
 import { HorizontalRule } from '../component/decorator/HorizontalRule';
 import type { HorizontalRuleHost } from '../context/DecoratorHostContext';
 import { dispatchApplicationCommand } from '../plugins/group-b/command';
 
+const NO_SELECTED_KEYS: readonly number[] = [];
+
+function selectedKeys(view: EditorView | undefined): readonly number[] {
+  const selection = view?.selection().selection;
+  return selection?.kind === 'node' ? selection.keys : NO_SELECTED_KEYS;
+}
+
 /** Real view capabilities for the shared horizontal-rule component. */
 export function createNativeHorizontalRuleHost(
-  view: Accessor<EditorView | undefined>
+  view: Accessor<EditorView | undefined>,
+  selection: Accessor<readonly number[]> = () => selectedKeys(view())
 ): HorizontalRuleHost {
   const target = (current: EditorView, key: string) => {
     const index = Number(key);
@@ -22,10 +35,7 @@ export function createNativeHorizontalRuleHost(
     const current = view();
     if (!current) return false;
     const node = target(current, key);
-    const selection = current.selection().selection;
-    return (
-      !!node && selection.kind === 'node' && selection.keys.includes(node.key)
-    );
+    return !!node && selection().includes(node.key);
   };
   return {
     isSelected,
@@ -55,18 +65,45 @@ export function createNativeHorizontalRuleHost(
 export function createNativeHorizontalRuleViews(
   bindView: (view: EditorView) => void
 ): Pick<MacroDecorators, 'horizontalrule'> {
+  const selections = new WeakMap<
+    EditorView,
+    {
+      keys: Accessor<readonly number[]>;
+      detach: () => void;
+      users: number;
+    }
+  >();
   return {
     horizontalrule(props: DecoratorProps) {
       bindView(props.view);
       const generation = props.view.mirror.keyGeneration;
+      let shared = selections.get(props.view);
+      if (!shared) {
+        const [keys, setKeys] = createSignal(selectedKeys(props.view));
+        shared = {
+          keys,
+          detach: props.view.onCommit(() => setKeys(selectedKeys(props.view))),
+          users: 0,
+        };
+        selections.set(props.view, shared);
+      }
+      const selection = shared;
+      selection.users++;
       let active = true;
       onCleanup(() => {
         active = false;
+        selection.users--;
+        if (selection.users === 0) {
+          selection.detach();
+          selections.delete(props.view);
+        }
       });
-      const host = createNativeHorizontalRuleHost(() =>
-        active && props.view.mirror.keyGeneration === generation
-          ? props.view
-          : undefined
+      const host = createNativeHorizontalRuleHost(
+        () =>
+          active && props.view.mirror.keyGeneration === generation
+            ? props.view
+            : undefined,
+        selection.keys
       );
       return createComponent(HorizontalRule, {
         host,
