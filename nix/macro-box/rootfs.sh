@@ -119,6 +119,10 @@ in_chroot -i /.fakeroot -s /.fakeroot -- /bin/bash -euo pipefail -c '
   rm -f /usr/sbin/policy-rc.d
   rm -rf /var/cache/apt/*.bin /var/lib/apt/lists/* /var/log/*.log /root/.cache
 
+  # Mark /etc and /var current with /usr so ConditionNeedsUpdate units
+  # (ldconfig, systemd-update-done, hwdb, journal catalog) skip first boot.
+  touch -r /usr /etc/.updated /var/.updated
+
   excludes=(--exclude=./debs --exclude=./out --exclude=./.fakeroot --exclude="./proc/*"
     --exclude="./dev/*" --exclude="./sys/*" --exclude="./tmp/*" --exclude="./run/*")
   tar --numeric-owner -cpf /out/rootfs.tar "${excludes[@]}" -C / .

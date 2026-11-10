@@ -82,6 +82,17 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
 `incus exec t -- systemctl is-system-running` and
 `incus exec t -- curl -s --unix-socket /dev/incus/sock http://custom.socket/1.0/config`.
 
+## Boot path
+
+- `systemd-networkd-wait-online` waits for `--any` link (30 s cap), not all.
+- `/etc/.updated` and `/var/.updated` carry `/usr`'s mtime, so ldconfig,
+  `systemd-update-done` and the journal catalog rebuild skip first boot.
+- The kernel command line has `quiet`; `ttyS0` stays the recovery console.
+- `check-enrollment-source` gives the Incus socket 2 s.
+- To measure, boot the Docker image with `--network none` (no enrollment
+  mount) and read `systemd-analyze critical-chain macrod-enroll.service`.
+  Docker skips networkd and wait-online, so VM gains need an Incus host.
+
 ## Checks
 
 - `nix build .#macro-box-claude-agent-acp` (and `nix flake check`, which runs

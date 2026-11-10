@@ -7,7 +7,8 @@
 }:
 let
   inherit (pkgs) lib;
-  ini = pkgs.formats.ini { };
+  # Lists render as repeated keys, e.g. an empty `ExecStart=` reset.
+  ini = pkgs.formats.ini { listsAsDuplicateKeys = true; };
   json = pkgs.formats.json { };
   # Formats without a nixpkgs format use the standard key/value generator.
   keyValue =
@@ -175,6 +176,13 @@ let
     "etc/systemd/system/systemd-networkd-wait-online.service.d/macro-box.conf" = {
       "Unit" = {
         "ConditionVirtualization" = "!container";
+      };
+      # The guest has one NIC; the default waits for every link, up to 120 s.
+      "Service" = {
+        "ExecStart" = [
+          ""
+          "/usr/lib/systemd/systemd-networkd-wait-online --any --timeout=30"
+        ];
       };
     };
     "etc/systemd/system/systemd-networkd.socket.d/macro-box.conf" = {
@@ -407,7 +415,9 @@ rec {
       [
         { set = "timeout=0"; }
         { search = "--no-floppy --fs-uuid --set=root ${rootUuid}"; }
-        { linux = "/boot/vmlinuz root=UUID=${rootUuid} ro console=tty1 console=ttyS0"; }
+        # `quiet` keeps kernel messages off the slow serial console, which
+        # remains the recovery console.
+        { linux = "/boot/vmlinuz root=UUID=${rootUuid} ro quiet console=tty1 console=ttyS0"; }
         { initrd = "/boot/initrd.img"; }
         { boot = ""; }
       ]
