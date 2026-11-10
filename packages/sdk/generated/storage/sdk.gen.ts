@@ -1552,8 +1552,8 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Replace the contact's phone numbers. Any team member who can see the
-     * contact may, as with renaming it.
+     * Replace the contact's phone numbers. Access is enforced by
+     * [`CrmContactAccessLevelExtractor`], like adding the contact's email.
      */
     public setCrmContactPhones<ThrowOnError extends boolean = false>(options: Options<SetCrmContactPhonesData, ThrowOnError>): RequestResult<SetCrmContactPhonesResponses, SetCrmContactPhonesErrors, ThrowOnError> {
         return (options.client ?? this.client).put<SetCrmContactPhonesResponses, SetCrmContactPhonesErrors, ThrowOnError>({

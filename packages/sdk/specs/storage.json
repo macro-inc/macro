@@ -8934,7 +8934,7 @@
       },
       "put": {
         "tags": ["crm::inbound::axum_router::contact_phones"],
-        "summary": "Replace the contact's phone numbers. Any team member who can see the\ncontact may, as with renaming it.",
+        "summary": "Replace the contact's phone numbers. Access is enforced by\n[`CrmContactAccessLevelExtractor`], like adding the contact's email.",
         "operationId": "set_crm_contact_phones",
         "parameters": [
           {
@@ -8980,6 +8980,16 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {

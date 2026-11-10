@@ -6961,8 +6961,8 @@ export const getCrmContactPhonesResponse = zod
   .describe("A contact's phone numbers, oldest first.");
 
 /**
- * @summary Replace the contact's phone numbers. Any team member who can see the
-contact may, as with renaming it.
+ * @summary Replace the contact's phone numbers. Access is enforced by
+[`CrmContactAccessLevelExtractor`], like adding the contact's email.
  */
 export const setCrmContactPhonesParams = zod.object({
   contact_id: zod.uuid().describe('The CRM contact'),
