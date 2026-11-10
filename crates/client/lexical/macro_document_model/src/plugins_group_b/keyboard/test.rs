@@ -382,3 +382,108 @@ fn right_arrow_escapes_raw_inline_code_when_selection_format_is_clear() -> Resul
     assert_eq!(selected.style.as_ref(), "");
     Ok(())
 }
+
+#[test]
+fn right_arrow_preserves_other_typing_formats_and_style() -> Result<(), Error> {
+    let mut editor = register(Editor::builder(EditorMode::ViewAttached))
+        .build()
+        .expect("keyboard fixture");
+    editor.update(|tx| {
+        let paragraph = tx.create(Paragraph {})?;
+        let text = tx.create_text("code")?;
+        tx.text(text)?.set_format(TextFormat::CODE)?;
+        tx.append(paragraph, &[text.key()])?;
+        tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+        let mut range = RangeSelection::collapsed(Point::text(text, Utf16Offset(4)));
+        range.format = TextFormat::CODE
+            | TextFormat::HIGHLIGHT
+            | TextFormat::STRIKETHROUGH
+            | TextFormat::BOLD
+            | TextFormat::ITALIC;
+        range.style = "color: red;".into();
+        tx.set_selection(Some(Selection::Range(range)))
+    })?;
+    let (handled, commit) = editor.dispatch(&Command::Key {
+        command: KeyCommand::ArrowRight,
+        event: Some(KeyEvent {
+            key: "ArrowRight".into(),
+            shift: true,
+            ctrl: true,
+            meta: true,
+            alt: true,
+            ..KeyEvent::default()
+        }),
+    })?;
+    assert_eq!(handled, Handled::Yes);
+    assert!(commit.default_prevented);
+    let range = editor
+        .state()
+        .selection()
+        .and_then(Selection::as_range)
+        .expect("range");
+    assert_eq!(range.format, TextFormat::BOLD | TextFormat::ITALIC);
+    assert_eq!(range.style.as_ref(), "color: red;");
+    let view = editor.state().view();
+    let space = view.text(range.anchor.key()).expect("space");
+    assert_eq!(space.text.as_str(), " ");
+    assert_eq!(space.format, TextFormat::empty());
+    assert_eq!(space.style.as_ref(), "");
+    Ok(())
+}
+
+#[test]
+fn right_arrow_yields_without_a_collapsed_escape_boundary() -> Result<(), Error> {
+    for scenario in 0..5 {
+        let mut editor = register(Editor::builder(EditorMode::ViewAttached))
+            .build()
+            .expect("keyboard fixture");
+        editor.update(|tx| {
+            let paragraph = tx.create(Paragraph {})?;
+            let text = tx.create_text("code")?;
+            tx.text(text)?.set_format(TextFormat::CODE)?;
+            tx.append(paragraph, &[text.key()])?;
+            tx.append(NodeKey::ROOT, &[paragraph.key()])?;
+            let mut range = RangeSelection::collapsed(Point::text(text, Utf16Offset(2)));
+            range.format = TextFormat::CODE;
+            let selection = match scenario {
+                0 => None,
+                1 => {
+                    let mut nodes = NodeSelection::new();
+                    nodes.add(paragraph);
+                    Some(Selection::Node(nodes))
+                }
+                2 => {
+                    range.anchor = Point::text(text, Utf16Offset(0));
+                    Some(Selection::Range(range))
+                }
+                3 => Some(Selection::Range(range)),
+                _ => {
+                    tx.text(text)?.set_format(TextFormat::empty())?;
+                    range.anchor = Point::text(text, Utf16Offset(4));
+                    range.focus = range.anchor;
+                    range.format = TextFormat::empty();
+                    Some(Selection::Range(range))
+                }
+            };
+            tx.set_selection(selection)
+        })?;
+        let before = editor.state().to_json()?;
+        let selection = editor.state().selection().cloned();
+        let (handled, commit) = editor.dispatch(&Command::Key {
+            command: KeyCommand::ArrowRight,
+            event: Some(KeyEvent {
+                key: "ArrowRight".into(),
+                ..KeyEvent::default()
+            }),
+        })?;
+        assert_eq!(handled, Handled::No, "scenario {scenario}");
+        assert!(!commit.default_prevented, "scenario {scenario}");
+        assert_eq!(editor.state().to_json()?, before, "scenario {scenario}");
+        assert_eq!(
+            editor.state().selection(),
+            selection.as_ref(),
+            "scenario {scenario}"
+        );
+    }
+    Ok(())
+}

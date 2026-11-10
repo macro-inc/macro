@@ -54,6 +54,11 @@ must remain literal, while ordinary paste converts its Markdown. Release Shift
 and repeat. Rich HTML and Lexical clipboard data retain their normal priority,
 and a key release during lazy HTML import must not change the captured intent.
 
+Type an inline code span, press ArrowRight, then type plain text. Verify one
+space separates the code and following text, including after save and reopen;
+an existing leading space must be reused. Repeat from a text or element caret
+boundary immediately after the span.
+
 Check decorator selection with both engines: click an image and verify its node
 selection clears browser ranges, click an equation once without selecting it as
 a node, then click text after a node selection and verify a range caret returns.

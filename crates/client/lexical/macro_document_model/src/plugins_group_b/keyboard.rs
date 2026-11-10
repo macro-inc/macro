@@ -1,4 +1,4 @@
-//! Enter normalization and bounded block indentation. Browser key facts stay in views.
+//! Inline format escape, Enter normalization and bounded block indentation.
 use super::*;
 use lexical_rich_nodes::{heading::HeadingNode, quote::QuoteNode};
 use std::collections::HashSet;
@@ -19,6 +19,11 @@ impl Plugin for Keyboard {
     }
     fn commands(&self) -> &[CommandRegistration] {
         &[
+            CommandRegistration {
+                command: CommandKind::Key(KeyCommand::ArrowRight),
+                priority: CommandPriority::High,
+                placement: Placement::After,
+            },
             CommandRegistration {
                 command: CommandKind::Key(KeyCommand::Enter),
                 priority: CommandPriority::Normal,
@@ -48,6 +53,10 @@ impl Plugin for Keyboard {
     }
     fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error> {
         match command {
+            Command::Key {
+                command: KeyCommand::ArrowRight,
+                ..
+            } => arrow_right(tx),
             Command::InsertParagraph => {
                 tx.extension_mut::<PendingCleanup>()?.0 = true;
                 Ok(Handled::No)
@@ -93,6 +102,93 @@ impl Plugin for Keyboard {
         }
         Ok(())
     }
+}
+
+fn arrow_right(tx: &mut Transaction<'_>) -> Result<Handled, Error> {
+    let Some(range) = tx.selection().and_then(Selection::as_range) else {
+        return Ok(Handled::No);
+    };
+    if !range.is_collapsed() {
+        return Ok(Handled::No);
+    }
+    let focus = range.focus;
+    let typing_format = range.format;
+    match focus {
+        Point::Text { key, offset } if offset == Utf16Offset::ZERO => {
+            if let Some(left) = tx
+                .prev_sibling(key)
+                .filter(|left| has_escapable_format(tx, *left))
+            {
+                move_past_space_or_insert_after(tx, left, Some(key))?;
+                tx.prevent_default();
+                return Ok(Handled::Yes);
+            }
+        }
+        Point::Element { key, offset } if offset > ChildIndex(0) => {
+            if let Some(left) = tx
+                .child_at_index(key, ChildIndex(offset.0 - 1))
+                .filter(|left| has_escapable_format(tx, *left))
+            {
+                let right = tx.child_at_index(key, offset);
+                move_past_space_or_insert_after(tx, left, right)?;
+                tx.prevent_default();
+                return Ok(Handled::Yes);
+            }
+        }
+        _ => {}
+    }
+    let Point::Text { key, offset } = focus else {
+        return Ok(Handled::No);
+    };
+    let escapable = TextFormat::CODE | TextFormat::HIGHLIGHT | TextFormat::STRIKETHROUGH;
+    if offset != tx.text_content_size(key)
+        || (!typing_format.intersects(escapable) && !has_escapable_format(tx, key))
+    {
+        return Ok(Handled::No);
+    }
+    tx.prevent_default();
+    for format in [
+        TextFormatType::Code,
+        TextFormatType::Highlight,
+        TextFormatType::Strikethrough,
+    ] {
+        if typing_format.has(format) {
+            tx.toggle_selection_format(format)?;
+        }
+    }
+    let right = tx.next_sibling(key);
+    move_past_space_or_insert_after(tx, key, right)?;
+    Ok(Handled::Yes)
+}
+
+fn has_escapable_format(tx: &Transaction<'_>, key: NodeKey) -> bool {
+    tx.view().text(key).is_some_and(|text| {
+        text.format
+            .intersects(TextFormat::CODE | TextFormat::HIGHLIGHT | TextFormat::STRIKETHROUGH)
+    })
+}
+
+fn move_past_space_or_insert_after(
+    tx: &mut Transaction<'_>,
+    left: NodeKey,
+    right: Option<NodeKey>,
+) -> Result<(), Error> {
+    let space = if let Some(right) = right.filter(|key| {
+        tx.view()
+            .text(*key)
+            .is_some_and(|text| text.text.as_str().starts_with(' '))
+    }) {
+        right
+    } else {
+        let space = tx.create_text(" ")?;
+        tx.text(space)?
+            .set_format(TextFormat::empty())?
+            .set_style("")?;
+        tx.insert_after(left, space, true)?;
+        space.key()
+    };
+    tx.text(space)?
+        .select(Some(Utf16Offset(1)), Some(Utf16Offset(1)))
 }
 
 fn clear_empty_typing_style(tx: &mut Transaction<'_>) -> Result<(), Error> {
