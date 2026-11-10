@@ -14,6 +14,7 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
 - `markdown_export.py`: `--markdown` and `--query` output, a dense summary
   per session (`<id>.md`), its uncut code and results (`<id>.full.md`), and a
   batch `index.md`.
+- `test_agent_session_view.py`: the exporters' and CLI's unit tests.
 - `datadog_spans.py`: `--datadog`, the session's `execute_tool` and
   `chat_streaming` spans: tool start and end, result size and cut flag, and
   one row per model call (timing, tokens, prompt part sizes).
@@ -23,6 +24,9 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
 - Prod session: `tooling/agent-session-view/agent-session-view <session-id>`;
   dev: add `--env dev`. Output lands in `~/.cache/agent-session-view/<id>.html`.
 - Re-render without a database: `--save-json` once, then `--from-json`.
+- Open it from another machine: `--serve PORT --bind 0.0.0.0` (or the
+  tailnet IP). `--serve` alone listens on 127.0.0.1 only: the server has no
+  auth and session logs are user content.
 - Markdown for agents: `--markdown`; many sessions: `--query` with filters
   (`--help`). How to analyse them: the `agent-session-analysis` skill.
 - True tool durations and the model-call lane: add `--datadog` with
@@ -31,6 +35,7 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
 
 ## Checks
 
+- `python3 -m unittest discover tooling/agent-session-view` (stdlib only).
 - Render one export with `--from-json --out <scratch>.html` and open it, and
   again with `--markdown`.
 - `--query` against a local database holding a prompted session: load

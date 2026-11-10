@@ -30,7 +30,11 @@ Two sources, used together:
 tooling/agent-session-view/agent-session-view <session-id>             # HTML timeline (prod replica)
 tooling/agent-session-view/agent-session-view <session-id> --markdown  # <id>.md + <id>.full.md
 tooling/agent-session-view/agent-session-view <session-id> --datadog   # + span timings, model-call lane
+tooling/agent-session-view/agent-session-view <session-id> --serve 8000 # serve it on 127.0.0.1:8000
 ```
+
+`--serve` is unauthenticated and binds to loopback; add `--bind 0.0.0.0` (or
+the machine's tailnet IP) to open the page from another machine.
 
 Add `--env dev` for dev. Read the `.md` first: the header says where the
 time went and lists the slowest gaps and failures; each turn has a step table

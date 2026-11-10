@@ -6,8 +6,8 @@ read replica over an SSM port-forward (opened and closed by this script); for
 dev it connects to the dev database directly.
 
 usage:
-  agent-session-view <session-id> [--env prod|dev] [--out PATH] [--save-json PATH] [--serve PORT]
-  agent-session-view --from-json EXPORT.json [--out PATH] [--serve PORT]
+  agent-session-view <session-id> [--env prod|dev] [--out PATH] [--save-json PATH] [--serve PORT [--bind HOST]]
+  agent-session-view --from-json EXPORT.json [--out PATH] [--serve PORT [--bind HOST]]
 
 --markdown writes <id>.md (a dense summary for agents) and <id>.full.md (the
 uncut code and results) instead of the HTML page.
@@ -27,6 +27,7 @@ import os
 import pathlib
 import re
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -161,13 +162,29 @@ def with_host(url, host, port):
     return parsed._replace(netloc=netloc, query="sslmode=require").geturl()
 
 
+def without_password(url):
+    """The URL with its password taken out, and the password: psql reads it
+    from PGPASSWORD, so it never shows in the process list."""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.password is None:
+        return url, None
+    netloc = parsed.netloc.rsplit("@", 1)[1]
+    user = urllib.parse.quote(urllib.parse.unquote(parsed.username or ""), safe="")
+    return parsed._replace(netloc=f"{user}@{netloc}").geturl(), urllib.parse.unquote(parsed.password)
+
+
 def psql_json(url, sql, **variables):
+    url, password = without_password(url)
     args = ["psql", url, "-At", "-X", "-v", "ON_ERROR_STOP=1"]
     for name, value in variables.items():
         args += ["-v", f"{name}={value}"]
     result = subprocess.run(
         [*args, "-f", "-"], input=sql, capture_output=True, text=True,
-        env={**os.environ, "PGOPTIONS": "-c default_transaction_read_only=on"},
+        env={
+            **os.environ,
+            "PGOPTIONS": "-c default_transaction_read_only=on",
+            **({"PGPASSWORD": password} if password is not None else {}),
+        },
     )
     if result.returncode != 0:
         sys.exit(f"query failed: {result.stderr.strip()}")
@@ -191,11 +208,19 @@ def query_session(url, session_id, with_spans=False):
     return export
 
 
+def postgres_time(value):
+    """A Postgres timestamptz as JSON renders it. Postgres trims trailing zeros
+    from the fraction, which `fromisoformat` before Python 3.11 rejects, so the
+    fraction is padded to six digits first."""
+    value = re.sub(r"\.(\d{1,6})", lambda match: "." + match.group(1).ljust(6, "0"), value, count=1)
+    return datetime.datetime.fromisoformat(re.sub(r"([+-]\d\d)$", r"\1:00", value.replace("Z", "+00:00")))
+
+
 def session_spans(export):
     """The session's spans, over its log's time range with a margin each side."""
     margin = datetime.timedelta(minutes=5)
     times = [datetime.datetime.fromisoformat(frame["t"]) for frame in export["frames"]]
-    created = datetime.datetime.fromisoformat(export["session"]["created_at"])
+    created = postgres_time(export["session"]["created_at"])
     since = min([created, *times]) - margin
     until = max([created, *times]) + margin
     try:
@@ -218,16 +243,26 @@ def database(env):
          "--document-name", "AWS-StartPortForwardingSessionToRemoteHost",
          "--parameters", json.dumps({"host": [replica_host()], "portNumber": ["5432"], "localPortNumber": [str(port)]})],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        # Its own process group, so closing it also stops the
+        # session-manager-plugin child that holds the port-forward.
+        start_new_session=True,
     )
     try:
         wait_for_port(port, tunnel)
         yield with_host(doppler_secret("global_databases", "prd", "DATABASE_URL_READONLY"), "127.0.0.1", port)
     finally:
-        tunnel.terminate()
-        try:
-            tunnel.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            tunnel.kill()
+        close_tunnel(tunnel)
+
+
+def close_tunnel(tunnel):
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(tunnel.pid, signal.SIGTERM)
+    try:
+        tunnel.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(tunnel.pid, signal.SIGKILL)
+        tunnel.wait()
 
 
 def find_sessions(url, args):
@@ -271,15 +306,20 @@ def normalize(export):
 
 
 def render(export):
-    payload = json.dumps(export, ensure_ascii=False).replace("</", "<\\/")
+    # Every `<` as \u003c, so no `</script>` or `<!--` in the session ends or
+    # changes the script element it is inlined in.
+    payload = json.dumps(export, ensure_ascii=False).replace("<", "\\u003c")
     return TEMPLATE.read_text().replace("__SESSION_JSON__", payload)
 
 
-def serve(path, port):
+def serve(path, port, bind):
+    """Serve the output directory, unauthenticated: loopback unless `bind` says otherwise."""
     directory = str(path.parent)
     handler = lambda *args: http.server.SimpleHTTPRequestHandler(*args, directory=directory)
-    print(f"serving http://{socket.gethostname()}:{port}/{path.name} (ctrl-c to stop)", file=sys.stderr)
-    http.server.ThreadingHTTPServer(("0.0.0.0", port), handler).serve_forever()
+    server = http.server.ThreadingHTTPServer((bind, port), handler)
+    host = socket.gethostname() if bind in ("0.0.0.0", "::", "") else bind
+    print(f"serving http://{host}:{server.server_address[1]}/{path.name} (ctrl-c to stop)", file=sys.stderr)
+    server.serve_forever()
 
 
 def main():
@@ -290,6 +330,11 @@ def main():
     parser.add_argument("--save-json", type=pathlib.Path)
     parser.add_argument("--out", type=pathlib.Path)
     parser.add_argument("--serve", type=int, metavar="PORT")
+    parser.add_argument(
+        "--bind", default="127.0.0.1", metavar="HOST",
+        help="address --serve listens on (default 127.0.0.1); 0.0.0.0 or this machine's "
+        "tailnet IP to open the page from another machine",
+    )
     parser.add_argument("--markdown", action="store_true")
     parser.add_argument("--datadog", action="store_true", help="merge tool and model-call spans")
     batch = parser.add_argument_group("batch export (--query): markdown for every matching session")
@@ -330,7 +375,7 @@ def main():
         out.write_text(render(export))
     print(out)
     if args.serve:
-        serve(out, args.serve)
+        serve(out, args.serve, args.bind)
 
 
 if __name__ == "__main__":

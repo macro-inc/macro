@@ -147,7 +147,9 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const el = (tag, attrs = {}, html = '') => { const n = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v); n.innerHTML = html; return n; };
 
 function buildTurns(frames) {
-  const turns = [], tools = {};
+  // A provider can reuse a tool call id: updates go to its latest call, and
+  // the n-th call with an id takes the n-th span carrying it.
+  const turns = [], tools = {}, occurrences = {};
   let turn = null;
   for (const frame of frames) {
     const content = frame.content || {}, t = parseTime(frame.t);
@@ -169,6 +171,7 @@ function buildTurns(frames) {
       const input = { ...(update.rawInput || {}) }, source = input.source;
       delete input.source;
       const item = { kind: 'tool', id: update.toolCallId, title: update.title, name: (update._meta?.macro?.toolName || update.title || '?').replace(/^mcp__macro_internal__/, ''), input, source, start: t, end: null, status: update.status || 'pending', output: undefined, content: null };
+      item.occurrence = occurrences[update.toolCallId] = (occurrences[update.toolCallId] ?? -1) + 1;
       tools[update.toolCallId] = item;
       turn.items.push(item);
     } else if (kind === 'tool_call_update') {
@@ -194,14 +197,15 @@ function buildTurns(frames) {
     for (const item of turn.items) {
       if (item.kind !== 'tool') continue;
       item.n = ++n;
+      item.dom = `tool-${turn.n}-${item.n}`;
       if (item.end == null) item.end = item.start;
-      const span = DATA.spans?.tools?.[item.id];
+      const span = nthSpan(item.id, item.occurrence);
       if (span) {
         item.start = span.start_ms; item.end = span.end_ms;
         item.resultBytes = span.result_bytes; item.resultCut = span.result_cut;
       }
       const out = item.output;
-      item.softFail = item.status !== 'failed' && out && typeof out === 'object' && (out.status === 'failed' || (out.error && out.error !== null));
+      item.softFail = item.status !== 'failed' && reportsFailure(out);
       item.errorText = errorText(item);
     }
     turn.tools = turn.items.filter(i => i.kind === 'tool');
@@ -213,11 +217,24 @@ function buildTurns(frames) {
   return turns;
 }
 
+// The same predicate as markdown_export.failure: a result that reports a
+// program that did not succeed, or carries an error.
+const FAILED_PROGRAM = ['failed', 'timed_out', 'cancelled'];
+function reportsFailure(out) {
+  return !!out && typeof out === 'object' && (FAILED_PROGRAM.includes(out.status) || !!out.error);
+}
+
+function nthSpan(id, n) {
+  const spans = DATA.spans?.tools?.[id];
+  if (!spans) return null;
+  return Array.isArray(spans) ? spans[n] ?? null : n === 0 ? spans : null;
+}
+
 function errorText(item) {
   const out = item.output;
   if (out == null) return item.status === 'failed' ? 'failed' : '';
   if (typeof out === 'string') return item.status === 'failed' ? out.slice(0, 400) : '';
-  const err = out.error ?? (out.status === 'failed' ? out.message : null);
+  const err = out.error || (FAILED_PROGRAM.includes(out.status) ? out.message || out.status : null);
   if (!err) return '';
   return (typeof err === 'string' ? err : JSON.stringify(err)).slice(0, 400);
 }
@@ -267,8 +284,10 @@ function escapedWithChips(text) {
 }
 
 function markdown(text) {
-  const html = window.marked ? marked.parse(mentionChips(text)) : `<pre>${esc(text)}</pre>`;
-  return window.DOMPurify ? DOMPurify.sanitize(html) : html;
+  // Rendered markdown only when it can be sanitized; agent text never reaches
+  // innerHTML unescaped.
+  if (!window.marked || !window.DOMPurify) return `<pre>${esc(text)}</pre>`;
+  return DOMPurify.sanitize(marked.parse(mentionChips(text)));
 }
 
 function oneLine(value, limit = 160) {
@@ -309,7 +328,7 @@ function toolBody(item) {
 function renderTool(item) {
   const ms = item.end - item.start;
   const status = item.status === 'failed' ? 'failed' : item.softFail ? 'soft' : item.status === 'completed' ? 'ok' : 'pending';
-  const node = el('details', { class: `tool ${status}`, id: `tool-${item.id}` });
+  const node = el('details', { class: `tool ${status}`, id: item.dom });
   node.dataset.tool = item.name;
   node.dataset.failed = status === 'failed' || status === 'soft' ? '1' : '';
   node.append(el('summary', {}, `<span class="dot"></span><span class="num">#${item.n}</span><span class="name">${esc(item.name)}</span>` +
@@ -320,7 +339,8 @@ function renderTool(item) {
   let rendered = false;
   node.addEventListener('toggle', () => { if (node.open && !rendered) { node.append(toolBody(item)); rendered = true; } });
   node.searchText = [item.name, item.title, JSON.stringify(item.input), item.source, item.errorText].join(' ').toLowerCase();
-  node.lazyText = () => JSON.stringify(item.output ?? item.content ?? '').toLowerCase();
+  let output = null;
+  node.lazyText = () => output ??= JSON.stringify(item.output ?? item.content ?? '').toLowerCase();
   return node;
 }
 
@@ -333,7 +353,7 @@ function renderTimeline(turn) {
     if (item.kind === 'tool') {
       const seg = el('div', { class: `seg tool ${item.status === 'failed' ? 'failed' : item.softFail ? 'soft' : ''}`, title: `#${item.n} ${item.name} · ${secs(item.end - item.start)}` });
       seg.style.left = pct(item.start); seg.style.width = width(item.start, item.end);
-      seg.onclick = e => { e.stopPropagation(); const target = document.getElementById(`tool-${item.id}`); target.open = true; target.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+      seg.onclick = e => { e.stopPropagation(); const target = document.getElementById(item.dom); target.open = true; target.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
       bar.append(seg);
     } else if (item.kind === 'message') {
       const seg = el('div', { class: 'seg msg', title: 'reply text' });

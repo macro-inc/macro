@@ -17,7 +17,9 @@ TEXT_BUDGET = 1500
 SLOWEST_GAPS = 8
 
 AGENT_CONTEXT = re.compile(r"<m-agent-context>.*?</m-agent-context>", re.S)
-CODE_TOOLS = {"ExecuteCode"}
+CODE_TOOLS = {"ExecuteCode", "mcp__macro_internal__ExecuteCode"}
+# Code-mode statuses of a program that did not succeed.
+FAILED_PROGRAM = ("failed", "timed_out", "cancelled")
 
 
 def seconds(timestamp):
@@ -30,7 +32,9 @@ def cut(text, budget):
     return text[:budget] + f"\n…[{len(text) - budget} more chars in the full file]"
 
 
-def first_line(text):
+def first_line(value):
+    """The first non-blank line of `value`, a structured error as JSON."""
+    text = value if isinstance(value, str) or value is None else json.dumps(value, ensure_ascii=False)
     for line in (text or "").splitlines():
         if line.strip():
             return line.strip()[:160]
@@ -56,14 +60,39 @@ def result_body(update):
 
 
 def failure(update, body):
-    """The first error line of a finished call, or None when it succeeded."""
+    """The first error line of a finished call, or None when it succeeded.
+
+    The same predicate as the HTML viewer's: the call failed, or its result
+    reports a failed program or carries an error.
+    """
     raw = update.get("rawOutput")
+    error = raw.get("error") if isinstance(raw, dict) else None
     if update.get("status") == "failed":
-        return first_line(raw.get("error") if isinstance(raw, dict) and raw.get("error") else body) or "failed"
+        return first_line(error or body) or "failed"
     # Code mode returns a failed program as a result, not a failed call.
-    if isinstance(raw, dict) and raw.get("status") in ("failed", "timed_out", "cancelled"):
-        return first_line(raw.get("error") or raw["status"])
+    if isinstance(raw, dict) and (raw.get("status") in FAILED_PROGRAM or error):
+        return first_line(error or raw["status"]) or "failed"
     return None
+
+
+def fence(text, info=""):
+    """`text` in a code fence longer than any backtick run inside it."""
+    longest = max((len(run) for run in re.findall(r"`+", text)), default=0)
+    marks = "`" * max(3, longest + 1)
+    return f"{marks}{info}\n{text}\n{marks}"
+
+
+def union_seconds(intervals):
+    """How long any of the intervals covers, overlaps counted once."""
+    total, current = 0.0, None
+    for start, end in sorted(interval for interval in intervals if interval[1] > interval[0]):
+        if current and start <= current[1]:
+            current[1] = max(current[1], end)
+        else:
+            if current:
+                total += current[1] - current[0]
+            current = [start, end]
+    return total + (current[1] - current[0] if current else 0)
 
 
 class Turn:
@@ -73,8 +102,14 @@ class Turn:
         self.prompt = prompt
         self.steps = []
         self.ended = None
+        self.last = started
         self.stop = None
         self.answer = []
+
+    @property
+    def bound(self):
+        """When the turn ended, or its last frame when it never did."""
+        return self.ended if self.ended is not None else self.last
 
 
 class Step:
@@ -102,9 +137,11 @@ def parse(frames, tool_spans=None):
     """Fold frames into turns of steps: think, say, or tool.
 
     A tool step with a span in `tool_spans` (by tool call id) runs from the
-    span's start to its end instead of between its frames.
+    span's start to its end instead of between its frames. A reused id takes
+    its spans in order.
     """
     tool_spans = tool_spans or {}
+    seen = {}
     turns = []
     turn = None
     step = None
@@ -121,6 +158,7 @@ def parse(frames, tool_spans=None):
             continue
         if turn is None:
             continue
+        turn.last = t
         update = (content.get("params") or {}).get("update") or {}
         kind = update.get("sessionUpdate")
         if kind in ("agent_thought_chunk", "agent_message_chunk"):
@@ -135,7 +173,9 @@ def parse(frames, tool_spans=None):
                 turn.answer.append(text)
         elif kind == "tool_call":
             turn.answer = []
-            span = tool_spans.get(update.get("toolCallId"))
+            call_id = update.get("toolCallId")
+            span = nth_span(tool_spans.get(call_id), seen.get(call_id, 0))
+            seen[call_id] = seen.get(call_id, 0) + 1
             started = span["start_ms"] / 1000 if span else t
             step = Step(len(turn.steps) + 1, "tool", started, started - previous, tool_name(update))
             step.span = span
@@ -168,6 +208,13 @@ def parse(frames, tool_spans=None):
     return turns
 
 
+def nth_span(spans, n):
+    """The n-th span for a tool call id; an older export holds one, not a list."""
+    if isinstance(spans, dict):
+        spans = [spans]
+    return spans[n] if spans and n < len(spans) else None
+
+
 def finish(step, update, t):
     step.ended = step.span["end_ms"] / 1000 if step.span else t
     step.status = update.get("status")
@@ -188,8 +235,11 @@ class Totals:
         self.failed = sum(1 for step in tools if step.error)
         self.code_runs = sum(1 for step in tools if step.name in CODE_TOOLS)
         self.model_time = sum(step.gap for step in steps)
-        self.tool_time = sum(step.duration for step in tools)
-        self.wall = sum((turn.ended or turn.started) - turn.started for turn in turns)
+        self.tool_time = sum(
+            union_seconds([(step.started, step.ended) for step in turn.steps if step.kind == "tool"])
+            for turn in turns
+        )
+        self.wall = sum(turn.bound - turn.started for turn in turns)
 
 
 def render(export):
@@ -260,13 +310,13 @@ def render(export):
             if step.arguments:
                 arguments = json.dumps(step.arguments, ensure_ascii=False)
                 out.append("Args: `" + cut(arguments, RESULT_BUDGET).replace("`", "'") + "`\n")
-                full.append("Args:\n```json\n" + arguments + "\n```\n")
+                full.append("Args:\n" + fence(arguments, "json") + "\n")
             if step.code:
-                out.append("```js\n" + cut(step.code.rstrip(), CODE_BUDGET) + "\n```\n")
-                full.append("```js\n" + step.code.rstrip() + "\n```\n")
+                out.append(fence(cut(step.code.rstrip(), CODE_BUDGET), "js") + "\n")
+                full.append(fence(step.code.rstrip(), "js") + "\n")
             if step.result is not None:
-                out.append("Result:\n```\n" + cut(step.result, RESULT_BUDGET) + "\n```")
-                full.append("Result:\n```\n" + step.result + "\n```\n")
+                out.append("Result:\n" + fence(cut(step.result, RESULT_BUDGET)))
+                full.append("Result:\n" + fence(step.result) + "\n")
         calls = model_calls(spans, turn) if spans else []
         if calls:
             out += [
@@ -294,11 +344,11 @@ def render(export):
 
 
 def model_calls(spans, turn):
-    """The model calls that started within the turn."""
-    ended = turn.ended or float("inf")
+    """The model calls that started within the turn (up to its last frame
+    when it never ended)."""
     return [
         call for call in spans["model_calls"]
-        if turn.started <= call["start_ms"] / 1000 <= ended
+        if turn.started <= call["start_ms"] / 1000 <= turn.bound
     ]
 
 

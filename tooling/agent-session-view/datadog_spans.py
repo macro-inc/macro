@@ -12,6 +12,9 @@ us5.datadoghq.com.
 import datetime
 import json
 import os
+import sys
+import time
+import urllib.error
 import urllib.request
 
 SERVICE = "service:agent-harness-service"
@@ -20,8 +23,11 @@ TRACES_PER_QUERY = 40
 PROMPT_SECTIONS = [
     "preamble", "macro_prompt", "identity", "session_instructions", "session_note",
     "opener_note", "memory", "model_id", "connected_integrations", "sdk_docs",
-    "tools.eager", "tools.loaded", "history", "tool_results",
+    "unsectioned", "tools.eager", "tools.loaded", "history", "tool_results",
 ]
+# The Spans Search API allows a few hundred requests an hour; a batch export
+# waits out a 429 this many times per request before giving up.
+RATE_LIMIT_RETRIES = 5
 
 
 class MissingCredentials(Exception):
@@ -58,12 +64,32 @@ def search(query, since, until, keys):
                 "DD-APPLICATION-KEY": keys["DD_APP_KEY"],
             },
         )
-        with urllib.request.urlopen(request, timeout=60) as response:
-            result = json.load(response)
+        result = send(request)
         spans += [span["attributes"] for span in result.get("data") or []]
         cursor = ((result.get("meta") or {}).get("page") or {}).get("after")
         if not cursor:
             return spans
+
+
+def send(request):
+    """The response to `request`, waiting out rate limits; any other failure raises."""
+    for attempt in range(RATE_LIMIT_RETRIES + 1):
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as error:
+            if error.code != 429 or attempt == RATE_LIMIT_RETRIES:
+                raise
+            wait = rate_limit_wait(error.headers)
+            print(f"Datadog rate limit; retrying in {wait:.0f}s", file=sys.stderr)
+            time.sleep(wait)
+    raise AssertionError("unreachable")
+
+
+def rate_limit_wait(headers):
+    """Seconds until the rate-limit window resets, from Datadog's headers."""
+    reset = number(headers.get("X-RateLimit-Reset")) or number(headers.get("Retry-After"))
+    return max(reset or 0, 1) + 1
 
 
 def dig(value, path):
@@ -132,7 +158,11 @@ def model_call(span):
 
 
 def fetch(session_id, since, until):
-    """{"tools": {tool call id: timing}, "model_calls": [...]} for one session.
+    """{"tools": {tool call id: [timing, ...]}, "model_calls": [...]} for one session.
+
+    A provider can reuse a tool call id within a session, so each id maps to
+    every span carrying it, oldest first; the n-th call with that id takes
+    the n-th span.
 
     `since` and `until` are ISO timestamps bounding the session's log.
     """
@@ -146,7 +176,7 @@ def fetch(session_id, since, until):
     for span in session_spans:
         call_id = dig(span.get("custom") or {}, "gen_ai.tool.call.id")
         if dig(span.get("custom") or {}, "gen_ai.operation.name") == "execute_tool" and call_id:
-            tools[call_id] = tool(span)
+            tools.setdefault(call_id, []).append(tool(span))
     traces = sorted({span["trace_id"] for span in session_spans if span.get("trace_id")})
     calls = []
     for start in range(0, len(traces), TRACES_PER_QUERY):
