@@ -507,7 +507,7 @@ async fn run() -> anyhow::Result<()> {
     // is authorized by the account link instead.
     let mcp_credentials_key = AesKey::try_from(config.mcp_credentials_key_secret_name.as_ref())
         .context("invalid MCP credentials encryption key")?;
-    let linked_github = config.linked_github_tokens()?;
+    let linked_github = Some(config.linked_github_tokens()?);
     let mcp_servers = Arc::new(NativeServerStore::new(
         PgServerRepo::new(pool.clone(), mcp_credentials_key),
         linked_github.clone(),
@@ -734,7 +734,10 @@ async fn run() -> anyhow::Result<()> {
     let service_shutdown = tokio_util::sync::CancellationToken::new();
     let (http_listening, http_ready) = tokio::sync::watch::channel(false);
     let scheduling_runtime = scheduling::build(
-        scheduling::config::Config::from_env()?,
+        scheduling::config::Config::from_env()?
+            .resolve_remote_secrets(Environment::new_or_prod(), &secrets)
+            .await
+            .context("failed to resolve scheduling secrets")?,
         pool.clone(),
         std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
         routine_code,

@@ -1,11 +1,15 @@
 import { defaultTaskPropertyValues } from '@app/features/block-md/util/taskComposerProperties';
 import { useQuickAccess } from '@core/context/quickAccess';
+import { normalizeNameText } from '@core/util/name-match-score';
 import {
   getBuiltinPropertyIds,
   SYSTEM_PROPERTY_IDS,
 } from '@property/constants';
+import type { PropertyApiValues } from '@property/types';
+import { useContactReferences } from '@queries/contacts/use-references';
 import { useListPropertiesQuery } from '@queries/properties/definitions';
 import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
+import { type Accessor, createMemo } from 'solid-js';
 import { CUSTOMER_CONTACT_PROPERTY_IDS } from '../../task-composer/customer-contact';
 import type { InputFields } from '../core/input';
 import {
@@ -13,10 +17,16 @@ import {
   suggestedTaskProperties,
   type TaskFieldDefinition,
   type TaskReference,
+  type TaskReferenceLookup,
+  taskPeopleLabels,
 } from './suggested-task-properties';
 import { parseTaskProperties } from './task-properties';
 
-export function createTaskFieldSource(userId: string) {
+export function createTaskFieldSource(
+  userId: string,
+  fields: Accessor<InputFields>,
+  enabled: Accessor<boolean>
+) {
   const query = useListPropertiesQuery(() => ({
     scope: 'system',
     includeOptions: true,
@@ -27,12 +37,7 @@ export function createTaskFieldSource(userId: string) {
     SYSTEM_PROPERTY_IDS.PROJECT,
   ]);
   const creatable = new Set([...allowed, ...CUSTOMER_CONTACT_PROPERTY_IDS]);
-  const items = useQuickAccess().useList(
-    'person',
-    'initiative',
-    'task',
-    'document'
-  );
+  const items = useQuickAccess().useList('initiative', 'task', 'document');
   const fromRows = (
     rows: PropertyDefinitionResponse[],
     ids: ReadonlySet<string> = allowed
@@ -49,7 +54,11 @@ export function createTaskFieldSource(userId: string) {
         },
       ];
     });
-  const definitions = () => (query.isSuccess ? fromRows(query.data) : []);
+  const definitions = createMemo(() =>
+    query.isSuccess ? fromRows(query.data) : []
+  );
+  const inferredFields = createMemo(() => fields().properties);
+  const manualFields = createMemo(() => fields().taskProperties);
   const loadRows = async () => {
     if (query.isSuccess) return query.data;
     const result = await query.refetch({ cancelRefetch: false });
@@ -57,29 +66,56 @@ export function createTaskFieldSource(userId: string) {
       throw result.error ?? new Error('Could not load task fields');
     return result.data;
   };
-  const references = (): TaskReference[] =>
-    items.items().map((item) =>
-      item.kind === 'user'
-        ? {
-            id: item.id,
-            type: 'USER',
-            labels: [
-              item.data.name ?? '',
-              item.data.email,
-              item.data.name?.split(' ')[0] ?? '',
-            ].filter(Boolean),
-          }
-        : {
-            id: item.id,
-            type:
-              item.bucket === 'initiative'
-                ? 'INITIATIVE'
-                : item.bucket === 'task'
-                  ? 'TASK'
-                  : 'DOCUMENT',
-            labels: [item.data.name],
-          }
+  const people = useContactReferences(
+    () => ({
+      labels: enabled()
+        ? taskPeopleLabels(
+            inferredFields(),
+            definitions(),
+            parseTaskProperties(manualFields())
+          )
+        : [],
+      matching: 'anyName',
+      excludeSecondaryInboxes: true,
+    }),
+    enabled
+  );
+  const references: TaskReferenceLookup = (text, type) => {
+    const users = !type || type === 'USER' ? people.lookup(text) : [];
+    // A matching document cannot prove uniqueness in an untyped field while
+    // person evidence is unavailable. Never substitute the suggestion window.
+    if (!users) return;
+    const userReferences = users.map(
+      (user): TaskReference => ({
+        id: user.userId,
+        type: 'USER',
+        labels: [
+          user.name ?? '',
+          user.email,
+          normalizeNameText(user.name ?? '').split(' ')[0],
+        ].filter(Boolean),
+      })
     );
+    if (type === 'USER') return userReferences;
+    return [
+      ...userReferences,
+      ...items.items().flatMap((item): TaskReference[] => {
+        const entityType =
+          item.bucket === 'initiative'
+            ? 'INITIATIVE'
+            : item.bucket === 'task'
+              ? 'TASK'
+              : 'DOCUMENT';
+        if (type && type !== entityType) return [];
+        if (
+          item.id.trim().toLowerCase() !== text.trim().toLowerCase() &&
+          item.data.name.trim().toLowerCase() !== text.trim().toLowerCase()
+        )
+          return [];
+        return [{ id: item.id, type: entityType, labels: [item.data.name] }];
+      }),
+    ];
+  };
   return {
     definitions: async () =>
       fromRows(await loadRows())
@@ -97,11 +133,16 @@ export function createTaskFieldSource(userId: string) {
           definition,
         ])
       ),
-    values: (fields: InputFields) => {
+    values: (
+      fields: InputFields
+    ): {
+      values: Record<string, PropertyApiValues>;
+      unresolved: string[];
+    } => {
       const inferred = suggestedTaskProperties(
         fields.properties,
         definitions(),
-        references()
+        references
       );
       const manual = parseTaskProperties(fields.taskProperties);
       const dueDate = fields.due_date
@@ -130,7 +171,8 @@ export function createTaskFieldSource(userId: string) {
           ...inferred.unresolved.filter((name) => {
             const field = definitions().find(
               (f) =>
-                f.definition.display_name.toLowerCase() === name.toLowerCase()
+                f.definition.display_name.trim().toLowerCase() ===
+                name.trim().toLowerCase()
             );
             return !field || !manual[field.definition.id];
           }),

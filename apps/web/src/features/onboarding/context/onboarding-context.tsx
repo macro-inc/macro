@@ -41,6 +41,8 @@ export type OnboardingRecord = {
   suggestedTeamDomain: string | undefined;
 };
 
+export type InboxProvider = 'google' | 'microsoft';
+
 export type EmailAccountsSource = {
   accounts: Accessor<Loadable<readonly EmailAccount[]>>;
   /** Re-reads the links; resolves once the request settles. */
@@ -81,7 +83,7 @@ export type TeamInvite = { id: string; invitedBy: string };
 export type TeamDirectorySource = {
   teams: Accessor<Loadable<readonly Team[]>>;
   invites: Accessor<Loadable<readonly TeamInvite[]>>;
-  /** Contact email addresses, for same-domain invite suggestions. */
+  /** At most PREFILL_CAP same-domain invite suggestions, not a contact catalog. */
   contacts: Accessor<Loadable<readonly string[]>>;
   retry(): void;
 };
@@ -110,8 +112,16 @@ export type OnboardingContext = {
   refreshViewer(): Promise<ViewerState>;
   createOnboardingRecord(): Accessor<Loadable<OnboardingRecord>>;
   createEmailAccounts(): EmailAccountsSource;
-  /** Starts Google consent for another inbox; on web the page navigates away. */
-  connectInbox(): Promise<void>;
+  /**
+   * Starts consent for another inbox; on web the page navigates away. Without
+   * a provider the app asks which one.
+   */
+  connectInbox(provider?: InboxProvider): Promise<void>;
+  /**
+   * Whether to offer Outlook beside Google: Microsoft sign-up is on and this
+   * user may connect an Outlook inbox. False until both are known.
+   */
+  createOutlookAvailability(): Accessor<boolean>;
   createToolCatalog(): ToolCatalogSource;
   /**
    * Independent provider states. `poll` re-checks while connections change.
@@ -121,7 +131,10 @@ export type OnboardingContext = {
   connectTool(tool: Tool): Promise<void>;
   /** Opens the native GitHub App repository selection, after account linking. */
   configureGithubRepositories(): void;
-  createTeamDirectory(): TeamDirectorySource;
+  createTeamDirectory(input: {
+    domain: Accessor<string | undefined>;
+    ownEmail: Accessor<string | undefined>;
+  }): TeamDirectorySource;
   /** Rejects on failure; the capability reports its own errors. */
   /** `allowDomainJoin` lets people on the owner's work domain join.
    * `notifyDomain` also emails the owner's same-domain contacts that the team

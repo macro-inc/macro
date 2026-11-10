@@ -103,6 +103,13 @@ export type ChannelDetailProps = {
   fallbackName?: string;
   /** Whether the composer grabs focus on mount. Defaults to false. */
   autofocus?: boolean;
+  /** Focus the composer each time this changes after mount. */
+  composerFocusRequest?: number;
+  /**
+   * Esc on the message list (the composer's Esc lands there) hands focus back
+   * to the list this conversation was opened from. Returns whether it did.
+   */
+  onEscapeToList?: () => boolean;
   /** Render the host's header and register any host-specific breadcrumbs. */
   children: (context: ChannelDetailContext) => JSX.Element;
 };
@@ -461,7 +468,11 @@ function ChannelDetailContent(props: ChannelDetailProps) {
                     fallback={<ChannelLoading />}
                   >
                     <TraceFlow name="channel.messages.view">
-                      <ChannelMessages autofocus={props.autofocus ?? false} />
+                      <ChannelMessages
+                        autofocus={props.autofocus ?? false}
+                        composerFocusRequest={props.composerFocusRequest}
+                        onEscapeToList={props.onEscapeToList}
+                      />
                     </TraceFlow>
                   </DebugSuspense>
                 </Match>

@@ -4,7 +4,7 @@ use sqlx::types::Uuid;
 
 use crate::links::types::DbUserProvider;
 
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(pool, email_address), err)]
 pub async fn insert_email_link_history(
     pool: &PgPool,
     link_id: Uuid,

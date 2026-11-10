@@ -26,7 +26,7 @@ async fn sync_sets_flag_when_thread_has_calendar_attachment(
     assert!(!fetch_flag(&pool, THREAD_WITH_ICS).await?);
 
     let mut conn = pool.acquire().await?;
-    sync_thread_calendar_flag(&mut conn, Uuid::parse_str(THREAD_WITH_ICS)?).await?;
+    sync_thread_attachment_flags(&mut conn, Uuid::parse_str(THREAD_WITH_ICS)?).await?;
 
     assert!(fetch_flag(&pool, THREAD_WITH_ICS).await?);
     Ok(())
@@ -43,7 +43,7 @@ async fn sync_clears_stale_flag_when_no_calendar_attachment(
     assert!(fetch_flag(&pool, THREAD_STALE_TRUE_PDF_ONLY).await?);
 
     let mut conn = pool.acquire().await?;
-    sync_thread_calendar_flag(&mut conn, Uuid::parse_str(THREAD_STALE_TRUE_PDF_ONLY)?).await?;
+    sync_thread_attachment_flags(&mut conn, Uuid::parse_str(THREAD_STALE_TRUE_PDF_ONLY)?).await?;
 
     assert!(!fetch_flag(&pool, THREAD_STALE_TRUE_PDF_ONLY).await?);
     Ok(())
@@ -56,12 +56,112 @@ async fn sync_clears_stale_flag_when_no_calendar_attachment(
 async fn sync_is_stable_when_flag_already_matches(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let thread_id = Uuid::parse_str(THREAD_WITH_ICS)?;
     let mut conn = pool.acquire().await?;
-    sync_thread_calendar_flag(&mut conn, thread_id).await?;
+    sync_thread_attachment_flags(&mut conn, thread_id).await?;
     assert!(fetch_flag(&pool, THREAD_WITH_ICS).await?);
 
     // Re-sync with no attachment changes: the value must stay put.
-    sync_thread_calendar_flag(&mut conn, thread_id).await?;
+    sync_thread_attachment_flags(&mut conn, thread_id).await?;
     assert!(fetch_flag(&pool, THREAD_WITH_ICS).await?);
+    Ok(())
+}
+
+// -- attachment kinds ---------------------------------------------------------
+
+const KIND_THREAD_ALL_KINDS: &str = "00000000-0000-0000-0000-00000000c201";
+const KIND_THREAD_STALE_NO_ATTACHMENTS: &str = "00000000-0000-0000-0000-00000000c202";
+const KIND_LINK: &str = "00000000-0000-0000-0000-000000000c01";
+
+/// `(pdf, image, document)` flags of one thread.
+async fn fetch_kind_flags(
+    pool: &Pool<Postgres>,
+    thread_id: &str,
+) -> anyhow::Result<(bool, bool, bool)> {
+    let row = sqlx::query!(
+        "SELECT has_pdf_attachment, has_image_attachment, has_document_attachment
+         FROM email_threads WHERE id = $1",
+        Uuid::parse_str(thread_id)?
+    )
+    .fetch_one(pool)
+    .await?;
+    Ok((
+        row.has_pdf_attachment,
+        row.has_image_attachment,
+        row.has_document_attachment,
+    ))
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("sync_thread_attachment_kind_flags")
+    )
+)]
+async fn sync_sets_kind_flags_from_attachment_mime_types(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let mut conn = pool.acquire().await?;
+    sync_thread_attachment_flags(&mut conn, Uuid::parse_str(KIND_THREAD_ALL_KINDS)?).await?;
+
+    assert_eq!(
+        fetch_kind_flags(&pool, KIND_THREAD_ALL_KINDS).await?,
+        (true, true, true)
+    );
+    assert!(!fetch_flag(&pool, KIND_THREAD_ALL_KINDS).await?);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("sync_thread_attachment_kind_flags")
+    )
+)]
+async fn sync_clears_stale_kind_flags(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let mut conn = pool.acquire().await?;
+    sync_thread_attachment_flags(
+        &mut conn,
+        Uuid::parse_str(KIND_THREAD_STALE_NO_ATTACHMENTS)?,
+    )
+    .await?;
+
+    assert_eq!(
+        fetch_kind_flags(&pool, KIND_THREAD_STALE_NO_ATTACHMENTS).await?,
+        (false, false, false)
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("sync_thread_attachment_kind_flags")
+    )
+)]
+async fn backfill_only_sets_missing_kind_flags(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let link_id = Uuid::parse_str(KIND_LINK)?;
+
+    assert_eq!(
+        backfill_link_attachment_kind_flags(&pool, link_id).await?,
+        1
+    );
+    assert_eq!(
+        fetch_kind_flags(&pool, KIND_THREAD_ALL_KINDS).await?,
+        (true, true, true)
+    );
+    // Clearing stale flags belongs to ingest and delete, not the backfill.
+    assert_eq!(
+        fetch_kind_flags(&pool, KIND_THREAD_STALE_NO_ATTACHMENTS).await?,
+        (true, true, true)
+    );
+
+    // A rerun has nothing left to set.
+    assert_eq!(
+        backfill_link_attachment_kind_flags(&pool, link_id).await?,
+        0
+    );
     Ok(())
 }
 

@@ -48,6 +48,9 @@ enforced by the ordinary backend APIs.
   `/scheduling`. Link writes carry the user's quoted `userConfirmation`, which the
   route rejects when blank; `BookingLink` handles keep their `team` for edits.
 - `src/entities/routines/`, `agents/`, `harnesses/`: automation and agent hosts.
+  `harnesses.directory()` lists teammates' hosts and `Harness.requestAccess()`
+  asks for one. Granting takes the owner's own session, so the server refuses
+  `Harness.access.grant` and `resolve` from any SDK credential.
   `agents.list()` reads storage agent records, which built-in personas lack;
   `agents.coding()` reads the harness `GET /coding-agents` listing (Cursor
   included) that the `ListCodingAgents` tool serves. `routines.create` takes
@@ -76,6 +79,9 @@ enforced by the ordinary backend APIs.
   name-based pipeline methods (`find`, `addRecords`, `updateEntries`,
   `removeRecords`, `edit`, `importCsv`/`exportCsv`), which call
   `crm::inbound::pipeline_workflows`; field values are tagged by kind.
+- `src/entities/saved-views/`: `macro.savedViews` over the revision-guarded
+  `/saved_views/definitions` routes; `edit` and `remove` send the revision the
+  handle last saw, and keep the response's record so chained writes stay guarded.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
   `external_chat`) and their message/send/upload/participant handles.
 - `src/entities/connected-apps/`: `macro.connectedApps.list(execution)` returns the

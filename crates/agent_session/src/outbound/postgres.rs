@@ -607,6 +607,25 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
         self.find(id).await?.ok_or(AgentSessionError::NotFound(id))
     }
 
+    async fn has_unfinished_turn(&self, id: AgentSessionId) -> Result<bool> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT COALESCE(
+                turn_state IN ('starting', 'running', 'stopping', 'blocked')
+                    OR (turn_state = 'disconnected' AND turn_interrupted),
+                false
+            ) AS "unfinished!"
+            FROM agent_session
+            WHERE id = $1
+            "#,
+            id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read the agent session's turn state")?
+        .ok_or(AgentSessionError::NotFound(id))
+    }
+
     async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
         let billing = sqlx::query_scalar!(
             "SELECT billing FROM agent_session WHERE id = $1",
@@ -1848,6 +1867,13 @@ impl<B: BotFacts + 'static> AgentSessionLogRepo for PgAgentSessionRepo<B> {
                 r#"
                 UPDATE agent_session
                 SET turn_state = $2,
+                    turn_interrupted = CASE
+                        WHEN $2 = 'disconnected' THEN COALESCE(
+                            turn_state IN ('starting', 'running', 'stopping', 'blocked'),
+                            false
+                        )
+                        ELSE false
+                    END,
                     modified_at = CASE WHEN $3 THEN now() ELSE modified_at END
                 WHERE id = $1 AND turn_state IS DISTINCT FROM $2
                 "#,
