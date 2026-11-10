@@ -319,19 +319,22 @@ fn rebuilt_state(
 }
 
 /// `history` as a turn's model messages are built from it: without reasoning
-/// parts, and without assistant entries that held nothing else.
+/// parts, with the text parts that leaves next to each other read as one, and
+/// without assistant entries that held nothing else.
 fn model_history(history: &[HistoryEntry]) -> Vec<HistoryEntry> {
     history
         .iter()
         .filter_map(|entry| match entry {
             HistoryEntry::Assistant(parts) => {
-                let parts: Vec<agent::types::AssistantMessagePart> = parts
-                    .iter()
-                    .filter(|part| {
-                        !matches!(part, agent::types::AssistantMessagePart::Thinking { .. })
-                    })
-                    .cloned()
-                    .collect();
+                let parts = agent::merge_consecutive_parts(
+                    parts
+                        .iter()
+                        .filter(|part| {
+                            !matches!(part, agent::types::AssistantMessagePart::Thinking { .. })
+                        })
+                        .cloned()
+                        .collect(),
+                );
                 (!parts.is_empty()).then_some(HistoryEntry::Assistant(parts))
             }
             other => Some(other.clone()),
