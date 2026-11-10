@@ -425,6 +425,12 @@ where
             .ok_or_else(|| HarnessError::NotFound("unknown harness".to_owned()))?;
 
         self.ensure_may_manage(&caller, &harness).await?;
+        if harness.computer_id.is_some() {
+            return Err(HarnessError::BadRequest(
+                "This machine is a Macro computer. Release it from Macro computers instead."
+                    .to_owned(),
+            ));
+        }
 
         if !self
             .repo

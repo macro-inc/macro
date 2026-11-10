@@ -674,6 +674,30 @@ async fn claim_rejects_bad_secrets_and_dead_pairings() {
     assert!(matches!(result, Err(HarnessError::NotFound(_))));
 }
 
+/// A Macro computer's harness goes away with the computer (Release now);
+/// deleting it directly would leave a paid computer with no runtime.
+#[tokio::test]
+async fn a_computer_harness_cannot_be_removed_like_a_paired_machine() {
+    let repo = FakeRepo {
+        harness: Some(Harness {
+            computer_id: Some(COMPUTER_ID),
+            ..harness(HarnessOwner::User {
+                user_id: OWNER_ID.to_owned(),
+            })
+        }),
+        delete_result: true,
+        ..FakeRepo::default()
+    };
+    let result = service(repo.clone())
+        .delete_harness(caller(OWNER_ID), HarnessId::TEST_A)
+        .await;
+    assert!(
+        matches!(&result, Err(HarnessError::BadRequest(message)) if message.contains("Release")),
+        "{result:?}"
+    );
+    assert!(repo.calls.lock().unwrap().deleted.is_empty());
+}
+
 #[tokio::test]
 async fn private_harnesses_are_deletable_only_by_their_owner() {
     let repo = FakeRepo {
