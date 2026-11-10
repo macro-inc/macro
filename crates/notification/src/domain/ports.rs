@@ -324,6 +324,21 @@ impl NotificationRouter for NoRouting {
     }
 }
 
+/// A router a consumer may leave out, such as while its feature is off for
+/// everyone: without one, every recipient gets the natural row and nothing is
+/// looked up.
+impl<R: NotificationRouter> NotificationRouter for Option<R> {
+    async fn route<T: Serialize + Send + Sync>(
+        &self,
+        notification: RoutedNotification<'_, T>,
+    ) -> Result<RecipientRoutes, Report> {
+        match self {
+            Some(router) => router.route(notification).await,
+            None => Ok(RecipientRoutes::new()),
+        }
+    }
+}
+
 /// Port for receiving realtime notification database events.
 pub trait NotificationEventsReceiver: Send + 'static {
     /// Receive the next raw notification database event payload.

@@ -18,6 +18,9 @@ worker that sends email/mobile-push/websocket notifications.
   `health.rs`, and `/notification_stacks`, whose router lives in
   `crates/notification_routing`.
 - `src/stack_flags.rs`: where the `enable-notification-stacks` flag is read from.
+  A deployment without a flag provider key has stacks off for everyone, and
+  `main.rs` then gives ingress no router: no stack is read and every
+  notification is stored and delivered as before.
 - `src/model/notification.rs`: service-local request/response shapes.
 - Push payload schemas come from `notification::domain::models::apple`; keep the
   frontend push validators generated from those same OpenAPI components.

@@ -48,6 +48,15 @@ impl StackFlags {
     }
 }
 
+impl StackFlags {
+    /// Whether stacks are off for every person, so nothing can be routed and
+    /// ingress need not look at stacks at all. A deployment without a flag
+    /// provider key answers yes.
+    pub fn off_for_everyone(&self) -> bool {
+        matches!(self, Self::Fixed(false))
+    }
+}
+
 impl FeatureFlags for StackFlags {
     async fn load(&self, user_id: &MacroUserIdStr<'_>) -> Result<FlagSnapshot, Report> {
         match self {
@@ -59,3 +68,6 @@ impl FeatureFlags for StackFlags {
         }
     }
 }
+
+#[cfg(test)]
+mod test;

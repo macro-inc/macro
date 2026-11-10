@@ -352,16 +352,20 @@ pub async fn main() -> anyhow::Result<()> {
     .map_err(|error| anyhow::anyhow!("invalid feature flag configuration: {error}"))?;
     let stack_repository =
         notification_routing::outbound::pg_stack_repo::PgStackRepository::new(db.clone());
-    let stack_router = notification_routing::domain::router::StackRouter::new(
-        stack_repository.clone(),
-        notification_routing::outbound::pg_document_placements::PgDocumentPlacements::new(
-            db.clone(),
-            system_properties::SystemPropertiesServiceImpl::new(
-                system_properties::PgSystemPropertiesRepository::new(db.clone()),
+    // While stacks are off for everyone, ingress has no router: it reads no
+    // stacks and stores and delivers every notification as it always has.
+    let stack_router = (!stack_flags.off_for_everyone()).then(|| {
+        notification_routing::domain::router::StackRouter::new(
+            stack_repository.clone(),
+            notification_routing::outbound::pg_document_placements::PgDocumentPlacements::new(
+                db.clone(),
+                system_properties::SystemPropertiesServiceImpl::new(
+                    system_properties::PgSystemPropertiesRepository::new(db.clone()),
+                ),
             ),
-        ),
-        stack_flags.clone(),
-    );
+            stack_flags.clone(),
+        )
+    });
     let stacks = Arc::new(
         notification_routing::domain::service::NotificationStackServiceImpl::new(
             stack_repository,

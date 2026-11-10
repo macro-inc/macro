@@ -234,6 +234,59 @@ async fn a_failed_router_delivers_to_everyone_as_signal() {
 }
 
 #[tokio::test]
+async fn an_absent_router_delivers_to_everyone_as_signal() {
+    let first = test_user_id("first@example.com");
+    let second = test_user_id("second@example.com");
+    let queue = Arc::new(MockQueue::new());
+    let service =
+        NotificationIngressService::new(MockRepository::new(), queue.clone(), MockStateMachine)
+            .with_router(None::<FixedRouter>);
+
+    service
+        .send_notification(
+            request_to([first.clone(), second.clone()])
+                .into_request()
+                .with_conn_gateway(),
+        )
+        .await
+        .unwrap();
+
+    let mut both = vec![first.to_string(), second.to_string()];
+    both.sort();
+    assert_eq!(
+        realtime_recipients(&queue.get_published()),
+        HashMap::from([("signal".to_string(), both)])
+    );
+}
+
+#[tokio::test]
+async fn a_present_router_still_routes_when_it_may_be_absent() {
+    let captured = test_user_id("captured@example.com");
+    let natural = test_user_id("natural@example.com");
+    let queue = Arc::new(MockQueue::new());
+    let service =
+        NotificationIngressService::new(MockRepository::new(), queue.clone(), MockStateMachine)
+            .with_router(Some(FixedRouter::capturing(&captured)));
+
+    service
+        .send_notification(
+            request_to([captured.clone(), natural.clone()])
+                .into_request()
+                .with_conn_gateway(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        realtime_recipients(&queue.get_published()),
+        HashMap::from([
+            ("noise".to_string(), vec![captured.to_string()]),
+            ("signal".to_string(), vec![natural.to_string()]),
+        ])
+    );
+}
+
+#[tokio::test]
 async fn the_router_is_asked_about_recipients_left_after_filtering() {
     let muted = test_user_id("muted@example.com");
     let recipient = test_user_id("recipient@example.com");
