@@ -214,15 +214,18 @@ where
 
     /// The cancellation of `dial` while it is this harness's current dial
     /// and its connection is up, else `None`.
+    ///
+    /// Local-only by design: a dial runs on the replica holding its socket,
+    /// and a Reattach forwarded elsewhere is stale there (a manager replica
+    /// has no socket to bind; a replica the harness redialed into runs its
+    /// own dial for the same listing).
     fn current_dial(&self, dial: DialTicket) -> Option<CancellationToken> {
         if !self.runtimes.is_connected(dial.harness) {
             return None;
         }
         self.dials
             .get(&dial.harness)
-            .filter(|current| {
-                current.generation == dial.generation && !current.cancelled.is_cancelled()
-            })
+            .filter(|current| current.id == dial.dial && !current.cancelled.is_cancelled())
             .map(|current| current.cancelled.clone())
     }
 

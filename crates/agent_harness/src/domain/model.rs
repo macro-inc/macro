@@ -672,8 +672,9 @@ pub enum HarnessCommand {
 pub struct DialTicket {
     /// The harness that dialed.
     pub harness: harness_id::HarnessId,
-    /// The dial's number on the replica that holds its connection.
-    pub generation: u64,
+    /// The dial's id, unique across replicas: a ticket forwarded to another
+    /// replica never matches that replica's own dial.
+    pub dial: Uuid,
 }
 
 /// What executing a command did with it, beyond succeeding.

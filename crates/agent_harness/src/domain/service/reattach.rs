@@ -34,6 +34,8 @@ static DIAL_GENERATION: AtomicU64 = AtomicU64::new(0);
 /// One harness's dial in progress.
 pub(super) struct Dial {
     pub(super) generation: u64,
+    /// Names the dial in the [`DialTicket`]s of the restores it hands out.
+    pub(super) id: macro_uuid::Uuid,
     /// Cancelled when the harness dials again or the dialing connection
     /// closes.
     pub(super) cancelled: CancellationToken,
@@ -154,20 +156,19 @@ where
         tracing::Span::current().follows_from(&cause);
         let generation = DIAL_GENERATION.fetch_add(1, Ordering::Relaxed);
         let cancelled = closed.child_token();
+        let id = macro_uuid::generate_uuid_v7();
         if let Some(previous) = self.inner.dials.insert(
             harness,
             Dial {
                 generation,
+                id,
                 cancelled: cancelled.clone(),
             },
         ) {
             previous.cancelled.cancel();
         }
 
-        let dial = DialTicket {
-            harness,
-            generation,
-        };
+        let dial = DialTicket { harness, dial: id };
         let report = self.reattach_listed(dial, acp_sessions, &cancelled).await;
         self.inner
             .dials
