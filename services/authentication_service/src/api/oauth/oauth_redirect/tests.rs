@@ -234,3 +234,40 @@ async fn redirect_telemetry_carries_no_session_code() {
         "stale code reached telemetry: {text}"
     );
 }
+
+fn sso_state(original_url: Option<&str>) -> SsoState {
+    SsoState {
+        original_url: original_url.map(|url| url.parse().unwrap()),
+        is_mobile: false,
+        referral_code: None,
+        is_agent: false,
+    }
+}
+
+#[test]
+fn sign_in_failure_returns_to_the_starting_page_with_the_reason() {
+    let state = sso_state(Some("https://macro.com/app/signup?referral_code=abc"));
+    let url = sign_in_failure_url(Some(&state), ConsentFailure::AdminConsentRequired).unwrap();
+    assert_eq!(
+        url.as_str(),
+        "https://macro.com/app/signup?referral_code=abc&sso_error=admin_consent_required"
+    );
+}
+
+#[test]
+fn sign_in_failure_replaces_an_earlier_reason() {
+    let state = sso_state(Some("https://macro.com/app/signup?sso_error=failed"));
+    let url = sign_in_failure_url(Some(&state), ConsentFailure::Cancelled).unwrap();
+    assert_eq!(
+        url.as_str(),
+        "https://macro.com/app/signup?sso_error=cancelled"
+    );
+}
+
+#[test]
+fn sign_in_failure_needs_an_allowed_page_to_return_to() {
+    assert!(sign_in_failure_url(None, ConsentFailure::Failed).is_none());
+    assert!(sign_in_failure_url(Some(&sso_state(None)), ConsentFailure::Failed).is_none());
+    let forged = sso_state(Some("https://evil.example.com/phish"));
+    assert!(sign_in_failure_url(Some(&forged), ConsentFailure::Failed).is_none());
+}

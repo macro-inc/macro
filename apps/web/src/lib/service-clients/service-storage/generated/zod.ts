@@ -391,6 +391,14 @@ export const listAgentsResponseItem = zod
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
+    stopped_reason: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['no_runtime_access'])
+          .describe('Why an agent cannot run right now.'),
+      ])
+      .optional(),
   })
   .describe('A persisted user- or team-owned AI agent.');
 export const listAgentsResponse = zod.array(listAgentsResponseItem);
@@ -692,6 +700,247 @@ export const updateAgentResponse = zod
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
+    stopped_reason: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['no_runtime_access'])
+          .describe('Why an agent cannot run right now.'),
+      ])
+      .optional(),
+  })
+  .describe('A persisted user- or team-owned AI agent.');
+
+/**
+ * @summary Handler for `PATCH /agents/{agent_id}`: change only the settings the body
+names, keeping every other one, as the `ConfigureAgent` tool does.
+ */
+export const patchAgentParams = zod.object({
+  agent_id: zod.string().describe('Agent bot ID'),
+});
+
+export const patchAgentBody = zod
+  .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Replacement permission choice: approve without asking (`true`) or\nprompt (`false`). A patch cannot clear the choice back to unset; an\nexplicit `false` prompts exactly as unset does.'
+      ),
+    channels: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            channel_ids: zod
+              .array(zod.uuid())
+              .optional()
+              .describe(
+                'Selected channels. Must be non-empty only for `selected` scope.'
+              ),
+            channel_scope: zod
+              .enum(['all', 'selected'])
+              .describe(
+                'Whether an agent is available everywhere or only in selected channels.'
+              ),
+          })
+          .describe(
+            'Where an agent can be mentioned: everywhere its owner can use it, or\nexactly the listed channels.'
+          ),
+      ])
+      .optional(),
+    default_model: zod.string().nullish().describe('Replacement model.'),
+    harness: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            harness: zod
+              .string()
+              .describe(
+                'Harness slug, e.g. `in-memory`, `cursor`, or `macrod`.'
+              ),
+            harness_id: zod.union([zod.null(), zod.string()]).optional(),
+          })
+          .describe(
+            'The runtime an agent runs on: a harness slug and, for `macrod`, the\nregistered harness serving it. Travel together because one without the\nother is never a valid choice.'
+          ),
+      ])
+      .optional(),
+    instructions: zod
+      .string()
+      .nullish()
+      .describe('Replacement instructions, whole.'),
+    is_coding: zod.boolean().nullish().describe('Replacement coding choice.'),
+    mcp: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                scope: zod.enum(['owner_connections']),
+              })
+              .describe(
+                'Whatever apps the person running the session has connected.'
+              ),
+            zod
+              .object({
+                scope: zod.enum(['selected']),
+                servers: zod
+                  .array(
+                    zod
+                      .object({
+                        app_slug: zod
+                          .string()
+                          .describe('Pipedream app slug, e.g. `linear`.'),
+                        server_name: zod
+                          .string()
+                          .describe('Display name, e.g. `Linear`.'),
+                      })
+                      .describe(
+                        'One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.'
+                      )
+                  )
+                  .describe(
+                    "The apps, in the order the agent's author picked them."
+                  ),
+              })
+              .describe('Exactly these apps, connected or not.'),
+          ])
+          .describe(
+            "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
+          ),
+      ])
+      .optional(),
+  })
+  .describe(
+    "Request to change part of a persisted agent's instructions or settings.\n\nEvery field is optional; an absent field keeps the agent's current value.\nOwnership and the bot profile (name, handle, description, avatar) are not\npatchable here: the profile has [`PatchBotRequest`], and ownership changes\ngo through [`UpdateAgentRequest`]. Unknown fields are refused, so a\nmisspelled or flattened setting is never silently ignored."
+  );
+
+export const patchAgentResponse = zod
+  .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. `None` means always prompt. Bypass also requires the harness's opt-in."
+      ),
+    bot: zod
+      .object({
+        avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
+        created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+        created_by: zod
+          .string()
+          .nullish()
+          .describe('User that created this bot.'),
+        deleted_at: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('Soft-delete timestamp.'),
+        description: zod.string().nullish().describe('Optional description.'),
+        handle: zod.string().describe('Stable handle.'),
+        has_agent: zod
+          .boolean()
+          .describe(
+            'Whether this bot runs as an AI agent: mentions and DMs start an agent session.'
+          ),
+        id: zod.string(),
+        kind: zod.enum(['owned', 'system']).describe('Bot kind.'),
+        name: zod.string().describe('Display name.'),
+        owner: zod
+          .union([
+            zod.null(),
+            zod
+              .union([
+                zod
+                  .object({
+                    type: zod.enum(['user']),
+                    user_id: zod.string().describe('Owner user id.'),
+                  })
+                  .describe('User-owned bot.'),
+                zod
+                  .object({
+                    team_id: zod.uuid().describe('Owner team id.'),
+                    type: zod.enum(['team']),
+                  })
+                  .describe('Team-owned bot.'),
+              ])
+              .describe('Bot owner.'),
+          ])
+          .optional(),
+        updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+      })
+      .describe(
+        'Bot row.\n\nClients deserialize this, so both derives are used.'
+      ),
+    channel_ids: zod
+      .array(zod.uuid())
+      .describe('Selected channel ids. Empty for a global agent.'),
+    channel_scope: zod
+      .enum(['all', 'selected'])
+      .describe(
+        'Whether an agent is available everywhere or only in selected channels.'
+      ),
+    default_model: zod
+      .string()
+      .describe('Model selected specifically for this agent.'),
+    harness: zod.string().describe('Harness used to run the agent.'),
+    harness_id: zod.union([zod.null(), zod.string()]).optional(),
+    instructions: zod
+      .string()
+      .describe(
+        'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    is_coding: zod
+      .boolean()
+      .describe(
+        "Whether the agent works in a repository, which decides how it answers\na channel mention: a coding agent posts a magic chip into its live\nsession, a chat agent replies in the thread. Chosen in the agent's\nsettings; the persona's word, not the runtime's."
+      ),
+    mcp: zod
+      .union([
+        zod
+          .object({
+            scope: zod.enum(['owner_connections']),
+          })
+          .describe(
+            'Whatever apps the person running the session has connected.'
+          ),
+        zod
+          .object({
+            scope: zod.enum(['selected']),
+            servers: zod
+              .array(
+                zod
+                  .object({
+                    app_slug: zod
+                      .string()
+                      .describe('Pipedream app slug, e.g. `linear`.'),
+                    server_name: zod
+                      .string()
+                      .describe('Display name, e.g. `Linear`.'),
+                  })
+                  .describe(
+                    'One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.'
+                  )
+              )
+              .describe(
+                "The apps, in the order the agent's author picked them."
+              ),
+          })
+          .describe('Exactly these apps, connected or not.'),
+      ])
+      .describe(
+        "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
+      ),
+    stopped_reason: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['no_runtime_access'])
+          .describe('Why an agent cannot run right now.'),
+      ])
+      .optional(),
   })
   .describe('A persisted user- or team-owned AI agent.');
 
@@ -2312,6 +2561,112 @@ export const listTeamOutOfOfficeResponse = zod
     ),
   })
   .describe('Team out-of-office viewport response.');
+
+/**
+ * @summary Merge the requester's and selected teammates' busy time in a bounded window.
+ */
+export const getTeamAvailabilityBody = zod
+  .object({
+    end: zod.iso.datetime({}).describe('Exclusive instant.'),
+    start: zod.iso.datetime({}).describe('Inclusive instant.'),
+    userIds: zod
+      .array(zod.string())
+      .nullish()
+      .describe(
+        'At most 100 current teammates; the requester is always included.\nOmit for the whole team; an empty list checks only the requester.'
+      ),
+  })
+  .describe('A bounded window and the teammates whose busy time to merge.');
+
+export const getTeamAvailabilityResponse = zod
+  .object({
+    complete: zod
+      .boolean()
+      .describe(
+        'True only when all requested people and source intervals were covered.'
+      ),
+    end: zod.iso.datetime({}).describe('Exclusive requested end.'),
+    freeWindows: zod
+      .array(
+        zod
+          .object({
+            end: zod.iso.datetime({}).describe('Exclusive end.'),
+            start: zod.iso.datetime({}).describe('Inclusive start.'),
+          })
+          .describe(
+            'An exact, half-open interval of UTC instants, without event metadata.'
+          )
+      )
+      .nullish()
+      .describe(
+        'Common calendar gaps for every included person, present only with\ncomplete coverage. These are not working-hours or booking guarantees.'
+      ),
+    members: zod
+      .array(
+        zod
+          .object({
+            busy: zod
+              .array(
+                zod
+                  .object({
+                    end: zod.iso.datetime({}).describe('Exclusive end.'),
+                    start: zod.iso.datetime({}).describe('Inclusive start.'),
+                  })
+                  .describe(
+                    'An exact, half-open interval of UTC instants, without event metadata.'
+                  )
+              )
+              .describe(
+                'Merged known busy intervals clipped to the requested range.'
+              ),
+            coverage: zod
+              .enum(['complete', 'unknown'])
+              .describe(
+                'Whether missing busy blocks can safely be interpreted as free time.'
+              ),
+            unknownReasons: zod
+              .array(
+                zod
+                  .enum([
+                    'hidden',
+                    'unavailable',
+                    'truncated',
+                    'missing_time_zone',
+                    'invalid_time_zone',
+                    'invalid_interval',
+                    'conflicting_copies',
+                  ])
+                  .describe(
+                    "Why a person's unoccupied intervals cannot establish availability."
+                  )
+              )
+              .describe(
+                'Reasons gaps in the busy intervals cannot be called free.'
+              ),
+            userId: zod
+              .string()
+              .describe('Macro identifier of the included person.'),
+          })
+          .describe(
+            'Busy time and confidence for one explicitly included person.'
+          )
+      )
+      .describe('Included people, always including the requester.'),
+    start: zod.iso.datetime({}).describe('Inclusive requested start.'),
+    summary: zod
+      .string()
+      .describe(
+        'A concise explanation that does not overstate incomplete results.'
+      ),
+    unknownUserIds: zod
+      .array(zod.string())
+      .describe(
+        'Requested identifiers without a current team relationship. No profile\nor calendar data about those identifiers is disclosed.'
+      ),
+  })
+  .describe(
+    'Availability for exactly the members selected by the domain service.'
+  );
 
 /**
  * @summary Export an event the requester can see — their own, or one shared with a
@@ -5090,6 +5445,40 @@ export const setChannelPictureBody = zod
   );
 
 /**
+ * Grants the channel's current members access to one item, the way posting
+it in a message does. Calendar events can be shared only from the caller's
+own calendar, and private or confidential events are refused. Sharing again
+is a no-op.
+ * @summary Handler for `POST /channels/{channel_id}/shares`.
+ */
+export const shareWithChannelParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const shareWithChannelBody = zod
+  .object({
+    entityId: zod
+      .uuid()
+      .describe('Id of the item to share. For a calendar event, the event id.'),
+    entityType: zod
+      .enum([
+        'calendar_event',
+        'document',
+        'project',
+        'database',
+        'form',
+        'call',
+        'thread',
+        'agent_session',
+        'external_chat',
+      ])
+      .describe(
+        'Entity types a channel grant can cover.\n\nValues are the stored entity types. `calendar` is accepted for a calendar\nchip, whose stored type is `calendar_event`.'
+      ),
+  })
+  .describe("Request to share one item with a channel's current members.");
+
+/**
  * @summary Handler for `POST /channels/{channel_id}/webhook`.
  */
 export const postChannelBotWebhookParams = zod.object({
@@ -5150,6 +5539,7 @@ export const getCollabSurfaceResponse = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -5207,6 +5597,7 @@ export const ensureCollabSurfaceBody = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -5245,6 +5636,7 @@ export const ensureCollabSurfaceResponse = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -5555,6 +5947,12 @@ export const createCrmCompanyResponse = zod
               .string()
               .nullish()
               .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
             updatedAt: zod.iso
               .datetime({})
               .describe('When the contact record was last updated.'),
@@ -5620,6 +6018,157 @@ export const createCrmCompanyResponse = zod
   );
 
 /**
+ * @summary Create the companies a CSV lists, and put its Stage, Owner and Revenue
+values on entries of a company pipeline.
+ */
+export const importCrmCompaniesCsvBody = zod
+  .object({
+    csv: zod.string().nullish().describe('The CSV text.'),
+    documentId: zod
+      .uuid()
+      .nullish()
+      .describe('A CSV document the caller can open.'),
+    newPipeline: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            name: zod
+              .string()
+              .nullish()
+              .describe("Its name; defaults to the file's name."),
+            sharing: zod
+              .enum(['private', 'team'])
+              .optional()
+              .describe(
+                'Initial sharing, or the desired team grant. Individual ownership is preserved.'
+              ),
+          })
+          .describe('A new company pipeline for a companies import.'),
+      ])
+      .optional(),
+    pipelineId: zod
+      .uuid()
+      .nullish()
+      .describe('An existing company pipeline the caller can edit.'),
+  })
+  .describe(
+    'A companies CSV to import: exactly one of its text or a CSV file in\nMacro, and at most one of `pipelineId` or `newPipeline` for its Stage,\nOwner and Revenue values (a new private pipeline when neither is given).'
+  );
+
+export const importCrmCompaniesCsvResponseCreatedMin = 0;
+
+export const importCrmCompaniesCsvResponseExistingMin = 0;
+
+export const importCrmCompaniesCsvResponsePipelineAddedMin = 0;
+
+export const importCrmCompaniesCsvResponsePipelineAlreadyPresentMin = 0;
+
+export const importCrmCompaniesCsvResponsePipelineCreatedRecordsMin = 0;
+
+export const importCrmCompaniesCsvResponsePipelineSkippedRowsMin = 0;
+
+export const importCrmCompaniesCsvResponseSkippedRowsMin = 0;
+
+export const importCrmCompaniesCsvResponse = zod
+  .object({
+    created: zod
+      .number()
+      .min(importCrmCompaniesCsvResponseCreatedMin)
+      .describe('Companies created.'),
+    existing: zod
+      .number()
+      .min(importCrmCompaniesCsvResponseExistingMin)
+      .describe('Companies the team already had.'),
+    failed: zod
+      .array(
+        zod
+          .object({
+            key: zod
+              .string()
+              .describe("The company's domain or the contact's email."),
+            reason: zod.string().describe('What went wrong.'),
+          })
+          .describe('A record an import could not add, and why.')
+      )
+      .describe('Companies that could not be created.'),
+    pipeline: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            added: zod
+              .number()
+              .min(importCrmCompaniesCsvResponsePipelineAddedMin)
+              .describe('Entries added.'),
+            addedOptions: zod
+              .array(
+                zod
+                  .object({
+                    field: zod.string().describe('The field.'),
+                    labels: zod.array(zod.string()).describe('The labels.'),
+                  })
+                  .describe('Labels to add to a select field.')
+              )
+              .describe(
+                "Labels added to select fields so the CSV's values fit."
+              ),
+            alreadyPresent: zod
+              .number()
+              .min(importCrmCompaniesCsvResponsePipelineAlreadyPresentMin)
+              .describe('Rows whose record the pipeline already had.'),
+            createdRecords: zod
+              .number()
+              .min(importCrmCompaniesCsvResponsePipelineCreatedRecordsMin)
+              .describe('Companies or contacts the import created.'),
+            filledFields: zod
+              .array(zod.string())
+              .describe('Pipeline fields the CSV filled.'),
+            ignoredColumns: zod
+              .array(zod.string())
+              .describe('CSV columns matching no field the import can fill.'),
+            invalid: zod
+              .array(
+                zod
+                  .object({
+                    key: zod
+                      .string()
+                      .describe("The company's domain or the contact's email."),
+                    reason: zod.string().describe('What went wrong.'),
+                  })
+                  .describe('A record an import could not add, and why.')
+              )
+              .describe('Rows refused for a value their field cannot hold.'),
+            pipelineId: zod.uuid().describe('The pipeline filled.'),
+            pipelineName: zod.string().describe('Its name.'),
+            skippedRows: zod
+              .number()
+              .min(importCrmCompaniesCsvResponsePipelineSkippedRowsMin)
+              .describe('Rows without a domain or email.'),
+            unresolved: zod
+              .array(
+                zod
+                  .object({
+                    key: zod
+                      .string()
+                      .describe("The company's domain or the contact's email."),
+                    reason: zod.string().describe('What went wrong.'),
+                  })
+                  .describe('A record an import could not add, and why.')
+              )
+              .describe('Records that could not be found or created.'),
+          })
+          .describe('What a pipeline import did.'),
+      ])
+      .optional(),
+    skippedRows: zod
+      .number()
+      .min(importCrmCompaniesCsvResponseSkippedRowsMin)
+      .describe('Rows without a domain like acme.com.'),
+  })
+  .describe('What a companies import did.');
+
+/**
  * @summary Fetch a single CRM company by id, hydrated with its domains, the
 primary domain's directory display metadata (name + description),
 and the company's contacts. Access is enforced by
@@ -5669,6 +6218,12 @@ export const getCompanyResponse = zod
               .string()
               .nullish()
               .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
             updatedAt: zod.iso
               .datetime({})
               .describe('When the contact record was last updated.'),
@@ -5777,6 +6332,12 @@ export const listCompanyContactsResponseItem = zod
       .string()
       .nullish()
       .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
     updatedAt: zod.iso
       .datetime({})
       .describe('When the contact record was last updated.'),
@@ -5847,6 +6408,12 @@ export const createCrmContactResponse = zod
       .string()
       .nullish()
       .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
     updatedAt: zod.iso
       .datetime({})
       .describe('When the contact record was last updated.'),
@@ -5856,9 +6423,8 @@ export const createCrmContactResponse = zod
   );
 
 /**
- * @summary Toggle `email_sync` on a CRM company. Purely a visibility flag —
-it gates whether team members can see each other's emails with
-this company. Existing CRM data is unaffected.
+ * @summary Toggle email contribution for a CRM company without archiving its records.
+Individual consent and all remaining exclusions still apply.
  */
 export const setEmailSyncParams = zod.object({
   company_id: zod.uuid().describe('The CRM company to update'),
@@ -5869,7 +6435,7 @@ export const setEmailSyncBody = zod
     email_sync: zod
       .boolean()
       .describe(
-        "New value for `crm_companies.email_sync`. Purely a read-side\nvisibility\/permission gate — `soup` queries and email-permission\nchecks require `email_sync = true` before exposing the\ncompany's emails team-wide. Populate continues to write CRM\nhistory regardless, so toggling never destroys data and\nre-enabling never requires a backfill."
+        "Allow eligible email contributions for this company's domains.\nDisabling excludes new ingestion and CRM thread access while preserving\nrecords. Re-enabling requires an admin, removes exact team exclusions,\nand schedules backfill only for explicitly consenting primary mailboxes.\nPersonal and broader team exclusions continue to apply."
       ),
   })
   .describe(
@@ -5976,6 +6542,12 @@ export const searchContactsResponse = zod
               .string()
               .nullish()
               .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
             updatedAt: zod.iso
               .datetime({})
               .describe('When the contact record was last updated.'),
@@ -6039,6 +6611,12 @@ export const createCrmTeamContactResponse = zod
       .string()
       .nullish()
       .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
     updatedAt: zod.iso
       .datetime({})
       .describe('When the contact record was last updated.'),
@@ -6098,6 +6676,12 @@ export const getContactByEmailResponse = zod
               .string()
               .nullish()
               .describe('Display name observed for the contact, if any.'),
+            personalEmail: zod
+              .boolean()
+              .optional()
+              .describe(
+                'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+              ),
             updatedAt: zod.iso
               .datetime({})
               .describe('When the contact record was last updated.'),
@@ -6154,6 +6738,138 @@ export const getContactResponse = zod
       .string()
       .nullish()
       .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+/**
+ * @summary Update an existing team-owned contact without merging its identity.
+ */
+export const setCrmContactCompanyParams = zod.object({
+  contact_id: zod.uuid().describe('The contact to update'),
+});
+
+export const setCrmContactCompanyBody = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .describe(
+        'Destination company in the same team. Unlinking is not supported.'
+      ),
+  })
+  .describe('Link or switch a contact with a known personal-provider email.');
+
+export const setCrmContactCompanyResponse = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's email address; absent for contacts added by name\nalone."
+      ),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was last updated.'),
+  })
+  .describe(
+    'A CRM contact as returned by `GET \/crm\/companies\/{company_id}\/contacts`.'
+  );
+
+/**
+ * @summary Update an existing team-owned contact without merging its identity.
+ */
+export const setCrmContactEmailParams = zod.object({
+  contact_id: zod.uuid().describe('The contact to update'),
+});
+
+export const setCrmContactEmailBody = zod
+  .object({
+    email: zod
+      .string()
+      .describe('The address to add. An identical retry is accepted.'),
+  })
+  .describe('Add a missing contact email. Existing addresses are read-only.');
+
+export const setCrmContactEmailResponse = zod
+  .object({
+    companyId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'The id of the company the contact belongs to; absent for a\ncontact without a company.'
+      ),
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the contact record was created.'),
+    email: zod
+      .string()
+      .nullish()
+      .describe(
+        "The contact's email address; absent for contacts added by name\nalone."
+      ),
+    firstInteraction: zod.iso
+      .datetime({})
+      .describe('Earliest known interaction with this contact.'),
+    hidden: zod
+      .boolean()
+      .describe(
+        'Whether the contact is hidden from CRM listings for the\nrequesting team. Non-admin viewers never see `hidden = true`\nrows (the endpoint filters them out); admin\/owner callers see\nhidden contacts so they can render the right toggle state.'
+      ),
+    id: zod.uuid().describe('The id of the contact record.'),
+    lastInteraction: zod.iso
+      .datetime({})
+      .describe('Most recent known interaction with this contact.'),
+    name: zod
+      .string()
+      .nullish()
+      .describe('Display name observed for the contact, if any.'),
+    personalEmail: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the address uses a known personal provider and permits company edits.\nOlder servers omit this classification; clients must then keep it read-only.'
+      ),
     updatedAt: zod.iso
       .datetime({})
       .describe('When the contact record was last updated.'),
@@ -6200,6 +6916,121 @@ export const setCrmContactNameBody = zod
       ),
   })
   .describe('Request body for `PUT \/contacts\/{contact_id}\/name`.');
+
+/**
+ * @summary Read the caller's mailbox consent and both exclusion lists.
+ */
+export const getCrmEmailPrivacyResponse = zod
+  .object({
+    can_remove_team_domains: zod
+      .boolean()
+      .describe('Whether the caller can remove a team exclusion.'),
+    enabled: zod
+      .boolean()
+      .describe(
+        'Whether this exact mailbox has explicit contribution consent.'
+      ),
+    mailbox_email: zod
+      .string()
+      .nullish()
+      .describe(
+        'The primary mailbox that would contribute; absent before email connection.'
+      ),
+    mailbox_link_id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Exact current primary connection; clients bind opt-in to this identifier.'
+      ),
+    personal_domains: zod
+      .array(zod.string())
+      .describe("Domains excluded only for the caller's contributions."),
+    team_domains: zod
+      .array(zod.string())
+      .describe(
+        'Domains excluded across the team, including legacy company exclusions.'
+      ),
+  })
+  .describe('Current consent and exclusions, readable by any team member.');
+
+/**
+ * @summary Apply one consent or domain-exclusion change as the authenticated member.
+ */
+export const updateCrmEmailPrivacyBody = zod
+  .union([
+    zod
+      .object({
+        action: zod.enum(['set_consent']),
+        enabled: zod
+          .boolean()
+          .describe(
+            "False withdraws this mailbox's CRM contribution without deleting records."
+          ),
+        link_id: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Required when enabling; must match the displayed primary connection.'
+          ),
+      })
+      .describe(
+        'Consent covers all available past and future emails in the primary mailbox.'
+      ),
+    zod
+      .object({
+        action: zod.enum(['add_domain']),
+        domain: zod.string().describe('Bare company domain.'),
+        scope: zod
+          .enum(['team', 'personal'])
+          .describe('The audience affected by a domain exclusion.'),
+      })
+      .describe('Add a domain and its subdomains to an exclusion list.'),
+    zod
+      .object({
+        action: zod.enum(['remove_domain']),
+        domain: zod.string().describe('Bare company domain.'),
+        scope: zod
+          .enum(['team', 'personal'])
+          .describe('The audience affected by a domain exclusion.'),
+      })
+      .describe('Remove an exclusion; other exclusions still apply.'),
+  ])
+  .describe(
+    'One explicit privacy change, avoiding lost updates to whole blocklists.'
+  );
+
+export const updateCrmEmailPrivacyResponse = zod
+  .object({
+    can_remove_team_domains: zod
+      .boolean()
+      .describe('Whether the caller can remove a team exclusion.'),
+    enabled: zod
+      .boolean()
+      .describe(
+        'Whether this exact mailbox has explicit contribution consent.'
+      ),
+    mailbox_email: zod
+      .string()
+      .nullish()
+      .describe(
+        'The primary mailbox that would contribute; absent before email connection.'
+      ),
+    mailbox_link_id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Exact current primary connection; clients bind opt-in to this identifier.'
+      ),
+    personal_domains: zod
+      .array(zod.string())
+      .describe("Domains excluded only for the caller's contributions."),
+    team_domains: zod
+      .array(zod.string())
+      .describe(
+        'Domains excluded across the team, including legacy company exclusions.'
+      ),
+  })
+  .describe('Current consent and exclusions, readable by any team member.');
 
 /**
  * @summary List the caller's live pipelines in their CRM.
@@ -6337,6 +7168,359 @@ export const createCrmPipelineResponse = zod
   .describe("Metadata together with the caller's effective grant.");
 
 /**
+ * @summary Entries whose company or contact matches the search, across the caller's
+pipelines; pipelines without a match are left out.
+ */
+export const searchCrmPipelineEntriesQueryLimitMin = 0;
+
+export const searchCrmPipelineEntriesQueryParams = zod.object({
+  search: zod
+    .string()
+    .describe("Text the record's name, domain or email must contain."),
+  limit: zod
+    .number()
+    .min(searchCrmPipelineEntriesQueryLimitMin)
+    .nullish()
+    .describe('Most entries per pipeline, 1 to 5000; defaults to 50.'),
+});
+
+export const searchCrmPipelineEntriesResponseItem = zod
+  .object({
+    entries: zod
+      .array(
+        zod
+          .object({
+            entryId: zod
+              .uuid()
+              .describe("The entry: a row of the pipeline's table."),
+            fields: zod
+              .record(
+                zod.string(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['text']),
+                        value: zod.string().describe('Free text.'),
+                      })
+                      .describe('Free text.'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number().describe('A number.'),
+                      })
+                      .describe('A number.'),
+                    zod
+                      .object({
+                        type: zod.enum(['checkbox']),
+                        value: zod.boolean().describe('True or false.'),
+                      })
+                      .describe('True or false.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}).describe('A date-time.'),
+                      })
+                      .describe('A date-time.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .string()
+                          .describe(
+                            'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                          ),
+                      })
+                      .describe(
+                        'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['labels']),
+                        value: zod
+                          .array(zod.string())
+                          .describe("Option labels, in the cell's order."),
+                      })
+                      .describe("Option labels, in the cell's order."),
+                    zod
+                      .object({
+                        type: zod.enum(['links']),
+                        value: zod.array(zod.string()).describe('URLs.'),
+                      })
+                      .describe('URLs.'),
+                    zod
+                      .object({
+                        type: zod.enum(['references']),
+                        value: zod
+                          .array(zod.string())
+                          .describe(
+                            'Macro ids: people as macro| user ids, records or other items.'
+                          ),
+                      })
+                      .describe(
+                        'Macro ids: people as macro| user ids, records or other items.'
+                      ),
+                  ])
+                  .describe("A stored value in its field's own terms.")
+              )
+              .describe('Its other fields that hold a value, by name.'),
+            record: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
+          })
+          .describe('One pipeline entry.')
+      )
+      .describe('Its matching entries.'),
+    pipeline: zod
+      .object({
+        createdAt: zod.iso.datetime({}).describe('Creation time.'),
+        databaseId: zod.uuid().describe('Dedicated backing database.'),
+        id: zod
+          .uuid()
+          .describe(
+            'Entity identity, used with `CrmPipeline` access receipts.'
+          ),
+        name: zod.string().describe('Pipeline display name.'),
+        primaryColumnId: zod
+          .uuid()
+          .describe(
+            "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
+          ),
+        recordType: zod.union([
+          zod.null(),
+          zod
+            .enum(['company', 'contact'])
+            .describe(
+              'Which CRM entity each row references. Fixed when a pipeline is created.'
+            ),
+        ]),
+        sharing: zod
+          .enum(['private', 'team'])
+          .describe(
+            'Initial sharing, or the desired team grant. Individual ownership is preserved.'
+          ),
+        tableId: zod.uuid().describe('Table of entries.'),
+        teamId: zod
+          .uuid()
+          .describe(
+            'Team owning the pipeline; references retain their own access controls.'
+          ),
+        trashedAt: zod.iso
+          .datetime({})
+          .nullable()
+          .describe('Trashed pipelines are omitted from navigation.'),
+        userId: zod
+          .string()
+          .describe('Owning user; sharing never changes ownership.'),
+      })
+      .describe(
+        'Pipeline metadata; table schema and data are read through the database service.'
+      )
+      .and(
+        zod.object({
+          grant: zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        })
+      )
+      .describe("Metadata together with the caller's effective grant."),
+  })
+  .describe("A pipeline's entries among those asked for.");
+export const searchCrmPipelineEntriesResponse = zod.array(
+  searchCrmPipelineEntriesResponseItem
+);
+
+/**
+ * @summary Every entry tracking one of the records, across the caller's pipelines;
+pipelines without one are left out.
+ */
+export const listCrmRecordPipelineEntriesBody = zod
+  .object({
+    recordIds: zod.array(zod.uuid()).describe('CRM company or contact ids.'),
+  })
+  .describe('The companies or contacts to find entries for, across pipelines.');
+
+export const listCrmRecordPipelineEntriesResponseItem = zod
+  .object({
+    entries: zod
+      .array(
+        zod
+          .object({
+            entryId: zod
+              .uuid()
+              .describe("The entry: a row of the pipeline's table."),
+            fields: zod
+              .record(
+                zod.string(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['text']),
+                        value: zod.string().describe('Free text.'),
+                      })
+                      .describe('Free text.'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number().describe('A number.'),
+                      })
+                      .describe('A number.'),
+                    zod
+                      .object({
+                        type: zod.enum(['checkbox']),
+                        value: zod.boolean().describe('True or false.'),
+                      })
+                      .describe('True or false.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}).describe('A date-time.'),
+                      })
+                      .describe('A date-time.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .string()
+                          .describe(
+                            'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                          ),
+                      })
+                      .describe(
+                        'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['labels']),
+                        value: zod
+                          .array(zod.string())
+                          .describe("Option labels, in the cell's order."),
+                      })
+                      .describe("Option labels, in the cell's order."),
+                    zod
+                      .object({
+                        type: zod.enum(['links']),
+                        value: zod.array(zod.string()).describe('URLs.'),
+                      })
+                      .describe('URLs.'),
+                    zod
+                      .object({
+                        type: zod.enum(['references']),
+                        value: zod
+                          .array(zod.string())
+                          .describe(
+                            'Macro ids: people as macro| user ids, records or other items.'
+                          ),
+                      })
+                      .describe(
+                        'Macro ids: people as macro| user ids, records or other items.'
+                      ),
+                  ])
+                  .describe("A stored value in its field's own terms.")
+              )
+              .describe('Its other fields that hold a value, by name.'),
+            record: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
+          })
+          .describe('One pipeline entry.')
+      )
+      .describe('Its matching entries.'),
+    pipeline: zod
+      .object({
+        createdAt: zod.iso.datetime({}).describe('Creation time.'),
+        databaseId: zod.uuid().describe('Dedicated backing database.'),
+        id: zod
+          .uuid()
+          .describe(
+            'Entity identity, used with `CrmPipeline` access receipts.'
+          ),
+        name: zod.string().describe('Pipeline display name.'),
+        primaryColumnId: zod
+          .uuid()
+          .describe(
+            "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
+          ),
+        recordType: zod.union([
+          zod.null(),
+          zod
+            .enum(['company', 'contact'])
+            .describe(
+              'Which CRM entity each row references. Fixed when a pipeline is created.'
+            ),
+        ]),
+        sharing: zod
+          .enum(['private', 'team'])
+          .describe(
+            'Initial sharing, or the desired team grant. Individual ownership is preserved.'
+          ),
+        tableId: zod.uuid().describe('Table of entries.'),
+        teamId: zod
+          .uuid()
+          .describe(
+            'Team owning the pipeline; references retain their own access controls.'
+          ),
+        trashedAt: zod.iso
+          .datetime({})
+          .nullable()
+          .describe('Trashed pipelines are omitted from navigation.'),
+        userId: zod
+          .string()
+          .describe('Owning user; sharing never changes ownership.'),
+      })
+      .describe(
+        'Pipeline metadata; table schema and data are read through the database service.'
+      )
+      .and(
+        zod.object({
+          grant: zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        })
+      )
+      .describe("Metadata together with the caller's effective grant."),
+  })
+  .describe("A pipeline's entries among those asked for.");
+export const listCrmRecordPipelineEntriesResponse = zod.array(
+  listCrmRecordPipelineEntriesResponseItem
+);
+
+/**
  * @summary Read one pipeline by its entity identity.
  */
 export const getCrmPipelineParams = zod.object({
@@ -6394,6 +7578,1359 @@ export const getCrmPipelineResponse = zod
     })
   )
   .describe("Metadata together with the caller's effective grant.");
+
+/**
+ * @summary Every entry as CSV text: Company and Domain (or Contact and Email), then
+one column per field, people as emails. An import reads the same layout.
+ */
+export const getCrmPipelineCsvParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const getCrmPipelineCsvResponseRowsMin = 0;
+
+export const getCrmPipelineCsvResponse = zod
+  .object({
+    complete: zod
+      .boolean()
+      .describe(
+        'Whether every entry was written; a pipeline beyond 5000 entries is cut.'
+      ),
+    csv: zod.string().describe('The CSV.'),
+    name: zod.string().describe("The pipeline's name."),
+    rows: zod
+      .number()
+      .min(getCrmPipelineCsvResponseRowsMin)
+      .describe('Entries written.'),
+  })
+  .describe(
+    "A pipeline's entries as CSV text: Company and Domain (or Contact and\nEmail), then one column per field, people as emails."
+  );
+
+/**
+ * @summary Rename or share a pipeline, and add, rename or delete its fields and
+options by name, in one change.
+ */
+export const editCrmPipelineParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const editCrmPipelineBody = zod
+  .object({
+    addFields: zod
+      .array(
+        zod
+          .object({
+            name: zod
+              .string()
+              .describe('Its name, unique in the pipeline ignoring case.'),
+            options: zod
+              .array(zod.string())
+              .optional()
+              .describe("A select field's labels, in order."),
+            type: zod
+              .enum([
+                'text',
+                'number',
+                'checkbox',
+                'date',
+                'link',
+                'select',
+                'multi_select',
+                'person',
+                'people',
+              ])
+              .describe('The type of a field to add.'),
+          })
+          .describe('A field to add.')
+      )
+      .optional()
+      .describe('Fields to add.'),
+    addOptions: zod
+      .array(
+        zod
+          .object({
+            field: zod.string().describe('The field.'),
+            labels: zod.array(zod.string()).describe('The labels.'),
+          })
+          .describe('Labels to add to a select field.')
+      )
+      .optional()
+      .describe(
+        'Labels to add to select fields; for Stage, new stages go last.'
+      ),
+    name: zod.string().nullish().describe('A new name.'),
+    removeFields: zod
+      .array(zod.string())
+      .optional()
+      .describe('Fields to delete with their values.'),
+    removeOptions: zod
+      .array(
+        zod
+          .object({
+            field: zod.string().describe('The field.'),
+            label: zod.string().describe('The label.'),
+          })
+          .describe('An option to delete, emptying the entries holding it.')
+      )
+      .optional()
+      .describe('Options to delete.'),
+    renameFields: zod
+      .array(
+        zod
+          .object({
+            from: zod.string().describe('Its current name.'),
+            to: zod.string().describe('Its new name.'),
+          })
+          .describe('A field to rename.')
+      )
+      .optional()
+      .describe('Fields to rename.'),
+    renameOptions: zod
+      .array(
+        zod
+          .object({
+            field: zod.string().describe('The field.'),
+            from: zod.string().describe('The current label.'),
+            to: zod.string().describe('The new label.'),
+          })
+          .describe('An option to relabel.')
+      )
+      .optional()
+      .describe('Options to relabel.'),
+    sharing: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['private', 'team'])
+          .describe(
+            'Initial sharing, or the desired team grant. Individual ownership is preserved.'
+          ),
+      ])
+      .optional(),
+  })
+  .describe(
+    "Changes to a pipeline's name, sharing, fields and options, applied\ntogether."
+  );
+
+export const editCrmPipelineResponse = zod
+  .object({
+    createdAt: zod.iso.datetime({}).describe('Creation time.'),
+    databaseId: zod.uuid().describe('Dedicated backing database.'),
+    id: zod
+      .uuid()
+      .describe('Entity identity, used with `CrmPipeline` access receipts.'),
+    name: zod.string().describe('Pipeline display name.'),
+    primaryColumnId: zod
+      .uuid()
+      .describe(
+        "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
+      ),
+    recordType: zod.union([
+      zod.null(),
+      zod
+        .enum(['company', 'contact'])
+        .describe(
+          'Which CRM entity each row references. Fixed when a pipeline is created.'
+        ),
+    ]),
+    sharing: zod
+      .enum(['private', 'team'])
+      .describe(
+        'Initial sharing, or the desired team grant. Individual ownership is preserved.'
+      ),
+    tableId: zod.uuid().describe('Table of entries.'),
+    teamId: zod
+      .uuid()
+      .describe(
+        'Team owning the pipeline; references retain their own access controls.'
+      ),
+    trashedAt: zod.iso
+      .datetime({})
+      .nullable()
+      .describe('Trashed pipelines are omitted from navigation.'),
+    userId: zod
+      .string()
+      .describe('Owning user; sharing never changes ownership.'),
+  })
+  .describe(
+    'Pipeline metadata; table schema and data are read through the database service.'
+  )
+  .and(
+    zod.object({
+      grant: zod
+        .enum(['view', 'comment', 'edit', 'owner'])
+        .describe('Ordered from least to most access top -> bottom'),
+    })
+  )
+  .describe("Metadata together with the caller's effective grant.")
+  .and(
+    zod.object({
+      fields: zod
+        .array(
+          zod
+            .object({
+              multiple: zod
+                .boolean()
+                .describe('Whether it holds several values.'),
+              name: zod.string().describe('The name entries and filters use.'),
+              options: zod
+                .array(zod.string())
+                .describe(
+                  "A select or tags field's labels in order: for Stage, the stages from\nfirst to last."
+                ),
+              readOnly: zod
+                .boolean()
+                .describe('Whether the caller cannot write it.'),
+              required: zod
+                .boolean()
+                .describe('Whether every entry must have a value.'),
+              type: zod
+                .enum([
+                  'company',
+                  'contact',
+                  'text',
+                  'number',
+                  'checkbox',
+                  'date',
+                  'date_range',
+                  'link',
+                  'select',
+                  'tags',
+                  'person',
+                  'item',
+                  'relation',
+                  'formula',
+                ])
+                .describe('What a field holds.'),
+            })
+            .describe('One field of a pipeline, named as people see it.')
+        )
+        .describe(
+          "Its fields in column order; a tracked pipeline's first names its record."
+        ),
+      version: zod.number().describe("Its table's version when read."),
+    })
+  )
+  .describe('A pipeline with its fields.');
+
+/**
+ * @summary Add entries, filling fields by name: companies or contacts in a tracked
+pipeline, free-form rows in a generic one. A record already in the
+pipeline is returned in `alreadyPresent` instead, unless `allowDuplicates`.
+ */
+export const addCrmPipelineEntriesParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const addCrmPipelineEntriesBody = zod
+  .object({
+    allowDuplicates: zod
+      .boolean()
+      .optional()
+      .describe('Add a record again although it already has an entry here.'),
+    entries: zod
+      .array(
+        zod
+          .object({
+            email: zod
+              .string()
+              .nullish()
+              .describe(
+                "A contact's email: that contact, or in a company pipeline its company."
+              ),
+            recordId: zod
+              .uuid()
+              .nullish()
+              .describe('A CRM company or contact id.'),
+            set: zod
+              .array(
+                zod
+                  .object({
+                    field: zod
+                      .string()
+                      .describe("The field's name, ignoring case."),
+                    value: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'One value: an option label, a person as \"me\", an email or a macro|\nuser id, a number, true\/false, or a date.'
+                      ),
+                    values: zod
+                      .array(zod.string())
+                      .nullish()
+                      .describe(
+                        'Several values, for a field holding several. A filter matches an entry\nholding any of them.'
+                      ),
+                  })
+                  .describe(
+                    'A field and the text to write into it or match it against. Leave out both\n`value` and `values` to empty the field, or in a filter to match an empty\nfield.'
+                  )
+              )
+              .optional()
+              .describe('Fields to fill in.'),
+          })
+          .describe(
+            "One entry to add: at most one of `recordId` or `email`. A tracked\npipeline's entry names its record; a generic pipeline's names none."
+          )
+      )
+      .describe('The records to add, each with its starting fields.'),
+  })
+  .describe('Entries to add.');
+
+export const addCrmPipelineEntriesResponse = zod
+  .object({
+    added: zod
+      .array(
+        zod
+          .object({
+            entryId: zod
+              .uuid()
+              .describe("The entry: a row of the pipeline's table."),
+            fields: zod
+              .record(
+                zod.string(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['text']),
+                        value: zod.string().describe('Free text.'),
+                      })
+                      .describe('Free text.'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number().describe('A number.'),
+                      })
+                      .describe('A number.'),
+                    zod
+                      .object({
+                        type: zod.enum(['checkbox']),
+                        value: zod.boolean().describe('True or false.'),
+                      })
+                      .describe('True or false.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}).describe('A date-time.'),
+                      })
+                      .describe('A date-time.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .string()
+                          .describe(
+                            'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                          ),
+                      })
+                      .describe(
+                        'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['labels']),
+                        value: zod
+                          .array(zod.string())
+                          .describe("Option labels, in the cell's order."),
+                      })
+                      .describe("Option labels, in the cell's order."),
+                    zod
+                      .object({
+                        type: zod.enum(['links']),
+                        value: zod.array(zod.string()).describe('URLs.'),
+                      })
+                      .describe('URLs.'),
+                    zod
+                      .object({
+                        type: zod.enum(['references']),
+                        value: zod
+                          .array(zod.string())
+                          .describe(
+                            'Macro ids: people as macro| user ids, records or other items.'
+                          ),
+                      })
+                      .describe(
+                        'Macro ids: people as macro| user ids, records or other items.'
+                      ),
+                  ])
+                  .describe("A stored value in its field's own terms.")
+              )
+              .describe('Its other fields that hold a value, by name.'),
+            record: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
+          })
+          .describe('One pipeline entry.')
+      )
+      .describe('The new entries, as saved.'),
+    alreadyPresent: zod
+      .array(
+        zod
+          .object({
+            entryId: zod
+              .uuid()
+              .describe("The entry: a row of the pipeline's table."),
+            fields: zod
+              .record(
+                zod.string(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['text']),
+                        value: zod.string().describe('Free text.'),
+                      })
+                      .describe('Free text.'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number().describe('A number.'),
+                      })
+                      .describe('A number.'),
+                    zod
+                      .object({
+                        type: zod.enum(['checkbox']),
+                        value: zod.boolean().describe('True or false.'),
+                      })
+                      .describe('True or false.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}).describe('A date-time.'),
+                      })
+                      .describe('A date-time.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .string()
+                          .describe(
+                            'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                          ),
+                      })
+                      .describe(
+                        'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['labels']),
+                        value: zod
+                          .array(zod.string())
+                          .describe("Option labels, in the cell's order."),
+                      })
+                      .describe("Option labels, in the cell's order."),
+                    zod
+                      .object({
+                        type: zod.enum(['links']),
+                        value: zod.array(zod.string()).describe('URLs.'),
+                      })
+                      .describe('URLs.'),
+                    zod
+                      .object({
+                        type: zod.enum(['references']),
+                        value: zod
+                          .array(zod.string())
+                          .describe(
+                            'Macro ids: people as macro| user ids, records or other items.'
+                          ),
+                      })
+                      .describe(
+                        'Macro ids: people as macro| user ids, records or other items.'
+                      ),
+                  ])
+                  .describe("A stored value in its field's own terms.")
+              )
+              .describe('Its other fields that hold a value, by name.'),
+            record: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
+          })
+          .describe('One pipeline entry.')
+      )
+      .describe(
+        'Existing entries of requested records that were not added again.'
+      ),
+    version: zod
+      .number()
+      .nullish()
+      .describe(
+        "The table's version after the write; missing when nothing was written."
+      ),
+  })
+  .describe('The entries added.');
+
+/**
+ * @summary Set fields of entries by name, all or nothing; a stage takes its label.
+ */
+export const updateCrmPipelineEntriesParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const updateCrmPipelineEntriesBody = zod
+  .object({
+    baseVersion: zod
+      .number()
+      .nullish()
+      .describe(
+        "Refuse the change if the pipeline's table moved past this version."
+      ),
+    updates: zod
+      .array(
+        zod
+          .object({
+            entryId: zod.uuid().nullish().describe('The entry.'),
+            recordId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'The record whose single entry in the pipeline to change.'
+              ),
+            set: zod
+              .array(
+                zod
+                  .object({
+                    field: zod
+                      .string()
+                      .describe("The field's name, ignoring case."),
+                    value: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'One value: an option label, a person as \"me\", an email or a macro|\nuser id, a number, true\/false, or a date.'
+                      ),
+                    values: zod
+                      .array(zod.string())
+                      .nullish()
+                      .describe(
+                        'Several values, for a field holding several. A filter matches an entry\nholding any of them.'
+                      ),
+                  })
+                  .describe(
+                    'A field and the text to write into it or match it against. Leave out both\n`value` and `values` to empty the field, or in a filter to match an empty\nfield.'
+                  )
+              )
+              .describe('Fields to set.'),
+          })
+          .describe(
+            'The changes to one entry: exactly one of `entryId` or `recordId`.'
+          )
+      )
+      .describe("Each entry's changes."),
+  })
+  .describe('Entries to change.');
+
+export const updateCrmPipelineEntriesResponse = zod
+  .object({
+    updated: zod
+      .array(
+        zod
+          .object({
+            changes: zod
+              .array(
+                zod
+                  .object({
+                    after: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                type: zod.enum(['text']),
+                                value: zod.string().describe('Free text.'),
+                              })
+                              .describe('Free text.'),
+                            zod
+                              .object({
+                                type: zod.enum(['number']),
+                                value: zod.number().describe('A number.'),
+                              })
+                              .describe('A number.'),
+                            zod
+                              .object({
+                                type: zod.enum(['checkbox']),
+                                value: zod.boolean().describe('True or false.'),
+                              })
+                              .describe('True or false.'),
+                            zod
+                              .object({
+                                type: zod.enum(['date']),
+                                value: zod.iso
+                                  .datetime({})
+                                  .describe('A date-time.'),
+                              })
+                              .describe('A date-time.'),
+                            zod
+                              .object({
+                                type: zod.enum(['date_range']),
+                                value: zod
+                                  .string()
+                                  .describe(
+                                    'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                                  ),
+                              })
+                              .describe(
+                                'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                              ),
+                            zod
+                              .object({
+                                type: zod.enum(['labels']),
+                                value: zod
+                                  .array(zod.string())
+                                  .describe(
+                                    "Option labels, in the cell's order."
+                                  ),
+                              })
+                              .describe("Option labels, in the cell's order."),
+                            zod
+                              .object({
+                                type: zod.enum(['links']),
+                                value: zod
+                                  .array(zod.string())
+                                  .describe('URLs.'),
+                              })
+                              .describe('URLs.'),
+                            zod
+                              .object({
+                                type: zod.enum(['references']),
+                                value: zod
+                                  .array(zod.string())
+                                  .describe(
+                                    'Macro ids: people as macro| user ids, records or other items.'
+                                  ),
+                              })
+                              .describe(
+                                'Macro ids: people as macro| user ids, records or other items.'
+                              ),
+                          ])
+                          .describe("A stored value in its field's own terms."),
+                      ])
+                      .optional(),
+                    before: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                type: zod.enum(['text']),
+                                value: zod.string().describe('Free text.'),
+                              })
+                              .describe('Free text.'),
+                            zod
+                              .object({
+                                type: zod.enum(['number']),
+                                value: zod.number().describe('A number.'),
+                              })
+                              .describe('A number.'),
+                            zod
+                              .object({
+                                type: zod.enum(['checkbox']),
+                                value: zod.boolean().describe('True or false.'),
+                              })
+                              .describe('True or false.'),
+                            zod
+                              .object({
+                                type: zod.enum(['date']),
+                                value: zod.iso
+                                  .datetime({})
+                                  .describe('A date-time.'),
+                              })
+                              .describe('A date-time.'),
+                            zod
+                              .object({
+                                type: zod.enum(['date_range']),
+                                value: zod
+                                  .string()
+                                  .describe(
+                                    'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                                  ),
+                              })
+                              .describe(
+                                'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                              ),
+                            zod
+                              .object({
+                                type: zod.enum(['labels']),
+                                value: zod
+                                  .array(zod.string())
+                                  .describe(
+                                    "Option labels, in the cell's order."
+                                  ),
+                              })
+                              .describe("Option labels, in the cell's order."),
+                            zod
+                              .object({
+                                type: zod.enum(['links']),
+                                value: zod
+                                  .array(zod.string())
+                                  .describe('URLs.'),
+                              })
+                              .describe('URLs.'),
+                            zod
+                              .object({
+                                type: zod.enum(['references']),
+                                value: zod
+                                  .array(zod.string())
+                                  .describe(
+                                    'Macro ids: people as macro| user ids, records or other items.'
+                                  ),
+                              })
+                              .describe(
+                                'Macro ids: people as macro| user ids, records or other items.'
+                              ),
+                          ])
+                          .describe("A stored value in its field's own terms."),
+                      ])
+                      .optional(),
+                    field: zod.string().describe('The field.'),
+                  })
+                  .describe("One field's value before and after an update.")
+              )
+              .describe('The fields set, as they were and are.'),
+            entryId: zod.uuid().describe('The entry.'),
+            record: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
+          })
+          .describe('An updated entry.')
+      )
+      .describe('Each entry, in request order.'),
+    version: zod
+      .number()
+      .nullish()
+      .describe(
+        "The table's version after the write; missing when nothing was written."
+      ),
+  })
+  .describe('The entries an update wrote.');
+
+/**
+ * @summary Entries of one pipeline matching filters, records or a search, with
+per-option counts and number totals over every match.
+ */
+export const findCrmPipelineEntriesParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const findCrmPipelineEntriesBodyLimitMin = 0;
+
+export const findCrmPipelineEntriesBody = zod
+  .object({
+    descending: zod.boolean().optional().describe('Put the largest first.'),
+    filters: zod
+      .array(
+        zod
+          .object({
+            field: zod.string().describe("The field's name, ignoring case."),
+            value: zod
+              .string()
+              .nullish()
+              .describe(
+                'One value: an option label, a person as \"me\", an email or a macro|\nuser id, a number, true\/false, or a date.'
+              ),
+            values: zod
+              .array(zod.string())
+              .nullish()
+              .describe(
+                'Several values, for a field holding several. A filter matches an entry\nholding any of them.'
+              ),
+          })
+          .describe(
+            'A field and the text to write into it or match it against. Leave out both\n`value` and `values` to empty the field, or in a filter to match an empty\nfield.'
+          )
+      )
+      .optional()
+      .describe('Every filter must match.'),
+    limit: zod
+      .number()
+      .min(findCrmPipelineEntriesBodyLimitMin)
+      .nullish()
+      .describe(
+        'Most entries to return, 1 to 5000; defaults to 50. Counts and totals\ncover every match regardless.'
+      ),
+    recordIds: zod
+      .array(zod.uuid())
+      .optional()
+      .describe('Only entries tracking one of these companies or contacts.'),
+    search: zod
+      .string()
+      .nullish()
+      .describe("Text the record's name, domain or email must contain."),
+    sortBy: zod
+      .string()
+      .nullish()
+      .describe(
+        'The field to order by; number, date and select fields order by value\nand stage order.'
+      ),
+  })
+  .describe('Which entries to read, and how to order them.');
+
+export const findCrmPipelineEntriesResponseCountsItemCountsItemCountMin = 0;
+
+export const findCrmPipelineEntriesResponseCountsItemEmptyMin = 0;
+
+export const findCrmPipelineEntriesResponseMatchedMin = 0;
+
+export const findCrmPipelineEntriesResponse = zod
+  .object({
+    complete: zod
+      .boolean()
+      .describe(
+        'Whether every entry was read; a pipeline beyond 5000 entries is not,\nso counts and totals cover only the entries read.'
+      ),
+    counts: zod
+      .array(
+        zod
+          .object({
+            counts: zod
+              .array(
+                zod
+                  .object({
+                    count: zod
+                      .number()
+                      .min(
+                        findCrmPipelineEntriesResponseCountsItemCountsItemCountMin
+                      )
+                      .describe('Matched entries holding it.'),
+                    label: zod.string().describe("The option's label."),
+                  })
+                  .describe('How many matched entries hold one option.')
+              )
+              .describe('Every option in order, with its count.'),
+            empty: zod
+              .number()
+              .min(findCrmPipelineEntriesResponseCountsItemEmptyMin)
+              .describe('Matched entries with the field empty.'),
+            field: zod.string().describe('The field.'),
+          })
+          .describe(
+            'Matched entries per option of one single-select field, such as Stage.'
+          )
+      )
+      .describe('Matched entries per option of each single-select field.'),
+    entries: zod
+      .array(
+        zod
+          .object({
+            entryId: zod
+              .uuid()
+              .describe("The entry: a row of the pipeline's table."),
+            fields: zod
+              .record(
+                zod.string(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['text']),
+                        value: zod.string().describe('Free text.'),
+                      })
+                      .describe('Free text.'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number().describe('A number.'),
+                      })
+                      .describe('A number.'),
+                    zod
+                      .object({
+                        type: zod.enum(['checkbox']),
+                        value: zod.boolean().describe('True or false.'),
+                      })
+                      .describe('True or false.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}).describe('A date-time.'),
+                      })
+                      .describe('A date-time.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .string()
+                          .describe(
+                            'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                          ),
+                      })
+                      .describe(
+                        'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['labels']),
+                        value: zod
+                          .array(zod.string())
+                          .describe("Option labels, in the cell's order."),
+                      })
+                      .describe("Option labels, in the cell's order."),
+                    zod
+                      .object({
+                        type: zod.enum(['links']),
+                        value: zod.array(zod.string()).describe('URLs.'),
+                      })
+                      .describe('URLs.'),
+                    zod
+                      .object({
+                        type: zod.enum(['references']),
+                        value: zod
+                          .array(zod.string())
+                          .describe(
+                            'Macro ids: people as macro| user ids, records or other items.'
+                          ),
+                      })
+                      .describe(
+                        'Macro ids: people as macro| user ids, records or other items.'
+                      ),
+                  ])
+                  .describe("A stored value in its field's own terms.")
+              )
+              .describe('Its other fields that hold a value, by name.'),
+            record: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
+          })
+          .describe('One pipeline entry.')
+      )
+      .describe('The first `limit` matches, in the requested order.'),
+    matched: zod
+      .number()
+      .min(findCrmPipelineEntriesResponseMatchedMin)
+      .describe('How many entries matched in all.'),
+    pipeline: zod
+      .object({
+        createdAt: zod.iso.datetime({}).describe('Creation time.'),
+        databaseId: zod.uuid().describe('Dedicated backing database.'),
+        id: zod
+          .uuid()
+          .describe(
+            'Entity identity, used with `CrmPipeline` access receipts.'
+          ),
+        name: zod.string().describe('Pipeline display name.'),
+        primaryColumnId: zod
+          .uuid()
+          .describe(
+            "A tracked pipeline's protected record reference. A generic pipeline's\nName, which names no column once someone deletes it."
+          ),
+        recordType: zod.union([
+          zod.null(),
+          zod
+            .enum(['company', 'contact'])
+            .describe(
+              'Which CRM entity each row references. Fixed when a pipeline is created.'
+            ),
+        ]),
+        sharing: zod
+          .enum(['private', 'team'])
+          .describe(
+            'Initial sharing, or the desired team grant. Individual ownership is preserved.'
+          ),
+        tableId: zod.uuid().describe('Table of entries.'),
+        teamId: zod
+          .uuid()
+          .describe(
+            'Team owning the pipeline; references retain their own access controls.'
+          ),
+        trashedAt: zod.iso
+          .datetime({})
+          .nullable()
+          .describe('Trashed pipelines are omitted from navigation.'),
+        userId: zod
+          .string()
+          .describe('Owning user; sharing never changes ownership.'),
+      })
+      .describe(
+        'Pipeline metadata; table schema and data are read through the database service.'
+      )
+      .and(
+        zod.object({
+          grant: zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        })
+      )
+      .describe("Metadata together with the caller's effective grant.")
+      .and(
+        zod.object({
+          fields: zod
+            .array(
+              zod
+                .object({
+                  multiple: zod
+                    .boolean()
+                    .describe('Whether it holds several values.'),
+                  name: zod
+                    .string()
+                    .describe('The name entries and filters use.'),
+                  options: zod
+                    .array(zod.string())
+                    .describe(
+                      "A select or tags field's labels in order: for Stage, the stages from\nfirst to last."
+                    ),
+                  readOnly: zod
+                    .boolean()
+                    .describe('Whether the caller cannot write it.'),
+                  required: zod
+                    .boolean()
+                    .describe('Whether every entry must have a value.'),
+                  type: zod
+                    .enum([
+                      'company',
+                      'contact',
+                      'text',
+                      'number',
+                      'checkbox',
+                      'date',
+                      'date_range',
+                      'link',
+                      'select',
+                      'tags',
+                      'person',
+                      'item',
+                      'relation',
+                      'formula',
+                    ])
+                    .describe('What a field holds.'),
+                })
+                .describe('One field of a pipeline, named as people see it.')
+            )
+            .describe(
+              "Its fields in column order; a tracked pipeline's first names its record."
+            ),
+          version: zod.number().describe("Its table's version when read."),
+        })
+      )
+      .describe('A pipeline with its fields.'),
+    totals: zod
+      .array(
+        zod
+          .object({
+            field: zod.string().describe('The field.'),
+            sum: zod.number().describe('The sum.'),
+          })
+          .describe('The sum of a number field over the matched entries.')
+      )
+      .describe('The sum of each number field over the matched entries.'),
+  })
+  .describe('The entries a query matched.');
+
+/**
+ * @summary Delete entries by id, or every entry of the records; the companies and
+contacts stay in the CRM.
+ */
+export const removeCrmPipelineEntriesParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const removeCrmPipelineEntriesBody = zod
+  .object({
+    entryIds: zod.array(zod.uuid()).optional().describe('Entries to delete.'),
+    recordIds: zod
+      .array(zod.uuid())
+      .optional()
+      .describe('Records whose every entry in the pipeline to delete.'),
+  })
+  .describe('Entries to delete; their companies and contacts stay in the CRM.');
+
+export const removeCrmPipelineEntriesResponse = zod
+  .object({
+    removed: zod
+      .array(
+        zod
+          .object({
+            entryId: zod
+              .uuid()
+              .describe("The entry: a row of the pipeline's table."),
+            fields: zod
+              .record(
+                zod.string(),
+                zod
+                  .union([
+                    zod
+                      .object({
+                        type: zod.enum(['text']),
+                        value: zod.string().describe('Free text.'),
+                      })
+                      .describe('Free text.'),
+                    zod
+                      .object({
+                        type: zod.enum(['number']),
+                        value: zod.number().describe('A number.'),
+                      })
+                      .describe('A number.'),
+                    zod
+                      .object({
+                        type: zod.enum(['checkbox']),
+                        value: zod.boolean().describe('True or false.'),
+                      })
+                      .describe('True or false.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date']),
+                        value: zod.iso.datetime({}).describe('A date-time.'),
+                      })
+                      .describe('A date-time.'),
+                    zod
+                      .object({
+                        type: zod.enum(['date_range']),
+                        value: zod
+                          .string()
+                          .describe(
+                            'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                          ),
+                      })
+                      .describe(
+                        'A span of time, written start\/end: 2026-10-12\/2026-10-16.'
+                      ),
+                    zod
+                      .object({
+                        type: zod.enum(['labels']),
+                        value: zod
+                          .array(zod.string())
+                          .describe("Option labels, in the cell's order."),
+                      })
+                      .describe("Option labels, in the cell's order."),
+                    zod
+                      .object({
+                        type: zod.enum(['links']),
+                        value: zod.array(zod.string()).describe('URLs.'),
+                      })
+                      .describe('URLs.'),
+                    zod
+                      .object({
+                        type: zod.enum(['references']),
+                        value: zod
+                          .array(zod.string())
+                          .describe(
+                            'Macro ids: people as macro| user ids, records or other items.'
+                          ),
+                      })
+                      .describe(
+                        'Macro ids: people as macro| user ids, records or other items.'
+                      ),
+                  ])
+                  .describe("A stored value in its field's own terms.")
+              )
+              .describe('Its other fields that hold a value, by name.'),
+            record: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    detail: zod
+                      .string()
+                      .nullish()
+                      .describe("A company's domain or a contact's email."),
+                    id: zod.uuid().describe('The CRM company or contact id.'),
+                    name: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Its name; missing when the caller cannot see the record.'
+                      ),
+                  })
+                  .describe('The company or contact an entry tracks.'),
+              ])
+              .optional(),
+          })
+          .describe('One pipeline entry.')
+      )
+      .describe('Each entry as it was.'),
+    version: zod
+      .number()
+      .nullish()
+      .describe(
+        "The table's version after the write; missing when nothing was written."
+      ),
+  })
+  .describe('The entries deleted.');
+
+/**
+ * @summary Save every entry as a CSV file in the caller's files, laid out as
+`/csv` returns it.
+ */
+export const exportCrmPipelineCsvParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const exportCrmPipelineCsvResponseRowsMin = 0;
+
+export const exportCrmPipelineCsvResponse = zod
+  .object({
+    complete: zod
+      .boolean()
+      .describe(
+        'Whether every entry was written; a pipeline beyond 5000 entries is cut.'
+      ),
+    documentId: zod.uuid().describe('The CSV document.'),
+    fileName: zod.string().describe('Its name.'),
+    rows: zod
+      .number()
+      .min(exportCrmPipelineCsvResponseRowsMin)
+      .describe('Entries written.'),
+  })
+  .describe("A pipeline saved as a CSV file in the caller's files.");
+
+/**
+ * @summary Add a CSV's rows as entries, matching its columns to fields by name and
+creating the companies or contacts the team lacks. Records already in the
+pipeline are not added again.
+ */
+export const importCrmPipelineCsvParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const importCrmPipelineCsvBody = zod
+  .object({
+    csv: zod.string().nullish().describe('The CSV text.'),
+    documentId: zod
+      .uuid()
+      .nullish()
+      .describe('A CSV document the caller can open.'),
+  })
+  .describe('A CSV to import: exactly one of its text or a CSV file in Macro.');
+
+export const importCrmPipelineCsvResponseAddedMin = 0;
+
+export const importCrmPipelineCsvResponseAlreadyPresentMin = 0;
+
+export const importCrmPipelineCsvResponseCreatedRecordsMin = 0;
+
+export const importCrmPipelineCsvResponseSkippedRowsMin = 0;
+
+export const importCrmPipelineCsvResponse = zod
+  .object({
+    added: zod
+      .number()
+      .min(importCrmPipelineCsvResponseAddedMin)
+      .describe('Entries added.'),
+    addedOptions: zod
+      .array(
+        zod
+          .object({
+            field: zod.string().describe('The field.'),
+            labels: zod.array(zod.string()).describe('The labels.'),
+          })
+          .describe('Labels to add to a select field.')
+      )
+      .describe("Labels added to select fields so the CSV's values fit."),
+    alreadyPresent: zod
+      .number()
+      .min(importCrmPipelineCsvResponseAlreadyPresentMin)
+      .describe('Rows whose record the pipeline already had.'),
+    createdRecords: zod
+      .number()
+      .min(importCrmPipelineCsvResponseCreatedRecordsMin)
+      .describe('Companies or contacts the import created.'),
+    filledFields: zod
+      .array(zod.string())
+      .describe('Pipeline fields the CSV filled.'),
+    ignoredColumns: zod
+      .array(zod.string())
+      .describe('CSV columns matching no field the import can fill.'),
+    invalid: zod
+      .array(
+        zod
+          .object({
+            key: zod
+              .string()
+              .describe("The company's domain or the contact's email."),
+            reason: zod.string().describe('What went wrong.'),
+          })
+          .describe('A record an import could not add, and why.')
+      )
+      .describe('Rows refused for a value their field cannot hold.'),
+    pipelineId: zod.uuid().describe('The pipeline filled.'),
+    pipelineName: zod.string().describe('Its name.'),
+    skippedRows: zod
+      .number()
+      .min(importCrmPipelineCsvResponseSkippedRowsMin)
+      .describe('Rows without a domain or email.'),
+    unresolved: zod
+      .array(
+        zod
+          .object({
+            key: zod
+              .string()
+              .describe("The company's domain or the contact's email."),
+            reason: zod.string().describe('What went wrong.'),
+          })
+          .describe('A record an import could not add, and why.')
+      )
+      .describe('Records that could not be found or created.'),
+  })
+  .describe('What a pipeline import did.');
 
 /**
  * @summary Rename a pipeline.
@@ -11453,7 +13990,7 @@ export const getCrmTeamSettingsResponse = zod
       ),
   })
   .describe(
-    "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH \/team\/crm` on the auth service)."
+    "The team's CRM configuration (everything on `team_crm_settings`\nexcept the retired `crm_enabled` flag). Email contribution consent and\nexclusions are managed separately through `\/crm\/email-privacy`."
   );
 
 /**
@@ -11569,7 +14106,7 @@ export const putCrmTeamSettingsResponse = zod
       ),
   })
   .describe(
-    "The team's CRM configuration (everything on `team_crm_settings`\nexcept the `crm_enabled` killswitch, which is managed via\n`PATCH \/team\/crm` on the auth service)."
+    "The team's CRM configuration (everything on `team_crm_settings`\nexcept the retired `crm_enabled` flag). Email contribution consent and\nexclusions are managed separately through `\/crm\/email-privacy`."
   );
 
 /**
@@ -11685,10 +14222,25 @@ export const createDatabaseBody = zod
   .describe('Request body for creating a database.');
 
 /**
- * @summary Save an immutable query. Editing a question saves a new one.
+ * @summary Save a question: a `SELECT` that compiles against the caller's databases,
+whose chart columns, when given, are ones it returns. Saved questions
+never change; editing one saves a new one.
  */
 export const saveDatabaseQueryBody = zod
   .object({
+    chart: zod
+      .object({
+        color: zod
+          .string()
+          .optional()
+          .describe('The column whose values split the series.'),
+        x: zod.string().describe('The label column.'),
+        y: zod
+          .array(zod.string())
+          .describe('The value columns, each a number.'),
+      })
+      .optional()
+      .describe('The result columns a chart of a saved question plots.'),
     databaseId: zod
       .uuid()
       .optional()
@@ -11704,7 +14256,7 @@ export const saveDatabaseQueryBody = zod
       })
       .describe('A versioned query definition.'),
   })
-  .describe('Request body for saving a query.');
+  .describe('Request body for saving a question.');
 
 /**
  * @summary A saved query's definition, for its creator or a viewer of its database.
@@ -18608,6 +21160,22 @@ export const createSnippetHandlerResponse = zod
   .describe('Response for creating a snippet.');
 
 /**
+ * @summary Create a blank native spreadsheet, ready to read and edit.
+ */
+export const createSpreadsheetBody = zod
+  .object({
+    documentName: zod.string().describe('Spreadsheet name.'),
+    projectId: zod.uuid().nullish().describe('Optional parent project.'),
+  })
+  .describe('Request to create a blank native spreadsheet.');
+
+export const createSpreadsheetResponse = zod
+  .object({
+    documentId: zod.string().describe("The new spreadsheet's document ID."),
+  })
+  .describe('A created native spreadsheet.');
+
+/**
  * @summary Creates a task document with properties and initialized markdown content in
 one backend-owned lifecycle.
  */
@@ -20318,6 +22886,470 @@ export const getDocumentBranchNameResponse = zod
   .describe('Branch name response.');
 
 /**
+ * @summary Edit a canvas by natural-language instructions with edit access, through
+EditCanvas's editor, AI admission and billing.
+ */
+export const editCanvasWithAiParams = zod.object({
+  document_id: zod.string().describe('Canvas document identity'),
+});
+
+export const editCanvasWithAiBody = zod
+  .object({
+    instructions: zod
+      .string()
+      .min(1)
+      .describe(
+        'Natural-language instructions, naming items by id where they exist.'
+      ),
+  })
+  .describe('What to change, in words.');
+
+export const editCanvasWithAiResponseOperationsAppliedMin = 0;
+
+export const editCanvasWithAiResponse = zod
+  .object({
+    clarification: zod
+      .string()
+      .nullish()
+      .describe(
+        'What the editor needs to know to finish, when it applied part of the\nedit and stopped; the applied part stays.'
+      ),
+    operationsApplied: zod
+      .number()
+      .min(editCanvasWithAiResponseOperationsAppliedMin)
+      .describe('Operations the live scene acknowledged.'),
+    summary: zod.string().describe('What the editor did, in words.'),
+  })
+  .describe('A completed edit by instructions.');
+
+/**
+ * @summary Apply one batch of CanvasEditor code with edit access, against the revision
+it was planned on, without a model. The batch validates, measures text and
+commits once, or not at all.
+ */
+export const applyCanvasEditsParams = zod.object({
+  document_id: zod.string().describe('Canvas document identity'),
+});
+
+export const applyCanvasEditsBody = zod
+  .object({
+    code: zod
+      .string()
+      .min(1)
+      .describe(
+        'JavaScript using `editor` (and `snippets`), as ApplyCanvasEdits runs it.'
+      ),
+    expectedRevision: zod
+      .string()
+      .describe(
+        'The revision the batch was planned against, from a fresh scene read.'
+      ),
+    snippets: zod
+      .record(zod.string(), zod.string())
+      .nullish()
+      .describe('Plain text values the code reads as `snippets.<key>`.'),
+  })
+  .describe('One batch of CanvasEditor code to apply against a revision.');
+
+export const applyCanvasEditsResponseOperationsAppliedMin = 0;
+
+export const applyCanvasEditsResponse = zod
+  .object({
+    operationsApplied: zod
+      .number()
+      .min(applyCanvasEditsResponseOperationsAppliedMin)
+      .describe('Operations the live scene acknowledged.'),
+    revision: zod.string().describe("The scene's revision after the batch."),
+    scene: zod
+      .object({})
+      .describe(
+        'The scene after the batch, with `textLayout` for measured text.'
+      ),
+    summary: zod.string().describe('What happened, in words.'),
+  })
+  .describe('A committed batch.');
+
+/**
+ * @summary Render a canvas to a PNG with view access, with the Canvas renderer, and
+keep it as a static file owned by the caller. No model runs.
+ */
+export const renderCanvasParams = zod.object({
+  document_id: zod.string().describe('Canvas document identity'),
+});
+
+export const renderCanvasBody = zod
+  .object({
+    crop: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            height: zod.number().describe('Positive world height.'),
+            width: zod.number().describe('Positive world width.'),
+            x: zod.number().describe('World x coordinate.'),
+            y: zod.number().describe('World y coordinate.'),
+          })
+          .describe('World-space crop or object bounds.'),
+      ])
+      .optional(),
+    itemIds: zod
+      .array(zod.string())
+      .nullish()
+      .describe('Items to fit the image to, at most 100.'),
+  })
+  .describe('What to render.');
+
+export const renderCanvasResponseHeightMin = 0;
+
+export const renderCanvasResponseWidthMin = 0;
+
+export const renderCanvasResponse = zod
+  .object({
+    crop: zod
+      .object({
+        height: zod.number().describe('Positive world height.'),
+        width: zod.number().describe('Positive world width.'),
+        x: zod.number().describe('World x coordinate.'),
+        y: zod.number().describe('World y coordinate.'),
+      })
+      .describe('World-space crop or object bounds.'),
+    fileId: zod.string().describe('Static file id of the PNG.'),
+    height: zod
+      .number()
+      .min(renderCanvasResponseHeightMin)
+      .describe('Image height in pixels.'),
+    objects: zod
+      .array(
+        zod
+          .object({
+            bounds: zod
+              .object({
+                height: zod.number().describe('Positive world height.'),
+                width: zod.number().describe('Positive world width.'),
+                x: zod.number().describe('World x coordinate.'),
+                y: zod.number().describe('World y coordinate.'),
+              })
+              .describe('World-space crop or object bounds.'),
+            id: zod.string().describe('Canvas item ID.'),
+          })
+          .describe('Stable object-to-image mapping.')
+      )
+      .describe('Items in the image, with their world bounds.'),
+    revision: zod.string().describe('Revision of the scene the image shows.'),
+    textLayout: zod
+      .array(
+        zod
+          .object({
+            bounds: zod
+              .object({
+                height: zod.number().describe('Positive world height.'),
+                width: zod.number().describe('Positive world width.'),
+                x: zod.number().describe('World x coordinate.'),
+                y: zod.number().describe('World y coordinate.'),
+              })
+              .describe('World-space crop or object bounds.'),
+            id: zod.string().describe('Stable item ID.'),
+            overflow: zod
+              .boolean()
+              .describe(
+                'Whether the DOM text exceeds its intended text frame.'
+              ),
+          })
+          .describe(
+            'Actual browser text bounds and overflow for a read-only render.'
+          )
+      )
+      .describe('Rendered text bounds and whether text overflows its frame.'),
+    unavailable: zod
+      .array(
+        zod
+          .object({
+            id: zod.string().describe('Canvas item ID.'),
+            reason: zod
+              .string()
+              .describe('Why no referenced resource was loaded.'),
+          })
+          .describe('Explicitly unavailable referenced content.')
+      )
+      .describe('Referenced content the renderer could not show, and why.'),
+    url: zod.string().describe('Permanent URL of the PNG.'),
+    width: zod
+      .number()
+      .min(renderCanvasResponseWidthMin)
+      .describe('Image width in pixels.'),
+  })
+  .describe(
+    'A PNG of the canvas, stored as a static file owned by the caller.'
+  );
+
+/**
+ * @summary Read a canvas's live scene with view access: stable item ids, containment
+and order, transforms, world bounds, shapes and text. No model runs.
+ */
+export const readCanvasSceneParams = zod.object({
+  document_id: zod.string().describe('Canvas document identity'),
+});
+
+export const readCanvasSceneBody = zod
+  .object({
+    format: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['scene', 'overview'])
+          .describe('Scene representation requested by a reader.'),
+      ])
+      .optional(),
+    itemIds: zod
+      .array(zod.string())
+      .nullish()
+      .describe(
+        'Stable item ids to read, at most 100; omit for the whole scene, up to\n300 items.'
+      ),
+  })
+  .describe('Which part of the scene to read.');
+
+export const readCanvasSceneResponse = zod
+  .object({
+    revision: zod
+      .string()
+      .describe(
+        "The scene's immutable revision; pass it as `expectedRevision` to edit."
+      ),
+    scene: zod
+      .object({})
+      .describe(
+        'The scene: `rootId`, `totalItems`, `matchedItems`, `truncated` and\n`items` with stable ids, transforms, world bounds, shapes and text.'
+      ),
+  })
+  .describe('The live scene at one revision.');
+
+/**
+ * @summary Start a comment thread anchored to a quoted passage of a markdown or Word
+document, with the caller's comment access. On markdown the passage is
+marked in the live document first, and nothing is posted when the quote is
+ambiguous or missing.
+ */
+export const commentOnDocumentTextParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const commentOnDocumentTextBody = zod
+  .object({
+    content: zod.string().describe('Comment body in macro markdown.'),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .optional()
+      .describe(
+        'The people and items the body mentions, notified as in any comment.'
+      ),
+    occurrence: zod
+      .number()
+      .min(1)
+      .nullish()
+      .describe(
+        'Which appearance of the passage, counting from 1 in document order.\nOnly needed when it appears more than once.'
+      ),
+    quote: zod
+      .string()
+      .min(1)
+      .describe(
+        'The passage to comment on, quoted exactly as the document reads: plain\ntext without markdown syntax, within one paragraph, heading, list item\nor table cell.'
+      ),
+  })
+  .describe('A comment on a quoted passage.');
+
+export const commentOnDocumentTextResponse = zod
+  .object({
+    comment: zod
+      .object({
+        attachments: zod
+          .array(
+            zod
+              .object({
+                created_at: zod.iso
+                  .datetime({})
+                  .describe('When the attachment was added.'),
+                entity_id: zod.string().describe('Attached entity identifier.'),
+                entity_type: zod.string().describe('Attached entity type.'),
+                height: zod
+                  .number()
+                  .nullish()
+                  .describe('Optional media height.'),
+                id: zod.uuid().describe('Attachment UUID.'),
+                width: zod.number().nullish().describe('Optional media width.'),
+              })
+              .describe('An entity attached to a message.')
+          )
+          .describe('Attached entities.'),
+        bot_profile: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+                name: zod.string().describe('Bot display name.'),
+              })
+              .describe(
+                'Public bot profile attached to bot-authored messages.'
+              ),
+          ])
+          .optional(),
+        content: zod.string().describe('Macro Markdown body.'),
+        created_at: zod.iso.datetime({}).describe('Creation time.'),
+        deleted_at: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('Message tombstone, independent of thread deletion.'),
+        edited_at: zod.iso
+          .datetime({})
+          .nullish()
+          .describe('Last content edit, if any.'),
+        guest_name: zod
+          .string()
+          .nullish()
+          .describe(
+            'Display name of a verified call guest, retained after the call ends.'
+          ),
+        id: zod.uuid().describe('Message UUID.'),
+        imported_author: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                name: zod
+                  .string()
+                  .describe(
+                    'Original author text; never interpreted as an authenticated principal.'
+                  ),
+              })
+              .describe(
+                'Display attribution for a comment imported from an external document.'
+              ),
+          ])
+          .optional(),
+        kind: zod
+          .enum(['message', 'call_root'])
+          .optional()
+          .describe(
+            'What a persisted message is. Set by the server, never by a client.'
+          ),
+        mentions: zod
+          .array(
+            zod
+              .object({
+                entity_id: zod
+                  .string()
+                  .describe('Mentioned entity identifier.'),
+                entity_type: zod.string().describe('Mentioned entity type.'),
+              })
+              .describe('A mention tracked in a message body.')
+          )
+          .describe(
+            'Tracked mentions, retained when a caller changes attachments only.'
+          ),
+        parent: zod
+          .union([
+            zod
+              .object({
+                id: zod
+                  .uuid()
+                  .describe('A channel, including direct messages.'),
+                type: zod.enum(['channel']),
+              })
+              .describe('A channel, including direct messages.'),
+            zod
+              .object({
+                id: zod
+                  .string()
+                  .describe(
+                    'A validated document identifier. Historical document ids need not be UUIDs.'
+                  ),
+                type: zod.enum(['document']),
+              })
+              .describe('A document, including tasks and PDFs.'),
+            zod
+              .object({
+                id: zod
+                  .uuid()
+                  .describe(
+                    'An initiative, presented as a project in the application.'
+                  ),
+                type: zod.enum(['initiative']),
+              })
+              .describe(
+                'An initiative, presented as a project in the application.'
+              ),
+            zod
+              .object({
+                id: zod.uuid().describe('A CRM company.'),
+                type: zod.enum(['crm_company']),
+              })
+              .describe('A CRM company.'),
+            zod
+              .object({
+                id: zod.uuid().describe('A CRM contact.'),
+                type: zod.enum(['crm_contact']),
+              })
+              .describe('A CRM contact.'),
+            zod
+              .object({
+                id: zod
+                  .uuid()
+                  .describe('A video call and its persistent chat thread.'),
+                type: zod.enum(['call']),
+              })
+              .describe('A video call and its persistent chat thread.'),
+          ])
+          .describe(
+            'The entity whose permissions and lifecycle govern a message.'
+          ),
+        reactions: zod
+          .array(
+            zod
+              .object({
+                emoji: zod.string().describe('Emoji being reacted with.'),
+                users: zod.array(zod.string()).describe('User identifiers.'),
+              })
+              .describe('Reaction emoji and the users who added it.')
+          )
+          .describe('Aggregated reactions.'),
+        sender_id: zod
+          .string()
+          .describe('Authenticated actor or owner of imported content.'),
+        thread_id: zod
+          .uuid()
+          .nullish()
+          .describe('Root message UUID for replies; absent on roots.'),
+        triggered_by: zod
+          .string()
+          .nullish()
+          .describe('User who triggered a bot-authored message.'),
+        triggered_via: zod
+          .string()
+          .nullish()
+          .describe(
+            'Self-reported name of the client the user triggered it through, such\nas \"Claude Code\"; a display label only.'
+          ),
+        updated_at: zod.iso.datetime({}).describe('Last persisted update.'),
+      })
+      .describe(
+        'Shared message representation for channel timelines and entity discussions.'
+      ),
+    markedText: zod
+      .string()
+      .describe('The text the comment is anchored to, as the document reads.'),
+  })
+  .describe('The thread the comment started.');
+
+/**
  * Copies an existing document, creating a new document with the same content.
 Does not require re-uploading the document file.
  * @summary Handler for `POST /documents/{document_id}/copy`.
@@ -21054,6 +24086,61 @@ export const getDocumentLocationV3Response = zod
       .describe('Sync-service backed content.'),
   ])
   .describe('Location response with content lifecycle metadata.');
+
+/**
+ * @summary Read a markdown document's or task's body with the revision it was read
+at, to write it back with `PUT` without overwriting anyone's edits.
+ */
+export const getDocumentMarkdownParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const getDocumentMarkdownResponse = zod
+  .object({
+    markdown: zod
+      .string()
+      .describe('The body as Markdown, in the format `text-content` returns.'),
+    revision: zod
+      .string()
+      .describe(
+        "The document's version, as sync-service encodes it. Pass it back to\nwrite the body only if nobody has changed the document since."
+      ),
+  })
+  .describe("A markdown document's body and the revision it was read at.");
+
+/**
+ * @summary Replace a markdown document's or task's body, only if the document is still
+at the revision the caller read. Top-level blocks whose Markdown is
+unchanged keep their comments and formatting; changed blocks are replaced.
+ */
+export const writeDocumentMarkdownParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const writeDocumentMarkdownBody = zod
+  .object({
+    expectedRevision: zod
+      .string()
+      .min(1)
+      .describe(
+        'The `revision` from the read this body is based on. The write applies\nonly if the document is still at this revision.'
+      ),
+    markdown: zod.string().describe('The whole new body, as Markdown.'),
+  })
+  .describe('The body to write and the revision it was written against.');
+
+export const writeDocumentMarkdownResponse = zod
+  .object({
+    changed: zod
+      .boolean()
+      .describe(
+        'Whether the body changed; `false` when it already read that way.'
+      ),
+    revision: zod.string().describe("The document's version after the write."),
+  })
+  .describe(
+    'A body write that landed, or found the body already reading that way.'
+  );
 
 /**
  * @summary Permanently deletes a document.
@@ -29122,6 +32209,2985 @@ export const setSkillDescriptionResponse = zod
   .describe("A skill's routing description.");
 
 /**
+ * A client that disconnects drops the worker request, which cancels the
+edit before its save.
+ * @summary Edit a native spreadsheet by instructions with the caller's edit access:
+a writer model reads the workbook and saves one atomic batch, with AI
+admission and billing. A workbook changed while it worked saves nothing
+and answers 409.
+ */
+export const editSpreadsheetWithAiParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const editSpreadsheetWithAiBody = zod
+  .object({
+    instructions: zod
+      .string()
+      .min(1)
+      .describe(
+        'Natural-language instructions. Name the sheet and the cells, columns\nor table to change, describe the outcome, and say what must stay.'
+      ),
+  })
+  .describe('What to change in a workbook, in words.');
+
+export const editSpreadsheetWithAiResponseSheetsItemColumnCountMin = 0;
+
+export const editSpreadsheetWithAiResponseSheetsItemErrorCellsMin = 0;
+
+export const editSpreadsheetWithAiResponseSheetsItemFormulaCellsMin = 0;
+
+export const editSpreadsheetWithAiResponseSheetsItemPopulatedCellsMin = 0;
+
+export const editSpreadsheetWithAiResponseSheetsItemRowCountMin = 0;
+
+export const editSpreadsheetWithAiResponse = zod
+  .object({
+    applied: zod.boolean().describe('Whether a new change was persisted.'),
+    changes: zod
+      .array(
+        zod
+          .object({
+            range: zod
+              .string()
+              .nullish()
+              .describe('Affected range, when applicable.'),
+            sheetId: zod.string().describe('Affected stable sheet identity.'),
+            summary: zod.string().describe('Human-readable change summary.'),
+            type: zod.string().describe('Operation type.'),
+          })
+          .describe('Applied edit summary.')
+      )
+      .describe('What changed, one summary per operation.'),
+    revision: zod.string().describe('Revision after the edit.'),
+    sheets: zod
+      .array(
+        zod
+          .object({
+            columnCount: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemColumnCountMin)
+              .describe('Available columns.'),
+            errorCells: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemErrorCellsMin)
+              .describe('Number of calculated errors.'),
+            formulaCells: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemFormulaCellsMin)
+              .describe('Number of formulas.'),
+            id: zod
+              .string()
+              .describe('Stable sheet identity for future calls.'),
+            name: zod.string().describe('Current sheet name.'),
+            populatedCells: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemPopulatedCellsMin)
+              .describe('Number of populated cells.'),
+            rowCount: zod
+              .number()
+              .min(editSpreadsheetWithAiResponseSheetsItemRowCountMin)
+              .describe('Available rows.'),
+            tables: zod
+              .array(
+                zod
+                  .object({
+                    columnTypes: zod
+                      .array(
+                        zod
+                          .object({
+                            column: zod
+                              .string()
+                              .describe(
+                                'Header name of the column, ignoring case.'
+                              ),
+                            type: zod
+                              .enum([
+                                'text',
+                                'number',
+                                'percent',
+                                'currency',
+                                'date',
+                                'datetime',
+                                'time',
+                                'checkbox',
+                                'dropdown',
+                                'person',
+                              ])
+                              .describe(
+                                'What a table column holds, as Google Sheets types table columns.'
+                              ),
+                          })
+                          .describe(
+                            "A table column's type, by its header name."
+                          )
+                      )
+                      .optional()
+                      .describe('Typed columns; untyped columns are left out.'),
+                    columns: zod
+                      .array(zod.string())
+                      .describe('Column names, from the header row.'),
+                    filteredColumns: zod
+                      .array(zod.string())
+                      .optional()
+                      .describe('Columns whose filters currently hide rows.'),
+                    name: zod
+                      .string()
+                      .describe('Table name, as in Sales[Amount].'),
+                    range: zod
+                      .string()
+                      .describe(
+                        'A1 rectangle from the header row through the total row, if any.'
+                      ),
+                    totalsRow: zod
+                      .boolean()
+                      .describe('Whether the last row is a total row.'),
+                  })
+                  .describe(
+                    'A named table (an Excel table) that formulas address with structured references.'
+                  )
+              )
+              .optional()
+              .describe('Named tables on the sheet.'),
+            usedRange: zod
+              .string()
+              .nullish()
+              .describe(
+                'Bounding rectangle of used cells, or null for an empty sheet.'
+              ),
+          })
+          .describe('Compact metadata for a sheet.')
+      )
+      .describe('Every sheet after the edit.'),
+    warnings: zod
+      .array(zod.string())
+      .describe(
+        'Issues to check, such as formula errors; they are not repaired.'
+      ),
+  })
+  .describe('A completed edit by instructions.');
+
+/**
+ * @summary Evaluate scratch formulas against a native spreadsheet with view access,
+optionally with hypothetical inputs. Nothing is saved.
+ */
+export const calculateSpreadsheetParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const calculateSpreadsheetBodyOverridesItemCellsItemValueDefaultFour =
+  null;
+
+export const calculateSpreadsheetBody = zod
+  .object({
+    formulas: zod
+      .array(
+        zod
+          .object({
+            formula: zod
+              .string()
+              .describe('Excel-style formula, beginning with =.'),
+            label: zod
+              .string()
+              .nullish()
+              .describe('Optional label echoed with the result.'),
+          })
+          .describe('A scratch formula evaluated without persisting it.')
+      )
+      .describe('At most 20 formulas beginning with =.'),
+    overrides: zod
+      .array(
+        zod
+          .object({
+            cells: zod
+              .array(
+                zod
+                  .object({
+                    address: zod
+                      .string()
+                      .describe('A1 address, from A1 through XFD100000.'),
+                    value: zod
+                      .union([
+                        zod.boolean().describe('TRUE or FALSE.'),
+                        zod
+                          .number()
+                          .describe(
+                            'A number, passed to the engine exactly as written.'
+                          ),
+                        zod
+                          .string()
+                          .describe(
+                            'Text, or a formula starting with =, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}<\/m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}<\/m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}<\/m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9\/28\/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search\/read results; do not invent them. Other Markdown is literal.'
+                          ),
+                        zod
+                          .null()
+                          .describe(
+                            "Empties the cell's input; formatting stays."
+                          ),
+                      ])
+                      .describe(
+                        "A cell's new input, typed as the caller has it."
+                      ),
+                  })
+                  .describe(
+                    'Source text for one cell. Formulas start with =; a leading apostrophe forces literal text.'
+                  )
+              )
+              .describe('Cells to change in this hypothetical calculation.'),
+            sheetId: zod
+              .string()
+              .describe(
+                'Stable sheet ID or exact sheet name from ReadSpreadsheet.'
+              ),
+          })
+          .describe(
+            "Hypothetical inputs applied only to the calculation's disposable workbook."
+          )
+      )
+      .nullish()
+      .describe('Hypothetical cell inputs, never saved.'),
+    sheetId: zod
+      .string()
+      .nullish()
+      .describe(
+        'Sheet for unqualified references; defaults to the first sheet.'
+      ),
+  })
+  .describe(
+    'Scratch formulas to evaluate against a workbook, without writing anything.'
+  );
+
+export const calculateSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin = 0;
+
+export const calculateSpreadsheetResponseRangesItemCellsItemStyleIndentMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemColumnCountMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemErrorCellsMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemFormulaCellsMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemPopulatedCellsMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemRowCountMin = 0;
+
+export const calculateSpreadsheetResponseSheetsItemColumnCountMinOne = 0;
+
+export const calculateSpreadsheetResponseSheetsItemErrorCellsMinOne = 0;
+
+export const calculateSpreadsheetResponseSheetsItemFormulaCellsMinOne = 0;
+
+export const calculateSpreadsheetResponseSheetsItemPopulatedCellsMinOne = 0;
+
+export const calculateSpreadsheetResponseSheetsItemRowCountMinOne = 0;
+
+export const calculateSpreadsheetResponse = zod
+  .union([
+    zod
+      .object({
+        action: zod.enum(['read']),
+        ranges: zod
+          .array(
+            zod
+              .object({
+                cells: zod
+                  .array(
+                    zod
+                      .object({
+                        display: zod
+                          .string()
+                          .describe('Text shown in the spreadsheet.'),
+                        error: zod
+                          .string()
+                          .nullish()
+                          .describe('Explanation for an error result.'),
+                        type: zod
+                          .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                          .describe('The calculation result kind.'),
+                        value: zod
+                          .unknown()
+                          .describe(
+                            'The typed scalar. Empty cells have a null value.'
+                          ),
+                      })
+                      .describe(
+                        'A calculated scalar with its display text and optional error explanation.'
+                      )
+                      .and(
+                        zod.object({
+                          address: zod.string().describe('A1 address.'),
+                          formula: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Formula, when this input is calculated.'
+                            ),
+                          source: zod
+                            .string()
+                            .describe('Exact persisted source input.'),
+                          style: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  bold: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bold text.'),
+                                  borderBottom: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bottom border.'),
+                                  borderBottomColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Bottom border color.'),
+                                  borderBottomStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderLeft: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Left border.'),
+                                  borderLeftColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Left border color.'),
+                                  borderLeftStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderRight: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Right border.'),
+                                  borderRightColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Right border color.'),
+                                  borderRightStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderTop: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Top border.'),
+                                  borderTopColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Top border color.'),
+                                  borderTopStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  checkbox: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe(
+                                      "Show the cell's TRUE\/FALSE value as a checkbox; false removes it and keeps the value."
+                                    ),
+                                  decimals: zod
+                                    .number()
+                                    .nullish()
+                                    .describe(
+                                      'Decimal places, 0 through 10; -1 restores automatic.'
+                                    ),
+                                  fillColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Fill color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  fontFamily: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['sans', 'serif', 'mono'])
+                                        .describe('Font family.'),
+                                    ])
+                                    .optional(),
+                                  fontName: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel font name, up to 128 characters.'
+                                    ),
+                                  fontSize: zod
+                                    .number()
+                                    .min(
+                                      calculateSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      'Font size in points, 8 through 36.'
+                                    ),
+                                  format: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'general',
+                                          'number',
+                                          'currency',
+                                          'accounting',
+                                          'percent',
+                                          'date',
+                                          'time',
+                                          'scientific',
+                                          'text',
+                                        ])
+                                        .describe(
+                                          'Number interpretation and display; currency and accounting are USD and dates use UTC.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                  horizontalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'auto',
+                                          'left',
+                                          'center',
+                                          'right',
+                                        ])
+                                        .describe('Horizontal alignment.'),
+                                    ])
+                                    .optional(),
+                                  indent: zod
+                                    .number()
+                                    .min(
+                                      calculateSpreadsheetResponseRangesItemCellsItemStyleIndentMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      "Indent level, 0 through 250, as Excel's Increase Indent: each level is three spaces from the\nleft edge, or from the right edge of right-aligned cells. Centered cells ignore it."
+                                    ),
+                                  italic: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Italic text.'),
+                                  numberFormat: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel number format, up to 512 characters; it overrides the display of `format`.\nShow dates with format=date and a date code such as mmm yyyy (Jan 2026), mmm dd, yyyy,\nmm\/dd\/yyyy, dd\/mm\/yyyy, yyyy-mm-dd, d mmm yyyy or dddd, mmmm d, yyyy; times with\nformat=time and a code such as h:mm AM\/PM.'
+                                    ),
+                                  strikethrough: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Struck-through text.'),
+                                  textColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Text color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  underline: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Underlined text.'),
+                                  verticalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['top', 'middle', 'bottom'])
+                                        .describe('Vertical alignment.'),
+                                    ])
+                                    .optional(),
+                                  wrap: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Wrap text.'),
+                                })
+                                .describe(
+                                  'Sparse cell styling patch. Omitted fields remain unchanged.'
+                                ),
+                            ])
+                            .optional(),
+                        })
+                      )
+                      .describe('Cell source and calculated result.')
+                  )
+                  .describe('Cells with their sources and current results.'),
+                range: zod.string().describe('Requested or sampled rectangle.'),
+                sheetId: zod.string().describe('Stable sheet identity.'),
+                sheetName: zod.string().describe('Current sheet name.'),
+                truncated: zod
+                  .boolean()
+                  .describe(
+                    'True when a narrower follow-up read is needed to see every cell.'
+                  ),
+                validations: zod
+                  .array(
+                    zod
+                      .object({
+                        colors: zod
+                          .array(
+                            zod
+                              .object({
+                                color: zod
+                                  .string()
+                                  .describe(
+                                    'Chip color as #RRGGBB. Light colors such as #D9EAD3 keep dark text legible.'
+                                  ),
+                                item: zod
+                                  .string()
+                                  .describe(
+                                    'The choice, matched to cell text ignoring case.'
+                                  ),
+                              })
+                              .describe(
+                                "A dropdown choice's color. Cells showing the choice draw it as a chip of this color."
+                              )
+                          )
+                          .nullish()
+                          .describe("A dropdown's choice colors."),
+                        dropdown: zod
+                          .boolean()
+                          .nullish()
+                          .describe(
+                            'Whether a list rule shows its dropdown arrow.'
+                          ),
+                        formulas: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe('Rule formulas, without the leading =.'),
+                        items: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe("A dropdown's typed choices."),
+                        operator: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Comparison for number, date, time and text-length rules.'
+                          ),
+                        range: zod
+                          .string()
+                          .describe(
+                            'Cells the rule covers, as space-separated A1 ranges.'
+                          ),
+                        rejectInvalid: zod
+                          .boolean()
+                          .describe(
+                            'Whether entries that break the rule are rejected.'
+                          ),
+                        source: zod
+                          .string()
+                          .nullish()
+                          .describe("A dropdown's source range."),
+                        type: zod
+                          .string()
+                          .describe(
+                            'Rule kind: list, whole, decimal, date, time, textLength, custom, or any.'
+                          ),
+                      })
+                      .describe(
+                        'A data validation rule; list rules are dropdowns.'
+                      )
+                  )
+                  .optional()
+                  .describe(
+                    'Dropdowns and other data validation rules overlapping this range.'
+                  ),
+              })
+              .describe('Addressed range with explicit truncation.')
+          )
+          .describe('Addressed cells with raw inputs and calculated results.'),
+        revision: zod
+          .string()
+          .describe('Opaque revision required for EditSpreadsheet.'),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemColumnCountMin)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemErrorCellsMin)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemFormulaCellsMin)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemPopulatedCellsMin)
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemRowCountMin)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('All visible sheets and their used bounds.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Limits or issues the caller should account for.'),
+      })
+      .describe('Workbook inspection result.'),
+    zod
+      .object({
+        action: zod.enum(['calculate']),
+        results: zod
+          .array(
+            zod
+              .object({
+                display: zod
+                  .string()
+                  .describe('Text shown in the spreadsheet.'),
+                error: zod
+                  .string()
+                  .nullish()
+                  .describe('Explanation for an error result.'),
+                type: zod
+                  .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                  .describe('The calculation result kind.'),
+                value: zod
+                  .unknown()
+                  .describe('The typed scalar. Empty cells have a null value.'),
+              })
+              .describe(
+                'A calculated scalar with its display text and optional error explanation.'
+              )
+              .and(
+                zod.object({
+                  formula: zod.string().describe('Evaluated scratch formula.'),
+                  label: zod
+                    .string()
+                    .nullish()
+                    .describe('Caller-supplied label.'),
+                })
+              )
+              .describe('One hypothetical formula result.')
+          )
+          .describe('Results in input order.'),
+        revision: zod
+          .string()
+          .describe('Revision used for these calculations.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Calculation limits or issues.'),
+      })
+      .describe('Scratch calculation result. No persistent changes were made.'),
+    zod
+      .object({
+        action: zod.enum(['edit']),
+        applied: zod.boolean().describe('Whether a new change was persisted.'),
+        changes: zod
+          .array(
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .nullish()
+                  .describe('Affected range, when applicable.'),
+                sheetId: zod
+                  .string()
+                  .describe('Affected stable sheet identity.'),
+                summary: zod
+                  .string()
+                  .describe('Human-readable change summary.'),
+                type: zod.string().describe('Operation type.'),
+              })
+              .describe('Applied edit summary.')
+          )
+          .describe('Applied operation summaries.'),
+        revision: zod
+          .string()
+          .describe(
+            'Revision after the edit; use a fresh read before further editing.'
+          ),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemColumnCountMinOne)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemErrorCellsMinOne)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemFormulaCellsMinOne)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(
+                    calculateSpreadsheetResponseSheetsItemPopulatedCellsMinOne
+                  )
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(calculateSpreadsheetResponseSheetsItemRowCountMinOne)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('Sheet metadata after editing.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Issues requiring inspection, including formula errors.'),
+      })
+      .describe('Result of a persisted atomic edit.'),
+  ])
+  .describe('Structured output from a deterministic workbook operation.');
+
+/**
+ * @summary Apply one atomic batch of operations to a native spreadsheet with edit
+access. Every operation validates before anything is saved; a workbook that
+changed since `expectedRevision` rejects the batch with 409.
+ */
+export const editSpreadsheetParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const editSpreadsheetBodyOperationsItemCellsItemValueDefaultFour = null;
+export const editSpreadsheetBodyOperationsItemStyleFontSizeMin = 0;
+
+export const editSpreadsheetBodyOperationsItemStyleIndentMin = 0;
+
+export const editSpreadsheetBodyOperationsItemCountMin = 0;
+
+export const editSpreadsheetBodyOperationsItemColumnsItemWidthMin = 0;
+
+export const editSpreadsheetBody = zod
+  .object({
+    expectedRevision: zod
+      .string()
+      .describe(
+        'The revision a read returned; a changed workbook rejects the batch.'
+      ),
+    operations: zod
+      .array(
+        zod
+          .union([
+            zod
+              .object({
+                cells: zod
+                  .array(
+                    zod
+                      .object({
+                        address: zod
+                          .string()
+                          .describe('A1 address, from A1 through XFD100000.'),
+                        value: zod
+                          .union([
+                            zod.boolean().describe('TRUE or FALSE.'),
+                            zod
+                              .number()
+                              .describe(
+                                'A number, passed to the engine exactly as written.'
+                              ),
+                            zod
+                              .string()
+                              .describe(
+                                'Text, or a formula starting with =, at most 10,000 characters. Macro links render as mention pills.\nFor named pills, use the same inline tags as docs: <m-user-mention>{\"userId\":\"macro|person@example.com\",\"email\":\"person@example.com\",\"displayName\":\"Person\"}<\/m-user-mention>\nor <m-document-mention>{\"documentId\":\"UUID\",\"documentName\":\"Budget\",\"blockName\":\"spreadsheet\"}<\/m-document-mention>.\nA date chip is <m-date-mention>{\"date\":\"2026-09-28T00:00:00.000Z\",\"displayFormat\":\"Sep 28\"}<\/m-date-mention>; a cell holding only that chip calculates as the date.\nPlain dates such as 9\/28\/2026 or =DATE(2026,9,28) display as dates without a number format.\nTags can be mixed with ordinary text. Use IDs from search\/read results; do not invent them. Other Markdown is literal.'
+                              ),
+                            zod
+                              .null()
+                              .describe(
+                                "Empties the cell's input; formatting stays."
+                              ),
+                          ])
+                          .describe(
+                            "A cell's new input, typed as the caller has it."
+                          ),
+                      })
+                      .describe(
+                        'Source text for one cell. Formulas start with =; a leading apostrophe forces literal text.'
+                      )
+                  )
+                  .describe('Cells and their new source inputs.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['set_cells']),
+              })
+              .describe(
+                'Set raw values\/formulas while preserving existing formatting.'
+              ),
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .describe('A1 rectangle, for example A1:D20.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                style: zod
+                  .object({
+                    bold: zod.boolean().nullish().describe('Bold text.'),
+                    borderBottom: zod
+                      .boolean()
+                      .nullish()
+                      .describe('Bottom border.'),
+                    borderBottomColor: zod
+                      .string()
+                      .nullish()
+                      .describe('Bottom border color.'),
+                    borderBottomStyle: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'reset',
+                            'thin',
+                            'medium',
+                            'thick',
+                            'double',
+                            'dotted',
+                            'dashed',
+                            'dashDot',
+                            'dashDotDot',
+                            'slantDashDot',
+                            'hair',
+                            'mediumDashed',
+                            'mediumDashDot',
+                            'mediumDashDotDot',
+                          ])
+                          .describe('Excel border line style.'),
+                      ])
+                      .optional(),
+                    borderLeft: zod
+                      .boolean()
+                      .nullish()
+                      .describe('Left border.'),
+                    borderLeftColor: zod
+                      .string()
+                      .nullish()
+                      .describe('Left border color.'),
+                    borderLeftStyle: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'reset',
+                            'thin',
+                            'medium',
+                            'thick',
+                            'double',
+                            'dotted',
+                            'dashed',
+                            'dashDot',
+                            'dashDotDot',
+                            'slantDashDot',
+                            'hair',
+                            'mediumDashed',
+                            'mediumDashDot',
+                            'mediumDashDotDot',
+                          ])
+                          .describe('Excel border line style.'),
+                      ])
+                      .optional(),
+                    borderRight: zod
+                      .boolean()
+                      .nullish()
+                      .describe('Right border.'),
+                    borderRightColor: zod
+                      .string()
+                      .nullish()
+                      .describe('Right border color.'),
+                    borderRightStyle: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'reset',
+                            'thin',
+                            'medium',
+                            'thick',
+                            'double',
+                            'dotted',
+                            'dashed',
+                            'dashDot',
+                            'dashDotDot',
+                            'slantDashDot',
+                            'hair',
+                            'mediumDashed',
+                            'mediumDashDot',
+                            'mediumDashDotDot',
+                          ])
+                          .describe('Excel border line style.'),
+                      ])
+                      .optional(),
+                    borderTop: zod.boolean().nullish().describe('Top border.'),
+                    borderTopColor: zod
+                      .string()
+                      .nullish()
+                      .describe('Top border color.'),
+                    borderTopStyle: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'reset',
+                            'thin',
+                            'medium',
+                            'thick',
+                            'double',
+                            'dotted',
+                            'dashed',
+                            'dashDot',
+                            'dashDotDot',
+                            'slantDashDot',
+                            'hair',
+                            'mediumDashed',
+                            'mediumDashDot',
+                            'mediumDashDotDot',
+                          ])
+                          .describe('Excel border line style.'),
+                      ])
+                      .optional(),
+                    checkbox: zod
+                      .boolean()
+                      .nullish()
+                      .describe(
+                        "Show the cell's TRUE\/FALSE value as a checkbox; false removes it and keeps the value."
+                      ),
+                    decimals: zod
+                      .number()
+                      .nullish()
+                      .describe(
+                        'Decimal places, 0 through 10; -1 restores automatic.'
+                      ),
+                    fillColor: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Fill color as #RRGGBB; empty string resets it.'
+                      ),
+                    fontFamily: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['sans', 'serif', 'mono'])
+                          .describe('Font family.'),
+                      ])
+                      .optional(),
+                    fontName: zod
+                      .string()
+                      .nullish()
+                      .describe('Exact Excel font name, up to 128 characters.'),
+                    fontSize: zod
+                      .number()
+                      .min(editSpreadsheetBodyOperationsItemStyleFontSizeMin)
+                      .nullish()
+                      .describe('Font size in points, 8 through 36.'),
+                    format: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum([
+                            'general',
+                            'number',
+                            'currency',
+                            'accounting',
+                            'percent',
+                            'date',
+                            'time',
+                            'scientific',
+                            'text',
+                          ])
+                          .describe(
+                            'Number interpretation and display; currency and accounting are USD and dates use UTC.'
+                          ),
+                      ])
+                      .optional(),
+                    horizontalAlign: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['auto', 'left', 'center', 'right'])
+                          .describe('Horizontal alignment.'),
+                      ])
+                      .optional(),
+                    indent: zod
+                      .number()
+                      .min(editSpreadsheetBodyOperationsItemStyleIndentMin)
+                      .nullish()
+                      .describe(
+                        "Indent level, 0 through 250, as Excel's Increase Indent: each level is three spaces from the\nleft edge, or from the right edge of right-aligned cells. Centered cells ignore it."
+                      ),
+                    italic: zod.boolean().nullish().describe('Italic text.'),
+                    numberFormat: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Exact Excel number format, up to 512 characters; it overrides the display of `format`.\nShow dates with format=date and a date code such as mmm yyyy (Jan 2026), mmm dd, yyyy,\nmm\/dd\/yyyy, dd\/mm\/yyyy, yyyy-mm-dd, d mmm yyyy or dddd, mmmm d, yyyy; times with\nformat=time and a code such as h:mm AM\/PM.'
+                      ),
+                    strikethrough: zod
+                      .boolean()
+                      .nullish()
+                      .describe('Struck-through text.'),
+                    textColor: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Text color as #RRGGBB; empty string resets it.'
+                      ),
+                    underline: zod
+                      .boolean()
+                      .nullish()
+                      .describe('Underlined text.'),
+                    verticalAlign: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .enum(['top', 'middle', 'bottom'])
+                          .describe('Vertical alignment.'),
+                      ])
+                      .optional(),
+                    wrap: zod.boolean().nullish().describe('Wrap text.'),
+                  })
+                  .describe(
+                    'Sparse cell styling patch. Omitted fields remain unchanged.'
+                  ),
+                type: zod.enum(['format_cells']),
+              })
+              .describe('Apply a sparse formatting patch to a rectangle.'),
+            zod
+              .object({
+                clearFormatting: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    'Defaults to false; preserves formatting unless requested.'
+                  ),
+                range: zod.string().describe('A1 rectangle.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['clear_cells']),
+              })
+              .describe(
+                "Clear a rectangle's inputs, optionally its formatting too."
+              ),
+            zod
+              .object({
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                sourceRange: zod.string().describe('Source rectangle.'),
+                targetRange: zod.string().describe('Target rectangle.'),
+                type: zod.enum(['fill_cells']),
+              })
+              .describe(
+                'Repeat a source rectangle into a target using relative formula translation.'
+              ),
+            zod
+              .object({
+                name: zod
+                  .string()
+                  .describe(
+                    'Unique Excel-compatible name, at most 31 characters.'
+                  ),
+                type: zod.enum(['add_sheet']),
+              })
+              .describe(
+                'Add an empty sheet; later operations may address it by this name.'
+              ),
+            zod
+              .object({
+                name: zod.string().describe('New unique name.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['rename_sheet']),
+              })
+              .describe(
+                'Rename a sheet; rejected when existing formulas directly reference its current name.'
+              ),
+            zod
+              .object({
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe('Optional unique name for the copy.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['duplicate_sheet']),
+              })
+              .describe(
+                'Duplicate a sheet, including values, formulas, styles, and layout.'
+              ),
+            zod
+              .object({
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['delete_sheet']),
+              })
+              .describe(
+                'Delete a sheet; the final sheet and directly referenced sheets are protected.'
+              ),
+            zod
+              .object({
+                count: zod
+                  .number()
+                  .min(editSpreadsheetBodyOperationsItemCountMin)
+                  .describe('Number of rows to append.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['append_rows']),
+              })
+              .describe('Append rows, up to the 100,000-row sheet limit.'),
+            zod
+              .object({
+                columns: zod
+                  .array(
+                    zod
+                      .object({
+                        column: zod
+                          .string()
+                          .describe('Column letter A through XFD.'),
+                        width: zod
+                          .number()
+                          .min(
+                            editSpreadsheetBodyOperationsItemColumnsItemWidthMin
+                          )
+                          .describe('Width in pixels, 8 through 640.'),
+                      })
+                      .describe('A column width.')
+                  )
+                  .describe('Column widths to set.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['resize_columns']),
+              })
+              .describe('Resize one or more columns.'),
+            zod
+              .object({
+                colors: zod
+                  .array(
+                    zod
+                      .object({
+                        color: zod
+                          .string()
+                          .describe(
+                            'Chip color as #RRGGBB. Light colors such as #D9EAD3 keep dark text legible.'
+                          ),
+                        item: zod
+                          .string()
+                          .describe(
+                            'The choice, matched to cell text ignoring case.'
+                          ),
+                      })
+                      .describe(
+                        "A dropdown choice's color. Cells showing the choice draw it as a chip of this color."
+                      )
+                  )
+                  .nullish()
+                  .describe(
+                    'Optional color per choice, shown as a colored chip in cells and in the open list. With typed items, each must name one of them.'
+                  ),
+                items: zod
+                  .array(zod.string())
+                  .nullish()
+                  .describe(
+                    'Typed choices, without commas, at most 253 characters in total.'
+                  ),
+                range: zod
+                  .string()
+                  .describe('A1 rectangle, for example C2:C200.'),
+                rejectInvalid: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    'Defaults to true: reject typed entries that are not a choice. False only suggests the choices.'
+                  ),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                source: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    "Range holding the choices, for example 'Lists'!A2:A20 or A2:A20 on the same sheet."
+                  ),
+                type: zod.enum(['set_dropdown']),
+              })
+              .describe(
+                'Add an in-cell dropdown (list data validation) to a rectangle, replacing any validation there.\nGive exactly one of items or source. Cell values are unchanged; set them separately.'
+              ),
+            zod
+              .object({
+                range: zod.string().describe('A1 rectangle.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['clear_validation']),
+              })
+              .describe(
+                'Remove dropdowns and any other data validation from a rectangle.'
+              ),
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .describe('A1 rectangle, for example D2:D50.'),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                type: zod.enum(['insert_checkboxes']),
+              })
+              .describe(
+                'Turn a rectangle into checkboxes backed by TRUE\/FALSE values: blank cells become FALSE\n(unchecked) and other values are kept. Check or uncheck them with set_cells TRUE or FALSE.'
+              ),
+            zod
+              .object({
+                columnTypes: zod
+                  .array(
+                    zod
+                      .object({
+                        column: zod
+                          .string()
+                          .describe(
+                            'Header name of the column, ignoring case.'
+                          ),
+                        type: zod
+                          .enum([
+                            'text',
+                            'number',
+                            'percent',
+                            'currency',
+                            'date',
+                            'datetime',
+                            'time',
+                            'checkbox',
+                            'dropdown',
+                            'person',
+                          ])
+                          .describe(
+                            'What a table column holds, as Google Sheets types table columns.'
+                          ),
+                      })
+                      .describe("A table column's type, by its header name.")
+                  )
+                  .nullish()
+                  .describe(
+                    "Column types by header name. A type formats the column's data cells; checkbox makes\nthem checkboxes and dropdown offers the column's values as colored choices."
+                  ),
+                name: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Unique table name, such as Sales; spaces become underscores. Defaults to the next free\nTableN.'
+                  ),
+                range: zod
+                  .string()
+                  .describe(
+                    'A1 rectangle including the header row, for example A1:D20. Must not overlap a table.'
+                  ),
+                sheetId: zod
+                  .string()
+                  .describe('Stable sheet ID or exact name.'),
+                totalsRow: zod
+                  .boolean()
+                  .nullish()
+                  .describe(
+                    'Add a total row below the data, which must be empty. Defaults to false.'
+                  ),
+                type: zod.enum(['create_table']),
+              })
+              .describe(
+                'Convert a rectangle to a named table (an Excel table). Its first row becomes the header\nrow; blank or repeated headers are named. Formulas can then use structured references\nsuch as Table1[Amount], [@Amount] or Table1 for its data, and each header gets sort and\nfilter controls. Columns take the type their values suggest unless column_types says.'
+              ),
+          ])
+          .describe(
+            'One operation in an atomic workbook edit. All operations validate before any write.'
+          )
+      )
+      .describe('Between 1 and 25 operations, validated and saved together.'),
+  })
+  .describe(
+    'One atomic batch of operations against the revision it was planned on.'
+  );
+
+export const editSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin = 0;
+
+export const editSpreadsheetResponseRangesItemCellsItemStyleIndentMin = 0;
+
+export const editSpreadsheetResponseSheetsItemColumnCountMin = 0;
+
+export const editSpreadsheetResponseSheetsItemErrorCellsMin = 0;
+
+export const editSpreadsheetResponseSheetsItemFormulaCellsMin = 0;
+
+export const editSpreadsheetResponseSheetsItemPopulatedCellsMin = 0;
+
+export const editSpreadsheetResponseSheetsItemRowCountMin = 0;
+
+export const editSpreadsheetResponseSheetsItemColumnCountMinOne = 0;
+
+export const editSpreadsheetResponseSheetsItemErrorCellsMinOne = 0;
+
+export const editSpreadsheetResponseSheetsItemFormulaCellsMinOne = 0;
+
+export const editSpreadsheetResponseSheetsItemPopulatedCellsMinOne = 0;
+
+export const editSpreadsheetResponseSheetsItemRowCountMinOne = 0;
+
+export const editSpreadsheetResponse = zod
+  .union([
+    zod
+      .object({
+        action: zod.enum(['read']),
+        ranges: zod
+          .array(
+            zod
+              .object({
+                cells: zod
+                  .array(
+                    zod
+                      .object({
+                        display: zod
+                          .string()
+                          .describe('Text shown in the spreadsheet.'),
+                        error: zod
+                          .string()
+                          .nullish()
+                          .describe('Explanation for an error result.'),
+                        type: zod
+                          .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                          .describe('The calculation result kind.'),
+                        value: zod
+                          .unknown()
+                          .describe(
+                            'The typed scalar. Empty cells have a null value.'
+                          ),
+                      })
+                      .describe(
+                        'A calculated scalar with its display text and optional error explanation.'
+                      )
+                      .and(
+                        zod.object({
+                          address: zod.string().describe('A1 address.'),
+                          formula: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Formula, when this input is calculated.'
+                            ),
+                          source: zod
+                            .string()
+                            .describe('Exact persisted source input.'),
+                          style: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  bold: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bold text.'),
+                                  borderBottom: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bottom border.'),
+                                  borderBottomColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Bottom border color.'),
+                                  borderBottomStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderLeft: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Left border.'),
+                                  borderLeftColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Left border color.'),
+                                  borderLeftStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderRight: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Right border.'),
+                                  borderRightColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Right border color.'),
+                                  borderRightStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderTop: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Top border.'),
+                                  borderTopColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Top border color.'),
+                                  borderTopStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  checkbox: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe(
+                                      "Show the cell's TRUE\/FALSE value as a checkbox; false removes it and keeps the value."
+                                    ),
+                                  decimals: zod
+                                    .number()
+                                    .nullish()
+                                    .describe(
+                                      'Decimal places, 0 through 10; -1 restores automatic.'
+                                    ),
+                                  fillColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Fill color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  fontFamily: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['sans', 'serif', 'mono'])
+                                        .describe('Font family.'),
+                                    ])
+                                    .optional(),
+                                  fontName: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel font name, up to 128 characters.'
+                                    ),
+                                  fontSize: zod
+                                    .number()
+                                    .min(
+                                      editSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      'Font size in points, 8 through 36.'
+                                    ),
+                                  format: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'general',
+                                          'number',
+                                          'currency',
+                                          'accounting',
+                                          'percent',
+                                          'date',
+                                          'time',
+                                          'scientific',
+                                          'text',
+                                        ])
+                                        .describe(
+                                          'Number interpretation and display; currency and accounting are USD and dates use UTC.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                  horizontalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'auto',
+                                          'left',
+                                          'center',
+                                          'right',
+                                        ])
+                                        .describe('Horizontal alignment.'),
+                                    ])
+                                    .optional(),
+                                  indent: zod
+                                    .number()
+                                    .min(
+                                      editSpreadsheetResponseRangesItemCellsItemStyleIndentMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      "Indent level, 0 through 250, as Excel's Increase Indent: each level is three spaces from the\nleft edge, or from the right edge of right-aligned cells. Centered cells ignore it."
+                                    ),
+                                  italic: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Italic text.'),
+                                  numberFormat: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel number format, up to 512 characters; it overrides the display of `format`.\nShow dates with format=date and a date code such as mmm yyyy (Jan 2026), mmm dd, yyyy,\nmm\/dd\/yyyy, dd\/mm\/yyyy, yyyy-mm-dd, d mmm yyyy or dddd, mmmm d, yyyy; times with\nformat=time and a code such as h:mm AM\/PM.'
+                                    ),
+                                  strikethrough: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Struck-through text.'),
+                                  textColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Text color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  underline: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Underlined text.'),
+                                  verticalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['top', 'middle', 'bottom'])
+                                        .describe('Vertical alignment.'),
+                                    ])
+                                    .optional(),
+                                  wrap: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Wrap text.'),
+                                })
+                                .describe(
+                                  'Sparse cell styling patch. Omitted fields remain unchanged.'
+                                ),
+                            ])
+                            .optional(),
+                        })
+                      )
+                      .describe('Cell source and calculated result.')
+                  )
+                  .describe('Cells with their sources and current results.'),
+                range: zod.string().describe('Requested or sampled rectangle.'),
+                sheetId: zod.string().describe('Stable sheet identity.'),
+                sheetName: zod.string().describe('Current sheet name.'),
+                truncated: zod
+                  .boolean()
+                  .describe(
+                    'True when a narrower follow-up read is needed to see every cell.'
+                  ),
+                validations: zod
+                  .array(
+                    zod
+                      .object({
+                        colors: zod
+                          .array(
+                            zod
+                              .object({
+                                color: zod
+                                  .string()
+                                  .describe(
+                                    'Chip color as #RRGGBB. Light colors such as #D9EAD3 keep dark text legible.'
+                                  ),
+                                item: zod
+                                  .string()
+                                  .describe(
+                                    'The choice, matched to cell text ignoring case.'
+                                  ),
+                              })
+                              .describe(
+                                "A dropdown choice's color. Cells showing the choice draw it as a chip of this color."
+                              )
+                          )
+                          .nullish()
+                          .describe("A dropdown's choice colors."),
+                        dropdown: zod
+                          .boolean()
+                          .nullish()
+                          .describe(
+                            'Whether a list rule shows its dropdown arrow.'
+                          ),
+                        formulas: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe('Rule formulas, without the leading =.'),
+                        items: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe("A dropdown's typed choices."),
+                        operator: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Comparison for number, date, time and text-length rules.'
+                          ),
+                        range: zod
+                          .string()
+                          .describe(
+                            'Cells the rule covers, as space-separated A1 ranges.'
+                          ),
+                        rejectInvalid: zod
+                          .boolean()
+                          .describe(
+                            'Whether entries that break the rule are rejected.'
+                          ),
+                        source: zod
+                          .string()
+                          .nullish()
+                          .describe("A dropdown's source range."),
+                        type: zod
+                          .string()
+                          .describe(
+                            'Rule kind: list, whole, decimal, date, time, textLength, custom, or any.'
+                          ),
+                      })
+                      .describe(
+                        'A data validation rule; list rules are dropdowns.'
+                      )
+                  )
+                  .optional()
+                  .describe(
+                    'Dropdowns and other data validation rules overlapping this range.'
+                  ),
+              })
+              .describe('Addressed range with explicit truncation.')
+          )
+          .describe('Addressed cells with raw inputs and calculated results.'),
+        revision: zod
+          .string()
+          .describe('Opaque revision required for EditSpreadsheet.'),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemColumnCountMin)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemErrorCellsMin)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemFormulaCellsMin)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemPopulatedCellsMin)
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemRowCountMin)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('All visible sheets and their used bounds.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Limits or issues the caller should account for.'),
+      })
+      .describe('Workbook inspection result.'),
+    zod
+      .object({
+        action: zod.enum(['calculate']),
+        results: zod
+          .array(
+            zod
+              .object({
+                display: zod
+                  .string()
+                  .describe('Text shown in the spreadsheet.'),
+                error: zod
+                  .string()
+                  .nullish()
+                  .describe('Explanation for an error result.'),
+                type: zod
+                  .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                  .describe('The calculation result kind.'),
+                value: zod
+                  .unknown()
+                  .describe('The typed scalar. Empty cells have a null value.'),
+              })
+              .describe(
+                'A calculated scalar with its display text and optional error explanation.'
+              )
+              .and(
+                zod.object({
+                  formula: zod.string().describe('Evaluated scratch formula.'),
+                  label: zod
+                    .string()
+                    .nullish()
+                    .describe('Caller-supplied label.'),
+                })
+              )
+              .describe('One hypothetical formula result.')
+          )
+          .describe('Results in input order.'),
+        revision: zod
+          .string()
+          .describe('Revision used for these calculations.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Calculation limits or issues.'),
+      })
+      .describe('Scratch calculation result. No persistent changes were made.'),
+    zod
+      .object({
+        action: zod.enum(['edit']),
+        applied: zod.boolean().describe('Whether a new change was persisted.'),
+        changes: zod
+          .array(
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .nullish()
+                  .describe('Affected range, when applicable.'),
+                sheetId: zod
+                  .string()
+                  .describe('Affected stable sheet identity.'),
+                summary: zod
+                  .string()
+                  .describe('Human-readable change summary.'),
+                type: zod.string().describe('Operation type.'),
+              })
+              .describe('Applied edit summary.')
+          )
+          .describe('Applied operation summaries.'),
+        revision: zod
+          .string()
+          .describe(
+            'Revision after the edit; use a fresh read before further editing.'
+          ),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemColumnCountMinOne)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemErrorCellsMinOne)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemFormulaCellsMinOne)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemPopulatedCellsMinOne)
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(editSpreadsheetResponseSheetsItemRowCountMinOne)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('Sheet metadata after editing.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Issues requiring inspection, including formula errors.'),
+      })
+      .describe('Result of a persisted atomic edit.'),
+  ])
+  .describe('Structured output from a deterministic workbook operation.');
+
+/**
+ * @summary Read a native spreadsheet with view access: every sheet's summary, and the
+cells of the requested ranges. Returns the revision an edit needs.
+ */
+export const readSpreadsheetParams = zod.object({
+  document_id: zod.string().describe('Document identity'),
+});
+
+export const readSpreadsheetBody = zod
+  .object({
+    includeStyles: zod.boolean().nullish().describe('Include cell formatting.'),
+    ranges: zod
+      .array(zod.string())
+      .nullish()
+      .describe(
+        'A1 ranges such as A1:F20. Omit for the workbook overview and samples.'
+      ),
+    sheetId: zod
+      .string()
+      .nullish()
+      .describe('Stable sheet ID or exact name; defaults to the first sheet.'),
+  })
+  .describe('What to read from a workbook.');
+
+export const readSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin = 0;
+
+export const readSpreadsheetResponseRangesItemCellsItemStyleIndentMin = 0;
+
+export const readSpreadsheetResponseSheetsItemColumnCountMin = 0;
+
+export const readSpreadsheetResponseSheetsItemErrorCellsMin = 0;
+
+export const readSpreadsheetResponseSheetsItemFormulaCellsMin = 0;
+
+export const readSpreadsheetResponseSheetsItemPopulatedCellsMin = 0;
+
+export const readSpreadsheetResponseSheetsItemRowCountMin = 0;
+
+export const readSpreadsheetResponseSheetsItemColumnCountMinOne = 0;
+
+export const readSpreadsheetResponseSheetsItemErrorCellsMinOne = 0;
+
+export const readSpreadsheetResponseSheetsItemFormulaCellsMinOne = 0;
+
+export const readSpreadsheetResponseSheetsItemPopulatedCellsMinOne = 0;
+
+export const readSpreadsheetResponseSheetsItemRowCountMinOne = 0;
+
+export const readSpreadsheetResponse = zod
+  .union([
+    zod
+      .object({
+        action: zod.enum(['read']),
+        ranges: zod
+          .array(
+            zod
+              .object({
+                cells: zod
+                  .array(
+                    zod
+                      .object({
+                        display: zod
+                          .string()
+                          .describe('Text shown in the spreadsheet.'),
+                        error: zod
+                          .string()
+                          .nullish()
+                          .describe('Explanation for an error result.'),
+                        type: zod
+                          .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                          .describe('The calculation result kind.'),
+                        value: zod
+                          .unknown()
+                          .describe(
+                            'The typed scalar. Empty cells have a null value.'
+                          ),
+                      })
+                      .describe(
+                        'A calculated scalar with its display text and optional error explanation.'
+                      )
+                      .and(
+                        zod.object({
+                          address: zod.string().describe('A1 address.'),
+                          formula: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Formula, when this input is calculated.'
+                            ),
+                          source: zod
+                            .string()
+                            .describe('Exact persisted source input.'),
+                          style: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  bold: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bold text.'),
+                                  borderBottom: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Bottom border.'),
+                                  borderBottomColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Bottom border color.'),
+                                  borderBottomStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderLeft: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Left border.'),
+                                  borderLeftColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Left border color.'),
+                                  borderLeftStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderRight: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Right border.'),
+                                  borderRightColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Right border color.'),
+                                  borderRightStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  borderTop: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Top border.'),
+                                  borderTopColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe('Top border color.'),
+                                  borderTopStyle: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'reset',
+                                          'thin',
+                                          'medium',
+                                          'thick',
+                                          'double',
+                                          'dotted',
+                                          'dashed',
+                                          'dashDot',
+                                          'dashDotDot',
+                                          'slantDashDot',
+                                          'hair',
+                                          'mediumDashed',
+                                          'mediumDashDot',
+                                          'mediumDashDotDot',
+                                        ])
+                                        .describe('Excel border line style.'),
+                                    ])
+                                    .optional(),
+                                  checkbox: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe(
+                                      "Show the cell's TRUE\/FALSE value as a checkbox; false removes it and keeps the value."
+                                    ),
+                                  decimals: zod
+                                    .number()
+                                    .nullish()
+                                    .describe(
+                                      'Decimal places, 0 through 10; -1 restores automatic.'
+                                    ),
+                                  fillColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Fill color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  fontFamily: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['sans', 'serif', 'mono'])
+                                        .describe('Font family.'),
+                                    ])
+                                    .optional(),
+                                  fontName: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel font name, up to 128 characters.'
+                                    ),
+                                  fontSize: zod
+                                    .number()
+                                    .min(
+                                      readSpreadsheetResponseRangesItemCellsItemStyleFontSizeMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      'Font size in points, 8 through 36.'
+                                    ),
+                                  format: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'general',
+                                          'number',
+                                          'currency',
+                                          'accounting',
+                                          'percent',
+                                          'date',
+                                          'time',
+                                          'scientific',
+                                          'text',
+                                        ])
+                                        .describe(
+                                          'Number interpretation and display; currency and accounting are USD and dates use UTC.'
+                                        ),
+                                    ])
+                                    .optional(),
+                                  horizontalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum([
+                                          'auto',
+                                          'left',
+                                          'center',
+                                          'right',
+                                        ])
+                                        .describe('Horizontal alignment.'),
+                                    ])
+                                    .optional(),
+                                  indent: zod
+                                    .number()
+                                    .min(
+                                      readSpreadsheetResponseRangesItemCellsItemStyleIndentMin
+                                    )
+                                    .nullish()
+                                    .describe(
+                                      "Indent level, 0 through 250, as Excel's Increase Indent: each level is three spaces from the\nleft edge, or from the right edge of right-aligned cells. Centered cells ignore it."
+                                    ),
+                                  italic: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Italic text.'),
+                                  numberFormat: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Exact Excel number format, up to 512 characters; it overrides the display of `format`.\nShow dates with format=date and a date code such as mmm yyyy (Jan 2026), mmm dd, yyyy,\nmm\/dd\/yyyy, dd\/mm\/yyyy, yyyy-mm-dd, d mmm yyyy or dddd, mmmm d, yyyy; times with\nformat=time and a code such as h:mm AM\/PM.'
+                                    ),
+                                  strikethrough: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Struck-through text.'),
+                                  textColor: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Text color as #RRGGBB; empty string resets it.'
+                                    ),
+                                  underline: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Underlined text.'),
+                                  verticalAlign: zod
+                                    .union([
+                                      zod.null(),
+                                      zod
+                                        .enum(['top', 'middle', 'bottom'])
+                                        .describe('Vertical alignment.'),
+                                    ])
+                                    .optional(),
+                                  wrap: zod
+                                    .boolean()
+                                    .nullish()
+                                    .describe('Wrap text.'),
+                                })
+                                .describe(
+                                  'Sparse cell styling patch. Omitted fields remain unchanged.'
+                                ),
+                            ])
+                            .optional(),
+                        })
+                      )
+                      .describe('Cell source and calculated result.')
+                  )
+                  .describe('Cells with their sources and current results.'),
+                range: zod.string().describe('Requested or sampled rectangle.'),
+                sheetId: zod.string().describe('Stable sheet identity.'),
+                sheetName: zod.string().describe('Current sheet name.'),
+                truncated: zod
+                  .boolean()
+                  .describe(
+                    'True when a narrower follow-up read is needed to see every cell.'
+                  ),
+                validations: zod
+                  .array(
+                    zod
+                      .object({
+                        colors: zod
+                          .array(
+                            zod
+                              .object({
+                                color: zod
+                                  .string()
+                                  .describe(
+                                    'Chip color as #RRGGBB. Light colors such as #D9EAD3 keep dark text legible.'
+                                  ),
+                                item: zod
+                                  .string()
+                                  .describe(
+                                    'The choice, matched to cell text ignoring case.'
+                                  ),
+                              })
+                              .describe(
+                                "A dropdown choice's color. Cells showing the choice draw it as a chip of this color."
+                              )
+                          )
+                          .nullish()
+                          .describe("A dropdown's choice colors."),
+                        dropdown: zod
+                          .boolean()
+                          .nullish()
+                          .describe(
+                            'Whether a list rule shows its dropdown arrow.'
+                          ),
+                        formulas: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe('Rule formulas, without the leading =.'),
+                        items: zod
+                          .array(zod.string())
+                          .nullish()
+                          .describe("A dropdown's typed choices."),
+                        operator: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'Comparison for number, date, time and text-length rules.'
+                          ),
+                        range: zod
+                          .string()
+                          .describe(
+                            'Cells the rule covers, as space-separated A1 ranges.'
+                          ),
+                        rejectInvalid: zod
+                          .boolean()
+                          .describe(
+                            'Whether entries that break the rule are rejected.'
+                          ),
+                        source: zod
+                          .string()
+                          .nullish()
+                          .describe("A dropdown's source range."),
+                        type: zod
+                          .string()
+                          .describe(
+                            'Rule kind: list, whole, decimal, date, time, textLength, custom, or any.'
+                          ),
+                      })
+                      .describe(
+                        'A data validation rule; list rules are dropdowns.'
+                      )
+                  )
+                  .optional()
+                  .describe(
+                    'Dropdowns and other data validation rules overlapping this range.'
+                  ),
+              })
+              .describe('Addressed range with explicit truncation.')
+          )
+          .describe('Addressed cells with raw inputs and calculated results.'),
+        revision: zod
+          .string()
+          .describe('Opaque revision required for EditSpreadsheet.'),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemColumnCountMin)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemErrorCellsMin)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemFormulaCellsMin)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemPopulatedCellsMin)
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemRowCountMin)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('All visible sheets and their used bounds.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Limits or issues the caller should account for.'),
+      })
+      .describe('Workbook inspection result.'),
+    zod
+      .object({
+        action: zod.enum(['calculate']),
+        results: zod
+          .array(
+            zod
+              .object({
+                display: zod
+                  .string()
+                  .describe('Text shown in the spreadsheet.'),
+                error: zod
+                  .string()
+                  .nullish()
+                  .describe('Explanation for an error result.'),
+                type: zod
+                  .enum(['blank', 'number', 'text', 'boolean', 'error'])
+                  .describe('The calculation result kind.'),
+                value: zod
+                  .unknown()
+                  .describe('The typed scalar. Empty cells have a null value.'),
+              })
+              .describe(
+                'A calculated scalar with its display text and optional error explanation.'
+              )
+              .and(
+                zod.object({
+                  formula: zod.string().describe('Evaluated scratch formula.'),
+                  label: zod
+                    .string()
+                    .nullish()
+                    .describe('Caller-supplied label.'),
+                })
+              )
+              .describe('One hypothetical formula result.')
+          )
+          .describe('Results in input order.'),
+        revision: zod
+          .string()
+          .describe('Revision used for these calculations.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Calculation limits or issues.'),
+      })
+      .describe('Scratch calculation result. No persistent changes were made.'),
+    zod
+      .object({
+        action: zod.enum(['edit']),
+        applied: zod.boolean().describe('Whether a new change was persisted.'),
+        changes: zod
+          .array(
+            zod
+              .object({
+                range: zod
+                  .string()
+                  .nullish()
+                  .describe('Affected range, when applicable.'),
+                sheetId: zod
+                  .string()
+                  .describe('Affected stable sheet identity.'),
+                summary: zod
+                  .string()
+                  .describe('Human-readable change summary.'),
+                type: zod.string().describe('Operation type.'),
+              })
+              .describe('Applied edit summary.')
+          )
+          .describe('Applied operation summaries.'),
+        revision: zod
+          .string()
+          .describe(
+            'Revision after the edit; use a fresh read before further editing.'
+          ),
+        sheets: zod
+          .array(
+            zod
+              .object({
+                columnCount: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemColumnCountMinOne)
+                  .describe('Available columns.'),
+                errorCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemErrorCellsMinOne)
+                  .describe('Number of calculated errors.'),
+                formulaCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemFormulaCellsMinOne)
+                  .describe('Number of formulas.'),
+                id: zod
+                  .string()
+                  .describe('Stable sheet identity for future calls.'),
+                name: zod.string().describe('Current sheet name.'),
+                populatedCells: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemPopulatedCellsMinOne)
+                  .describe('Number of populated cells.'),
+                rowCount: zod
+                  .number()
+                  .min(readSpreadsheetResponseSheetsItemRowCountMinOne)
+                  .describe('Available rows.'),
+                tables: zod
+                  .array(
+                    zod
+                      .object({
+                        columnTypes: zod
+                          .array(
+                            zod
+                              .object({
+                                column: zod
+                                  .string()
+                                  .describe(
+                                    'Header name of the column, ignoring case.'
+                                  ),
+                                type: zod
+                                  .enum([
+                                    'text',
+                                    'number',
+                                    'percent',
+                                    'currency',
+                                    'date',
+                                    'datetime',
+                                    'time',
+                                    'checkbox',
+                                    'dropdown',
+                                    'person',
+                                  ])
+                                  .describe(
+                                    'What a table column holds, as Google Sheets types table columns.'
+                                  ),
+                              })
+                              .describe(
+                                "A table column's type, by its header name."
+                              )
+                          )
+                          .optional()
+                          .describe(
+                            'Typed columns; untyped columns are left out.'
+                          ),
+                        columns: zod
+                          .array(zod.string())
+                          .describe('Column names, from the header row.'),
+                        filteredColumns: zod
+                          .array(zod.string())
+                          .optional()
+                          .describe(
+                            'Columns whose filters currently hide rows.'
+                          ),
+                        name: zod
+                          .string()
+                          .describe('Table name, as in Sales[Amount].'),
+                        range: zod
+                          .string()
+                          .describe(
+                            'A1 rectangle from the header row through the total row, if any.'
+                          ),
+                        totalsRow: zod
+                          .boolean()
+                          .describe('Whether the last row is a total row.'),
+                      })
+                      .describe(
+                        'A named table (an Excel table) that formulas address with structured references.'
+                      )
+                  )
+                  .optional()
+                  .describe('Named tables on the sheet.'),
+                usedRange: zod
+                  .string()
+                  .nullish()
+                  .describe(
+                    'Bounding rectangle of used cells, or null for an empty sheet.'
+                  ),
+              })
+              .describe('Compact metadata for a sheet.')
+          )
+          .describe('Sheet metadata after editing.'),
+        warnings: zod
+          .array(zod.string())
+          .describe('Issues requiring inspection, including formula errors.'),
+      })
+      .describe('Result of a persisted atomic edit.'),
+  ])
+  .describe('Structured output from a deterministic workbook operation.');
+
+/**
  * @summary Gets the team-share state of a document. The team is resolved from the
 document owner's team membership; `teamId` is omitted when the owner does
 not belong to a team.
@@ -29566,6 +35632,7 @@ export const accessRequestsStateParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
 });
@@ -29618,6 +35685,12 @@ export const accessRequestsStateResponse = zod
             id: zod
               .uuid()
               .describe('Stable request identity across revisions.'),
+            requestedByAgent: zod
+              .uuid()
+              .nullish()
+              .describe(
+                "The agent that asked on the requester's behalf, when one did."
+              ),
             requestedLevel: zod
               .enum(['view', 'comment', 'edit', 'owner'])
               .describe('Ordered from least to most access top -> bottom'),
@@ -29675,6 +35748,12 @@ export const accessRequestsStateResponse = zod
             id: zod
               .uuid()
               .describe('Stable request identity across revisions.'),
+            requestedByAgent: zod
+              .uuid()
+              .nullish()
+              .describe(
+                "The agent that asked on the requester's behalf, when one did."
+              ),
             requestedLevel: zod
               .enum(['view', 'comment', 'edit', 'owner'])
               .describe('Ordered from least to most access top -> bottom'),
@@ -29724,6 +35803,7 @@ export const accessRequestsSubmitParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
 });
@@ -29754,6 +35834,12 @@ export const accessRequestsSubmitResponse = zod
       ])
       .optional(),
     id: zod.uuid().describe('Stable request identity across revisions.'),
+    requestedByAgent: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The agent that asked on the requester's behalf, when one did."
+      ),
     requestedLevel: zod
       .enum(['view', 'comment', 'edit', 'owner'])
       .describe('Ordered from least to most access top -> bottom'),
@@ -29790,6 +35876,7 @@ export const accessRequestsCancelParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
 });
@@ -29816,6 +35903,7 @@ export const accessRequestsResolveParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
   request_id: zod.uuid(),
@@ -29847,6 +35935,12 @@ export const accessRequestsResolveResponse = zod
       ])
       .optional(),
     id: zod.uuid().describe('Stable request identity across revisions.'),
+    requestedByAgent: zod
+      .uuid()
+      .nullish()
+      .describe(
+        "The agent that asked on the requester's behalf, when one did."
+      ),
     requestedLevel: zod
       .enum(['view', 'comment', 'edit', 'owner'])
       .describe('Ordered from least to most access top -> bottom'),
@@ -29883,6 +35977,7 @@ export const accessRequestsDirectParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
 });
@@ -29915,6 +36010,7 @@ export const accessRequestsSetDirectParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
   user_id: zod.string(),
@@ -29953,6 +36049,7 @@ export const accessRequestsRemoveDirectParams = zod.object({
     'email_thread',
     'agent_session',
     'external_chat',
+    'harness',
   ]),
   entity_id: zod.uuid(),
   user_id: zod.string(),
@@ -30315,6 +36412,11 @@ export const externalChatResponse = zod
                         .describe(
                           'Their id at the provider (WhatsApp: phone-number or LID JID).'
                         ),
+                      name: zod
+                        .string()
+                        .describe(
+                          'What to call them: their provider name, else their phone number,\nelse a generic name.'
+                        ),
                     })
                     .describe(
                       'Someone in an external chat; Macro access is a separate grant.'
@@ -30659,9 +36761,29 @@ export const externalChatMessagesResponse = zod
               .array(
                 zod
                   .object({
-                    count: zod.number().describe('Number of reacting people.'),
                     emoji: zod.string().describe('Emoji.'),
                     mine: zod.boolean().describe('Caller has this reaction.'),
+                    reactors: zod
+                      .array(
+                        zod
+                          .object({
+                            name: zod
+                              .string()
+                              .describe(
+                                'Display name, never authentication evidence.'
+                              ),
+                            userId: zod
+                              .string()
+                              .nullish()
+                              .describe('Verified Macro user, if any.'),
+                          })
+                          .describe(
+                            'A person named in a message: a Macro user when verified, else their name\nat the provider, else their phone number.'
+                          )
+                      )
+                      .describe(
+                        'The people who reacted with it, earliest first.'
+                      ),
                   })
                   .describe('Grouped reactions.')
               )
@@ -31169,9 +37291,25 @@ export const externalChatMessageResponse = zod
       .array(
         zod
           .object({
-            count: zod.number().describe('Number of reacting people.'),
             emoji: zod.string().describe('Emoji.'),
             mine: zod.boolean().describe('Caller has this reaction.'),
+            reactors: zod
+              .array(
+                zod
+                  .object({
+                    name: zod
+                      .string()
+                      .describe('Display name, never authentication evidence.'),
+                    userId: zod
+                      .string()
+                      .nullish()
+                      .describe('Verified Macro user, if any.'),
+                  })
+                  .describe(
+                    'A person named in a message: a Macro user when verified, else their name\nat the provider, else their phone number.'
+                  )
+              )
+              .describe('The people who reacted with it, earliest first.'),
           })
           .describe('Grouped reactions.')
       )
@@ -31821,6 +37959,7 @@ export const listFavoritesQueryParams = zod.object({
           'crm_contact',
           'crm_pipeline',
           'reminder',
+          'harness',
           'skill',
           'agent_session',
           'scheduled_action',
@@ -31886,6 +38025,7 @@ export const listFavoritesResponse = zod
                 'crm_contact',
                 'crm_pipeline',
                 'reminder',
+                'harness',
                 'skill',
                 'agent_session',
                 'scheduled_action',
@@ -31939,6 +38079,7 @@ export const addFavoriteBody = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -31993,6 +38134,7 @@ export const addFavoriteResponse = zod
         'crm_contact',
         'crm_pipeline',
         'reminder',
+        'harness',
         'skill',
         'agent_session',
         'scheduled_action',
@@ -32044,6 +38186,7 @@ export const reorderFavoritesBody = zod
                 'crm_contact',
                 'crm_pipeline',
                 'reminder',
+                'harness',
                 'skill',
                 'agent_session',
                 'scheduled_action',
@@ -32088,6 +38231,7 @@ export const removeFavoriteByEntityParams = zod.object({
       'crm_contact',
       'crm_pipeline',
       'reminder',
+      'harness',
       'skill',
       'agent_session',
       'scheduled_action',
@@ -37178,12 +43322,18 @@ export const approveHarnessPairingBody = zod
     team_id: zod
       .uuid()
       .nullish()
-      .describe('Owning team. Omit for a private, user-owned harness.'),
+      .describe(
+        'Team to open the harness to. Omit to keep it to the approving user.'
+      ),
   })
   .describe('Request to approve a pairing and register the harness.');
 
 export const approveHarnessPairingResponse = zod
   .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'none'])
+      .optional()
+      .describe('What one caller may do with a machine.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
@@ -37203,22 +43353,19 @@ export const approveHarnessPairingResponse = zod
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
     owner: zod
-      .union([
-        zod
-          .object({
-            type: zod.enum(['user']),
-            user_id: zod.string().describe('Owner user id.'),
-          })
-          .describe('User-owned (private) harness.'),
-        zod
-          .object({
-            team_id: zod.uuid().describe('Owner team id.'),
-            type: zod.enum(['team']),
-          })
-          .describe('Team-owned harness, usable by every team member.'),
-      ])
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose machine this is.')
       .describe(
-        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
       ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
@@ -37250,6 +43397,10 @@ export const claimHarnessPairingResponse = zod
   .object({
     harness: zod
       .object({
+        access: zod
+          .enum(['owner', 'user', 'read', 'none'])
+          .optional()
+          .describe('What one caller may do with a machine.'),
         allow_permission_bypass: zod
           .boolean()
           .optional()
@@ -37269,22 +43420,19 @@ export const claimHarnessPairingResponse = zod
           .describe('When the daemon last attached a runtime connection.'),
         name: zod.string().describe('Display name.'),
         owner: zod
-          .union([
-            zod
-              .object({
-                type: zod.enum(['user']),
-                user_id: zod.string().describe('Owner user id.'),
-              })
-              .describe('User-owned (private) harness.'),
-            zod
-              .object({
-                team_id: zod.uuid().describe('Owner team id.'),
-                type: zod.enum(['team']),
-              })
-              .describe('Team-owned harness, usable by every team member.'),
-          ])
+          .object({
+            type: zod.enum(['user']),
+            user_id: zod.string().describe('Owner user id.'),
+          })
+          .describe('The person whose machine this is.')
           .describe(
-            'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+            "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+          ),
+        shared_team_ids: zod
+          .array(zod.uuid())
+          .optional()
+          .describe(
+            'Teams it is a team machine for: their every member is a user of it.'
           ),
         updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
       })
@@ -37304,6 +43452,10 @@ export const claimHarnessPairingResponse = zod
  */
 export const listHarnessesResponseItem = zod
   .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'none'])
+      .optional()
+      .describe('What one caller may do with a machine.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
@@ -37323,22 +43475,19 @@ export const listHarnessesResponseItem = zod
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
     owner: zod
-      .union([
-        zod
-          .object({
-            type: zod.enum(['user']),
-            user_id: zod.string().describe('Owner user id.'),
-          })
-          .describe('User-owned (private) harness.'),
-        zod
-          .object({
-            team_id: zod.uuid().describe('Owner team id.'),
-            type: zod.enum(['team']),
-          })
-          .describe('Team-owned harness, usable by every team member.'),
-      ])
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose machine this is.')
       .describe(
-        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
       ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
@@ -37348,10 +43497,14 @@ export const listHarnessesResponseItem = zod
 export const listHarnessesResponse = zod.array(listHarnessesResponseItem);
 
 /**
- * @summary Handler for `GET /harnesses/me`.
+ * @summary Handler for `GET /harnesses/directory`.
  */
-export const getSelfHarnessResponse = zod
+export const listHarnessDirectoryResponseItem = zod
   .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'none'])
+      .optional()
+      .describe('What one caller may do with a machine.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
@@ -37371,22 +43524,70 @@ export const getSelfHarnessResponse = zod
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
     owner: zod
-      .union([
-        zod
-          .object({
-            type: zod.enum(['user']),
-            user_id: zod.string().describe('Owner user id.'),
-          })
-          .describe('User-owned (private) harness.'),
-        zod
-          .object({
-            team_id: zod.uuid().describe('Owner team id.'),
-            type: zod.enum(['team']),
-          })
-          .describe('Team-owned harness, usable by every team member.'),
-      ])
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose machine this is.')
       .describe(
-        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
+      ),
+    updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+  })
+  .describe(
+    'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
+  );
+export const listHarnessDirectoryResponse = zod.array(
+  listHarnessDirectoryResponseItem
+);
+
+/**
+ * @summary Handler for `GET /harnesses/me`.
+ */
+export const getSelfHarnessResponse = zod
+  .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'none'])
+      .optional()
+      .describe('What one caller may do with a machine.'),
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether agents may bypass ACP permission requests on this harness.'
+      ),
+    connected: zod
+      .boolean()
+      .describe('Whether the daemon currently holds a runtime connection.'),
+    created_at: zod.iso.datetime({}).describe('Creation timestamp.'),
+    created_by: zod.string().describe('User that registered this harness.'),
+    id: zod.string(),
+    kind: zod.string().describe('Runtime kind. Currently always `macrod`.'),
+    last_connected_at: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('When the daemon last attached a runtime connection.'),
+    name: zod.string().describe('Display name.'),
+    owner: zod
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose machine this is.')
+      .describe(
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
       ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
@@ -37463,6 +43664,10 @@ export const patchHarnessBody = zod
 
 export const patchHarnessResponse = zod
   .object({
+    access: zod
+      .enum(['owner', 'user', 'read', 'none'])
+      .optional()
+      .describe('What one caller may do with a machine.'),
     allow_permission_bypass: zod
       .boolean()
       .optional()
@@ -37482,28 +43687,70 @@ export const patchHarnessResponse = zod
       .describe('When the daemon last attached a runtime connection.'),
     name: zod.string().describe('Display name.'),
     owner: zod
-      .union([
-        zod
-          .object({
-            type: zod.enum(['user']),
-            user_id: zod.string().describe('Owner user id.'),
-          })
-          .describe('User-owned (private) harness.'),
-        zod
-          .object({
-            team_id: zod.uuid().describe('Owner team id.'),
-            type: zod.enum(['team']),
-          })
-          .describe('Team-owned harness, usable by every team member.'),
-      ])
+      .object({
+        type: zod.enum(['user']),
+        user_id: zod.string().describe('Owner user id.'),
+      })
+      .describe('The person whose machine this is.')
       .describe(
-        'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
+        "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
+      ),
+    shared_team_ids: zod
+      .array(zod.uuid())
+      .optional()
+      .describe(
+        'Teams it is a team machine for: their every member is a user of it.'
       ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
   })
   .describe(
     'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
   );
+
+/**
+ * @summary Handler for `GET /harnesses/{harness_id}/residents`.
+ */
+export const listHarnessResidentsParams = zod.object({
+  harness_id: zod.string().describe('Harness ID'),
+});
+
+export const listHarnessResidentsResponseItem = zod
+  .object({
+    bot_id: zod.string(),
+    name: zod.string().describe('Display name.'),
+    owner_user_id: zod
+      .string()
+      .nullish()
+      .describe('The user owning the agent, when a person does.'),
+    team_id: zod
+      .uuid()
+      .nullish()
+      .describe('The team owning the agent, when a team does.'),
+  })
+  .describe(
+    'An agent that lives on a machine, as opposed to a coding agent directed\nthere turn by turn. Anyone who can reach it can talk to it; it stays up only\nwhile its own owner can use the machine.'
+  );
+export const listHarnessResidentsResponse = zod.array(
+  listHarnessResidentsResponseItem
+);
+
+/**
+ * Requires the owner's own session: an agent can ask for access to a machine
+but never open one, since that grants code execution on it.
+ * @summary Handler for `PUT /harnesses/{harness_id}/team-access`.
+ */
+export const setHarnessTeamAccessParams = zod.object({
+  harness_id: zod.string().describe('Harness ID'),
+});
+
+export const setHarnessTeamAccessBody = zod
+  .object({
+    enabled: zod
+      .boolean()
+      .describe('Whether every member of the team may use the machine.'),
+    team_id: zod.uuid().describe('The team, which the owner must belong to.'),
+  })
+  .describe("Request to open or close a machine to one of the owner's teams.");
 
 /**
  * @summary Gets the users history
@@ -37977,6 +44224,122 @@ export const createInitiativeResponse = zod
   );
 
 /**
+ * @summary Page the initiatives the caller can view, filtered by name and canonical properties,
+with each row's properties and progress over the tasks the caller can view.
+ */
+export const pageInitiativesQueryLimitMin = 0;
+
+export const pageInitiativesQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(pageInitiativesQueryLimitMin)
+    .nullish()
+    .describe('Maximum rows, between one and one hundred; defaults to fifty.'),
+  cursor: zod
+    .string()
+    .nullish()
+    .describe('Opaque continuation returned by the previous page.'),
+  query: zod.string().nullish().describe('Case-insensitive name substring.'),
+  status: zod.uuid().nullish().describe('Required status option id.'),
+  priority: zod.uuid().nullish().describe('Required priority option id.'),
+  assignee: zod.string().nullish().describe('Required assignee user id.'),
+  dueAfter: zod.iso
+    .datetime({})
+    .nullish()
+    .describe('Inclusive due-date lower bound.'),
+  dueBefore: zod.iso
+    .datetime({})
+    .nullish()
+    .describe('Inclusive due-date upper bound.'),
+  sort: zod
+    .enum(['updated', 'name', 'due'])
+    .optional()
+    .describe('Sort key; defaults to updated time.'),
+  descending: zod
+    .boolean()
+    .nullish()
+    .describe('Descending order; defaults to true for updated time.'),
+});
+
+export const pageInitiativesResponseInitiativesItemCompletedTaskCountMin = 0;
+
+export const pageInitiativesResponseInitiativesItemTaskCountMin = 0;
+
+export const pageInitiativesResponse = zod
+  .object({
+    initiatives: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'Opaque identifier for an initiative. Minted as UUIDv7 in application code.'
+              ),
+            name: zod.string().describe('Display name.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the initiative was last updated.'),
+          })
+          .describe('List-row view of an initiative.')
+          .and(
+            zod.object({
+              completedTaskCount: zod
+                .number()
+                .min(
+                  pageInitiativesResponseInitiativesItemCompletedTaskCountMin
+                )
+                .describe('Number of visible tasks whose status is completed.'),
+              properties: zod
+                .object({
+                  assignees: zod
+                    .array(zod.string())
+                    .describe(
+                      'Assigned user ids, independent of sharing membership.'
+                    ),
+                  completed: zod
+                    .boolean()
+                    .describe(
+                      'Whether the canonical task status represents completion.'
+                    ),
+                  dueDate: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('Due timestamp, or unset.'),
+                  priority: zod
+                    .uuid()
+                    .nullish()
+                    .describe('Priority option id, or unset.'),
+                  status: zod
+                    .uuid()
+                    .nullish()
+                    .describe('Status option id, or unset.'),
+                })
+                .describe(
+                  'Snapshot of canonical property values, never a second writable store.'
+                ),
+              taskCount: zod
+                .number()
+                .min(pageInitiativesResponseInitiativesItemTaskCountMin)
+                .describe('Number of associated tasks the caller may view.'),
+              userAccessLevel: zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            })
+          )
+          .describe(
+            'A project row with caller-specific permissions, properties and visible task progress.'
+          )
+      )
+      .describe('Rows in requested order.'),
+    nextCursor: zod
+      .string()
+      .nullish()
+      .describe('Continuation, absent when exhausted.'),
+  })
+  .describe('One authorized project collection page.');
+
+/**
  * @summary Fetch one initiative the caller can view.
  */
 export const getInitiativeParams = zod.object({
@@ -38208,6 +44571,113 @@ export const updateInitiativeResponse = zod
   .describe(
     'Full initiative returned to a caller, including members, tasks, and share state.'
   );
+
+/**
+ * Task references require current view access to the task, so a page can hold
+fewer records than `limit`, even none. Follow `nextCursor` with the same
+window until it is absent.
+ * @summary Read an initiative's creation, edits, property changes and task membership
+changes, newest first.
+ */
+export const getInitiativeActivityParams = zod.object({
+  initiative_id: zod.string().describe('Initiative identifier.'),
+});
+
+export const getInitiativeActivityQueryLimitMin = 0;
+
+export const getInitiativeActivityQueryParams = zod.object({
+  after: zod.iso
+    .datetime({})
+    .optional()
+    .describe('Only changes at or after this time.'),
+  before: zod.iso
+    .datetime({})
+    .optional()
+    .describe('Only changes before this time.'),
+  cursorOccurredAt: zod.iso
+    .datetime({})
+    .optional()
+    .describe(
+      "`occurredAt` of the previous page's `nextCursor`; send with `cursorId`."
+    ),
+  cursorId: zod
+    .uuid()
+    .optional()
+    .describe(
+      "`id` of the previous page's `nextCursor`; send with `cursorOccurredAt`."
+    ),
+  limit: zod
+    .number()
+    .min(getInitiativeActivityQueryLimitMin)
+    .optional()
+    .describe('Events to scan, 1 through 100; defaults to 100.'),
+});
+
+export const getInitiativeActivityResponse = zod
+  .object({
+    nextCursor: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            id: zod.uuid().describe('Tie-breaker within the same timestamp.'),
+            occurredAt: zod.iso
+              .datetime({})
+              .describe('Time of the last scanned activity.'),
+          })
+          .describe('Stable cursor for project history.'),
+      ])
+      .optional(),
+    records: zod
+      .array(
+        zod
+          .object({
+            action: zod.string().describe('Durable activity action tag.'),
+            actionPayload: zod
+              .unknown()
+              .optional()
+              .describe(
+                'Typed payload for known actions. Absent for unknown actions.'
+              ),
+            actorId: zod.string().describe('Principal who acted.'),
+            id: zod
+              .uuid()
+              .describe(
+                'Stable record identifier, also used for realtime deduplication.'
+              ),
+            occurredAt: zod.iso.datetime({}).describe('Time of the change.'),
+            subjectId: zod
+              .string()
+              .describe(
+                "Acting user's feed identity when a bot acted on their behalf."
+              ),
+          })
+          .describe(
+            'One authorized activity row; task names are hydrated through existing authorized task reads.'
+          )
+      )
+      .describe('Visible changes in newest-first order.'),
+  })
+  .describe(
+    'History page. Access filtering can shorten records; follow nextCursor until exhausted.'
+  );
+
+/**
+ * @summary Read the description of an initiative the caller can view.
+ */
+export const getInitiativeDescriptionParams = zod.object({
+  initiative_id: zod.string().describe('Initiative identifier.'),
+});
+
+export const getInitiativeDescriptionResponse = zod
+  .object({
+    markdown: zod
+      .string()
+      .describe(
+        'GitHub-flavored markdown; empty while no one has opened or written it.'
+      ),
+  })
+  .describe("An initiative's description.");
 
 /**
  * @summary Gets the instructions document for the current user
@@ -67607,6 +74077,217 @@ export const createViewHandlerResponse = zod.object({
   updatedAt: zod.iso.datetime({}),
   userId: zod.string(),
 });
+
+export const listSavedViewDefinitionsQueryFirstMin = 0;
+
+export const listSavedViewDefinitionsQueryParams = zod.object({
+  kind: zod
+    .string()
+    .optional()
+    .describe('Only definitions of this consumer kind, such as `email`.'),
+  first: zod
+    .number()
+    .min(listSavedViewDefinitionsQueryFirstMin)
+    .optional()
+    .describe('Page size, 1 to 50; defaults to 25.'),
+  after: zod
+    .string()
+    .optional()
+    .describe('`nextCursor` from the previous page.'),
+});
+
+export const listSavedViewDefinitionsResponse = zod
+  .object({
+    nextCursor: zod
+      .string()
+      .nullish()
+      .describe(
+        'Opaque cursor for the next page, absent when the listing is complete.'
+      ),
+    views: zod
+      .array(
+        zod
+          .object({
+            config: zod
+              .object({})
+              .describe(
+                'Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`.'
+              ),
+            createdAt: zod.iso.datetime({}),
+            id: zod.uuid().describe('Stable identity of this definition.'),
+            name: zod.string().describe('Display name chosen by the owner.'),
+            ownerId: zod
+              .string()
+              .describe('User who owns and can edit this definition.'),
+            revision: zod
+              .number()
+              .describe('Current revision, required by updates and deletion.'),
+            sharedTeamId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Team with access, or absent when the definition is private.'
+              ),
+            updatedAt: zod.iso.datetime({}),
+          })
+          .describe(
+            'A saved filter definition, not a snapshot of matching entities.'
+          )
+      )
+      .describe('Definitions the viewer can currently access.'),
+  })
+  .describe("A page in the viewer's own order, then by creation time and ID.");
+
+export const createSavedViewDefinitionBody = zod.object({
+  config: zod
+    .object({})
+    .describe(
+      'Consumer configuration with its `kind` and `version`, at most 32 KiB.'
+    ),
+  id: zod
+    .uuid()
+    .nullish()
+    .describe(
+      'Client-chosen ID, reused to retry the same creation; generated when absent.'
+    ),
+  name: zod.string().describe('Nonempty display name, at most 120 characters.'),
+  sharedTeamId: zod
+    .uuid()
+    .nullish()
+    .describe('Team to share with, which the creator must belong to.'),
+});
+
+export const reorderSavedViewDefinitionsBody = zod.object({
+  ids: zod
+    .array(zod.uuid())
+    .describe(
+      'Visible definitions of that kind in their new order, at most 200;\ndefinitions left out follow them by creation time.'
+    ),
+  kind: zod
+    .string()
+    .describe('Consumer kind whose order is replaced, such as `email`.'),
+});
+
+export const reorderSavedViewDefinitionsResponseItem = zod
+  .object({
+    config: zod
+      .object({})
+      .describe(
+        'Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`.'
+      ),
+    createdAt: zod.iso.datetime({}),
+    id: zod.uuid().describe('Stable identity of this definition.'),
+    name: zod.string().describe('Display name chosen by the owner.'),
+    ownerId: zod
+      .string()
+      .describe('User who owns and can edit this definition.'),
+    revision: zod
+      .number()
+      .describe('Current revision, required by updates and deletion.'),
+    sharedTeamId: zod
+      .uuid()
+      .nullish()
+      .describe('Team with access, or absent when the definition is private.'),
+    updatedAt: zod.iso.datetime({}),
+  })
+  .describe('A saved filter definition, not a snapshot of matching entities.');
+export const reorderSavedViewDefinitionsResponse = zod.array(
+  reorderSavedViewDefinitionsResponseItem
+);
+
+export const getSavedViewDefinitionParams = zod.object({
+  saved_view_id: zod.uuid().describe('The saved view to read'),
+});
+
+export const getSavedViewDefinitionResponse = zod
+  .object({
+    config: zod
+      .object({})
+      .describe(
+        'Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`.'
+      ),
+    createdAt: zod.iso.datetime({}),
+    id: zod.uuid().describe('Stable identity of this definition.'),
+    name: zod.string().describe('Display name chosen by the owner.'),
+    ownerId: zod
+      .string()
+      .describe('User who owns and can edit this definition.'),
+    revision: zod
+      .number()
+      .describe('Current revision, required by updates and deletion.'),
+    sharedTeamId: zod
+      .uuid()
+      .nullish()
+      .describe('Team with access, or absent when the definition is private.'),
+    updatedAt: zod.iso.datetime({}),
+  })
+  .describe('A saved filter definition, not a snapshot of matching entities.');
+
+export const deleteSavedViewDefinitionParams = zod.object({
+  saved_view_id: zod.uuid().describe('The saved view to delete'),
+});
+
+export const deleteSavedViewDefinitionQueryParams = zod.object({
+  expectedRevision: zod
+    .number()
+    .describe('Revision that must still be current when the deletion commits.'),
+});
+
+export const updateSavedViewDefinitionParams = zod.object({
+  saved_view_id: zod.uuid().describe('The saved view to update'),
+});
+
+export const updateSavedViewDefinitionBody = zod.object({
+  config: zod
+    .object({})
+    .nullish()
+    .describe(
+      'Complete replacement configuration; absent keeps the current one.'
+    ),
+  expectedRevision: zod
+    .number()
+    .describe('Revision that must still be current when the update commits.'),
+  name: zod
+    .string()
+    .nullish()
+    .describe('Replacement name; absent keeps the current one.'),
+  sharing: zod
+    .union([
+      zod.null(),
+      zod
+        .object({
+          teamId: zod.uuid().nullish(),
+        })
+        .describe(
+          'An explicit sharing change: a team, or `null` to make the definition private.'
+        ),
+    ])
+    .optional(),
+});
+
+export const updateSavedViewDefinitionResponse = zod
+  .object({
+    config: zod
+      .object({})
+      .describe(
+        'Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`.'
+      ),
+    createdAt: zod.iso.datetime({}),
+    id: zod.uuid().describe('Stable identity of this definition.'),
+    name: zod.string().describe('Display name chosen by the owner.'),
+    ownerId: zod
+      .string()
+      .describe('User who owns and can edit this definition.'),
+    revision: zod
+      .number()
+      .describe('Current revision, required by updates and deletion.'),
+    sharedTeamId: zod
+      .uuid()
+      .nullish()
+      .describe('Team with access, or absent when the definition is private.'),
+    updatedAt: zod.iso.datetime({}),
+  })
+  .describe('A saved filter definition, not a snapshot of matching entities.');
 
 export const excludeDefaultViewHandlerBody = zod.object({
   defaultViewId: zod.string(),

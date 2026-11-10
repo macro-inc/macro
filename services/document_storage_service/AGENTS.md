@@ -16,7 +16,10 @@ threads, pins, recents, notifications, folders, activity.
   `folders_query`, `graphql_soup`, `threads`, `annotations`, `history`,
   `pins`, `recents`, `notification`, `instructions`, `internal`.
 - `/databases/query` mounts the `databases_sql` HTTP adapter, sharing the database/access services and the primary Soup reader; SQL authorization stays in its domain service.
-- `src/service/saved_views.rs`: composes saved-view storage with the primary-backed Teams repository, reusing `get_user_teams` and `get_all_team_members`. REST and GraphQL share its owner-only domain policy.
+- `src/service/saved_views.rs`: composes saved-view storage with the primary-backed Teams repository, reusing `get_user_teams` and `get_all_team_members`. REST and GraphQL share its owner-only domain policy. `src/api/saved_views/definitions.rs` is the SDK's REST adapter over the same `SavedViewApi` as GraphQL (kinds, revisions, sharing, order); the legacy `/saved_views` routes beside it serve CRM unchanged. All three use the one `ApiContext::saved_views` service built in `server.rs`, whose `outbound/saved_view_changes.rs` notifier pushes `saved_views_changed` through the gateway on `event_broker_tracker`, resolving team members off the request path.
+- Personal contact pages use `graphql_contacts` and the contacts directory service.
+  Compose primary-backed graph and name readers in `server.rs`, and insert the
+  context through the shared GraphQL HTTP/websocket request-data function.
 - `src/api/graphql_soup.rs`: the `/soup/graphql` (+ `/soup/graphql/ws`
   subscriptions) GraphQL API — the frontend's main read path for Home/Recent/
   search ("Soup" items); see `crates/graphql_soup` for resolvers/loaders.
@@ -89,6 +92,9 @@ threads, pins, recents, notifications, folders, activity.
 
 ## Gotchas
 
+- Register add-only contact email and personal-provider company setters with required request fields in OpenAPI together;
+  the CRM domain owns authorization, normalization and relation invariants.
+
 - Provision required `POSTHOG_API_KEY` before startup; `enable-call-channel-thread`
   evaluation has a 300 ms timeout and keeps the call's own chat on failure.
 - The same flag client evaluates `enable-programmatic-calls` per caller for the
@@ -99,7 +105,9 @@ threads, pins, recents, notifications, folders, activity.
 - Several behaviors are Cargo-feature-gated (`connection_gateway`,
   `delete_document_worker`, `location_check`, all on by `default`) — a feature
   disabled locally can hide a bug that only shows in deployed builds.
-- Soup GraphQL reads a replica with multi-second lag; a read immediately after
+- CRM-scoped Soup email previews read the primary so consent withdrawal and
+  exclusions take effect without replica lag; ordinary inbox lists keep the replica.
+- Ordinary Soup GraphQL reads a replica with multi-second lag; a read immediately after
   a write through the same request needs the primary-reading loader, not the
   default one — see `crates/graphql_soup`.
 - Dev's readonly pool keeps 2–20 connections per task, independently of the

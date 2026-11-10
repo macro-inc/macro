@@ -20,6 +20,16 @@ the old cache file, so the first launch after this native update requires
 sign-in again. Cookie expiry, refresh, and write behavior are unchanged. This
 requires a native app release; an OTA frontend bundle cannot relocate the jar.
 
+## OTA bundle storage
+
+On iOS, the bundle updater stores downloads and their persistence markers in
+`Library/Application Support/<bundle-identifier>/bundle-updates`, not the
+purgeable `Library/Caches` directory. The directory is excluded from backup
+because the server can supply the bundles again. The updater deliberately
+ignores legacy cache contents: the first launch uses embedded assets and checks
+for a fresh download. Other platforms retain their existing cache location.
+This storage change requires a native app release.
+
 ## File saving and sharing
 
 The optional `file_export_plugin` registers iOS save/share commands. The web
@@ -98,15 +108,21 @@ An update reload normally lands while the page is hidden, which is harmless for
 a list and fatal for anything the page is waiting on. A native auth sheet is the
 sharp case: leaving the app for a sign-in code hides the page, the reload drops
 the JavaScript awaiting the sheet, and the finished sign-in has nowhere to go.
+Returning from the sheet foregrounds the app, so a reload that lands while the
+session code is still being redeemed, before the login hint is down, loses the
+sign-in just the same. The new document never checks identity and shows sign-in
+over the session in the native cookie jar.
 `holdAutomaticReload` covers this work on the page and sends
 `set_bundle_reload_hold` here, because the mobile foreground handler applies a
 completed bundle without asking the page. `apply_update` then answers `Held` and
 the bundle stays pending until the next hide or foreground after the release.
 Each document sends its hold state on mount, so a hold whose owner died cannot
 block updates until the next launch. Desktop has no foreground handler to hold
-and does not call the command. Mobile requires it, so the mobile native floors
-must reach a binary that has it; below that floor no bundle applies, so no
-update reload can land on a sheet.
+and does not call the command. Mobile requires it. The iOS floor reaches a
+binary that has it; the Android floor does not yet. Android binaries without
+the command still apply bundles over a pending sign-in, and their embedded
+bundle predates the page-side hold, so a fresh install's first sign-in stays
+exposed until a newer native release.
 
 `frontend_instance_id` is generated once per document and attached to every
 PostHog event (including automatic exceptions/pageviews) and OTel resource.

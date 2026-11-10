@@ -414,6 +414,8 @@ pub async fn update_entity_access_channel_share_permissions(
             // are private to one user.
             | EntityType::Reminder
             | EntityType::ScheduledAction
+            // Runtimes are shared with people and teams, never channels.
+            | EntityType::Harness
             // A database row is shared only through its database.
             | EntityType::DatabaseRow
             => {
@@ -493,6 +495,8 @@ pub async fn update_entity_access_channel_share_permissions(
             // are private to one user.
             | EntityType::Reminder
             | EntityType::ScheduledAction
+            // Runtimes are shared with people and teams, never channels.
+            | EntityType::Harness
             // A database row is shared only through its database.
             | EntityType::DatabaseRow
             => {

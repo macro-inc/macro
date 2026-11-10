@@ -92,9 +92,10 @@ fn every_host_toolset_passes_schema_validation() {
 }
 
 /// Gemini rejects a whole request when one tool schema has a `$ref` loop of
-/// required fields, so every turn advertising that tool fails.
+/// required fields or nests too deeply, so every turn advertising that tool
+/// fails.
 #[test]
-fn no_tool_schema_has_a_ref_loop_of_required_fields() {
+fn every_tool_schema_is_one_gemini_accepts() {
     let mut schemas = Vec::new();
     for tools in [
         tools_for(AiHost::Chat),
@@ -120,6 +121,11 @@ fn no_tool_schema_has_a_ref_loop_of_required_fields() {
             ai_toolset::schema::required_ref_loop(schema.as_value()),
             None,
             "{name}"
+        );
+        let depth = ai_toolset::schema::nesting_depth(schema.as_value());
+        assert!(
+            depth <= ai_toolset::schema::GEMINI_MAX_SCHEMA_DEPTH,
+            "{name} nests {depth} levels"
         );
     }
 }
@@ -183,7 +189,7 @@ fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
         assert!(!prompt.contains(name), "{name}");
     }
     assert!(tools.toolset.tools.contains_key("ListAgentUpdates"));
-    assert!(prompt.contains("macro.agents.list()"));
+    assert!(prompt.contains("macro.agents.coding()"));
     assert!(prompt.contains("macro.agentSessions.createManaged"));
     assert!(
         !tools_for(AiHost::AgentSession)
@@ -191,6 +197,30 @@ fn code_mode_starts_agents_through_the_sdk_instead_of_dispatch_tools() {
             .to_string()
             .contains("createManaged")
     );
+}
+
+/// Code mode hides direct tools whose work the SDK does, while other
+/// hosts keep them.
+#[test]
+fn code_mode_hides_tools_the_sdk_covers() {
+    let code_mode = tools_for_agent_code_mode();
+    let direct = tools_for(AiHost::AgentSession);
+    for name in [
+        "ListTags",
+        "CreateTag",
+        "EditTag",
+        "DeleteTag",
+        "OpenDirectMessage",
+        "MuteNotifications",
+        "GetTeamAvailability",
+    ] {
+        assert!(!code_mode.toolset.tools.contains_key(name), "{name}");
+        assert!(
+            !code_mode.deferred.iter().any(|tool| tool.name == name),
+            "{name}"
+        );
+        assert!(direct.toolset.tools.contains_key(name), "{name}");
+    }
 }
 
 #[test]
@@ -777,6 +807,15 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "ContentSearch",
         "DiscoverConnectors",
         "ConnectMcpServer",
+        "ReadCanvas",
+        "EditCanvas",
+        "ApplyCanvasEdits",
+        "ReadSpreadsheet",
+        "CalculateSpreadsheet",
+        "EditSpreadsheet",
+        "ListSkills",
+        "SearchSkills",
+        "ReadSkill",
     ] {
         assert!(standard.toolset.tools.contains_key(name), "{name}");
         assert!(sdk.tools.contains_key(name), "{name}");
@@ -785,14 +824,7 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     }
     for name in [
         "CreateDocument",
-        "ListSkills",
-        "SearchSkills",
-        "ReadSkill",
-        "EditSpreadsheet",
-        "ReadCanvas",
         "RenderCanvas",
-        "ApplyCanvasEdits",
-        "EditCanvas",
         "Subagent",
         "SearchTools",
         "LoadTools",
@@ -983,5 +1015,22 @@ fn unrouted_prompts_inline_the_sdk_area_guidance_and_routed_ones_leave_it_to_the
         );
         assert!(prompt.contains("DispatchCodingAgent"), "{host:?}");
         assert_eq!(prompt, tools.routed_prompt.to_string(), "{host:?}");
+    }
+}
+
+#[test]
+fn code_mode_reads_memory_and_activity_through_the_sdk() {
+    let names = [
+        "ReadMemory",
+        "UpdateMemory",
+        "GetUserActivity",
+        "ReadActivity",
+        "ReadInitiativeActivity",
+    ];
+    let code_mode = tools_for_agent_code_mode();
+    let direct = tools_for(AiHost::AgentSession);
+    for name in names {
+        assert!(!code_mode.toolset.tools.contains_key(name), "{name}");
+        assert!(direct.toolset.tools.contains_key(name), "{name}");
     }
 }

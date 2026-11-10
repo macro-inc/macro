@@ -25,7 +25,7 @@ export default {
   tabMobileApp: 'Mobile App',
   tabTags: 'Tags',
   tabIntegrations: 'Integrations',
-  tabRuntimes: 'Runtimes',
+  tabRuntimes: 'Machines',
   tabMcpServer: 'MCP server',
   tabApiKeys: 'API Keys',
   tabAccountManagers: 'Account Managers',

@@ -4,6 +4,7 @@ use crate::api::webhooks::user::create_user_webhook::{
 use crate::api::{
     context::ApiContext,
     login::sso::{SsoState, is_allowed_original_url, redact_original_url_for_logging},
+    oauth2::ConsentFailure,
     utils::{
         append_signed_up_param_if_new_user, create_access_token_cookie,
         create_refresh_token_cookie, default_redirect_url, generate_session_code,
@@ -65,13 +66,22 @@ pub async fn handler(
     let code = match params.code {
         Some(c) => c,
         None => {
+            let failure = ConsentFailure::classify(
+                params.error.as_deref(),
+                params.error_description.as_deref(),
+            );
             tracing::warn!(
                 auth_handoff_failure = "missing_code",
+                outcome = failure.as_str(),
                 error = ?params.error,
                 error_reason = ?params.error_reason,
                 error_description = ?params.error_description,
                 "oauth redirect received without code",
             );
+            let state = params.state.and_then(|state| state.decode().ok());
+            if let Some(url) = sign_in_failure_url(state.as_ref(), failure) {
+                return Ok(html_redirect(&url).into_response());
+            }
             return Err((
                 StatusCode::BAD_REQUEST,
                 Json(ErrorResponse {
@@ -306,6 +316,30 @@ async fn get_redirect_url(
     .await?;
 
     Ok(res)
+}
+
+/// The query param that tells the app why a provider sign-in came back without
+/// a code, so it can offer email sign-in instead of a dead end.
+const SSO_ERROR_PARAM: &str = "sso_error";
+
+/// Sends a sign-in that came back without a code to the page that started it,
+/// with the reason. `None` when there is no allowed page to return to.
+fn sign_in_failure_url(state: Option<&SsoState>, failure: ConsentFailure) -> Option<Url> {
+    let mut url = state?.original_url.clone()?;
+    // Re-validate: the state is client-visible and may be forged.
+    if !is_allowed_original_url(&url) {
+        return None;
+    }
+    let kept: Vec<(String, String)> = url
+        .query_pairs()
+        .filter(|(key, _)| key != SSO_ERROR_PARAM)
+        .map(|(key, value)| (key.into_owned(), value.into_owned()))
+        .collect();
+    url.query_pairs_mut()
+        .clear()
+        .extend_pairs(kept)
+        .append_pair(SSO_ERROR_PARAM, failure.as_str());
+    Some(url)
 }
 
 /// given an input url, attaches a session code as a query param if required.
