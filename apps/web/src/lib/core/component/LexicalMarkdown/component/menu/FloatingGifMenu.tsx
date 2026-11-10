@@ -9,23 +9,12 @@ import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn, InputGroup, Surface } from '@ui';
 import {
-  $addUpdateTag,
-  $getNodeByKey,
-  $getRoot,
-  $getSelection,
-  $isRangeSelection,
-  $setSelection,
-  type BaseSelection,
-  SKIP_DOM_SELECTION_TAG,
-} from 'lexical';
-import {
   type Accessor,
   createEffect,
   createResource,
   createSignal,
   For,
   Match,
-  onCleanup,
   onMount,
   Show,
   Switch,
@@ -38,15 +27,11 @@ import {
 } from '../../context/FloatingMenuContext';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithSelection } from '../../directive/floatWithSelection';
-import {
-  $insertGifNode,
-  type Gif,
-  gifPickerPlugin,
-  searchGifs,
-} from '../../plugins/gif';
+import type { GifMenuHost } from '../../editing/overlay-hosts/gif';
+import { createLexicalGifMenuHost } from '../../editing/overlay-hosts/lexical-gif';
+import { type Gif, searchGifs } from '../../plugins/gif';
 import PoweredByKlipy from '../../plugins/gif/powered-by-klipy.svg';
 import { uploadGif } from '../../plugins/gif/uploadGif';
-import { registerRootEventListener } from '../../plugins/shared/utils';
 import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 
 false && floatWithSelection;
@@ -73,6 +58,22 @@ export function FloatingGifMenu(
   const plugins = () => lexicalWrapper?.plugins;
   const editor = () => lexicalWrapper?.editor;
 
+  return (
+    <HostedFloatingGifMenu
+      canEdit={canEdit}
+      portalScope={props.portalScope}
+      host={createLexicalGifMenuHost(editor, plugins)}
+    />
+  );
+}
+
+export function HostedFloatingGifMenu<Target, Insertion>(props: {
+  canEdit: Accessor<boolean>;
+  portalScope?: PortalScope;
+  host: GifMenuHost<Target, Insertion>;
+}) {
+  const canEdit = props.canEdit;
+
   const [menuOpen, setMenuOpen] = createMenuOpenSignal(
     'gif-picker-menu',
     MenuPriority.High,
@@ -98,7 +99,7 @@ export function FloatingGifMenu(
     );
   };
   // The search field takes focus, so the editor's caret is kept to insert at.
-  let insertAt: BaseSelection | null = null;
+  let insertAt: Target | null = null;
   let inputRef: HTMLInputElement | undefined;
   let gridRef: HTMLDivElement | undefined;
 
@@ -134,41 +135,33 @@ export function FloatingGifMenu(
 
   const closeToEditor = () => {
     resetMenu();
-    editor()?.focus();
+    props.host.focus();
   };
 
   const handleOpenPicker = createCallback(() => {
-    if (!canEdit() || !editor()?.isEditable()) return;
+    if (!canEdit() || !props.host.isEditable()) return;
     if (menuOpen()) {
       resetMenu();
       return;
     }
-    insertAt = $getSelection()?.clone() ?? null;
-    // Keep Lexical's commit from reclaiming focus after the command returns.
-    $addUpdateTag(SKIP_DOM_SELECTION_TAG);
+    insertAt = props.host.captureTarget();
     setMenuOpen(true);
   });
 
   const insertGif = async (gif: Gif) => {
     if (uploading()) return;
-    const currentEditor = editor();
-    if (!canEdit() || !currentEditor?.isEditable()) {
+    const insertion = props.host.prepareInsertion(insertAt, canEdit);
+    if (!insertion) {
       resetMenu();
       return;
     }
-    const selection = insertAt?.clone();
-    const root = currentEditor.getRootElement();
     const request = new AbortController();
     uploadController = request;
     setUploading(true);
     let uploadedId: string | undefined;
     let inserted = false;
     setUploadError(false);
-    const unregisterUpdate = currentEditor.registerUpdateListener(
-      ({ dirtyElements, dirtyLeaves }) => {
-        if (dirtyElements.size || dirtyLeaves.size) resetMenu();
-      }
-    );
+    const unregisterUpdate = props.host.subscribeChanges(insertion, resetMenu);
     request.signal.addEventListener('abort', unregisterUpdate, { once: true });
     try {
       const result = await uploadGif(gif, request.signal);
@@ -183,29 +176,13 @@ export function FloatingGifMenu(
         request.signal.aborted ||
         !menuOpen() ||
         !canEdit() ||
-        !currentEditor.isEditable() ||
-        currentEditor !== editor() ||
-        root !== currentEditor.getRootElement()
+        !props.host.isCurrent(insertion)
       )
         return;
 
-      currentEditor.update(
-        () => {
-          // A cleared draft must not receive the old request's image.
-          if (
-            selection &&
-            $isRangeSelection(selection) &&
-            (!$getNodeByKey(selection.anchor.key)?.isAttached() ||
-              !$getNodeByKey(selection.focus.key)?.isAttached())
-          )
-            return;
-          if (selection) $setSelection(selection);
-          else if (!$getSelection()) $getRoot().selectEnd();
-          $insertGifNode(gif, result.value);
-          inserted = true;
-        },
-        { discrete: true }
-      );
+      inserted = props.host.commit(insertion, gif, result.value, () => {
+        inserted = true;
+      });
       closeToEditor();
     } finally {
       request.signal.removeEventListener('abort', unregisterUpdate);
@@ -223,13 +200,7 @@ export function FloatingGifMenu(
   });
 
   createEffect(() => {
-    const currentPlugins = plugins();
-    if (!currentPlugins) return;
-
-    currentPlugins.useReactive(canEdit, () => {
-      if (!canEdit()) return;
-      return gifPickerPlugin({ onOpenPicker: handleOpenPicker });
-    });
+    props.host.registerPicker(canEdit, handleOpenPicker);
   });
 
   const { isKeypressActive } = useIsKeyPressActive();
@@ -263,28 +234,15 @@ export function FloatingGifMenu(
       <ScopedPortal scope={props.portalScope}>
         <div
           ref={(panel) => {
-            const currentEditor = editor();
-            if (!currentEditor) return;
-            onCleanup(cancelUpload);
-            // Search belongs to this composer even though its DOM is portalled.
-            onCleanup(
-              registerRootEventListener(currentEditor, 'focusout', (event) => {
-                if (
-                  event.relatedTarget instanceof Node &&
-                  panel.contains(event.relatedTarget)
-                ) {
-                  event.stopPropagation();
-                }
-              })
-            );
+            props.host.registerPanel(panel, cancelUpload);
           }}
           data-holds-prompts
           data-keep-keyboard
           class="w-[28rem] mobile:w-[calc(100cqw-1rem-2px)] max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content menu-open-animation"
           use:floatWithSelection={{
             selection: untrack(() => window.getSelection()),
-            fallbackElement: editor()?.getRootElement(),
-            reactiveOnContainer: editor()?.getRootElement(),
+            fallbackElement: props.host.root(),
+            reactiveOnContainer: props.host.root(),
             onAvailableHeight: setMenuAvailableHeight,
             fullHeight: MAX_GRID_HEIGHT + PANEL_CHROME_HEIGHT,
           }}

@@ -199,6 +199,13 @@ open, resized and inserted stages. Set `OVERLAY_TABLE_CAPTURE` to retain the
 same per-project files. Run it alongside the six existing table-picker cases
 when comparing the shared `TablePickerHost` extraction; native binding remains
 a separate acceptance gate.
+The opt-in `/?gifs` route mounts the real `FloatingGifMenu`. Its copied seven
+inventory cases supply catalog and failed-download responses at the external
+IO boundary; they do not prove successful upload or native binding. The added
+capture case attaches raw open/search/failed-download/closed JSON and DOM;
+`OVERLAY_GIF_CAPTURE` also retains per-project files. Input uses `hasTouch` so
+the same cases run in independently named browser projects. Keep these runs
+separate from historical inventory reports and their dependency epochs.
 The opt-in `/?controls` route mounts the actual checklist collector/store and
 TaskListControlsRenderer with production query and user providers. Its cases
 exercise plain/task progress, task-only filter availability, status selection
