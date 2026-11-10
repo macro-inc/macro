@@ -4,6 +4,7 @@
 
 mod chat_reply;
 mod coding_preferences;
+mod command_workers;
 mod external_mcp;
 mod external_replies;
 mod followers;
