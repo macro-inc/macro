@@ -91,6 +91,18 @@ export function ComputerBuyFlow(props: {
     return current === 'computer' ? 'agent' : current;
   };
 
+  // Each step replaces the content, and with it the focused control; keep
+  // focus in the modal so Escape and Tab still reach it.
+  let content: HTMLDivElement | undefined;
+  createEffect(
+    on(step, () => {
+      queueMicrotask(() => {
+        if (content && !content.contains(document.activeElement))
+          content.focus();
+      });
+    })
+  );
+
   // Opening from Finish setup starts on the agent step.
   createEffect(
     on(
@@ -164,6 +176,9 @@ export function ComputerBuyFlow(props: {
         onOpenChange={(open) => !open && close()}
         position="center"
         visibleScrim
+        contentRef={(element) => {
+          content = element;
+        }}
         class="w-[min(600px,calc(100vw-16px))]"
       >
         <ActionDialogShell class="h-auto">

@@ -125,6 +125,8 @@ function ManagedComputerRow(props: {
   const currentMode = () =>
     mode.isSuccess ? mode.data.mode : props.harness?.claude_mode;
   const claude = (): ComputerClaudeState => {
+    // Guided setup picks Claude; until then there is nothing to show.
+    if (!props.computer.setupCompletedAt) return { kind: 'unset' };
     const value = currentMode();
     if (value === 'macro_credits') return { kind: 'credits' };
     if (value === 'own_account')

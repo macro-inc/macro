@@ -171,6 +171,11 @@ export function ClaudeSignInFlow(props: {
           {t('computers.claudeSharedAccount')}
         </p>
         <Show when={step() === 'code'}>
+          <p class="text-sm text-ink-muted">
+            {t('computers.claudeHarnessNote')}
+          </p>
+        </Show>
+        <Show when={step() === 'code'}>
           <form
             class="ph-no-capture flex flex-col gap-2"
             onSubmit={(event) => {
@@ -178,9 +183,6 @@ export function ClaudeSignInFlow(props: {
               fireAndForget(submit(), 'computer-claude');
             }}
           >
-            <p class="text-xs text-ink-muted">
-              {t('computers.claudeHarnessNote')}
-            </p>
             <label for={codeId} class="text-sm leading-5 text-ink-muted">
               {t('computers.claudeCodeLabel')}
             </label>

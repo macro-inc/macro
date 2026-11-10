@@ -20,6 +20,8 @@ import {
 
 /** How Claude Code on the computer is paid for, as the row shows it. */
 export type ComputerClaudeState =
+  /** Not chosen yet: guided setup asks. */
+  | { kind: 'unset' }
   | { kind: 'loading' }
   | { kind: 'credits' }
   | { kind: 'account'; account?: string };
@@ -32,7 +34,7 @@ export type ComputerPrimaryAction = {
 
 function claudeText(claude: ComputerClaudeState): string | undefined {
   if (claude.kind === 'credits') return t('computers.claudeCredits');
-  if (claude.kind === 'loading') return undefined;
+  if (claude.kind === 'loading' || claude.kind === 'unset') return undefined;
   return claude.account
     ? t('computers.claudeOwnAccountAs', { account: claude.account })
     : t('computers.claudeNotSignedIn');
