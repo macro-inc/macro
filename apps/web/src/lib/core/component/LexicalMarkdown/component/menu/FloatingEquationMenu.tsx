@@ -16,7 +16,7 @@ import {
   createMenuOpenSignal,
   MenuPriority,
 } from '../../context/FloatingMenuContext';
-import { useDecoratorHost } from '../../decorator-host/use-decorator-host';
+import { useEquationHost } from '../../decorator-host/equation-host';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { floatWithSelection } from '../../directive/floatWithSelection';
 import { Equation } from '../decorator/Equation';
@@ -29,7 +29,7 @@ export function FloatingEquationMenu(
   props: { canEdit?: Accessor<boolean> } = {}
 ) {
   const canEdit = props.canEdit ?? useCanEdit();
-  const host = useDecoratorHost();
+  const host = useEquationHost();
 
   const [menuOpen, setMenuOpen] = createMenuOpenSignal(
     'equation-menu',
