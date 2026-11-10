@@ -278,6 +278,8 @@ where
             return Ok(0);
         }
         let now = Utc::now();
+        let stale =
+            chrono::Duration::from_std(STALE_GENERATION).map_err(GenerationError::internal)?;
         let due: Vec<AudienceMember> = self
             .runner
             .repo
@@ -285,6 +287,7 @@ where
                 now,
                 now - ACTIVE_WITHIN,
                 now - NIGHTLY_EVERY,
+                now - stale,
                 NIGHT,
                 u16::try_from(room).unwrap_or(u16::MAX),
             )
@@ -325,6 +328,19 @@ where
         }
         tracing::Span::current().record("suggestion.swept", stale.len());
         Ok(stale.len())
+    }
+
+    /// The person's routine suggestions: AI's, then Macro's templates.
+    pub async fn routine_suggestions(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> Result<scheduled_action::domain::suggestions::model::RoutineSuggestions, GenerationError>
+    {
+        self.runner
+            .routines
+            .suggestions(user, None)
+            .await
+            .map_err(|error| GenerationError::Internal(rootcause::report!("{error:?}")))
     }
 
     /// Wait for every generation running here to stop.

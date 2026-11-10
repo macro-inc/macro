@@ -74,6 +74,17 @@ impl GenerationRepo for PgGenerationRepo {
             tx.commit().await?;
             return Ok(restarted);
         }
+        // An interrupted run of the other trigger ended with its process.
+        sqlx::query!(
+            r#"UPDATE suggestion_generation SET status = 'failed', finished_at = $3
+               WHERE user_id = $1 AND trigger <> $2 AND status = 'generating' AND started_at < $4"#,
+            user.as_ref(),
+            trigger.as_ref(),
+            now,
+            stale_before,
+        )
+        .execute(&mut *tx)
+        .await?;
         let id = Uuid::now_v7();
         // The unique indexes refuse a second running generation and a
         // second onboarding one.
@@ -206,6 +217,7 @@ impl GenerationRepo for PgGenerationRepo {
         now: DateTime<Utc>,
         seen_since: DateTime<Utc>,
         nightly_since: DateTime<Utc>,
+        stale_before: DateTime<Utc>,
         night: (u8, u8),
         limit: u16,
     ) -> Result<Vec<AudienceMember>, Self::Err> {
@@ -217,7 +229,8 @@ impl GenerationRepo for PgGenerationRepo {
                  AND NOT EXISTS (
                      SELECT 1 FROM suggestion_generation g
                      WHERE g.user_id = a.user_id
-                       AND (g.status = 'generating' OR (g.trigger = 'nightly' AND g.started_at > $3)))
+                       AND ((g.status = 'generating' AND g.started_at >= $7)
+                            OR (g.trigger = 'nightly' AND g.started_at > $3)))
                ORDER BY a.seen_at
                LIMIT $6"#,
             now,
@@ -226,6 +239,7 @@ impl GenerationRepo for PgGenerationRepo {
             i32::from(night.0),
             i32::from(night.1),
             i64::from(limit),
+            stale_before,
         )
         .fetch_all(&self.pool)
         .await?;

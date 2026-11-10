@@ -21,7 +21,8 @@ pub trait GenerationRepo: Send + Sync + 'static {
     /// An onboarding run doesn't hold back that night's nightly run: it is
     /// the quick brief, not the full research. A
     /// running one of the same trigger that started before `stale_before`
-    /// was interrupted (its process stopped) and starts again.
+    /// was interrupted (its process stopped) and starts again; one of the
+    /// other trigger is recorded failed, so it holds nothing back.
     fn begin(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -75,13 +76,16 @@ pub trait GenerationRepo: Send + Sync + 'static {
 
     /// At most `limit` people seen since `seen_since`, whose local hour at
     /// `now` is in `night` (start inclusive, end exclusive), with no
-    /// generation running and no nightly one started after `nightly_since`;
-    /// those seen longest ago first.
+    /// generation running since `stale_before` and no nightly one started
+    /// after `nightly_since`; those seen longest ago first. A generation
+    /// still running from before `stale_before` was interrupted and holds
+    /// no one back.
     fn due(
         &self,
         now: DateTime<Utc>,
         seen_since: DateTime<Utc>,
         nightly_since: DateTime<Utc>,
+        stale_before: DateTime<Utc>,
         night: (u8, u8),
         limit: u16,
     ) -> impl Future<Output = Result<Vec<AudienceMember>, Self::Err>> + Send;
