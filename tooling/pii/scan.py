@@ -9,7 +9,9 @@ free text.
 The optional Gitleaks pass conservatively excludes only entire staged files
 identical to the same path in an incoming parent; modified files stay scanned.
 Sync transcript JWT findings are accepted only after their staged signatures
-verify against the public local test key; all other secret rules still apply.
+verify against the public local test key. Generic-key findings qualify only
+when their exact flagged secret span lies wholly inside such a verified token;
+all unrelated secret findings remain blocked.
 
 Only humans should add `tooling/pii/exceptions` entries, unless they ask an
 agent to.
@@ -20,6 +22,7 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import gzip
 import hmac
 import json
 import os
@@ -258,12 +261,50 @@ def merge_parents() -> list[str]:
     return verified_parents
 
 
+def logical_path(path: str) -> str:
+    return path.removesuffix(".gz")
+
+
+def compressed_paths(*args: str) -> list[str]:
+    result = git("diff", *args, "--name-only", "--diff-filter=AMR", "-z")
+    result.check_returncode()
+    return [path for path in result.stdout.split("\0") if path.endswith(".gz") and not skip_path(logical_path(path))]
+
+
+def file_text(path: str, staged: bool = False) -> str:
+    if Path(path).is_absolute() or ".." in Path(path).parts or "\0" in path:
+        raise ValueError("Invalid scan path")
+    if staged:
+        result = subprocess.run(["git", "show", f":0:{path}"], cwd=ROOT, check=True, capture_output=True)
+        data = result.stdout
+    else:
+        data = (ROOT / path).read_bytes()
+    if path.endswith(".gz"):
+        try:
+            data = gzip.decompress(data)
+        except (OSError, EOFError) as error:
+            raise ValueError(f"Invalid gzip input: {path}") from error
+    return data.decode("utf-8")
+
+
+def body_findings(paths: list[str], exceptions: Exceptions, staged: bool = False) -> list[Finding]:
+    findings = []
+    for path in paths:
+        if not skip_path(logical_path(path)):
+            findings.extend(scan_text(file_text(path, staged), exceptions, logical_path(path)))
+    return findings
+
+
 def staged_findings(exceptions: Exceptions) -> list[Finding]:
     """Keep only staged findings on lines newly added relative to every parent."""
     findings = list(iter_diff_findings(staged_diff(), exceptions))
     for parent in merge_parents():
         parent_findings = set(iter_diff_findings(staged_diff(parent), exceptions))
         findings = [finding for finding in findings if finding in parent_findings]
+    paths = compressed_paths("--cached")
+    parents = merge_parents()
+    paths = [path for path in paths if not (parents and unchanged_import(path, parents))]
+    findings.extend(body_findings(paths, exceptions, staged=True))
     return findings
 
 
@@ -288,6 +329,9 @@ def untracked_findings(exceptions: Exceptions) -> list[Finding]:
             continue
         file_path = ROOT / path
         if not file_path.is_file():
+            continue
+        if path.endswith(".gz"):
+            findings.extend(body_findings([path], exceptions))
             continue
         try:
             if file_path.stat().st_size > MAX_FILE_BYTES:
@@ -328,9 +372,9 @@ def unchanged_import(path: str, parents: list[str]) -> bool:
 
 
 def local_transcript_jwt(finding: dict, staged: dict[str, list[str]]) -> bool:
-    """Recognize only staged sync fixture tokens signed by the public test key."""
+    """Recognize only exact sync fixture tokens signed by the public test key."""
     path = finding["File"]
-    if (finding["RuleID"] != "jwt" or finding.get("Tags")
+    if (finding["RuleID"] not in ("jwt", "generic-api-key") or finding.get("Tags")
             or not re.fullmatch(r"crates/sync_server_sim/tests/transcripts(?:-activated)?/[^/]+/[^/]+\.jsonl", path)):
         return False
     line = finding["StartLine"]
@@ -342,14 +386,15 @@ def local_transcript_jwt(finding: dict, staged: dict[str, list[str]]) -> bool:
         staged[path] = result.stdout.splitlines()
     if line > len(staged[path]):
         return False
-    tokens = re.findall(
+    text = staged[path][line - 1]
+    tokens = list(re.finditer(
         r"(?<![A-Za-z0-9_-])ey[A-Za-z0-9_-]*\.[A-Za-z0-9_/\\-]*\.[A-Za-z0-9_/\\=-]*",
-        staged[path][line - 1],
-    )
+        text,
+    ))
     if not tokens:
         return False
     for token in tokens:
-        header, payload, signature = token.split(".")
+        header, payload, signature = token.group().split(".")
         try:
             decoded_header = json.loads(base64.b64decode(header + "=" * (-len(header) % 4), altchars=b"-_", validate=True))
             decoded_payload = json.loads(base64.b64decode(payload + "=" * (-len(payload) % 4), altchars=b"-_", validate=True))
@@ -361,6 +406,21 @@ def local_transcript_jwt(finding: dict, staged: dict[str, list[str]]) -> bool:
         expected = base64.urlsafe_b64encode(digest).decode().rstrip("=")
         if not hmac.compare_digest(signature, expected):
             return False
+    if finding["RuleID"] == "generic-api-key":
+        # The private report identifies the exact original match and secret.
+        # Reject ambiguous matches instead of guessing at Gitleaks column offsets.
+        match, secret = finding.get("Match"), finding.get("Secret")
+        if (not isinstance(match, str) or not isinstance(secret, str)
+                or not secret or not match or match.find(secret) < 0
+                or match.find(secret) != match.rfind(secret)
+                or text.find(match) < 0 or text.find(match) != text.rfind(match)):
+            return False
+        secret_start = text.index(match) + match.index(secret)
+        secret_end = secret_start + len(secret)
+        return any(
+            token.start() <= secret_start < secret_end <= token.end()
+            for token in tokens
+        )
     return True
 
 
@@ -368,7 +428,7 @@ def run_gitleaks() -> int:
     gitleaks = shutil.which("gitleaks")
     if not gitleaks:
         return 0
-    command = [gitleaks, "protect", "--staged", "--redact", "--no-banner"]
+    command = [gitleaks, "protect", "--staged", "--no-banner"]
     try:
         parents = merge_parents()
         with tempfile.TemporaryDirectory(prefix="macro-pii-") as directory:
@@ -376,7 +436,7 @@ def run_gitleaks() -> int:
             result = subprocess.run(
                 [*command, "--exit-code", "42", "--report-format", "json", "--report-path", str(report_path)],
                 cwd=ROOT,
-                check=False,
+                check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
             )
             if result.returncode not in (0, 42):
                 return result.returncode
@@ -409,6 +469,58 @@ def run_gitleaks() -> int:
         return 2
 
 
+def run_file_gitleaks(paths: list[str], staged: bool = False) -> int:
+    """Scan decoded bodies; binary Git diffs contain no searchable gzip text."""
+    gitleaks = shutil.which("gitleaks")
+    if not gitleaks or not paths:
+        return 0
+    try:
+        with tempfile.TemporaryDirectory(prefix="macro-pii-bodies-") as directory:
+            source = Path(directory) / "source"
+            source.mkdir()
+            originals = {}
+            bodies = {}
+            for path in paths:
+                logical = logical_path(path)
+                if skip_path(logical):
+                    continue
+                if logical in originals:
+                    raise ValueError("Duplicate logical scan path")
+                text = file_text(path, staged)
+                destination = source / logical
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_text(text, encoding="utf-8")
+                originals[logical] = path
+                bodies[logical] = text.splitlines()
+            report_path = Path(directory) / "report.json"
+            result = subprocess.run(
+                [gitleaks, "detect", "--no-git", "--source", str(source), "--no-banner", "--exit-code", "42", "--report-format", "json", "--report-path", str(report_path)],
+                cwd=ROOT, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            if result.returncode not in (0, 42):
+                return result.returncode
+            findings = json.loads(report_path.read_text(encoding="utf-8"))
+            if not isinstance(findings, list) or bool(findings) != (result.returncode == 42):
+                raise ValueError("Invalid Gitleaks report")
+            blocked = 0
+            for finding in findings:
+                if not isinstance(finding, dict) or not isinstance(finding.get("File"), str) or not isinstance(finding.get("RuleID"), str) or type(finding.get("StartLine")) is not int:
+                    raise ValueError("Invalid Gitleaks finding")
+                name = Path(finding["File"])
+                logical = str(name.relative_to(source)) if name.is_absolute() else str(name)
+                if logical not in originals:
+                    raise ValueError("Unexpected Gitleaks path")
+                finding = {**finding, "File": logical}
+                if local_transcript_jwt(finding, bodies):
+                    continue
+                print(f'{originals[logical]}:{finding["StartLine"]}: {finding["RuleID"]} [redacted]', file=sys.stderr)
+                blocked += 1
+            return int(blocked != 0)
+    except (OSError, ValueError, subprocess.CalledProcessError):
+        print("Decoded body secret scan failed; commit remains blocked.", file=sys.stderr)
+        return 2
+
+
 def report(findings: list[Finding]) -> int:
     if not findings:
         return 0
@@ -430,6 +542,7 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Scan added lines vs origin/main (and untracked files), like just check.",
     )
+    parser.add_argument("--files", nargs="+", help="Scan complete logical file bodies, including gzip, without staging them.")
     parser.add_argument(
         "--text",
         metavar="TEXT",
@@ -447,16 +560,29 @@ def main(argv: list[str] | None = None) -> int:
         text = sys.stdin.read() if args.text == "-" else args.text
         return report(scan_text(text, exceptions))
 
-    if args.changed:
-        findings = list(iter_diff_findings(changed_diff(), exceptions))
-        findings.extend(untracked_findings(exceptions))
-        return report(findings)
-
-    findings = staged_findings(exceptions)
-    status = report(findings)
-    if status != 0 or args.skip_gitleaks:
-        return status
-    return run_gitleaks()
+    try:
+        if args.files:
+            status = report(body_findings(args.files, exceptions))
+            return status if status or args.skip_gitleaks else run_file_gitleaks(args.files)
+        if args.changed:
+            findings = list(iter_diff_findings(changed_diff(), exceptions))
+            base = os.environ.get("CHECK_BASE") or merge_base() or "HEAD"
+            findings.extend(body_findings(compressed_paths(base), exceptions))
+            findings.extend(untracked_findings(exceptions))
+            return report(findings)
+        findings = staged_findings(exceptions)
+        status = report(findings)
+        if status != 0 or args.skip_gitleaks:
+            return status
+        status = run_gitleaks()
+        if status:
+            return status
+        parents = merge_parents()
+        paths = [path for path in compressed_paths("--cached") if not (parents and unchanged_import(path, parents))]
+        return run_file_gitleaks(paths, staged=True)
+    except (OSError, ValueError, subprocess.CalledProcessError):
+        print("Logical file scan failed; commit remains blocked.", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

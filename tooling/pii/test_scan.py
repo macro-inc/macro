@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tempfile
+import gzip
 import subprocess
 import unittest
 import io
@@ -358,6 +359,65 @@ class GitleaksMergeTest(unittest.TestCase):
         (self.root / ".git/MERGE_HEAD").unlink()
         self.assertEqual(self.run_tool([finding]), 0)
 
+    def test_generic_findings_require_exact_span_in_verified_local_token(self):
+        path = "crates/sync_server_sim/tests/transcripts-activated/example.test/scenario.jsonl"
+        file = self.root / path
+        file.parent.mkdir(parents=True)
+        encode = lambda value: base64.urlsafe_b64encode(value).decode().rstrip("=")
+        body = encode(b'{"alg":"HS256"}') + "." + encode(b'{"user_id":"test-user"}')
+        valid = body + "." + encode(hmac.new(b"local", body.encode(), hashlib.sha256).digest())
+        wrong = body + "." + encode(hmac.new(b"other", body.encode(), hashlib.sha256).digest())
+
+        def check(text, start, end, allowed):
+            file.write_text(text + "\n")
+            self.git("add", path)
+            finding = {
+                "File": path, "RuleID": "generic-api-key", "Tags": [],
+                "StartLine": 1, "EndLine": 1,
+                "StartColumn": len(text[:start].encode()) + 1,
+                "EndColumn": len(text[:end].encode()),
+                "Match": text[start:end], "Secret": text[start:end],
+            }
+            self.assertEqual(self.run_tool([finding]), 0 if allowed else 1)
+
+        # Non-ASCII context does not change exact original match/secret locations.
+        text = "\u03bb token=" + valid + " unrelated=independent-secret"
+        start = text.index(valid)
+        check(text, start + 5, start + 20, True)
+        # Exact Match may include context outside the token; only Secret is exempt.
+        finding = {
+            "File": path, "RuleID": "generic-api-key", "Tags": [],
+            "StartLine": 1, "EndLine": 1,
+            "Match": text[start - 6:start + 23],
+            "Secret": text[start:start + 20],
+        }
+        self.assertEqual(self.run_tool([finding]), 0)
+        for field in ({"Match": "missing context"}, {"Secret": "unrelated"},
+                      {"Match": ""}, {"Secret": ""}):
+            self.assertEqual(self.run_tool([{**finding, **field}]), 1)
+        file.write_text(text + " " + text + "\n")
+        self.git("add", path)
+        self.assertEqual(self.run_tool([finding]), 1)
+        unrelated = text.index("independent-secret")
+        check(text, unrelated, len(text), False)
+        check("token=" + wrong, 5, 20, False)
+        check(text, start - 1, start + 20, False)
+        truncated = "token=" + valid[:-1]
+        check(truncated, 5, 20, False)
+
+        # Leading JSON whitespace creates overlapping base64 occurrences in a
+        # valid signed token, not merely an unrelated malformed input.
+        repeated_body = encode(b'{"alg":"HS256"}') + "." + encode(b" " * 12 + b'{}')
+        repeated = repeated_body + "." + encode(hmac.new(b"local", repeated_body.encode(), hashlib.sha256).digest())
+        file.write_text("token=" + repeated + "\n")
+        self.git("add", path)
+        repeated_part = encode(b" " * 12)
+        for match, secret in ((repeated_part, repeated_part[:9]),
+                              (repeated_part[:9], repeated_part[:9])):
+            self.assertEqual(self.run_tool([{
+                **finding, "Match": match, "Secret": secret,
+            }]), 1)
+
     def test_invalid_parent_and_empty_merge_state_fail_closed(self):
         for value in ("not-a-commit\n", "imported.txt\n", ""):
             with self.subTest(value=value):
@@ -383,6 +443,94 @@ class GitleaksMergeTest(unittest.TestCase):
     def test_git_failure_fails_closed(self):
         with patch.object(scan, "git", side_effect=subprocess.CalledProcessError(1, ["git"])):
             self.assertEqual(self.run_tool([self.finding("imported.txt")]), 2)
+
+
+class CompressedBodyTest(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.git("init", "-q", "-b", "local")
+        self.git("config", "user.name", "Test")
+        self.git("config", "user.email", "test@example.com")
+        (self.root / "base.txt").write_text("base\n")
+        self.git("add", ".")
+        self.git("commit", "-qm", "initial")
+        self.enterContext(patch.object(scan, "ROOT", self.root))
+        self.exceptions = Exceptions(set(), set(), set())
+
+    def git(self, *args):
+        return subprocess.check_output(["git", "-C", str(self.root), *args], text=True, stderr=subprocess.DEVNULL)
+
+    def test_staged_gzip_secret_is_scanned_as_logical_text(self):
+        token = "ghp" + "_" + "a" * 36
+        (self.root / "fixture.jsonl.gz").write_bytes(gzip.compress((token + "\n").encode()))
+        self.git("add", "fixture.jsonl.gz")
+        findings = scan.staged_findings(self.exceptions)
+        self.assertTrue(any(f.kind == "secret" and f.value == token for f in findings))
+
+    def test_concatenated_gzip_members_include_late_secret(self):
+        token = "ghp" + "_" + "a" * 36
+        body = gzip.compress(b"clean\n") + gzip.compress((token + "\n").encode())
+        (self.root / "fixture.jsonl.gz").write_bytes(body)
+        self.git("add", "fixture.jsonl.gz")
+        findings = scan.staged_findings(self.exceptions)
+        self.assertTrue(any(f.kind == "secret" and f.line_no == 2 for f in findings))
+
+    def test_corrupt_trailing_member_and_crc_fail_closed(self):
+        valid = gzip.compress(b"clean\n")
+        corrupt = bytearray(valid)
+        corrupt[-5] ^= 1
+        for data in [valid + b"junk", valid + valid[:9], bytes(corrupt)]:
+            with self.subTest(data_length=len(data)):
+                (self.root / "fixture.jsonl.gz").write_bytes(data)
+                self.git("add", "fixture.jsonl.gz")
+                with self.assertRaises(ValueError):
+                    scan.staged_findings(self.exceptions)
+                with redirect_stderr(io.StringIO()):
+                    self.assertEqual(scan.main(["--skip-gitleaks"]), 2)
+
+    def test_staged_gzip_scans_index_not_unstaged_worktree(self):
+        token = "ghp" + "_" + "a" * 36
+        path = self.root / "fixture.jsonl.gz"
+        path.write_bytes(gzip.compress((token + "\n").encode()))
+        self.git("add", "fixture.jsonl.gz")
+        path.write_bytes(gzip.compress(b"clean\n"))
+        self.assertTrue(scan.staged_findings(self.exceptions))
+        self.git("add", "fixture.jsonl.gz")
+        path.write_bytes(gzip.compress((token + "\n").encode()))
+        self.assertEqual(scan.staged_findings(self.exceptions), [])
+
+    def test_untracked_gzip_scans_past_plain_text_size_limit(self):
+        token = "ghp" + "_" + "a" * 36
+        data = b"clean\n" * (scan.MAX_FILE_BYTES // 6 + 1) + (token + "\n").encode()
+        (self.root / "fixture.jsonl.gz").write_bytes(gzip.compress(data))
+        self.assertTrue(any(f.kind == "secret" for f in scan.untracked_findings(self.exceptions)))
+
+    def test_changed_mode_scans_compressed_worktree(self):
+        token = "ghp" + "_" + "a" * 36
+        (self.root / "fixture.jsonl.gz").write_bytes(gzip.compress((token + "\n").encode()))
+        self.git("add", "fixture.jsonl.gz")
+        with patch.dict(scan.os.environ, {"CHECK_BASE": "HEAD"}), redirect_stderr(io.StringIO()):
+            self.assertEqual(scan.main(["--changed", "--skip-gitleaks"]), 1)
+
+    def test_explicit_gzip_file_mode_needs_no_staging(self):
+        token = "ghp" + "_" + "a" * 36
+        (self.root / "fixture.jsonl.gz").write_bytes(gzip.compress((token + "\n").encode()))
+        with redirect_stderr(io.StringIO()):
+            self.assertEqual(scan.main(["--files", "fixture.jsonl.gz", "--skip-gitleaks"]), 1)
+
+    def test_decoded_gitleaks_checks_real_body_and_redacts_secret(self):
+        binary = scan.shutil.which("gitleaks")
+        if not binary:
+            self.skipTest("actual gitleaks binary unavailable")
+        token = "ghp" + "_" + "u8Jk4P0sX7vQ2aN9cF6mL1dR5wT3yH0bV8zS"
+        (self.root / "fixture.jsonl.gz").write_bytes(gzip.compress((token + "\n").encode()))
+        output = io.StringIO()
+        with patch.object(scan.shutil, "which", return_value=str(binary)), redirect_stderr(output):
+            self.assertEqual(scan.run_file_gitleaks(["fixture.jsonl.gz"]), 1)
+        self.assertNotIn(token, output.getvalue())
+        self.assertIn("[redacted]", output.getvalue())
 
 
 if __name__ == "__main__":
