@@ -29,7 +29,7 @@ const TEAMMATE: &str = "macro|teammate@example.com";
 /// A team of two whose admin, Grace, bought a computer: the hosted harness
 /// the operator pairs, owned by the buyer and granted to the team.
 async fn team_computer(pool: &PgPool, team_id: Uuid) -> (ComputerId, HarnessId) {
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO macro_user (id, username, email, stripe_customer_id)
         VALUES
@@ -40,7 +40,7 @@ async fn team_computer(pool: &PgPool, team_id: Uuid) -> (ComputerId, HarnessId) 
     .execute(pool)
     .await
     .unwrap();
-    sqlx::query(
+    sqlx::query!(
         r#"
         INSERT INTO "User" (id, email, macro_user_id)
         VALUES
@@ -51,27 +51,29 @@ async fn team_computer(pool: &PgPool, team_id: Uuid) -> (ComputerId, HarnessId) 
     .execute(pool)
     .await
     .unwrap();
-    sqlx::query(
+    sqlx::query!(
         "INSERT INTO macro_user_info (macro_user_id, first_name, last_name) VALUES ('00000000-0000-4000-8000-000000000001', 'Grace', 'Hopper')",
     )
     .execute(pool)
     .await
     .unwrap();
-    sqlx::query("INSERT INTO team (id, name, owner_id) VALUES ($1, 'Platform', $2)")
-        .bind(team_id)
-        .bind(BUYER)
-        .execute(pool)
-        .await
-        .unwrap();
-    sqlx::query(
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id) VALUES ($1, 'Platform', $2)",
+        team_id,
+        BUYER,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
         r#"
         INSERT INTO team_user (user_id, team_id, team_role)
         VALUES ($1, $3, 'owner'), ($2, $3, 'member')
         "#,
+        BUYER,
+        TEAMMATE,
+        team_id,
     )
-    .bind(BUYER)
-    .bind(TEAMMATE)
-    .bind(team_id)
     .execute(pool)
     .await
     .unwrap();
@@ -86,11 +88,13 @@ async fn team_computer(pool: &PgPool, team_id: Uuid) -> (ComputerId, HarnessId) 
         })
         .await
         .unwrap();
-    let harness: Uuid = sqlx::query_scalar("SELECT id FROM harnesses WHERE computer_id = $1")
-        .bind(computer_id.as_uuid())
-        .fetch_one(pool)
-        .await
-        .unwrap();
+    let harness: Uuid = sqlx::query_scalar!(
+        "SELECT id FROM harnesses WHERE computer_id = $1",
+        computer_id.as_uuid()
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap();
     (computer_id, HarnessId::new_from_uuid(harness))
 }
 
@@ -280,12 +284,13 @@ async fn revoking_a_computer_deletes_its_agents(pool: PgPool) {
             .iter()
             .all(|agent| agent.harness_id != Some(harness_id))
     );
-    let live: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM harnesses WHERE id = $1 AND deleted_at IS NULL")
-            .bind(harness_id.as_uuid())
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+    let live: i64 = sqlx::query_scalar!(
+        r#"SELECT count(*) AS "count!" FROM harnesses WHERE id = $1 AND deleted_at IS NULL"#,
+        harness_id.as_uuid()
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
     assert_eq!(live, 0);
     assert!(
         computers
