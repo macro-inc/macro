@@ -20,6 +20,16 @@ the old cache file, so the first launch after this native update requires
 sign-in again. Cookie expiry, refresh, and write behavior are unchanged. This
 requires a native app release; an OTA frontend bundle cannot relocate the jar.
 
+## OTA bundle storage
+
+On iOS, the bundle updater stores downloads and their persistence markers in
+`Library/Application Support/<bundle-identifier>/bundle-updates`, not the
+purgeable `Library/Caches` directory. The directory is excluded from backup
+because the server can supply the bundles again. The updater deliberately
+ignores legacy cache contents: the first launch uses embedded assets and checks
+for a fresh download. Other platforms retain their existing cache location.
+This storage change requires a native app release.
+
 ## File saving and sharing
 
 The optional `file_export_plugin` registers iOS save/share commands. The web
@@ -472,6 +482,11 @@ The `tauri.conf.json` window size only applies to the first launch. A saved
 position that no longer lands on a connected monitor is ignored and the OS
 places the window. State is written to `.window-state.json` in the app config
 directory on quit; delete that file to reset. Mobile is unaffected.
+
+Launching Macro while it is already running exits the new process in
+`tauri-plugin-single-instance` before it creates a window. The running process
+then unhides the app and shows, unminimizes and focuses its window, rebuilding
+it from the startup config if it no longer exists (`src/desktop/main_window.rs`).
 
 ## Desktop native updates
 

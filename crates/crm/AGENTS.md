@@ -15,10 +15,15 @@ tools/HTTP/GraphQL surfaces over them.
 - `src/domain/pipeline_workflows/`: pipeline entry/field/record ops built on
   the shared `databases` engine (Sales pipelines are a `databases` consumer).
 - `src/domain/crm_csv.rs`, `src/domain/crm_transfer.rs`: CSV import/export for
-  agents (companies, pipeline entries, pipeline exports). Writes go through the
+  agents and the SDK (companies, pipeline entries, pipeline exports as text or
+  a saved file). Writes go through the
   pipeline workflows and `CrmService`; CSV files reach documents through the
   `CsvFiles` port, implemented in `ai_tools::crm_csv_files`.
 - `src/inbound/axum_router.rs` (+ `axum_router/*.rs`): HTTP handlers.
+- `src/inbound/pipeline_workflows.rs`: HTTP routes over the pipeline workflows
+  and CSV transfers (entries by record, fields by name, options by label),
+  merged into `/crm` beside `src/inbound/pipelines.rs`; the SDK's pipeline
+  entry methods call them.
 - `src/inbound/toolset.rs` (+ `toolset/*.rs`): AI tool definitions.
 - `src/outbound/companies_repo.rs`: the Postgres adapter for companies/contacts.
 - `SALES_BACKFILL.md`: how the legacy-CRM-to-Sales migration behaves.
@@ -92,18 +97,26 @@ tools/HTTP/GraphQL surfaces over them.
 - Serialize single and bulk source teardown company-before-source/contact, and
   re-read the target after waiting; orphan deletion must not cascade a new manual link.
 - CRM availability is team membership, independent of contribution consent.
-  Population takes the shared `crm-email:{team}` advisory lock before domain
-  advisory locks, parent team `KEY SHARE`, then entity rows. Privacy changes
+  Population takes the shared `crm-email:{team}` advisory lock, then the
+  `crm-contact:{team}:{link}:{email}` lock (which `depopulate_contact` also
+  takes before its domain lock), parent team `KEY SHARE`, the mailbox scan,
+  then the domain advisory lock and entity rows. Never run the mailbox scan
+  under a domain lock: a team backfill queues every population of the domain
+  behind it. Population transactions set a five-second `lock_timeout` and
+  return `CrmError::Contended` so their job is deferred, not held. Privacy changes
   take the exclusive privacy lock before domain/entity locks. Keep locks through
-  commit; never wait on a domain or privacy lock after acquiring entity rows.
+  commit; never wait on a domain or privacy lock after acquiring CRM entity
+  rows. Only shared team, mailbox and member row locks may precede a domain lock,
+  and no domain-lock holder may lock those rows exclusively.
   Manual creation retains domain/parent/entity ordering without email consent.
   Contact field edits take exclusive privacy coordination before discovery/domain
   locks because reassignment changes contribution eligibility; they never require
   consent or enable sync. Assigned personal contacts under disabled parent sync
   retain their identity/company but receive no email-derived source/history writes.
   Legacy enable is a compatibility no-op; disable/purge is retired.
-- Bound pipeline read- and write-guard waits with a transaction-local five-second
-  timeout so waiters release pool connections needed by the holder's storage work.
+- Bound pipeline read- and write-guard waits, and contact population lock waits,
+  with a transaction-local five-second timeout so waiters release pool
+  connections needed by the holder's work.
 - When depopulating an email, prefer its domain-linked contact over a manual
   unfiled record so mailbox-source teardown reaches the synced contact.
 - Domain exclusions affect contribution and CRM email reads, never record

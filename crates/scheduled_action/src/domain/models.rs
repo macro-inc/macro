@@ -164,7 +164,7 @@ pub const MAX_DESCRIPTION_CHARS: usize = 1_000;
 
 /// Client configuration, the create body. Ownership and execution state are
 /// server-owned.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ActionConfiguration {
     pub name: String,
@@ -179,6 +179,47 @@ pub struct ActionConfiguration {
     /// What the routine is for, in the owner's words; empty when unset.
     #[serde(default)]
     pub description: String,
+}
+
+/// What saving a routine would find wrong, without saving it: the answer to
+/// `POST /scheduled-actions/check`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct RoutineCheck {
+    /// Whether saving it would succeed: no problems and no failing steps.
+    pub ok: bool,
+    /// Why saving it would fail, other than its code, for its author.
+    pub problems: Vec<String>,
+    /// Code steps that don't type-check against Macro's SDK.
+    pub steps: Vec<CheckedStepProblems>,
+    /// The routine as saving would store it: code steps named and the SDK
+    /// their code checks against stamped.
+    pub routine: ActionConfiguration,
+}
+
+/// Something a routine draft's session created for the routine to use, such
+/// as the database it writes to: it exists whether or not the routine is
+/// saved.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreatedItem {
+    /// What kind of item.
+    #[schema(inline)]
+    pub entity_type: model_entity::EntityType,
+    /// Its id.
+    pub entity_id: String,
+}
+
+/// A code step that doesn't type-check.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckedStepProblems {
+    /// Its place among the routine's steps, from zero.
+    pub index: usize,
+    /// Its title.
+    pub title: String,
+    /// What the type checker reports, first problems first.
+    pub problems: Vec<String>,
 }
 
 /// Configuration replacement, the update body. Activation has its own endpoint, so
@@ -238,6 +279,8 @@ pub enum ActionPolicyError {
     DescriptionTooLong,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
+    #[error("only a routine suggestion session may suggest routines")]
+    NotSuggesting,
 }
 
 /// A routine's finished runs, as code reads them: its last run and its last
@@ -329,6 +372,11 @@ pub struct ScheduledAction {
     #[serde(default)]
     #[schema(value_type = Option<String>, format = Uuid)]
     pub template_id: Option<Uuid>,
+    /// The routine suggestion it was saved from, if any: a plain pointer
+    /// that stays after the suggestion is replaced.
+    #[serde(default)]
+    #[schema(value_type = Option<String>, format = Uuid)]
+    pub suggestion_id: Option<Uuid>,
     /// What the routine is for, in the owner's words; empty when unset.
     #[serde(default)]
     pub description: String,

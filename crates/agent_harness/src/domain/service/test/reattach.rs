@@ -227,7 +227,7 @@ fn listing_harness() -> (
         ),
         MockContainerManager::new(),
         AnnouncerMock::new(),
-        TestConnections::new(MirrorBindings, Arc::clone(&runtimes)),
+        TestConnections::new(MirrorBindings::default(), Arc::clone(&runtimes)),
         PromptContextMock::default(),
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),

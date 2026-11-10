@@ -6,6 +6,7 @@ import {
 } from '@app/components/list';
 import {
   useViewControlHotkeys,
+  useViewShell,
   useViewTabHotkeys,
 } from '@app/components/view-shell';
 import {
@@ -35,6 +36,7 @@ import { enableChannelTags } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
+import { isModality } from '@core/mobile/inputModality';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import type { ChannelEntity, WithNotification } from '@entity';
 import { useCachedChannelsByIds } from '@queries/channel/by-ids';
@@ -148,6 +150,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     threadsEnabled,
     threadsChannelId,
     setThreadsChannelId,
+    registerRailRowFocus,
   } = useChannelsView();
   const userId = useUserId();
 
@@ -162,6 +165,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
+  const shell = useViewShell();
   const notificationSource = useGlobalNotificationSource();
   const orchestrator = useGlobalBlockOrchestrator();
   let activation = 0;
@@ -171,6 +175,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
     console.error('Failed to open conversation', error);
     toast.failure('Unable to open conversation. Please try again.');
   };
+
+  // A click or Enter opens a conversation to write in, so its composer takes
+  // focus; arrowing through the rail only previews. A tap would raise the
+  // on-screen keyboard.
+  const activationOptions = () => ({ focusComposer: !isModality('touch') });
 
   const selectChannel = async (
     channel: WithNotification<ChannelEntity>,
@@ -195,7 +204,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         }),
       });
       const previous = selectedChannel();
-      if (!setSelectedChannel(selection)) return;
+      if (!setSelectedChannel(selection, activationOptions())) return;
       // The detail owns read marking on route opens. Re-clicks refresh and
       // mark again even though the mounted route does not change.
       if (previous?.id === selection.id && channel.isParticipant !== false) {
@@ -262,7 +271,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
           target: channel.target
             ? { kind: 'message', ...channel.target }
             : undefined,
-        })
+        }),
+        activationOptions()
       );
       return;
     }
@@ -630,7 +640,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
               ),
               'channels-view'
             );
-          } else setSelectedChannel({ type: 'channel', id: channelId });
+          } else
+            setSelectedChannel(
+              { type: 'channel', id: channelId },
+              activationOptions()
+            );
         }
       },
     })
@@ -985,6 +999,32 @@ export function ChannelsRail(props: ChannelsRailProps) {
     scrollHandle.scrollToIndex(result.index);
     return true;
   };
+
+  const rowChannelId = (row: ChannelRailRow | undefined) => {
+    if (row?.kind === 'conversation') return row.channel.id;
+    if (row?.kind === 'favorite' && row.favorite.entityType === 'channel')
+      return row.favorite.entityId;
+  };
+
+  // Esc from the open conversation returns to its row: the one it was opened
+  // from, or its first row when it arrived from elsewhere (Cmd+K, a link).
+  // A collapsed sidebar opens for it. A narrow split shows the sidebar and
+  // the conversation in turns, so Esc stays with the split there.
+  registerRailRowFocus((channelId) => {
+    const root = listRoot();
+    if (!root?.isConnected) return false;
+    if (shell.aside.isCollapsed()) {
+      if (!shell.aside.canCollapse()) return false;
+      shell.aside.expand();
+    }
+    if (rowChannelId(list.focus.item()) !== channelId) {
+      const row = visibleRows().find((row) => rowChannelId(row) === channelId);
+      const result = row && list.focus.set(row.id, { reason: 'keyboard' });
+      if (result) scrollHandle.scrollToIndex(result.index);
+    }
+    root.focus({ preventScroll: true });
+    return true;
+  });
 
   const sectionHotkeys = createHotkeyGroup();
   const sectionHotkeysEnabled = () =>

@@ -182,7 +182,10 @@ where
                 && bot_id == bot_id::MACRO_NEW_BOT_ID
                 && matches!(mcp_servers, AgentMcpServers::OwnerConnections)
                 && request.repo_url.is_none()
-                && request.source == SessionSource::User;
+                && request.source == SessionSource::User
+                // A warm row is billable; a non-billable session opens its own
+                // row.
+                && request.billing.is_billable();
             let claim = match &self.warm_lifecycle {
                 Some(lifecycle) if eligible => Some(
                     lifecycle
@@ -265,6 +268,12 @@ where
                     (false, SessionSource::Agent) => {
                         agent_session::domain::model::SessionPurpose::Dispatched
                     }
+                    // Asked for out of sight, such as a routine draft.
+                    (false, SessionSource::User)
+                        if request.visibility == SessionVisibility::Hidden =>
+                    {
+                        agent_session::domain::model::SessionPurpose::Background
+                    }
                     (false, SessionSource::User) => {
                         agent_session::domain::model::SessionPurpose::Standalone
                     }
@@ -292,6 +301,7 @@ where
                 mcp_servers,
                 egress_token_hash: Some(egress.session_token_hash),
                 origin: request.origin,
+                billing: request.billing,
             })
             .instrument(tracing::info_span!("agent.init.persist", agent.session.id = %session_id))
             .await?;
@@ -450,6 +460,7 @@ where
             reservations.insert(id, (owner.clone(), Instant::now()));
         }
         let request = OpenManagedSession {
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             id: Some(id),
             owner,

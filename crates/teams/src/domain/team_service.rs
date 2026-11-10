@@ -1276,6 +1276,20 @@ where
         Ok(true)
     }
 
+    /// Whether the user's Stripe customer still has an active or trialing
+    /// subscription.
+    async fn has_live_subscription(&self, user_id: &MacroUserIdStr<'_>) -> Result<bool, TeamError> {
+        let Some(customer_id) = self.team_repository.get_stripe_customer_id(user_id).await? else {
+            return Ok(false);
+        };
+        let live = self
+            .customer_repository
+            .get_subscription_id_for_customer(&customer_id)
+            .await
+            .map_err(|error| TeamError::StorageLayerError(error.into()))?;
+        Ok(live.is_some())
+    }
+
     /// Best-effort rollback of a direct team add (from
     /// `try_join_team_by_domain`): removes the membership again and undoes
     /// the team seat count bump. Failures are logged and swallowed, like
@@ -2110,7 +2124,7 @@ where
         Ok(team_member)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self), fields(owner_personal_role = tracing::field::Empty), err)]
     async fn revoke_permissions_for_team_members(
         &self,
         team_id: &uuid::Uuid,
@@ -2128,10 +2142,6 @@ where
             .await?;
         let members = self.team_repository.get_team_members(team_id).await?;
 
-        if members.is_empty() {
-            return Ok(());
-        }
-
         for member in members {
             let roles_to_remove = team_member_roles_to_remove();
 
@@ -2143,6 +2153,25 @@ where
                 .await
                 .map_err(RevokePermissionsForTeamMembersError::RemoveRolesFromUserError)?;
         }
+
+        // Creating or linking a team moves the owner's personal subscription
+        // onto the team, so the personal Pro role it granted lapses with the
+        // team. Keep it while any subscription on their customer is live:
+        // another one pays for it, or this team's is live again and the lapse
+        // event arrived late.
+        let owner = self.team_repository.get_team_owner(team_id).await?;
+        if self.has_live_subscription(&owner).await? {
+            tracing::Span::current().record("owner_personal_role", "kept");
+            return Ok(());
+        }
+        self.user_roles_and_permissions_service
+            .dangerous_remove_roles_from_user(
+                &owner,
+                &non_empty::NonEmpty::new([RoleId::ProfessionalSubscriber].as_slice()).unwrap(),
+            )
+            .await
+            .map_err(RevokePermissionsForTeamMembersError::RemoveRolesFromUserError)?;
+        tracing::Span::current().record("owner_personal_role", "removed");
 
         Ok(())
     }

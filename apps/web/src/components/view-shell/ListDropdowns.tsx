@@ -208,6 +208,8 @@ export type ListFilterGroup<
   selectionMode?: 'single' | 'multiple';
   defaultOptionId?: TOptionId;
   searchPlaceholder?: string;
+  /** In a searchable group, offers typed text no option lists as one. */
+  createOption?: (query: string) => ListControlOption<TOptionId> | undefined;
   contentClass?: string;
   /** Keep the source ordering instead of promoting selected options. */
   preserveOrder?: boolean;
@@ -303,11 +305,16 @@ export function ListFilterDropdown<
   ];
   const setSelectedOptionIds = (
     group: ListFilterGroup<TGroupId, TOptionId>,
-    ids: readonly string[]
+    ids: readonly TOptionId[]
   ) => {
     const current = selectedOptionIds(group);
+    // Typed entries (`createOption`) arrive with ids no option lists yet.
     const optionIds = [
-      ...new Set([...current, ...group.options.map((option) => option.id)]),
+      ...new Set([
+        ...current,
+        ...group.options.map((option) => option.id),
+        ...ids,
+      ]),
     ];
     const next = optionIds.filter((id) => {
       if (group.options.find((option) => option.id === id)?.disabled)
@@ -427,8 +434,12 @@ export function ListFilterDropdown<
                   active={isGroupActive(group())}
                   options={() => group().options}
                   activeIds={() => selectedOptionIds(group())}
-                  onChange={(ids) => setSelectedOptionIds(group(), ids)}
+                  // The submenu returns this group's option and typed ids.
+                  onChange={(ids) =>
+                    setSelectedOptionIds(group(), ids as TOptionId[])
+                  }
                   placeholder={group().searchPlaceholder}
+                  createOption={group().createOption}
                   preserveOrder={group().preserveOrder}
                   footer={group().footer}
                   onOpenChange={group().onOpenChange}

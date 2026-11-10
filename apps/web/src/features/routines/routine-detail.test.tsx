@@ -495,9 +495,9 @@ describe('routine execution target autosave', () => {
     fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Duplicate' }), {
       key: 'Enter',
     });
-    expect(mocks.create).toHaveBeenCalledWith(
-      expect.objectContaining({ task: saved.task })
-    );
+    expect(mocks.create).toHaveBeenCalledWith({
+      body: expect.objectContaining({ task: saved.task }),
+    });
   });
 
   it('disables immediate Run now until the latest target has saved', async () => {
@@ -880,12 +880,14 @@ describe('routine editor triggers', () => {
       key: 'Enter',
     });
     expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
-      name: 'Summary copy',
-      kind: 'Agent',
-      enabled: true,
-      task: cron.task,
-      trigger: cron.trigger,
-      run_visibility: 'unlisted',
+      body: {
+        name: 'Summary copy',
+        kind: 'Agent',
+        enabled: true,
+        task: cron.task,
+        trigger: cron.trigger,
+        run_visibility: 'unlisted',
+      },
     });
     await vi.advanceTimersByTimeAsync(300);
     fireEvent.click(screen.getByText('Run now'));
