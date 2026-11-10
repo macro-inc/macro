@@ -122,8 +122,9 @@ enforced by the ordinary backend APIs.
   handles. The generated union includes internal sync signals, but delivery
   skips those and spam or trash `email.message_received` events. Delivery goes
   only to the owner's `scope=user` stream or personal-workspace webhook;
-  subscribing or setting email filters requires a `UserOrInternal` credential.
-  Bot and harness credentials receive HTTP 403 for those requests.
+  subscribing, setting email filters, or changing a webhook that has them
+  requires a `UserOrInternal` credential. Bot and harness credentials receive
+  HTTP 403 for those requests.
 
 ## Boundaries
 

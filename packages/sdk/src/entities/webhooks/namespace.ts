@@ -21,7 +21,7 @@ export class WebhooksNamespace {
    * names, optionally narrowed to entity ids); `scope` defaults to `'user'`.
    * `email.*` events reach only the inbox owner's `'user'` scope webhooks, and
    * filters naming them need the owner's own token or API key: bot and harness
-   * credentials get a 403.
+   * credentials get a 403, and cannot change a webhook that has such filters.
    */
   create(opts: {
     url: string;

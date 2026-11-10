@@ -10,7 +10,9 @@ use crate::domain::{
     },
     ports::{WebhookError, WebhookService},
 };
-use crate::inbound::email_event_access::{EmailEventsForbidden, authorize_email_event_filters};
+use crate::inbound::email_event_access::{
+    EmailEventsForbidden, admits_email_events, authorize_email_event_filters,
+};
 use axum::{
     Json, RequestPartsExt, Router,
     extract::{FromRef, FromRequestParts, Path, State},
@@ -312,17 +314,23 @@ pub async fn patch_webhook<S: WebhookService, Auth: MacroAuthorizationService>(
     Path(path): Path<WebhookPath>,
     Json(request): Json<PatchWebhookRequest>,
 ) -> Result<Json<Webhook>, WebhookHandlerError> {
+    let principal = &authorization.authorization.principal;
+    let caller = authorization.authorization.user.macro_user_id.clone();
     if let Some(filters) = &request.filters {
-        authorize_email_event_filters(&authorization.authorization.principal, filters)?;
+        authorize_email_event_filters(principal, filters)?;
+    }
+    // A credential that may not subscribe to email events may not redirect,
+    // pause, or otherwise change a webhook that already delivers them.
+    if !admits_email_events(principal) {
+        let existing = service
+            .get_webhook(caller.clone(), path.webhook_id.clone())
+            .await?;
+        authorize_email_event_filters(principal, &existing.filters)?;
     }
 
     Ok(Json(
         service
-            .patch_webhook(
-                authorization.authorization.user.macro_user_id,
-                path.webhook_id,
-                request,
-            )
+            .patch_webhook(caller, path.webhook_id, request)
             .await?,
     ))
 }

@@ -818,9 +818,9 @@ owner only: a personal (`scope: 'user'`) stream or personal-workspace webhook.
 Team-scoped streams and team webhooks never receive them. Spam or trash arrivals
 are not delivered as `email.message_received`.
 
-Opening a stream with an `email.*` filter, or creating or updating a webhook
-with one, requires the owner's own token or API key, or an internal service
-acting for the owner. Bot credentials, including `requestedAs(user)`, and
+Opening a stream with an `email.*` filter, creating a webhook with one, or
+changing anything on a webhook that has one, requires the owner's own token or
+API key, or an internal service acting for the owner. Bot credentials, including `requestedAs(user)`, and
 harness credentials receive HTTP 403 with
 `email events require the inbox owner's own credential`. `listen()`
 rejects with `MacroForbiddenError` in that case; it rejects with `MacroApiError`

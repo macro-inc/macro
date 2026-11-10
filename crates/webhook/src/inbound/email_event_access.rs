@@ -13,20 +13,23 @@ pub(crate) const EMAIL_EVENT_PREFIX: &str = "email.";
 #[error("email events require the inbox owner's own credential")]
 pub(crate) struct EmailEventsForbidden;
 
+/// Whether `principal` is a credential the email API would let read mail.
+pub(crate) fn admits_email_events(principal: &MacroAuthorization) -> bool {
+    UserOrInternal::narrow(principal.clone()).is_ok()
+}
+
 pub(crate) fn authorize_email_event_filters(
     principal: &MacroAuthorization,
     filters: &[WebhookFilter],
 ) -> Result<(), EmailEventsForbidden> {
-    if !filters.iter().any(|filter| {
+    let names_email_event = filters.iter().any(|filter| {
         filter
             .events
             .iter()
             .any(|event| event.starts_with(EMAIL_EVENT_PREFIX))
-    }) {
-        return Ok(());
+    });
+    if names_email_event && !admits_email_events(principal) {
+        return Err(EmailEventsForbidden);
     }
-
-    UserOrInternal::narrow(principal.clone())
-        .map(|_| ())
-        .map_err(|_| EmailEventsForbidden)
+    Ok(())
 }
