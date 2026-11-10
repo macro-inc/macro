@@ -13,7 +13,8 @@ use std::marker::PhantomData;
 use std::time::Duration;
 
 use either::Either;
-use macro_env::Environment;
+/// Environment selecting the Kafka transport.
+pub use macro_env::Environment;
 use opentelemetry::propagation::{Extractor, Injector};
 use rdkafka::consumer::{
     CommitMode, Consumer, ConsumerContext, DefaultConsumerContext, StreamConsumer,
@@ -283,10 +284,11 @@ fn create_consumer_from_env<T>(
     })
 }
 
-fn create_producer_from_env(
+fn create_producer_for_environment(
     config: ClientConfig,
+    environment: Environment,
 ) -> Result<KafkaEventProducer, KafkaProducerError> {
-    let producer = match Environment::new_or_prod() {
+    let producer = match environment {
         Environment::Local => Either::Left(config.create().map_err(KafkaProducerError::Plaintext)?),
         Environment::Develop | Environment::Production => {
             let config = configure_sasl_iam(config);
@@ -368,7 +370,17 @@ impl KafkaEventProducer {
     /// Producer creation is lazy: no broker connection or IAM token is created
     /// until a message is sent.
     pub fn from_env(brokers: &str) -> Result<Self, KafkaProducerError> {
-        create_producer_from_env(producer_config(brokers))
+        Self::with_environment(brokers, Environment::new_or_prod())
+    }
+
+    /// Creates a producer using an explicit transport environment.
+    ///
+    /// Like [`Self::from_env`], construction is lazy and does not connect to a broker.
+    pub fn with_environment(
+        brokers: &str,
+        environment: Environment,
+    ) -> Result<Self, KafkaProducerError> {
+        create_producer_for_environment(producer_config(brokers), environment)
     }
 
     /// Sends a keyed payload to `topic` and waits for delivery confirmation.

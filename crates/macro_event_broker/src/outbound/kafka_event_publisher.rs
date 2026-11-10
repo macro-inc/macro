@@ -24,6 +24,16 @@ impl KafkaEventPublisher {
             producer: KafkaEventProducer::from_env(brokers)?,
         })
     }
+
+    /// Builds a lazy Kafka publisher using an explicit transport environment.
+    pub fn with_environment(
+        brokers: &str,
+        environment: kafka_util::Environment,
+    ) -> Result<Self, KafkaProducerError> {
+        Ok(Self {
+            producer: KafkaEventProducer::with_environment(brokers, environment)?,
+        })
+    }
 }
 
 impl EventPublisher for KafkaEventPublisher {
