@@ -131,31 +131,13 @@ Review both variants at their actual size and contrast, following Apple's
 [SF Symbols guidance](https://developer.apple.com/design/human-interface-guidelines/sf-symbols#Design-variants).
 These are composition principles; the drawings remain independently authored.
 
-## Interaction motion
+## No interaction motion
 
-`icon-motion.ts` is installed once by the app shell. It delegates pointer presses
-and keyboard/assistive-technology clicks to the leading action glyph in buttons,
-links, tabs, command options, and menu items, including portal menus and newly mounted controls.
-All existing and newly authored `data-macro-icon` SVGs inherit this behavior.
-
-- Keep feedback brief and finite: 320 ms on press. Use a small
-  press-and-settle, a restrained turn for settings, tilt for folders/mail,
-  or lift for sharing. Do not bounce continuously or delay the action.
-- Keep all glyphs still on hover; feedback runs only on activation.
-  The agent sparkle stays still on both hover and activation.
-- Animate the drawing, never its label, hit target, selection background, or
-  layout. Individual transform properties preserve existing layout transforms.
-- Put `data-icon-motion-target` on a fixed-size wrapper when an action swaps SVGs
-  (as `NavGlyph` does). Both variants then move as one without a position jump.
-- Static glyphs, disclosure arrows, state/check indicators, loading spinners,
-  disabled/busy controls, and illustrations larger than 32 px stay still.
-  Add `data-icon-motion="none"` on a glyph or ancestor for other stateful icons
-  or controls that own their own motion. Do not add decorative motion to status.
-- Respect `prefers-reduced-motion` for activation feedback; preference
-  changes cancel in-flight animation. Rapid presses replace rather than stack.
-- New semantic motion belongs in this shared module, not individual consumers.
-  Draw original paths and motion; references such as Grok inform restraint and
-  timing, never asset reuse. No new animation runtime is needed.
+Interface glyphs never animate on press or hover. Do not add a shared motion
+module or per-control bounce, turn, tilt, lift, or scale effects; controls give
+feedback through their own hover and pressed fills. State-driven motion is
+separate: disclosure carets still turn with their expanded state, and loading
+spinners keep spinning.
 
 ## Review
 
