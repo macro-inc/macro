@@ -93,7 +93,7 @@ impl Transaction<'_> {
         } else {
             (range.anchor, range.focus)
         };
-        let nodes = range.nodes(self.view())?;
+        let mut nodes = range.nodes(self.view())?;
         let has_text = nodes.iter().any(|key| self.is_text(*key));
         if !has_text {
             self.toggle_selection_format_at(slot, format)?;
@@ -118,13 +118,30 @@ impl Transaction<'_> {
             end.key() == key && end.offset() < self.text_content_size(key).get()
         });
         let mut first_target = None;
+        let mut first_target_from_last = false;
         let mut last_target = None;
+        let mut last_text_formatted = false;
         for node in &nodes {
             if self.is_element(*node) {
                 let current = self.view().element_data(*node)?.text_format;
                 self.element(*node)?
                     .set_text_format(current.toggled(format, alignment))?;
             }
+        }
+        // Upstream writes the first and last text before the interior nodes.
+        // Dirty-leaf insertion order controls normalization: merging an interior
+        // pair first can resolve a parent endpoint before the boundary pair.
+        if let Some(last) = last_text
+            && let Some(last_index) = nodes.iter().position(|key| *key == last)
+            && let Some(first_index) = nodes.iter().position(|key| {
+                self.view().text(*key).is_some_and(|data| {
+                    !(*key == start.key() && start.offset() == data.text.utf16_len().get())
+                })
+            })
+            && last_index > first_index + 1
+        {
+            let last = nodes.remove(last_index);
+            nodes.insert(first_index + 1, last);
         }
         for node in nodes {
             let Some(data) = self.view().text(node) else {
@@ -157,8 +174,16 @@ impl Transaction<'_> {
                     .get(index)
                     .ok_or(Error::Invariant("formatted text slice missing"))?
             };
-            first_target.get_or_insert(target);
-            last_target = Some((target, to - from));
+            if first_target.is_none() || first_target_from_last && Some(node) != last_text {
+                first_target = Some(target);
+                first_target_from_last = Some(node) == last_text;
+            }
+            if Some(node) == last_text {
+                last_text_formatted = true;
+                last_target = Some((target, to - from));
+            } else if !last_text_formatted {
+                last_target = Some((target, to - from));
+            }
             let flags = self
                 .view()
                 .text(target)
@@ -253,3 +278,6 @@ impl Transaction<'_> {
         self.format_text_at(SelectionSlot::Active, format, align_with)
     }
 }
+
+#[cfg(test)]
+mod test;
