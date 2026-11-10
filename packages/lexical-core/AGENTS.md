@@ -33,7 +33,9 @@ derives a missing email from `macro|` IDs so web name lookup and clipboard round
 trips can resolve the user. Other identities still need an email or display name.
 Document mention Markdown requires only `documentId` (cards also need
 `blockName`); `documentName` is a cached label the chip replaces with the live
-name, and agents routinely omit it.
+name, and agents routinely omit it. A date mention body is the JSON object or,
+as models sometimes write it, a bare ISO date or timestamp;
+`parseDateMentionBody` in `nodes/DateMentionNode.ts` reads both.
 
 Keep URLs protected from inline formatting during import; matching rendered
 text is too late. Preserve code, mention payloads, existing links, and escaped

@@ -6,7 +6,8 @@ Datadog monitors and synthetic tests as code.
 Datadog. This stack **adopts** them — it does not recreate them. `import.json`
 lists every one by id. Everything else is declared here first and is created
 on deploy: the prod threshold and anomaly monitors (`monitors/macrodb.ts`,
-`redis.ts`, `queues.ts`, `regressions.ts`, `outlook-sync.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, the Outlook sync metrics and retention filter, one other log-based metric, and one downtime.
+`redis.ts`, `queues.ts`, `regressions.ts`, `outlook-sync.ts`,
+`routine-suggestions.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, the Outlook sync and routine suggestions metrics, the Outlook retention filter, one other log-based metric, and one downtime.
 
 ## Routing
 
@@ -48,8 +49,8 @@ its thresholds many times a day.
 
 ## Prod threshold monitors
 
-`monitors/macrodb.ts`, `redis.ts`, `queues.ts`, `regressions.ts` and
-`outlook-sync.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
+`monitors/macrodb.ts`, `redis.ts`, `queues.ts`, `regressions.ts`,
+`outlook-sync.ts` and `routine-suggestions.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
 on CloudWatch metrics have hand-written copies in Grafana
 (`infra/stacks/observability/nixos/prod-alerts.nix`), and Grafana pages on-call for
 the critical ones through GoAlert. Their Datadog copies only notify (GoAlert's
@@ -58,7 +59,7 @@ anomaly monitor reads `macro.logs.errors`, a log-based metric declared in
 `regressions.ts`, because log monitors have no anomaly function.
 
 Each of those files also declares a dashboard (MacroDB, Redis, Queue,
-Regression alerts and Outlook sync) with one graph per monitor, titled like the monitor, its
+Regression alerts, Outlook sync and Routine suggestions) with one graph per monitor, titled like the monitor, its
 critical and warning thresholds drawn as markers; anomaly graphs show the band
 instead. Every prod monitor's message links to its dashboard. Change a query or
 threshold in the graph too; `routing.test.ts` checks that each monitor has a
@@ -115,12 +116,12 @@ The gate is that preview:
   of the channel), and the GraphQL soup volume, websocket upgrade, gateway
   connections and task count monitors their `query` and thresholds (volume
   and websocket upgrades also gain recovery thresholds).
-- **92 resources to create**: 72 monitors (31 prod threshold and anomaly, 19 GraphQL soup, 9
+- **105 resources to create**: 76 monitors (32 prod threshold and anomaly, 19 GraphQL soup, 9
   notification retention, 10 WhatsApp session, 1 native call push, 2 harness
-  presence), 2 webhooks,
-  7 log-based metrics, 3 span-based metrics and 1 APM retention filter (6, 3
-  and 1 of them for Outlook sync), the GoAlert synthetic test, the five prod
-  alert dashboards, and the notification retention dashboard. If the paging
+  presence, 3 OAuth), 2 webhooks,
+  15 log-based metrics, 3 span-based metrics and 1 APM retention filter (6, 3
+  and 1 of them for Outlook sync, 8 log-based metrics for routine
+  suggestions), the GoAlert synthetic test, the six prod alert dashboards, and the notification retention dashboard. If the paging
   webhooks and GoAlert synthetic are already deployed, expect only the 2
   Notify webhooks among the webhooks.
 - **1 downtime to create**, muting `[PROD] Notification consumer: no
@@ -221,6 +222,36 @@ Android call push, excluding stale device registrations.
 It sees only publishes SNS rejects. A push that SNS accepts and the device then
 drops leaves no backend trace.
 
+## OAuth connection coverage
+
+`monitors/oauth.ts` adds three production log monitors through GoAlert's
+Notify service. They post to the alerts channel without phoning on-call,
+renotify hourly, and recover when their rolling count falls below the threshold:
+
+| Signal | Threshold | First check |
+| --- | --- | --- |
+| Linked GitHub token lookup errors | 3 in 15 minutes | Internal auth response and the caller's resolved authentication-service key; user OAuth can succeed while this lookup fails. |
+| Native MCP token exchange/provider rejection or Pipedream connection failure | 3 in 1 hour | Provider error, redirect URL, scopes, app configuration and organization permissions. Explicit `access_denied`, `user_cancelled` and `user_canceled` codes are excluded. |
+| OAuth client rejection codes in `error` or `reason` | 1 in 15 minutes | Client ID/secret, app status and allowed grant types for `invalid_client`, `unauthorized_client` or `incorrect_client_credentials`. |
+
+The first two read existing logs from `mcp_client` and `pipedream_mcp`;
+the third is provider-independent. Log samples are not included in notifications;
+follow the filtered log links for investigation. The linked-token log was
+verified in production during the internal-key failure. Ordinary unlinked or
+expired GitHub grants return no token rather than emitting that failure log.
+
+These are failure signals, not synthetic sign-in tests. They cannot detect an
+unused provider breaking, a browser-only failure, or an error that is not
+logged in one of these forms. Repeated failures from one user's permissions
+can trigger the flow monitor and need triage. Generic HTTP 401s, `invalid_grant`,
+and routine expired grants do not by themselves trigger the client-rejection
+monitor. Recovery means the error count fell below threshold, not that a sign-in succeeded.
+
+After deploying a credential fix, verify the internal token lookup succeeds
+and a read-only MCP tool call works with the linked account. This stack needs
+its own explicitly approved manual deployment; merging the service fix does
+not activate these alerts.
+
 ## GraphQL soup rollout coverage
 
 `monitors/graphql-soup.ts` declares 19 new monitors for the `enable-graphql-soup`
@@ -279,3 +310,22 @@ per-mailbox tags before Outlook leaves its rollout flag.
 Thresholds come from the first production import (2026-11-03, two mailboxes,
 about 2,100 messages in 15 minutes); retune them against a few weeks of data.
 The reauthorization thresholds have no baseline yet.
+
+## Routine suggestions coverage
+
+`monitors/routine-suggestions.ts` adds **one monitor, one dashboard and eight
+log-based metrics** for routine suggestions in agent-harness-service. Its
+header lists every log field it reads;
+[the runbook](../../../docs/runbooks/routine-suggestions.md) covers the alert
+and where each generation's trace is.
+
+The dashboard shows generations by outcome, the fallback rate (generations
+that left Macro's templates only), time to first suggestion, per-surface fill,
+rejected suggestions, and saves and dismissals by surface, origin and kind.
+The monitor notifies when more than 10% of an hour's finished generations,
+plus two, fail; it does not page while suggestions are behind
+`enable-routine-suggestions`.
+
+Deploy the agent-harness-service release that emits the
+`routine_suggestions.*` logs before these. Log-based metrics count from deploy
+onward. There is no baseline yet; the 10% threshold is a starting point.

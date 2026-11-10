@@ -524,6 +524,14 @@ export const enableCrm = defineFlag({
   default: onInDev,
 });
 
+// Emergency stop for CRM contact results in @ mentions and Command K/mobile
+// name searches. Companies and Macro users remain searchable. Off until
+// PostHog enables it; override with VITE_DISABLE_CRM_CONTACT_SEARCH.
+export const disableCrmContactSearch = defineFlag({
+  key: 'disable-crm-contact-search',
+  env: 'DISABLE_CRM_CONTACT_SEARCH',
+});
+
 /** CRM activity tabs and context-aware task composition. Off until opted in. */
 export const enableCrmActivity = defineFlag({
   key: 'enable-crm-activity',
@@ -596,6 +604,14 @@ export const enableGitBlame = defineFlag({
 export const enableInlineAiEditing = defineFlag({
   key: 'inline-ai-editing',
   env: 'INLINE_AI_EDITING',
+  default: onInDev,
+});
+
+// Continue with Microsoft on sign-up, sign-in and the onboarding work step,
+// including the Outlook connect that follows a Microsoft sign-up.
+export const enableMicrosoftSignup = defineFlag({
+  key: 'enable-microsoft-signup',
+  env: 'ENABLE_MICROSOFT_SIGNUP',
   default: onInDev,
 });
 
@@ -942,6 +958,17 @@ export const enableRoutineStarterTemplates = defineFlag({
 export const enableRoutineCodeSteps = defineFlag({
   key: 'enable-routine-code-steps',
   env: 'ENABLE_ROUTINE_CODE_STEPS',
+  default: onInDev,
+});
+
+// Routines AI picks for the user from the catalog: sidebar cards, the
+// Routines page and onboarding's last step. The scheduler checks the same
+// PostHog flag before it reads mail or generates, so with it off there are
+// none to show. Suggestions are built on code-step routines and ship with
+// enable-routine-code-steps; both must be on.
+export const enableRoutineSuggestions = defineFlag({
+  key: 'enable-routine-suggestions',
+  env: 'ENABLE_ROUTINE_SUGGESTIONS',
   default: onInDev,
 });
 

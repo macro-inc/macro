@@ -16,6 +16,10 @@
   text-decoration:none;
 }
 .agents-setup-link svg { width:16px; height:16px; }
+/* The macrod Watch demo beside its setup link, smaller than the hero's. */
+.agents-setup-actions { display:flex; flex-wrap:wrap; align-items:center; gap:12px 24px; margin-top:auto; }
+.agents-setup-actions .agents-setup-link { margin-top:0; }
+.feature-page .agents-setup-actions .tutorial-video-trigger { min-height:44px; padding:10px 18px; font-size:15px; }
 .agents-connections .agents-setup-link:hover { text-decoration:underline; text-underline-offset:4px; }
 .agents-mcp-disclosure { margin-top:40px; border-block:1px solid #ffffff20; }
 .agents-mcp-disclosure > summary {

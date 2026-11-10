@@ -1,5 +1,12 @@
 import X from '@phosphor/x.svg';
-import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
+import {
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 import {
   DEMO_BOOKING_URL,
   FEATURE_PAGES,
@@ -61,6 +68,47 @@ export function SiteHeader(props: { hideOpenApp?: boolean }) {
     setOpen(true);
   };
   onCleanup(cancelClose);
+  let glowFrame = 0;
+  let glowTarget: HTMLAnchorElement | undefined;
+  let pointerX = 0;
+  let pointerY = 0;
+  const moveGlow: JSX.EventHandler<HTMLAnchorElement, PointerEvent> = (
+    event
+  ) => {
+    if (event.pointerType === 'touch') return;
+    glowTarget = event.currentTarget;
+    pointerX = event.clientX;
+    pointerY = event.clientY;
+    if (glowFrame) return;
+    glowFrame = requestAnimationFrame(() => {
+      glowFrame = 0;
+      if (!glowTarget) return;
+      // Sign Up paints through its face, which grows as it lands in the footer.
+      const bounds = (
+        glowTarget.querySelector('.site-nav-open-face') ?? glowTarget
+      ).getBoundingClientRect();
+      glowTarget.style.setProperty(
+        '--glow-x',
+        `${((pointerX - bounds.left) / bounds.width) * 100}%`
+      );
+      glowTarget.style.setProperty(
+        '--glow-y',
+        `${((pointerY - bounds.top) / bounds.height) * 100}%`
+      );
+    });
+  };
+  const stopGlow = () => {
+    if (glowFrame) cancelAnimationFrame(glowFrame);
+    glowFrame = 0;
+    glowTarget = undefined;
+  };
+  const centerGlow: JSX.EventHandler<HTMLAnchorElement, FocusEvent> = (
+    event
+  ) => {
+    event.currentTarget.style.setProperty('--glow-x', '50%');
+    event.currentTarget.style.setProperty('--glow-y', '50%');
+  };
+  onCleanup(stopGlow);
   const hasHoverMenu = () =>
     window.matchMedia('(min-width: 768px) and (hover: hover)').matches;
 
@@ -209,6 +257,11 @@ export function SiteHeader(props: { hideOpenApp?: boolean }) {
       <div class="site-header-actions">
         <a
           class="site-nav-demo"
+          onPointerEnter={moveGlow}
+          onPointerMove={moveGlow}
+          onPointerLeave={stopGlow}
+          onPointerCancel={stopGlow}
+          onFocus={centerGlow}
           href={DEMO_BOOKING_URL}
           target="_blank"
           rel="noreferrer"
@@ -217,13 +270,18 @@ export function SiteHeader(props: { hideOpenApp?: boolean }) {
         </a>
         <Show when={!props.hideOpenApp}>
           <a
-            class="site-nav-start site-nav-open"
+            class="site-nav-open"
             target="_self"
             href="/app/signup"
             onClick={routePhoneToMobileSignup}
+            onPointerEnter={moveGlow}
+            onPointerMove={moveGlow}
+            onPointerLeave={stopGlow}
+            onPointerCancel={stopGlow}
+            onFocus={centerGlow}
           >
             <span class="site-nav-open-label">Sign Up</span>
-            <span class="site-nav-open-footer" aria-hidden="true">
+            <span class="site-nav-open-face" aria-hidden="true">
               <span>Sign Up</span>
               <svg
                 width="28"

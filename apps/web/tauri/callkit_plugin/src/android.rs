@@ -52,6 +52,7 @@ command!(
     open_full_screen_intent_settings,
     "openFullScreenIntentSettings"
 );
+command!(open_microphone_settings, "openMicrophoneSettings");
 
 #[derive(Serialize)]
 struct WatchArgs {

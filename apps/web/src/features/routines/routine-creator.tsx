@@ -5,10 +5,11 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHasPaidAccess } from '@core/auth/license';
 import { defaultModelForPlan } from '@core/component/AI/constant';
 import {
+  enableRoutineCodeSteps,
   enableRoutineConditions,
   enableRoutineStarterTemplates,
 } from '@core/constant/featureFlags';
-import { useStarterSteps } from './queries/starters';
+import { useRoutineCatalog } from './queries/catalog';
 import { RoutineAiComposer } from './routine-ai-composer';
 import { startRoutineDraft } from './routine-draft-start';
 import { RoutineCreatorView } from './views/routine-creator';
@@ -29,13 +30,15 @@ export function RoutineCreator(
   const decisions = useFeatureFlag(enableRoutineConditions);
   const templates = useFeatureFlag(enableRoutineStarterTemplates);
   const defaultModel = () => defaultModelForPlan(hasPaidAccess());
-  const starters = useStarterSteps();
+  const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
+  const catalog = useRoutineCatalog();
   return (
     <RoutineCreatorView
       defaultModel={defaultModel()}
       decisionsEnabled={decisions().enabled}
       templatesEnabled={templates().enabled}
-      starters={starters()}
+      catalog={catalog()}
+      codeSteps={codeSteps().enabled}
       renderComposer={(apply, current, initialDescription) => (
         <RoutineAiComposer
           apply={apply}
