@@ -9,13 +9,16 @@ import { COMMAND_PRIORITY_NORMAL, KEY_ENTER_COMMAND } from 'lexical';
 import { createSignal, Show, useContext } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import type { ContactMentionHostProp } from '../../decorator-host/contact-host';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { autoRegister } from '../../plugins';
 import { MentionTooltip } from './MentionTooltip';
 
 false && floatWithElement;
 
-export function ContactMention(props: ContactMentionDecoratorProps) {
+export function ContactMention(
+  props: ContactMentionDecoratorProps & ContactMentionHostProp
+) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const editor = lexicalWrapper?.editor;
   const selection = () => lexicalWrapper?.selection;
@@ -26,6 +29,7 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
   let mentionRef!: HTMLSpanElement;
 
   const isSelectedAsNode = () => {
+    if (props.host) return props.host.isSelected(props.key);
     const sel = selection();
     if (!sel) return false;
     return sel.type === 'node' && sel.nodeKeys.has(props.key);
@@ -82,17 +86,20 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
       .join(' ');
   };
 
-  if (editor) {
+  const onEnter = (event: KeyboardEvent | null) => {
+    if (isSelectedAsNode()) {
+      openContact(event);
+      return true;
+    }
+    return false;
+  };
+  if (props.host) {
+    autoRegister(props.host.registerNormalEnter(onEnter));
+  } else if (editor) {
     autoRegister(
       editor.registerCommand(
         KEY_ENTER_COMMAND,
-        (e) => {
-          if (isSelectedAsNode()) {
-            openContact(e);
-            return true;
-          }
-          return false;
-        },
+        onEnter,
         COMMAND_PRIORITY_NORMAL
       )
     );
