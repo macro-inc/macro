@@ -2183,6 +2183,106 @@
         }
       }
     },
+    "/internal/computers/{computer_id}/image": {
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Rebuild a running or stopped computer's root disk from another image,\nkeeping its data disk.",
+        "operationId": "internal_update_computer_image",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InternalUpdateImageBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageUpdate"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/computers/{computer_id}/image/rollback": {
+      "post": {
+        "tags": ["hosted_runtimes::inbound::axum_router"],
+        "summary": "Update a computer back to the image it ran before its last update.",
+        "operationId": "internal_rollback_computer_image",
+        "parameters": [
+          {
+            "name": "computer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "teamId",
+            "in": "query",
+            "description": "Team that owns the computer.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageUpdate"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/jwt/macro_api_token": {
       "get": {
         "tags": ["jwt::macro_api_token"],
@@ -8778,6 +8878,21 @@
           }
         }
       },
+      "ImageUpdate": {
+        "type": "object",
+        "description": "An accepted image update.",
+        "required": ["image"],
+        "properties": {
+          "image": {
+            "type": "string",
+            "description": "The image the root disk is being rebuilt from."
+          },
+          "previousImage": {
+            "type": ["string", "null"],
+            "description": "The image it ran before; `null` if creation never recorded one."
+          }
+        }
+      },
       "InitGithubLinkResponse": {
         "type": "object",
         "required": ["authorization_url", "link_id"],
@@ -8851,6 +8966,22 @@
           "size": {
             "$ref": "#/components/schemas/ComputerSize",
             "description": "Purchased catalog size."
+          },
+          "teamId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Team that owns the computer."
+          }
+        }
+      },
+      "InternalUpdateImageBody": {
+        "type": "object",
+        "description": "Body of an image update.",
+        "required": ["teamId", "image"],
+        "properties": {
+          "image": {
+            "type": "string",
+            "description": "The versioned image to rebuild the root disk from, e.g. `macro-box/2026-11-10`."
           },
           "teamId": {
             "type": "string",

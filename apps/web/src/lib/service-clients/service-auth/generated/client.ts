@@ -55,6 +55,7 @@ import type {
   GtmInviteLinkList,
   GtmInviteOffer,
   GtmInviteOfferStatus,
+  ImageUpdate,
   InitGithubLinkParams,
   InitGithubLinkResponse,
   InitGmailLinkParams,
@@ -64,6 +65,8 @@ import type {
   InternalGetComputerParams,
   InternalPurchaseBody,
   InternalQuoteComputerParams,
+  InternalRollbackComputerImageParams,
+  InternalUpdateImageBody,
   InviteToTeamRequest,
   JoinTeamByInviteLinkResponse,
   ListGtmInviteLinksParams,
@@ -2639,6 +2642,131 @@ export const internalGetComputer = async (
     status: res.status,
     headers: res.headers,
   } as internalGetComputerResponse;
+};
+
+/**
+ * @summary Rebuild a running or stopped computer's root disk from another image,
+keeping its data disk.
+ */
+export type internalUpdateComputerImageResponse200 = {
+  data: ImageUpdate;
+  status: 200;
+};
+
+export type internalUpdateComputerImageResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type internalUpdateComputerImageResponseSuccess =
+  internalUpdateComputerImageResponse200 & {
+    headers: Headers;
+  };
+export type internalUpdateComputerImageResponseError =
+  internalUpdateComputerImageResponse409 & {
+    headers: Headers;
+  };
+
+export type internalUpdateComputerImageResponse =
+  | internalUpdateComputerImageResponseSuccess
+  | internalUpdateComputerImageResponseError;
+
+export const getInternalUpdateComputerImageUrl = (computerId: string) => {
+  return `/internal/computers/${computerId}/image`;
+};
+
+export const internalUpdateComputerImage = async (
+  computerId: string,
+  internalUpdateImageBody: InternalUpdateImageBody,
+  options?: RequestInit
+): Promise<internalUpdateComputerImageResponse> => {
+  const res = await fetch(getInternalUpdateComputerImageUrl(computerId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(internalUpdateImageBody),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: internalUpdateComputerImageResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as internalUpdateComputerImageResponse;
+};
+
+/**
+ * @summary Update a computer back to the image it ran before its last update.
+ */
+export type internalRollbackComputerImageResponse200 = {
+  data: ImageUpdate;
+  status: 200;
+};
+
+export type internalRollbackComputerImageResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type internalRollbackComputerImageResponseSuccess =
+  internalRollbackComputerImageResponse200 & {
+    headers: Headers;
+  };
+export type internalRollbackComputerImageResponseError =
+  internalRollbackComputerImageResponse409 & {
+    headers: Headers;
+  };
+
+export type internalRollbackComputerImageResponse =
+  | internalRollbackComputerImageResponseSuccess
+  | internalRollbackComputerImageResponseError;
+
+export const getInternalRollbackComputerImageUrl = (
+  computerId: string,
+  params: InternalRollbackComputerImageParams
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/internal/computers/${computerId}/image/rollback?${stringifiedParams}`
+    : `/internal/computers/${computerId}/image/rollback`;
+};
+
+export const internalRollbackComputerImage = async (
+  computerId: string,
+  params: InternalRollbackComputerImageParams,
+  options?: RequestInit
+): Promise<internalRollbackComputerImageResponse> => {
+  const res = await fetch(
+    getInternalRollbackComputerImageUrl(computerId, params),
+    {
+      ...options,
+      method: 'POST',
+    }
+  );
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: internalRollbackComputerImageResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as internalRollbackComputerImageResponse;
 };
 
 /**

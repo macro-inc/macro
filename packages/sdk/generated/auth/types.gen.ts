@@ -1297,6 +1297,20 @@ export type GtmInviteOfferStatus = {
     offer?: null | GtmInviteOffer;
 };
 
+/**
+ * An accepted image update.
+ */
+export type ImageUpdate = {
+    /**
+     * The image the root disk is being rebuilt from.
+     */
+    image: string;
+    /**
+     * The image it ran before; `null` if creation never recorded one.
+     */
+    previousImage?: string | null;
+};
+
 export type InitGithubLinkResponse = {
     /**
      * The OAuth authorization URL to redirect the user to
@@ -1357,6 +1371,20 @@ export type InternalPurchaseBody = {
      * Purchased catalog size.
      */
     size: ComputerSize;
+    /**
+     * Team that owns the computer.
+     */
+    teamId: string;
+};
+
+/**
+ * Body of an image update.
+ */
+export type InternalUpdateImageBody = {
+    /**
+     * The versioned image to rebuild the root disk from, e.g. `macro-box/2026-11-10`.
+     */
+    image: string;
     /**
      * Team that owns the computer.
      */
@@ -3677,6 +3705,53 @@ export type InternalGetComputerResponses = {
 };
 
 export type InternalGetComputerResponse = InternalGetComputerResponses[keyof InternalGetComputerResponses];
+
+export type InternalUpdateComputerImageData = {
+    body: InternalUpdateImageBody;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/internal/computers/{computer_id}/image';
+};
+
+export type InternalUpdateComputerImageErrors = {
+    409: ErrorResponse;
+};
+
+export type InternalUpdateComputerImageError = InternalUpdateComputerImageErrors[keyof InternalUpdateComputerImageErrors];
+
+export type InternalUpdateComputerImageResponses = {
+    200: ImageUpdate;
+};
+
+export type InternalUpdateComputerImageResponse = InternalUpdateComputerImageResponses[keyof InternalUpdateComputerImageResponses];
+
+export type InternalRollbackComputerImageData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query: {
+        /**
+         * Team that owns the computer.
+         */
+        teamId: string;
+    };
+    url: '/internal/computers/{computer_id}/image/rollback';
+};
+
+export type InternalRollbackComputerImageErrors = {
+    409: ErrorResponse;
+};
+
+export type InternalRollbackComputerImageError = InternalRollbackComputerImageErrors[keyof InternalRollbackComputerImageErrors];
+
+export type InternalRollbackComputerImageResponses = {
+    200: ImageUpdate;
+};
+
+export type InternalRollbackComputerImageResponse = InternalRollbackComputerImageResponses[keyof InternalRollbackComputerImageResponses];
 
 export type MacroApiTokenData = {
     body?: never;
