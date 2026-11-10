@@ -92,6 +92,7 @@ impl Editor {
                     registration: [registration],
                     callback: listener,
                 }),
+                command_callback: None,
                 foreign_id: Some(id),
             },
         );
@@ -216,32 +217,6 @@ impl Transaction<'_> {
         call: impl FnOnce(&mut Transaction<'_>) -> Result<Value, Error>,
     ) -> Result<Value, Error> {
         super::projection::foreign(self, call)?
-    }
-    pub(crate) fn dispatch_inner(
-        &mut self,
-        command: &Command,
-        flush_levels: bool,
-    ) -> Result<Handled, Error> {
-        for priority in plugin::PRIORITIES {
-            let list = self
-                .editor
-                .listeners
-                .get(&command.kind())
-                .into_iter()
-                .flatten()
-                .filter(|listener| listener.priority == priority)
-                .cloned()
-                .collect::<Vec<_>>();
-            for listener in list {
-                if listener.plugin.handle(self, command)? == Handled::Yes {
-                    return Ok(Handled::Yes);
-                }
-            }
-            if flush_levels && self.dirty_since_flush {
-                self.flush()?;
-            }
-        }
-        Ok(Handled::No)
     }
 }
 

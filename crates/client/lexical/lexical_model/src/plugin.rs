@@ -2,6 +2,8 @@
 use crate::collections::IndexMap;
 use crate::*;
 use std::sync::Arc;
+mod command_listener;
+pub use command_listener::*;
 /// One isolated follow-up: true publishes it; false discards all staged changes.
 /// Allocated keys remain consumed even when the transaction is discarded.
 pub type ConditionalUpdate<'a> = Box<dyn FnOnce(&mut Transaction<'_>) -> Result<bool, Error> + 'a>;
@@ -117,6 +119,7 @@ impl ListenerTable {
 pub(crate) struct Listener {
     pub(crate) priority: CommandPriority,
     pub(crate) plugin: Arc<dyn Plugin>,
+    pub(crate) command_callback: Option<(CommandListenerId, Arc<dyn CommandListener>)>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign_id: Option<ForeignListenerId>,
 }
@@ -156,6 +159,7 @@ pub(crate) fn listeners(plugins: &[Arc<dyn Plugin>]) -> (Listeners, ListenerTabl
                 Listener {
                     priority: registration.priority,
                     plugin: plugin.clone(),
+                    command_callback: None,
                     #[cfg(feature = "foreign-nodes")]
                     foreign_id: None,
                 },
@@ -184,27 +188,48 @@ impl Transaction<'_> {
     pub fn dispatch(&mut self, command: &Command) -> Result<Handled, Error> {
         self.dispatch_inner(command, false)
     }
-    #[cfg(not(feature = "foreign-nodes"))]
     pub(crate) fn dispatch_inner(
         &mut self,
         command: &Command,
         flush_levels: bool,
     ) -> Result<Handled, Error> {
-        let list = self
-            .editor
-            .listeners
-            .get(&command.kind())
-            .cloned()
-            .unwrap_or_default();
-        let mut previous_level = None;
-        for listener in list {
-            if flush_levels && previous_level.is_some_and(|priority| priority != listener.priority)
+        #[cfg(not(feature = "foreign-nodes"))]
+        let mut visited = false;
+        for priority in PRIORITIES {
+            #[cfg(not(feature = "foreign-nodes"))]
+            if flush_levels
+                && visited
+                && self
+                    .editor
+                    .listeners
+                    .get(&command.kind())
+                    .into_iter()
+                    .flatten()
+                    .any(|listener| listener.priority == priority)
             {
                 self.flush()?;
             }
-            previous_level = Some(listener.priority);
-            if listener.plugin.handle(self, command)? == Handled::Yes {
-                return Ok(Handled::Yes);
+            let list = self
+                .editor
+                .listeners
+                .get(&command.kind())
+                .into_iter()
+                .flatten()
+                .filter(|listener| listener.priority == priority)
+                .cloned()
+                .collect::<Vec<_>>();
+            #[cfg(not(feature = "foreign-nodes"))]
+            {
+                visited |= !list.is_empty();
+            }
+            for listener in list {
+                if listener.plugin.handle(self, command)? == Handled::Yes {
+                    return Ok(Handled::Yes);
+                }
+            }
+            #[cfg(feature = "foreign-nodes")]
+            if flush_levels && self.dirty_since_flush {
+                self.flush()?;
             }
         }
         Ok(Handled::No)
