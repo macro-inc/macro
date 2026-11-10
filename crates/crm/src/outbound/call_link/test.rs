@@ -601,3 +601,62 @@ async fn a_number_links_and_is_learned_only_inside_each_team(pool: PgPool) {
         );
     }
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_guest_whose_email_matched_only_a_company_still_matches_by_phone(pool: PgPool) {
+    let team_id = seed_team(&pool, true).await;
+    let acme = insert_company(&pool, team_id, "acme.example", false).await;
+    let desk = insert_contact(&pool, acme, "desk@acme.example").await;
+    insert_phone(&pool, desk, "+1555010").await;
+    let call_id = Uuid::now_v7();
+
+    linker(&pool)
+        .link_call_record(
+            call_id,
+            &imported(&[(Some("new@acme.example"), Some("+1555010"))]),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        linked_ids(&pool, call_id, SystemPropertyKey::Contacts).await,
+        [desk.to_string()]
+    );
+    assert_eq!(
+        linked_ids(&pool, call_id, SystemPropertyKey::Companies).await,
+        [acme.to_string()]
+    );
+    assert_eq!(
+        phones(&pool, desk).await,
+        [("+1555010".to_owned(), "manual".to_owned())],
+        "only a contact found by email learns a number"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_contact_under_a_hidden_company_neither_links_nor_learns(pool: PgPool) {
+    let team_id = seed_team(&pool, true).await;
+    let acme = insert_company(&pool, team_id, "acme.example", true).await;
+    let desk = insert_contact(&pool, acme, "desk@acme.example").await;
+    insert_phone(&pool, desk, "+1555010").await;
+    let call_id = Uuid::now_v7();
+
+    linker(&pool)
+        .link_call_record(
+            call_id,
+            &imported(&[
+                (None, Some("+1555010")),
+                (Some("desk@acme.example"), Some("+1555011")),
+            ]),
+        )
+        .await
+        .unwrap();
+
+    for property in [SystemPropertyKey::Contacts, SystemPropertyKey::Companies] {
+        assert!(linked_ids(&pool, call_id, property).await.is_empty());
+    }
+    assert_eq!(
+        phones(&pool, desk).await,
+        [("+1555010".to_owned(), "manual".to_owned())]
+    );
+}

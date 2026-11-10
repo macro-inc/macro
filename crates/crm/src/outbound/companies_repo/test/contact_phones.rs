@@ -62,6 +62,28 @@ async fn editing_a_contact_s_numbers_keeps_the_source_of_numbers_it_keeps(
         .await?
         .unwrap();
     assert_eq!(numbers(&phones), [("+4420123", PhoneSource::Manual)]);
+
+    // A number the contact already has is not new and keeps its source.
+    let added = repo
+        .add_contact_phones(
+            &team_id,
+            &[(contact_id, phone("+4420123"))],
+            PhoneSource::Call,
+        )
+        .await?;
+    assert_eq!(added, 0);
+    let phones = repo.contact_phones(&team_id, &contact_id, false).await?;
+    assert_eq!(
+        numbers(&phones.unwrap()),
+        [("+4420123", PhoneSource::Manual)]
+    );
+
+    // Saving no numbers removes them all.
+    assert_eq!(
+        repo.set_contact_phones(&team_id, &contact_id, &[], false)
+            .await?,
+        Some(vec![])
+    );
     Ok(())
 }
 

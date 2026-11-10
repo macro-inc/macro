@@ -196,7 +196,7 @@ async fn an_attendee_with_an_account_is_a_participant_not_a_guest(
     call.participants.extend([
         CallParticipant {
             id: macro_uuid::generate_uuid_v7(),
-            user_id: Some(user("import-a")),
+            user_id: Some(user("import-b")),
             display_name: Some("Sam Rep".into()),
             email: Some("sam@example.com".into()),
             phone: Some("+1555011".into()),
@@ -220,7 +220,7 @@ async fn an_attendee_with_an_account_is_a_participant_not_a_guest(
         .upsert(call)
         .await?;
     let repo = PgCallRepo::new(pool);
-    let owner = user("import-a").to_string();
+    let attendee = user("import-b").to_string();
 
     let record = repo
         .get_call_record_by_call_id(&call_id)
@@ -231,7 +231,7 @@ async fn an_attendee_with_an_account_is_a_participant_not_a_guest(
         .iter()
         .map(|p| p.user_id.as_str())
         .collect();
-    assert_eq!(participants, vec![owner.as_str()]);
+    assert_eq!(participants, vec![attendee.as_str()]);
     let mut guests: Vec<&str> = record
         .guests
         .iter()
@@ -240,7 +240,7 @@ async fn an_attendee_with_an_account_is_a_participant_not_a_guest(
     guests.sort();
     assert_eq!(guests, vec!["Ada", "Caller"]);
     assert_eq!(
-        record.transcript[1].speaker_id, owner,
+        record.transcript[1].speaker_id, attendee,
         "their label names their account"
     );
 
@@ -250,7 +250,8 @@ async fn an_attendee_with_an_account_is_a_participant_not_a_guest(
     assert_eq!(listed[0].participants.len(), 1);
     assert_eq!(listed[0].guests.len(), 2);
 
-    // CRM linking sees the owner and the guests, each by email or phone.
+    // CRM linking sees only the owner's account, and the guests by email or
+    // phone: an imported call is private to its owner.
     let people = repo.get_call_record_people(&call_id).await?;
     assert_eq!(people.user_ids, vec![user("import-a")]);
     let mut guests: Vec<(Option<String>, Option<String>)> = people
