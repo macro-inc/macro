@@ -115,7 +115,10 @@ export function ConnectedRuntimesSection(props: {
             {(harness) => (
               <PairedRuntimeRow
                 harness={harness}
-                isComputer={props.computerHarnessIds.has(harness.id)}
+                isComputer={
+                  !!harness.computer_id ||
+                  props.computerHarnessIds.has(harness.id)
+                }
                 onRename={() => props.onRename(harness)}
                 onRemove={() => props.onRemove(harness)}
                 sharing={props.sharing === harness.id}
@@ -197,19 +200,18 @@ function PairedRuntimeRow(props: {
           />
         </Show>
         <RuntimeOptions harness={props.harness} />
-        <Show when={isOwner()}>
+        {/* A Macro computer is renamed and released from its own row. */}
+        <Show when={isOwner() && !props.isComputer}>
           <ConnectAction
             label="Rename"
             variant="neutral"
             onClick={props.onRename}
           />
-          <Show when={!props.isComputer}>
-            <ConnectAction
-              label="Remove"
-              variant="danger"
-              onClick={props.onRemove}
-            />
-          </Show>
+          <ConnectAction
+            label="Remove"
+            variant="danger"
+            onClick={props.onRemove}
+          />
         </Show>
       </div>
     </div>
