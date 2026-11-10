@@ -117,6 +117,7 @@ this focused host check does not establish complete Macro registry acceptance.
 Assert the rule's selected outline and remove control after selection-only
 commits without hover, including after a sibling component is disposed.
 
+Selection-only chips may receive a narrow `DecoratorSelectionHost`; preserve their actual LexicalWrapper selection fallback when it is absent. Verify OFF bytes, import-matched native DOM/JSON and actual selection with `decorator-host/selection-browser-test/playwright.config.ts` in all three engines; this fixture is not the complete application registry.
 Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
 backend-free desktop/phone regression: the card reserves its height from
 `previewData.poll.optionCount` as a `min-height`, grows to wrapped text, and

@@ -14,6 +14,7 @@ import { cn } from '@ui/utils/classname';
 import { type Accessor, type JSX, Show, useContext } from 'solid-js';
 import { match } from 'ts-pattern';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import type { DecoratorSelectionHostProp } from '../../decorator-host/selection-host';
 
 /**
  * The chip a reply renders when the reader has to connect something before
@@ -22,14 +23,18 @@ import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
  * that connects it. Once the reader has connected it, the same chip reads as
  * connected rather than nagging.
  */
-export function ConnectApp(props: ConnectAppDecoratorProps) {
+export function ConnectApp(
+  props: ConnectAppDecoratorProps & DecoratorSelectionHostProp
+) {
   return match(props.target)
     .with('connections', () => <ConnectPipedreamApp {...props} />)
     .with('harness', () => <ConnectHarness {...props} />)
     .exhaustive();
 }
 
-function ConnectPipedreamApp(props: ConnectAppDecoratorProps) {
+function ConnectPipedreamApp(
+  props: ConnectAppDecoratorProps & DecoratorSelectionHostProp
+) {
   const inChat = useContext(AppConnectionContext);
   const layout = useSplitLayout();
   const connections = usePipedreamConnectedSlugs();
@@ -57,7 +62,9 @@ function ConnectPipedreamApp(props: ConnectAppDecoratorProps) {
   );
 }
 
-function ConnectHarness(props: ConnectAppDecoratorProps) {
+function ConnectHarness(
+  props: ConnectAppDecoratorProps & DecoratorSelectionHostProp
+) {
   const { openSettings } = useSettingsState();
   const connected = useHarnessConnectionStatus(() => props.appSlug);
   return (
@@ -71,17 +78,20 @@ function ConnectHarness(props: ConnectAppDecoratorProps) {
 }
 
 function ConnectChip(
-  props: ConnectAppDecoratorProps & {
-    connected: Accessor<boolean>;
-    icon: JSX.Element;
-    onConnect: () => void;
-    disabled?: Accessor<boolean>;
-  }
+  props: ConnectAppDecoratorProps &
+    DecoratorSelectionHostProp & {
+      connected: Accessor<boolean>;
+      icon: JSX.Element;
+      onConnect: () => void;
+      disabled?: Accessor<boolean>;
+    }
 ) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const selection = () => lexicalWrapper?.selection;
 
   const isSelectedAsNode = () => {
+    const host = props.host;
+    if (host) return host.isSelected(props.key);
     const sel = selection();
     if (!sel) return false;
     return sel.type === 'node' && sel.nodeKeys.has(props.key);

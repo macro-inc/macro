@@ -9,13 +9,18 @@ import { isThemeV2, isThemeV3 } from '@theme/utils/themeValidation';
 import { cn } from '@ui';
 import { Show, useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import type { DecoratorSelectionHostProp } from '../../decorator-host/selection-host';
 
-export function ThemeMention(props: ThemeMentionDecoratorProps) {
+export function ThemeMention(
+  props: ThemeMentionDecoratorProps & DecoratorSelectionHostProp
+) {
   const { openSettings } = useSettingsState();
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const selection = () => lexicalWrapper?.selection;
 
   const isSelectedAsNode = () => {
+    const host = props.host;
+    if (host) return host.isSelected(props.key);
     const sel = selection();
     if (!sel) return false;
     return sel.type === 'node' && sel.nodeKeys.has(props.key);

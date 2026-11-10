@@ -2,12 +2,17 @@ import Fallback from '@icon/system/regular/placeholder.svg';
 import type { UnknownMentionDecoratorProps } from '@macro-inc/lexical-core';
 import { useContext } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import type { DecoratorSelectionHostProp } from '../../decorator-host/selection-host';
 
-export function UnknownMention(props: UnknownMentionDecoratorProps) {
+export function UnknownMention(
+  props: UnknownMentionDecoratorProps & DecoratorSelectionHostProp
+) {
   const lexicalWrapper = useContext(LexicalWrapperContext);
   const selection = () => lexicalWrapper?.selection;
 
   const isSelectedAsNode = () => {
+    const host = props.host;
+    if (host) return host.isSelected(props.key);
     const sel = selection();
     if (!sel) return false;
     return sel.type === 'node' && sel.nodeKeys.has(props.key);
