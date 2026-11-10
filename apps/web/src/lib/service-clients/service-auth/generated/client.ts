@@ -5530,6 +5530,65 @@ export const retryTeamComputer = async (
 };
 
 /**
+ * @summary Mark the guided setup after buying the computer finished. Idempotent;
+allowed to the computer's buyer and the team owner.
+ */
+export type completeTeamComputerSetupResponse200 = {
+  data: ComputerStatus;
+  status: 200;
+};
+
+export type completeTeamComputerSetupResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type completeTeamComputerSetupResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type completeTeamComputerSetupResponseSuccess =
+  completeTeamComputerSetupResponse200 & {
+    headers: Headers;
+  };
+export type completeTeamComputerSetupResponseError = (
+  | completeTeamComputerSetupResponse403
+  | completeTeamComputerSetupResponse404
+) & {
+  headers: Headers;
+};
+
+export type completeTeamComputerSetupResponse =
+  | completeTeamComputerSetupResponseSuccess
+  | completeTeamComputerSetupResponseError;
+
+export const getCompleteTeamComputerSetupUrl = (computerId: string) => {
+  return `/team/computers/${computerId}/setup-complete`;
+};
+
+export const completeTeamComputerSetup = async (
+  computerId: string,
+  options?: RequestInit
+): Promise<completeTeamComputerSetupResponse> => {
+  const res = await fetch(getCompleteTeamComputerSetupUrl(computerId), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: completeTeamComputerSetupResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as completeTeamComputerSetupResponse;
+};
+
+/**
  * @summary Legacy compatibility endpoint for team admins and owners. Enabling
 is a no-op; disabling is rejected. CRM records remain available.
 Each member manages mailbox contribution through `/crm/email-privacy`;

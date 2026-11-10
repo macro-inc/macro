@@ -6,11 +6,13 @@
  */
 import type { ComputerStatusCancelsAt } from './computerStatusCancelsAt';
 import type { ComputerStatusCompReason } from './computerStatusCompReason';
+import type { ComputerStatusDefaultAgentId } from './computerStatusDefaultAgentId';
 import type { ComputerStatusHarnessId } from './computerStatusHarnessId';
 import type { ComputerStatusKind } from './computerStatusKind';
 import type { ComputerStatusPayment } from './computerStatusPayment';
 import type { ComputerStatusRetainedUntil } from './computerStatusRetainedUntil';
 import type { ComputerStatusSetup } from './computerStatusSetup';
+import type { ComputerStatusSetupCompletedAt } from './computerStatusSetupCompletedAt';
 
 /**
  * A computer as its team sees it.
@@ -24,6 +26,9 @@ export interface ComputerStatus {
   compReason?: ComputerStatusCompReason;
   /** Time the computer was reserved. */
   createdAt: string;
+  /** Bot id of the coding agent the computer came with; null until macrod
+first connects. It can name an agent the team since deleted. */
+  defaultAgentId?: ComputerStatusDefaultAgentId;
   /** Root disk limit saved at purchase. */
   diskGib: number;
   /** Harness claimed by this guest. */
@@ -40,6 +45,8 @@ export interface ComputerStatus {
   /** When the disk is destroyed, for a canceled computer. */
   retainedUntil?: ComputerStatusRetainedUntil;
   setup?: ComputerStatusSetup;
+  /** When the team finished the guided setup; null while it is unfinished. */
+  setupCompletedAt?: ComputerStatusSetupCompletedAt;
   /** Purchased catalog size. */
   size: string;
   /** Observed guest status. */
