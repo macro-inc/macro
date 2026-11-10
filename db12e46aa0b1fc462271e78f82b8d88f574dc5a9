@@ -1,0 +1,30 @@
+apps/web/src/features/agent-session-activity/core/fold-rows.ts
+  s_6cb2023c1aec79::t_41a096bd7c1f9d 25-29,44,60
+  s_6cb2023c1aec79::t_782bb212ca82c8 3-8,10-11,13,50,53-54,56-59,61
+apps/web/src/features/agent-session-activity/primitives/create-panel-state.test.ts
+  s_6cb2023c1aec79::t_5729c5ecd56de8 1-16,18-24,26,39-40
+  s_6cb2023c1aec79::t_3b9cd7ea58e473 17,25,27-29,33,36-38
+  s_6cb2023c1aec79::t_782bb212ca82c8 30-32,34-35
+apps/web/src/features/agent-session-activity/browser-test/mock-i18n.ts
+  s_6cb2023c1aec79::t_db6e1c498aa52f 1-5,7-18
+apps/web/src/features/agent-session-activity/views/agent-activity-section.tsx
+  s_6cb2023c1aec79::t_782bb212ca82c8 350,353
+apps/web/src/features/agent-session-activity/core/fold-rows.test.ts
+  s_6cb2023c1aec79::t_782bb212ca82c8 52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "db12e46aa0b1fc462271e78f82b8d88f574dc5a9",
+  "prompts": {},
+  "sessions": {
+    "s_6cb2023c1aec79": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0f0daae7-0e99-45c9-a870-201fecb8aeea",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

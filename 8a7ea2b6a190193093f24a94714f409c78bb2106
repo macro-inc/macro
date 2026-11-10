@@ -1,0 +1,31 @@
+docs/runbooks/ai-quota-enforcement.md
+  s_977a3c5a93eb37::t_fe4d78fe233db0 126-131,426-430
+services/agent_harness_service/AGENTS.md
+  s_977a3c5a93eb37::t_0bcda9f79ee7ee 177-179
+services/agent_harness_service/src/config.rs
+  s_977a3c5a93eb37::t_c3ced16016ae73 14,50-52,134-135,315,319,323,326-330,334,337-342
+services/agent_harness_service/src/config/test.rs
+  s_977a3c5a93eb37::t_4f0c7c0b9cb750 21-22,53-72,74-76,82-83,85
+services/agent_harness_service/src/main.rs
+  s_977a3c5a93eb37::t_e16f1f31d621d0 510
+services/agent_harness_service/src/scheduling/config.rs
+  s_977a3c5a93eb37::t_82b4d0bca2c078 11-12,21,37-38,86,88-91,94
+services/agent_harness_service/src/scheduling/config/test.rs
+  s_977a3c5a93eb37::t_612d4076a7c99b 24,87,90,104,119-136,149-150
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8a7ea2b6a190193093f24a94714f409c78bb2106",
+  "prompts": {},
+  "sessions": {
+    "s_977a3c5a93eb37": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c606-7308-7b61-8401-e2c20a6b8bfd",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

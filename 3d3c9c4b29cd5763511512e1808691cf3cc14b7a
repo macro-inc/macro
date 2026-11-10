@@ -1,0 +1,22 @@
+crates/call/src/inbound/axum_router/meetings.rs
+  s_d3bc3b09d0f55f::t_bbc4a622b212ef 274
+crates/call/src/inbound/axum_router/test.rs
+  s_d3bc3b09d0f55f::t_67bc9e4b4bd6c4 10-29
+  s_d3bc3b09d0f55f::t_7604737045c616 9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3d3c9c4b29cd5763511512e1808691cf3cc14b7a",
+  "prompts": {},
+  "sessions": {
+    "s_d3bc3b09d0f55f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c10b-6bf2-7b30-9062-29d04c9c201e",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

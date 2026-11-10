@@ -1,0 +1,37 @@
+services/agent_harness_service/src/main.rs
+  s_5df110e989a564::t_61a7ee123f886f 721-724
+services/agent_harness_service/src/cognition/config.rs
+  s_5df110e989a564::t_333125f9e4e1d3 119
+  s_5df110e989a564::t_61a7ee123f886f 120,230-231
+services/agent_harness_service/src/config.rs
+  s_5df110e989a564::t_333125f9e4e1d3 65-66,134
+  s_5df110e989a564::t_61a7ee123f886f 14,135-136,331
+  s_5df110e989a564::t_3dfde783d33fa5 16-17
+  s_5df110e989a564::t_0067e8b2f93da2 15
+services/agent_harness_service/src/config/test.rs
+  s_5df110e989a564::t_305bc9f7b1b67d 22
+  s_5df110e989a564::t_3dfde783d33fa5 1-21,23-66
+services/agent_harness_service/src/scheduling/config/test.rs
+  s_5df110e989a564::t_952da3ee1f6d0b 3-17,130-132,134-145
+  s_5df110e989a564::t_a8ed333ff8c922 133
+  s_5df110e989a564::t_3d55e7a7f60fab 146
+services/agent_harness_service/src/scheduling/config.rs
+  s_5df110e989a564::t_61a7ee123f886f 12,43-44,97
+  s_5df110e989a564::t_333125f9e4e1d3 42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "35ae7e5a33761516c1ab85c4badbff1591178834",
+  "prompts": {},
+  "sessions": {
+    "s_5df110e989a564": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c603-bc0a-7b50-881f-f2730d830afc",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

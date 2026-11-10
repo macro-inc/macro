@@ -1,0 +1,31 @@
+crates/call/src/inbound/axum_router/meetings.rs
+  s_d3bc3b09d0f55f::t_47d47e5ce40bbe 11-14,315-335
+  s_d3bc3b09d0f55f::t_620cf8a4a5034b 281
+  s_d3bc3b09d0f55f::t_eb5da1fc186690 336-337
+crates/call/src/inbound/axum_router/test.rs
+  s_d3bc3b09d0f55f::t_77ae0a2cdd445e 423-427
+  s_d3bc3b09d0f55f::t_6c349d7d072c1f 369-396,398-411,413-416,421-422,432,434-438,442-455,461-481,484,486,491
+  s_d3bc3b09d0f55f::t_da5ea8bf6b89fc 397,417-420,433,456-460
+  s_d3bc3b09d0f55f::t_a827e81012c622 485
+  s_d3bc3b09d0f55f::t_88a19fc6fed8fa 428-431,439-441
+crates/call/AGENTS.md
+  s_d3bc3b09d0f55f::t_cffeda2114cfed 80-81
+docs/agent-guide/calls.md
+  s_d3bc3b09d0f55f::t_cffeda2114cfed 24-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "732f26bf2f854a32e3bdc413c3eada466120dd65",
+  "prompts": {},
+  "sessions": {
+    "s_d3bc3b09d0f55f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c10b-6bf2-7b30-9062-29d04c9c201e",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

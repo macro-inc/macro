@@ -1,0 +1,20 @@
+apps/web/src/components/app/tab-layout/DesktopTabStrip.tsx
+  s_2cad5715c715e3::t_f4e76f48bf1c06 75-78,97
+  s_2cad5715c715e3::t_ba2dc88eb2c366 94-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2d169358cea9aa551cc480819a652086413ceac8",
+  "prompts": {},
+  "sessions": {
+    "s_2cad5715c715e3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d784be3f-2ad3-4e86-943f-85cbe17d1e86",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
