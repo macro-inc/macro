@@ -30,6 +30,11 @@ while the editor retains a focused range leaves that range in place. Queued
 focus waits for native completion and rechecks disposal/editability before
 browser focus. These checks do not establish slash-menu or full document-app acceptance.
 
+When opening an older document without `documentMetadata`, verify that hydration
+preserves the model and sends no local document update or WAL append. The first
+real text edit adds version 10 in that edit’s normal update; read-only export
+must retain it without another write.
+
 For native document view performance, run the lexical-wasm-view
 `commit-work.browser.e2e.ts` fixture against a source-matched session artifact.
 Typing in one comment should measure that block's anchors, preserve table cell

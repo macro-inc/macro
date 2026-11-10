@@ -37,6 +37,7 @@ The host supplies identities and both clocks and executes the returned effects.
   operation exists; consuming-view exposure, not model publication, owns signature
   observation revisions.
 - Clean persisted transparent wrappers only during writable initialization; retain protected local fields and apply initial hooks once.
+- Verify metadata-free opens against unchanged Loro versions and no WAL/document-update frames; include metadata in the first edit’s normal coalesced WAL without an extra metadata input.
 - Never weaken either side of the collab differential or change oracle expectations.
 
 ## Checks

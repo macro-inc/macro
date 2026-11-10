@@ -38,7 +38,7 @@ impl Plugin for Metadata {
         Ok(Handled::No)
     }
     fn after_commit(&self, tx: &mut Transaction<'_>, commit: &Commit) -> Result<(), Error> {
-        if commit.changes.mutations.is_empty() {
+        if tx.is_initializing() || commit.changes.mutations.is_empty() {
             return Ok(());
         }
         let previous = commit
@@ -71,3 +71,6 @@ impl Plugin for Metadata {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test;
