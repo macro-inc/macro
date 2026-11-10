@@ -398,3 +398,36 @@ async fn a_parents_list_holds_every_trigger_type_without_asking_for_events() {
     assert_eq!(children.len(), 1);
     assert_eq!(with_children.len(), 2);
 }
+
+#[tokio::test]
+async fn a_keyed_create_under_a_paused_parent_marks_a_sub_routine_that_was_off_by_hand() {
+    let service = service(false);
+    let parent = top_level(&service, "parent").await;
+    start_run(&service, &parent, PARENT_RUN);
+    let child = create(&service, "child", from_code(&parent), Some("task-1"))
+        .await
+        .unwrap()
+        .into_action();
+    service
+        .set_enabled(edit_receipt(child.id.unwrap()), false)
+        .await
+        .unwrap();
+    service
+        .set_enabled(edit_receipt(parent.id.unwrap()), false)
+        .await
+        .unwrap();
+
+    // The run asks for it on again, unchanged, while its parent is off.
+    create(&service, "child", from_code(&parent), Some("task-1"))
+        .await
+        .unwrap();
+    let held = stored(&service, child.id.unwrap());
+    assert!(!held.enabled);
+    assert!(held.sub_routine.unwrap().paused_by_parent);
+
+    service
+        .set_enabled(edit_receipt(parent.id.unwrap()), true)
+        .await
+        .unwrap();
+    assert!(stored(&service, child.id.unwrap()).enabled);
+}

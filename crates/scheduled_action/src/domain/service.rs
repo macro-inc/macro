@@ -516,7 +516,15 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         };
         // Checked like any update, but with nothing to replace: a new revision
         // would only supersede event runs queued under the current one.
-        if !configuration_changed && action.enabled == input.enabled {
+        // A sub-routine its parent's pause now holds off must record that,
+        // even when nothing else about it changes.
+        let newly_held = with_parent
+            && !input.enabled
+            && action
+                .sub_routine
+                .as_ref()
+                .is_some_and(|link| !link.paused_by_parent);
+        if !configuration_changed && action.enabled == input.enabled && !newly_held {
             return Ok(action);
         }
         action.configuration_revision = action.configuration_revision.next()?;
