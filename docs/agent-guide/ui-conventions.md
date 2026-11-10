@@ -138,9 +138,8 @@ unchanged. See the [selection-control API contract](../../.agents/rules/web/ui-p
 ## Multiselect dropdowns
 
 Use `Dropdown.MultiSelectItem` for filter options, not independent settings.
-Clicking the left checkbox toggles only that option and keeps the menu open.
-Clicking the rest of the row adds the option and closes the whole dropdown;
-clicking an already-selected row leaves it selected. Shift-click or **Only**
+Clicking an option's row or its checkbox toggles only that option and keeps
+the menu open. Shift-click or **Only**
 replaces that group's selection with the option and keeps the menu open, even
 when it is already the sole selection. Other filter groups stay unchanged.
 Only also clears persisted selections missing from the current options. Dynamic
@@ -152,6 +151,8 @@ whole group's selection in one write, without intermediate per-option writes.
 Arrow keys navigate. Space toggles a focused menu row; Enter adds and closes;
 Shift+Enter selects only that option without closing. Searchable filters retain
 input focus and use Enter/Shift+Enter on the highlighted search result.
+A searchable group's `createOption` turns typed text no option lists into a
+leading `Add “…”` row, so a typed address joins the selection like an option.
 **Only** sits at the right on hover or keyboard highlight and remains visible on
 touch devices. Touch rows and checkbox hit areas use the shared touch sizing.
 Existing mobile filter drawers retain their toggle-and-stay-open behavior.
