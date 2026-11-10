@@ -123,7 +123,7 @@ try {
   // A literal dynamic import joins Deno's initial static graph, bypassing read
   // permissions. Compute this specifier so the entire generated graph is loaded
   // at runtime and every local module read requires the scratch permission.
-  const program = new URL(unattended ? "./main.ts" : "./main.mjs", import.meta.url).href;
+  const program = new URL("./main.ts", import.meta.url).href;
   if (unattended) {
     // A dry run's backstop lives in fetch; nothing else may reach the
     // network (raw sockets) or start a realm with its own fetch (workers).
@@ -139,7 +139,7 @@ try {
   } else {
     const session = context.sessionId ? macro.agentSessions.byId(context.sessionId) : undefined;
     const execution = session && context.executionId ? session.codeExecutions.byId(context.executionId) : undefined;
-    if (typeof main !== "function") throw new Error("Export an async main({macro, session, execution}) function.");
+    if (typeof main !== "function") throw new Error("Export an async main(context: CodeContext) function.");
     value = await main({...context, macro, session, execution});
   }
   if (unattended) {

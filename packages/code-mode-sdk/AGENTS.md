@@ -24,6 +24,11 @@ HTML worker belong to `packages/sdk-docs`.
   entity. Agents route on the sentence; the guide is how that area works,
   inlined into unrouted prompts and loaded with the entity on routed turns.
 - `src/index.ts`: public SDK exports used by programs.
+- `sdk-types.json` holds the SDK's declarations, which every program is
+  type-checked against, and Handlebars' (`handlebars`), kept out of the
+  fingerprint routines record. `@agent` examples of whole programs are fenced
+  `typescript` and typed with `CodeContext`; `crates/agent_code_mode` checks
+  each one.
 
 ## Tool contracts
 

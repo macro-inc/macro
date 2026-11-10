@@ -1,8 +1,8 @@
 Import Handlebars directly from "handlebars". Rendering is local and makes no API call. For Markdown email bodies, noEscape:true preserves Markdown; use the default escaping for HTML. Use data from the user's request or fetched sources, not invented recipients.
 
-```javascript
+```typescript
 import Handlebars from 'handlebars';
-export async function main({execution}) {
+export async function main({execution}: CodeContext) {
   const render = Handlebars.compile('Hi {{name}},\n\nHere is the launch update.', {strict:true,noEscape:true});
   const review = await execution.reviews.create({
     kind:'email', title:'Launch updates',

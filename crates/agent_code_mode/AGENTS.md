@@ -17,7 +17,10 @@ stacks. Process isolation belongs to
 
 ## Start here
 
-- `SKILL.md`: the agent-facing JavaScript contract and examples.
+- `SKILL.md`: the agent-facing TypeScript contract and examples. Every
+  whole-program example here, in `src/inbound/toolset/guides/` and in SDK
+  `@agent` guides is fenced `typescript` and must type-check
+  (`every_documented_example_type_checks`).
 - `src/domain/service.rs`: execution admission, identity and persistence; tool
   receipts include observed SDK activity for inline conversation snapshots.
 - `src/domain/user.rs`: `UserCodeMode`, runs as an authenticated user with no

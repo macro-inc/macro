@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use tokio::time::Instant;
 use tokio_util::sync::CancellationToken;
 
-/// Executes a JavaScript module with run-scoped credentials and cancellation.
+/// Executes a TypeScript module with run-scoped credentials and cancellation.
 #[async_trait]
 pub trait ProgramExecutor: Send + Sync + 'static {
     /// Observe advisory progress separately from the final model result.
@@ -64,6 +64,7 @@ pub trait ProgramChecker: Send + Sync + 'static {
         &self,
         source: &str,
         declarations: &str,
+        imports: super::ProgramImports,
     ) -> Result<Vec<super::Diagnostic>, super::CheckError> {
         self.check_files(
             &[super::SourceFile {
@@ -71,6 +72,7 @@ pub trait ProgramChecker: Send + Sync + 'static {
                 source: source.to_owned(),
             }],
             declarations,
+            imports,
         )
         .await
     }
@@ -81,5 +83,6 @@ pub trait ProgramChecker: Send + Sync + 'static {
         &self,
         files: &[super::SourceFile],
         declarations: &str,
+        imports: super::ProgramImports,
     ) -> Result<Vec<super::Diagnostic>, super::CheckError>;
 }

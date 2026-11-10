@@ -1,14 +1,15 @@
 # Code execution in the agent harness
 
-`ExecuteCode` accepts a JavaScript ES module exporting `main`. The agent harness
-starts a fresh Deno 2.9.6 child for each execution; there is no separate runner
-service. Macro SDK and Handlebars imports are bundled ahead of time, with no
-per-run package download or TypeScript compilation.
+`ExecuteCode` accepts a TypeScript ES module exporting `main`. The agent harness
+type-checks it against the SDK, then starts a fresh Deno 2.9.6 child for each
+execution; there is no separate runner service. Macro SDK and Handlebars
+imports are bundled ahead of time, with no per-run package download; Deno
+strips the types.
 
-```js
+```ts
 import Handlebars from 'handlebars';
 
-export async function main({ macro, session, execution }) {
+export async function main({ macro, session, execution }: CodeContext) {
   const results = await Promise.all([
     macro.ai.decide({ input: 'First message', questions: { urgent: 'Is this urgent?' } }),
     macro.ai.decide({ input: 'Second message', questions: { urgent: 'Is this urgent?' } }),
@@ -29,10 +30,36 @@ SDK methods perform normal authenticated HTTP requests. Promise concurrency is
 ordinary JavaScript concurrency: there is no per-call Rust tool dispatch or
 stdin/stdout request/reply bridge.
 
-`ExecutionService` owns process admission, queueing, deadlines, cancellation, and
-shutdown. The Deno adapter implements its process port. Session authorization,
-execution journaling, and review policy belong to the `agent_code_mode` domain;
-API services independently enforce the authenticated user's permissions.
+`ExecutionService` owns process admission, type checking, queueing, deadlines,
+cancellation, and shutdown. The Deno adapters implement its process and
+checker ports.
+
+## Type checking before a run
+
+An attended program (agent session or public MCP `ExecuteCode`) is checked
+with `deno check` before it waits for a process slot, against the SDK's
+declarations, Handlebars' and `CodeContext` (`src/domain/context.rs`), the type
+of `main`'s argument: `session` and `execution` are declared only when the run
+has them. Checking is strict, so `main`'s argument and any parameter TypeScript
+can't infer need types.
+
+- Type errors: the run fails with `FailureCode::Compile` and no process
+  starts. The message lists up to 20 of the checker's diagnostics, each with
+  its code, the offending line and `at main.ts:<line>:<column>`.
+- The checker is busy (every slot and queue place taken) or fails: the run
+  fails (`Limit` or `Internal`) and doesn't run unchecked.
+- The check counts against the run's deadline and is cancelled with it.
+
+A check takes about a second of one core and 250 MB. The harness shares one
+checker between its executors: 4 slots and 48 queued, enough for every program
+the session and public executors admit at once. Each check is a
+`code_execution.check` span (`waited_ms`, `diagnostics`, `outcome`), and the
+run's `code_execution.run` span records `check` (`passed`, `rejected`, `busy`,
+`failed` or `skipped`).
+
+Session authorization, execution journaling, and review policy belong to the
+`agent_code_mode` domain; API services independently enforce the authenticated
+user's permissions.
 
 The harness persists source before execution, then final status and returned
 JSON or error. New executions do not automatically journal each HTTP response.
@@ -65,7 +92,8 @@ get around it can still write with the owner's permissions.
 `DenoChecker` (`src/outbound/deno/check.rs`) type-checks a TypeScript program
 against the SDK's generated declarations (`sdk-types.json` from `crates/code_mode_assets`)
 without running it, plus an ambient declaration module the host supplies (the
-type of `main`'s argument). `check_files` checks several modules together (up
+type of `main`'s argument). `ProgramImports` says whether `handlebars` resolves,
+as it does for attended programs and not for unattended ones. `check_files` checks several modules together (up
 to 40), so one can import another's types, and attributes each diagnostic to
 its file. An import map sends every file URL outside the
 check and the declarations to a root that doesn't exist, so a program can't
@@ -80,7 +108,7 @@ fingerprint stays valid until it changes.
 | Concurrent Deno executions per harness replica | 8 (public MCP: 4 more) |
 | Additional queued executions | 16 (public MCP: 8 more) |
 | Total execution lifetime, including queueing and API calls | 30 seconds |
-| JavaScript source | 64 KiB |
+| Program source | 64 KiB |
 | Model-facing result (larger `data` is summarized; an unattended one fails) | 64 KiB |
 | Child frame | 256 KiB |
 | Combined program stdout/stderr | 2 MiB |
@@ -97,7 +125,7 @@ writes, environment access, subprocesses, FFI, and system information are denied
 Timers, workers and other sleep primitives throw an error that points programs
 at `macro.routines.create` for checking back later; this steers agents and is not
 a security boundary.
-The trusted bootstrap dynamically imports generated `main.mjs` so its module
+The trusted bootstrap dynamically imports generated `main.ts` so its module
 reads are subject to the scratch read permission. Both static and dynamic imports
 outside scratch are covered by real-runtime tests.
 
@@ -131,6 +159,7 @@ cargo test -p code_execution -- --include-ignored
 ```
 
 The suite covers actual SDK HTTP authentication and concurrency, prebundled
-Handlebars, plain JavaScript entry modules, filesystem/import/process/network
+Handlebars, TypeScript and plain JavaScript entry modules, type checking before
+a run, filesystem/import/process/network
 restrictions including redirects, output bounds, cancellation, deadlines,
 backpressure, and cleanup. It makes no model-provider calls.

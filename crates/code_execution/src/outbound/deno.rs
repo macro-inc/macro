@@ -1,4 +1,4 @@
-//! Fresh JavaScript processes with run-only credentials and allowlisted API egress.
+//! Fresh Deno processes with run-only credentials and allowlisted API egress.
 
 use crate::domain::*;
 use async_trait::async_trait;
@@ -97,13 +97,8 @@ impl DenoRunner {
                 .await
                 .map_err(internal)?;
         }
-        // An unattended program is TypeScript; Deno strips its types on load.
-        let program = if job.environment.unattended.is_some() {
-            "main.ts"
-        } else {
-            "main.mjs"
-        };
-        tokio::fs::write(root.join(program), &job.request.source)
+        // Programs are TypeScript; Deno strips their types on load.
+        tokio::fs::write(root.join("main.ts"), &job.request.source)
             .await
             .map_err(internal)?;
         let bootstrap = root.join("bootstrap.mjs");

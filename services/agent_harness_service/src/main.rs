@@ -183,6 +183,14 @@ const RUNTIME_COMMAND_CONSUMER_ATTEMPTS: usize = 5;
 /// Routine code programs the harness runs at once. Steps beyond it wait for a
 /// slot before their credential is minted, so they never queue in the executor.
 const ROUTINE_CODE_SLOTS: usize = 4;
+/// Type checks the harness runs at once. A check takes about a second of one
+/// core and 250 MB; every attended program is checked before it runs, and
+/// routines are checked when saved.
+const CODE_CHECK_SLOTS: usize = 4;
+/// Checks waiting for a slot, beyond which one fails as busy: every program
+/// the session (8 running + 16 queued) and public (4 + 8) executors admit at
+/// once, plus routine saves.
+const CODE_CHECK_QUEUE: usize = 48;
 
 impl GroupName for AgentHarnessConsumerGroup {
     const GROUP_NAME: &'static str = "agent-harness-service";
@@ -651,10 +659,24 @@ async fn run() -> anyhow::Result<()> {
             .await
             .map_err(|error| anyhow::anyhow!("invalid Deno runtime: {error}"))?;
             let runner: Arc<dyn code_execution::domain::CodeRunner> = Arc::new(runner);
+            // One checker for every executor: each attended program is
+            // type-checked before it runs.
+            let checker: Arc<dyn code_execution::domain::ProgramChecker> = Arc::new(
+                code_execution::outbound::deno::check::DenoChecker::new(
+                    binary.into(),
+                    code_scratch.path().join("checks"),
+                    CODE_CHECK_SLOTS,
+                    CODE_CHECK_QUEUE,
+                    code_execution::domain::Limits::default().max_source_bytes,
+                )
+                .await
+                .map_err(|error| anyhow::anyhow!("invalid Deno type checker: {error}"))?,
+            );
             // Public MCP runs get their own admission budget so external
             // clients cannot exhaust the slots agent sessions rely on.
             let public = code_execution::domain::ExecutionService::new(
                 Arc::clone(&runner),
+                Arc::clone(&checker),
                 code_execution::domain::Limits {
                     max_running: 4,
                     max_queued: 8,
@@ -665,6 +687,7 @@ async fn run() -> anyhow::Result<()> {
             // with a CPU limit, so unattended code can't crowd out sessions.
             let routines = code_execution::domain::ExecutionService::new(
                 Arc::clone(&runner),
+                Arc::clone(&checker),
                 code_execution::domain::Limits {
                     max_running: ROUTINE_CODE_SLOTS,
                     max_queued: 16,
@@ -673,22 +696,15 @@ async fn run() -> anyhow::Result<()> {
                     ..Default::default()
                 },
             )?;
-            let checker = code_execution::outbound::deno::check::DenoChecker::new(
-                binary.into(),
-                code_scratch.path().join("checks"),
-                2,
-                code_execution::domain::Limits::default().max_source_bytes,
-            )
-            .await
-            .map_err(|error| anyhow::anyhow!("invalid Deno type checker: {error}"))?;
             Some((
                 code_execution::domain::ExecutionService::new(
                     runner,
+                    Arc::clone(&checker),
                     code_execution::domain::Limits::default(),
                 )?,
                 public,
                 routines,
-                Arc::new(checker),
+                checker,
             ))
         }
         None => None,
@@ -698,7 +714,7 @@ async fn run() -> anyhow::Result<()> {
         Some((_, _, routines, checker)) => Some(
             routine_code::SdkRoutineCode::new(
                 Arc::new(routines.clone()),
-                Arc::clone(checker) as Arc<dyn code_execution::domain::ProgramChecker>,
+                Arc::clone(checker),
                 MacroApiTokenSigner::new(
                     pool.clone(),
                     config.macro_api_token_issuer.as_ref(),

@@ -55,14 +55,21 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
         .await
         .unwrap();
     assert!(path.status.success(), "Deno 2.9.6 must be on PATH");
-    let deno = DenoRunner::new(
-        String::from_utf8(path.stdout).unwrap().trim().into(),
-        scratch.path().to_owned(),
-        128,
+    let binary: std::path::PathBuf = String::from_utf8(path.stdout).unwrap().trim().into();
+    let deno = DenoRunner::new(binary.clone(), scratch.path().join("runs"), 128)
+        .await
+        .unwrap();
+    let checker = code_execution::outbound::deno::check::DenoChecker::new(
+        binary,
+        scratch.path().join("checks"),
+        1,
+        4,
+        64 * 1024,
     )
     .await
     .unwrap();
-    let runner = ExecutionService::new(Arc::new(deno), Limits::default()).unwrap();
+    let runner =
+        ExecutionService::new(Arc::new(deno), Arc::new(checker), Limits::default()).unwrap();
     let store = Arc::new(PgExecutionStore::new(pool.clone()));
     let code_mode = Arc::new(agent_code_mode::domain::CodeModeService::new(
         Some(Arc::new(runner.clone())),
@@ -329,5 +336,10 @@ async fn authenticated_mcp_runs_javascript_and_persists_source_and_result(pool: 
         agent_code_mode::domain::ExecutionStatus::Cancelled
     );
     runner.shutdown().await;
-    assert_eq!(std::fs::read_dir(scratch.path()).unwrap().count(), 0);
+    assert_eq!(
+        std::fs::read_dir(scratch.path().join("runs"))
+            .unwrap()
+            .count(),
+        0
+    );
 }

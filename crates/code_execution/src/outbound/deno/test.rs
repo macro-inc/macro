@@ -16,8 +16,28 @@ async fn setup(limits: Limits) -> (tempfile::TempDir, ExecutionService) {
         .unwrap();
     (
         root,
-        ExecutionService::new(Arc::new(runner), limits).unwrap(),
+        ExecutionService::new(Arc::new(runner), Arc::new(Unchecked), limits).unwrap(),
     )
+}
+
+/// Passes every program, so these tests reach the process boundary with
+/// code a type checker would refuse.
+struct Unchecked;
+
+#[async_trait::async_trait]
+impl ProgramChecker for Unchecked {
+    fn sdk_fingerprint(&self) -> &str {
+        "unchecked"
+    }
+
+    async fn check_files(
+        &self,
+        _files: &[SourceFile],
+        _declarations: &str,
+        _imports: ProgramImports,
+    ) -> Result<Vec<Diagnostic>, CheckError> {
+        Ok(Vec::new())
+    }
 }
 
 async fn collect(mut handle: ExecutionHandle) -> (Vec<ExecutionEvent>, Outcome) {
@@ -324,16 +344,20 @@ export async function main({token, hosts, webAppUrl, macro: supplied}) {
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
-async fn requires_javascript_exported_main() {
+async fn requires_an_exported_main() {
     let (_root, service) = setup(Limits::default()).await;
-    for source in [
-        "return 42;",
-        "export const main = 42;",
-        "export function main() { const n: number = 42; return n; }",
-    ] {
+    for source in ["return 42;", "export const main = 42;"] {
         let (_, outcome) = run(&service, source, 5000).await;
         assert!(matches!(outcome, Outcome::Failed { error } if error.code == FailureCode::Runtime));
     }
+    // Programs are TypeScript; Deno strips the types.
+    let (_, outcome) = run(
+        &service,
+        "export function main() { const n: number = 42; return n; }",
+        5000,
+    )
+    .await;
+    assert!(matches!(outcome, Outcome::Succeeded { value } if value == 42));
     service.shutdown().await;
 }
 
@@ -905,5 +929,67 @@ async fn the_cpu_limit_stops_a_busy_program() {
         matches!(&outcome, Outcome::Failed { error } if error.code == FailureCode::Limit && error.message.contains("CPU")),
         "{outcome:?}"
     );
+    service.shutdown().await;
+}
+
+async fn checked_service() -> (tempfile::TempDir, ExecutionService) {
+    let root = tempfile::tempdir().unwrap();
+    let binary = Command::new("which").arg("deno").output().await.unwrap();
+    assert!(binary.status.success(), "Deno 2.9.6 must be on PATH");
+    let binary = PathBuf::from(String::from_utf8(binary.stdout).unwrap().trim());
+    let runner = DenoRunner::new(binary.clone(), root.path().join("runs"), 128)
+        .await
+        .unwrap();
+    let checker = check::DenoChecker::new(binary, root.path().join("checks"), 1, 4, 64 * 1024)
+        .await
+        .unwrap();
+    let service =
+        ExecutionService::new(Arc::new(runner), Arc::new(checker), Limits::default()).unwrap();
+    (root, service)
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn sdk_misuse_is_reported_by_line_and_never_runs() {
+    let (_root, service) = checked_service().await;
+    // Run, it would print; a rejected program has no log events.
+    let source = "export async function main({ macro }: CodeContext) {\n  console.log('ran');\n  return await macro.tasks.findSimilarr({ title: 'x', body: 'y' });\n}\n";
+    let (events, outcome) = run(&service, source, 20_000).await;
+    let Outcome::Failed { error } = outcome else {
+        panic!("expected a type error, got {outcome:?}");
+    };
+    assert_eq!(error.code, FailureCode::Compile);
+    assert!(
+        error
+            .message
+            .contains("Property 'findSimilarr' does not exist on type 'TaskNamespace'"),
+        "{}",
+        error.message
+    );
+    assert!(error.message.contains("at main.ts:3:"), "{}", error.message);
+    assert!(
+        events
+            .iter()
+            .all(|event| !matches!(event.kind, EventKind::Started | EventKind::Log { .. }))
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_typed_program_with_handlebars_checks_and_runs() {
+    let (_root, service) = checked_service().await;
+    let source = r#"import Handlebars from 'handlebars';
+export async function main({ macro, webAppUrl }: CodeContext) {
+  const render = Handlebars.compile('{{count}} items', { strict: true });
+  return { data: { text: render({ count: 2 }), sdk: typeof macro.tasks.findSimilar, webAppUrl } };
+}
+"#;
+    let (_, outcome) = run(&service, source, 20_000).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("expected success, got {outcome:?}");
+    };
+    assert_eq!(value["data"]["text"], "2 items");
+    assert_eq!(value["data"]["sdk"], "function");
     service.shutdown().await;
 }

@@ -70,7 +70,7 @@ enum CodeHost {
     User,
 }
 
-/// Execute a JavaScript module with the real Macro SDK.
+/// Execute a type-checked TypeScript module with the real Macro SDK.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(
@@ -95,9 +95,9 @@ pub struct ExecuteCode {
     /// Copy the current server-issued turn_id from the prompt's execution context.
     /// Never reuse an ID from another turn or discover a replacement for a stale call.
     pub turn_id: macro_uuid::Uuid,
-    /// A JavaScript ES module, with imports and an exported async main function.
+    /// A TypeScript ES module, with imports and an exported async main function.
     #[schemars(
-        description = "JavaScript module, at most 64 KiB. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts, webAppUrl}) { const macro = new Macro({token, hosts, webAppUrl}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no TypeScript syntax or package downloads. The token, hosts and webAppUrl are supplied by the runner; never return or log the token."
+        description = "TypeScript module, at most 64 KiB, type-checked against the SDK before it runs. Import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts, webAppUrl}: CodeContext) { const macro = new Macro({token, hosts, webAppUrl}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no package downloads. The token, hosts and webAppUrl are supplied by the runner; never return or log the token."
     )]
     pub source: String,
     /// Deadline including queueing and API calls.
@@ -144,7 +144,7 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCode {
     }
 }
 
-/// Execute a JavaScript module with the real Macro SDK as the signed-in user.
+/// Execute a type-checked TypeScript module with the real Macro SDK as the signed-in user.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 #[schemars(
@@ -158,9 +158,9 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCode {
     )
 )]
 pub struct UserExecuteCode {
-    /// A JavaScript ES module, with imports and an exported async main function.
+    /// A TypeScript ES module, with imports and an exported async main function.
     #[schemars(
-        description = "JavaScript module, at most 64 KiB. Export async function main({macro}) { return {data: ...}; }. Optional imports: {Macro} from '@macro-inc/sdk' and Handlebars from 'handlebars'. Dependencies are preinstalled; no TypeScript syntax or package downloads. Never return or log the token main receives."
+        description = "TypeScript module, at most 64 KiB, type-checked against the SDK before it runs. Export async function main({macro}: CodeContext) { return {data: ...}; }. Optional imports: {Macro} from '@macro-inc/sdk' and Handlebars from 'handlebars'. Dependencies are preinstalled; no package downloads. Never return or log the token main receives."
     )]
     pub source: String,
     /// Deadline including queueing and API calls.

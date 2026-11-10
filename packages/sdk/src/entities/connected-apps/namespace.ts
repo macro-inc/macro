@@ -23,13 +23,14 @@ export type { ConnectMcpServerResponse };
  *
  * When an app the work needs is missing, find it with `macro.connectedApps.discover(execution, appName)` and `connector.inspect()` its advertised actions and connection status. Recommend connecting only when an advertised action supports the task; an app's name is not evidence. For a suitable unconnected app, put the inspection's `connectMarkup` in your reply verbatim and say what connecting enables. To add a remote MCP server the user gives you the URL of, use `macro.connectedApps.addServer(execution, {url, serverName})`; never guess a URL, and tell the user to sign in under Settings → Connections when its summary says so.
  *
- * ```javascript
- * export async function main({macro, execution}) {
+ * ```typescript
+ * export async function main({macro, execution}: CodeContext) {
  *   const apps = await macro.connectedApps.list(execution);
  *   const linear = apps.find((app) => app.key === 'linear');
  *   if (!linear) return {data: {error: 'Linear is not connected', available: apps.map((app) => app.name)}};
  *   const tools = await linear.tools();
  *   const search = tools.find((tool) => tool.name === 'list_issues');
+ *   if (!search) return {data: {error: 'Linear has no list_issues tool'}};
  *   const result = await search.call({query: 'login bug', limit: 5});
  *   return {data: result.isError ? {error: result.content} : result.structuredContent ?? result.content};
  * }

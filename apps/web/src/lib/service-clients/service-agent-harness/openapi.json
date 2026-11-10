@@ -6322,7 +6322,7 @@
           },
           "source": {
             "type": "string",
-            "description": "The submitted JavaScript module."
+            "description": "The submitted TypeScript module."
           },
           "status": {
             "$ref": "#/components/schemas/ExecutionStatus",

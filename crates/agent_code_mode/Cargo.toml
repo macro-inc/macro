@@ -46,6 +46,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 jev = { path = "../jev", features = ["outbound"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
