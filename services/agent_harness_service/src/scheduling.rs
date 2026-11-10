@@ -495,14 +495,20 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             agent_model: chat::domain::models::FREE_MODEL.to_owned(),
         },
     ));
-    let ideas = Arc::new(IdeaService::new(
-        Arc::new(PgIdeaRepo::new(db.clone())),
-        Arc::new(EntityIdeaAccess(access.as_ref().clone())),
-        correlation_sessions,
-        generations.clone(),
-        generations.clone(),
-        template_flags.clone(),
-    ));
+    let ideas = Arc::new(
+        IdeaService::new(
+            Arc::new(PgIdeaRepo::new(db.clone())),
+            Arc::new(EntityIdeaAccess(access.as_ref().clone())),
+            correlation_sessions,
+            generations.clone(),
+            generations.clone(),
+            template_flags.clone(),
+        )
+        .with_sdk_reference(agent_code_mode::domain::index_digest(
+            ideas::domain::prompt::SYMBOLS,
+            ideas::domain::prompt::FIELDS_OF,
+        )),
+    );
     let generation = Arc::new(GenerationService::new(
         generations,
         sessions,
