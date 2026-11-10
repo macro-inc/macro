@@ -11,6 +11,8 @@ tests are separate from Rust-backed production compatibility acceptance.
 
 ## Boundaries
 
+- Match ListItemNode's parent-check/first-child-list checkbox predicate; nested wrappers have no role/tabIndex/aria-checked, while nested theme classes depend on any list child. Verify literal item attributes against actual Source with `browser-test/list-item-wrapper.playwright.config.ts`.
+
 - Set the decorator marker before contentEditable, preserving Source DOM attribute order.
 
 - Capture ViewOptions.owner before asynchronous mounts so native decorator roots inherit application providers; dispose each decorator root when its keyed node is removed.
