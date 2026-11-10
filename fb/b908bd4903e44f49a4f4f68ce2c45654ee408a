@@ -1,0 +1,186 @@
+packages/sdk/generated/storage/types.gen.ts
+  s_154e7eadce3a09::t_3a868cd7ac23f3 8931-8936,9103-9432,9531-9927
+  s_154e7eadce3a09::t_4eea988a117532 22912
+  s_154e7eadce3a09::t_9da8f836797bec 9928
+packages/sdk/specs/storage.json
+  s_154e7eadce3a09::t_3a868cd7ac23f3 39018-39022,39178-40302,40304,40306,40308-40319,40321,40323-40325,40331-40332,40334,40336,40338-40349,40351,40353-40364,40366,40368-40370,40373-40381,40383-40385,40387-40388,40391-40392,40394,40396,40398-40411,40413-40415,40421-40422,40424,40426,40428-40439,40441,40443-40445,40451-40452,40454,40456,40458-40469,40471,40473-40475,40480,61198-61199
+  s_154e7eadce3a09::t_73c06ca83cde1a 61196-61197
+packages/sdk/generated/storage/index.ts
+  s_154e7eadce3a09::t_3a868cd7ac23f3 4
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailEventOrigin.ts
+  s_154e7eadce3a09::t_196b1726f59b74 1-19
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailLabelRef.ts
+  s_154e7eadce3a09::t_b64abb14647dce 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailLabelRefLabelId.ts
+  s_154e7eadce3a09::t_9e3b313b8946a4 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailLabelRefName.ts
+  s_154e7eadce3a09::t_84b7a42ee48329 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailLinkConnectedMetadata.ts
+  s_154e7eadce3a09::t_37c1e364180f76 1-25
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailLinkDisconnectReason.ts
+  s_154e7eadce3a09::t_e31af06052e651 1-21
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailLinkDisconnectedMetadata.ts
+  s_154e7eadce3a09::t_c18a6204773555 1-23
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailLinkReauthRequiredMetadata.ts
+  s_154e7eadce3a09::t_2a038a38d8d2f4 1-21
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageDeletedMetadata.ts
+  s_154e7eadce3a09::t_c2e9b551417507 1-23
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageDraftSyncedMetadata.ts
+  s_154e7eadce3a09::t_0636af38ed5269 1-27
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageReceivedMetadata.ts
+  s_154e7eadce3a09::t_23a9e524dde84a 1-48
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageReceivedMetadataFromEmail.ts
+  s_154e7eadce3a09::t_1268a72efddb2d 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageReceivedMetadataFromName.ts
+  s_154e7eadce3a09::t_cbd32f7d2d3827 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageReceivedMetadataReceivedAt.ts
+  s_154e7eadce3a09::t_0a562835938750 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageReceivedMetadataSubject.ts
+  s_154e7eadce3a09::t_4fa1bbba5f3d08 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageSendCancelledMetadata.ts
+  s_154e7eadce3a09::t_3b55c588d3de66 1-26
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageSendCancelledMetadataActor.ts
+  s_154e7eadce3a09::t_8cc59321150df7 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageSendQueuedMetadata.ts
+  s_154e7eadce3a09::t_39e2bf6a1493c1 1-28
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageSendQueuedMetadataActor.ts
+  s_154e7eadce3a09::t_96c056e8b4ab4c 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageSentMetadata.ts
+  s_154e7eadce3a09::t_e057fb499bbc69 1-41
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageSentMetadataActor.ts
+  s_154e7eadce3a09::t_307111dc17eb38 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailMessageSentMetadataSubject.ts
+  s_154e7eadce3a09::t_2a1ce458586f2c 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailSendCancelReason.ts
+  s_154e7eadce3a09::t_a0b81d1fd67e82 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadArchivedMetadata.ts
+  s_154e7eadce3a09::t_4b0eea45e0b40d 1-27
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadArchivedMetadataActor.ts
+  s_154e7eadce3a09::t_06c9eec234857a 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadBackfilledMetadata.ts
+  s_154e7eadce3a09::t_6257fb56921be3 1-19
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadLabelsUpdatedMetadata.ts
+  s_154e7eadce3a09::t_e8ada5364247a3 1-36
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadLabelsUpdatedMetadataActor.ts
+  s_154e7eadce3a09::t_07904492e8155b 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadProjectChangedMetadata.ts
+  s_154e7eadce3a09::t_5f864bb25108d0 1-28
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadProjectChangedMetadataPreviousProjectId.ts
+  s_154e7eadce3a09::t_0ac20db53d9bad 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadProjectChangedMetadataProjectId.ts
+  s_154e7eadce3a09::t_7cbe532185c694 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadReadMetadata.ts
+  s_154e7eadce3a09::t_668fba37db0193 1-27
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadReadMetadataActor.ts
+  s_154e7eadce3a09::t_cb273ebf828294 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadSpamChangedMetadata.ts
+  s_154e7eadce3a09::t_088920e5a78f42 1-27
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadSpamChangedMetadataActor.ts
+  s_154e7eadce3a09::t_2812c3251eb188 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadStarredMetadata.ts
+  s_154e7eadce3a09::t_1c03b5d20b061e 1-27
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadStarredMetadataActor.ts
+  s_154e7eadce3a09::t_430768327c518d 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadTrashedMetadata.ts
+  s_154e7eadce3a09::t_7776f2df99c5ce 1-27
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadTrashedMetadataActor.ts
+  s_154e7eadce3a09::t_0e24ffac290726 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadsReindexReason.ts
+  s_154e7eadce3a09::t_25b974258695ff 1-18
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailThreadsReindexRequestedMetadata.ts
+  s_154e7eadce3a09::t_4dbccf86bf940d 1-23
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEvent.ts
+  s_154e7eadce3a09::t_9ed6a85636c52e 1-47
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOf.ts
+  s_154e7eadce3a09::t_e6f9225c18d214 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfEventType.ts
+  s_154e7eadce3a09::t_a14cfc3d4102cc 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfFive.ts
+  s_154e7eadce3a09::t_9f5bb018a6399f 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfFiveEventType.ts
+  s_154e7eadce3a09::t_5d41dddd919293 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfNine.ts
+  s_154e7eadce3a09::t_bfe7b20fd97745 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfNineEventType.ts
+  s_154e7eadce3a09::t_2f9015710aea7a 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfOnefive.ts
+  s_154e7eadce3a09::t_f370f219843e0c 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfOnefiveEventType.ts
+  s_154e7eadce3a09::t_1c6e440af6b773 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfOnenine.ts
+  s_154e7eadce3a09::t_36998bac122f41 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfOnenineEventType.ts
+  s_154e7eadce3a09::t_2319f747ecb8c6 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfOneone.ts
+  s_154e7eadce3a09::t_5a6fc56ee7e9df 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfOneoneEventType.ts
+  s_154e7eadce3a09::t_00f681b3b7a1bb 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfOneseven.ts
+  s_154e7eadce3a09::t_21a3e67d55a056 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfOnesevenEventType.ts
+  s_154e7eadce3a09::t_cd2e32e32d86ba 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfOnethree.ts
+  s_154e7eadce3a09::t_3d8d0efdd264fe 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfOnethreeEventType.ts
+  s_154e7eadce3a09::t_ce72c424e43fac 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfSeven.ts
+  s_154e7eadce3a09::t_bfd03d287283f2 1-26
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfSevenEventType.ts
+  s_154e7eadce3a09::t_b27f34ba33e7a5 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfThree.ts
+  s_154e7eadce3a09::t_7b30f1ae710857 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfThreeEventType.ts
+  s_154e7eadce3a09::t_b96a984327d3b1 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfThreefive.ts
+  s_154e7eadce3a09::t_a8ad29a73a3a4f 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfThreefiveEventType.ts
+  s_154e7eadce3a09::t_8df725e171c000 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfThreeone.ts
+  s_154e7eadce3a09::t_b4d28a8e0fe46d 1-24
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfThreeoneEventType.ts
+  s_154e7eadce3a09::t_58c7ee6a871b27 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfThreethree.ts
+  s_154e7eadce3a09::t_67dd9c2512c224 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfThreethreeEventType.ts
+  s_154e7eadce3a09::t_4ad36de493d920 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfTwofive.ts
+  s_154e7eadce3a09::t_2eb374b066508d 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfTwofiveEventType.ts
+  s_154e7eadce3a09::t_893a320d036992 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfTwonine.ts
+  s_154e7eadce3a09::t_bd9da577c8734b 1-20
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfTwonineEventType.ts
+  s_154e7eadce3a09::t_01fe60f8863f62 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfTwoone.ts
+  s_154e7eadce3a09::t_af9296c465c9af 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfTwooneEventType.ts
+  s_154e7eadce3a09::t_97e2e06dfeb0ad 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfTwoseven.ts
+  s_154e7eadce3a09::t_fac547e9b6427e 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfTwosevenEventType.ts
+  s_154e7eadce3a09::t_fff26c81e793e4 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfTwothree.ts
+  s_154e7eadce3a09::t_92b47adaa8f693 1-22
+apps/web/src/lib/service-clients/service-storage/generated/schemas/emailTopicEventOneOfTwothreeEventType.ts
+  s_154e7eadce3a09::t_641b3697a55d57 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/index.ts
+  s_154e7eadce3a09::t_fbcf0dfd660cd8 1290,1304-1324,1340-1395
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_154e7eadce3a09::t_48ed2bee521c20 39018-39022,39178-40302,40304,40306,40308-40319,40321,40323-40325,40331-40332,40334,40336,40338-40349,40351,40353-40364,40366,40368-40370,40373-40381,40383-40385,40387-40388,40391-40392,40394,40396,40398-40411,40413-40415,40421-40422,40424,40426,40428-40439,40441,40443-40445,40451-40452,40454,40456,40458-40469,40471,40473-40475,40480,61196-61199
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "fbb908bd4903e44f49a4f4f68ce2c45654ee408a",
+  "prompts": {},
+  "sessions": {
+    "s_154e7eadce3a09": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad735192-5c05-45ca-a84d-09b5ccc7f8bc",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
