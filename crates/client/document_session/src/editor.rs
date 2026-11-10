@@ -5,7 +5,10 @@ use lexical_loro::{FIXUP_ORIGIN, LOCAL_ORIGIN, LoroProjection, PlainPolicy, Sync
 use lexical_model::*;
 use loro::LoroDoc;
 use loro_internal::undo::UndoManager;
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicI64, Ordering},
+};
 mod builder;
 pub(crate) mod reported_errors;
 pub use reported_errors::ReportedModelErrorObserver;
@@ -34,7 +37,7 @@ pub struct EditorConfig {
     pub mode: EditorMode,
     /// Platform selection policy.
     pub view_host: ViewHost,
-    /// Typing merge interval on the injected monotonic clock.
+    /// Collaborative history merge interval on the host-provided clocks.
     pub delay_ms: u64,
     /// Trusted application commands that change only local policy-excluded state.
     pub local_commands: &'static [CommandKind],
@@ -71,7 +74,7 @@ pub struct EditorSurface {
     pub(crate) focused: bool,
     pub(crate) focus_known: bool,
     pub(crate) resynced: bool,
-    item_started: Option<HistoryTime>,
+    history_clock: Arc<AtomicI64>,
     availability: HistoryAvailability,
     #[cfg(feature = "conformance")]
     pub(crate) undo_applied: Vec<crate::UndoObservation>,
@@ -88,6 +91,8 @@ pub struct EditorSurface {
 }
 impl EditorSurface {
     pub(crate) fn new(config: EditorConfig, peer: u64, now: Now) -> Result<Self, SessionError> {
+        i64::try_from(config.delay_ms)
+            .map_err(|_| SessionError::Configuration("history delay exceeds i64 milliseconds"))?;
         let editor = Self::builder(&config, config.mode, peer).build()?;
         Ok(Self {
             core: Self::core(editor),
@@ -103,7 +108,7 @@ impl EditorSurface {
             focused: false,
             focus_known: false,
             resynced: false,
-            item_started: None,
+            history_clock: Arc::new(AtomicI64::new(now.wall.0)),
             availability: HistoryAvailability::default(),
             #[cfg(feature = "conformance")]
             undo_applied: Vec::new(),
@@ -187,6 +192,9 @@ impl EditorSurface {
         access: Access,
         view: &mut Vec<ViewEffect>,
     ) -> Result<(), SessionError> {
+        let interval = i64::try_from(self.config.delay_ms)
+            .map_err(|_| SessionError::Configuration("history delay exceeds i64 milliseconds"))?;
+        self.history_clock.store(now.wall.0, Ordering::Relaxed);
         let _open = tracing::info_span!("editor.open", peer = doc.peer_id()).entered();
         let load = tracing::info_span!("state.load", peer = doc.peer_id());
         let load_guard = load.enter();
@@ -252,14 +260,15 @@ impl EditorSurface {
         self.refresh_cursor(doc);
         let undo = UndoManager::new(doc.inner());
         undo.set_max_undo_steps(100);
-        undo.set_merge_interval(0);
+        let clock = self.history_clock.clone();
+        undo.set_time_source(Some(Arc::new(move || clock.load(Ordering::Relaxed))));
+        undo.set_merge_interval(interval);
         undo.add_exclude_origin_prefix("history-");
         self.history_selection = history::HistorySelection::default();
         self.history_selection.install(&undo);
         self.undo = Some(undo);
         self.tracker = MergeTracker::new(self.config.delay_ms, HistoryTime(now.mono.0));
         self.group_active = false;
-        self.item_started = None;
         self.availability = HistoryAvailability::default();
         // Initialization's ClearHistory boundary makes the manager ready for user edits.
         self.history_ready = true;
@@ -284,6 +293,7 @@ impl EditorSurface {
         access: Access,
         view: &mut Vec<ViewEffect>,
     ) -> Result<(), SessionError> {
+        self.history_clock.store(now.wall.0, Ordering::Relaxed);
         let _span =
             tracing::warn_span!("doc.projection.resync", error.kind = "projection").entered();
         let cursor = self.cursor.clone();
@@ -324,13 +334,12 @@ impl EditorSurface {
             }
         }
     }
-    fn group(&mut self, commits: &[Commit], now: HistoryTime) -> Result<usize, SessionError> {
+    fn group(&mut self, commits: &[Commit], now: HistoryTime) -> Result<(), SessionError> {
         let Some(undo) = &mut self.undo else {
-            return Ok(0);
+            return Ok(());
         };
-        let count = undo.undo_count();
         if !self.history_ready {
-            return Ok(count);
+            return Ok(());
         }
         for commit in commits {
             if commit.changes.is_empty() && commit.prev.selection() == commit.next.selection() {
@@ -356,7 +365,7 @@ impl EditorSurface {
                 _ => {}
             }
         }
-        Ok(count)
+        Ok(())
     }
     pub(crate) fn apply(
         &mut self,
@@ -366,6 +375,7 @@ impl EditorSurface {
         access: Access,
         view: &mut Vec<ViewEffect>,
     ) -> Result<bool, SessionError> {
+        self.history_clock.store(now.wall.0, Ordering::Relaxed);
         self.handled = Handled::No;
         let cold_span = match &input {
             Input::SetState { .. } => Some(tracing::info_span!(
@@ -436,7 +446,6 @@ impl EditorSurface {
                 undo.clear();
             }
             self.group_active = false;
-            self.item_started = None;
             self.history_ready = true;
             self.handled = Handled::Yes;
             self.tracker = MergeTracker::new(self.config.delay_ms, HistoryTime(now.mono.0));
@@ -482,7 +491,7 @@ impl EditorSurface {
                     self.projection.as_ref()?.cursor(doc, previous, selection)
                 }));
         }
-        let count = self.group(commits, HistoryTime(now.mono.0))?;
+        self.group(commits, HistoryTime(now.mono.0))?;
         #[cfg(feature = "test-faults")]
         let fault = if std::mem::take(&mut self.wrong_next_type) {
             self.prepare_projection_type_write(doc)?
@@ -515,16 +524,12 @@ impl EditorSurface {
         if changed && let Some(fault) = fault {
             self.inject_projection_type_write(doc, fault)?;
         }
-        if self.undo.as_ref().is_some_and(|u| u.undo_count() > count) {
-            self.item_started = Some(HistoryTime(now.mono.0));
-        }
         if clear {
             if let Some(undo) = &mut self.undo {
                 undo.group_end();
                 undo.clear();
             }
             self.group_active = false;
-            self.item_started = None;
             self.tracker = MergeTracker::new(self.config.delay_ms, HistoryTime(now.mono.0));
             self.history_ready = true;
         }
@@ -576,11 +581,11 @@ impl EditorSurface {
         access: Access,
         view: &mut Vec<ViewEffect>,
     ) -> Result<bool, SessionError> {
+        self.history_clock.store(now.wall.0, Ordering::Relaxed);
         self.handled = Handled::Yes;
         let undo = self.undo.as_mut().ok_or(SessionError::NotReady)?;
         undo.group_end();
         self.group_active = false;
-        self.item_started = None;
         let meta = if redo {
             undo.top_redo_meta()
         } else {
@@ -720,6 +725,7 @@ impl EditorSurface {
         view: &mut Vec<ViewEffect>,
         historic: bool,
     ) -> Result<bool, SessionError> {
+        self.history_clock.store(now.wall.0, Ordering::Relaxed);
         let popped = historic
             .then(|| self.history_selection.take_popped())
             .flatten();

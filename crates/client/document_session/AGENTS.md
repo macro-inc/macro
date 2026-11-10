@@ -33,7 +33,7 @@ The host supplies identities and both clocks and executes the returned effects.
 - Collaborative builders enable opaque unknown types and disable core snapshot history.
 - Deliver explicit Focus inputs when host focus changes; preserve logical selection on blur.
 - Register Click at the ordinary rich-text Editor priority and reuse lexical_rich_nodes::rich_text::click; decorator-specific selection remains in component listeners.
-- Loro owns undo with merge_interval 0; MergeTracker and injected time own grouping. Preserve its structural and explicit-push boundaries; never turn a classified Push into Merge using a second elapsed-time window.
+- Match collaborative registerLoroHistory with Loro’s configured merge interval and the injected host wall clock; keep MergeTracker as the independent group classifier, without a second session interval override. Standalone lexical-history tests do not define collaborative Session boundaries.
 - Checkpoint eligible local projections from their new oplog span instead of document events; retain full events for imports, fixups, paused/excluded edits and undo/redo.
 - Drain initial core output before accepting input; rebuild bindings and undo on reset.
 - Forward native decorator observation sidecars even when no serialized property
