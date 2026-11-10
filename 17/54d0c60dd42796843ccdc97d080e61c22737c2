@@ -1,0 +1,33 @@
+apps/web/src/features/channel/Thread/ChannelThread.tsx
+  s_51eb97e54b8b5e::t_2513dc879619e7 77,88
+apps/web/src/features/channel/Call/chat/CallChat.tsx
+  s_51eb97e54b8b5e::t_2513dc879619e7 250
+apps/web/src/features/channel/Thread/types.ts
+  s_51eb97e54b8b5e::t_2513dc879619e7 4-8,68-69
+apps/web/src/lib/core/messages/MessageThread.tsx
+  s_51eb97e54b8b5e::t_2513dc879619e7 23,51-52,224
+apps/web/src/features/channel/Call/chat/browser-test/call-chat.browser.e2e.ts
+  s_51eb97e54b8b5e::t_7c77a5cc2d4083 254-269
+  s_51eb97e54b8b5e::t_38bf2f1af3a617 359-360,363-364
+  s_51eb97e54b8b5e::t_36d077ff5f98f4 73
+  s_51eb97e54b8b5e::t_e12d18cdd70da0 349-351,365-370
+  s_51eb97e54b8b5e::t_d7a11014cc7327 157
+  s_51eb97e54b8b5e::t_5cf16431eeca58 208
+  s_51eb97e54b8b5e::t_66138d1ca2c010 361-362
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "1754d0c60dd42796843ccdc97d080e61c22737c2",
+  "prompts": {},
+  "sessions": {
+    "s_51eb97e54b8b5e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c77b-5d86-7e81-b9b2-550abeb9f94a",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
