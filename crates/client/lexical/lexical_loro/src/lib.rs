@@ -83,6 +83,7 @@ pub use index::{
     InitialEditorState, fork_doc, new_doc, reconstruct_initial_state, reconstruct_state,
 };
 use index::{NodeIndex, projected_children};
+mod child_index;
 mod local;
 mod remote;
 pub use remote::RemoteChanges;
@@ -93,6 +94,10 @@ pub struct LoroProjection {
     policy: &'static dyn SyncPolicy,
     index: NodeIndex,
     events: Arc<Mutex<Vec<remote::PendingBatch>>>,
+    child_index: child_index::ChildIndex,
+    indexed_state: EditorState,
+    indexed_vv: loro::VersionVector,
+    indexed_frontiers: loro::Frontiers,
     _subscription: loro::Subscription,
 }
 /// A consistency mismatch with its location and both observable values.

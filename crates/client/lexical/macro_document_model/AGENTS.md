@@ -73,6 +73,8 @@ The fixed Macro catalog supplies comparison metadata, never JavaScript construct
 
 ## Checks
 
+- `TMPDIR=/home/wolf/tmp cargo test -p macro_document_model --test projection_children -j2` checks bounded insertion work with independent full reconstruction and fresh snapshot replay; its ignored receipt runner compares ordered operations, JSON, VV and frontiers against an explicitly retained baseline.
+
 - `cargo test -p macro_document_model --test sync_draft_comparison` checks actual source draft-strip bootstrap, comparison-only canonical exports, immutable writer bytes and incremental parent/typing behavior.
 
 - `bun apps/web/scripts/lexical-group-b-app-blocks.ts --check` checks the Group B pasted app-link block catalog.

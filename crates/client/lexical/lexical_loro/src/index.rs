@@ -251,7 +251,15 @@ impl LoroProjection {
             };
             batches.push(remote::PendingBatch::from_event(event));
         }));
+        let mut child_index = crate::child_index::ChildIndex::default();
+        for key in index.nodes.keys().copied() {
+            child_index.remember(state.view(), key, &index.map(doc, key)?, &index, policy)?;
+        }
         Ok(Self {
+            child_index,
+            indexed_state: state.clone(),
+            indexed_vv: doc.oplog_vv(),
+            indexed_frontiers: doc.state_frontiers(),
             policy,
             index,
             events,

@@ -68,6 +68,21 @@ impl LoroProjection {
         now: loro::Timestamp,
         suppress_events: bool,
     ) -> Result<LocalProjected> {
+        let result = self.project_local_commit(doc, commits, origin, now, suppress_events);
+        if result.is_err() {
+            // Partial projection writes cannot leave reusable insertion anchors.
+            self.child_index = crate::child_index::ChildIndex::default();
+        }
+        result
+    }
+    fn project_local_commit(
+        &mut self,
+        doc: &LoroDoc,
+        commits: &[Commit],
+        origin: &'static str,
+        now: loro::Timestamp,
+        suppress_events: bool,
+    ) -> Result<LocalProjected> {
         if !matches!(origin, LOCAL_ORIGIN | FIXUP_ORIGIN) {
             return Err(diverged("unsupported projection origin"));
         }
@@ -93,7 +108,7 @@ impl LoroProjection {
         }
         let mut dirty = OrderedMap::default();
         let mut structure = OrderedSet::default();
-        for (key, mutation) in candidates {
+        for (&key, &mutation) in &candidates {
             let links_changed = prev.parent(key) != next.parent(key)
                 || prev.prev_sibling(key) != next.prev_sibling(key)
                 || prev.next_sibling(key) != next.next_sibling(key);
@@ -177,12 +192,59 @@ impl LoroProjection {
             .filter(|key| next.is_element(*key))
             .collect::<Vec<_>>();
         structural.sort_by_key(|key| next.ancestors(*key).count());
+        // Indexed anchors are valid only against the exact model/native pair
+        // which produced them. External commits (including own-field visibility
+        // changes) and uncommitted native writes invalidate them before use.
+        let anchors_valid = origin == LOCAL_ORIGIN
+            && self.indexed_state.same_snapshot(&first.prev)
+            && self.indexed_vv == before_vv
+            && self.indexed_frontiers == doc.state_frontiers()
+            && !doc.is_detached()
+            && doc.inner().get_pending_txn_len() == 0;
+        if !anchors_valid {
+            self.child_index = crate::child_index::ChildIndex::default();
+        }
+        let mut insertions = OrderedMap::default();
+        if anchors_valid && !structural.is_empty() {
+            let mut changed_children: FxHashMap<NodeKey, Vec<NodeKey>> = FxHashMap::default();
+            for key in candidates.keys().copied() {
+                if let Some(parent) = prev.parent(key) {
+                    changed_children.entry(parent).or_default().push(key);
+                }
+                if let Some(parent) = next.parent(key)
+                    && Some(parent) != prev.parent(key)
+                {
+                    changed_children.entry(parent).or_default().push(key);
+                }
+            }
+            for key in &structural {
+                if !self.index.nodes.contains_key(key) {
+                    continue;
+                }
+                let map = self.index.map(doc, *key)?;
+                if let Some(list) = schema::children(&map)?
+                    && let Some(plan) = self.child_index.plan(
+                        doc,
+                        [prev, next],
+                        *key,
+                        changed_children
+                            .get(key)
+                            .map(Vec::as_slice)
+                            .unwrap_or_default(),
+                        &list,
+                        self.policy,
+                    )?
+                {
+                    insertions.insert(*key, (list, plan));
+                }
+            }
+        }
         // Creating a new ancestor can rebind an existing descendant before its
         // old parent is reconciled. Remember only affected parents' current
         // children so those old containers stay owned until their removal.
         let mut previous_owners = FxHashMap::default();
         for key in &structural {
-            if self.index.nodes.contains_key(key) {
+            if !insertions.contains_key(key) && self.index.nodes.contains_key(key) {
                 let map = self.index.map(doc, *key)?;
                 for child in projected_children(&map, self.policy)? {
                     if let Some((key, Slot::Node)) = self.index.owner.get(&child.id()) {
@@ -191,11 +253,46 @@ impl LoroProjection {
                 }
             }
         }
+        let mut reconciled = Vec::new();
         for key in structural {
             if handled.contains(&key) || !self.index.nodes.contains_key(&key) {
                 continue;
             }
             stats.nodes_visited += 1;
+            if let Some((list, plan)) = insertions.swap_remove(&key) {
+                let mut offset = 0;
+                for run in plan {
+                    for (rank, child) in run.keys.iter().copied().enumerate() {
+                        let position = run.position + offset + rank;
+                        let map = list.insert_container(position, LoroMap::new())?;
+                        schema::initialize_map(
+                            &map,
+                            &storage_node(next, child, self.policy)?,
+                            schema::MapSchema::Node,
+                        )?;
+                        self.index.bind_tree(next, child, &map, self.policy)?;
+                        self.child_index
+                            .insert_anchor(key, child, &list, position, map.id())?;
+                        handled.insert(child);
+                        for (descendant, _) in next.descendants(child) {
+                            handled.insert(descendant);
+                        }
+                        stats.children_scanned += 1;
+                        stats.containers_written += 1;
+                        stats.nodes_visited += 1 + next.descendants(child).count();
+                    }
+                    offset += run.keys.len();
+                }
+                self.child_index.inserted(key, offset);
+                written.insert(key);
+                self.index
+                    .bind(key, &self.index.map(doc, key)?, self.policy)?;
+                continue;
+            }
+            // Complex transforms may rebind descendants across parents. Discard
+            // their anchors and rebuild only the reconciled lists after writes.
+            self.child_index = crate::child_index::ChildIndex::default();
+            reconciled.push(key);
             let a = if prev.contains(key) {
                 synced_children(prev, key, self.policy)
             } else {
@@ -308,6 +405,17 @@ impl LoroProjection {
                 }
             }
         }
+        for key in reconciled {
+            if self.index.nodes.contains_key(&key) {
+                self.child_index.remember(
+                    next,
+                    key,
+                    &self.index.map(doc, key)?,
+                    &self.index,
+                    self.policy,
+                )?;
+            }
+        }
         // Defer suppression until the infallible commit boundary: fallible
         // projection writes retain their normal events and recovery behavior.
         let events_suppressed =
@@ -318,7 +426,11 @@ impl LoroProjection {
         };
         doc.commit_with(loro::CommitOptions::new().origin(origin).timestamp(now));
         drop(recording);
-        let changed = before_vv != doc.oplog_vv();
+        self.indexed_state = last.next.clone();
+        let after_vv = doc.oplog_vv();
+        let changed = before_vv != after_vv;
+        self.indexed_vv = after_vv;
+        self.indexed_frontiers = doc.state_frontiers();
         tracing::debug!(
             nodes_visited = stats.nodes_visited,
             containers_written = stats.containers_written,
