@@ -1,5 +1,5 @@
 import { getActiveEditor } from './editor';
-import { LineBreakNode, ParagraphNode, TextNode } from './nodes';
+import { LineBreakNode, ParagraphNode, TabNode, TextNode } from './nodes';
 import { $applyNodeReplacement } from './nodes/replacement/helpers';
 
 export type {
@@ -8,23 +8,21 @@ export type {
   EditableListener,
   EditorConfig,
   EditorDOMRenderConfig,
+  EditorState,
   HTMLConfig,
+  LexicalEditor,
 } from './editor';
 export {
+  $getEditorDOMRenderConfig,
   $getNodeByKey,
   $getRoot,
   $isElementNode,
   createEditor,
-  EditorState,
-  getEditorDOMRenderConfig,
-  getEditorDOMRenderConfig as $getEditorDOMRenderConfig,
   isCurrentlyReadOnlyMode,
-  LexicalEditor,
 } from './editor';
 export {
   DecoratorNode,
   ElementNode,
-  LexicalNode,
   LineBreakNode,
   ParagraphNode,
   RootNode,
@@ -276,6 +274,7 @@ export {
   safeCast,
   shallowMergeConfig,
 } from './extension-core';
+export type { LexicalNode } from './nodes';
 export { ArtificialNode__DO_NOT_USE } from './nodes/artificial';
 export { buildImportMap } from './nodes/build-import-map';
 export type {
@@ -328,6 +327,31 @@ export {
   createSharedNodeState,
   getStaticNodeConfig,
 } from './nodes/static-config';
+export type {
+  BaseSelection,
+  ElementPoint,
+  NodeSelection,
+  Point,
+  PointType,
+  RangeSelection,
+  TextPoint,
+} from './selection';
+export {
+  $createNodeSelection,
+  $createPoint,
+  $createRangeSelection,
+  $generateNodesFromRawText,
+  $getCharacterOffsets,
+  $getPreviousSelection,
+  $getSelection,
+  $getTextContent,
+  $insertNodes,
+  $isBlockElementNode,
+  $isNodeSelection,
+  $isRangeSelection,
+  $normalizeSelection__EXPERIMENTAL,
+  $setSelection,
+} from './selection';
 export type { RawTextVisitor } from './selection/helpers';
 export { tokenizeRawText } from './selection/helpers';
 export {
@@ -362,3 +386,29 @@ export {
   stopLexicalPropagation,
   toggleTextFormatType,
 } from './utilities';
+export function $createTabNode(): TabNode {
+  return $applyNodeReplacement(new TabNode());
+}
+
+export {
+  $isDecoratorNode,
+  $isInlineElementOrDecoratorNode,
+  $isLeafNode,
+  $isLexicalNode,
+  $isRootNode,
+  $isRootOrShadowRoot,
+  $isTabNode,
+  $isTokenOrSegmented,
+  $isTokenOrTab,
+} from './nodes/predicates';
+export {
+  $setDirectionFromDOM,
+  setNodeIndentFromDOM,
+} from './utilities/dom-config';
+export {
+  $createChildrenArray,
+  $findMatchingParent,
+  $getNearestRootOrShadowRoot,
+  $hasAncestor,
+  removeFromParent,
+} from './utilities/tree';

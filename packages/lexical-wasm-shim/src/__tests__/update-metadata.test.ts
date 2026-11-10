@@ -5,10 +5,9 @@ import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
-  LexicalNode,
   TextNode,
 } from '../index';
-import type { ParagraphNode } from '../nodes';
+import { LexicalNode, type ParagraphNode } from '../nodes';
 
 test('native dirty intent stays live across historical readonly peers and restores after throws', () => {
   const editor = createEditor();

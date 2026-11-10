@@ -134,3 +134,8 @@ Keep the root export manifest pinned to Original public names and kinds; forward
 actual producer bindings explicitly, leave state/runtime binders internal, and
 use canonical type-only data/constructor utilities without importing Original
 node/editor/selection graphs. Public slot aliases use the actual view classes.
+
+Keep LexicalNode, LexicalEditor, EditorState and selection classes type-only at
+the public root, as pinned upstream; implementation modules retain their runtime
+classes. The public $getEditorDOMRenderConfig accepts an optional editor and
+otherwise uses the active editor; keep the explicit internal helper private.
