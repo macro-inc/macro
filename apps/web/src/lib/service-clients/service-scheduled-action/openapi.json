@@ -306,7 +306,7 @@
     "/ideas/{id}/accept": {
       "post": {
         "tags": ["ideas"],
-        "summary": "The caller acts on a proposed idea.",
+        "summary": "The caller acts on an idea: a background prompt idea is taken on; any\nother is done once they act on it (open its item, the composer, the\nroutine), and shows in the feed's `done`.",
         "operationId": "accept_idea",
         "parameters": [
           {
@@ -321,7 +321,7 @@
         ],
         "responses": {
           "204": {
-            "description": "Accepted"
+            "description": "Accepted: a background prompt idea is taken on, any other idea is done; accepting a done idea again changes nothing"
           },
           "401": {
             "description": "",
@@ -334,7 +334,7 @@
             }
           },
           "404": {
-            "description": "No proposed idea with this id for the caller, or ideas are off",
+            "description": "No open or done idea with this id for the caller, or ideas are off",
             "content": {
               "text/plain": {
                 "schema": {
