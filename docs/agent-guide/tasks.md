@@ -14,14 +14,26 @@ the filter uses the legacy compact option rows and searchable Assignee, Created 
 and Tags submenus. They use the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
 clicking a row or its checkbox toggles and stays open, Enter adds and closes, and
 Shift/Only selects just one option and stays open. Escape dismisses the menu.
+Assignee uses the team/agent roster and retains selected outsiders. Created by
+loads bounded personal windows only while its submenu or mobile accordion is
+open; search and Next options replace that window without losing selections. Me
+is a semantic viewer choice, distinct from the named fixed self option.
+Unavailable selected IDs remain selected, and Only changes its own group without
+clearing other restrictions.
 The top of the `Filter` menu is a `Filter with AI…` textbox, focused when the menu opens: type a plain-English
 description such as `urgent and high priority tasks that are not completed` and press
 Enter. It replaces the current selection with the matching Status, Priority, Assignee,
 Created by, and Tags options (exclusions on Status/Priority become the complementary
 options; subject matter such as `about billing` lands in the search box), then closes
-the menu. Requests that only partly map keep the menu open and show a muted note
-under the box; requests that map to nothing (excluding a tag, an unknown person,
-off-topic text) keep the typed text and show a red error there instead. The box keeps
+the menu. People are extracted as names/addresses, then resolved independently of
+suggestions; the model never receives the personal directory. A unique full name
+wins before unique first-name matching. Comma-bearing names stay one reference,
+and complete addresses cannot match someone else's display-name alias. Unknown,
+ambiguous or incomplete offline people block the whole plan without changing the
+current filters; rephrase with a full name/address or retry after reconnecting.
+Account/session replacement, navigation and intervening filter/search edits discard
+late replies. Other partly supported requests keep the menu open with a muted note;
+requests mapping to nothing keep the typed text and show a red error. The box keeps
 focus while you type even if the pointer drifts over the rows; ArrowDown moves into
 the rows and hovering a submenu hands focus to it as usual. The mobile drawer has no
 AI box.
@@ -298,6 +310,30 @@ directions with tied and undated tasks. Filter during local and service search,
 then edit or clear a due date: loaded rows move between buckets immediately,
 and refetches correct complete counts and previously absent tasks. Gantt's
 saved-date semantics do not change.
+
+## Import from Linear
+
+Use **Import from Linear** in the Tasks tour/actions menu, or open
+`/app/component/import-linear`, and choose a Linear CSV. The preview shows the
+first 20 rows plus rows with warnings.
+
+Each distinct assignee is matched by exact name or explicit email/identity using
+complete contact evidence, not a suggestion page. Ambiguous or unmatched values
+remain Unassigned with a warning. When lookup is unavailable, retry or explicitly
+choose an assignee/Unassigned before importing. Manual choices override later
+lookup results, including an explicit Unassigned choice.
+
+The mapping button opens the shared single-user property picker. Search or use
+Next options/PageDown; choosing a person replaces the previous choice and retains
+their name/email. Desktop uses inline controls; narrow screens stack them.
+
+Clear or a new upload resets mappings. A late file read cannot replace a newer
+file. Import snapshots assignments and locks editing while running. Account/session
+replacement or closing the importer stops subsequent tasks; an already-dispatched
+creation may still complete. Completed imports cannot be submitted again without
+a new upload. Already-created tasks are kept; failed rows are counted, not
+automatically retried.
+
 ## Saved views
 
 Saved views are available on main Tasks, not inside Project or CRM task lists.

@@ -1,3 +1,4 @@
+import type { PeopleCache } from '../people/host';
 import type { IdentityBindingWire, MutationInspection } from '../protocol';
 /**
  * Transport-agnostic cache host interface consumed by the urql exchange and
@@ -26,6 +27,7 @@ import type {
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
   HydrationResult,
+  HydrationScope,
   MutationClaim,
   MutationSettlement,
   OptimisticLinkPatchWire,
@@ -80,6 +82,11 @@ export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
   registerDependencies?: boolean;
   /** Opaque session tag; see protocol.ts `identity`. */
   identity?: string;
+}
+
+export interface CacheHydrateArgs extends Omit<CacheWriteArgs, 'opKey'> {
+  /** Reject a response from another account or cleared database before writing. */
+  hydrationScope?: HydrationScope;
 }
 
 export interface EnqueueOptimisticMutationArgs extends CacheWriteArgs {
@@ -147,6 +154,8 @@ export interface CacheHost {
   readRecordsByKeys(
     args: ReadRecordsByKeysArgs
   ): Promise<ReadRecordsByKeysResult>;
+  /** Context-aware contact policy; absent on disabled/older host adapters. */
+  readonly people?: PeopleCache;
   /** Searches the compact write-through materialized projection. */
   search(args: SearchCacheArgs): Promise<SearchCachePage>;
   /** Evaluates an exact initial Soup filter page over complete local projections. */
@@ -164,7 +173,7 @@ export interface CacheHost {
    * notifying foreground subscribers unless the write resets cache identity.
    * Cache-only consumers can opt into hydration via onCacheChanged.
    */
-  hydrateQuery(args: Omit<CacheWriteArgs, 'opKey'>): Promise<HydrationResult>;
+  hydrateQuery(args: CacheHydrateArgs): Promise<HydrationResult>;
   /** Durably queues an optimistic mutation and claims the strict head. */
   enqueueOptimisticMutation(
     args: EnqueueOptimisticMutationArgs,

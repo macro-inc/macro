@@ -6,6 +6,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { invalidateUserQuota } from '@queries/auth';
+import {
+  assertQueryAccount,
+  type QueryAccount,
+} from '@queries/auth/account-scope';
 import { postNewHistoryItem } from '@queries/history/history';
 import { setPreviewOnCreate } from '@queries/preview/preview';
 import { refetchSoupEntity, type SoupEntityTag } from '@queries/soup/cache';
@@ -111,6 +115,16 @@ export async function createTask(
   return (await createTaskResponse(args))?.documentId;
 }
 
+/** Long-running workflows must supply their captured owner. Unlike an optional
+ * field on createTask, a missing capture cannot silently become an unscoped write. */
+export async function createTaskForAccount(
+  account: QueryAccount,
+  args?: CreateTaskArgs
+): Promise<string | undefined> {
+  assertQueryAccount(account);
+  return (await createTaskResponse(args, account))?.documentId;
+}
+
 /**
  * Creates a task and returns the canonical snapshot used to initialize it.
  */
@@ -130,7 +144,10 @@ export async function createTaskWithInitialSnapshot(args?: CreateTaskArgs) {
   return { documentId: createdTask.documentId, initialSnapshot };
 }
 
-async function createTaskResponse(args?: CreateTaskArgs) {
+async function createTaskResponse(
+  args?: CreateTaskArgs,
+  account?: QueryAccount
+) {
   // Ensure status is always set, defaulting to NOT_STARTED
   const existingPropertyValues = args?.propertyValues ?? [];
   const hasStatus = existingPropertyValues.some(
@@ -158,6 +175,7 @@ async function createTaskResponse(args?: CreateTaskArgs) {
     propertyValues,
     pinnedPropertyDefinitionIds: args?.pinnedPropertyDefinitionIds,
   });
+  if (account) assertQueryAccount(account);
 
   fireAndForget(invalidateUserQuota(), 'create-entity');
 

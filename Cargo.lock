@@ -538,6 +538,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "pipedream_mcp",
+ "rand 0.9.4",
  "redis",
  "reqwest 0.13.4",
  "rootcause",
@@ -3746,16 +3747,20 @@ dependencies = [
  "apollo-compiler",
  "apollo-parser",
  "chrono",
+ "database_sql",
  "lru 0.16.4",
+ "macro_user_id",
  "maybe_send",
  "miniz_oxide",
  "pollster",
  "postcard",
  "predicate-index",
  "proptest",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "subsequence_match",
  "thiserror 2.0.18",
  "uuid",
 ]
@@ -19686,9 +19691,6 @@ dependencies = [
 [[package]]
 name = "subsequence_match"
 version = "0.1.0"
-dependencies = [
- "workspace-hack",
-]
 
 [[package]]
 name = "subtle"

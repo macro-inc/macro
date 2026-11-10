@@ -11,7 +11,6 @@ import { ViewTour } from '@app/features/tours/ViewTour';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { SplitRouter } from '@app/lib/split-router';
 import { TraceFlow } from '@app/observability/flow';
-import { usePreference } from '@app/preferences/use-preference';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -45,6 +44,10 @@ import { emailTour } from './tour';
 import type { EmailTab, EmailViewStateOptions } from './types';
 import { useEmailViewHotkeys } from './use-email-view-hotkeys';
 import { useReadingPaneHotkey } from './use-reading-pane-hotkey';
+import {
+  READING_PANE_LIST_WIDTH,
+  useReadingPaneListWidth,
+} from './use-reading-pane-list-width';
 import { useVisibleEmailTab } from './use-visible-email-tab';
 import {
   EmailSavedViewsPicker,
@@ -131,9 +134,6 @@ function EmailPanes(props: {
   );
 }
 
-/** The list column's width beside the reading pane, in pixels. */
-const LIST_WIDTH = { default: 440, min: 340, max: 720 };
-
 function EmailDesktopLayout(props: {
   list: JSX.Element;
   focusList: () => void;
@@ -142,13 +142,7 @@ function EmailDesktopLayout(props: {
   const { readingPane, composing } = useEmailView();
   // A new email takes the list's place, so the reading pane folds away.
   const readerBeside = () => readingPane() && !composing();
-  const [storedListWidth, setListWidth] = usePreference(
-    'macro:pref:email:reading-pane-list-width',
-    { default: LIST_WIDTH.default }
-  );
-  // A stored width from an older layout still fits the current bounds.
-  const listWidth = () =>
-    Math.min(LIST_WIDTH.max, Math.max(LIST_WIDTH.min, storedListWidth()));
+  const [listWidth, setListWidth] = useReadingPaneListWidth();
 
   return (
     <ViewShell.Root
@@ -160,8 +154,8 @@ function EmailDesktopLayout(props: {
           ? {
               preferredWidth: 640,
               width: listWidth(),
-              min: LIST_WIDTH.min,
-              max: LIST_WIDTH.max,
+              min: READING_PANE_LIST_WIDTH.min,
+              max: READING_PANE_LIST_WIDTH.max,
             }
           : { preferredWidth: 640 }
       }
