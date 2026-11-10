@@ -910,3 +910,5 @@ fn application_host_request_keeps_its_typed_payload_in_the_existing_effect_envel
 
 mod code_persistence;
 mod effective_access;
+
+mod checklist_plan;

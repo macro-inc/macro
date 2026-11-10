@@ -193,6 +193,9 @@ pub fn query(
     generation: u32,
     state: &EditorState,
 ) -> Result<Option<serde_json::Value>, Error> {
+    if let Some(reply) = checklist_query::query(name, data, generation, state)? {
+        return Ok(Some(reply));
+    }
     table::query(name, data, generation, state)
 }
 
@@ -206,3 +209,5 @@ pub mod checklist_controls;
 
 /// Pure checklist planning from collected metadata and actual external task facts.
 pub mod checklist_plan;
+
+mod checklist_query;

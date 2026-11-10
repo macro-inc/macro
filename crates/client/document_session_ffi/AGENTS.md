@@ -53,3 +53,5 @@ Read decorator model text and instance layout facts in bulk through generation-a
 Forward supplied PasteIntent directly through FfiClipboardPayload; preserve rich MIME order, file flags and HTML nodes independently, and initialize ordinary native clipboard reads explicitly to false.
 
 Forward application queries through EditorSurface.application_query under the session mutex, rejecting stale model generations before payload decoding; never reconstruct committed controller state from serialized nodes.
+
+Read group-b.checklist-plan through the existing generation-checked application_query under the session mutex; preserve tagged coverage/calendar failures and keep provider facts explicit.

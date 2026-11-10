@@ -667,3 +667,5 @@ mod diff_projection;
 mod paste_intent;
 
 mod search_query;
+
+mod checklist_plan;
