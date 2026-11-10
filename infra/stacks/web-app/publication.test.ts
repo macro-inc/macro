@@ -16,6 +16,7 @@ import type { RegisterResourceRequest } from '@pulumi/pulumi/proto/resource_pb';
 import { MockMonitor } from '@pulumi/pulumi/runtime/mocks';
 
 const resources: pulumi.runtime.MockResourceArgs[] = [];
+const execSync = mock((_command: string) => Buffer.from(''));
 const dependencies = new Map<string, string[]>();
 const dist = mkdtempSync(join(tmpdir(), 'web-publication-'));
 writeFileSync(join(dist, 'index.html'), '<html>fixture</html>');
@@ -25,7 +26,7 @@ beforeAll(async () => {
   // resources themselves use Pulumi's real constructors and mock monitor.
   mock.module('node:child_process', () => ({
     ...childProcess,
-    execSync: mock(() => Buffer.from('')),
+    execSync,
   }));
   const register = MockMonitor.prototype.registerResource;
   spyOn(MockMonitor.prototype, 'registerResource').mockImplementation(function (
@@ -112,6 +113,15 @@ describe('web publication resource ordering', () => {
         'index-html-object-metadata-command'
       )
     ).toBe(true);
+  });
+
+  test('the native archive leaves out the tutorial videos and web keeps them', () => {
+    const strips = execSync.mock.calls
+      .map(([command]) => command)
+      .filter((command) => command.includes('strip-native-tutorials.sh'));
+    expect(strips).toEqual([
+      "bash ../../../apps/web/scripts/strip-native-tutorials.sh './output/app-archive'",
+    ]);
   });
 
   test('the stable archive URL is not cached as an immutable asset', () => {

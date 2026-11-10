@@ -472,8 +472,11 @@ Retain FAQ class markers so prerendering emits matching FAQPage structured data.
 
 Product heroes put **Watch demo** beside Get started (`ProductHero`'s
 `tutorial`, and the Email hero); the Agents page's Bring your own agent
-section also has one for MacroD. It opens `TutorialVideoDialog`: the app's
-Block tutorial, paused behind the app's play pill (play disc, presenter, "Watch
+section also has one for MacroD. A `FeaturePageSection` takes one as its
+`action`, under its description: Chat's Channel access section opens Automatic
+permissions, Email's organized-inboxes section AI tagging, and Documents' links
+section Company graph. Each opens `TutorialVideoDialog`: the app's
+tutorial, paused behind the app's play pill (play disc, presenter, "Watch
 demo · m:ss") until the visitor presses it. Escape and the backdrop close it,
 and focus returns to the button. Titles and lengths in
 `core/tutorial-videos.ts` copy the app's `tutorials` messages; change both
@@ -482,7 +485,10 @@ together.
 The videos and posters live once, in `public/video/tutorials/` (mp4s through
 Git LFS), and deploy to `macro.com/video/tutorials/`. docs.macro.com embeds
 them from there, including Blocks without a page here (Home, Drive, Calendar,
-Scheduling, Spreadsheets, Databases, Canvas). Replacing a video keeps its
+Scheduling, Spreadsheets, Databases, Forms, Canvas, Routines, Skills).
+`TUTORIAL_VIDEOS` also lists the videos about Macro as a whole (Company graph,
+AI tagging, Automatic permissions, Workspace events, Unified search), so pages
+built for them can open the same dialog. Replacing a video keeps its
 name; the deploy's `--size-only` sync skips a same-size file, and CloudFront
 caches videos for a day.
 

@@ -1,3 +1,4 @@
+import { TutorialRow } from '@app/features/video-tutorials';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { Accessor, JSX } from 'solid-js';
 import { RoutinesList } from '../components/routines-list';
@@ -33,6 +34,7 @@ export function RoutinesListView(props: {
       onToggle={(row) => props.source.setEnabled(row.id, !row.enabled)}
       templates={props.templates}
       onTemplate={props.onTemplate}
+      listStart={<TutorialRow tutorial="routines" />}
       footer={props.footer}
     />
   );

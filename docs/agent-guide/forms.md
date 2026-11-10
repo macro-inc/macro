@@ -13,7 +13,9 @@ decides who may respond.
 
 ## Creating
 
-- **Create → Form** (shortcut **C → Q**, **Shift** opens it in a new split)
+- **Create → Form** (shortcut **C → Q** with the create menu's Search mode
+  off; with it on, the default, **C**, type **q**, **Enter**; **Shift** opens it
+  in a new split)
   creates "Untitled form" with a new database whose table is "Responses",
   and opens the builder at `/app/form/<uuid>`. Drive's **New → Form** opens
   it inline instead, at `/app/drive/form/<uuid>`.
@@ -72,6 +74,9 @@ at that position. Hover between sections to insert a **Section** or **Gate**.
 These controls also appear on keyboard focus and stay visible while their menus
 are open. Meeting links can only be added at the end; adding other sections later
 keeps the meeting link last. Start an empty form by adding a section, then its questions.
+Until the form has a question, the Forms `TutorialPill` (from
+`features/video-tutorials`) sits centered under those actions (the form block
+passes it to the builder as its `signpost`).
 
 - **Database row** asks which table to use before adding the question.
   Existing questions and sections can still be reordered with their drag handles.

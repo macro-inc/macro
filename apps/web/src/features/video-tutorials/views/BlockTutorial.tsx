@@ -1,3 +1,5 @@
+import { getNativeMobilePlatform, isTauri } from '@core/util/platform';
+import { getWebOrigin } from '@core/util/webOrigin';
 import { Match, Show, Switch } from 'solid-js';
 import { TUTORIALS, type Tutorial } from '../catalog';
 import {
@@ -13,6 +15,28 @@ import {
   createTutorialState,
   type TutorialState,
 } from '../primitives/create-tutorial-state';
+
+/**
+ * A block's tutorial, once its video is in the catalog. The iOS and Android
+ * apps show none: their bundles ship without the videos
+ * (`scripts/strip-native-tutorials.sh`). This is about what the native app
+ * ships, not layout, so mobile web at phone width keeps its tutorials.
+ */
+function tutorialFor(id: TutorialId): Tutorial | undefined {
+  if (getNativeMobilePlatform()) return undefined;
+  return TUTORIALS[id];
+}
+
+/**
+ * Where a tutorial's video or poster loads from. The native apps' over-the-air
+ * bundle leaves them out, so the desktop app streams them from the web app,
+ * which publishes the same content-hashed files. The web app and the dev
+ * server serve their own.
+ */
+function servedUrl(asset: string): string {
+  if (import.meta.env.DEV || !isTauri()) return asset;
+  return new URL(asset, getWebOrigin()).href;
+}
 
 /**
  * "Have questions about Macro CRM? Talk to us in your support channel." under
@@ -46,7 +70,8 @@ function Entry(props: {
 }) {
   const state: TutorialState = createTutorialState(props.tutorial.id);
   const shown = () => TUTORIALS[state.shown()] ?? props.tutorial;
-  // The shelf after a video ends: every other tutorial, in the blocks' order.
+  // The shelf after a video ends: every other video, the blocks' tutorials
+  // first, then the videos about Macro as a whole.
   const more = () =>
     TUTORIAL_IDS.flatMap((id) => {
       const tutorial = TUTORIALS[id];
@@ -80,8 +105,8 @@ function Entry(props: {
         onOpenChange={state.setOpen}
         title={shown().title}
         length={shown().length}
-        videoUrl={shown().videoUrl}
-        posterUrl={shown().posterUrl}
+        videoUrl={servedUrl(shown().videoUrl)}
+        posterUrl={servedUrl(shown().posterUrl)}
         onPlayStarted={state.recordPlay}
         more={more()}
         onSelectTutorial={state.show}
@@ -105,7 +130,7 @@ function Entry(props: {
  */
 export function TutorialRow(props: { tutorial: TutorialId }) {
   return (
-    <Show when={TUTORIALS[props.tutorial]}>
+    <Show when={tutorialFor(props.tutorial)}>
       {(tutorial) => <Entry tutorial={tutorial()} variant="row" />}
     </Show>
   );
@@ -114,7 +139,7 @@ export function TutorialRow(props: { tutorial: TutorialId }) {
 /** The entry as a button, centered in a block's empty state. */
 export function TutorialPill(props: { tutorial: TutorialId; class?: string }) {
   return (
-    <Show when={TUTORIALS[props.tutorial]}>
+    <Show when={tutorialFor(props.tutorial)}>
       {(tutorial) => (
         <Entry tutorial={tutorial()} variant="pill" class={props.class} />
       )}
@@ -131,7 +156,7 @@ export function TutorialSidebarItem(props: {
   named?: boolean;
 }) {
   return (
-    <Show when={TUTORIALS[props.tutorial]}>
+    <Show when={tutorialFor(props.tutorial)}>
       {(tutorial) => (
         <Entry tutorial={tutorial()} variant="sidebar" named={props.named} />
       )}
@@ -140,4 +165,4 @@ export function TutorialSidebarItem(props: {
 }
 
 /** Whether a block has a tutorial video yet (for layouts that reserve space). */
-export const hasTutorial = (id: TutorialId) => TUTORIALS[id] !== undefined;
+export const hasTutorial = (id: TutorialId) => tutorialFor(id) !== undefined;

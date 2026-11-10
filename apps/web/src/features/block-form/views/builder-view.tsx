@@ -26,6 +26,7 @@ import {
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import {
   type Accessor,
+  type Component,
   createMemo,
   createSignal,
   createUniqueId,
@@ -36,6 +37,7 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
 import {
@@ -140,6 +142,8 @@ type BuilderViewProps = {
   /** Registers writes a preview waits for, while the builder is open. */
   trackWrites: TrackWrites;
   onOpenDatabase: (databaseId: string) => void;
+  /** The host's entry under the add actions until the form has a question: its tutorial. */
+  signpost?: Component;
 };
 
 /**
@@ -1174,6 +1178,19 @@ function BuilderCanvas(
                   </Button>
                 </Show>
               </div>
+            </Show>
+            <Show
+              when={
+                !layout().sections.some(
+                  (section) => section.questions.length > 0
+                ) && props.signpost
+              }
+            >
+              {(signpost) => (
+                <div class="mt-6 flex justify-center">
+                  <Dynamic component={signpost()} />
+                </div>
+              )}
             </Show>
           </div>
         </div>

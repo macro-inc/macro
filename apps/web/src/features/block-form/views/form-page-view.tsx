@@ -133,6 +133,8 @@ type FormPageProps = {
   preview: Pick<Preview, 'trackWrites' | 'trackLayout'>;
   onTabChange: (tab: FormTab) => void;
   onOpenDatabase: (databaseId: string) => void;
+  /** The host's entry in the Build tab until the form has a question: its tutorial. */
+  signpost?: Component;
   onOpenShare: () => void;
   onTrashed: () => void;
 };
@@ -170,6 +172,7 @@ function EditorPanels(
       active={props.tab === 'build'}
       trackWrites={props.preview.trackWrites}
       onOpenDatabase={props.onOpenDatabase}
+      signpost={props.signpost}
     />
   );
   const sharing = (

@@ -9,10 +9,22 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TUTORIALS } from './catalog';
 import {
+  hasTutorial,
   TutorialPill,
   TutorialRow,
   TutorialSidebarItem,
 } from './views/BlockTutorial';
+
+// The app's platform: the web app unless a test says otherwise.
+const platform = vi.hoisted(() => ({
+  tauri: false,
+  nativeMobile: undefined as 'ios' | 'android' | undefined,
+}));
+vi.mock('@core/util/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/util/platform')>()),
+  isTauri: () => platform.tauri,
+  getNativeMobilePlatform: () => platform.nativeMobile,
+}));
 
 const track = vi.hoisted(() => vi.fn());
 vi.mock('@app/lib/analytics', () => ({ analytics: { track } }));
@@ -40,6 +52,8 @@ const play = vi.fn(() => Promise.resolve());
 const pause = vi.fn();
 
 beforeEach(() => {
+  platform.tauri = false;
+  platform.nativeMobile = undefined;
   localStorage.clear();
   channelList.channels = [];
   openWithSplit.mockClear();
@@ -70,6 +84,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
 });
 
 const row = () =>
@@ -335,5 +350,43 @@ describe('block tutorial sidebar item', () => {
       name: /Learn how to use Macro Docs/,
     });
     expect(docs.textContent).toContain('Watch tutorial');
+  });
+});
+
+describe('in the native apps', () => {
+  it.each(['ios', 'android'] as const)(
+    'renders no entry in the %s app',
+    (nativeMobile) => {
+      platform.tauri = true;
+      platform.nativeMobile = nativeMobile;
+      render(() => (
+        <>
+          <TutorialRow tutorial="mail" />
+          <TutorialPill tutorial="crm" />
+          <TutorialSidebarItem tutorial="docs" named />
+        </>
+      ));
+
+      expect(screen.queryByRole('button')).toBeNull();
+      expect(hasTutorial('mail')).toBe(false);
+    }
+  );
+
+  it('streams the video and poster from the web app in the desktop app', async () => {
+    // The desktop app's bundle has no videos; a built one loads them from macro.com.
+    vi.stubEnv('DEV', false);
+    platform.tauri = true;
+    render(() => <TutorialRow tutorial="mail" />);
+    expect(hasTutorial('mail')).toBe(true);
+
+    fireEvent.click(row()!);
+    await screen.findByRole('dialog');
+
+    const served = (asset: string | undefined) =>
+      new URL(asset!, 'https://macro.com').href;
+    expect(video()?.getAttribute('src')).toBe(served(TUTORIALS.mail?.videoUrl));
+    expect(video()?.getAttribute('poster')).toBe(
+      served(TUTORIALS.mail?.posterUrl)
+    );
   });
 });

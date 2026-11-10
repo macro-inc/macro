@@ -8,7 +8,7 @@ import {
 } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { errAsync, ok, okAsync, type Result, ResultAsync } from 'neverthrow';
-import { createRoot } from 'solid-js';
+import { type Component, createRoot } from 'solid-js';
 import {
   afterEach,
   beforeAll,
@@ -148,6 +148,7 @@ function mount(
     detail?: FormDetail;
     overrides?: Partial<FormContext>;
     trackWrites?: (flush: () => ResultAsync<void, FormWriteFailure>) => void;
+    signpost?: Component;
   } = {}
 ) {
   const detail = options.detail ?? rsvp();
@@ -164,6 +165,7 @@ function mount(
         collaboration={mock.shared.collaboration}
         trackWrites={options.trackWrites ?? (() => {})}
         onOpenDatabase={() => {}}
+        signpost={options.signpost}
       />
     </FormProvider>
   ));
@@ -401,6 +403,19 @@ describe('BuilderView', () => {
     expect(shared.theirs().sections[0].questions).toHaveLength(1);
     expect(shared.theirs().sections[0].questions[0].widget).toBe('short');
     expect(calls.notices).toEqual([]);
+  });
+
+  it('shows the host signpost until the form has a question', async () => {
+    const detail = rsvp();
+    detail.layout = { sections: [] };
+    mount({ detail, signpost: () => <p>Watch the Forms tutorial</p> });
+    expect(screen.getByText('Watch the Forms tutorial')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Add section' }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(screen.getByText('Watch the Forms tutorial')).toBeTruthy();
+    await addQuestion('Short answer');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(screen.queryByText('Watch the Forms tutorial')).toBeNull();
   });
 
   it('chooses a related table in a dialog from the compact add menu', async () => {

@@ -61,6 +61,11 @@
 
 .product-feature-intro h2 > span { display: block; white-space: nowrap; }
 
+/* A section's Watch demo under its description, smaller than the hero's. */
+.product-feature-intro-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 20px; }
+.product-feature-intro-copy p { margin: 0; }
+.feature-page .product-feature-intro-copy .tutorial-video-trigger { min-height: 44px; padding: 10px 18px; font-size: 15px; }
+
 /* Stack before either column becomes cramped; never clamp or hide copy. */
 @media (max-width: 1199px) {
   .product-feature-intro { grid-template-columns: minmax(0, 1fr); gap: 24px; margin-bottom: 32px; }

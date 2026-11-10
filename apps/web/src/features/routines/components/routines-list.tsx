@@ -28,6 +28,8 @@ export function RoutinesList(props: {
   /** Templates to start from, above the list; absent where none are offered. */
   templates?: RoutineTemplate[];
   onTemplate?: (template: RoutineTemplate) => void;
+  /** Pinned at the top of the list, above the templates: the tutorial row. */
+  listStart?: JSX.Element;
   /** Scrolls with the list, below it, e.g. suggested routines. */
   footer?: JSX.Element;
 }) {
@@ -138,6 +140,7 @@ export function RoutinesList(props: {
         </div>
       </Show>
       <div class="@container/routines min-h-0 min-w-0 flex-1 overflow-auto">
+        {props.listStart}
         {/* Templates sit above the list, out of the way of a search. */}
         <Show
           when={

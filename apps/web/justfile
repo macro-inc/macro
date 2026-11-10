@@ -170,13 +170,16 @@ build-prod: build-wasm
     MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
 
-# Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly
+# Tauri build hook (run automatically via beforeBuildCommand) — not meant to be run directly.
+# The iOS and Android apps build their embedded bundle here; it leaves out the
+# tutorial videos, which those apps don't show.
 [private]
 build-tauri: build-wasm
     printf production > tauri/src-tauri/.macro-tauri-env
     MODE=production NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
     bun scripts/cache-wasm/cli.ts remove-sidecar --dist dist
+    bash scripts/strip-native-tutorials.sh dist
 
 # As build-tauri, but MODE=development so the bundle talks to dev.macro.com.
 # Used by `ios-build-sim`: a PR preview must never be wired to production.
@@ -186,6 +189,7 @@ build-tauri-dev: build-cache-wasm build-agent-fold-wasm
     MODE=development NODE_ENV=production NODE_OPTIONS="{{node_heap}}" bun run --bun build
     bun scripts/cache-wasm/cli.ts package-dist --dist dist
     bun scripts/cache-wasm/cli.ts remove-sidecar --dist dist
+    bash scripts/strip-native-tutorials.sh dist
 
 # Build the bundle, zip it, and install it at
 # tooling/native_app_server/app-archive.zip for the bundle
@@ -196,7 +200,9 @@ dist-archive: build-prod
     set -euo pipefail
     TARGET="$(cd {{ justfile_directory() }}/../../tooling/native_app_server && pwd)/app-archive.zip"
     rm -f "$TARGET"
-    (cd dist && zip -qr "$TARGET" . -x '*cache_wasm_bg*.wasm.br')
+    # Like the deployed archive, without the Brotli sidecar or the tutorial
+    # videos (scripts/strip-native-tutorials.sh).
+    (cd dist && zip -qr "$TARGET" . -x '*cache_wasm_bg*.wasm.br' -x 'assets/tutorials/*')
     echo "Archive: $TARGET"
 
 bundle-smoke-server *ARGS:

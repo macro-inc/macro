@@ -5,6 +5,7 @@ import {
   useCreatableEnabled,
   useCreateAction,
 } from '@app/features/command/Launcher';
+import { TutorialPill } from '@app/features/video-tutorials';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { useAddInboxFlow, useEmailLinksStatus } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -248,7 +249,9 @@ export function EmptyState(props: {
             onClick: () => runCreateAction('skill'),
           }}
           documentationUrl={`${DOCS_BASE}/product/agents`}
-        />
+        >
+          <TutorialPill tutorial="skills" class="w-fit" />
+        </EmptyStatePanel>
       </Match>
 
       <Match when={props.listView === 'agents'}>
@@ -296,7 +299,9 @@ export function EmptyState(props: {
           title="No items to show"
           description="Search across messages, documents, tasks, and more."
           documentationUrl={`${DOCS_BASE}/product/search`}
-        />
+        >
+          <TutorialPill tutorial="unified-search" />
+        </EmptyStatePanel>
       </Match>
 
       <Match when={true}>

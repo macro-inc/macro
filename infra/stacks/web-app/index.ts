@@ -66,6 +66,8 @@ const publicAccessBlock = new aws.s3.BucketPublicAccessBlock(
 // Stage web delivery and a native/OTA archive separately. Web delivery keeps
 // the Brotli sidecar for targeted S3 upload; native clients need the raw WASM
 // only, so their archive copy removes the sidecar before FileArchive snapshots it.
+// The archive also leaves out the tutorial videos: the iOS and Android apps
+// don't show them, and the desktop app streams them from web delivery.
 const buildOutputPath = './output/app';
 const appArchiveOutputPath = './output/app-archive';
 const cacheWasmRetentionDays = 7;
@@ -90,6 +92,10 @@ execSync(
 );
 execSync(
   `find ${shellQuote(appArchiveOutputPath)} -type f -name 'cache_wasm_bg*.wasm.br' -delete`,
+  { stdio: 'inherit' }
+);
+execSync(
+  `bash ../../../apps/web/scripts/strip-native-tutorials.sh ${shellQuote(appArchiveOutputPath)}`,
   { stdio: 'inherit' }
 );
 

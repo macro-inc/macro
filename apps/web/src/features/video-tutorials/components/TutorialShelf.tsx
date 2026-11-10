@@ -1,23 +1,31 @@
 import { t } from '@app/lib/i18n';
 import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
+import SkillIcon from '@icon/system/regular/blueprint.svg';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
 import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
+import FormIcon from '@icon/system/regular/clipboard-text.svg';
+import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
 import DatabaseIcon from '@icon/system/regular/database.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FileTextIcon from '@icon/system/regular/file-text.svg';
 import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import GraphIcon from '@icon/system/regular/graph.svg';
 import HouseIcon from '@icon/system/regular/house.svg';
 import LaptopIcon from '@icon/system/regular/laptop.svg';
+import LightningIcon from '@icon/system/regular/lightning.svg';
 import ListChecksIcon from '@icon/system/regular/list-checks.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import ShapesIcon from '@icon/system/regular/shapes.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
 import TableIcon from '@icon/system/regular/table.svg';
+import TagIcon from '@icon/system/regular/tag-simple.svg';
+import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import WhatsappIcon from '@phosphor/whatsapp-logo.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button } from '@ui';
@@ -40,7 +48,11 @@ type Tile = {
   to: string;
 };
 
-/** Each block's tile: the icon the app's navigation shows for it, on its own wash. */
+/**
+ * Each video's tile: the icon the app's navigation shows for its block (or,
+ * for a video about Macro as a whole, the icon of what it shows), on its own
+ * wash.
+ */
 const TILES: Record<TutorialId, Tile> = {
   mail: { icon: EnvelopeIcon, from: '--color-blue', to: '--color-cyan' },
   home: { icon: HouseIcon, from: '--color-amber', to: '--color-orange' },
@@ -64,6 +76,9 @@ const TILES: Record<TutorialId, Tile> = {
   calls: { icon: PhoneCallIcon, from: '--color-lime', to: '--color-green' },
   agents: { icon: AgentIcon, from: '--color-purple', to: '--color-pink' },
   macrod: { icon: LaptopIcon, from: '--color-cyan', to: '--color-violet' },
+  routines: { icon: RoutineIcon, from: '--color-amber', to: '--color-yellow' },
+  skills: { icon: SkillIcon, from: '--color-blue', to: '--color-teal' },
+  forms: { icon: FormIcon, from: '--color-pink', to: '--color-purple' },
   github: {
     icon: GitPullRequestIcon,
     from: '--color-purple',
@@ -75,6 +90,27 @@ const TILES: Record<TutorialId, Tile> = {
     to: '--color-pink',
   },
   whatsapp: { icon: WhatsappIcon, from: '--color-green', to: '--color-lime' },
+  'company-graph': {
+    icon: GraphIcon,
+    from: '--color-violet',
+    to: '--color-cyan',
+  },
+  'ai-tagging': { icon: TagIcon, from: '--color-pink', to: '--color-orange' },
+  'automatic-permissions': {
+    icon: UsersThreeIcon,
+    from: '--color-teal',
+    to: '--color-green',
+  },
+  'workspace-events': {
+    icon: LightningIcon,
+    from: '--color-yellow',
+    to: '--color-orange',
+  },
+  'unified-search': {
+    icon: MagnifyingGlassIcon,
+    from: '--color-blue',
+    to: '--color-purple',
+  },
 };
 
 function TileArt(props: { tutorial: ShelfTutorial }) {

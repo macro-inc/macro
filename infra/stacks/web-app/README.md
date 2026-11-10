@@ -29,6 +29,11 @@ old WASM pruning → retained-build pruning
   only after the assets and managed native archive are ready. The stable
   `app-archive.zip` is managed separately with `no-store`.
 
+The native archive (`app-archive.zip`, the over-the-air bundle for every native
+app) leaves out the tutorial videos under `assets/tutorials/`
+(`apps/web/scripts/strip-native-tutorials.sh`): the iOS and Android apps show no
+tutorials, and the desktop app streams them from web delivery.
+
 The routing Lambda depends on entrypoint publication. Updating it independently
 could expose HTML naming an asset that still returns 403. Every Lambda HTML
 response, including preview failures, uses `no-store`. Pruning waits for the

@@ -16,6 +16,7 @@ import {
   ThreadGraphic,
 } from '../components/product/ProductGraphics';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
+import { TutorialVideoDialog } from '../components/TutorialVideoDialog';
 import { TaskAgentsGraphic } from '../components/tasks/TasksFeatureGraphics';
 import { chatComparisons } from '../core/feature-comparisons';
 
@@ -71,6 +72,7 @@ export function RouteChannels() {
         id="channel-access"
         title={['Easily share files', 'with your team.']}
         description="After sharing files in a conversation, anyone in that chat automatically gets access. Anyone added later will gain access, and anyone you remove will lose access."
+        action={<TutorialVideoDialog tutorial="automatic-permissions" />}
       >
         <DemoInteractionBoundary
           class="feature-page-visual"

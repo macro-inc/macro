@@ -15,6 +15,7 @@ import {
   ThreadGraphic,
 } from '../components/product/ProductGraphics';
 import { ProductHero, ProductPage } from '../components/product/ProductPage';
+import { TutorialVideoDialog } from '../components/TutorialVideoDialog';
 import { WorkspaceDesktopDemo } from '../components/WorkspaceDesktopDemo';
 import { documentComparisons } from '../core/feature-comparisons';
 
@@ -121,6 +122,7 @@ export function RouteDocuments() {
           id="document-links"
           title={['Tag emails, files,', 'and chats in your docs.']}
           description="Link to the work you’re writing about and open it beside your document. Read the original email, task, or conversation while you write."
+          action={<TutorialVideoDialog tutorial="company-graph" />}
         >
           <DemoInteractionBoundary
             class="feature-page-visual docs-wide-demo"

@@ -1,4 +1,5 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { TutorialPill } from '@app/features/video-tutorials';
 /**
  * App-facing entry for the `form` block. It reads the legacy block state once
  * (id, params, split) and hands identity, capabilities and host actions to
@@ -55,6 +56,11 @@ import { createPreview } from './primitives/create-preview';
 import { FormCardView } from './views/form-card-view';
 import { type FormHeaderProps, FormPageView } from './views/form-page-view';
 import { RespondView } from './views/respond-view';
+
+/** A new form's Build tab offers the Forms tutorial until it has a question. */
+function FormsTutorial() {
+  return <TutorialPill tutorial="forms" />;
+}
 
 function FormHeader(props: FormHeaderProps) {
   return (
@@ -240,6 +246,7 @@ function FormBlockContent(props: {
               replaceOrInsertSplit({ type: 'database', id: databaseId })
             }
             onOpenShare={openShare}
+            signpost={FormsTutorial}
             onTrashed={() => returnSplitToRecentListView(panel.handle)}
           />
         }
