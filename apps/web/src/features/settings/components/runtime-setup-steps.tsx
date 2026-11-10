@@ -78,8 +78,8 @@ export function RuntimeSetupSteps(props: { children: JSX.Element }) {
         <p class="mb-6 rounded-lg border border-edge-muted bg-ink/[0.025] px-3 py-2 text-sm text-ink-muted">
           Setting up this computer? The desktop app bundles macrod — use the{' '}
           <span class="font-medium text-ink">This computer</span> card on the
-          Machines page instead; no download or pairing code needed. The
-          steps below connect a different machine.
+          Machines page instead; no download or pairing code needed. The steps
+          below connect a different machine.
         </p>
       </Show>
       <ol aria-label="Machine setup steps" class="list-none">

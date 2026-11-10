@@ -101,7 +101,8 @@ const SETTINGS: Setting[] = [
   {
     tab: 'Harness',
     title: 'Agent machines and credentials',
-    keywords: 'cursor harness runtime machine computer api key provider pairing daemon',
+    keywords:
+      'cursor harness runtime machine computer api key provider pairing daemon',
   },
   {
     tab: 'Harness',

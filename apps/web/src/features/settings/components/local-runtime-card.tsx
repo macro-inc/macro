@@ -254,7 +254,8 @@ export function LocalRuntimeCard() {
                 <Match when={phase() === 'error'}>
                   <div class="mt-4 flex flex-wrap items-center gap-3">
                     <p class="text-sm text-failure">
-                      {snapshot()?.lastError ?? 'This computer stopped running agents.'}
+                      {snapshot()?.lastError ??
+                        'This computer stopped running agents.'}
                     </p>
                     <Button
                       type="button"
