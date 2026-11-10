@@ -1,0 +1,989 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: malformed JSON
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": "[",
+    "body_format": "raw",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to parse the request body as JSON: EOF while parsing a list at line 1 column 1",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "85"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":400,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing JSON content type
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": "[]",
+    "body_format": "raw",
+    "content-type": "text/plain"
+  }
+response:
+  {
+    "body": "Expected request with `Content-Type: application/json`",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "54"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 415
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":415,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty JSON body
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": "",
+    "body_format": "raw",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to parse the request body as JSON: EOF while parsing a value at line 1 column 0",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "86"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":400,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid UUID
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": [
+        "invalid"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: thread_ids[0]: UUID parsing failed: invalid character: found `i` at 1 at line 1 column 63",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "147"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: wrong JSON shape
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": 42,
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: invalid type: integer `42`, expected struct ThreadHistoryRequest at line 1 column 2",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "141"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: null body
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": null,
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: invalid type: null, expected struct ThreadHistoryRequest at line 1 column 4",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "133"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing ids field
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>"
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: missing field `thread_ids` at line 1 column 40",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "104"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing user field
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "thread_ids": []
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: missing field `user_id` at line 1 column 17",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "101"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: user has no inbox
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:C>",
+      "thread_ids": []
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Link not found for user <user:C>",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "50"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 404
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":404,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  3ff28d7d7e73 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: unknown user
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "user_id": "macro|unknown@example.com",
+      "thread_ids": []
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Link not found for user macro|unknown@example.com",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "49"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 404
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":404,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+logs:
+  []
+sql:
+  3ff28d7d7e73 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty user
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "user_id": "",
+      "thread_ids": []
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Database query failed",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "21"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 500
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":500,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 500 Internal Server Error","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler",
+        "fetch_link_by_macro_id"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Macro ID cannot be empty"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request"
+      ],
+      "message": "Internal server error",
+      "fields": {
+        "error_type": "GetThreadHistoriesError",
+        "nested_error": "QueryError(Macro ID cannot be empty)",
+        "variant": "QueryError"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 500 Internal Server Error",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: key without acting user
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal key only",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": []
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "history_map": {}
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "18"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_thread_summary_info {"link_ids":"[<link:A2>]","thread_ids":"[]"}
+logs:
+  []
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing credentials
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "none",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": []
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":401,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing internal key
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal identity without key",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": []
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":401,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: wrong internal key
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "wrong internal key",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": []
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":401,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request"
+      ],
+      "message": "internal authorization failed",
+      "fields": {
+        "error": "\n ● InvalidCredentials\n ╰ crates/macro_authorization/src/domain/service.rs:271\n"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid bearer
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "none (invalid bearer)",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": []
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":401,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request"
+      ],
+      "message": "credential authorization failed",
+      "fields": {
+        "error": "\n ● InvalidCredentials\n ├ crates/macro_authorization/src/outbound/macro_auth.rs:88\n │\n ● Generic(GenericErrorResponse { message: \"unable to decode token\" })\n ╰ crates/macro_authorization/src/outbound/macro_auth.rs:88\n"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: user bearer is not internal
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "user A",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": []
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "forbidden"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "23"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 403
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":403,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

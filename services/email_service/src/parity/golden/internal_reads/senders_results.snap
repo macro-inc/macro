@@ -1,0 +1,485 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: only newest own inbox selected
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/senders",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "message_ids": [
+        "<msg:m1a>",
+        "<msg:a2a>",
+        "<msg:a2b>",
+        "<msg:b1a>",
+        "<missing>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "sender_map": {
+        "53000000-0000-0000-0000-000079e20000": {
+          "pretty_sender": "Contact a2a",
+          "sender": "sender-a2a@example.com"
+        },
+        "53000000-0000-0000-0000-000079e20001": {
+          "pretty_sender": "Contact a2b",
+          "sender": "sender-a2b@example.com"
+        }
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "226"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/messages/senders","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/senders"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_message_sender_and_pretty_sender {"link_ids":"[<link:A2>]","message_ids":"[<msg:m1a>, <msg:a2a>, <msg:a2b>, <msg:b1a>, <missing>]"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+  df3328d07bcc rows_affected=2 rows_returned=2
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: other owner inbox
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/senders",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:B>",
+      "message_ids": [
+        "<msg:b1a>",
+        "<msg:m1a>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "sender_map": {
+        "53000000-0000-0000-0000-000079e10000": {
+          "pretty_sender": "Contact b1a",
+          "sender": "sender-b1a@example.com"
+        }
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "121"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/messages/senders","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/senders"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_message_sender_and_pretty_sender {"link_ids":"[<link:B>]","message_ids":"[<msg:b1a>, <msg:m1a>]"}
+logs:
+  []
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+  df3328d07bcc rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/senders",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "message_ids": []
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "sender_map": {}
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "17"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/messages/senders","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/senders"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_message_sender_and_pretty_sender {"link_ids":"[<link:A2>]","message_ids":"[]"}
+logs:
+  []
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: unknown
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/senders",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "message_ids": [
+        "<missing>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "sender_map": {}
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "17"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/messages/senders","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/senders"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_message_sender_and_pretty_sender {"link_ids":"[<link:A2>]","message_ids":"[<missing>]"}
+logs:
+  []
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+  df3328d07bcc rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: duplicates
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/senders",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "message_ids": [
+        "<msg:a2a>",
+        "<msg:a2a>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "sender_map": {
+        "53000000-0000-0000-0000-000079e20000": {
+          "pretty_sender": "Contact a2a",
+          "sender": "sender-a2a@example.com"
+        }
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "121"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/messages/senders","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/senders"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_message_sender_and_pretty_sender {"link_ids":"[<link:A2>]","message_ids":"[<msg:a2a>, <msg:a2a>]"}
+logs:
+  []
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+  df3328d07bcc rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: absent sender and fallback name
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/senders",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "message_ids": [
+        "<msg:a2a>",
+        "<msg:a2b>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "sender_map": {
+        "53000000-0000-0000-0000-000079e20001": {
+          "pretty_sender": "sender-a2b@example.com",
+          "sender": "sender-a2b@example.com"
+        }
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "132"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/messages/senders","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/senders"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_message_sender_and_pretty_sender {"link_ids":"[<link:A2>]","message_ids":"[<msg:a2a>, <msg:a2b>]"}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler",
+        "get_message_sender_and_pretty_sender"
+      ],
+      "message": "message has no sender contact",
+      "fields": {
+        "message_id": "<msg:a2a>"
+      }
+    }
+  ]
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+  df3328d07bcc rows_affected=2 rows_returned=2
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: first inbox selected when newest
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/senders",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "message_ids": [
+        "<msg:m1a>",
+        "<msg:a2a>",
+        "<msg:b1a>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "sender_map": {
+        "53000000-0000-0000-0000-000079e00000": {
+          "pretty_sender": "Contact m1a",
+          "sender": "sender-m1a@example.com"
+        }
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "121"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/messages/senders","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/senders"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_message_sender_and_pretty_sender {"link_ids":"[<link:A>]","message_ids":"[<msg:m1a>, <msg:a2a>, <msg:b1a>]"}
+logs:
+  []
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+  df3328d07bcc rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

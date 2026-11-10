@@ -28,6 +28,10 @@ pub(super) struct LabOptions {
 pub(super) enum Auth {
     User(usize),
     Internal,
+    InternalKeyOnly,
+    WrongInternalKey,
+    MissingInternalKey,
+    MissingCredentials,
     InvalidBearer,
 }
 
@@ -283,6 +287,10 @@ impl Lab {
         let auth_name = match auth {
             Auth::User(i) => format!("user {}", ['A', 'B', 'C'][i]),
             Auth::Internal => "internal".into(),
+            Auth::InternalKeyOnly => "internal key only".into(),
+            Auth::WrongInternalKey => "wrong internal key".into(),
+            Auth::MissingInternalKey => "internal identity without key".into(),
+            Auth::MissingCredentials => "none".into(),
             Auth::InvalidBearer => "none (invalid bearer)".into(),
         };
         let (wire_body, recorded_body, body_format, content_type) = match body {
@@ -336,6 +344,16 @@ impl Lab {
             Auth::InvalidBearer => {
                 request = request.header("authorization", "Bearer parity-invalid-jwt");
             }
+            Auth::InternalKeyOnly => {
+                request = request.header("x-internal-auth-key", "parity");
+            }
+            Auth::WrongInternalKey => {
+                request = request.header("x-internal-auth-key", "wrong-parity-key");
+            }
+            Auth::MissingInternalKey => {
+                request = request.header("x-internal-macro-user-id", &self.fixture.users[0]);
+            }
+            Auth::MissingCredentials => {}
         }
         let request = request.body(wire_body).expect("request");
         let (recording, span) = capture::start();

@@ -2,8 +2,11 @@
 
 use regex::Regex;
 use serde_json::Value;
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
+
+mod test;
 
 static UUID: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
@@ -24,6 +27,7 @@ static TIMESTAMP: LazyLock<Regex> = LazyLock::new(|| {
 #[derive(Clone, Default)]
 pub(super) struct Normalizer {
     pub symbols: BTreeMap<String, String>,
+    pub sort_response_keys: bool,
     replacements: BTreeMap<String, String>,
     uuids: BTreeMap<String, String>,
 }
@@ -70,13 +74,14 @@ impl Normalizer {
             Value::String(text) => {
                 // Backtraces are telemetry, never an excuse to trim application content.
                 let text = if telemetry {
-                    let text = text
-                        .split("\n\nStack backtrace:")
-                        .next()
-                        .expect("error prefix");
-                    POSTGRES_SOURCE_LINE.replace_all(text, "${1}<postgres-source-line>${2}")
+                    let text = without_backtrace(&text);
+                    Cow::Owned(
+                        POSTGRES_SOURCE_LINE
+                            .replace_all(&text, "${1}<postgres-source-line>${2}")
+                            .into_owned(),
+                    )
                 } else {
-                    std::borrow::Cow::Borrowed(text.as_str())
+                    Cow::Borrowed(text.as_str())
                 };
                 Value::String(self.text(&text))
             }
@@ -118,11 +123,27 @@ impl Normalizer {
                 if changed_timestamp {
                     values.insert("after".into(), Value::String("<ts:changed>".into()));
                 }
+                // Read summaries serialize HashMaps. Object order is not JSON
+                // behavior; array order still is. Opt in to preserve old goldens.
+                if self.sort_response_keys && section == "response" {
+                    values.sort_keys();
+                }
                 Value::Object(values)
             }
             value => value,
         }
     }
+}
+
+fn without_backtrace(text: &str) -> Cow<'_, str> {
+    let Some((message, backtrace)) = text.split_once("\n\nStack backtrace:") else {
+        return Cow::Borrowed(text);
+    };
+    // Debug-formatting an enum around anyhow::Error closes the tuple after
+    // the backtrace. Keep those delimiters, just as in its non-backtrace form.
+    let backtrace = backtrace.trim_end();
+    let closing = &backtrace[backtrace.trim_end_matches(')').len()..];
+    Cow::Owned(format!("{message}{closing}"))
 }
 
 const SQS_RECEIPT_FIELDS: &[&str] = &["receipt_handle", "ReceiptHandle"];

@@ -1,0 +1,83 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: database failure
+request:
+  {
+    "method": "POST",
+    "path": "/email/messages/batch",
+    "auth": "user A",
+    "body": [
+      "<msg:m1a>"
+    ],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Database query error",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "20"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 500
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":500,"http.route":"/email/messages/batch","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 500 Internal Server Error","request.id":"<volatile>","url.path":"/email/messages/batch"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO batch_handler {"fusionauth_user_id":"<fusion:A>","ids":"[<msg:m1a>]","user_id":"<user:A>"}
+    INFO get_parsed_messages_by_id_batch {"message_ids":"[<msg:m1a>]"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "batch_handler",
+        "get_parsed_messages_by_id_batch"
+      ],
+      "message": null,
+      "fields": {
+        "error": "error returned from database: column m.snippet does not exist"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 500 Internal Server Error",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  bf1171c7e96b rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

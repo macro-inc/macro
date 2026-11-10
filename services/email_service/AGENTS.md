@@ -11,7 +11,8 @@ the gateway `/email` prefix.
 - `src/main.rs` / `src/lib.rs`: entrypoint and `run()`.
 - `src/api.rs` + `src/api/context.rs`: HTTP surface and `ApiContext`.
 - `src/composition/api.rs`: production API dependencies and service wiring.
-- `src/parity/`: HTTP characterization lab and message-label goldens; see its
+- `src/parity/`: HTTP characterization lab and its golden suites (message labels,
+  message and thread reads, internal reads); see its
   README for recording, normalization, and the providers it cannot isolate.
 - `src/pubsub/`: SQS pubsub workers, one module per concern — `inbox_sync`,
   `link_manager` (Gmail re-subscribe, health checks, inbox deletion),

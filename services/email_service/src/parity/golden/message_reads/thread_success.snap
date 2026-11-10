@@ -1,0 +1,652 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: own thread
+request:
+  {
+    "method": "GET",
+    "path": "/email/threads/<thread:t1>/messages",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": [
+      {
+        "bcc": [],
+        "body_parsed": null,
+        "cc": [],
+        "db_id": "<msg:retained>",
+        "draft_generation": 0,
+        "from": null,
+        "internal_date_ts": "<ts>",
+        "labels": [],
+        "link_id": "<link:A>",
+        "subject": "retained",
+        "thread_db_id": "<thread:t1>",
+        "to": []
+      },
+      {
+        "bcc": [],
+        "body_parsed": null,
+        "cc": [],
+        "db_id": "<msg:page-newest>",
+        "draft_generation": 0,
+        "from": null,
+        "internal_date_ts": "<ts>",
+        "labels": [],
+        "link_id": "<link:A>",
+        "subject": "page-newest",
+        "thread_db_id": "<thread:t1>",
+        "to": []
+      },
+      {
+        "bcc": [],
+        "body_parsed": null,
+        "cc": [],
+        "db_id": "<msg:page-new>",
+        "draft_generation": 0,
+        "from": null,
+        "internal_date_ts": "<ts>",
+        "labels": [],
+        "link_id": "<link:A>",
+        "subject": "page-new",
+        "thread_db_id": "<thread:t1>",
+        "to": []
+      },
+      {
+        "bcc": [],
+        "body_parsed": null,
+        "cc": [],
+        "db_id": "<msg:page-old>",
+        "draft_generation": 0,
+        "from": null,
+        "internal_date_ts": "<ts>",
+        "labels": [],
+        "link_id": "<link:A>",
+        "subject": "page-old",
+        "thread_db_id": "<thread:t1>",
+        "to": []
+      },
+      {
+        "bcc": [
+          {
+            "email": "bcc-draft@example.com",
+            "name": "Header BCC",
+            "photo_url": null
+          }
+        ],
+        "body_parsed": "HTML body **draft** & details.",
+        "cc": [
+          {
+            "email": "cc-draft@example.com",
+            "name": "Contact CC",
+            "photo_url": null
+          }
+        ],
+        "db_id": "<msg:draft>",
+        "draft_generation": 7,
+        "from": {
+          "email": "sender-draft@example.com",
+          "name": "Header draft",
+          "photo_url": "https://example.com/photo.png"
+        },
+        "internal_date_ts": "<ts>",
+        "labels": [
+          {
+            "name": "INBOX",
+            "provider_id": "INBOX"
+          }
+        ],
+        "link_id": "<link:A>",
+        "subject": "Subject draft",
+        "thread_db_id": "<thread:t1>",
+        "to": [
+          {
+            "email": "to-draft@example.com",
+            "name": "Header TO",
+            "photo_url": null
+          }
+        ]
+      }
+    ],
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "1900"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/threads/{id}/messages","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/threads/<thread:t1>/messages"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO get_thread_messages_handler {"fusionauth_user_id":"<fusion:A>","id":"<thread:t1>","query_params":"GetThreadMessagesParams { offset: None, limit: None }","user_id":"<user:A>"}
+        INFO get_paginated_parsed_messages_by_thread_id {"limit":5,"offset":0,"thread_id":"<thread:t1>"}
+          INFO get_senders_contacts_map {"message_ids":"[<msg:retained>, <msg:page-newest>, <msg:page-new>, <msg:page-old>, <msg:draft>]"}
+            INFO fetch_sender_contacts_by_message_ids {"message_ids":"[<msg:retained>, <msg:page-newest>, <msg:page-new>, <msg:page-old>, <msg:draft>]"}
+          INFO fetch_db_recipients_in_bulk {"message_ids":"[<msg:retained>, <msg:page-newest>, <msg:page-new>, <msg:page-old>, <msg:draft>]"}
+          INFO fetch_message_labels_in_bulk {"message_ids":"[<msg:retained>, <msg:page-newest>, <msg:page-new>, <msg:page-old>, <msg:draft>]"}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  40b69fc48c40 rows_affected=3 rows_returned=3
+  961b97d9a732 rows_affected=5 rows_returned=5
+  74f57f96d211 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  9e3df57cee79 rows_affected=3 rows_returned=3
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  07da058600b3 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: second own inbox
+request:
+  {
+    "method": "GET",
+    "path": "/email/threads/<thread:a2t>/messages",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": [
+      {
+        "bcc": [
+          {
+            "email": "bcc-a2b@example.com",
+            "name": "Header BCC",
+            "photo_url": null
+          }
+        ],
+        "body_parsed": "HTML body **a2b** & details.",
+        "cc": [
+          {
+            "email": "cc-a2b@example.com",
+            "name": "Contact CC",
+            "photo_url": null
+          }
+        ],
+        "db_id": "<msg:a2b>",
+        "draft_generation": 0,
+        "from": {
+          "email": "sender-a2b@example.com",
+          "name": "Header a2b",
+          "photo_url": "https://example.com/photo.png"
+        },
+        "internal_date_ts": "<ts>",
+        "labels": [
+          {
+            "name": "INBOX",
+            "provider_id": "INBOX"
+          }
+        ],
+        "link_id": "<link:A2>",
+        "subject": "Subject a2b",
+        "thread_db_id": "<thread:a2t>",
+        "to": [
+          {
+            "email": "to-a2b@example.com",
+            "name": "Header TO",
+            "photo_url": null
+          }
+        ]
+      },
+      {
+        "bcc": [
+          {
+            "email": "bcc-a2a@example.com",
+            "name": "Header BCC",
+            "photo_url": null
+          }
+        ],
+        "body_parsed": "HTML body **a2a** & details.",
+        "cc": [
+          {
+            "email": "cc-a2a@example.com",
+            "name": "Contact CC",
+            "photo_url": null
+          }
+        ],
+        "db_id": "<msg:a2a>",
+        "draft_generation": 0,
+        "from": {
+          "email": "sender-a2a@example.com",
+          "name": "Header a2a",
+          "photo_url": "https://example.com/photo.png"
+        },
+        "internal_date_ts": "<ts>",
+        "labels": [
+          {
+            "name": "INBOX",
+            "provider_id": "INBOX"
+          },
+          {
+            "name": "UNREAD",
+            "provider_id": "UNREAD"
+          }
+        ],
+        "link_id": "<link:A2>",
+        "subject": "Subject a2a",
+        "thread_db_id": "<thread:a2t>",
+        "to": [
+          {
+            "email": "to-a2a@example.com",
+            "name": "Header TO",
+            "photo_url": null
+          }
+        ]
+      }
+    ],
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "1374"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/threads/{id}/messages","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/threads/<thread:a2t>/messages"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO get_thread_messages_handler {"fusionauth_user_id":"<fusion:A>","id":"<thread:a2t>","query_params":"GetThreadMessagesParams { offset: None, limit: None }","user_id":"<user:A>"}
+        INFO get_paginated_parsed_messages_by_thread_id {"limit":5,"offset":0,"thread_id":"<thread:a2t>"}
+          INFO get_senders_contacts_map {"message_ids":"[<msg:a2b>, <msg:a2a>]"}
+            INFO fetch_sender_contacts_by_message_ids {"message_ids":"[<msg:a2b>, <msg:a2a>]"}
+          INFO fetch_db_recipients_in_bulk {"message_ids":"[<msg:a2b>, <msg:a2a>]"}
+          INFO fetch_message_labels_in_bulk {"message_ids":"[<msg:a2b>, <msg:a2a>]"}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+logs:
+  []
+sql:
+  40b69fc48c40 rows_affected=3 rows_returned=3
+  961b97d9a732 rows_affected=2 rows_returned=2
+  74f57f96d211 rows_affected=2 rows_returned=2
+  9e3df57cee79 rows_affected=6 rows_returned=6
+  07da058600b3 rows_affected=3 rows_returned=3
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: delegated inbox
+request:
+  {
+    "method": "GET",
+    "path": "/email/threads/<thread:b1>/messages",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": [
+      {
+        "bcc": [
+          {
+            "email": "bcc-b1b@example.com",
+            "name": "Header BCC",
+            "photo_url": null
+          }
+        ],
+        "body_parsed": "HTML body **b1b** & details.",
+        "cc": [
+          {
+            "email": "cc-b1b@example.com",
+            "name": "Contact CC",
+            "photo_url": null
+          }
+        ],
+        "db_id": "<msg:b1b>",
+        "draft_generation": 0,
+        "from": {
+          "email": "sender-b1b@example.com",
+          "name": "Header b1b",
+          "photo_url": "https://example.com/photo.png"
+        },
+        "internal_date_ts": "<ts>",
+        "labels": [
+          {
+            "name": "INBOX",
+            "provider_id": "INBOX"
+          }
+        ],
+        "link_id": "<link:B>",
+        "subject": "Subject b1b",
+        "thread_db_id": "<thread:b1>",
+        "to": [
+          {
+            "email": "to-b1b@example.com",
+            "name": "Header TO",
+            "photo_url": null
+          }
+        ]
+      },
+      {
+        "bcc": [
+          {
+            "email": "bcc-b1a@example.com",
+            "name": "Header BCC",
+            "photo_url": null
+          }
+        ],
+        "body_parsed": "HTML body **b1a** & details.",
+        "cc": [
+          {
+            "email": "cc-b1a@example.com",
+            "name": "Contact CC",
+            "photo_url": null
+          }
+        ],
+        "db_id": "<msg:b1a>",
+        "draft_generation": 0,
+        "from": {
+          "email": "sender-b1a@example.com",
+          "name": "Header b1a",
+          "photo_url": "https://example.com/photo.png"
+        },
+        "internal_date_ts": "<ts>",
+        "labels": [
+          {
+            "name": "INBOX",
+            "provider_id": "INBOX"
+          },
+          {
+            "name": "UNREAD",
+            "provider_id": "UNREAD"
+          }
+        ],
+        "link_id": "<link:B>",
+        "subject": "Subject b1a",
+        "thread_db_id": "<thread:b1>",
+        "to": [
+          {
+            "email": "to-b1a@example.com",
+            "name": "Header TO",
+            "photo_url": null
+          }
+        ]
+      }
+    ],
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "1374"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/threads/{id}/messages","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/threads/<thread:b1>/messages"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO get_thread_messages_handler {"fusionauth_user_id":"<fusion:A>","id":"<thread:b1>","query_params":"GetThreadMessagesParams { offset: None, limit: None }","user_id":"<user:A>"}
+        INFO get_paginated_parsed_messages_by_thread_id {"limit":5,"offset":0,"thread_id":"<thread:b1>"}
+          INFO get_senders_contacts_map {"message_ids":"[<msg:b1b>, <msg:b1a>]"}
+            INFO fetch_sender_contacts_by_message_ids {"message_ids":"[<msg:b1b>, <msg:b1a>]"}
+          INFO fetch_db_recipients_in_bulk {"message_ids":"[<msg:b1b>, <msg:b1a>]"}
+          INFO fetch_message_labels_in_bulk {"message_ids":"[<msg:b1b>, <msg:b1a>]"}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+logs:
+  []
+sql:
+  40b69fc48c40 rows_affected=3 rows_returned=3
+  961b97d9a732 rows_affected=2 rows_returned=2
+  74f57f96d211 rows_affected=2 rows_returned=2
+  9e3df57cee79 rows_affected=6 rows_returned=6
+  07da058600b3 rows_affected=3 rows_returned=3
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: internal acting user
+request:
+  {
+    "method": "GET",
+    "path": "/email/threads/<thread:t1>/messages",
+    "auth": "internal",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": [
+      {
+        "bcc": [],
+        "body_parsed": null,
+        "cc": [],
+        "db_id": "<msg:retained>",
+        "draft_generation": 0,
+        "from": null,
+        "internal_date_ts": "<ts>",
+        "labels": [],
+        "link_id": "<link:A>",
+        "subject": "retained",
+        "thread_db_id": "<thread:t1>",
+        "to": []
+      },
+      {
+        "bcc": [],
+        "body_parsed": null,
+        "cc": [],
+        "db_id": "<msg:page-newest>",
+        "draft_generation": 0,
+        "from": null,
+        "internal_date_ts": "<ts>",
+        "labels": [],
+        "link_id": "<link:A>",
+        "subject": "page-newest",
+        "thread_db_id": "<thread:t1>",
+        "to": []
+      },
+      {
+        "bcc": [],
+        "body_parsed": null,
+        "cc": [],
+        "db_id": "<msg:page-new>",
+        "draft_generation": 0,
+        "from": null,
+        "internal_date_ts": "<ts>",
+        "labels": [],
+        "link_id": "<link:A>",
+        "subject": "page-new",
+        "thread_db_id": "<thread:t1>",
+        "to": []
+      },
+      {
+        "bcc": [],
+        "body_parsed": null,
+        "cc": [],
+        "db_id": "<msg:page-old>",
+        "draft_generation": 0,
+        "from": null,
+        "internal_date_ts": "<ts>",
+        "labels": [],
+        "link_id": "<link:A>",
+        "subject": "page-old",
+        "thread_db_id": "<thread:t1>",
+        "to": []
+      },
+      {
+        "bcc": [
+          {
+            "email": "bcc-draft@example.com",
+            "name": "Header BCC",
+            "photo_url": null
+          }
+        ],
+        "body_parsed": "HTML body **draft** & details.",
+        "cc": [
+          {
+            "email": "cc-draft@example.com",
+            "name": "Contact CC",
+            "photo_url": null
+          }
+        ],
+        "db_id": "<msg:draft>",
+        "draft_generation": 7,
+        "from": {
+          "email": "sender-draft@example.com",
+          "name": "Header draft",
+          "photo_url": "https://example.com/photo.png"
+        },
+        "internal_date_ts": "<ts>",
+        "labels": [
+          {
+            "name": "INBOX",
+            "provider_id": "INBOX"
+          }
+        ],
+        "link_id": "<link:A>",
+        "subject": "Subject draft",
+        "thread_db_id": "<thread:t1>",
+        "to": [
+          {
+            "email": "to-draft@example.com",
+            "name": "Header TO",
+            "photo_url": null
+          }
+        ]
+      }
+    ],
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "1900"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/threads/{id}/messages","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/threads/<thread:t1>/messages"}
+    INFO agent_sdk_request {}
+      INFO get_thread_messages_handler {"fusionauth_user_id":"<fusion:A>","id":"<thread:t1>","query_params":"GetThreadMessagesParams { offset: None, limit: None }","user_id":"<user:A>"}
+        INFO get_paginated_parsed_messages_by_thread_id {"limit":5,"offset":0,"thread_id":"<thread:t1>"}
+          INFO get_senders_contacts_map {"message_ids":"[<msg:retained>, <msg:page-newest>, <msg:page-new>, <msg:page-old>, <msg:draft>]"}
+            INFO fetch_sender_contacts_by_message_ids {"message_ids":"[<msg:retained>, <msg:page-newest>, <msg:page-new>, <msg:page-old>, <msg:draft>]"}
+          INFO fetch_db_recipients_in_bulk {"message_ids":"[<msg:retained>, <msg:page-newest>, <msg:page-new>, <msg:page-old>, <msg:draft>]"}
+          INFO fetch_message_labels_in_bulk {"message_ids":"[<msg:retained>, <msg:page-newest>, <msg:page-new>, <msg:page-old>, <msg:draft>]"}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+logs:
+  []
+sql:
+  40b69fc48c40 rows_affected=3 rows_returned=3
+  961b97d9a732 rows_affected=5 rows_returned=5
+  74f57f96d211 rows_affected=1 rows_returned=1
+  9e3df57cee79 rows_affected=3 rows_returned=3
+  07da058600b3 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

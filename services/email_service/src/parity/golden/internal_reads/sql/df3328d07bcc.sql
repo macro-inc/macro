@@ -1,0 +1,1 @@
+SELECT m.id as "message_id!", c.email_address as "sender?", COALESCE(c.name, c.email_address) as "pretty_sender?" FROM email_messages m LEFT JOIN email_contacts c ON c.id = m.from_contact_id WHERE m.id = ANY($1) AND m.link_id = ANY($2)

@@ -1,0 +1,199 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: only the accessible message
+request:
+  {
+    "method": "GET",
+    "path": "/email/threads/<thread:t1>/messages?limit=100",
+    "auth": "user B",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": [
+      {
+        "bcc": [
+          {
+            "email": "bcc-m1a@example.com",
+            "name": "Header BCC",
+            "photo_url": null
+          }
+        ],
+        "body_parsed": "HTML body **m1a** & details.",
+        "cc": [
+          {
+            "email": "cc-m1a@example.com",
+            "name": "Contact CC",
+            "photo_url": null
+          }
+        ],
+        "db_id": "<msg:m1a>",
+        "draft_generation": 0,
+        "from": {
+          "email": "sender-m1a@example.com",
+          "name": "Header m1a",
+          "photo_url": "https://example.com/photo.png"
+        },
+        "internal_date_ts": "<ts>",
+        "labels": [
+          {
+            "name": "INBOX",
+            "provider_id": "INBOX"
+          },
+          {
+            "name": "UNREAD",
+            "provider_id": "UNREAD"
+          }
+        ],
+        "link_id": "<link:B>",
+        "subject": "Subject m1a",
+        "thread_db_id": "<thread:t1>",
+        "to": [
+          {
+            "email": "to-m1a@example.com",
+            "name": "Header TO",
+            "photo_url": null
+          }
+        ]
+      }
+    ],
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "708"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/email/threads/{id}/messages","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/threads/<thread:t1>/messages"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO get_thread_messages_handler {"fusionauth_user_id":"<fusion:B>","id":"<thread:t1>","query_params":"GetThreadMessagesParams { offset: None, limit: Some(100) }","user_id":"<user:B>"}
+        INFO get_paginated_parsed_messages_by_thread_id {"limit":100,"offset":0,"thread_id":"<thread:t1>"}
+          INFO get_senders_contacts_map {"message_ids":"[<msg:draft>, <msg:m1c>, <msg:m1b>, <msg:m1a>]"}
+            INFO fetch_sender_contacts_by_message_ids {"message_ids":"[<msg:draft>, <msg:m1c>, <msg:m1b>, <msg:m1a>]"}
+          INFO fetch_db_recipients_in_bulk {"message_ids":"[<msg:draft>, <msg:m1c>, <msg:m1b>, <msg:m1a>]"}
+          INFO fetch_message_labels_in_bulk {"message_ids":"[<msg:draft>, <msg:m1c>, <msg:m1b>, <msg:m1a>]"}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  40b69fc48c40 rows_affected=1 rows_returned=1
+  961b97d9a732 rows_affected=4 rows_returned=4
+  74f57f96d211 rows_affected=4 rows_returned=4
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  9e3df57cee79 rows_affected=12 rows_returned=12
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  07da058600b3 rows_affected=7 rows_returned=7
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: existing empty thread
+request:
+  {
+    "method": "GET",
+    "path": "/email/threads/<thread:t2>/messages",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "Unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":401,"http.route":"/email/threads/{id}/messages","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/threads/<thread:t2>/messages"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO get_thread_messages_handler {"fusionauth_user_id":"<fusion:A>","id":"<thread:t2>","query_params":"GetThreadMessagesParams { offset: None, limit: None }","user_id":"<user:A>"}
+        INFO get_paginated_parsed_messages_by_thread_id {"limit":5,"offset":0,"thread_id":"<thread:t2>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "get_thread_messages_handler"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Unauthorized"
+      }
+    }
+  ]
+sql:
+  40b69fc48c40 rows_affected=3 rows_returned=3
+  961b97d9a732 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

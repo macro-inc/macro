@@ -1,0 +1,1257 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: all inboxes
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "internal",
+    "body": [
+      "<msg:m1a>",
+      "<msg:m1b>",
+      "<msg:draft>",
+      "<msg:a2a>",
+      "<msg:b1a>",
+      "<msg:m3a>"
+    ],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": [
+      {
+        "bcc": [
+          {
+            "email": "bcc-m1a@example.com",
+            "name": "Header BCC",
+            "photo_url": null
+          }
+        ],
+        "body_parsed": "HTML body **m1a** & details.",
+        "cc": [
+          {
+            "email": "cc-m1a@example.com",
+            "name": "Contact CC",
+            "photo_url": null
+          }
+        ],
+        "db_id": "<msg:m1a>",
+        "draft_generation": 0,
+        "from": {
+          "email": "sender-m1a@example.com",
+          "name": "Header m1a",
+          "photo_url": "https://example.com/photo.png"
+        },
+        "internal_date_ts": "<ts>",
+        "labels": [
+          {
+            "name": "INBOX",
+            "provider_id": "INBOX"
+          },
+          {
+            "name": "UNREAD",
+            "provider_id": "UNREAD"
+          }
+        ],
+        "link_id": "<link:A>",
+        "subject": "Subject m1a",
+        "thread_db_id": "<thread:t1>",
+        "to": [
+          {
+            "email": "to-m1a@example.com",
+            "name": "Header TO",
+            "photo_url": null
+          }
+        ]
+      },
+      {
+        "bcc": [
+          {
+            "email": "bcc-m1b@example.com",
+            "name": "Header BCC",
+            "photo_url": null
+          }
+        ],
+        "body_parsed": "HTML body **m1b** & details.",
+        "cc": [
+          {
+            "email": "cc-m1b@example.com",
+            "name": "Contact CC",
+            "photo_url": null
+          }
+        ],
+        "db_id": "<msg:m1b>",
+        "draft_generation": 0,
+        "from": {
+          "email": "sender-m1b@example.com",
+          "name": "Header m1b",
+          "photo_url": "https://example.com/photo.png"
+        },
+        "internal_date_ts": "<ts>",
+        "labels": [
+          {
+            "name": "INBOX",
+            "provider_id": "INBOX"
+          },
+          {
+            "name": "SENT",
+            "provider_id": "SENT"
+          },
+          {
+            "name": "STARRED",
+            "provider_id": "STARRED"
+          }
+        ],
+        "link_id": "<link:A>",
+        "subject": "Subject m1b",
+        "thread_db_id": "<thread:t1>",
+        "to": [
+          {
+            "email": "to-m1b@example.com",
+            "name": "Header TO",
+            "photo_url": null
+          }
+        ]
+      },
+      {
+        "bcc": [
+          {
+            "email": "bcc-m3a@example.com",
+            "name": "Header BCC",
+            "photo_url": null
+          }
+        ],
+        "body_parsed": "Plain body m3a\nSecond line & details.",
+        "cc": [
+          {
+            "email": "cc-m3a@example.com",
+            "name": "Contact CC",
+            "photo_url": null
+          }
+        ],
+        "db_id": "<msg:m3a>",
+        "draft_generation": 0,
+        "from": {
+          "email": "sender-m3a@example.com",
+          "name": "Header m3a",
+          "photo_url": "https://example.com/photo.png"
+        },
+        "internal_date_ts": "<ts>",
+        "labels": [
+          {
+            "name": "INBOX",
+            "provider_id": "INBOX"
+          },
+          {
+            "name": "Work",
+            "provider_id": "Label_work"
+          },
+          {
+            "name": "UNREAD",
+            "provider_id": "UNREAD"
+          }
+        ],
+        "link_id": "<link:A>",
+        "subject": "Subject m3a",
+        "thread_db_id": "<thread:t3>",
+        "to": [
+          {
+            "email": "to-m3a@example.com",
+            "name": "Header TO",
+            "photo_url": null
+          }
+        ]
+      },
+      {
+        "bcc": [
+          {
+            "email": "bcc-draft@example.com",
+            "name": "Header BCC",
+            "photo_url": null
+          }
+        ],
+        "body_parsed": "HTML body **draft** & details.",
+        "cc": [
+          {
+            "email": "cc-draft@example.com",
+            "name": "Contact CC",
+            "photo_url": null
+          }
+        ],
+        "db_id": "<msg:draft>",
+        "draft_generation": 7,
+        "from": {
+          "email": "sender-draft@example.com",
+          "name": "Header draft",
+          "photo_url": "https://example.com/photo.png"
+        },
+        "internal_date_ts": "<ts>",
+        "labels": [
+          {
+            "name": "INBOX",
+            "provider_id": "INBOX"
+          }
+        ],
+        "link_id": "<link:A>",
+        "subject": "Subject draft",
+        "thread_db_id": "<thread:t1>",
+        "to": [
+          {
+            "email": "to-draft@example.com",
+            "name": "Header TO",
+            "photo_url": null
+          }
+        ]
+      },
+      {
+        "bcc": [
+          {
+            "email": "bcc-b1a@example.com",
+            "name": "Header BCC",
+            "photo_url": null
+          }
+        ],
+        "body_parsed": "HTML body **b1a** & details.",
+        "cc": [
+          {
+            "email": "cc-b1a@example.com",
+            "name": "Contact CC",
+            "photo_url": null
+          }
+        ],
+        "db_id": "<msg:b1a>",
+        "draft_generation": 0,
+        "from": {
+          "email": "sender-b1a@example.com",
+          "name": "Header b1a",
+          "photo_url": "https://example.com/photo.png"
+        },
+        "internal_date_ts": "<ts>",
+        "labels": [
+          {
+            "name": "INBOX",
+            "provider_id": "INBOX"
+          },
+          {
+            "name": "UNREAD",
+            "provider_id": "UNREAD"
+          }
+        ],
+        "link_id": "<link:B>",
+        "subject": "Subject b1a",
+        "thread_db_id": "<thread:b1>",
+        "to": [
+          {
+            "email": "to-b1a@example.com",
+            "name": "Header TO",
+            "photo_url": null
+          }
+        ]
+      },
+      {
+        "bcc": [
+          {
+            "email": "bcc-a2a@example.com",
+            "name": "Header BCC",
+            "photo_url": null
+          }
+        ],
+        "body_parsed": "HTML body **a2a** & details.",
+        "cc": [
+          {
+            "email": "cc-a2a@example.com",
+            "name": "Contact CC",
+            "photo_url": null
+          }
+        ],
+        "db_id": "<msg:a2a>",
+        "draft_generation": 0,
+        "from": {
+          "email": "sender-a2a@example.com",
+          "name": "Header a2a",
+          "photo_url": "https://example.com/photo.png"
+        },
+        "internal_date_ts": "<ts>",
+        "labels": [
+          {
+            "name": "INBOX",
+            "provider_id": "INBOX"
+          },
+          {
+            "name": "UNREAD",
+            "provider_id": "UNREAD"
+          }
+        ],
+        "link_id": "<link:A2>",
+        "subject": "Subject a2a",
+        "thread_db_id": "<thread:a2t>",
+        "to": [
+          {
+            "email": "to-a2a@example.com",
+            "name": "Header TO",
+            "photo_url": null
+          }
+        ]
+      }
+    ],
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "4308"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO agent_sdk_request {}
+      INFO get_message_by_id_batch_handler {"ids":"[<msg:m1a>, <msg:m1b>, <msg:draft>, <msg:a2a>, <msg:b1a>, <msg:m3a>]"}
+        INFO get_parsed_messages_by_id_batch {"message_ids":"[<msg:m1a>, <msg:m1b>, <msg:draft>, <msg:a2a>, <msg:b1a>, <msg:m3a>]"}
+          INFO get_senders_contacts_map {"message_ids":"[<msg:draft>, <msg:m1b>, <msg:m3a>, <msg:m1a>, <msg:b1a>, <msg:a2a>]"}
+            INFO fetch_sender_contacts_by_message_ids {"message_ids":"[<msg:draft>, <msg:m1b>, <msg:m3a>, <msg:m1a>, <msg:b1a>, <msg:a2a>]"}
+          INFO fetch_db_recipients_in_bulk {"message_ids":"[<msg:draft>, <msg:m1b>, <msg:m3a>, <msg:m1a>, <msg:b1a>, <msg:a2a>]"}
+          INFO fetch_message_labels_in_bulk {"message_ids":"[<msg:draft>, <msg:m1b>, <msg:m3a>, <msg:m1a>, <msg:b1a>, <msg:a2a>]"}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+          INFO map_attachmentless_db_message_to_service {}
+logs:
+  []
+sql:
+  bf1171c7e96b rows_affected=6 rows_returned=6
+  74f57f96d211 rows_affected=6 rows_returned=6
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  9e3df57cee79 rows_affected=18 rows_returned=18
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  07da058600b3 rows_affected=13 rows_returned=13
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: some unknown
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "internal",
+    "body": [
+      "<missing>",
+      "<msg:m1a>"
+    ],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": [
+      {
+        "bcc": [
+          {
+            "email": "bcc-m1a@example.com",
+            "name": "Header BCC",
+            "photo_url": null
+          }
+        ],
+        "body_parsed": "HTML body **m1a** & details.",
+        "cc": [
+          {
+            "email": "cc-m1a@example.com",
+            "name": "Contact CC",
+            "photo_url": null
+          }
+        ],
+        "db_id": "<msg:m1a>",
+        "draft_generation": 0,
+        "from": {
+          "email": "sender-m1a@example.com",
+          "name": "Header m1a",
+          "photo_url": "https://example.com/photo.png"
+        },
+        "internal_date_ts": "<ts>",
+        "labels": [
+          {
+            "name": "INBOX",
+            "provider_id": "INBOX"
+          },
+          {
+            "name": "UNREAD",
+            "provider_id": "UNREAD"
+          }
+        ],
+        "link_id": "<link:A>",
+        "subject": "Subject m1a",
+        "thread_db_id": "<thread:t1>",
+        "to": [
+          {
+            "email": "to-m1a@example.com",
+            "name": "Header TO",
+            "photo_url": null
+          }
+        ]
+      }
+    ],
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "708"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO agent_sdk_request {}
+      INFO get_message_by_id_batch_handler {"ids":"[<missing>, <msg:m1a>]"}
+        INFO get_parsed_messages_by_id_batch {"message_ids":"[<missing>, <msg:m1a>]"}
+          INFO get_senders_contacts_map {"message_ids":"[<msg:m1a>]"}
+            INFO fetch_sender_contacts_by_message_ids {"message_ids":"[<msg:m1a>]"}
+          INFO fetch_db_recipients_in_bulk {"message_ids":"[<msg:m1a>]"}
+          INFO fetch_message_labels_in_bulk {"message_ids":"[<msg:m1a>]"}
+          INFO map_attachmentless_db_message_to_service {}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "get_message_by_id_batch_handler"
+      ],
+      "message": "some ids not found in database",
+      "fields": {
+        "missing_ids": "[<missing>]"
+      }
+    }
+  ]
+sql:
+  bf1171c7e96b rows_affected=1 rows_returned=1
+  74f57f96d211 rows_affected=1 rows_returned=1
+  9e3df57cee79 rows_affected=3 rows_returned=3
+  07da058600b3 rows_affected=2 rows_returned=2
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: duplicate found
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "internal",
+    "body": [
+      "<msg:m1a>",
+      "<msg:m1a>"
+    ],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": [
+      {
+        "bcc": [
+          {
+            "email": "bcc-m1a@example.com",
+            "name": "Header BCC",
+            "photo_url": null
+          }
+        ],
+        "body_parsed": "HTML body **m1a** & details.",
+        "cc": [
+          {
+            "email": "cc-m1a@example.com",
+            "name": "Contact CC",
+            "photo_url": null
+          }
+        ],
+        "db_id": "<msg:m1a>",
+        "draft_generation": 0,
+        "from": {
+          "email": "sender-m1a@example.com",
+          "name": "Header m1a",
+          "photo_url": "https://example.com/photo.png"
+        },
+        "internal_date_ts": "<ts>",
+        "labels": [
+          {
+            "name": "INBOX",
+            "provider_id": "INBOX"
+          },
+          {
+            "name": "UNREAD",
+            "provider_id": "UNREAD"
+          }
+        ],
+        "link_id": "<link:A>",
+        "subject": "Subject m1a",
+        "thread_db_id": "<thread:t1>",
+        "to": [
+          {
+            "email": "to-m1a@example.com",
+            "name": "Header TO",
+            "photo_url": null
+          }
+        ]
+      }
+    ],
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "708"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO agent_sdk_request {}
+      INFO get_message_by_id_batch_handler {"ids":"[<msg:m1a>, <msg:m1a>]"}
+        INFO get_parsed_messages_by_id_batch {"message_ids":"[<msg:m1a>, <msg:m1a>]"}
+          INFO get_senders_contacts_map {"message_ids":"[<msg:m1a>]"}
+            INFO fetch_sender_contacts_by_message_ids {"message_ids":"[<msg:m1a>]"}
+          INFO fetch_db_recipients_in_bulk {"message_ids":"[<msg:m1a>]"}
+          INFO fetch_message_labels_in_bulk {"message_ids":"[<msg:m1a>]"}
+          INFO map_attachmentless_db_message_to_service {}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "get_message_by_id_batch_handler"
+      ],
+      "message": "some ids not found in database",
+      "fields": {
+        "missing_ids": "[]"
+      }
+    }
+  ]
+sql:
+  bf1171c7e96b rows_affected=1 rows_returned=1
+  74f57f96d211 rows_affected=1 rows_returned=1
+  9e3df57cee79 rows_affected=3 rows_returned=3
+  07da058600b3 rows_affected=2 rows_returned=2
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: duplicate missing
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "internal",
+    "body": [
+      "<missing>",
+      "<msg:m1a>",
+      "<missing>"
+    ],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": [
+      {
+        "bcc": [
+          {
+            "email": "bcc-m1a@example.com",
+            "name": "Header BCC",
+            "photo_url": null
+          }
+        ],
+        "body_parsed": "HTML body **m1a** & details.",
+        "cc": [
+          {
+            "email": "cc-m1a@example.com",
+            "name": "Contact CC",
+            "photo_url": null
+          }
+        ],
+        "db_id": "<msg:m1a>",
+        "draft_generation": 0,
+        "from": {
+          "email": "sender-m1a@example.com",
+          "name": "Header m1a",
+          "photo_url": "https://example.com/photo.png"
+        },
+        "internal_date_ts": "<ts>",
+        "labels": [
+          {
+            "name": "INBOX",
+            "provider_id": "INBOX"
+          },
+          {
+            "name": "UNREAD",
+            "provider_id": "UNREAD"
+          }
+        ],
+        "link_id": "<link:A>",
+        "subject": "Subject m1a",
+        "thread_db_id": "<thread:t1>",
+        "to": [
+          {
+            "email": "to-m1a@example.com",
+            "name": "Header TO",
+            "photo_url": null
+          }
+        ]
+      }
+    ],
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "708"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO agent_sdk_request {}
+      INFO get_message_by_id_batch_handler {"ids":"[<missing>, <msg:m1a>, <missing>]"}
+        INFO get_parsed_messages_by_id_batch {"message_ids":"[<missing>, <msg:m1a>, <missing>]"}
+          INFO get_senders_contacts_map {"message_ids":"[<msg:m1a>]"}
+            INFO fetch_sender_contacts_by_message_ids {"message_ids":"[<msg:m1a>]"}
+          INFO fetch_db_recipients_in_bulk {"message_ids":"[<msg:m1a>]"}
+          INFO fetch_message_labels_in_bulk {"message_ids":"[<msg:m1a>]"}
+          INFO map_attachmentless_db_message_to_service {}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "get_message_by_id_batch_handler"
+      ],
+      "message": "some ids not found in database",
+      "fields": {
+        "missing_ids": "[<missing>, <missing>]"
+      }
+    }
+  ]
+sql:
+  bf1171c7e96b rows_affected=1 rows_returned=1
+  74f57f96d211 rows_affected=1 rows_returned=1
+  9e3df57cee79 rows_affected=3 rows_returned=3
+  07da058600b3 rows_affected=2 rows_returned=2
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: all unknown
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "internal",
+    "body": [
+      "<missing>"
+    ],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "messages not found"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "32"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 404
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":404,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO agent_sdk_request {}
+      INFO get_message_by_id_batch_handler {"ids":"[<missing>]"}
+        INFO get_parsed_messages_by_id_batch {"message_ids":"[<missing>]"}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "get_message_by_id_batch_handler"
+      ],
+      "message": "no messages found in database",
+      "fields": {}
+    }
+  ]
+sql:
+  bf1171c7e96b rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty succeeds
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "internal",
+    "body": [],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": [],
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "2"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO agent_sdk_request {}
+      INFO get_message_by_id_batch_handler {"ids":"[]"}
+        INFO get_parsed_messages_by_id_batch {"message_ids":"[]"}
+logs:
+  []
+sql:
+  bf1171c7e96b rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: key without acting user
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "internal key only",
+    "body": [
+      "<msg:m1a>"
+    ],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": [
+      {
+        "bcc": [
+          {
+            "email": "bcc-m1a@example.com",
+            "name": "Header BCC",
+            "photo_url": null
+          }
+        ],
+        "body_parsed": "HTML body **m1a** & details.",
+        "cc": [
+          {
+            "email": "cc-m1a@example.com",
+            "name": "Contact CC",
+            "photo_url": null
+          }
+        ],
+        "db_id": "<msg:m1a>",
+        "draft_generation": 0,
+        "from": {
+          "email": "sender-m1a@example.com",
+          "name": "Header m1a",
+          "photo_url": "https://example.com/photo.png"
+        },
+        "internal_date_ts": "<ts>",
+        "labels": [
+          {
+            "name": "INBOX",
+            "provider_id": "INBOX"
+          },
+          {
+            "name": "UNREAD",
+            "provider_id": "UNREAD"
+          }
+        ],
+        "link_id": "<link:A>",
+        "subject": "Subject m1a",
+        "thread_db_id": "<thread:t1>",
+        "to": [
+          {
+            "email": "to-m1a@example.com",
+            "name": "Header TO",
+            "photo_url": null
+          }
+        ]
+      }
+    ],
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "708"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO agent_sdk_request {}
+      INFO get_message_by_id_batch_handler {"ids":"[<msg:m1a>]"}
+        INFO get_parsed_messages_by_id_batch {"message_ids":"[<msg:m1a>]"}
+          INFO get_senders_contacts_map {"message_ids":"[<msg:m1a>]"}
+            INFO fetch_sender_contacts_by_message_ids {"message_ids":"[<msg:m1a>]"}
+          INFO fetch_db_recipients_in_bulk {"message_ids":"[<msg:m1a>]"}
+          INFO fetch_message_labels_in_bulk {"message_ids":"[<msg:m1a>]"}
+          INFO map_attachmentless_db_message_to_service {}
+logs:
+  []
+sql:
+  bf1171c7e96b rows_affected=1 rows_returned=1
+  74f57f96d211 rows_affected=1 rows_returned=1
+  9e3df57cee79 rows_affected=3 rows_returned=3
+  07da058600b3 rows_affected=2 rows_returned=2
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing credentials
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "none",
+    "body": [
+      "<msg:m1a>"
+    ],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":401,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing internal key
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "internal identity without key",
+    "body": [
+      "<msg:m1a>"
+    ],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":401,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: wrong internal key
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "wrong internal key",
+    "body": [
+      "<msg:m1a>"
+    ],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":401,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request"
+      ],
+      "message": "internal authorization failed",
+      "fields": {
+        "error": "\n ● InvalidCredentials\n ╰ crates/macro_authorization/src/domain/service.rs:271\n"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid bearer
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "none (invalid bearer)",
+    "body": [
+      "<msg:m1a>"
+    ],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":401,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request"
+      ],
+      "message": "credential authorization failed",
+      "fields": {
+        "error": "\n ● InvalidCredentials\n ├ crates/macro_authorization/src/outbound/macro_auth.rs:88\n │\n ● Generic(GenericErrorResponse { message: \"unable to decode token\" })\n ╰ crates/macro_authorization/src/outbound/macro_auth.rs:88\n"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: user bearer is not internal
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "user A",
+    "body": [
+      "<msg:m1a>"
+    ],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "message": "forbidden"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "23"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 403
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":403,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

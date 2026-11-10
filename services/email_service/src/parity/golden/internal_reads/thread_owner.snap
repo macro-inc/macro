@@ -1,0 +1,672 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: own
+request:
+  {
+    "method": "GET",
+    "path": "/internal/threads/<thread:t1>/owner",
+    "auth": "internal",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "user_id": "<user:A>"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "40"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/internal/threads/{id}/owner","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/<thread:t1>/owner"}
+    INFO agent_sdk_request {}
+      INFO handler {"thread_id":"<thread:t1>"}
+        INFO get_macro_id_from_thread_id {"thread_id":"<thread:t1>"}
+logs:
+  []
+sql:
+  28b08ef58ad5 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: second owned
+request:
+  {
+    "method": "GET",
+    "path": "/internal/threads/<thread:a2t>/owner",
+    "auth": "internal",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "user_id": "<user:A>"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "40"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/internal/threads/{id}/owner","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/<thread:a2t>/owner"}
+    INFO agent_sdk_request {}
+      INFO handler {"thread_id":"<thread:a2t>"}
+        INFO get_macro_id_from_thread_id {"thread_id":"<thread:a2t>"}
+logs:
+  []
+sql:
+  28b08ef58ad5 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: other owner
+request:
+  {
+    "method": "GET",
+    "path": "/internal/threads/<thread:b1>/owner",
+    "auth": "internal",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "user_id": "<user:B>"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "40"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/internal/threads/{id}/owner","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/<thread:b1>/owner"}
+    INFO agent_sdk_request {}
+      INFO handler {"thread_id":"<thread:b1>"}
+        INFO get_macro_id_from_thread_id {"thread_id":"<thread:b1>"}
+logs:
+  []
+sql:
+  28b08ef58ad5 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: key without acting user
+request:
+  {
+    "method": "GET",
+    "path": "/internal/threads/<thread:t1>/owner",
+    "auth": "internal key only",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "user_id": "<user:A>"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "40"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":200,"http.route":"/internal/threads/{id}/owner","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/<thread:t1>/owner"}
+    INFO agent_sdk_request {}
+      INFO handler {"thread_id":"<thread:t1>"}
+        INFO get_macro_id_from_thread_id {"thread_id":"<thread:t1>"}
+logs:
+  []
+sql:
+  28b08ef58ad5 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing credentials
+request:
+  {
+    "method": "GET",
+    "path": "/internal/threads/<thread:t1>/owner",
+    "auth": "none",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":401,"http.route":"/internal/threads/{id}/owner","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/<thread:t1>/owner"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing internal key
+request:
+  {
+    "method": "GET",
+    "path": "/internal/threads/<thread:t1>/owner",
+    "auth": "internal identity without key",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":401,"http.route":"/internal/threads/{id}/owner","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/<thread:t1>/owner"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: wrong internal key
+request:
+  {
+    "method": "GET",
+    "path": "/internal/threads/<thread:t1>/owner",
+    "auth": "wrong internal key",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":401,"http.route":"/internal/threads/{id}/owner","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/<thread:t1>/owner"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request"
+      ],
+      "message": "internal authorization failed",
+      "fields": {
+        "error": "\n ● InvalidCredentials\n ╰ crates/macro_authorization/src/domain/service.rs:271\n"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid bearer
+request:
+  {
+    "method": "GET",
+    "path": "/internal/threads/<thread:t1>/owner",
+    "auth": "none (invalid bearer)",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":401,"http.route":"/internal/threads/{id}/owner","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/<thread:t1>/owner"}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request"
+      ],
+      "message": "credential authorization failed",
+      "fields": {
+        "error": "\n ● InvalidCredentials\n ├ crates/macro_authorization/src/outbound/macro_auth.rs:88\n │\n ● Generic(GenericErrorResponse { message: \"unable to decode token\" })\n ╰ crates/macro_authorization/src/outbound/macro_auth.rs:88\n"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: user bearer is not internal
+request:
+  {
+    "method": "GET",
+    "path": "/internal/threads/<thread:t1>/owner",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "forbidden"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "23"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 403
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":403,"http.route":"/internal/threads/{id}/owner","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/<thread:t1>/owner"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: unknown thread
+request:
+  {
+    "method": "GET",
+    "path": "/internal/threads/<missing>/owner",
+    "auth": "internal",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "thread not found"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "30"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 404
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":404,"http.route":"/internal/threads/{id}/owner","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/<missing>/owner"}
+    INFO agent_sdk_request {}
+      INFO handler {"thread_id":"<missing>"}
+        INFO get_macro_id_from_thread_id {"thread_id":"<missing>"}
+logs:
+  []
+sql:
+  28b08ef58ad5 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: malformed thread
+request:
+  {
+    "method": "GET",
+    "path": "/internal/threads/invalid/owner",
+    "auth": "internal",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Invalid URL: Cannot parse `id` with value `invalid`: UUID parsing failed: invalid character: found `i` at 1",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "107"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/internal/threads/{id}/owner","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/invalid/owner"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: stored invalid owner
+request:
+  {
+    "method": "GET",
+    "path": "/internal/threads/<thread:t1>/owner",
+    "auth": "internal",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "invalid macro user id"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "35"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/internal/threads/{id}/owner","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/<thread:t1>/owner"}
+    INFO agent_sdk_request {}
+      INFO handler {"thread_id":"<thread:t1>"}
+        INFO get_macro_id_from_thread_id {"thread_id":"<thread:t1>"}
+logs:
+  []
+sql:
+  28b08ef58ad5 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

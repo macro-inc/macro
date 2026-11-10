@@ -1,0 +1,101 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: database failure
+request:
+  {
+    "method": "GET",
+    "path": "/email/threads/<thread:t1>/messages",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "Unable to get messages"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "36"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 500
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":500,"http.route":"/email/threads/{id}/messages","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 500 Internal Server Error","request.id":"<volatile>","url.path":"/email/threads/<thread:t1>/messages"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO get_thread_messages_handler {"fusionauth_user_id":"<fusion:A>","id":"<thread:t1>","query_params":"GetThreadMessagesParams { offset: None, limit: None }","user_id":"<user:A>"}
+        INFO get_paginated_parsed_messages_by_thread_id {"limit":5,"offset":0,"thread_id":"<thread:t1>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "get_thread_messages_handler",
+        "get_paginated_parsed_messages_by_thread_id"
+      ],
+      "message": null,
+      "fields": {
+        "error": "error returned from database: column \"snippet\" does not exist"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "get_thread_messages_handler"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Unable to get messages"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 500 Internal Server Error",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  40b69fc48c40 rows_affected=3 rows_returned=3
+  961b97d9a732 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

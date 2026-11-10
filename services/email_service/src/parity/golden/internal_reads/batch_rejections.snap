@@ -1,0 +1,310 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: malformed JSON
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "internal",
+    "body": "[",
+    "body_format": "raw",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to parse the request body as JSON: EOF while parsing a list at line 1 column 1",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "85"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":400,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing JSON content type
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "internal",
+    "body": "[]",
+    "body_format": "raw",
+    "content-type": "text/plain"
+  }
+response:
+  {
+    "body": "Expected request with `Content-Type: application/json`",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "54"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 415
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":415,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty JSON body
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "internal",
+    "body": "",
+    "body_format": "raw",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to parse the request body as JSON: EOF while parsing a value at line 1 column 0",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "86"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":400,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid UUID
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "internal",
+    "body": [
+      "invalid"
+    ],
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: [0]: UUID parsing failed: invalid character: found `i` at 1 at line 1 column 10",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "137"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: wrong JSON shape
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "internal",
+    "body": 42,
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: invalid type: integer `42`, expected a sequence at line 1 column 2",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "124"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: null body
+request:
+  {
+    "method": "POST",
+    "path": "/internal/messages/batch",
+    "auth": "internal",
+    "body": null,
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: invalid type: null, expected a sequence at line 1 column 4",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "116"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/internal/messages/batch","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/messages/batch"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

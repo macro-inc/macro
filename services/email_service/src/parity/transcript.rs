@@ -1,3 +1,4 @@
+use self::response_order::ResponseArrayRule;
 use super::normalize::Normalizer;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -5,12 +6,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 
+pub(super) mod response_order;
 mod test;
 
 pub(super) struct Transcript {
     pub suite: String,
     pub name: String,
     pub normalizer: Normalizer,
+    pub response_array_rules: &'static [ResponseArrayRule],
     text: String,
     callsites: String,
     debug_spans: String,
@@ -23,6 +26,7 @@ impl Transcript {
             suite: suite.into(),
             name: name.into(),
             normalizer,
+            response_array_rules: &[],
             text: String::new(),
             callsites: String::new(),
             debug_spans: String::new(),
@@ -32,7 +36,17 @@ impl Transcript {
 
     pub fn step(&mut self, name: &str, sections: Vec<(&str, Value)>) {
         writeln!(self.text, "step: {name}").expect("write transcript");
+        let request = sections
+            .iter()
+            .find(|(section, _)| *section == "request")
+            .map(|(_, value)| value.clone())
+            .unwrap_or(Value::Null);
         for (section, mut value) in sections {
+            if section == "response" {
+                for rule in self.response_array_rules {
+                    rule.apply(&request, &mut value);
+                }
+            }
             if section == "callsites" || section == "debug_spans" {
                 // Diagnostic-only values must not consume UUID numbers used by goldens.
                 let mut normalizer = self.normalizer.clone();

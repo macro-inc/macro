@@ -2,6 +2,48 @@ use super::*;
 use serde_json::json;
 
 #[test]
+fn response_array_rules_are_opt_in_and_run_before_normalizing() {
+    if !crate::parity::process_per_test() {
+        return;
+    }
+    let sections = vec![
+        (
+            "request",
+            json!({"method":"GET","path":"/email/threads/id/messages"}),
+        ),
+        (
+            "response",
+            json!({"body":[
+                {"db_id":"z","internal_date_ts":"2026-02-01T00:00:00Z","labels":[{"provider_id":"Z"},{"provider_id":"A"}]},
+                {"db_id":"a","internal_date_ts":"2026-01-01T00:00:00Z"}
+            ]}),
+        ),
+        (
+            "logs",
+            json!({"body":{"labels":[{"provider_id":"Z"},{"provider_id":"A"}]}}),
+        ),
+    ];
+    let mut untouched = Transcript::new("test", "original", Normalizer::default());
+    untouched.step("original", sections.clone());
+    let original = untouched.take();
+    assert!(original.find("\"provider_id\": \"Z\"") < original.find("\"provider_id\": \"A\""));
+
+    let mut sorted = Transcript::new("test", "sorted", Normalizer::default());
+    sorted.response_array_rules = &[
+        ResponseArrayRule::MessageLabelsByProviderId,
+        ResponseArrayRule::ThreadTimestampTiesById,
+    ];
+    sorted.step("sorted", sections);
+    let sorted = sorted.take();
+    // If timestamps were already masked, the messages would become ties and
+    // sort by ID. Keep the actual primary order while sorting only labels.
+    assert!(sorted.find("\"db_id\": \"z\"") < sorted.find("\"db_id\": \"a\""));
+    let (response, logs) = sorted.split_once("logs:").expect("logs section");
+    assert!(response.find("\"provider_id\": \"A\"") < response.find("\"provider_id\": \"Z\""));
+    assert!(logs.find("\"provider_id\": \"Z\"") < logs.find("\"provider_id\": \"A\""));
+}
+
+#[test]
 fn sql_is_shared_by_content_and_executions_keep_order_and_counts() {
     if !crate::parity::process_per_test() {
         return;

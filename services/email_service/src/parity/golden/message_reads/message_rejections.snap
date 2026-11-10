@@ -1,0 +1,496 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: unknown id
+request:
+  {
+    "method": "GET",
+    "path": "/email/messages/<missing>",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Message not found",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "17"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 404
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":404,"http.route":"/email/messages/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/messages/<missing>"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO handler {"fusionauth_user_id":"<fusion:A>","id":"<missing>","user_id":"<user:A>"}
+        INFO get_parsed_message_by_id {"message_id":"<missing>"}
+logs:
+  []
+sql:
+  7883e20fb942 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: malformed id
+request:
+  {
+    "method": "GET",
+    "path": "/email/messages/not-a-uuid",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Invalid URL: Cannot parse `id` with value `not-a-uuid`: UUID parsing failed: invalid character: found `n` at 1",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "110"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":400,"http.route":"/email/messages/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/messages/not-a-uuid"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: other inbox owner
+request:
+  {
+    "method": "GET",
+    "path": "/email/messages/<msg:m1a>",
+    "auth": "user B",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Unauthorized",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "12"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":401,"http.route":"/email/messages/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/messages/<msg:m1a>"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO handler {"fusionauth_user_id":"<fusion:B>","id":"<msg:m1a>","user_id":"<user:B>"}
+        INFO get_parsed_message_by_id {"message_id":"<msg:m1a>"}
+          INFO get_senders_contacts_map {"message_ids":"[<msg:m1a>]"}
+            INFO fetch_sender_contacts_by_message_ids {"message_ids":"[<msg:m1a>]"}
+          INFO fetch_db_recipients_in_bulk {"message_ids":"[<msg:m1a>]"}
+          INFO fetch_message_labels_in_bulk {"message_ids":"[<msg:m1a>]"}
+          INFO map_attachmentless_db_message_to_service {}
+logs:
+  []
+sql:
+  7883e20fb942 rows_affected=1 rows_returned=1
+  74f57f96d211 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  9e3df57cee79 rows_affected=3 rows_returned=3
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  07da058600b3 rows_affected=2 rows_returned=2
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  40b69fc48c40 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: no inboxes
+request:
+  {
+    "method": "GET",
+    "path": "/email/messages/<msg:m1a>",
+    "auth": "user C",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Unauthorized",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "12"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":401,"http.route":"/email/messages/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/messages/<msg:m1a>"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO handler {"fusionauth_user_id":"<fusion:C>","id":"<msg:m1a>","user_id":"<user:C>"}
+        INFO get_parsed_message_by_id {"message_id":"<msg:m1a>"}
+          INFO get_senders_contacts_map {"message_ids":"[<msg:m1a>]"}
+            INFO fetch_sender_contacts_by_message_ids {"message_ids":"[<msg:m1a>]"}
+          INFO fetch_db_recipients_in_bulk {"message_ids":"[<msg:m1a>]"}
+          INFO fetch_message_labels_in_bulk {"message_ids":"[<msg:m1a>]"}
+          INFO map_attachmentless_db_message_to_service {}
+logs:
+  []
+sql:
+  7883e20fb942 rows_affected=1 rows_returned=1
+  74f57f96d211 rows_affected=1 rows_returned=1
+  9e3df57cee79 rows_affected=3 rows_returned=3
+  07da058600b3 rows_affected=2 rows_returned=2
+  40b69fc48c40 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid bearer
+request:
+  {
+    "method": "GET",
+    "path": "/email/messages/<msg:m1a>",
+    "auth": "none (invalid bearer)",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":401,"http.route":"/email/messages/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/messages/<msg:m1a>"}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request"
+      ],
+      "message": "credential authorization failed",
+      "fields": {
+        "error": "\n ● InvalidCredentials\n ├ crates/macro_authorization/src/outbound/macro_auth.rs:88\n │\n ● Generic(GenericErrorResponse { message: \"unable to decode token\" })\n ╰ crates/macro_authorization/src/outbound/macro_auth.rs:88\n"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: internal without user
+request:
+  {
+    "method": "GET",
+    "path": "/email/messages/<msg:m1a>",
+    "auth": "internal key only",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Unauthorized",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "12"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":401,"http.route":"/email/messages/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/messages/<msg:m1a>"}
+    INFO agent_sdk_request {}
+      INFO handler {"fusionauth_user_id":"","id":"<msg:m1a>","user_id":"macro|INTERNAL@macro.com"}
+        INFO get_parsed_message_by_id {"message_id":"<msg:m1a>"}
+          INFO get_senders_contacts_map {"message_ids":"[<msg:m1a>]"}
+            INFO fetch_sender_contacts_by_message_ids {"message_ids":"[<msg:m1a>]"}
+          INFO fetch_db_recipients_in_bulk {"message_ids":"[<msg:m1a>]"}
+          INFO fetch_message_labels_in_bulk {"message_ids":"[<msg:m1a>]"}
+          INFO map_attachmentless_db_message_to_service {}
+logs:
+  []
+sql:
+  7883e20fb942 rows_affected=1 rows_returned=1
+  74f57f96d211 rows_affected=1 rows_returned=1
+  9e3df57cee79 rows_affected=3 rows_returned=3
+  07da058600b3 rows_affected=2 rows_returned=2
+  40b69fc48c40 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: wrong internal key
+request:
+  {
+    "method": "GET",
+    "path": "/email/messages/<msg:m1a>",
+    "auth": "wrong internal key",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":401,"http.route":"/email/messages/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/messages/<msg:m1a>"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request"
+      ],
+      "message": "internal authorization failed",
+      "fields": {
+        "error": "\n ● InvalidCredentials\n ╰ crates/macro_authorization/src/domain/service.rs:271\n"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing credentials
+request:
+  {
+    "method": "GET",
+    "path": "/email/messages/<msg:m1a>",
+    "auth": "none",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"GET","http.response.status_code":401,"http.route":"/email/messages/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/messages/<msg:m1a>"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

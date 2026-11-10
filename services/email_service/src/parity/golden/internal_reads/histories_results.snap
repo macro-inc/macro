@@ -1,0 +1,931 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: only newest own inbox selected
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": [
+        "<thread:t1>",
+        "<thread:a2t>",
+        "<thread:b1>",
+        "<missing>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "history_map": {
+        "52000000-0000-0000-0000-000079e50000": {
+          "created_at": "<ts>",
+          "inbox_visible": true,
+          "is_draft": false,
+          "is_important": false,
+          "is_read": false,
+          "item_id": "<thread:a2t>",
+          "link_id": "<link:A2>",
+          "pretty_sender": "Contact a2b",
+          "sender": "sender-a2b@example.com",
+          "snippet": "Snippet a2b",
+          "subject": "Subject a2a",
+          "updated_at": "<ts>",
+          "user_id": "<user:A>",
+          "viewed_at": null
+        }
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "471"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_thread_summary_info {"link_ids":"[<link:A2>]","thread_ids":"[<thread:t1>, <thread:a2t>, <thread:b1>, <missing>]"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+  9fb044fa58c9 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: other owner inbox
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:B>",
+      "thread_ids": [
+        "<thread:b1>",
+        "<thread:t1>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "history_map": {
+        "52000000-0000-0000-0000-000079e40000": {
+          "created_at": "<ts>",
+          "inbox_visible": true,
+          "is_draft": false,
+          "is_important": false,
+          "is_read": false,
+          "item_id": "<thread:b1>",
+          "link_id": "<link:B>",
+          "pretty_sender": "Contact b1b",
+          "sender": "sender-b1b@example.com",
+          "snippet": "Snippet b1b",
+          "subject": "Subject b1a",
+          "updated_at": "<ts>",
+          "user_id": "<user:B>",
+          "viewed_at": null
+        }
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "471"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_thread_summary_info {"link_ids":"[<link:B>]","thread_ids":"[<thread:b1>, <thread:t1>]"}
+logs:
+  []
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+  9fb044fa58c9 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": []
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "history_map": {}
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "18"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_thread_summary_info {"link_ids":"[<link:A2>]","thread_ids":"[]"}
+logs:
+  []
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: unknown
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": [
+        "<missing>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "history_map": {}
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "18"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_thread_summary_info {"link_ids":"[<link:A2>]","thread_ids":"[<missing>]"}
+logs:
+  []
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+  9fb044fa58c9 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: duplicates
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": [
+        "<thread:a2t>",
+        "<thread:a2t>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "history_map": {
+        "52000000-0000-0000-0000-000079e50000": {
+          "created_at": "<ts>",
+          "inbox_visible": true,
+          "is_draft": false,
+          "is_important": false,
+          "is_read": false,
+          "item_id": "<thread:a2t>",
+          "link_id": "<link:A2>",
+          "pretty_sender": "Contact a2b",
+          "sender": "sender-a2b@example.com",
+          "snippet": "Snippet a2b",
+          "subject": "Subject a2a",
+          "updated_at": "<ts>",
+          "user_id": "<user:A>",
+          "viewed_at": null
+        }
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "471"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_thread_summary_info {"link_ids":"[<link:A2>]","thread_ids":"[<thread:a2t>, <thread:a2t>]"}
+logs:
+  []
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+  9fb044fa58c9 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: view before last message
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": [
+        "<thread:t1>",
+        "<thread:a2t>",
+        "<thread:b1>",
+        "<missing>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "history_map": {
+        "52000000-0000-0000-0000-000079e50000": {
+          "created_at": "<ts>",
+          "inbox_visible": true,
+          "is_draft": false,
+          "is_important": false,
+          "is_read": false,
+          "item_id": "<thread:a2t>",
+          "link_id": "<link:A2>",
+          "pretty_sender": "Contact a2b",
+          "sender": "sender-a2b@example.com",
+          "snippet": "Snippet a2b",
+          "subject": "Subject a2a",
+          "updated_at": "<ts>",
+          "user_id": "<user:A>",
+          "viewed_at": null
+        }
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "471"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_thread_summary_info {"link_ids":"[<link:A2>]","thread_ids":"[<thread:t1>, <thread:a2t>, <thread:b1>, <missing>]"}
+logs:
+  []
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+  9fb044fa58c9 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: view equals last message
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": [
+        "<thread:t1>",
+        "<thread:a2t>",
+        "<thread:b1>",
+        "<missing>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "history_map": {
+        "52000000-0000-0000-0000-000079e50000": {
+          "created_at": "<ts>",
+          "inbox_visible": true,
+          "is_draft": false,
+          "is_important": false,
+          "is_read": false,
+          "item_id": "<thread:a2t>",
+          "link_id": "<link:A2>",
+          "pretty_sender": "Contact a2b",
+          "sender": "sender-a2b@example.com",
+          "snippet": "Snippet a2b",
+          "subject": "Subject a2a",
+          "updated_at": "<ts>",
+          "user_id": "<user:A>",
+          "viewed_at": "<ts>"
+        }
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "489"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_thread_summary_info {"link_ids":"[<link:A2>]","thread_ids":"[<thread:t1>, <thread:a2t>, <thread:b1>, <missing>]"}
+logs:
+  []
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+  9fb044fa58c9 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: view after last message
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": [
+        "<thread:t1>",
+        "<thread:a2t>",
+        "<thread:b1>",
+        "<missing>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "history_map": {
+        "52000000-0000-0000-0000-000079e50000": {
+          "created_at": "<ts>",
+          "inbox_visible": true,
+          "is_draft": false,
+          "is_important": false,
+          "is_read": false,
+          "item_id": "<thread:a2t>",
+          "link_id": "<link:A2>",
+          "pretty_sender": "Contact a2b",
+          "sender": "sender-a2b@example.com",
+          "snippet": "Snippet a2b",
+          "subject": "Subject a2a",
+          "updated_at": "<ts>",
+          "user_id": "<user:A>",
+          "viewed_at": "<ts>"
+        }
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "489"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_thread_summary_info {"link_ids":"[<link:A2>]","thread_ids":"[<thread:t1>, <thread:a2t>, <thread:b1>, <missing>]"}
+logs:
+  []
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+  9fb044fa58c9 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: latest sender absent
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": [
+        "<thread:t1>",
+        "<thread:a2t>",
+        "<thread:b1>",
+        "<missing>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "history_map": {
+        "52000000-0000-0000-0000-000079e50000": {
+          "created_at": "<ts>",
+          "inbox_visible": true,
+          "is_draft": false,
+          "is_important": false,
+          "is_read": false,
+          "item_id": "<thread:a2t>",
+          "link_id": "<link:A2>",
+          "pretty_sender": "",
+          "sender": "",
+          "snippet": "Snippet a2b",
+          "subject": "Subject a2a",
+          "updated_at": "<ts>",
+          "user_id": "<user:A>",
+          "viewed_at": "<ts>"
+        }
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "456"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_thread_summary_info {"link_ids":"[<link:A2>]","thread_ids":"[<thread:t1>, <thread:a2t>, <thread:b1>, <missing>]"}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler",
+        "get_thread_summary_info"
+      ],
+      "message": "latest message has no sender contact",
+      "fields": {
+        "thread_id": "<thread:a2t>"
+      }
+    }
+  ]
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+  9fb044fa58c9 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: trashed latest omitted
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": [
+        "<thread:t1>",
+        "<thread:a2t>",
+        "<thread:b1>",
+        "<missing>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "history_map": {}
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "18"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_thread_summary_info {"link_ids":"[<link:A2>]","thread_ids":"[<thread:t1>, <thread:a2t>, <thread:b1>, <missing>]"}
+logs:
+  []
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+  9fb044fa58c9 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: all drafts use updated time
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": [
+        "<thread:t1>",
+        "<thread:a2t>",
+        "<thread:b1>",
+        "<missing>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "history_map": {
+        "52000000-0000-0000-0000-000079e50000": {
+          "created_at": "<ts>",
+          "inbox_visible": true,
+          "is_draft": true,
+          "is_important": false,
+          "is_read": false,
+          "item_id": "<thread:a2t>",
+          "link_id": "<link:A2>",
+          "pretty_sender": "",
+          "sender": "",
+          "snippet": "Snippet a2b",
+          "subject": "Subject a2a",
+          "updated_at": "<ts>",
+          "user_id": "<user:A>",
+          "viewed_at": "<ts>"
+        }
+      }
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "455"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_thread_summary_info {"link_ids":"[<link:A2>]","thread_ids":"[<thread:t1>, <thread:a2t>, <thread:b1>, <missing>]"}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler",
+        "get_thread_summary_info"
+      ],
+      "message": "latest message has no sender contact",
+      "fields": {
+        "thread_id": "<thread:a2t>"
+      }
+    }
+  ]
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+  9fb044fa58c9 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: only discarded drafts omitted
+request:
+  {
+    "method": "POST",
+    "path": "/internal/threads/histories",
+    "auth": "internal",
+    "body": {
+      "user_id": "<user:A>",
+      "thread_ids": [
+        "<thread:t1>",
+        "<thread:a2t>",
+        "<thread:b1>",
+        "<missing>"
+      ]
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "body": {
+      "history_map": {}
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "18"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/internal/threads/histories","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/threads/histories"}
+    INFO agent_sdk_request {}
+      INFO handler {}
+        INFO fetch_link_by_macro_id {}
+        INFO get_thread_summary_info {"link_ids":"[<link:A2>]","thread_ids":"[<thread:t1>, <thread:a2t>, <thread:b1>, <missing>]"}
+logs:
+  []
+sql:
+  3ff28d7d7e73 rows_affected=1 rows_returned=1
+  9fb044fa58c9 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
