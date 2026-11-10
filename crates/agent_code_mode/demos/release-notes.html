@@ -300,6 +300,8 @@
 
   // Registered before the first load, so a failed one leaves the page listening.
   on(['document.created', 'document.updated', 'document.deleted'], reload);
+  // Task Status, Assignee and Due changes emit no live event: refresh on focus too.
+  window.addEventListener('focus', () => reload());
   await loadChoices();
 </script>
 </body>

@@ -227,6 +227,8 @@
     if (event.key === 'Enter') add();
   });
   on(['document.created', 'document.updated', 'document.deleted'], reload);
+  // Task Status, Assignee and Due changes emit no live event: refresh on focus too.
+  window.addEventListener('focus', () => reload());
   await reload();
 </script>
 </body>

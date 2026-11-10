@@ -271,7 +271,10 @@
     posting = false;
     postButton.disabled = false;
   });
-  on(['document.created', 'document.updated', 'document.deleted'], reload);
+  // Content edits arrive only as document.interaction, about every 5 s while someone types.
+  on(['document.created', 'document.updated', 'document.deleted', 'document.interaction'], reload);
+  // Task Status, Assignee and Due changes emit no live event: refresh on focus too.
+  window.addEventListener('focus', () => reload());
   await reload();
 </script>
 </body>

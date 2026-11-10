@@ -267,7 +267,8 @@
   }
 
   daysSelect.addEventListener('change', () => reload());
-  on(['document.updated', 'document.deleted'], reload);
+  // Content edits arrive only as document.interaction, about every 5 s while someone types.
+  on(['document.updated', 'document.deleted', 'document.interaction'], reload);
   await reload();
 </script>
 </body>

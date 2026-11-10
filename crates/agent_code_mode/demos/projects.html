@@ -191,6 +191,8 @@
   filter.addEventListener('change', reload);
   // Tasks are documents: a task created or completed changes a project's progress.
   on(['document.created', 'document.updated', 'document.deleted'], reload);
+  // Task Status, Assignee and Due changes emit no live event: refresh on focus too.
+  window.addEventListener('focus', () => reload());
   createButton.addEventListener('click', create);
   nameInput.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') create();

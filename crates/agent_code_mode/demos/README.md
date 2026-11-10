@@ -10,8 +10,8 @@ doesn't ship. Upload one to Drive and open it in Render to try it.
 
 | Page | Recreates | Reads | Writes | Live events |
 | --- | --- | --- | --- | --- |
-| `tasks-board.html` | Tasks board grouped by Status | `workspace.page` (tasks), Status options | Change a task's Status; create a task | `document.*` |
-| `projects.html` | Projects (initiatives) overview with task progress | `initiatives.list` | Create a project | `document.*` (task progress) |
+| `tasks-board.html` | Tasks board grouped by Status | `workspace.page` (tasks), Status options | Change a task's Status; create a task | `document.*`; refreshes on focus |
+| `projects.html` | Projects (initiatives) overview with task progress | `initiatives.list` | Create a project | `document.*` (tasks created or deleted); refreshes on focus |
 | `drive.html` | Drive: recent documents and search | `workspace.page`, `search.page` | Create a note | `document.*` |
 | `channel.html` | Channel reader | `workspace.page` (channels), `channel.messages` | Post a message | `message.*` |
 | `notifications.html` | Notification inbox | `notifications.list` | Mark done, Undo | `message.posted`, `message.mentioned`, `document.created` |
@@ -31,16 +31,16 @@ Macro into one tool a team or an agent might build for itself.
 
 | Page | Combines | Reads | Writes | Live events |
 | --- | --- | --- | --- | --- |
-| `weekly-digest.html` | Tasks, documents, channels | Tasks updated and completed in the period, documents edited, each active channel's message count and most-reacted message | Post the editable digest to a channel | `document.*`, `message.posted` |
-| `project-health.html` | Projects, tasks, channels | `initiatives.list` with progress; open tasks by their Project property for overdue, due-this-week, unassigned and idle days | Post an overdue nudge with task mentions to a channel | `document.*` |
+| `weekly-digest.html` | Tasks, documents, channels | Tasks updated and completed in the period, documents edited, each active channel's message count and most-reacted message | Post the editable digest to a channel | `document.*` (with `document.interaction`), `message.posted`; refreshes on focus |
+| `project-health.html` | Projects, tasks, channels | `initiatives.list` with progress; open tasks by their Project property for overdue, due-this-week, unassigned and idle days | Post an overdue nudge with task mentions to a channel | `document.*`; refreshes on focus |
 | `triage-desk.html` | Notifications, tasks, email | `notifications.list`, unassigned open tasks, unread inbox threads | Mark a notification done; assign a task to yourself; archive a thread | `message.posted`, `message.mentioned`, `document.*`; refreshes on focus |
-| `standup-composer.html` | Tasks, documents, channels | Your tasks done or under way since yesterday (or Friday), what's next and overdue, documents you own that changed | Post the editable standup to a channel | `document.*` |
+| `standup-composer.html` | Tasks, documents, channels | Your tasks done or under way since yesterday (or Friday), what's next and overdue, documents you own that changed | Post the editable standup to a channel | `document.*` (with `document.interaction`); refreshes on focus |
 | `channel-to-tasks.html` | Channels, tasks | A channel's recent messages, with the ✅ reactions you left | Create a task per picked message (quote and channel link, due date, assignee), reply in its thread with a task mention, react ✅ | `message.*` |
-| `workload-board.html` | Teams, users, tasks | Team members and every open task's assignees and due date | Swap one assignee of a task for another, or take them off it; co-assignees stay | `document.*` |
-| `doc-freshness.html` | Documents, users, direct messages, tasks | Documents untouched for N days and their owners | Ask the owner in a direct message with a document mention; for your own, create a review task | `document.updated`, `document.deleted` |
+| `workload-board.html` | Teams, users, tasks | Team members and every open task's assignees and due date | Swap one assignee of a task for another, or take them off it; co-assignees stay | `document.*`; refreshes on focus |
+| `doc-freshness.html` | Documents, users, direct messages, tasks | Documents untouched for N days and their owners | Ask the owner in a direct message with a document mention; for your own, create a review task | `document.updated`, `document.deleted`, `document.interaction` |
 | `automation-ops.html` | Routines, agent sessions | `routines.list` with `routine.history`, joined to the sessions their runs started (`resource_id`); open agent sessions and their turn state | Run a routine now, pause or resume it; archive a session | `agent_session.*` |
 | `follow-up-radar.html` | CRM, email, tasks | `crm.searchContacts` with last interaction, the latest email thread per contact, open "Follow up with" tasks | Create a follow-up task and comment on the contact with a task mention | `document.*`; refreshes on focus |
-| `release-notes.html` | Projects, tasks, documents, channels | A project's tasks completed in the period and those still in flight | Create the notes document, announce it in a channel, and comment on the project, each with a document mention | `document.*` |
+| `release-notes.html` | Projects, tasks, documents, channels | A project's tasks completed in the period and those still in flight | Create the notes document, announce it in a channel, and comment on the project, each with a document mention | `document.*`; refreshes on focus |
 
 They work around what programs can't do. Email is only read, and no page
 creates calendar events: the SDK holds sending mail and creating events behind
@@ -49,7 +49,13 @@ or a review), so nothing here sends mail or invites. Mentions are
 built from `toMention()` parts, since programs import no SDK helpers such as
 `msg`, and a document or task must be loaded first so its mention carries a
 name. CRM, routines, notifications and email emit no live events, so those
-pages reload on related document or message events, or on focus. A listing
+pages reload on related document or message events, or on focus. Neither do
+a task's Status, Assignee or Due changes: `document.updated` covers only a
+rename, move, file type or sharing change, so pages that show task
+properties reload after their own writes and on focus. Content edits arrive
+only as `document.interaction`, about every 5 seconds while someone types
+and when a document is opened or closed; pages that care about edits
+subscribe to it. A listing
 has no completion time, so "completed this week" means completed and updated
 this week. `channel-to-tasks.html` remembers what it tracked by your ✅
 reaction, read from each message's loaded detail (`toJSON().detail`), which
