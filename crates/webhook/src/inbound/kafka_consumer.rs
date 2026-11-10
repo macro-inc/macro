@@ -1,7 +1,7 @@
 //! Kafka consumer that feeds broker events into webhook ingestion.
 //!
-//! Subscribes to [`DocumentMacroEvent`], [`ChannelMacroEvent`], and
-//! [`WebhookMacroEvent`] topics and hands every decoded event envelope to a
+//! Subscribes to document, channel, message, email, call, webhook, and agent
+//! topics and hands every decoded event envelope to a
 //! [`WebhookEventIngestionService`].
 //!
 //! Delivery is at-least-once: an event's offset is committed only after the
@@ -40,8 +40,9 @@ struct WebhookEventIngestionConsumerGroup;
 
 impl GroupName for WebhookEventIngestionConsumerGroup {
     const GROUP_NAME: &'static str = "webhook-event-ingestion";
-    // `macro.messages` joined this group's subscription with no committed
-    // offset; starting at its head avoids replaying the topic's retention.
+    // New topics, including `macro.email`, join this group's subscription
+    // without committed offsets; starting at their heads avoids replaying
+    // retained history.
     const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
 }
 
@@ -116,6 +117,9 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
                     DeclaredMacroEvent::MessageMacroEvent(event) => {
                         service.ingest_message_event(event.event().clone()).await
                     }
+                    DeclaredMacroEvent::EmailMacroEvent(event) => {
+                        service.ingest_email_event(event.event().clone()).await
+                    }
                     DeclaredMacroEvent::WebhookMacroEvent(event) => {
                         service.ingest_webhook_event(event.event().clone()).await
                     }
@@ -179,7 +183,7 @@ async fn ingest_with_retry<S: WebhookEventIngestionService>(
 /// Run the webhook event consumer until `shutdown` resolves.
 ///
 /// Connects to `brokers` and subscribes to the topics declared by
-/// [`DocumentMacroEvent`], [`ChannelMacroEvent`], and [`WebhookMacroEvent`]
+/// document, channel, message, email, call, webhook, and agent topics
 /// under the `webhook-event-ingestion` consumer group. Every decoded event is fed to
 /// `service`, committing each offset only
 /// after ingestion succeeds (see `ingest_with_retry` for the retry policy).

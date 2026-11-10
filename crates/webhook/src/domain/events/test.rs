@@ -324,3 +324,28 @@ fn macro_event_round_trips_without_exposing_secrets_or_header_values() {
     assert_eq!(decoded.event(), original.event());
     assert_eq!(decoded.topic(), "macro.webhooks");
 }
+
+#[test]
+fn internal_email_signal_remains_in_webhook_event_union() {
+    use email::domain::events::EmailTopicEvent;
+
+    let link_id = Uuid::parse_str("01998a30-5e6f-7061-8253-9e0f1a2b3c4d").expect("valid link id");
+    let thread_id =
+        Uuid::parse_str("01998a30-6f70-7162-8354-0f1a2b3c4d5e").expect("valid thread id");
+    let decoded: WebhookEvent = serde_json::from_value(json!({
+        "event_type": "email.thread_backfilled",
+        "metadata": {
+            "link_id": link_id,
+            "owner": "macro|owner@example.com",
+            "thread_id": thread_id,
+        },
+    }))
+    .expect("internal email signal is in the webhook event union");
+
+    let WebhookEvent::Email(EmailTopicEvent::ThreadBackfilled(metadata)) = decoded else {
+        panic!("expected an email thread backfill event");
+    };
+    assert_eq!(metadata.link_id, link_id);
+    assert_eq!(metadata.owner, user_id("macro|owner@example.com"));
+    assert_eq!(metadata.thread_id, thread_id);
+}

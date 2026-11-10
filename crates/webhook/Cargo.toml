@@ -19,6 +19,7 @@ inbound = [
   "dep:axum-extra",
   "dep:channels",
   "dep:documents",
+  "dep:email",
   "dep:macro_authorization",
   "dep:model-error-response",
   "dep:model_user",
@@ -29,6 +30,7 @@ inbound = [
   "call/inbound",
   "channels/schema",
   "documents/schema",
+  "email/schema",
   "messages/schema",
   "ports",
   "rate_limit/axum",
@@ -39,6 +41,7 @@ ingestion = [
   "dep:channels",
   "dep:call",
   "dep:documents",
+  "dep:email",
   "dep:entity_access",
   "dep:futures",
   "dep:uuid",
@@ -77,6 +80,7 @@ call = { path = "../call", default-features = false, optional = true }
 channels = { path = "../channels", default-features = false, optional = true }
 chrono = { workspace = true }
 documents = { path = "../documents", default-features = false, optional = true }
+email = { path = "../email", default-features = false, optional = true }
 model_owner = { path = "../model_owner" }
 entity_access = { path = "../entity_access", default-features = false, features = [
   "ports",
