@@ -26,7 +26,24 @@ request:
 response:
   {
     "status": 200,
-    "content-type": "application/json",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "443"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
     "body": {
       "successful_ids": [
         "<msg:m1a>",

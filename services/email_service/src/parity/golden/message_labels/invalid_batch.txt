@@ -15,7 +15,24 @@ request:
 response:
   {
     "status": 400,
-    "content-type": "application/json",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "66"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
     "body": {
       "message": "Must include between 1 and 10 message IDs in request"
     }
@@ -72,7 +89,24 @@ request:
 response:
   {
     "status": 400,
-    "content-type": "application/json",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "66"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
     "body": {
       "message": "Must include between 1 and 10 message IDs in request"
     }
@@ -119,7 +153,23 @@ request:
 response:
   {
     "status": 400,
-    "content-type": "application/json",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "29"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
     "body": {
       "message": "label not found"
     }
@@ -177,7 +227,23 @@ request:
 response:
   {
     "status": 400,
-    "content-type": "application/json",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "29"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
     "body": {
       "message": "label not found"
     }

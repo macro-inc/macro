@@ -11,7 +11,24 @@ request:
 response:
   {
     "status": 400,
-    "content-type": "text/plain; charset=utf-8",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "75"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
     "body": "Failed to parse the request body as JSON: expected ident at line 1 column 2"
   }
 spans:
@@ -55,7 +72,24 @@ request:
 response:
   {
     "status": 422,
-    "content-type": "text/plain; charset=utf-8",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "148"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
     "body": "Failed to deserialize the JSON body into the target type: message_ids[0]: UUID parsing failed: invalid character: found `n` at 1 at line 1 column 28"
   }
 spans:

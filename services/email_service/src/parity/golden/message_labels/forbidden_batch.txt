@@ -17,7 +17,23 @@ request:
 response:
   {
     "status": 404,
-    "content-type": "application/json",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "31"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
     "body": {
       "message": "message not found"
     }

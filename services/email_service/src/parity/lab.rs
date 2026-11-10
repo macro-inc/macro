@@ -40,6 +40,9 @@ pub(super) enum RequestBody {
     },
 }
 
+/// Response headers whose values are generated per request.
+const VOLATILE_RESPONSE_HEADERS: [&str; 2] = ["x-request-id", "date"];
+
 pub(super) struct Lab {
     _guard: tokio::sync::OwnedMutexGuard<()>,
     app: Router,
@@ -346,10 +349,20 @@ impl Lab {
                     .await
                     .expect("router request");
                 let status = response.status().as_u16();
-                let content_type = response
-                    .headers()
-                    .get("content-type")
-                    .map(|v| v.to_str().expect("content type").to_owned());
+                // Every response header is behavior. Only values generated per
+                // request are masked, so their presence stays pinned.
+                let mut headers = std::collections::BTreeMap::<String, Vec<String>>::new();
+                for (name, value) in response.headers() {
+                    let value = if VOLATILE_RESPONSE_HEADERS.contains(&name.as_str()) {
+                        "<volatile>".to_owned()
+                    } else {
+                        String::from_utf8_lossy(value.as_bytes()).into_owned()
+                    };
+                    headers
+                        .entry(name.as_str().to_owned())
+                        .or_default()
+                        .push(value);
+                }
                 let bytes = response
                     .into_body()
                     .collect()
@@ -361,7 +374,7 @@ impl Lab {
                 // Wait for real tracked publish completion before closing the step.
                 let kafka = self.kafka.take().await;
                 self.sql_fault.drain().await;
-                (status, content_type, body, kafka)
+                (status, headers, body, kafka)
             }
             .instrument(span)
             .with_subscriber(capture::dispatch()),
@@ -402,7 +415,7 @@ impl Lab {
                 ),
                 (
                     "response",
-                    json!({"status":response.0,"content-type":response.1,"body":response.2}),
+                    json!({"status":response.0,"headers":response.1,"body":response.2}),
                 ),
                 ("spans", spans),
                 ("logs", logs),

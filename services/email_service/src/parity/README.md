@@ -4,7 +4,8 @@ The test-only lab builds `ApiContext` through production composition and drives
 `api::app` with Tower requests. Postgres and Redis are real; Gmail, SQS, service
 HTTP calls, and the real Kafka publisher's broker are in process.
 
-Each named step records the request and response, final INFO-and-above tracing span fields and
+Each named step records the request and response (status, every response
+header with only per-request values masked, body), final INFO-and-above tracing span fields and
 INFO/WARN/ERROR events, SQL statements and execution counts, provider HTTP, SQS,
 Kafka records, Redis changes, and changes in every public Postgres table. Database
 snapshots use a separate pool so fixture and inspection queries do not enter the
