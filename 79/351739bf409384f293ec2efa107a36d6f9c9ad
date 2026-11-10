@@ -1,0 +1,29 @@
+docs/guides/add-kafka-event.md
+  s_0a2fb23a435c2a::t_6f02ac845b509b 187-194
+crates/email/AGENTS.md
+  s_0a2fb23a435c2a::t_18f4bccb4a486c 59-64
+crates/webhook/README.md
+  s_0a2fb23a435c2a::t_18f4bccb4a486c 80-81,104-110,125-137,239-240
+  s_0a2fb23a435c2a::t_6d3d7760487d1b 123-124
+  s_0a2fb23a435c2a::t_8f663761378a40 119-122,198
+  s_0a2fb23a435c2a::t_a577a2b4bdf07a 199-201
+crates/webhook/AGENTS.md
+  s_0a2fb23a435c2a::t_8f663761378a40 38-40
+  s_0a2fb23a435c2a::t_18f4bccb4a486c 18,30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "79351739bf409384f293ec2efa107a36d6f9c9ad",
+  "prompts": {},
+  "sessions": {
+    "s_0a2fb23a435c2a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c748-9a4c-7901-b6f9-7bb14cf88baf",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

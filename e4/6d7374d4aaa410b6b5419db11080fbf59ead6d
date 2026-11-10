@@ -1,0 +1,50 @@
+crates/webhook/src/inbound/axum_router/test.rs
+  s_154e7eadce3a09::t_7fcf70cda2138c 502,517-545
+  s_154e7eadce3a09::t_78828840ab0721 492-501,503-516,546-548
+crates/webhook/README.md
+  s_f740b09ed3d982::t_3bf2a5d231b742 130-134
+crates/webhook/src/inbound/axum_router.rs
+  s_39a646e5be4b02::t_6c68d4a86f3824 13-15,317-318,320-328,333
+crates/webhook/src/inbound/email_event_access.rs
+  s_39a646e5be4b02::t_2771912e84547c 16-20,25,30-32,34
+docs/guides/add-kafka-event.md
+  s_f740b09ed3d982::t_a10e3d8041224e 210-211
+packages/sdk/AGENTS.md
+  s_f740b09ed3d982::t_3dea375968ac75 125-127
+packages/sdk/README.md
+  s_f740b09ed3d982::t_502b658b881b7b 821-823
+packages/sdk/src/entities/webhooks/namespace.ts
+  s_f740b09ed3d982::t_09b78e579a626a 24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e46d7374d4aaa410b6b5419db11080fbf59ead6d",
+  "prompts": {},
+  "sessions": {
+    "s_154e7eadce3a09": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad735192-5c05-45ca-a84d-09b5ccc7f8bc",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_39a646e5be4b02": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7c6-1dd5-7641-b674-872e3d8e1e15",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_f740b09ed3d982": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b45bf408-2e32-4e7a-8dc6-2a18e7900f11",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

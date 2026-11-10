@@ -1,0 +1,19 @@
+apps/web/src/features/channel/Call/CallContext.tsx
+  s_582d81b5822a74::t_42bec03853e3fe 209-211
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "b8a5219328a20d5928ae97fbfd867f77f6d748cb",
+  "prompts": {},
+  "sessions": {
+    "s_582d81b5822a74": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2967ee58-6dd5-40a8-867f-c2e038433d65",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

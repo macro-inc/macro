@@ -1,0 +1,23 @@
+docs/runbooks/ai-quota-enforcement.md
+  s_5df110e989a564::t_2df737a2e1d909 123-125,429
+  s_5df110e989a564::t_87d6556caf07d7 126-127
+  s_5df110e989a564::t_deed7d591744ca 128
+services/agent_harness_service/AGENTS.md
+  s_5df110e989a564::t_952da3ee1f6d0b 177-180
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "573c0d115285df52b10f10d5c2b166d2dc2267e2",
+  "prompts": {},
+  "sessions": {
+    "s_5df110e989a564": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c603-bc0a-7b50-881f-f2730d830afc",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+apps/web/src/features/channel/Call/chat/queries/use-guest-call-thread.ts
+  s_4ea1693858fae7::t_544d868ca849fa 23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e114d282a5aa302540105290578225b0d9e94bb8",
+  "prompts": {},
+  "sessions": {
+    "s_4ea1693858fae7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c74b-245f-72d0-9756-ef44eb99e5e6",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

@@ -1,0 +1,21 @@
+crates/webhook/src/inbound/kafka_consumer.rs
+  s_154e7eadce3a09::t_9f220a128692bd 27,36,233-259,262-263,266-272
+crates/webhook/README.md
+  s_154e7eadce3a09::t_66923004cca809 375-378
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "43585aa7b29893426893743dbb3b65bdf028cd3e",
+  "prompts": {},
+  "sessions": {
+    "s_154e7eadce3a09": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad735192-5c05-45ca-a84d-09b5ccc7f8bc",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

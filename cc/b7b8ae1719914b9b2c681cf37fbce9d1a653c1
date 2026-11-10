@@ -1,0 +1,51 @@
+crates/email/Cargo.toml
+  s_154e7eadce3a09::t_e2929189d5c2c1 50
+crates/email/src/domain/events/test.rs
+  s_9ccef66bd706ca::t_5d08264b47703d 233,454
+  s_154e7eadce3a09::t_e2929189d5c2c1 452-453,455-458
+crates/email/src/domain/events.rs
+  s_dd500f046a8f73::t_3205c0d596216b 54,67,85,97,109,128,143,158,193,214,247,264,286,305,325,345,365,385,405,430,452,465
+  s_154e7eadce3a09::t_e2929189d5c2c1 42,53,66,84,96,108,127,142,157,192,213,246,263,285,304,324,344,364,384,404,429,451,464,479,572-643
+  s_dd500f046a8f73::t_27a16caebf102f 518
+  s_83a5a60110c311::t_fccc12cd97e46a 644-645
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ccb7b8ae1719914b9b2c681cf37fbce9d1a653c1",
+  "prompts": {},
+  "sessions": {
+    "s_154e7eadce3a09": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad735192-5c05-45ca-a84d-09b5ccc7f8bc",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_83a5a60110c311": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f57d-7ef3-b5b3-8ee1b516494d",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_9ccef66bd706ca": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f127-75d1-9cc2-3033422e2a0e",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_dd500f046a8f73": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f121-7a41-946b-ae3938dc098d",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

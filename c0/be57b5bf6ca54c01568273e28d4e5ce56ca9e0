@@ -1,0 +1,21 @@
+apps/web/src/features/calendar-time-zone/core/mismatch-prompt.test.ts
+  s_35a301e5e3a373::t_c6c2811c74a576 1-98
+apps/web/src/features/calendar-time-zone/core/mismatch-prompt.ts
+  s_35a301e5e3a373::t_c6c2811c74a576 1-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c0be57b5bf6ca54c01568273e28d4e5ce56ca9e0",
+  "prompts": {},
+  "sessions": {
+    "s_35a301e5e3a373": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e183227b-cce8-40a3-9ed6-fc393433fbe0",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

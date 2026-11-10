@@ -1,0 +1,30 @@
+apps/web/src/features/channel/Call/chat/browser-test/call-chat.tsx
+  s_9ac4fec30709cb::t_324db5c521b93b 19-26,32,72-75,80-82
+  s_9ac4fec30709cb::t_28f110dfbba525 76-79
+apps/web/src/features/channel/Call/chat/browser-test/call-chat.browser.e2e.ts
+  s_9ac4fec30709cb::t_b57a4221ddc61b 3-7,10-25,31-34,36-37,39-46,51-61,63-70,73-76,86,89-90,97,103-106,110-113,121-122,126-129,136-154,166,169,171-172,175-177,182-184,186-189,191,193-194,222-225,230-238,246-250,255-266,270-273,278-284,325-329,333,337-338,355-356,373-374,382-383
+  s_9ac4fec30709cb::t_03b1f308b2768c 342-345
+  s_9ac4fec30709cb::t_a25f8c774f761f 77,168
+  s_9ac4fec30709cb::t_beb6794448239b 195-196,211-213,219-221
+  s_9ac4fec30709cb::t_0914951537e730 239-241
+  s_9ac4fec30709cb::t_28f110dfbba525 1,26-30,47-50,78-85,87-88,93-96,98-102,107-109,114-120,123-125,130-135,179-181,197-210,214-218,226-229,242-245,251-254,267-269,274-277,287-300,304-314,318-323,330-332,334-336,339-341,346-348,350-354,357-372,375-381
+  s_9ac4fec30709cb::t_5ed9d76a898ca9 155,157-163,349
+  s_9ac4fec30709cb::t_e2a1e762a9b114 285-286,301-303,315-317,324
+  s_9ac4fec30709cb::t_3da1aa55b1ccb8 62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "d29c9bec2637b0365d1bc2e0f9fbe9ef033fea5d",
+  "prompts": {},
+  "sessions": {
+    "s_9ac4fec30709cb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c74b-2493-7122-b62d-f3f9eb403e20",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

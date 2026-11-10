@@ -1,0 +1,27 @@
+tooling/xtask/crates/xtask_workflows/src/workflows/reusable_deploy_service.rs
+  s_84cf0ca6488a34::t_c631fa7e308eb7 197
+docs/development/infrastructure.md
+  s_84cf0ca6488a34::t_c631fa7e308eb7 202-204,206
+.github/workflows/reusable_deploy_service.yml
+  s_84cf0ca6488a34::t_c631fa7e308eb7 167
+tooling/xtask/crates/xtask_workflows/src/workflows/steps.rs
+  s_84cf0ca6488a34::t_c631fa7e308eb7 504-509,514
+.github/workflows/deploy-pulumi-stack.yml
+  s_84cf0ca6488a34::t_c631fa7e308eb7 51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "dcbb03975daf6444d83109f6b9581de72caad10c",
+  "prompts": {},
+  "sessions": {
+    "s_84cf0ca6488a34": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c2af1daa-2406-4e09-9c66-310cee2f1781",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

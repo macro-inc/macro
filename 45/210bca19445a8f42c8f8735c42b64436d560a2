@@ -1,0 +1,48 @@
+apps/web/src/features/channel/Call/chat/browser-test/call-chat.browser.e2e.ts
+  s_c6a08203850d89::t_3316ecec3e83f2 178
+  s_c6a08203850d89::t_a4ebbea2be8829 285-289,350-357,401-406
+  s_c6a08203850d89::t_bebb702140a6a4 41-43,104,143-144,348-349
+  s_c6a08203850d89::t_a1ed44eb58a41d 177
+apps/web/src/lib/queries/messages/meeting-sync.ts
+  s_c6a08203850d89::t_722c34c25702c2 1-13
+apps/web/src/features/channel/Call/chat/CallChat.tsx
+  s_c6a08203850d89::t_8255ee0297d0ed 213-215,217-219,223-272,307-310
+  s_c6a08203850d89::t_a4ebbea2be8829 14,84-93,273-306
+  s_c6a08203850d89::t_091ed482c0de4b 94
+  s_c6a08203850d89::t_11b08d594bf23e 210-212,216,220-222,311
+apps/web/src/features/channel/Call/chat/CallChat.test.tsx
+  s_c6a08203850d89::t_807f4f6838eddd 369-393
+docs/agent-guide/calls.md
+  s_c6a08203850d89::t_e2d40d0430839a 243-247
+apps/web/src/routes/shells.test.tsx
+  s_c6a08203850d89::t_e44ba40078bc09 6
+  s_c6a08203850d89::t_769e86845cec4b 9-13
+  s_c6a08203850d89::t_dfd3b81303a60c 1-5,7-8,14-48
+apps/web/src/routes/shells.tsx
+  s_c6a08203850d89::t_091ed482c0de4b 93,96-98,106,108
+  s_c6a08203850d89::t_a5b9849ca459ac 11,107
+  s_c6a08203850d89::t_722c34c25702c2 14
+  s_c6a08203850d89::t_c291ddfca9fc74 109-110
+apps/web/src/lib/core/messages/message-transport.tsx
+  s_c6a08203850d89::t_a4ebbea2be8829 69-70
+  s_c6a08203850d89::t_11dd3f63153173 68,71-84
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/ReplyTarget.tsx
+  s_c6a08203850d89::t_a4ebbea2be8829 12-15
+  s_c6a08203850d89::t_11dd3f63153173 32-33,39,44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "45210bca19445a8f42c8f8735c42b64436d560a2",
+  "prompts": {},
+  "sessions": {
+    "s_c6a08203850d89": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c7a5-d9c5-77b1-aad4-cec754104614",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

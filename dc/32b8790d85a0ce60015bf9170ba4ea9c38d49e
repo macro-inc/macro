@@ -1,0 +1,73 @@
+crates/webhook/src/inbound/stream_router.rs
+  s_d0a6a6a0e0b1d9::t_831326be3a9d76 10-12,15,126,163-165,170-174,183-193,197
+  s_d0a6a6a0e0b1d9::t_51cc9d99c39a4f 95,160-162,169,175,181-182,194-196
+crates/webhook/src/inbound/stream_router/test.rs
+  s_d0a6a6a0e0b1d9::t_c278829cfd4f87 1-12,14-36,41-94,103-129,131-151,153-156,162-177,182
+  s_d0a6a6a0e0b1d9::t_e0a422011a4027 13,95-102,130,161
+  s_d0a6a6a0e0b1d9::t_e43c7ac762bff1 157-160
+  s_154e7eadce3a09::t_acab351524058f 37-40,152,178-181
+crates/webhook/src/inbound/axum_router/test.rs
+  s_14aa6c873bac26::t_47a9717885829b 386-389,399-402,493-496
+  s_14aa6c873bac26::t_ad78ce2b81d35b 352-385,390-398,403-404,458-492,497,734-758
+  s_154e7eadce3a09::t_1f71960c87cf6b 498,759
+crates/webhook/src/inbound/axum_router.rs
+  s_14aa6c873bac26::t_b8c5bdaf20c85d 315-318
+  s_14aa6c873bac26::t_326f73dc79c4f2 387-389,396,402,408-409,424-426
+  s_14aa6c873bac26::t_f5e15260340e03 13,237,390-392,397-401,410-423,427
+crates/webhook/src/inbound/email_event_access/test.rs
+  s_705b53202fde57::t_80ed6367c4d2f0 1-39,41-91,99,101-106,111-112
+  s_705b53202fde57::t_3f6a7080a409f1 92-98,100,107-110
+  s_154e7eadce3a09::t_acab351524058f 40
+crates/webhook/src/inbound/email_event_access.rs
+  s_705b53202fde57::t_80ed6367c4d2f0 1-32
+crates/webhook/src/inbound/mod.rs
+  s_dd500f046a8f73::t_b51b07fe5af76a 6-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "dc32b8790d85a0ce60015bf9170ba4ea9c38d49e",
+  "prompts": {},
+  "sessions": {
+    "s_14aa6c873bac26": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f148-7e51-bf4c-ae4e620033bc",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_154e7eadce3a09": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad735192-5c05-45ca-a84d-09b5ccc7f8bc",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_705b53202fde57": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-efca-7d42-98c2-4e52be9ec8cb",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_d0a6a6a0e0b1d9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f02a-7631-b229-2c19c5997c6f",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_dd500f046a8f73": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f121-7a41-946b-ae3938dc098d",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

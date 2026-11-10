@@ -1,0 +1,21 @@
+packages/sdk/src/entities/webhooks/namespace.ts
+  s_154e7eadce3a09::t_a5a22d78b6156e 22-24
+packages/sdk/src/entities/webhooks/webhook.ts
+  s_154e7eadce3a09::t_2f6dd058433f86 154-157
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "843c2ab6e43bc9602617ab066ebf9f9f67852255",
+  "prompts": {},
+  "sessions": {
+    "s_154e7eadce3a09": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad735192-5c05-45ca-a84d-09b5ccc7f8bc",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

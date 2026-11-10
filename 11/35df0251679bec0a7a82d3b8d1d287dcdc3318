@@ -1,0 +1,29 @@
+infra/stacks/monitoring/AGENTS.md
+  s_977a3c5a93eb37::t_b8e8459c290d4f 78-80
+infra/stacks/monitoring/README.md
+  s_977a3c5a93eb37::t_b8e8459c290d4f 119,121,225-228,230-247,249-253
+  s_977a3c5a93eb37::t_cac2c22466f40c 229,248
+  s_977a3c5a93eb37::t_5398c4702c145d 254
+infra/stacks/monitoring/index.ts
+  s_977a3c5a93eb37::t_b8e8459c290d4f 26
+infra/stacks/monitoring/monitors/oauth.ts
+  s_977a3c5a93eb37::t_cfea75ee34744c 13
+  s_977a3c5a93eb37::t_b8e8459c290d4f 1-12,14-23,25-68
+  s_977a3c5a93eb37::t_cac2c22466f40c 24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "1135df0251679bec0a7a82d3b8d1d287dcdc3318",
+  "prompts": {},
+  "sessions": {
+    "s_977a3c5a93eb37": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c606-7308-7b61-8401-e2c20a6b8bfd",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

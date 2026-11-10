@@ -1,0 +1,97 @@
+packages/sdk/README.md
+  s_5af21bd1ca4d71::t_ab1d6bbc309f59 843
+  s_5af21bd1ca4d71::t_533888fae34c15 783-784,787,844-845
+  s_5af21bd1ca4d71::t_5912cebada34de 788,820-824,836-842,846-848
+  s_5af21bd1ca4d71::t_49c640d856ade5 789-790
+  s_154e7eadce3a09::t_73c06ca83cde1a 786,809-819,829-835
+  s_60bbe192a6a060::t_09267a6cdfc28b 785,825-828,849
+packages/sdk/src/events/hydrate/email.ts
+  s_154e7eadce3a09::t_73c06ca83cde1a 1-156
+packages/sdk/tests/events.test.ts
+  s_154e7eadce3a09::t_1d6304ee961642 117,140
+  s_154e7eadce3a09::t_38b1e13cbc4047 3,115-116,118-139,141-151
+  s_60bbe192a6a060::t_1bd46f0491e6b3 152
+packages/sdk/src/events/types.ts
+  s_451ea6888d1d14::t_bd8a84a0054d55 1-3,13,16,41
+  s_154e7eadce3a09::t_73c06ca83cde1a 10,37
+  s_451ea6888d1d14::t_0ba0638625bd4f 19
+packages/sdk/tests/email-events.test.ts
+  s_a5d4ddd8d163f9::t_88f7928518539d 407
+  s_154e7eadce3a09::t_73c06ca83cde1a 1-147,151,234-236,241,249,327,332-336,354-406,408-431
+  s_a5d4ddd8d163f9::t_be3b8b311b35ee 148-150,152-233,237-240,242-248,250-326,328-331,337-353
+packages/sdk/AGENTS.md
+  s_67305222b5dcde::t_7978851633ddfd 125-126
+  s_67305222b5dcde::t_24d27a8ccbd94d 121-124
+packages/sdk/src/events/receiver.ts
+  s_154e7eadce3a09::t_73c06ca83cde1a 12,48-49,74-76
+  s_154e7eadce3a09::t_821c424918ff1b 225
+  s_154e7eadce3a09::t_1d6304ee961642 189-192
+  s_1a742f35092608::t_78b0e0de86ecce 42-43
+  s_154e7eadce3a09::t_54460b06796bc2 6,28-35,154-156,180-188,193-217,244
+  s_1a742f35092608::t_23aa1e97725b24 150-151
+  s_60bbe192a6a060::t_6f208f90481936 218,245
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4ad6624daa9bdbe4555ceaa2dece265558c426b1",
+  "prompts": {},
+  "sessions": {
+    "s_154e7eadce3a09": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad735192-5c05-45ca-a84d-09b5ccc7f8bc",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_1a742f35092608": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f385-77a3-903b-1f5cd1772666",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_451ea6888d1d14": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f3a0-7581-815c-52c2eb8ae869",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_5af21bd1ca4d71": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f4f1-7213-850a-c9f34eb05853",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_60bbe192a6a060": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "46f7c65c-e6e3-42b5-a7ea-a9973c9087d3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_67305222b5dcde": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f418-7f12-b3e1-cab6f555c315",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_a5d4ddd8d163f9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c759-f3ce-72c2-a020-e3f203db86fc",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

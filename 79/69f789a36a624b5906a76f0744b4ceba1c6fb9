@@ -1,0 +1,48 @@
+services/agent_harness_service/src/main.rs
+  s_600911a2eef04c::t_83005be9a55134 511
+  s_600911a2eef04c::t_33340f6bd84101 722-725
+services/agent_harness_service/src/scheduling/config.rs
+  s_600911a2eef04c::t_83005be9a55134 11-12,21,37-38,86,88-91,94
+services/agent_harness_service/src/scheduling/config/test.rs
+  s_600911a2eef04c::t_83005be9a55134 16,24,87,90,104,119-155
+  s_600911a2eef04c::t_9608b28512aac8 3-15,17,156-158
+infra/stacks/monitoring/README.md
+  s_600911a2eef04c::t_067571ff23c144 118,120
+  s_600911a2eef04c::t_b0697e2efb5a4c 224-253
+docs/runbooks/ai-quota-enforcement.md
+  s_600911a2eef04c::t_83005be9a55134 126-131,426-430
+  s_600911a2eef04c::t_e6974b9b3cacf7 123-125
+services/agent_harness_service/AGENTS.md
+  s_600911a2eef04c::t_83005be9a55134 168-170
+  s_600911a2eef04c::t_65c7194431004c 171-172
+services/agent_harness_service/src/config.rs
+  s_600911a2eef04c::t_83005be9a55134 50-52,134-135,315,319,323,326-330,334,337-342
+  s_600911a2eef04c::t_4b493d7ab94abf 16-18
+infra/stacks/monitoring/monitors/oauth.ts
+  s_600911a2eef04c::t_7065d42026c59e 1-67
+services/agent_harness_service/src/config/test.rs
+  s_600911a2eef04c::t_83005be9a55134 18-19,21-91
+  s_600911a2eef04c::t_0557cb083ffdd7 1-17,20
+infra/stacks/monitoring/AGENTS.md
+  s_600911a2eef04c::t_e136f6bdd509cd 74-76
+infra/stacks/monitoring/index.ts
+  s_600911a2eef04c::t_eaa9f75bf2b245 26
+services/agent_harness_service/src/cognition/config.rs
+  s_600911a2eef04c::t_58e5a5b9bde2af 119-120,230-231
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7969f789a36a624b5906a76f0744b4ceba1c6fb9",
+  "prompts": {},
+  "sessions": {
+    "s_600911a2eef04c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c686-131e-7fe0-8516-c2380fc507c3",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

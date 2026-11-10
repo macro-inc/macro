@@ -1,0 +1,19 @@
+.mcp.json
+  s_4d84da24e1b583::t_dc5136a8d5d4ad 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "35c606f4c3896deb0c53ccf9321fa4c7b3c7a920",
+  "prompts": {},
+  "sessions": {
+    "s_4d84da24e1b583": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a41f3299-eb3f-48c5-a6c0-01da92974e39",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

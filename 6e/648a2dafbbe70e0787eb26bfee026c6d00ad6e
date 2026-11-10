@@ -1,0 +1,49 @@
+docs/agent-guide/ai-chat.md
+  s_6cb2023c1aec79::t_de058edb245c66 3-25
+apps/web/src/features/agent-session-activity/browser-test/mock-ui.tsx
+  s_6cb2023c1aec79::t_de058edb245c66 1-49
+apps/web/src/features/agent-session-activity/views/agent-activity-section.test.tsx
+  s_6cb2023c1aec79::t_de058edb245c66 1-197
+apps/web/src/features/agent-session-activity/core/fold-rows.test.ts
+  s_6cb2023c1aec79::t_de058edb245c66 1-62
+apps/web/src/features/agent-session-activity/browser-test/activity.browser.e2e.ts
+  s_6cb2023c1aec79::t_de058edb245c66 1-29
+apps/web/src/features/agent-session-activity/primitives/create-panel-state.ts
+  s_6cb2023c1aec79::t_de058edb245c66 1-91
+apps/web/src/features/agent-session-activity/context/agent-activity-source.ts
+  s_6cb2023c1aec79::t_de058edb245c66 3,20-29
+apps/web/src/features/agent-session-activity/browser-test/vite.config.ts
+  s_6cb2023c1aec79::t_de058edb245c66 1-44
+apps/web/src/features/agent-session-activity/browser-test/main.tsx
+  s_6cb2023c1aec79::t_de058edb245c66 1-76
+apps/web/src/lib/i18n/locales/en/agent-work.ts
+  s_6cb2023c1aec79::t_de058edb245c66 8-14
+apps/web/src/features/agent-session-activity/core/fold-rows.ts
+  s_6cb2023c1aec79::t_de058edb245c66 1-47
+apps/web/src/features/block-agent/component/sidepanel/AgentSidePanelSections.tsx
+  s_6cb2023c1aec79::t_de058edb245c66 13-15,17,22,48,59-61,195-200
+apps/web/src/features/agent-session-activity/views/agent-activity-section.tsx
+  s_6cb2023c1aec79::t_de058edb245c66 1-321
+apps/web/src/features/agent-session-activity/browser-test/playwright.config.ts
+  s_6cb2023c1aec79::t_de058edb245c66 1-32
+apps/web/src/features/agent-session-activity/browser-test/mock-i18n.ts
+  s_6cb2023c1aec79::t_de058edb245c66 1-10
+apps/web/src/features/agent-session-activity/browser-test/index.html
+  s_6cb2023c1aec79::t_de058edb245c66 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6e648a2dafbbe70e0787eb26bfee026c6d00ad6e",
+  "prompts": {},
+  "sessions": {
+    "s_6cb2023c1aec79": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0f0daae7-0e99-45c9-a870-201fecb8aeea",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

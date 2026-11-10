@@ -1,0 +1,19 @@
+apps/web/tauri/desktop-cef/src/main.rs
+  s_d3e546ad997718::t_bca206633dc4fc 27-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "851c498e2e317ab3742d4cef8b3ff98d0285ba8d",
+  "prompts": {},
+  "sessions": {
+    "s_d3e546ad997718": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8bb94316-a058-40e2-94e6-b7237cbcb5b5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

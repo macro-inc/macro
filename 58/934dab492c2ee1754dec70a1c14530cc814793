@@ -1,0 +1,25 @@
+apps/web/tauri/src-tauri/src/desktop/main_window.rs
+  s_d3e546ad997718::t_c815c7660075f1 1-97
+apps/web/tauri/src-tauri/src/lib.rs
+  s_d3e546ad997718::t_02d53d9b16e457 141-142,156-157,252,254,469-476
+apps/web/tauri/desktop-cef/src/main.rs
+  s_d3e546ad997718::t_02d53d9b16e457 27-28
+apps/web/tauri/src-tauri/src/desktop.rs
+  s_d3e546ad997718::t_02d53d9b16e457 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "58934dab492c2ee1754dec70a1c14530cc814793",
+  "prompts": {},
+  "sessions": {
+    "s_d3e546ad997718": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8bb94316-a058-40e2-94e6-b7237cbcb5b5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

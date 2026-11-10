@@ -1,0 +1,64 @@
+apps/web/src/features/meetings/views/meeting-discussion-host.tsx
+  s_13369452a23214::t_55bc686f1c6817 7-8
+docs/agent-guide/calls.md
+  s_13369452a23214::t_bc1b1b04144462 234-239
+docs/design/call-chat-in-channel.md
+  s_13369452a23214::t_bc1b1b04144462 243-248,316-317
+apps/web/src/features/channel/Call/CallOverlay.tsx
+  s_13369452a23214::t_74e5a9da47f14b 333,816-827
+apps/web/src/features/channel/Call/tests/call-overlay-muted.test.tsx
+  s_13369452a23214::t_f822f940cb0e38 336-340
+  s_13369452a23214::t_e36461e453f448 352-362
+  s_13369452a23214::t_f2903c3821a230 101-107,109,112,383
+  s_13369452a23214::t_c19eab5fe88d45 382,384
+apps/web/src/features/channel/Call/ChannelCallTab.tsx
+  s_13369452a23214::t_2ecfa390657a99 189
+apps/web/src/features/channel/Call/discussion/CallDiscussionContent.test.tsx
+  s_13369452a23214::t_7f2340d1a67424 20-25,38,50-59,61-73
+  s_13369452a23214::t_f822f940cb0e38 60
+  s_13369452a23214::t_c1294e410263d2 7-10
+  s_f385c1167dfa50::t_1b240f4207a174 74-75
+apps/web/src/features/channel/Call/discussion/CallDiscussionContent.tsx
+  s_13369452a23214::t_87386d34b72d29 61-62,69-71,75-81
+  s_13369452a23214::t_f8d9a28d01394d 24-30,32,38,43-44,60,74,82
+apps/web/AGENTS.md
+  s_13369452a23214::t_bc1b1b04144462 285-286,290-292
+apps/web/src/features/meetings/new-meeting-route.tsx
+  s_13369452a23214::t_55bc686f1c6817 4-5,70,182-194
+apps/web/src/features/channel/Call/tests/call-exit-navigation.test.tsx
+  s_13369452a23214::t_2c29bc50378530 9,29-30,38-39,45-48,57-62,86
+  s_13369452a23214::t_cb651c4db2e90e 31-37,40-44
+apps/web/src/features/meetings/meeting-route.test.tsx
+  s_13369452a23214::t_f097041bd19b0c 1-65,69-149
+  s_13369452a23214::t_cb651c4db2e90e 66-68
+apps/web/src/features/meetings/meeting-route.tsx
+  s_13369452a23214::t_23a202af4013b2 4-7,99-104,187
+  s_13369452a23214::t_8dbf93ebe9bc62 8-11,92,95
+  s_13369452a23214::t_2ecfa390657a99 93-94,96-98
+  s_13369452a23214::t_ec9786a950af9e 176,203
+  s_13369452a23214::t_f5aa20490e6505 177-186,188-195,197-202
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e4e31642ad28092498573427feb711eb9dc5bd20",
+  "prompts": {},
+  "sessions": {
+    "s_13369452a23214": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c74b-246c-7813-9b7d-c81e3f3b0481",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_f385c1167dfa50": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c74b-242d-7891-a934-0dbc0677f3cf",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

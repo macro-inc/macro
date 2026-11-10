@@ -1,0 +1,23 @@
+apps/web/src/lib/core/component/LexicalMarkdown/plugins/draggable-block/draggableBlockPlugin.test.ts
+  s_1902b361419a4c::t_ca159d49f4c8e7 1-29,33-73,75-82
+  s_1902b361419a4c::t_3c57d2af8642da 74
+  s_1902b361419a4c::t_6a327610160d6d 30-32
+apps/web/src/lib/core/component/LexicalMarkdown/plugins/draggable-block/draggableBlockPlugin.ts
+  s_1902b361419a4c::t_39c3cc8239db73 283-289
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "9b857b619cd1c8e7b958c0a89fd92b4fa2dd3293",
+  "prompts": {},
+  "sessions": {
+    "s_1902b361419a4c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd0ee36b-6489-4af6-9dd8-0ff56019ed16",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
