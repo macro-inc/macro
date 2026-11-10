@@ -29,6 +29,7 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 
 - Never import the recorder from shipped packages.
 - Keep composer and HTML route oracles in corpus/; compare actual source bytes and check generated mirrors/entities for drift.
+- Patch npm oracles only in private copyfile installs or after breaking hardlinks; bind lock-SRI pristine bytes, explicit profile changes and fresh optimized caches to every run.
 - Retain S1 D-11 error-mode caret validation in the production differential oracle.
 - Keep recorder source patches in `record/hooks.patch`; differential-only patches and observation hooks use a separate disposable source tree.
 - A failed upstream test, transparency check or self-replay cannot become A-rec.
