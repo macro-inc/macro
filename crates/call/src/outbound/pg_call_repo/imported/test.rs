@@ -269,3 +269,29 @@ async fn an_attendee_with_an_account_is_a_participant_not_a_guest(
     );
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("import_users"))
+)]
+async fn a_source_this_build_does_not_know_still_lists_the_call(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let call_id = PgImportedCallRepository::new(pool.clone())
+        .upsert(granola_meeting("import-a"))
+        .await?;
+    // Another service may import from a provider this build predates.
+    sqlx::query!(
+        "UPDATE call_entity_sources SET provider = 'future' WHERE call_id = $1",
+        call_id
+    )
+    .execute(&pool)
+    .await?;
+
+    let listed = PgCallRepo::new(pool)
+        .get_call_records_by_user(user("import-a").copied(), 10, &None, LATEST_FIRST)
+        .await?;
+    assert_eq!(listed.len(), 1);
+    assert!(listed[0].source.is_none());
+    Ok(())
+}

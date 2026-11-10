@@ -103,10 +103,12 @@ pub(super) async fn imported_sources(
     .fetch_all(conn)
     .await?
     {
-        let provider = row
-            .provider
-            .parse::<CallProvider>()
-            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+        // A provider a newer build imports from shows no badge here, rather
+        // than failing the whole list.
+        let Ok(provider) = row.provider.parse::<CallProvider>() else {
+            tracing::warn!(call_id = %row.call_id, provider = %row.provider, "unknown call provider");
+            continue;
+        };
         sources.insert(
             row.call_id,
             CallRecordSource {
