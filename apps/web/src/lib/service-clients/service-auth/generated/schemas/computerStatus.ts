@@ -18,6 +18,12 @@ import type { ComputerStatusSetupCompletedAt } from './computerStatusSetupComple
  * A computer as its team sees it.
  */
 export interface ComputerStatus {
+  /**
+   * Agents bound to the computer's live harness, teammates' private ones
+included: the ones releasing it deletes.
+   * @minimum 0
+   */
+  agentCount: number;
   /** When billing stops, for a computer canceled at period end. */
   cancelsAt?: ComputerStatusCancelsAt;
   /** Versioned catalog entry saved at purchase. */

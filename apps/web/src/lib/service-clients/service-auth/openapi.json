@@ -7478,9 +7478,16 @@
           "catalogEntry",
           "status",
           "poweredOn",
-          "createdAt"
+          "createdAt",
+          "agentCount"
         ],
         "properties": {
+          "agentCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Agents bound to the computer's live harness, teammates' private ones\nincluded: the ones releasing it deletes.",
+            "minimum": 0
+          },
           "cancelsAt": {
             "type": ["string", "null"],
             "format": "date-time",

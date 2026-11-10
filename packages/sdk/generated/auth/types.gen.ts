@@ -291,6 +291,11 @@ export type ComputerSize = 'standard' | 'large' | 'xl';
  */
 export type ComputerStatus = {
     /**
+     * Agents bound to the computer's live harness, teammates' private ones
+     * included: the ones releasing it deletes.
+     */
+    agentCount: number;
+    /**
      * When billing stops, for a computer canceled at period end.
      */
     cancelsAt?: string | null;
