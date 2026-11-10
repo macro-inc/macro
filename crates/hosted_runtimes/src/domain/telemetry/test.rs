@@ -194,3 +194,102 @@ fn traceparents_are_validated_without_a_propagator() {
     assert!(!is_valid_traceparent("00-xyz-2222222222222222-01"));
     assert!(!is_valid_traceparent("traceparent"));
 }
+
+#[test]
+fn capacity_gauges_each_host_and_the_fleet_sum() {
+    use opentelemetry::metrics::MeterProvider as _;
+    use opentelemetry_sdk::metrics::data::{AggregatedMetrics, MetricData};
+    use opentelemetry_sdk::metrics::{InMemoryMetricExporter, PeriodicReader, SdkMeterProvider};
+
+    let exporter = InMemoryMetricExporter::default();
+    let provider = SdkMeterProvider::builder()
+        .with_reader(PeriodicReader::builder(exporter.clone()).build())
+        .build();
+    let host = |n: u128, name: &str, awake: u32, sold: u32| crate::domain::models::Host {
+        id: crate::domain::lifecycle::HostId::new(uuid::Uuid::from_u128(n)),
+        name: name.to_owned(),
+        awake_capacity_units: awake,
+        sold_capacity_units: sold,
+    };
+    capacity(
+        &provider.meter("test"),
+        &[
+            HostAllocation {
+                host: host(1, "box-1", 3, 9),
+                sold_units: 8,
+                awake_units: 2,
+                vcpus: 32,
+                memory_gib: 64,
+                disk_gib: 800,
+            },
+            HostAllocation {
+                host: host(2, "box-2", 3, 9),
+                sold_units: 1,
+                awake_units: 0,
+                vcpus: 4,
+                memory_gib: 8,
+                disk_gib: 100,
+            },
+        ],
+    );
+    provider.force_flush().unwrap();
+
+    let mut points = Vec::new();
+    for resource in exporter.get_finished_metrics().unwrap() {
+        for scope in resource.scope_metrics() {
+            for metric in scope.metrics() {
+                let AggregatedMetrics::U64(MetricData::Gauge(gauge)) = metric.data() else {
+                    panic!("{} is not a u64 gauge", metric.name());
+                };
+                for point in gauge.data_points() {
+                    let mut attributes: Vec<String> = point
+                        .attributes()
+                        .map(|kv| format!("{}={}", kv.key, kv.value))
+                        .collect();
+                    attributes.sort();
+                    points.push(format!(
+                        "{} {} {}",
+                        metric.name(),
+                        attributes.join(","),
+                        point.value()
+                    ));
+                }
+            }
+        }
+    }
+    points.sort();
+
+    let fleet: Vec<&str> = points
+        .iter()
+        .map(String::as_str)
+        .filter(|point| point.contains("scope=fleet"))
+        .collect();
+    assert_eq!(
+        fleet,
+        vec![
+            "computer.capacity.allocated resource=awake_units,scope=fleet 2",
+            "computer.capacity.allocated resource=disk_gib,scope=fleet 900",
+            "computer.capacity.allocated resource=memory_gib,scope=fleet 72",
+            "computer.capacity.allocated resource=sold_units,scope=fleet 9",
+            "computer.capacity.allocated resource=vcpus,scope=fleet 36",
+            "computer.capacity.total resource=awake_units,scope=fleet 6",
+            "computer.capacity.total resource=sold_units,scope=fleet 18",
+        ]
+    );
+    assert!(points.contains(
+        &"computer.capacity.allocated host=box-1,host_id=00000000-0000-0000-0000-000000000001,resource=sold_units,scope=host 8"
+            .to_owned()
+    ));
+    assert!(points.contains(
+        &"computer.capacity.total host=box-2,host_id=00000000-0000-0000-0000-000000000002,resource=sold_units,scope=host 9"
+            .to_owned()
+    ));
+    // Hosts record no disk capacity, so disk has an allocation and no total.
+    assert!(
+        !points
+            .iter()
+            .any(|point| point.starts_with("computer.capacity.total")
+                && point.contains("resource=disk_gib"))
+    );
+    assert_eq!(points.len(), 21);
+}

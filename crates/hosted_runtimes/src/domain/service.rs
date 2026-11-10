@@ -40,9 +40,9 @@ pub enum ComputerError {
     /// Only failed computers may be retried.
     #[error("only a failed computer can be retried")]
     NotFailed,
-    /// No host has enough sale capacity.
-    #[error("this size is sold out")]
-    SoldOut,
+    /// No host has enough sale capacity for this size.
+    #[error("No capacity for {} right now", .0.label())]
+    SoldOut(ComputerSize),
     /// Request violates a computer input contract.
     #[error("{0}")]
     BadRequest(String),
@@ -363,7 +363,7 @@ impl<
             .await;
         match reserved {
             Ok(_) => {}
-            Err(ReserveError::SoldOut) => return Err(ComputerError::SoldOut),
+            Err(ReserveError::SoldOut) => return Err(ComputerError::SoldOut(request.size)),
             Err(ReserveError::Storage(error)) => return Err(internal(error)),
         }
 

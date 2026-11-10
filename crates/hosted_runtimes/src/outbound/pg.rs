@@ -12,7 +12,7 @@ use crate::domain::lifecycle::{
     ComputerState, Context, Effect, EffectWorker, Event, HostId, Phase, TimerKind, transition,
 };
 use crate::domain::models::{
-    Computer, ComputerRecord, Host, HostRegistration, NewComputer, SanitizedReason,
+    Computer, ComputerRecord, Host, HostAllocation, HostRegistration, NewComputer, SanitizedReason,
 };
 use crate::domain::ports::{ComputerRepo, DueTimer, PendingEffect, ReserveError};
 use crate::domain::size::{ComputerResources, ComputerSize};
@@ -969,6 +969,49 @@ impl ComputerRepo for PgComputerRepo {
         .execute(&self.pool)
         .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn allocation(&self) -> Result<Vec<HostAllocation>, PgComputerError> {
+        // The same sold and awake unit sums `reserve` and `host_has_room` check.
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                host.id,
+                host.name,
+                host.awake_capacity_units,
+                host.sold_capacity_units,
+                COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)) FILTER (WHERE computer.holds_units), 0)::BIGINT AS "sold_units!",
+                COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)) FILTER (WHERE computer.awake), 0)::BIGINT AS "awake_units!",
+                COALESCE(SUM(computer.vcpus) FILTER (WHERE computer.holds_units), 0)::BIGINT AS "vcpus!",
+                COALESCE(SUM(computer.memory_gib) FILTER (WHERE computer.holds_units), 0)::BIGINT AS "memory_gib!",
+                COALESCE(SUM(computer.disk_gib) FILTER (WHERE computer.holds_units), 0)::BIGINT AS "disk_gib!"
+            FROM hosted_runtime_host host
+            LEFT JOIN hosted_runtime computer ON computer.host_id = host.id
+            GROUP BY host.id
+            ORDER BY host.id
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                Ok(HostAllocation {
+                    host: Host {
+                        id: HostId::new(row.id),
+                        name: row.name,
+                        awake_capacity_units: u32::try_from(row.awake_capacity_units)?,
+                        sold_capacity_units: u32::try_from(row.sold_capacity_units)?,
+                    },
+                    sold_units: u32::try_from(row.sold_units)?,
+                    awake_units: u32::try_from(row.awake_units)?,
+                    vcpus: u32::try_from(row.vcpus)?,
+                    memory_gib: u32::try_from(row.memory_gib)?,
+                    disk_gib: u32::try_from(row.disk_gib)?,
+                })
+            })
+            .collect()
     }
 
     async fn sold_out_sizes(

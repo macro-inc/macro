@@ -1,0 +1,68 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                host.id,\n                host.name,\n                host.awake_capacity_units,\n                host.sold_capacity_units,\n                COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)) FILTER (WHERE computer.holds_units), 0)::BIGINT AS \"sold_units!\",\n                COALESCE(SUM(GREATEST((computer.memory_gib::BIGINT + 7) / 8, (computer.vcpus::BIGINT + 3) / 4)) FILTER (WHERE computer.awake), 0)::BIGINT AS \"awake_units!\",\n                COALESCE(SUM(computer.vcpus) FILTER (WHERE computer.holds_units), 0)::BIGINT AS \"vcpus!\",\n                COALESCE(SUM(computer.memory_gib) FILTER (WHERE computer.holds_units), 0)::BIGINT AS \"memory_gib!\",\n                COALESCE(SUM(computer.disk_gib) FILTER (WHERE computer.holds_units), 0)::BIGINT AS \"disk_gib!\"\n            FROM hosted_runtime_host host\n            LEFT JOIN hosted_runtime computer ON computer.host_id = host.id\n            GROUP BY host.id\n            ORDER BY host.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "awake_capacity_units",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "sold_capacity_units",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "sold_units!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "awake_units!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "vcpus!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "memory_gib!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "disk_gib!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "ab600e6aa553b31ca91a9004511bbf7b89039fccd4d98ae2d33767d4f9a8a0c4"
+}

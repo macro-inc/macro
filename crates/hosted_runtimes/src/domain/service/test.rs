@@ -295,7 +295,10 @@ async fn sold_out_size_is_not_billed() {
         })
         .await;
 
-    assert!(matches!(result, Err(ComputerError::SoldOut)));
+    assert!(matches!(
+        result,
+        Err(ComputerError::SoldOut(ComputerSize::Xl))
+    ));
     assert!(service.billing.updates.lock().unwrap().is_empty());
 }
 

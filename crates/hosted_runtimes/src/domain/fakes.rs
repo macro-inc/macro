@@ -16,8 +16,8 @@ use crate::domain::lifecycle::{
     ComputerState, Context, Effect, EffectWorker, Event, HostId, Phase, transition,
 };
 use crate::domain::models::{
-    Computer, ComputerDisplayMetadata, ComputerRecord, Host, HostRegistration, NewComputer,
-    SanitizedReason,
+    Computer, ComputerDisplayMetadata, ComputerRecord, Host, HostAllocation, HostRegistration,
+    NewComputer, SanitizedReason,
 };
 use crate::domain::ports::{ComputerRepo, DueTimer, PendingEffect, ReserveError};
 use crate::domain::service::Clock;
@@ -480,6 +480,32 @@ impl ComputerRepo for FakeRepo {
         self.calls.fetch_add(1, Ordering::SeqCst);
         self.heartbeats.lock().unwrap().push((host, now));
         Ok(())
+    }
+
+    async fn allocation(&self) -> Result<Vec<HostAllocation>, FakeError> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let computers = self.computers.lock().unwrap();
+        let held: Vec<&Computer> = computers
+            .values()
+            .filter(|c| c.state.holds_units())
+            .collect();
+        Ok(vec![HostAllocation {
+            host: Host {
+                id: HOST,
+                name: "fake".to_owned(),
+                awake_capacity_units: self.sold_units,
+                sold_capacity_units: self.sold_units,
+            },
+            sold_units: held.iter().map(|c| c.resources.units()).sum(),
+            awake_units: held
+                .iter()
+                .filter(|c| c.state.is_awake())
+                .map(|c| c.resources.units())
+                .sum(),
+            vcpus: held.iter().map(|c| c.resources.vcpus.get()).sum(),
+            memory_gib: held.iter().map(|c| c.resources.memory_gib.get()).sum(),
+            disk_gib: held.iter().map(|c| c.resources.disk_gib.get()).sum(),
+        }])
     }
 
     async fn sold_out_sizes(

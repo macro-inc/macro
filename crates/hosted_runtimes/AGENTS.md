@@ -136,7 +136,11 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   invalid timestamps prohibit orphan deletion. Never adopt unlabelled instances.
 - **Capacity**: Every purchase holds oversold units until payment refusal or
   destruction, reserved under the host lock. `GET /team/computers/offers`
-  reports `soldOut` per size.
+  reports `soldOut` per size. A purchase no host can fit returns
+  `ComputerError::SoldOut(size)` (409, "No capacity for <size> right now")
+  before billing. `ComputerRepo::allocation` reads each host's held units,
+  vCPUs, memory and disk with the same sums as `reserve`; reconcile gauges it
+  as `computer.capacity.*` for `infra/stacks/monitoring/monitors/computers.ts`.
 - **Purchase**: `ComputerService::purchase(PurchaseRequest { team_id, created_by, size, name, extra_items, billing })`
   → `computer_id`. A Stripe purchase adds the computer's item plus
   every `extra_items` entry in one subscription update (`SubscriptionItem { price_id: stripe::PriceId, quantity }`, quantity
@@ -351,3 +355,8 @@ One computer's first setup is one trace, rooted at the purchase (Buy computer). 
   `computer.setup.duration` (reservation → first macrod connection),
   `computer.provisioning.duration` (the same total, unlabelled),
   `computer.effect.failures` (by phase) and `computer.incus.reachable` (0/1).
+- Capacity gauges, every reconcile pass: `computer.capacity.allocated` and
+  `computer.capacity.total` by `scope` (`host`/`fleet`), `host_id`, `host`
+  and `resource` (`sold_units`, `awake_units`, `vcpus`, `memory_gib`,
+  `disk_gib`). Only units have a total; hosts record no disk capacity. The
+  monitoring stack's capacity monitors read these names.

@@ -15,8 +15,8 @@ use crate::domain::enrollment::{
 use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::lifecycle::{Effect, EffectWorker, Event, HostId, TimerKind};
 use crate::domain::models::{
-    BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostRegistration, NewComputer,
-    Quote, SubscriptionItem,
+    BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostAllocation,
+    HostRegistration, NewComputer, Quote, SubscriptionItem,
 };
 use crate::domain::size::ComputerSize;
 
@@ -252,6 +252,9 @@ pub trait ComputerRepo: Send + Sync + 'static {
         host: HostId,
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Every host with what its computers hold, by host id.
+    fn allocation(&self) -> impl Future<Output = Result<Vec<HostAllocation>, Self::Err>> + Send;
 
     /// Sizes that no host can sell.
     fn sold_out_sizes(
