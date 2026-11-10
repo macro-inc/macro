@@ -75,6 +75,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Publish event-only commits without advancing the history merge clock; history records only document or selection changes.
 - History restores snapshots without rerunning transforms; diffs compare descendant map entries even when ancestor records are shared.
 - Keep sibling-position ranks local to an immutable diff state; share next-state ranks across creation and child-list ordering, never across snapshots or commits.
+- Preserve the scoped test-only legacy ordering path and same-commit encoded-buffer property across diff refactors; compare words and UTF-8 bytes without sorting operations.
 - EditorCore is sans-IO: host time, layout, clipboard and composition facts arrive as data; effects leave as values.
 - Failed hook rounds roll back early publications too; failed main inputs retain and report their early commits. Use IsolatedAfterCommit for speculative follow-ups that must discard declined writes without undoing shared plugin commits; include queued updates and early publications in the round limit.
 

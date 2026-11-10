@@ -290,6 +290,10 @@ fn preorder_sort(
     keys: impl IntoIterator<Item = NodeKey>,
     positions: &mut ChildPositions,
 ) -> Vec<NodeKey> {
+    #[cfg(test)]
+    if test::legacy_order_enabled() {
+        return test::legacy_order_for_diff(view, keys);
+    }
     let mut keys = keys.into_iter();
     let Some(first) = keys.next() else {
         return Vec::new();
