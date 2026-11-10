@@ -1325,15 +1325,13 @@ async fn run() -> anyhow::Result<()> {
         )),
     )
     .await?;
-    let anthropic_gateway = anthropic_gateway::router(
-        anthropic_gateway::GatewayState::new(
-            Arc::new(session_repo.clone()),
-            admission.clone(),
-            recorder.clone(),
-            anthropic_gateway::ANTHROPIC_API_URL,
-            &config.anthropic_api_key,
-        )?,
-    );
+    let anthropic_gateway = anthropic_gateway::router(anthropic_gateway::GatewayState::new(
+        Arc::new(session_repo.clone()),
+        admission.clone(),
+        recorder.clone(),
+        anthropic_gateway::ANTHROPIC_API_URL,
+        &config.anthropic_api_key,
+    )?);
     let parked_commands = Arc::new(computers::ParkedCommands::default());
     let command_forwarder = Arc::new(RedisCommandForwarder::new(redis.clone()));
     let runtimes = RuntimeRegistry::with_presence(
@@ -1351,6 +1349,13 @@ async fn run() -> anyhow::Result<()> {
         computers::spawn_loops(
             Arc::clone(operator),
             computers::PgSessionActivity::new(pool.clone()),
+            computers::ClaudeSignInWatch {
+                sign_ins: computers::claude_expiry::PgClaudeSignIns::new(pool.clone()),
+                notices: computers::claude_expiry::IngressClaudeSignInNotices::new(
+                    Arc::clone(&notifications),
+                    teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
+                ),
+            },
             &computer_tasks,
             service_shutdown.clone(),
         );

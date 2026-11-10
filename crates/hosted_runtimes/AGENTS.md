@@ -246,6 +246,20 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
 - Fleet host discovery must not abort harness startup: report unhealthy and retry
   registration after 10, 20, 40, then 60 seconds, holding fleet effects and timers
   until registration succeeds without consuming their attempts.
+- **Claude sign-in notices**: `domain::claude_sign_in::due_notice(now, sign_in)`
+  is pure: within three days of the reported expiry `ExpiresSoon`, within one
+  day `ExpiresToday`, once passed (or macrod reports Claude signed out)
+  `Expired`. Only a report newer than the recorded sign-in counts. The last
+  notice (stage, sign-in time, expiry) is stored on `hosted_runtime`
+  (`claude_notice_*`); one for an older sign-in or expiry no longer counts,
+  nothing follows `Expired` for the same sign-in, and a later stage skips the
+  ones it overtook. `ComputerOperator::notify_claude_sign_ins(sign_ins, notices)`
+  sends each due notice to the signer plus the team's owner and admins, then
+  records it; a failed send is not recorded, so the next pass retries it, and
+  one computer's failure never stops the rest. Span:
+  `computer.claude_sign_in.check` (`checked`, `notified`, `failed`); never put
+  user ids or emails on it. The ports (`ClaudeSignIns`, `ClaudeSignInNotices`)
+  are implemented in agent_harness_service.
 - **Gateway**: computers call Claude via `ANTHROPIC_BASE_URL=<agent harness service>/anthropic`
   with a per-session token; see `services/agent_harness_service/AGENTS.md`.
 

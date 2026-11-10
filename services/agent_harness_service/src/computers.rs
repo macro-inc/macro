@@ -42,6 +42,7 @@ use tracing::Instrument;
 use crate::config::{ComputerFleetConfig, Config};
 
 pub(crate) mod claude;
+pub(crate) mod claude_expiry;
 pub(crate) mod control;
 pub(crate) mod default_agent;
 mod presence;
@@ -54,12 +55,14 @@ const EFFECT_TICK: Duration = Duration::from_secs(2);
 const TIMER_TICK: Duration = Duration::from_secs(5);
 const RECONCILE_TICK: Duration = Duration::from_secs(60);
 const IDLE_TICK: Duration = Duration::from_secs(60);
+/// macrod reports a rejected sign-in within about a minute; checking as often
+/// keeps that notice prompt.
+const CLAUDE_SIGN_IN_TICK: Duration = Duration::from_secs(60);
 /// A parked prompt is forwarded anyway after this long, so a computer that
 /// connects to another replica still gets it.
 const PARK_LIMIT: Duration = Duration::from_secs(120);
 
-pub type Operator =
-    ComputerOperator<PgComputerRepo, ConfiguredFleet, HostedHarnesses, SystemClock>;
+pub type Operator = ComputerOperator<PgComputerRepo, ConfiguredFleet, HostedHarnesses, SystemClock>;
 
 /// Build the operator from explicit config, or `None` when this deployment
 /// has no attached computer fleet (`COMPUTERS_FLEET` is absent).
@@ -181,6 +184,7 @@ enum Pass {
     Timers,
     Reconcile,
     SleepIdle,
+    ClaudeSignIns,
 }
 
 impl Pass {
@@ -190,36 +194,50 @@ impl Pass {
             Self::Timers => TIMER_TICK,
             Self::Reconcile => RECONCILE_TICK,
             Self::SleepIdle => IDLE_TICK,
+            Self::ClaudeSignIns => CLAUDE_SIGN_IN_TICK,
         }
     }
 }
 
+/// The Claude sign-in watch's ports.
+pub struct ClaudeSignInWatch<Ingress> {
+    /// Computers signed in to Claude through Macro.
+    pub sign_ins: claude_expiry::PgClaudeSignIns,
+    /// Their notices.
+    pub notices: claude_expiry::IngressClaudeSignInNotices<Ingress>,
+}
+
 /// Run the operator's passes until `shutdown`.
-pub fn spawn_loops(
+pub fn spawn_loops<Ingress: notification::domain::service::NotificationIngress>(
     operator: Arc<Operator>,
     activity: PgSessionActivity,
+    claude_sign_ins: ClaudeSignInWatch<Ingress>,
     tracker: &TaskTracker,
     shutdown: CancellationToken,
 ) {
+    let claude_sign_ins = Arc::new(claude_sign_ins);
     for pass in [
         Pass::Effects,
         Pass::Timers,
         Pass::Reconcile,
         Pass::SleepIdle,
+        Pass::ClaudeSignIns,
     ] {
         tracker.spawn(run_pass(
             pass,
             Arc::clone(&operator),
             activity.clone(),
+            Arc::clone(&claude_sign_ins),
             shutdown.clone(),
         ));
     }
 }
 
-async fn run_pass(
+async fn run_pass<Ingress: notification::domain::service::NotificationIngress>(
     pass: Pass,
     operator: Arc<Operator>,
     activity: PgSessionActivity,
+    claude_sign_ins: Arc<ClaudeSignInWatch<Ingress>>,
     shutdown: CancellationToken,
 ) {
     let mut interval = tokio::time::interval(pass.tick());
@@ -230,27 +248,36 @@ async fn run_pass(
             () = shutdown.cancelled() => return,
             _ = interval.tick() => {}
         }
-        let outcome = match pass {
-            Pass::Effects => operator
-                .run_fleet_effects_until(shutdown.cancelled())
-                .await
-                .map(|_| ()),
-            Pass::Timers => shutdown
-                .run_until_cancelled(operator.fire_timers())
-                .await
-                .transpose()
-                .map(|_| ()),
-            Pass::Reconcile => shutdown
-                .run_until_cancelled(operator.reconcile())
-                .await
-                .transpose()
-                .map(|_| ()),
-            Pass::SleepIdle => shutdown
-                .run_until_cancelled(operator.sleep_idle(&activity))
-                .await
-                .transpose()
-                .map(|_| ()),
-        };
+        let outcome =
+            match pass {
+                Pass::Effects => operator
+                    .run_fleet_effects_until(shutdown.cancelled())
+                    .await
+                    .map(|_| ()),
+                Pass::Timers => shutdown
+                    .run_until_cancelled(operator.fire_timers())
+                    .await
+                    .transpose()
+                    .map(|_| ()),
+                Pass::Reconcile => shutdown
+                    .run_until_cancelled(operator.reconcile())
+                    .await
+                    .transpose()
+                    .map(|_| ()),
+                Pass::SleepIdle => shutdown
+                    .run_until_cancelled(operator.sleep_idle(&activity))
+                    .await
+                    .transpose()
+                    .map(|_| ()),
+                Pass::ClaudeSignIns => shutdown
+                    .run_until_cancelled(operator.notify_claude_sign_ins(
+                        &claude_sign_ins.sign_ins,
+                        &claude_sign_ins.notices,
+                    ))
+                    .await
+                    .transpose()
+                    .map(|_| ()),
+            };
         if let Err(error) = outcome {
             let name: &'static str = pass.into();
             tracing::error!(pass = name, error = ?error, "computer pass failed");

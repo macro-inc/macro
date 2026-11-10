@@ -83,6 +83,15 @@ Pulumi stacks; they do not host extra agent processes.
   completion and its mode write run in a tracked task so a dropped HTTP waiter
   still reconciles any token macrod already committed),
   and `GET /harnesses/{id}/claude-mode` → `{mode}` (manage rights).
+  A completed sign-in records its caller as the signer; sign-out clears it.
+- `src/computers/claude_expiry.rs`: the ports of the operator's
+  `ClaudeSignIns` pass (every 60 s): `PgClaudeSignIns` reads live computers on
+  `own_account` (harness signer, capabilities and report time joined with the
+  computer's team and last `claude_notice_*`) and records sent notices on
+  `hosted_runtime`; `IngressClaudeSignInNotices` addresses the team's owner and
+  admins (`teams`) and sends `claude_sign_in_expiry` (inbox, gateway, push)
+  on the harness entity, with an id derived from harness, sign-in, stage and
+  expiry so replicas and retries never notify twice.
 - `src/computers/control.rs`: commands reach macrod as `computerControl`
   runtime messages; when the runtime is on another replica they cross Redis
   (`agent-harness.computer-control`: claim with `SET NX`, ack within 3 s or

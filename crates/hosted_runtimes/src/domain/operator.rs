@@ -8,6 +8,7 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Duration, Utc};
 
+use crate::domain::claude_sign_in::{self, ClaudeSignInNotices, ClaudeSignInPass, ClaudeSignIns};
 use crate::domain::enrollment::{Enrollment, EnrollmentGeneration, EnrollmentIssueError};
 use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::lifecycle::{
@@ -596,6 +597,22 @@ where
             }
         }
         Ok(frozen)
+    }
+
+    /// Tell signers and team admins about Claude sign-ins running out; see
+    /// [`claude_sign_in`](crate::domain::claude_sign_in).
+    pub async fn notify_claude_sign_ins<SignIns, Notices>(
+        &self,
+        sign_ins: &SignIns,
+        notices: &Notices,
+    ) -> Result<ClaudeSignInPass, ComputerError>
+    where
+        SignIns: ClaudeSignIns,
+        Notices: ClaudeSignInNotices,
+    {
+        claude_sign_in::notify_due(self.clock.now(), sign_ins, notices)
+            .await
+            .map_err(internal)
     }
 
     /// The computer `harness_id` runs on, if any.

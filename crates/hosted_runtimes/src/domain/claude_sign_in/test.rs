@@ -19,7 +19,9 @@ fn at(day: u32, hour: u32) -> DateTime<Utc> {
 fn signed_in_on_the_first() -> ClaudeSignIn {
     ClaudeSignIn {
         computer_id: ComputerId::new_from_uuid(Uuid::from_u128(1)),
-        harness_id: HarnessId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_7000_8000_0000_0000_0c0c)),
+        harness_id: HarnessId::new_from_uuid(Uuid::from_u128(
+            0x0000_0000_0000_7000_8000_0000_0000_0c0c,
+        )),
         team_id: TEAM,
         computer_name: "Build box".to_owned(),
         signed_in_by: MacroUserIdStr::try_from("macro|signer@example.com".to_owned()).unwrap(),
