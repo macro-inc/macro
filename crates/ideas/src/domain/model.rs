@@ -87,6 +87,46 @@ impl RunProgress {
     }
 }
 
+/// Where a run's session is, as the scheduler reads it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionState {
+    /// Opened, its prompt not taken yet.
+    AwaitingPrompt,
+    /// Working.
+    Running,
+    /// Waiting for the person to approve a tool call.
+    NeedsApproval,
+    /// Waiting for the person to answer a question.
+    NeedsInput,
+    /// Done.
+    Finished,
+    /// Stopped without finishing.
+    Failed,
+}
+
+impl SessionState {
+    /// How the run shows on its idea.
+    pub fn progress(self) -> RunProgress {
+        match self {
+            Self::AwaitingPrompt | Self::Running => RunProgress::Running,
+            Self::NeedsApproval => RunProgress::NeedsApproval,
+            Self::NeedsInput => RunProgress::NeedsInput,
+            Self::Finished => RunProgress::Finished,
+            Self::Failed => RunProgress::Failed,
+        }
+    }
+}
+
+/// Why a run's session didn't start.
+#[derive(Debug)]
+pub enum RunStartError {
+    /// Nothing is running: the run may be settled failed and tried again.
+    NotStarted(rootcause::Report),
+    /// The prompt may have been taken: the run stays for its session to
+    /// settle it, and is never started again meanwhile.
+    Uncertain(rootcause::Report),
+}
+
 /// A run as stored, before its progress is read.
 #[derive(Debug, Clone, PartialEq)]
 pub struct StoredRun {
@@ -104,6 +144,8 @@ pub struct StoredRun {
     pub started_at: DateTime<Utc>,
     /// Whether it was settled, and how.
     pub settled: Option<RunSettled>,
+    /// Checks in a row that couldn't read its session.
+    pub failed_checks: u16,
 }
 
 /// How a finished run was settled.

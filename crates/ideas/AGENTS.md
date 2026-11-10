@@ -80,6 +80,12 @@ person. Served by the harness under the scheduler's gateway prefix
   it created as `produced`; a failed run leaves the idea accepted, and
   accepting it again retries. Retiring or dismissing an idea never stops its
   run.
+- A run is never started twice: a prompt whose answer was lost
+  (`RunStartError::Uncertain`) leaves the run for its session to settle; only
+  a definite refusal (the prompted session deleted) settles it failed at once.
+  `settle_runs` checks runs in turn (`checked_at`), gives up a session still
+  waiting for its prompt after 10 minutes (deleting it), and one that can't be
+  read only after 10 failed checks on a run at least 30 minutes old.
 
 ## Gotchas
 

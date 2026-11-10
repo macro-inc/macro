@@ -11,7 +11,7 @@ use model_owner::CreationPrincipal;
 use super::model::{
     Change, GenerationSession, GenerationTrigger, Idea, IdeaContent, IdeaError, IdeaReview,
     IdeaState, IdeaWriteOutcome, Ideas, NewKind, OpenTarget, ResolveReason, RetireIdea,
-    RewriteIdea, RunProgress, RunSettled, StoredRun, SuggestIdea, Target,
+    RewriteIdea, RunSettled, RunStartError, SessionState, StoredRun, SuggestIdea, Target,
 };
 use super::resolution::{ResolutionEvent, Resolved};
 
@@ -81,11 +81,20 @@ pub trait IdeaRepo: Send + Sync + 'static {
         user: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<StoredRun>, Self::Err>> + Send;
 
-    /// Runs not settled yet, oldest first, at most `limit`.
+    /// Runs not settled yet, least recently checked first, at most `limit`.
     fn unsettled_runs(
         &self,
         limit: u16,
     ) -> impl Future<Output = Result<Vec<StoredRun>, Self::Err>> + Send;
+
+    /// Run `session` was checked at `at`, its session read or not: it goes
+    /// to the back of [`Self::unsettled_runs`], and a failed read counts.
+    fn checked_run(
+        &self,
+        session: Uuid,
+        read: bool,
+        at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Settle run `session` as `settled`; a finished one makes its idea done,
     /// if still accepted, and adds `produced` to it. False when it was
@@ -217,14 +226,18 @@ pub trait RoutineSuggestionDismissal: Send + Sync + 'static {
 #[async_trait::async_trait]
 pub trait RunSessions: Send + Sync + 'static {
     /// Open `run`'s hidden session as its person, billed as their agent
-    /// usage, and send it `prompt`.
-    async fn start(&self, run: &StoredRun, prompt: &str) -> Result<(), rootcause::Report>;
+    /// usage, and send it `prompt` once. A prompt refused outright deletes
+    /// the session it opened.
+    async fn start(&self, run: &StoredRun, prompt: &str) -> Result<(), RunStartError>;
 
-    /// How `run` is going.
-    async fn progress(&self, run: &StoredRun) -> Result<RunProgress, rootcause::Report>;
+    /// Where `run`'s session is.
+    async fn state(&self, run: &StoredRun) -> Result<SessionState, rootcause::Report>;
 
     /// What `run`'s session made, besides the session itself.
     async fn produced(&self, run: &StoredRun) -> Result<Vec<Target>, rootcause::Report>;
+
+    /// Delete `run`'s session, one that never took its prompt.
+    async fn discard(&self, run: &StoredRun) -> Result<(), rootcause::Report>;
 }
 
 /// Ideas as the API serves them: the person's feed, and the tools hidden
