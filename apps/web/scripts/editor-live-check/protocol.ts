@@ -21,8 +21,10 @@ export class DocumentReceipts {
       const inbound = new Reassembler();
       socket.on('framesent', ({ payload }) => {
         try {
-          if (typeof payload === 'string')
-            throw new Error('Expected binary document frame');
+          if (typeof payload === 'string') {
+            if (payload === 'ping' || payload === 'pong') return;
+            throw new Error('Unexpected text document frame');
+          }
           const bytes = outbound.push(payload);
           if (!bytes) return;
           const message = FromPeer.decode(bytes);
@@ -40,8 +42,10 @@ export class DocumentReceipts {
       });
       socket.on('framereceived', ({ payload }) => {
         try {
-          if (typeof payload === 'string')
-            throw new Error('Expected binary document frame');
+          if (typeof payload === 'string') {
+            if (payload === 'ping' || payload === 'pong') return;
+            throw new Error('Unexpected text document frame');
+          }
           const bytes = inbound.push(payload);
           if (!bytes) return;
           const message = FromRemote.decode(bytes);

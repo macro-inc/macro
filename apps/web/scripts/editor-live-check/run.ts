@@ -60,7 +60,7 @@ async function context(
     storageState,
     ignoreHTTPSErrors: true,
     viewport: { width: 1440, height: 1000 },
-    permissions: ['clipboard-read', 'clipboard-write'],
+    permissions: ['clipboard-read', 'clipboard-write', 'local-network-access'],
   });
   if (config.candidateArtifacts) {
     const artifacts = resolve(config.candidateArtifacts);
@@ -128,7 +128,7 @@ async function ready(page: Page) {
   await expect(body(page)).toBeVisible({ timeout: 90_000 });
   await expect(
     page.locator('[data-block-content] .skeleton-shimmer')
-  ).toHaveCount(0);
+  ).toHaveCount(0, { timeout: 30_000 });
 }
 async function snapshot(page: Page, requireCommon = false) {
   const module = modules.get(page);
@@ -269,6 +269,9 @@ try {
         .getByRole('button', { name: 'Continue', exact: true })
         .click();
       await identity;
+      await expect(
+        login.getByRole('button', { name: 'Create', exact: true })
+      ).toBeVisible({ timeout: 60_000 });
       await login.goto(config.existingDocumentURL);
       await ready(login);
     } finally {
