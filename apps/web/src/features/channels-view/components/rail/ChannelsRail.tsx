@@ -536,6 +536,19 @@ export function ChannelsRail(props: ChannelsRailProps) {
     return statuses;
   });
 
+  const unreadForCollapsedGroup = (
+    group: 'team_channels' | 'channels' | 'direct_messages'
+  ) => {
+    if (
+      state.expandedGroups[group] ||
+      state.sectionPreferences[group]?.unreadWhenCollapsed === false
+    ) {
+      return [];
+    }
+
+    return collapsedUnread();
+  };
+
   const visibleRows = createMemo(() => {
     if (props.searchOpen) {
       return searchResults().map(
@@ -553,11 +566,13 @@ export function ChannelsRail(props: ChannelsRailProps) {
       favorites: favorites(),
       team_channels: deduplicateChannels([
         props.sources.team_channels.items(),
-        collapsedUnread().filter((channel) => channel.channelType === 'team'),
+        unreadForCollapsedGroup('team_channels').filter(
+          (channel) => channel.channelType === 'team'
+        ),
       ]),
       channels: deduplicateChannels([
         props.sources.channels.items(),
-        collapsedUnread().filter(
+        unreadForCollapsedGroup('channels').filter(
           (channel) =>
             channel.channelType === 'public' ||
             channel.channelType === 'private'
@@ -565,7 +580,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       ]),
       direct_messages: deduplicateChannels([
         props.sources.direct_messages.items(),
-        collapsedUnread().filter(
+        unreadForCollapsedGroup('direct_messages').filter(
           (channel) => channel.channelType === 'direct_message'
         ),
       ]),

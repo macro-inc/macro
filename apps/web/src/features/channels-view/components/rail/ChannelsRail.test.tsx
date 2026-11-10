@@ -14,6 +14,7 @@ import {
 import { createSignal, getOwner, type JSX, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsSources } from '../../queries';
+import type { ChannelSectionKey, ChannelSectionPreferences } from '../../types';
 import type { ChannelRailRow, SectionDraft } from './ChannelsRailContext';
 
 vi.mock('@core/context/user', () => ({
@@ -28,6 +29,9 @@ const mocks = vi.hoisted(() => ({
   sectionsEnabled: true,
   unreadRows: [] as ChannelEntity[],
   closedGroups: [] as string[],
+  sectionPreferences: {} as Partial<
+    Record<ChannelSectionKey, ChannelSectionPreferences>
+  >,
   actualRows: (): ChannelRailRow[] => [],
   activityChannels: (): readonly ChannelEntity[] => [],
   additionalActivityChannels: (): readonly ChannelEntity[] => [],
@@ -283,7 +287,7 @@ vi.mock('../../channels-view-context', () => ({
         },
       },
       collapsedLabels: [],
-      sectionPreferences: {},
+      sectionPreferences: mocks.sectionPreferences,
       sortBy: {
         channels: 'viewed_at',
         team_channels: 'viewed_at',
@@ -536,6 +540,7 @@ beforeEach(() => {
   mocks.sectionsEnabled = true;
   mocks.unreadRows = [];
   mocks.closedGroups = [];
+  mocks.sectionPreferences = {};
   mocks.listRows = undefined;
   mocks.hotkeys.clear();
   mocks.userId = 'viewer';
@@ -625,6 +630,55 @@ it.each([false, true])(
     );
   }
 );
+
+it.each(['team_channels', 'channels', 'direct_messages'] as const)(
+  'adds off-page unread rows only to the collapsed %s group',
+  (collapsedGroup) => {
+    mocks.closedGroups = [collapsedGroup];
+    mocks.unreadRows = [
+      { ...channel, id: 'outside-team_channels', channelType: 'team' },
+      { ...channel, id: 'outside-channels', channelType: 'private' },
+      {
+        ...channel,
+        id: 'outside-direct_messages',
+        channelType: 'direct_message',
+      },
+    ];
+
+    mount();
+
+    const offPageIds = mocks
+      .actualRows()
+      .flatMap((row) =>
+        row.kind === 'conversation' && row.channel.id.startsWith('outside-')
+          ? [row.channel.id]
+          : []
+      );
+    expect(offPageIds).toEqual([`outside-${collapsedGroup}`]);
+  }
+);
+
+it('omits unread rows when the collapsed group disables them', () => {
+  mocks.closedGroups = ['team_channels', 'channels'];
+  mocks.sectionPreferences = {
+    channels: { unreadWhenCollapsed: false },
+  };
+  mocks.unreadRows = [
+    { ...channel, id: 'outside-team', channelType: 'team' },
+    { ...channel, id: 'outside-private', channelType: 'private' },
+  ];
+
+  mount();
+
+  const offPageIds = mocks
+    .actualRows()
+    .flatMap((row) =>
+      row.kind === 'conversation' && row.channel.id.startsWith('outside-')
+        ? [row.channel.id]
+        : []
+    );
+  expect(offPageIds).toEqual(['outside-team']);
+});
 
 it('delegates keyboard scrolling to the sectioned renderer instead of global indexes', () => {
   mount();

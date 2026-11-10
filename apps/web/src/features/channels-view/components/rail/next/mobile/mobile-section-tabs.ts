@@ -26,15 +26,14 @@ export function resolveMobileSectionTab(
 export function channelsForMobileSection(options: {
   tab: MobileSectionTab;
   channels: readonly ChannelEntity[];
-  pinnedIds: readonly string[];
   labels: readonly ChannelLabel[];
 }): ChannelEntity[] {
-  if (options.tab === 'all')
+  if (options.tab === 'all') {
+    // The list removes pins except rows with incoming-call actions.
     return options.channels.filter(
-      (channel) =>
-        channel.isParticipant !== false &&
-        !options.pinnedIds.includes(channel.id)
+      (channel) => channel.isParticipant !== false
     );
+  }
   if (options.tab === 'direct_messages')
     return options.channels.filter(
       (channel) =>

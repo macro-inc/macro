@@ -14,6 +14,7 @@ export function useMobileSectionActions(options: {
   labels: Accessor<readonly ChannelLabel[]>;
   labelsAvailable: Accessor<boolean>;
   canShare: Accessor<boolean>;
+  teamId: Accessor<string | undefined>;
   channelsById: Accessor<ReadonlyMap<string, ChannelEntity>>;
   favorites: Accessor<readonly Favorite[]>;
 }) {
@@ -25,6 +26,7 @@ export function useMobileSectionActions(options: {
     labelsAvailable: options.labelsAvailable,
     labelsUnavailableReason: () => t('channelSections.unavailable'),
     sharedLabels: options.canShare,
+    teamId: options.teamId,
     labels: options.labels,
     channelsById: options.channelsById,
     searchResults: () => [],

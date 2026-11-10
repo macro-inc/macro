@@ -1194,7 +1194,9 @@ placement. It lists **Not joined** channels first, then **Recent** when empty or
 **Channels** for a typed query. Join uses the existing channel join action.
 There is no separate Browse channels row. Closing search restores the sectioned
 list. Collapsed sections retain unread rows by default; **Display → Unread when
-collapsed** turns those rows off without changing expanded membership.
+collapsed** turns those rows off without changing expanded membership. Off-page
+unread rows supplement only collapsed groups with that setting enabled; expanded
+groups keep the source's page order.
 
 Drag a section heading or its name to reorder sections. There is no drag-handle
 icon. Keyboard focus reveals an icon-free **Reorder** control over the heading
@@ -1315,8 +1317,10 @@ The phone list reuses Home rows and the existing large favorite circles with
 unread dots. Up to six loaded favorites retain their saved order in one sideways
 scrolling row. All is selected initially, followed by Direct messages and custom
 sections in personal display order. All excludes pins except incoming-call rows;
-other tabs retain their pinned members. The shared dynamic tab control scrolls
-and reveals the selected section. People and funnel icons match desktop.
+the shared list renderer owns that exclusion so ringing pins retain their Join
+and Decline actions. Other tabs retain their pinned members. The shared dynamic
+tab control scrolls and reveals the selected section. People and funnel icons
+match desktop.
 
 The search control expands inside Chat, without adding a route or replacing dock
 Search. It groups Not joined before Recent or matching Channels. Unjoined rows
@@ -1325,7 +1329,8 @@ navigation, top-level read marking, incoming-call actions, and pull-to-refresh.
 
 Long-press a section tab, or use its visible options action, to open the shared
 mobile sheet. Visible to, Sort, Display, and mute drill into the sheet with Back,
-not nested touch submenus. Rename returns to the inline name field. Add channels
+not nested touch submenus. Sharing uses the verified current team, including when
+no other shared sections exist. Rename returns to the inline name field. Add channels
 opens the shared full-height picker above the options sheet with Cancel and Done;
 choosing rows keeps search focused, and Cancel discards the draft without closing
 the options sheet. The name-rule editor also stacks above the options sheet. A

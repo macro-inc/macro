@@ -105,7 +105,6 @@ export function MobileSectionsView(props: {
             localChannels(),
           ])
         : base().items(),
-      pinnedIds: props.pinned.map((channel) => channel.id),
       labels: labels(),
     });
   const base = () =>
@@ -174,6 +173,8 @@ export function MobileSectionsView(props: {
     labels,
     labelsAvailable: () => queryReadyGate(shared) && queryReadyGate(personal),
     canShare: () => queryReadyGate(shared) && Boolean(shared.data?.teamId),
+    teamId: () =>
+      queryReadyGate(shared) ? (shared.data?.teamId ?? undefined) : undefined,
     channelsById: () =>
       new Map(
         deduplicateChannels([
