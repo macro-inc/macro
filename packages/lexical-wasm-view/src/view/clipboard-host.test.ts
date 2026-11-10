@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { CommandCode } from '@macro-inc/collaboration/session/abi.generated';
-import { beforeAll, expect, test } from 'vitest';
+import { beforeAll, expect, test, vi } from 'vitest';
+import { readSelection } from './selection';
 import {
   initializeNativeSurfaceTests,
   nativeSurface,
@@ -18,7 +19,6 @@ test('typed file requests arrive before clipboard facts release and do not inser
         mime: 'application/x-macro-paste-facts',
         value: JSON.stringify({
           request: 99,
-          plainOnly: false,
           hasFileEntries: true,
           mobileImageRecovery: false,
         }),
@@ -110,7 +110,6 @@ test.each([false, true])(
           mime: 'application/x-macro-paste-facts',
           value: JSON.stringify({
             request: 0,
-            plainOnly,
             hasFileEntries: false,
             mobileImageRecovery: false,
           }),
@@ -144,9 +143,15 @@ test.each([false, true])(
         focus: { key: paragraph.key, offset: 0, type: 'element' },
       });
       fixture.counters.admissions = 0;
-      expect(await fixture.view.clipboard.paste(transfer('**bold**'))).toBe(
-        true
-      );
+      const inputs = vi.spyOn(fixture.port, 'input');
+      expect(
+        await fixture.view.clipboard.paste(
+          transfer('**bold**'),
+          readSelection(fixture.view),
+          { plainOnly }
+        )
+      ).toBe(true);
+      expect(inputs.mock.calls[0]?.[0].discriminator).toBe(plainOnly ? 10 : 4);
       expect(fixture.root.textContent).toBe(plainOnly ? '**bold**' : 'bold');
       expect(fixture.root.querySelectorAll('strong')).toHaveLength(
         plainOnly ? 0 : 1
@@ -515,5 +520,150 @@ test('a caret returning after an authoritative selection change is admitted', ()
     expect(fixture.counters.admissions).toBe(admitted);
   } finally {
     fixture.close();
+  }
+});
+
+test.each([
+  { key: 'Shift', release: false, plainOnly: true },
+  { key: 'Shift', release: true, plainOnly: false },
+  { key: 'Control', release: false, plainOnly: false },
+  { key: 'Meta', release: false, plainOnly: false },
+  { key: 'Alt', release: false, plainOnly: false },
+])(
+  'native paste captures window $key state with release=$release',
+  async ({ key, release, plainOnly }) => {
+    const fixture = nativeSurface();
+    try {
+      fixture.port.setState(
+        JSON.stringify({
+          root: {
+            type: 'root',
+            version: 1,
+            children: [{ type: 'paragraph', version: 1, children: [] }],
+          },
+        })
+      );
+      const paragraph = [...fixture.view.mirror.values()].find(
+        (node) => node.type === 'paragraph'
+      );
+      if (!paragraph) throw new Error('Missing paragraph');
+      const element = fixture.view.getElementByKey(paragraph.key);
+      if (!element) throw new Error('Missing paragraph element');
+      fixture.root.focus();
+      document.getSelection()?.setBaseAndExtent(element, 0, element, 0);
+      fixture.port.selectionFromView({
+        kind: 'range',
+        anchor: { key: paragraph.key, offset: 0, type: 'element' },
+        focus: { key: paragraph.key, offset: 0, type: 'element' },
+      });
+      const inputs = vi.spyOn(fixture.port, 'input');
+      const pastes = vi.spyOn(fixture.view.clipboard, 'paste');
+      window.dispatchEvent(new KeyboardEvent('keydown', { key }));
+      if (release) window.dispatchEvent(new KeyboardEvent('keyup', { key }));
+      const event = new Event('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', {
+        value: transfer('**literal**'),
+      });
+      fixture.root.dispatchEvent(event);
+      const pending = pastes.mock.results[0];
+      if (pending?.type !== 'return') throw new Error('Paste was not invoked');
+      expect(await pending.value).toBe(true);
+      expect(event.defaultPrevented).toBe(true);
+      expect(inputs.mock.calls[0]?.[0].discriminator).toBe(plainOnly ? 10 : 4);
+      expect(fixture.root.textContent).toBe(
+        plainOnly ? '**literal**' : 'literal'
+      );
+      expect(fixture.root.querySelectorAll('strong')).toHaveLength(
+        plainOnly ? 0 : 1
+      );
+    } finally {
+      window.dispatchEvent(new KeyboardEvent('keyup', { key }));
+      fixture.close();
+    }
+  }
+);
+
+test.each(['argument', 'window'])(
+  'paste freezes %s intent before lazy HTML import without changing rich precedence',
+  async (capture) => {
+    const fixture = nativeSurface();
+    try {
+      fixture.port.setState(
+        JSON.stringify({
+          root: {
+            type: 'root',
+            version: 1,
+            children: [{ type: 'paragraph', version: 1, children: [] }],
+          },
+        })
+      );
+      const paragraph = [...fixture.view.mirror.values()].find(
+        (node) => node.type === 'paragraph'
+      );
+      if (!paragraph) throw new Error('Missing paragraph');
+      const element = fixture.view.getElementByKey(paragraph.key);
+      if (!element) throw new Error('Missing paragraph element');
+      fixture.root.focus();
+      document.getSelection()?.setBaseAndExtent(element, 0, element, 0);
+      fixture.port.selectionFromView({
+        kind: 'range',
+        anchor: { key: paragraph.key, offset: 0, type: 'element' },
+        focus: { key: paragraph.key, offset: 0, type: 'element' },
+      });
+      const inputs = vi.spyOn(fixture.port, 'input');
+      let pending: Promise<boolean>;
+      if (capture === 'argument') {
+        const intent = { plainOnly: true };
+        pending = fixture.view.clipboard.paste(
+          transfer('**literal**', '<p><strong>rich</strong></p>'),
+          readSelection(fixture.view),
+          intent
+        );
+        intent.plainOnly = false;
+      } else {
+        const pastes = vi.spyOn(fixture.view.clipboard, 'paste');
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift' }));
+        const event = new Event('paste', { bubbles: true, cancelable: true });
+        Object.defineProperty(event, 'clipboardData', {
+          value: transfer('**literal**', '<p><strong>rich</strong></p>'),
+        });
+        fixture.root.dispatchEvent(event);
+        const result = pastes.mock.results[0];
+        if (result?.type !== 'return') throw new Error('Paste was not invoked');
+        pending = result.value;
+        window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Shift' }));
+      }
+      expect(await pending).toBe(true);
+      const input = inputs.mock.calls[0]?.[0];
+      if (!input?.isEditorPasteWithIntent())
+        throw new Error('Missing typed paste input');
+      expect(input.value.intent.plainOnly).toBe(true);
+      expect(fixture.root.textContent).toBe('rich');
+      expect(fixture.root.querySelectorAll('strong')).toHaveLength(1);
+    } finally {
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Shift' }));
+      fixture.close();
+    }
+  }
+);
+
+test('disposing the native view removes its window Shift listeners', () => {
+  const added = vi.spyOn(window, 'addEventListener');
+  const removed = vi.spyOn(window, 'removeEventListener');
+  let fixture: ReturnType<typeof nativeSurface> | undefined;
+  try {
+    fixture = nativeSurface();
+    const keys = added.mock.calls.filter(
+      ([name]) => name === 'keydown' || name === 'keyup'
+    );
+    expect(keys).toHaveLength(2);
+    fixture.view.dispose();
+    for (const [name, listener] of keys) {
+      expect(removed).toHaveBeenCalledWith(name, listener);
+    }
+  } finally {
+    fixture?.close();
+    added.mockRestore();
+    removed.mockRestore();
   }
 });

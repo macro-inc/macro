@@ -205,6 +205,20 @@ export function registerEvents(view: EditorView): {
   const listeners: (() => void)[] = [];
   const drag = new DragAccess(view);
   listeners.push(() => drag.dispose());
+  let shift = false;
+  const shiftDown = (event: KeyboardEvent) => {
+    if (event.key === 'Shift') shift = true;
+  };
+  const shiftUp = (event: KeyboardEvent) => {
+    if (event.key === 'Shift') shift = false;
+  };
+  const pasteWindow = window;
+  pasteWindow.addEventListener('keydown', shiftDown);
+  pasteWindow.addEventListener('keyup', shiftUp);
+  listeners.push(() => {
+    pasteWindow.removeEventListener('keydown', shiftDown);
+    pasteWindow.removeEventListener('keyup', shiftUp);
+  });
   const android =
     /Android/.test(navigator.userAgent) && /Chrome/.test(navigator.userAgent);
   let lastKey = '',
@@ -781,7 +795,7 @@ export function registerEvents(view: EditorView): {
     if (!event.clipboardData) return;
     event.preventDefault();
     view.clipboard
-      .paste(event.clipboardData, readSelection(view))
+      .paste(event.clipboardData, readSelection(view), { plainOnly: shift })
       .catch(view.options.onError);
   });
   listen('click', (event) => {

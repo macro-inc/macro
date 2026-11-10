@@ -44,11 +44,18 @@ attributes, model and Markdown in all three engines. Native node keys are
 properties rather than serialized attributes; do not mask attributes in this
 comparison. This is behavior coverage, not a large-document latency gate.
 
+<<<<<<< HEAD
 For native DOM selection changes, run the six-operation `selection-change.browser.e2e.ts`
 regression: the first interior-text event after an own range write preserves the
 model range; the next event admits the DOM range. Boundary, element and
 post-delete selections continue through normalization. Clearing selection or
 moving its anchor outside an editor must not consume the pending own-write mark.
+=======
+Compare plain-text paste with both engines while holding Shift: `**literal**`
+must remain literal, while ordinary paste converts its Markdown. Release Shift
+and repeat. Rich HTML and Lexical clipboard data retain their normal priority,
+and a key release during lazy HTML import must not change the captured intent.
+>>>>>>> 5656a88fcc (fix(editor): carry captured shift paste intent through the native input)
 
 Check decorator selection with both engines: click an image and verify its node
 selection clears browser ranges, click an equation once without selecting it as
