@@ -494,7 +494,17 @@ struct Logs(Arc<Mutex<Vec<Log>>>);
 struct Fields(BTreeMap<String, String>);
 impl tracing::field::Visit for Fields {
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        self.0.insert(field.name().into(), format!("{value:?}"));
+        let mut debug = format!("{value:?}");
+        // Assert the complete diagnostic independently of process backtrace settings,
+        // retaining any enclosing Debug enum delimiters after the trace.
+        if field.name() == "error"
+            && let Some((message, backtrace)) = debug.split_once("\n\nStack backtrace:")
+        {
+            let backtrace = backtrace.trim_end();
+            let closing = &backtrace[backtrace.trim_end_matches(')').len()..];
+            debug = format!("{message}{closing}");
+        }
+        self.0.insert(field.name().into(), debug);
     }
 }
 impl<S: tracing::Subscriber> Layer<S> for Logs {
