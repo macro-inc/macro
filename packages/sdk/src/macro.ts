@@ -199,7 +199,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /** Generate images with AI and attach them to messages. */
   readonly images: ImagesNamespace;
 
-  /** Import Notion, Linear, Jira and Slack content, tracked so nothing is imported twice. */
+  /** Import Notion, Linear and Jira content, tracked so nothing is imported twice. */
   readonly imports: ImportsNamespace;
   /** Search the public web and read web pages. */
   readonly web: WebNamespace;
