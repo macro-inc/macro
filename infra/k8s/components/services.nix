@@ -72,13 +72,6 @@ lib.mapAttrs (name: bin: {
   command = lib.optionals (instance.devBinaries != null) [
     "${pkgs.dumb-init}/bin/dumb-init"
     "--"
-    "${pkgs.glibc}/lib/ld-linux-x86-64.so.2"
-    "--library-path"
-    (lib.makeLibraryPath [
-      pkgs.openssl
-      pkgs.stdenv.cc.cc.lib
-      pkgs.glibc
-    ])
     "/app/out/${bin}"
   ];
   args = lib.optionals (name == "gmail-forwarder") [
@@ -92,7 +85,7 @@ lib.mapAttrs (name: bin: {
   terminationGracePeriod = if name == "whatsapp-session-service" then 120 else 30;
   sharedEnv = true;
   env = {
-    # The dev loader is /proc/self/exe; retain the actual service identity.
+    # Keep the service identity consistent between native and full-image builds.
     DD_SERVICE = name;
     PORT = "8080";
   }
@@ -126,6 +119,11 @@ lib.mapAttrs (name: bin: {
         mountPath = "/app/out";
         readOnly = true;
       }
+      {
+        name = "nix-store";
+        mountPath = "/nix/store";
+        readOnly = true;
+      }
     ]
     ++ lib.optionals (name == "agent-harness-service" && instance.devBinaries != null) [
       {
@@ -139,6 +137,13 @@ lib.mapAttrs (name: bin: {
         name = "binaries";
         hostPath = {
           path = instance.devBinaries;
+          type = "Directory";
+        };
+      }
+      {
+        name = "nix-store";
+        hostPath = {
+          path = "/nix/store";
           type = "Directory";
         };
       }

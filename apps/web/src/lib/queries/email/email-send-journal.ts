@@ -434,21 +434,58 @@ export function createEmailSendJournal(
                 finish();
                 return;
               }
-              if (row)
-                for (const id of [
-                  row.resolvedDraftId,
-                  String(row.metadata.payload.input.message.draftId),
-                  row.metadata.payload.workingCopy?.key,
-                ]) {
-                  if (!id) continue;
-                  const lock = tx.objectStore('meta').get(['send-lock', id]);
-                  lock.onsuccess = () => {
-                    if (lock.result === uuid)
-                      tx.objectStore('meta').delete(['send-lock', id]);
-                  };
-                }
+              const copy = row.metadata.payload.workingCopy;
+              for (const id of [
+                row.resolvedDraftId,
+                String(row.metadata.payload.input.message.draftId),
+                copy?.key,
+              ]) {
+                if (!id) continue;
+                const lock = tx.objectStore('meta').get(['send-lock', id]);
+                lock.onsuccess = () => {
+                  if (lock.result === uuid)
+                    tx.objectStore('meta').delete(['send-lock', id]);
+                };
+                // Outlives the intent: a composer in another tab may learn of
+                // the delivery only after this removal.
+                if (copy)
+                  tx.objectStore('meta').put(
+                    { generation: copy.generation, revision: copy.revision },
+                    ['sent-copy', id]
+                  );
+              }
               tx.objectStore('sends').delete(uuid);
               finish();
+            };
+          },
+          finish,
+          undefined
+        )
+      );
+    },
+    /** The working-copy version a removed sent intent carried for a draft. */
+    async sentCopy(
+      session: Session,
+      draftId: string
+    ): Promise<Pick<LocalDraft, 'generation' | 'revision'> | undefined> {
+      return await transaction('readonly', (tx, finish) =>
+        withSession(
+          tx,
+          session,
+          () => {
+            const request = tx.objectStore('meta').get(['sent-copy', draftId]);
+            request.onsuccess = () => {
+              const copy: unknown = request.result;
+              finish(
+                typeof copy === 'object' &&
+                  copy !== null &&
+                  'generation' in copy &&
+                  'revision' in copy &&
+                  typeof copy.generation === 'string' &&
+                  typeof copy.revision === 'number'
+                  ? { generation: copy.generation, revision: copy.revision }
+                  : undefined
+              );
             };
           },
           finish,

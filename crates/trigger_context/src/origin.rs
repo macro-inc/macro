@@ -50,7 +50,7 @@ pub enum TriggerOrigin {
         /// The project.
         project: Uuid,
     },
-    /// A person opened the session directly, from the composer.
+    /// A person opened the session directly: from the composer, or by asking for a routine draft.
     Requested {
         /// Who opened it.
         by: MacroUserIdStr<'static>,

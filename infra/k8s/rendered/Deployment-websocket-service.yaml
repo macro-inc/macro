@@ -38,7 +38,7 @@ spec:
           command: []
           env: []
           envFrom: []
-          image: localhost:32550/macro/websocket:build.cvsf3k22gpq2l8qx9wvz54bg473b6rwz
+          image: localhost:32550/macro/websocket:build.51w2mgpw5pdy6mz58gm857dgy3im4zzy
           imagePullPolicy: IfNotPresent
           name: websocket-service
           ports:

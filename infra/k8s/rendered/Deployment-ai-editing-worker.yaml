@@ -38,7 +38,7 @@ spec:
           envFrom:
             - secretRef:
                 name: macro-env
-          image: localhost:32550/macro/ai-editing-worker:build.49vj1bvkcpxj6n6z7j242z4yf442zl0b
+          image: localhost:32550/macro/ai-editing-worker:build.vc70nmmb6h18ayr2m9s35dj5b35r4gy4
           imagePullPolicy: IfNotPresent
           name: ai-editing-worker
           ports:

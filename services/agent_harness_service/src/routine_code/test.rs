@@ -219,7 +219,7 @@ async fn a_step_waits_for_a_free_slot_before_its_credential_and_gives_up_after_f
             Arc::clone(&programs) as Arc<dyn ProgramExecutor>,
             Arc::new(NoChecks),
             RecordedTokens::default(),
-            BTreeMap::new(),
+            code_execution::domain::SdkEndpoints::default(),
             Arc::new(ai_usage::NoOpUsageRecorder),
             None,
             Arc::new(NoTimeZones),
@@ -340,14 +340,17 @@ mod real_deno {
         let checker = DenoChecker::new(deno, root.path().join("checks"), 1, 64 * 1024)
             .await
             .unwrap();
-        let hosts = ["cognition", "email", "storage"]
-            .map(|name| (name.to_owned(), host.to_owned()))
-            .into();
+        let endpoints = code_execution::domain::SdkEndpoints {
+            hosts: ["cognition", "email", "storage"]
+                .map(|name| (name.to_owned(), host.to_owned()))
+                .into(),
+            ..Default::default()
+        };
         let code = SdkRoutineCode::new(
             Arc::new(executor),
             Arc::new(checker),
             FixedToken,
-            hosts,
+            endpoints,
             Arc::new(ai_usage::NoOpUsageRecorder),
             None,
             Arc::new(NoTimeZones),
@@ -676,16 +679,17 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         server.await.unwrap();
     }
 
-    /// Starters are offered as they are, and the CreateRoutine example is
+    /// Catalog routines are offered as they are, and the CreateRoutine example is
     /// copied by agents, so both must check against today's SDK.
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
-    async fn every_starter_and_the_create_routine_example_type_check() {
+    async fn every_catalog_routine_and_the_create_routine_example_type_check() {
         let (_root, code) = code("http://127.0.0.1:9").await;
-        for starter in routine_program::STARTERS.iter() {
-            let routine = program(json!([routine_program::Step::Code(starter.step.clone())]));
-            let problems = code.check_program(&routine).await.unwrap();
-            assert_eq!(problems, Vec::new(), "starter {}", starter.key);
+        for routine in routine_program::CATALOG.iter() {
+            let Some(step) = &routine.code else { continue };
+            let program = program(json!([routine_program::Step::Code(step.clone())]));
+            let problems = code.check_program(&program).await.unwrap();
+            assert_eq!(problems, Vec::new(), "catalog routine {}", routine.key);
         }
         let doc = include_str!("../../../../crates/routines/src/create_routine.md");
         let (_, example) = doc.split_once("Its `steps` string holds:\n").unwrap();

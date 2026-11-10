@@ -38,7 +38,7 @@ Compose and `run_local` remain independent.
 - Preserve existing PVC names and the `app` Deployment selector when adopting
   the earlier local instances. Never delete their data during measurements.
 - Apply PVCs outside the pruned workload set so removing a declaration retains data.
-- Keep the dev roll path on host binaries; use images for the full image path.
+- Keep the dev roll path on native host binaries with `/nix/store` mounted read-only; use images for the full image path.
 - Keep the local OpenSearch JVM processor count small; host CPU counts inflate startup pools.
 - Include only the ICU plugin required by local mappings; bundled ML/SQL plugins slow startup.
 - Read the [kube-local skill](../../.agents/skills/kube-local/SKILL.md) for operation.

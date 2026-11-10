@@ -3,8 +3,8 @@ import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
 import {
   DATADOG_API_KEY,
-  DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
   EcsDeploymentFailureAlarm,
+  versionEnvironment,
   withTelemetry,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
@@ -34,8 +34,11 @@ type Args = {
 };
 
 export class EmailPubSubWorkers extends pulumi.ComponentResource {
+  // AWSX uses the containers map key as the ECS container name.
+  public readonly containerName = 'service';
   public role: aws.iam.Role;
   public ecr: awsx.ecr.Repository;
+  public imageUri: pulumi.Output<string>;
   public serviceSg: aws.ec2.SecurityGroup;
   public service: awsx.ecs.FargateService;
   public clusterName: pulumi.Output<string> | string;
@@ -98,6 +101,7 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
       { parent: this }
     );
     this.ecr = image.ecr;
+    this.imageUri = image.image.imageUri;
 
     // sg - workers only need egress
     this.serviceSg = this.initializeSecurityGroup({
@@ -114,7 +118,8 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
           subnets: vpc.privateSubnetIds,
           securityGroups: [this.serviceSg.id],
         },
-        continueBeforeSteadyState: DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
+        // The consent API deploy waits for these consumers, including old-task drain.
+        continueBeforeSteadyState: false,
         deploymentCircuitBreaker: {
           enable: true,
           rollback: true,
@@ -127,13 +132,16 @@ export class EmailPubSubWorkers extends pulumi.ComponentResource {
             roleArn: dopplerEcsEnvironment.executionRole.arn,
           },
           containers: withTelemetry(BASE_NAME, {
-            service: {
-              name: BASE_NAME,
+            [this.containerName]: {
+              name: this.containerName,
               image: image.image.imageUri,
               stopTimeout: 10, // 10 seconds to force kill the task
               cpu: stack === 'prod' ? 2048 : 1024,
               memory: stack === 'prod' ? 3742 : 1742, // 2048 minimum - 256 for datadog - 50 for log_router
-              environment: [...containerEnvVars],
+              environment: [
+                ...containerEnvVars,
+                versionEnvironment(image.image.imageUri),
+              ],
               secrets: [...dopplerEcsEnvironment.containerSecrets],
               logConfiguration: {
                 logDriver: 'awsfirelens',

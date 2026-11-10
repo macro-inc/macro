@@ -209,6 +209,11 @@
           dir = "database-sql";
         }
         {
+          name = "natural_time";
+          crate = "crates/natural_time";
+          dir = "natural-time";
+        }
+        {
           name = "pptx_engine";
           crate = "crates/pptx_engine";
           dir = "pptx-engine";

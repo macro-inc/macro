@@ -38,7 +38,7 @@ spec:
           envFrom:
             - secretRef:
                 name: macro-env
-          image: localhost:32550/macro/analytics-proxy:build.makwqpjd9pmfqhfz4351kmgq4gigg0aj
+          image: localhost:32550/macro/analytics-proxy:build.9s72radzpri53zfc3a1i9rmyrrywv50c
           imagePullPolicy: IfNotPresent
           name: analytics-proxy
           ports:

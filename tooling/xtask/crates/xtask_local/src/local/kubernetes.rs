@@ -267,13 +267,13 @@ pub fn run(cmd: Cmd) -> Result<()> {
             );
             if !args.no_build {
                 let default = std::fs::canonicalize(
-                    super::repo_root().join("target/x86_64-unknown-linux-gnu/debug"),
+                    super::repo_root().join(super::arch::detect()?.debug_dir()),
                 )?;
                 ensure!(
                     params["devBinaries"].as_str() == Some(path_str(&default)?),
-                    "roll builds the default zigbuild directory; use --no-build for a custom binary directory"
+                    "roll builds the default native build directory; use --no-build for a custom binary directory"
                 );
-                super::zigbuild_only()?;
+                super::build_services_only()?;
             }
             let deployment = format!("deployment/{}", args.target.service);
             kube(
@@ -384,16 +384,18 @@ fn parameters(args: &InstanceArgs) -> Result<Value> {
         None
     } else {
         Some(
-            std::fs::canonicalize(args.binaries_dir.clone().unwrap_or_else(|| {
-                super::repo_root().join("target/x86_64-unknown-linux-gnu/debug")
-            }))
-            .context("binary directory is missing; run cargo x zigbuild first")?,
+            std::fs::canonicalize(
+                args.binaries_dir
+                    .clone()
+                    .unwrap_or(super::repo_root().join(super::arch::detect()?.debug_dir())),
+            )
+            .context("binary directory is missing; run cargo x build-services first")?,
         )
     };
     if let Some(path) = &binaries {
         ensure!(
             path.is_dir(),
-            "binary directory is missing; run cargo x zigbuild first"
+            "binary directory is missing; run cargo x build-services first"
         );
     }
     Ok(

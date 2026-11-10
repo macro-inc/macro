@@ -40,7 +40,7 @@ spec:
                   key: KUBE_POSTGRES_PASSWORD
                   name: macro-env
           envFrom: []
-          image: localhost:32550/macro/postgres:build.whrbqyjqg1c1gbzp5cj86xriqjz5lpsb
+          image: localhost:32550/macro/postgres:build.ak9ykh5jrffdsw9wy6l8b5iarh9w7qbb
           imagePullPolicy: IfNotPresent
           lifecycle:
             preStop:

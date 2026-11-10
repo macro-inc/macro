@@ -17,6 +17,11 @@ file can supply them with `--env-file /private/path`. Never print credentials.
 The controller creates Kubernetes Secrets through stdin; rendered manifests
 reference them. Never copy Secret values into YAML, Nix expressions or the repo.
 
+Build native Linux binaries with `cargo x build-services`. The development
+overlay mounts `target/debug` and the host’s `/nix/store` read-only. Rebuild
+old zigbuild output for this native contract; custom directories require
+`up --binaries-dir /path` and `roll --no-build`.
+
 Run two instances with different names and slots 0 and 1. The HTTPS links appear
 at startup and in `just kube-local status <name>`. Each namespace has its own
 backing services, PVCs and Secrets. Hostname cookies are shared across ports:

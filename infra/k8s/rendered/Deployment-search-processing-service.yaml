@@ -45,7 +45,7 @@ spec:
           envFrom:
             - secretRef:
                 name: macro-env
-          image: localhost:32550/macro/search-processing-service:build.j7ifd02sq9vx68219v41xx2jwhjgva3f
+          image: localhost:32550/macro/search-processing-service:build.2d2y7bpq8pbc2dw06fbs99msaps65s05
           imagePullPolicy: IfNotPresent
           name: search-processing-service
           ports:
@@ -68,11 +68,11 @@ spec:
             - /bin/sh
             - -ec
             - |
-              until kubectl get job kafka-topics-93d44f0073 >/dev/null 2>&1; do sleep 0.2; done
-              kubectl wait --for=condition=complete job/kafka-topics-93d44f0073 --timeout=600s
+              until kubectl get job kafka-topics-5ba3a4292b >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/kafka-topics-5ba3a4292b --timeout=600s
 
-              until kubectl get job migrate-ac72207dc7 >/dev/null 2>&1; do sleep 0.2; done
-              kubectl wait --for=condition=complete job/migrate-ac72207dc7 --timeout=600s
+              until kubectl get job migrate-f96702b49a >/dev/null 2>&1; do sleep 0.2; done
+              kubectl wait --for=condition=complete job/migrate-f96702b49a --timeout=600s
 
               until kubectl get job search-indices-c2bd22515d >/dev/null 2>&1; do sleep 0.2; done
               kubectl wait --for=condition=complete job/search-indices-c2bd22515d --timeout=600s

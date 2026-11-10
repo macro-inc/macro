@@ -11,7 +11,7 @@ their existing roles.
 From the Nix development shell, build host binaries once, then start each slot:
 
 ```sh
-cargo x zigbuild
+cargo x build-services
 just kube-local up dev-a --slot 0 &
 just kube-local up dev-b --slot 1 &
 wait
@@ -72,8 +72,11 @@ just kube-local up dev-a --slot 0
 just kube-local down dev-a
 ```
 
-The development overlay mounts the host zigbuild output into a nix2container
-base image. Rolling one service rebuilds binaries and restarts only the named
+The development overlay mounts native Nix-linked binaries from `target/debug`
+and the host’s `/nix/store` read-only into a nix2container base image. Build
+and run this overlay on Linux, as for Compose. Custom binary directories require
+`up --binaries-dir /path` and `roll --no-build`; rebuild old zigbuild outputs
+with `cargo x build-services` to adopt the native runtime contract. Rolling one service rebuilds binaries and restarts only the named
 Deployment. `--no-build` performs only the restart. This path skips Nix image
 builds and registry pushes. The other namespace continues running.
 
