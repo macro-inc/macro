@@ -20,6 +20,7 @@ function host(ideas: Idea[]) {
     ideas: list,
     failed: () => false,
     retry: vi.fn(),
+    refresh: vi.fn(async () => {}),
     accept: vi.fn(async () => {}),
     dismiss: vi.fn(async () => {}),
   } satisfies IdeasSource;
@@ -164,6 +165,7 @@ describe('ideas feed', () => {
       await feed.accept(routineIdea);
 
       expect(actions.turnOnRoutine).toHaveBeenCalledWith('suggestion-1');
+      expect(source.refresh).toHaveBeenCalledTimes(1);
       expect(source.accept).not.toHaveBeenCalled();
     });
   });

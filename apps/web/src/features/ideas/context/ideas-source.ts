@@ -8,6 +8,8 @@ export type IdeasSource = {
   /** Nothing to show because loading failed. */
   failed: Accessor<boolean>;
   retry(): void;
+  /** Read the feed again, after something outside it changed an idea. */
+  refresh(): Promise<void>;
   /** Take an idea up; a background prompt idea starts running. */
   accept(id: string): Promise<void>;
   /** Turn an idea down. `leaving` sends it so it survives the page closing. */

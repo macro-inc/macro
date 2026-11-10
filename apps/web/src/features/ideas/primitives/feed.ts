@@ -124,6 +124,7 @@ export function createIdeasFeed(
       if (idea.kind === 'routine') {
         // Saving the routine is what makes a routine idea done.
         await actions.turnOnRoutine(idea.routineSuggestionId);
+        await source.refresh();
         return;
       }
 

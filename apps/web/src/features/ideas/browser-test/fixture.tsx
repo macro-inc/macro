@@ -69,6 +69,7 @@ function Fixture() {
       setFailed(false);
       setIdeas(ALL);
     },
+    refresh: async () => {},
     accept: async (id) => {
       record(`accept ${id}`);
       change(id, (idea) =>
