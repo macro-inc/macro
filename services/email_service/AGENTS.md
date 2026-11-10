@@ -198,6 +198,8 @@ the gateway `/email` prefix.
   new race between writes and syncs; its ignored `randomized_shard_*` tests run
   the seeded simulation (`SIM_SEEDS`, `SIM_OVERLAP`, `SIM_BATCHES`, see
   `sim/test.rs`). Scenarios run in both label write forms (`scenario!`).
+  Keep bare unauthenticated `GET /` listener probes out of both fake Gmail
+  request logs; retain authenticated, query-bearing, body-bearing and provider requests.
 - Local stacks run debug workers on tokio's 2 MiB worker stacks, where every
   awaited future takes its own stack slot. Pass a Gmail call through a helper
   as a `BoxFuture`, and box an operation the dispatch awaits in several arms;

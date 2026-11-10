@@ -139,3 +139,44 @@ async fn scripted_http_pause_keeps_the_response_chosen_before_the_barrier() {
         503
     );
 }
+
+#[tokio::test]
+async fn only_bare_unauthenticated_listener_probes_skip_both_recordings() {
+    let recording = std::sync::Arc::new(Mutex::new(Vec::new()));
+    let gmail = FakeGmail::start(GmailState {
+        http_recording: Some(recording.clone()),
+        ..GmailState::default()
+    })
+    .await;
+    let root = gmail.url.strip_suffix("/gmail/v1").unwrap();
+    let client = reqwest::Client::new();
+    let response = client
+        .get(format!("{root}/"))
+        .send()
+        .await
+        .expect("listener probe");
+    assert_eq!(response.status(), 200);
+    assert_eq!(response.json::<Value>().await.unwrap(), json!({}));
+    assert!(gmail.lock().log.is_empty());
+    assert!(recording.lock().unwrap().is_empty());
+
+    for request in [
+        client.get(format!("{root}/")).bearer_auth("fixture"),
+        client.get(format!("{root}/?probe=1")),
+        client.get(format!("{root}/")).body("body"),
+        client.get(format!("{}/users/me/profile", gmail.url)),
+    ] {
+        assert_eq!(
+            request.send().await.expect("retained request").status(),
+            200
+        );
+    }
+    assert_eq!(gmail.lock().log.len(), 4);
+    let paths: Vec<_> = recording
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|entry| entry["path"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(paths, ["/", "/?probe=1", "/", "/gmail/v1/users/me/profile"]);
+}

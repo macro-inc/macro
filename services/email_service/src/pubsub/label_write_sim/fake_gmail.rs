@@ -7,7 +7,7 @@
 use axum::Router;
 use axum::body::Bytes;
 use axum::extract::State;
-use axum::http::{Method, StatusCode, Uri};
+use axum::http::{HeaderMap, Method, StatusCode, Uri};
 use axum::response::{IntoResponse, Response};
 use base64::Engine;
 use serde_json::{Value, json};
@@ -409,7 +409,23 @@ impl GmailState {
     }
 }
 
-async fn handle(State(gmail): State<FakeGmail>, method: Method, uri: Uri, body: Bytes) -> Response {
+async fn handle(
+    State(gmail): State<FakeGmail>,
+    method: Method,
+    uri: Uri,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
+    // Local listener discovery is not a Gmail request in either recording.
+    if method == Method::GET
+        && uri.path() == "/"
+        && uri.query().is_none()
+        && body.is_empty()
+        && !headers.contains_key(axum::http::header::AUTHORIZATION)
+    {
+        return (StatusCode::OK, axum::Json(json!({}))).into_response();
+    }
+
     let mut dropped = {
         let mut state = gmail.lock();
         if let Some(remaining) = state.drop_after_requests.get_mut(uri.path()) {
@@ -424,17 +440,14 @@ async fn handle(State(gmail): State<FakeGmail>, method: Method, uri: Uri, body: 
     };
     let recording = gmail.lock().http_recording.clone();
     // Reserve the entry at arrival so a paused request keeps its position.
-    let entry = recording.as_ref().and_then(|recording| {
-        if method == Method::GET && uri.path() == "/" {
-            return None;
-        }
+    let entry = recording.as_ref().map(|recording| {
         let mut recording = recording.lock().expect("HTTP recording");
         let index = recording.len();
         recording.push(
             serde_json::json!({"method": method.as_str(), "path": uri.to_string(),
             "body": crate::parity::http_body(&body), "status": null}),
         );
-        Some(index)
+        index
     });
     let http_pause = {
         let mut state = gmail.lock();
