@@ -256,6 +256,15 @@ impl Availability for Enabled {
 async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgPool) {
     use crate::domain::ports::Repository;
     use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+    async fn finish_lease_rollbacks(pool: &sqlx::PgPool) {
+        // SQLx queues rollback on transaction Drop. Check out every connection so
+        // the next independent request cannot race the preceding lease's release.
+        let mut connections = Vec::new();
+        for _ in 0..pool.options().get_max_connections() {
+            connections.push(pool.acquire().await.expect("finish queued rollback"));
+        }
+        drop(connections);
+    }
     let first = TeamId(Uuid::now_v7());
     let second = TeamId(Uuid::now_v7());
     for (user, email, team) in [
@@ -302,7 +311,7 @@ async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgP
         .await
         .expect("membership");
     }
-    let repository = Arc::new(PgRepository::new(pool).expect("repository capacity"));
+    let repository = Arc::new(PgRepository::new(pool.clone()).expect("repository capacity"));
     let now = chrono::Utc::now();
     let record = Record {
         user_id: MacroUserIdStr::parse_from_str("macro|synthetic@example.test")
@@ -384,6 +393,7 @@ async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgP
         .await
         .expect("enrolled verification code fixture");
     for copy in [false, true] {
+        finish_lease_rollbacks(&pool).await;
         let started = Arc::new(tokio::sync::Notify::new());
         let release = Arc::new(tokio::sync::Notify::new());
         *provider.username_gate.lock().expect("fixture lock") =
@@ -407,6 +417,26 @@ async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgP
             .await;
         if copy {
             assert!(matches!(interaction, Err(Error::Busy)));
+            let busy = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method("POST")
+                        .uri(format!("/teams/{}/items/{item}/reveal", first.0))
+                        .header("authorization", "Bearer session")
+                        .header("x-macro-passwords", "1")
+                        .header("content-type", "application/json")
+                        .body(Body::from("{}"))
+                        .expect("contending request"),
+                )
+                .await
+                .expect("contention response");
+            assert_eq!(busy.status(), StatusCode::CONFLICT);
+            let body = to_bytes(busy.into_body(), 1024)
+                .await
+                .expect("failure body");
+            let failure: Failure = serde_json::from_slice(&body).expect("typed failure");
+            assert_eq!(failure.code, FailureCode::VaultBusy);
         } else {
             assert_eq!(
                 interaction
@@ -459,6 +489,7 @@ async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgP
             StatusCode::FORBIDDEN,
         ),
     ] {
+        finish_lease_rollbacks(&pool).await;
         let response = app
             .clone()
             .oneshot(
@@ -542,6 +573,7 @@ async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgP
             StatusCode::NOT_FOUND,
         ),
     ] {
+        finish_lease_rollbacks(&pool).await;
         let response = app
             .clone()
             .oneshot(

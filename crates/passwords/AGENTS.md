@@ -27,6 +27,8 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
 - `just prepare_db` refreshes root SQLx metadata after query changes.
 - `python3 -m unittest discover -s infra/local/openbao -p 'test_*.py'`
   verifies real OpenBao namespaces/JWT/CAS/TOTP; see its README for local settings.
+- Drain pool connections between independent lease assertions in database tests:
+  SQLx queues rollback on transaction drop. Use a completion barrier, never sleeps.
 
 ## Gotchas
 
