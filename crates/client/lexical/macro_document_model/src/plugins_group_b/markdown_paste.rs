@@ -27,7 +27,7 @@ impl Plugin for MarkdownPaste {
     fn handle(&self, tx: &mut Transaction<'_>, command: &Command) -> Result<Handled, Error> {
         match command {
             Command::Paste(payload) => {
-                if super::clipboard::PasteFacts::read(payload)?.plain_only
+                if payload.intent.plain_only
                     || payload
                         .get("application/x-lexical-editor")
                         .is_some_and(|value| !value.is_empty())
