@@ -39,6 +39,9 @@ and has two services, each with its pair of webhooks declared in `goalert.ts`:
 - `routing.test.ts` fails if any monitor mentions another handle or an email
   address, if anything but the health check mentions the channel webhook, or if
   a monitor lacks the renotify interval.
+- **Composite inputs notify no one.** A monitor that only feeds a composite
+  (the ALB latency and request-floor monitors) has no handles; the composite
+  notifies. `routing.test.ts` checks both.
 
 Paging monitors: the app-down synthetic, ALB non-200 responses and low healthy
 hosts, Lambda error count, web-app source errors, macro-cache memory, RDS high
@@ -111,14 +114,16 @@ The gate is that preview:
   way. `dss-errors-prod` also changes its query and critical threshold
   (150 → 800), and `rds-low-freeable-memory` its query and thresholds
   (critical 2 GB → 250 MB, warning 3 GB → 500 MB) so 2 GiB instances stop
-  alerting at their normal level.
+  alerting at their normal level. `alb-high-response-time` also changes its
+  name, query (prod load balancers only) and message: it becomes an input to
+  the `alb-slow-under-load` composite and stops notifying itself.
 - **Already-deployed monitors update their `message`** (GoAlert handles instead
   of the channel), and the GraphQL soup volume, websocket upgrade, gateway
   connections and task count monitors their `query` and thresholds (volume
   and websocket upgrades also gain recovery thresholds).
-- **102 resources to create**: 73 monitors (32 prod threshold and anomaly, 19 GraphQL soup, 9
+- **104 resources to create**: 75 monitors (32 prod threshold and anomaly, 19 GraphQL soup, 9
   notification retention, 10 WhatsApp session, 1 native call push, 2 harness
-  presence), 2 webhooks,
+  presence, the ALB request floor and its composite), 2 webhooks,
   15 log-based metrics, 3 span-based metrics and 1 APM retention filter (6, 3
   and 1 of them for Outlook sync, 8 log-based metrics for routine
   suggestions), the GoAlert synthetic test, the six prod alert dashboards, and the notification retention dashboard. If the paging

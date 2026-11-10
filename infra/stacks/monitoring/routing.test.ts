@@ -57,6 +57,33 @@ const handles = (message: string): string[] =>
 const nonProd = (r: pulumi.runtime.MockResourceArgs) =>
   /\[(DEV|STAGING)\]/.test(r.inputs.name);
 
+// Monitors a composite combines notify no one; the composite notifies once.
+// Mock ids are resource names, so a composite's query names its inputs.
+const compositeInput = (r: pulumi.runtime.MockResourceArgs) =>
+  monitors().some(
+    (c) =>
+      c.inputs.type === 'composite' &&
+      c.inputs.query.split(/\s*(?:&&|\|\|)\s*/).includes(r.name)
+  );
+
+test('composite inputs notify no one and their composite notifies GoAlert', () => {
+  const composite = monitors().find((r) => r.name === 'alb-slow-under-load');
+  expect(composite?.inputs.query).toBe(
+    'alb-high-response-time && alb-request-floor'
+  );
+  const inputs = monitors().filter(compositeInput);
+  expect(inputs.map((r) => r.name).sort()).toEqual([
+    'alb-high-response-time',
+    'alb-request-floor',
+  ]);
+  for (const resource of inputs) {
+    expect({
+      name: resource.name,
+      handles: handles(resource.inputs.message),
+    }).toEqual({ name: resource.name, handles: [] });
+  }
+});
+
 test('dev and staging monitors notify no one', () => {
   const quiet = monitors().filter(nonProd);
   expect(quiet.length).toBeGreaterThan(5);
@@ -70,7 +97,7 @@ test('dev and staging monitors notify no one', () => {
 
 test('every prod monitor and synthetic test notifies only GoAlert', () => {
   const routed = [...monitors(), ...synthetics()].filter(
-    (r) => r.name !== 'goalert-health' && !nonProd(r)
+    (r) => r.name !== 'goalert-health' && !nonProd(r) && !compositeInput(r)
   );
   expect(routed.length).toBeGreaterThan(80);
   for (const resource of routed) {

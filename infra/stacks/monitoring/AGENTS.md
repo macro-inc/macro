@@ -45,7 +45,8 @@ From `infra/`:
   GoAlert, and pass `dependsOn: goalertWebhooks`. Never mention a channel
   webhook, Slack handle or email address: GoAlert posts to the channel. Only
   `goalert-health` posts to `@webhook-macro-alert-hook` directly.
-  `routing.test.ts` enforces it.
+  `routing.test.ts` enforces it. The exception is a composite's inputs, which
+  have no handles so that only the composite notifies.
 - Notification retention adds nine monitors, one dashboard and a downtime muting
   the prod missing-telemetry alarm; delete the downtime once DSS health
   instrumentation is deployed. Missing telemetry is deliberately an alert, not

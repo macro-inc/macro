@@ -1,9 +1,12 @@
 // Application load balancers.
 //
-// Adopted from monitors created by hand in the Datadog UI. Do not edit a
-// monitor here and in the UI at the same time — this file wins on deploy.
+// The `adopted()` monitors were created by hand in the Datadog UI. Do not edit
+// a monitor here and in the UI at the same time — this file wins on deploy.
+import * as datadog from '@pulumi/datadog';
+import * as pulumi from '@pulumi/pulumi';
 import { adopted } from '../adopted';
-import { notify } from '../notify';
+import { goalertWebhooks } from '../goalert';
+import { notify, RENOTIFY_MINUTES } from '../notify';
 
 // https://us5.datadoghq.com/monitors/1062605
 adopted('alb-non-200-responses', {
@@ -45,15 +48,21 @@ ${notify({ pages: true })}`,
   evaluationDelay: 900,
 });
 
-// https://us5.datadoghq.com/monitors/16891718
-adopted('alb-high-response-time', {
-  name: 'High average response time for alb {{loadbalancer.name}}',
-  type: 'query alert',
-  query:
-    'avg(last_1h):avg:aws.applicationelb.target_response_time.average{! name:proxy-service-alb-prod-153de67 , ! name:store-service-alb-prod-4db6301} by {loadbalancer} > 3',
-  message: `Loadbalancer {{loadbalancer.name}} has a high average response time
+// On a near-idle load balancer one slow request is enough to push the hourly
+// average past 3s: in the 30 days to 2026-11-10, 27 of this monitor's 28
+// alerts came from load balancers that had served under 30 requests in that
+// hour, and the other from a dev one. The latency monitor and a request floor
+// notify no one; the composite alerts when both hold for a load balancer.
+const PROD_ALBS =
+  '(level:prod OR environment:prod*) AND NOT name:proxy-service-alb-prod-153de67 AND NOT name:store-service-alb-prod-4db6301';
 
-${notify({ pages: false })}`,
+// https://us5.datadoghq.com/monitors/16891718
+const slow = adopted('alb-high-response-time', {
+  name: '[PROD] ALB {{loadbalancer.name}} average response time above 3s (composite input)',
+  type: 'query alert',
+  query: `avg(last_1h):avg:aws.applicationelb.target_response_time.average{${PROD_ALBS}} by {loadbalancer} > 3`,
+  message:
+    'Input to `[PROD] ALB {{loadbalancer.name}} slow under load`, which notifies; this monitor notifies no one.',
   monitorThresholds: {
     critical: '3',
   },
@@ -63,3 +72,44 @@ ${notify({ pages: false })}`,
   newGroupDelay: 60,
   evaluationDelay: 900,
 });
+
+const busy = new datadog.Monitor(
+  'alb-request-floor',
+  {
+    name: '[PROD] ALB {{loadbalancer.name}} served 100+ requests in an hour (composite input)',
+    type: 'query alert',
+    query: `sum(last_1h):sum:aws.applicationelb.request_count{${PROD_ALBS}} by {loadbalancer}.as_count() >= 100`,
+    message:
+      'Input to `[PROD] ALB {{loadbalancer.name}} slow under load`, which notifies; this monitor notifies no one. Alert here means the load balancer has enough traffic for its latency to count.',
+    tags: ['env:prod', 'service:alb'],
+    monitorThresholds: {
+      critical: '100',
+    },
+    renotifyInterval: RENOTIFY_MINUTES,
+    requireFullWindow: false,
+    onMissingData: 'default',
+    notifyAudit: false,
+    includeTags: true,
+    newGroupDelay: 60,
+    evaluationDelay: 900,
+  },
+  { dependsOn: goalertWebhooks }
+);
+
+new datadog.Monitor(
+  'alb-slow-under-load',
+  {
+    name: '[PROD] ALB {{loadbalancer.name}} slow under load',
+    type: 'composite',
+    query: pulumi.interpolate`${slow.id} && ${busy.id}`,
+    message: `Load balancer {{loadbalancer.name}} averaged over 3s target response time for an hour while serving at least 100 requests.
+
+${notify({ pages: false })}`,
+    tags: ['env:prod', 'service:alb'],
+    priority: '3',
+    renotifyInterval: RENOTIFY_MINUTES,
+    includeTags: true,
+    notifyAudit: false,
+  },
+  { dependsOn: goalertWebhooks }
+);
