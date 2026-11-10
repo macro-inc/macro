@@ -300,9 +300,10 @@ where
             RoutineActionStatus::Pending(RoutinePendingReason::AwaitingPrompt) => {
                 SessionState::AwaitingPrompt
             }
-            RoutineActionStatus::Pending(
-                RoutinePendingReason::Running | RoutinePendingReason::Disconnected,
-            ) => SessionState::Running,
+            RoutineActionStatus::Pending(RoutinePendingReason::Running) => SessionState::Running,
+            RoutineActionStatus::Pending(RoutinePendingReason::Disconnected) => {
+                SessionState::Disconnected
+            }
         })
     }
 

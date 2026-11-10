@@ -94,6 +94,8 @@ pub enum SessionState {
     AwaitingPrompt,
     /// Working.
     Running,
+    /// Its runtime went away mid-run (a restart, say) without finishing.
+    Disconnected,
     /// Waiting for the person to approve a tool call.
     NeedsApproval,
     /// Waiting for the person to answer a question.
@@ -108,7 +110,7 @@ impl SessionState {
     /// How the run shows on its idea.
     pub fn progress(self) -> RunProgress {
         match self {
-            Self::AwaitingPrompt | Self::Running => RunProgress::Running,
+            Self::AwaitingPrompt | Self::Running | Self::Disconnected => RunProgress::Running,
             Self::NeedsApproval => RunProgress::NeedsApproval,
             Self::NeedsInput => RunProgress::NeedsInput,
             Self::Finished => RunProgress::Finished,

@@ -1628,3 +1628,32 @@ async fn a_restored_idea_starts_no_second_run_while_its_first_is_going(pool: PgP
     h.service.accept(&user(OWNER), idea.id).await.unwrap();
     assert_eq!(runs.started.lock().unwrap().len(), 2);
 }
+
+/// A run whose runtime went away mid-run (a harness restart) doesn't stay
+/// running: past its start window its session is deleted, the run fails,
+/// and the idea may run again.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_run_cut_off_by_a_restart_is_given_up_and_runs_again(pool: PgPool) {
+    let mut h = harness(pool, true).await;
+    let runs = Arc::new(FakeRuns::default());
+    h.service = h.service.with_runs(runs.clone(), RUN_AGENT);
+    let session = h.session(OWNER, "ideas").await;
+    let idea = h
+        .suggest(
+            session,
+            prompt_idea("quotes:compare", "Compare the supplier quotes"),
+        )
+        .await
+        .idea
+        .unwrap();
+    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    let run_session = runs.started.lock().unwrap()[0].0;
+    runs.set(run_session, SessionState::Disconnected);
+    assert_eq!(h.first_run().await.progress, RunProgress::Running);
+    assert_eq!(h.service.settle_runs().await.unwrap(), 0);
+    age_runs(&h.pool, chrono::Duration::minutes(11)).await;
+    assert_eq!(h.service.settle_runs().await.unwrap(), 1);
+    assert_eq!(*runs.discarded.lock().unwrap(), [run_session]);
+    h.service.accept(&user(OWNER), idea.id).await.unwrap();
+    assert_eq!(runs.started.lock().unwrap().len(), 2);
+}
