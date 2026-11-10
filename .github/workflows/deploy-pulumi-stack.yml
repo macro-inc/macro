@@ -48,7 +48,7 @@ jobs:
   check-migrations:
     needs:
     - setup
-    if: ${{ inputs.environment == 'prod' && needs.setup.outputs.ships_code == 'true' }}
+    if: ${{ needs.setup.outputs.ships_code == 'true' }}
     name: Check ${{ inputs.pulumi-service-name }} migrations are applied
     runs-on: db-migrator
     steps:

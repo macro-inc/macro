@@ -501,19 +501,17 @@ pub fn checkout_v4() -> Step<Use> {
         .add_with(("persist-credentials", false))
 }
 
-/// A prod deploy that ships code built from this commit is blocked until every
-/// migration in the commit is applied to prod: single-service deploys apply
-/// none, and code running against a schema it is ahead of fails at runtime.
-/// Dev is left alone so a branch can deploy there before its migrations merge.
-/// `ships_code` is the `setup` job's expression for whether the deploy carries
-/// binaries or Lambdas; the deploy job must list this job in its `needs`.
+/// A deploy that ships code built from this commit is blocked until every
+/// migration in the commit is applied to the environment it deploys to:
+/// single-service deploys apply none, and code running against a schema it is
+/// ahead of fails at runtime. `ships_code` is the `setup` job's expression for
+/// whether the deploy carries binaries or Lambdas; the deploy job must list
+/// this job in its `needs`.
 pub fn check_macro_db_migrations_job(name: &str, ships_code: &str) -> Job {
     Job::default()
         .name(name)
         .needs(vec!["setup".to_string()])
-        .cond(Expression::new(format!(
-            "${{{{ inputs.environment == 'prod' && {ships_code} }}}}"
-        )))
+        .cond(Expression::new(format!("${{{{ {ships_code} }}}}")))
         .runs_on(runners::DB_MIGRATOR)
         .add_step(checkout_v4().add_with(("sparse-checkout", ".github/")))
         .add_step(

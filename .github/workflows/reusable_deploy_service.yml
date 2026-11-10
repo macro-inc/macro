@@ -164,7 +164,7 @@ jobs:
   check-migrations:
     needs:
     - setup
-    if: ${{ inputs.environment == 'prod' && (needs.setup.outputs.has_binaries == 'true' || needs.setup.outputs.has_lambdas == 'true') }}
+    if: ${{ needs.setup.outputs.has_binaries == 'true' || needs.setup.outputs.has_lambdas == 'true' }}
     name: Check ${{ inputs.service-name }} migrations are applied
     runs-on: db-migrator
     steps:

@@ -194,7 +194,7 @@ fn log_lambda_receipt() -> Step<Run> {
 fn check_migrations() -> Job {
     steps::check_macro_db_migrations_job(
         "Check ${{ inputs.service-name }} migrations are applied",
-        "(needs.setup.outputs.has_binaries == 'true' || needs.setup.outputs.has_lambdas == 'true')",
+        "needs.setup.outputs.has_binaries == 'true' || needs.setup.outputs.has_lambdas == 'true'",
     )
 }
 

@@ -199,11 +199,11 @@ build/deployment failure gates remain attempt-scoped.
 - **Migrations deploy before services** and must work with the code already
   running ([database guide](database.md)).
 - **Manual deploys apply no migrations.** `deploy-service-generic.yml` and
-  `deploy-pulumi-stack.yml` refuse a prod deploy of a service with binaries or
-  Lambdas while the deployed commit has a migration that is unapplied to prod
-  or differs from what was applied
+  `deploy-pulumi-stack.yml` refuse to deploy a service with binaries or
+  Lambdas while the deployed commit has a migration that is unapplied to the
+  target environment or differs from what was applied there
   (`.github/actions/check-macro-db-migrations`). Run `migrate-macro-db.yml`
-  first, or deploy a commit without the migration.
+  for that environment first, or deploy a commit without the migration.
 - `continueBeforeSteadyState` means a green deploy job does not prove old tasks
   stopped. The circuit breaker rolls back failed deployments; otherwise roll
   forward or redeploy an older ref.
