@@ -188,6 +188,10 @@ In deployed configs, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY`
 is cognition's Secrets Manager reference; AI tools resolve the separate
 `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME` reference.
 
+The binary allocates with mimalloc (`#[global_allocator]` in `src/main.rs`):
+glibc malloc kept freed memory resident as fragmentation under this
+workload. Tests and the library keep the system allocator.
+
 The shared Postgres pool defaults to 30 connections (`DATABASE_MAX_CONNECTIONS`).
 Routine dispatch waits for the shared HTTP listener and calls its loopback
 address, avoiding an ALB/self-startup race. Shutdown stops scheduling intake and

@@ -676,6 +676,7 @@ dependencies = [
  "mcp_select",
  "memory",
  "messages",
+ "mimalloc",
  "model",
  "model-entity",
  "model-error-response",
