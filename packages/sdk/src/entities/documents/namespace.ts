@@ -164,9 +164,10 @@ export class DocumentNamespace {
    *   and returns plain JSON (strings, numbers, arrays, objects; handles
    *   serialize to their `toJSON()`, such as `{ id }`, and dates to strings, so
    *   return the fields you show), at most 1000 KB of it. The first parameter,
-   *   if any, is an object type. A program runs on the
-   *   server as the person viewing the page, with `macro` this SDK signed in as
-   *   them, for at most 30 seconds. Programs have no `setTimeout`: they can't
+   *   if any, is an object type, and nothing follows the `ProgramContext`. A
+   *   program runs on the server as the person viewing the page, with `macro`
+   *   this SDK signed in as them, for at most 30 seconds. Programs have no
+   *   `setTimeout` or `setInterval` (calling one fails the build): they can't
    *   wait or poll; the page can.
    * - The client script: one `<script type="module" lang="ts">`. It imports
    *   each program as a typed async function from `macro:programs` and `on`
@@ -185,7 +186,11 @@ export class DocumentNamespace {
    * Neither block may import anything else: no `npm:` packages, remote URLs
    * or JSX. Write plain TypeScript against the DOM and the SDK. The page runs
    * in a sandboxed frame: a `<form>` never submits, so use buttons and key
-   * handlers, and nothing can fetch the network except through programs. Put
+   * handlers, and nothing can fetch the network except through programs. No
+   * `<meta http-equiv="refresh">`, `<link rel="preconnect">` (or
+   * `dns-prefetch`, `prefetch`, `prerender`), `<iframe>`, `<object>` or
+   * `<embed>`: the build fails on them. Links don't navigate (a `#fragment`
+   * link scrolls to its target), and a page that sets `location` is closed. Put
    * data into the page with `textContent` or `createElement`, never
    * `innerHTML`, so a task named `<img onerror=…>` stays text.
    *

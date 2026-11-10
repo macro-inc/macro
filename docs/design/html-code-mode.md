@@ -39,16 +39,33 @@ program up and get the outcome back.
   data:; media-src data: blob:; connect-src 'none'; form-action 'none';
   base-uri 'none'`. A page that runs programs as the viewer can then run only
   its own inline code and show only inline media, so fetch, beacons, remote
-  scripts, stylesheets and image URLs can't carry what it read out. CSP does
-  not stop the frame navigating itself (`location = …?leak`), so the frame
-  helper reports its page unloading, and the host also counts the frame's
-  loads: a frame that leaves its page is closed and replaced by a notice. The
-  request that leaves still goes out; closing the frame stops whatever the
-  page would do next. A page with neither programs nor a client script builds
+  scripts, stylesheets and image URLs can't carry what it read out. Paths the
+  policy leaves open are refused elsewhere: the build fails a page with
+  programs that has `<meta http-equiv="refresh">`, a connection hint
+  (`preconnect`, `dns-prefetch`, `prefetch`, `prerender`) or a nested frame
+  (`iframe`, `frame`, `object`, `embed`, which would get fresh globals), and
+  the frame helper, the page's first script, removes `RTCPeerConnection` and
+  its kin (Chrome ignores CSP's `webrtc` directive), removes hints and frames
+  a script inserts before a nested frame loads, scrolls `#fragment` links in
+  place (their URL resolves against the host's), and cancels every other
+  link click, download and ping. CSP does not stop the frame navigating
+  itself (`location = …?leak`, `location.assign`, a refresh meta a script
+  inserts, which removing it doesn't cancel, or a click dispatched on a link
+  outside the document), and `location` can't be overridden, so the helper
+  reports its page unloading and the host also counts the frame's loads in
+  the frame's window: a frame that leaves its page is closed and replaced by
+  a notice. The request that leaves still goes out, with whatever the page
+  put in its URL; closing the frame stops only what the page would do next,
+  and the notice says so. A frame the app's layout detaches and reattaches
+  reloads its `srcdoc` in a new window, which only the host can cause; the
+  guard treats that load as a fresh start and the hosts answer the new
+  window. A page with neither programs nor a client script builds
   `plain` and renders exactly as with the flag off: the stored text in the
   plain frame, with no policy and no helper, so CDN scripts, styles, fonts
   and images keep working. A document the server won't build for the viewer
-  (outside the rollout, too large, not HTML) renders the same way.
+  (outside the rollout, not HTML) renders the same way; one over 2 MiB does
+  too unless it has program blocks, which can't run unbuilt, so the preview
+  says the page is too large to run.
 - **How a file calls it.** Only by program id. The client imports its
   programs from `macro:programs` and calls them as typed functions. The
   build compiles those calls into the host transport. `window.macro` and its
@@ -74,7 +91,8 @@ program up and get the outcome back.
   sandboxes; that is not built. The accepted risk: a page someone else wrote
   can read the viewer's data and write it where its author can see it (a
   message, a document), or carry some out in the URL of one navigation before
-  the host closes its frame. CSP closes the other network paths.
+  the host closes its frame. CSP, the build and the frame helper close the
+  other network paths.
 - **Limits.** Enforced only on the server: a per-viewer queue in front of a
   document-run pool of its own (4 running, 16 queued), 2 running per viewer,
   30 s each. The page waits in the queue instead of failing; the wait counts
@@ -173,7 +191,10 @@ if the run is cancelled.
   `code-mode/` carries
   `run` by program id and `on`, and puts the strict CSP first in the built
   page's head. The latest failed run shows above the page until dismissed,
-  whether or not the page catches its call's rejection. Spans: `document_programs.build`,
+  whether or not the page catches its call's rejection; a frame that replaced
+  one whose run found the document changed starts with a notice to retry.
+  The frame is keyed by `sourceHash`, so a refetch of the same build keeps
+  it. Spans: `document_programs.build`,
   `document_programs.run` (with `queued_ms`), `block_code.run_document_program`,
   `block_code.document_events.stream`.
 - SDK: `documents.publishPage({ name, html, project })` uploads and builds;

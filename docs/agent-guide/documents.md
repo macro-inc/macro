@@ -3206,9 +3206,32 @@ images, fonts and media only as `data:` or `blob:` URLs, and no `fetch`,
 beacons, remote scripts, stylesheets, fonts or image URLs, so every read and
 write goes through a program. The frame is sandboxed with scripts only, so a
 `<form>` never submits: use buttons and key handlers. Programs have no
-`setTimeout`, so they cannot sleep or poll; the page's own script can. A page
-that navigates itself (setting `location`) is closed, and the preview shows
-"This page tried to leave" in its place.
+`setTimeout`, `setInterval` or `setImmediate`, so they cannot sleep or poll; a
+call to one fails the build (the page's own script can use them). A program
+takes at most two parameters, its arguments object and `{ macro }:
+ProgramContext`, or the build fails naming it.
+
+What the policy can't stop, the build and the frame refuse. A page with
+programs can't have `<meta http-equiv="refresh">`, connection hints (`<link
+rel="preconnect">`, `dns-prefetch`, `prefetch`, `prerender`) or nested frames
+(`<iframe>`, `<frame>`, `<object>`, `<embed>`): the build fails naming each,
+and ones a script adds later are removed. WebRTC (`RTCPeerConnection`) is
+unavailable. Links don't navigate: a `#fragment` link scrolls to its target,
+and every other link, `download` or `ping` does nothing. A page that navigates
+itself anyway (setting `location`, a refresh its script adds, or a click it
+dispatches on a link outside the document) is closed, and the preview shows
+"This page tried to navigate away" in its place. The request it started has
+already gone out by then, carrying whatever the page put in its URL: closing
+the frame stops only what the page would do next.
+
+A stored page over 2 MiB isn't built: one with programs says it is too large
+to run, and a page without programs renders as it is. When the page changes
+in another tab, the next call fails with "this page changed", the preview
+loads the new build, and a notice above it says the page was updated and to
+try again. A refetch of the same build (on reconnecting, or regaining focus)
+keeps the page, its state and its live events, which send `macro.resync` once
+the stream reopens. If the app moves the preview frame in its layout, the
+page loads again from the start in place, and keeps running.
 
 ```html
 <ul id="out"></ul>
