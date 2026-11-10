@@ -18,12 +18,18 @@ import type { ComputerStatusSetup } from './computerStatusSetup';
 export interface ComputerStatus {
   /** When billing stops, for a computer canceled at period end. */
   cancelsAt?: ComputerStatusCancelsAt;
+  /** Whether a pending cancellation can still be undone; false once billing has stopped. */
+  canUndoCancel?: boolean;
   /** Versioned catalog entry saved at purchase. */
   catalogEntry: string;
   /** Present for a comped purchase, including after release. */
   compReason?: ComputerStatusCompReason;
+  /** The user who bought it; with the team owner, the one who finishes setup. */
+  purchasedBy?: string | null;
   /** Time the computer was reserved. */
   createdAt: string;
+  /** Every agent bound to the computer, including ones the caller can't see. */
+  agentCount?: number;
   /** Bot id of the coding agent created on it; null until its harness is claimed. */
   defaultAgentId?: string | null;
   /** Root disk limit saved at purchase. */

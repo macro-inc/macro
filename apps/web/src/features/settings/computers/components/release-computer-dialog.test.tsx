@@ -15,6 +15,7 @@ it('releases only once the exact computer name is typed', () => {
   render(() => (
     <ReleaseComputerDialog
       computerName="Build machine"
+      agentCount={0}
       agentNames={[]}
       pending={false}
       onClose={vi.fn()}

@@ -1,7 +1,8 @@
-import { createRecentAgentSelections } from '@app/features/block-agent/context/recent-agent-selections';
+import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useUserId } from '@core/context/user';
+import { useSettingsState } from '@core/constant/SettingsState';
+import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
@@ -97,13 +98,13 @@ export function ComputerSetupDialog(props: {
   onClose: () => void;
 }) {
   const nameId = createUniqueId();
-  const userId = useUserId();
   const agents = useAgentsQuery();
   const renameBot = useUpdateBotMutation();
   const signOut = useClaudeSignOutMutation();
   const preKick = useClaudeSignInMutation();
   const completeSetup = useCompleteComputerSetupMutation();
-  const { replaceSplit } = useSplitLayout();
+  const layout = useSplitLayout();
+  const settings = useSettingsState();
   const [step, setStep] = createSignal<'agent' | 'claude' | 'done'>('agent');
   const [name, setName] = createSignal<string>();
   const [choice, setChoice] = createSignal<ClaudeChoice>();
@@ -180,11 +181,12 @@ export function ComputerSetupDialog(props: {
     }
   };
 
+  // Try it: a new conversation in Code with this computer's agent selected.
   const tryIt = () => {
     const botId = props.computer.defaultAgentId;
-    if (botId) createRecentAgentSelections(userId()).remember(botId);
     props.onClose();
-    replaceSplit({ content: { type: 'component', id: 'agents' } });
+    if (isMobile()) settings.closeSettings();
+    openAgentsPage(layout, 'new', botId ? { composerAgentId: botId } : {});
   };
 
   return (

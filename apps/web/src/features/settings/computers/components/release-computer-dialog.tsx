@@ -5,7 +5,9 @@ import { Show } from 'solid-js';
 /** Destroys a computer now; enabled only once its exact name is typed. */
 export function ReleaseComputerDialog(props: {
   computerName: string;
-  /** The agents bound to the computer, which releasing deletes. */
+  /** How many agents releasing deletes, teammates' private ones included. */
+  agentCount: number;
+  /** The names of the ones the viewer can see. */
   agentNames: readonly string[];
   pending: boolean;
   error?: string;
@@ -29,12 +31,18 @@ export function ReleaseComputerDialog(props: {
           everything on it. There is no refund for the rest of this billing
           period.
         </p>
-        <Show when={props.agentNames.length > 0}>
+        <Show when={props.agentCount > 0}>
           <p class="font-medium text-ink">
             {t('computers.releaseDeletesAgents', {
-              count: props.agentNames.length,
+              count: props.agentCount,
             })}
-            <Show when={props.agentNames.length <= 3}>
+            {/* Names only when they are all of them. */}
+            <Show
+              when={
+                props.agentCount <= 3 &&
+                props.agentNames.length === props.agentCount
+              }
+            >
               {': '}
               {props.agentNames.join(', ')}
             </Show>

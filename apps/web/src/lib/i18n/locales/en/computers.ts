@@ -27,6 +27,7 @@ export default {
   billingHint:
     'Computers are billed on your team subscription. Manage them in Settings → Machines.',
   cancels: 'Cancels {{date}}',
+  turnsOff: 'Turns off {{date}}',
   claudeSignInConflict:
     'Another sign-in is in progress on this computer — try again shortly',
   claudeCancelFailed: 'Could not cancel Claude sign-in. Please try again.',

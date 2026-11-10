@@ -54,12 +54,15 @@ function ComputerSubtitle(props: {
     if (status().tone !== 'success') return status().label;
     return claudeText(props.claude);
   };
-  const cancels = () =>
-    props.computer.cancelsAt
-      ? t('computers.cancels', {
-          date: formatComputerDate(props.computer.cancelsAt),
-        })
-      : undefined;
+  // Once billing has stopped the cancellation is final: it just turns off.
+  const cancels = () => {
+    const at = props.computer.cancelsAt;
+    if (!at) return undefined;
+    const date = formatComputerDate(at);
+    return props.computer.canUndoCancel === false
+      ? t('computers.turnsOff', { date })
+      : t('computers.cancels', { date });
+  };
   return (
     <span>
       {[computerSpecs(props.computer), state(), cancels()]

@@ -101,6 +101,8 @@ function ManagedComputerRow(props: {
   harness?: RegisteredHarness;
   canManage: boolean;
   canManageClaude: boolean;
+  /** The buyer or the team owner, whom the server lets finish setup. */
+  canFinishSetup: boolean;
   onFinishSetup: () => void;
   onSignIn: () => void;
   onShare: () => void;
@@ -137,14 +139,15 @@ function ManagedComputerRow(props: {
   };
 
   const primary = (): ComputerPrimaryAction | undefined => {
-    if (!props.canManageClaude || props.computer.status === 'payment_failed')
-      return undefined;
-    if (setupIncomplete())
+    if (props.computer.status === 'payment_failed') return undefined;
+    if (setupIncomplete()) {
+      if (!props.canFinishSetup) return undefined;
       return {
         label: t('computers.finishSetup'),
         onClick: props.onFinishSetup,
       };
-    if (claudeMissing())
+    }
+    if (props.canManageClaude && claudeMissing())
       return { label: t('computers.claudeSignIn'), onClick: props.onSignIn };
     return undefined;
   };
@@ -259,21 +262,22 @@ function ManagedComputerRow(props: {
         });
     }
     if (props.canManage && !paymentFailed && !computer.retainedUntil) {
-      items.push(
-        computer.cancelsAt
-          ? {
-              label: t('computers.undoCancel'),
-              icon: 'undo',
-              disabled: billingPending(),
-              onSelect: () => run(keep()),
-            }
-          : {
-              label: t('computers.cancelAtEnd'),
-              icon: 'cancel',
-              disabled: billingPending(),
-              onSelect: () => run(cancelAtPeriodEnd()),
-            }
-      );
+      if (!computer.cancelsAt) {
+        items.push({
+          label: t('computers.cancelAtEnd'),
+          icon: 'cancel',
+          disabled: billingPending(),
+          onSelect: () => run(cancelAtPeriodEnd()),
+        });
+      } else if (computer.canUndoCancel !== false) {
+        // Billing stops an hour before period end; after that it is final.
+        items.push({
+          label: t('computers.undoCancel'),
+          icon: 'undo',
+          disabled: billingPending(),
+          onSelect: () => run(keep()),
+        });
+      }
     }
     if (props.canManage) {
       items.push({
@@ -408,6 +412,9 @@ export function MacroComputers(props: {
                   harness={harnessFor(computer)}
                   canManage={isAdmin()}
                   canManageClaude={canManageClaude(computer)}
+                  canFinishSetup={
+                    computer.purchasedBy === userId() || isTeamOwner()
+                  }
                   onFinishSetup={() => setSettingUp(computer.id)}
                   onSignIn={() => setSigningIn(computer.id)}
                   onShare={() =>
@@ -491,6 +498,7 @@ export function MacroComputers(props: {
         {(computer) => (
           <ReleaseComputerDialog
             computerName={computer.name}
+            agentCount={computer.agentCount ?? agentsOn(computer).length}
             agentNames={agentsOn(computer)}
             pending={release.isPending}
             error={releaseError()}
