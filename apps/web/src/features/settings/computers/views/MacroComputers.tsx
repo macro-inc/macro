@@ -44,8 +44,7 @@ import {
 } from '../core/computer-display';
 import { useTeamComputers } from '../primitives/team-computers';
 import { ClaudeSignInDialog } from './claude-sign-in-dialog';
-import { ComputerBuyFlow, useViewerFirstName } from './computer-buy-flow';
-import { ComputerSetupDialog } from './computer-setup-dialog';
+import { ComputerBuyFlow } from './computer-buy-flow';
 
 function failureMessage(error: unknown, fallback: string): string {
   return (error instanceof ThrownResultError && error.message) || fallback;
@@ -324,7 +323,6 @@ export function MacroComputers(props: {
   const isAdmin = useIsTeamAdmin();
   const isTeamOwner = useIsTeamOwner();
   const userId = useUserId();
-  const firstName = useViewerFirstName();
   const { enabled, canPurchase, computers, failed } = useTeamComputers();
   const offers = useComputerOffersQuery(() => canPurchase() && isAdmin());
   const release = useReleaseComputerMutation();
@@ -460,15 +458,11 @@ export function MacroComputers(props: {
       </Show>
 
       <ComputerBuyFlow open={buying()} onClose={() => setBuying(false)} />
-      <Show when={byId(settingUp())}>
-        {(computer) => (
-          <ComputerSetupDialog
-            computer={computer()}
-            firstName={firstName()}
-            onClose={() => setSettingUp(undefined)}
-          />
-        )}
-      </Show>
+      <ComputerBuyFlow
+        open={!!settingUp()}
+        computerId={settingUp()}
+        onClose={() => setSettingUp(undefined)}
+      />
       <Show when={byId(signingIn())?.harnessId}>
         {(harnessId) => (
           <ClaudeSignInDialog

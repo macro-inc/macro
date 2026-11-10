@@ -826,7 +826,7 @@ again under **Your machines**. Each row uses the same layout as a Your machines
 row: status dot, name, one muted line, at most one action, and **⋯** (a sheet
 on touch) for the rest. The line is the size and the resources recorded at
 purchase (`Standard · 4 vCPU · 8 GB · 100 GB`), then one state: setup progress
-(`Setting up · Starting up (step 2 of 4)`, or **Waiting for space on the
+(`Setting up · Starting up (2 of 3)`, or **Waiting for space on the
 host**), **Starting…** while a power-on runs, **Powered off**, a fault, or how
 Claude is paid for (`Claude: Macro credits`, `Claude: your account · <email>`,
 `Claude: not signed in`; a shimmer while the mode loads). A pending cancellation
@@ -855,31 +855,49 @@ To buy one as a team admin:
    Agents**, a team without a computer also sees **Run coding agents on a Macro
    computer** in the agents list, and **Where it runs** ends with **New Macro
    computer**.
-2. **Get a computer** opens one dialog (a drawer on phones): the size radios
-   (**Standard**, **Large**, **XL**) with price per interval, sold-out sizes
-   offering **Notify me**; **Name**, prefilled "<first name>'s Agent Box"
-   (**Agent Box** without a first name); and the price breakdown.
+2. **Get a computer** opens guided setup: one modal (a sheet on phones) with a
+   step header, **Computer · Agent · Claude · Ready**, that stays open from Buy
+   to Try it. The Computer step has the size radios (**Standard**, **Large**,
+   **XL**) with price per interval, sold-out sizes offering **Notify me**;
+   **Name**, prefilled "<first name>'s Agent Box" (**Agent Box** without a first
+   name); the price breakdown; and under **Buy** the heads-up "Next you'll name
+   your agent and sign in to Claude (Pro or Max) — have claude.ai handy."
 3. **Buy · <price>/month** (or **Buy** for an included offer) adds it.
-   Failures stay in the dialog: sold out (409), payment declined (402), or a
+   Failures stay in the step: sold out (409), payment declined (402), or a
    subscription that can't add computers (422). On success the toast reads
-   "Computer purchased. Provisioning now." and guided setup opens.
+   "Computer purchased. Provisioning now." and the modal moves straight to
+   **Agent**.
 
-Guided setup (a sheet on phones) shows provisioning progress, then **Let's set
-up an agent on it**: the agent Macro created on the computer ("<buyer first
-name>'s Agent", a coding agent that bypasses permission prompts), its editable
-name, and an explicit choice between **Your Claude account** and **Macro's
-Claude**; nothing is preselected. **Continue** renames the agent
-(`PATCH /bots/{bot_id}`), then either runs Claude sign-in or switches to Macro
-credits, then marks setup complete. The last step's **Try it** opens a new
-Agents conversation in Code with that agent selected (`openAgentsPage` with
-`composerAgentId`). Closing at any step keeps what was done; **Finish setup**
-resumes. Bought from **Where it runs**, the editor selects the new computer
-when setup closes.
+While the computer provisions, a thin bar at the top of the modal follows the
+same three phases the row shows (Creating the computer → Starting up →
+Connecting to Macro). **Let's set up an agent on it** names the agent Macro
+creates on the computer ("<buyer first name>'s Agent", a coding agent that
+bypasses permission prompts) and asks for an explicit choice between **Your
+Claude account** and **Macro's Claude**; nothing is preselected. The name and
+choice apply once the computer is up: the rename (`PATCH /bots/{bot_id}`), then
+Claude, then setup-complete.
+
+- **Your Claude account** goes to **Sign in to Claude**. Until the computer
+  connects it says "Your sign-in link will be ready in a moment. Keep this
+  open; you'll open claude.ai, sign in, and paste a code back here." Then
+  **Open claude.ai** turns primary and the tab title becomes "● Sign in to
+  Claude — Macro". Closed meanwhile, a toast "<computer> is ready — sign in to
+  Claude" reopens the modal on that step. The code is pasted in the same modal.
+- **Macro's Claude** skips the Claude step.
+
+**Ready** follows by itself once the computer is connected and Claude is set;
+the computer status is refreshed first. **Try it** opens a new Agents
+conversation in Code with that agent selected (`openAgentsPage` with
+`composerAgentId`). Closing at any step keeps its place; the row's **Finish
+setup** reopens it. Bought from **Where it runs**, the editor selects the new
+computer when the modal closes.
 
 **Sign in with Claude** is a dialog. It starts the sign-in when it opens, so
 **Open claude.ai** is a plain new-tab link (the desktop app hands it to the
 system browser). Sign in there, copy the code, come back, paste it into the
-focused field, and press **Complete sign-in**; **Use Macro credits instead**
+focused field (under the note that the code goes straight into the harness
+running the real Claude Code on the computer), and press **Complete
+sign-in**; **Use Macro credits instead**
 switches to credits. A rejected code shows "That code didn't work. Try again to
 get a new one." with **Try again**; an expired sign-in shows **Start over**.
 Success closes the dialog with "Connected as <account>". Everyone on the team

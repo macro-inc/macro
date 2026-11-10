@@ -11,8 +11,10 @@ import {
 } from '@queries/computers/claude';
 import { ActionDialogShell, Button, buttonClasses, Input } from '@ui';
 import {
+  createEffect,
   createSignal,
   createUniqueId,
+  type JSX,
   Match,
   onCleanup,
   Show,
@@ -33,8 +35,9 @@ export function ClaudeSignInFlow(props: {
   onSignedIn: (account: string | undefined) => void;
   /** Offered beside Complete sign-in; absent when credits are not an option. */
   onUseCredits?: () => void;
-  /** Shown above the steps, e.g. the setup dialog's step title. */
   title?: string;
+  /** Guided setup's step header and progress, above the title. */
+  header?: JSX.Element;
 }) {
   const start = useClaudeSignInMutation();
   const complete = useClaudeCompleteMutation();
@@ -81,7 +84,15 @@ export function ClaudeSignInFlow(props: {
   };
   fireAndForget(begin(), 'computer-claude');
 
+  // A user who switched tabs sees in the tab strip that the link is ready.
+  const pageTitle = document.title;
+  createEffect(() => {
+    document.title =
+      url() && step() === 'open' ? t('computers.signInTabTitle') : pageTitle;
+  });
+
   onCleanup(() => {
+    document.title = pageTitle;
     generation++;
     request?.abort();
     if (!signedIn) {
@@ -147,6 +158,7 @@ export function ClaudeSignInFlow(props: {
   return (
     <>
       <ActionDialogShell.Body>
+        {props.header}
         <ActionDialogShell.Header>
           <ActionDialogShell.Title>
             {props.title ?? t('computers.claudeSignInTitle')}
@@ -166,6 +178,9 @@ export function ClaudeSignInFlow(props: {
               fireAndForget(submit(), 'computer-claude');
             }}
           >
+            <p class="text-xs text-ink-muted">
+              {t('computers.claudeHarnessNote')}
+            </p>
             <label for={codeId} class="text-sm leading-5 text-ink-muted">
               {t('computers.claudeCodeLabel')}
             </label>

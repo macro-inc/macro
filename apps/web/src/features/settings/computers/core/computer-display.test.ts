@@ -49,20 +49,22 @@ it.each<{ step: SetupStep; label: string; position: number }>([
   { step: 'creating', label: 'Creating the computer', position: 1 },
   { step: 'booting', label: 'Starting up', position: 2 },
   { step: 'connecting', label: 'Connecting to Macro', position: 3 },
-  { step: 'ready', label: 'Ready', position: 4 },
-])('renders canonical $step progress', ({ step, label, position }) => {
-  const status = computerStatusLabel({
-    ...waiting,
-    status: 'setting_up',
-    setup: { step, position, total: 4 },
-  });
-  expect(status).toEqual({
-    label: 'Setting up',
-    detail: `${label} (step ${position} of 4)`,
-    tone: 'progress',
-  });
-  expect(`${status.label} ${status.detail}`).not.toMatch(/paying|payment/i);
-});
+])(
+  'renders $step as one of the three setup phases',
+  ({ step, label, position }) => {
+    const status = computerStatusLabel({
+      ...waiting,
+      status: 'setting_up',
+      setup: { step, position, total: 4 },
+    });
+    expect(status).toEqual({
+      label: 'Setting up',
+      detail: `${label} (${position} of 3)`,
+      tone: 'progress',
+    });
+    expect(`${status.label} ${status.detail}`).not.toMatch(/paying|payment/i);
+  }
+);
 
 it('keeps an unrecognized runtime step generic without exposing raw text', () => {
   const setup: NonNullable<ComputerStatus['setup']> = {

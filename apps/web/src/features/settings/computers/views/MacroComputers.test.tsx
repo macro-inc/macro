@@ -57,7 +57,13 @@ vi.mock('@queries/computers/claude', () => ({
 }));
 
 vi.mock('./computer-setup-dialog', () => ({
-  ComputerSetupDialog: () => null,
+  ComputerSetupSteps: () => null,
+  StepHeader: () => null,
+  computerConnected: () => false,
+}));
+
+vi.mock('@queries/harnesses/harnesses', () => ({
+  useHarnessesQuery: () => ({ isSuccess: true, data: [] }),
 }));
 
 vi.mock('./claude-sign-in-dialog', () => ({
@@ -294,7 +300,8 @@ it('keeps a zero-price offer included through review and purchase', async () => 
   mocks.offers[0].quote.amount = 0;
   render(() => <MacroComputers harnesses={[]} onSharingChange={() => {}} />);
   fireEvent.click(screen.getByRole('button', { name: 'Get a computer' }));
-  await screen.findByText('Included for Macro');
+  await screen.findByRole('radio', { name: 'Standard' });
+  expect(screen.getAllByText('Included').length).toBeGreaterThan(0);
   expect(screen.queryByText(/\$0\.00/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Buy' }));
   await waitFor(() =>

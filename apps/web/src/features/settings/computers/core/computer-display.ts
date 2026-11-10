@@ -16,9 +16,9 @@ export function sizeLabel(size: string): string {
     .otherwise((unknown) => String(unknown));
 }
 
+/** "4 vCPU · 8 GB · 100 GB", for a size shown beside its name. */
 export function offerSpecs(offer: SizeOffer): string {
-  return t('computers.computerSpecs', {
-    size: sizeLabel(offer.size),
+  return t('computers.offerSpecs', {
     cpus: offer.vcpus,
     memory: offer.memoryGb,
     disk: offer.diskGb,
@@ -59,6 +59,21 @@ export function formatComputerDate(value: string): string {
   });
 }
 
+/** The setup phases a new computer goes through, as both its row and guided
+ *  setup show them. */
+export const SETUP_PHASES: readonly SetupStep[] = [
+  'creating',
+  'booting',
+  'connecting',
+];
+
+/** 0-based index of the computer's current setup phase. */
+export function setupPhaseIndex(computer: ComputerStatus): number {
+  const step = computer.setup?.step;
+  const index = step ? SETUP_PHASES.indexOf(step) : -1;
+  return index === -1 ? 0 : index;
+}
+
 export function setupStepLabel(step: SetupStep): string | undefined {
   return match(step)
     .with('creating', () => t('computers.stepCreating'))
@@ -80,14 +95,17 @@ export function computerStatusLabel(computer: ComputerStatus): {
     .with('setting_up', () => {
       const setup = computer.setup;
       const step = setup && setupStepLabel(setup.step);
+      // The same three phases guided setup shows; the server's final "ready"
+      // step is the Ready status itself.
+      const phase = SETUP_PHASES.indexOf(setup?.step ?? 'ready');
       return {
         label: t('computers.settingUp'),
         detail:
-          setup && step
+          step && phase !== -1
             ? t('computers.setupProgress', {
                 step,
-                position: setup.position,
-                total: setup.total,
+                position: phase + 1,
+                total: SETUP_PHASES.length,
               })
             : undefined,
         tone: 'progress',

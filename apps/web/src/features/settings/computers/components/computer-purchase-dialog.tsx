@@ -1,17 +1,18 @@
 import { t } from '@app/lib/i18n';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { ComputerSize, SizeOffer } from '@service-auth/computers';
-import { ActionDialogShell, Button, Dialog, Input } from '@ui';
-import { createSignal, createUniqueId, Show } from 'solid-js';
-import { PriceBreakdown } from '../../components/price-breakdown';
-import { formatQuote, offerSpecs, sizeLabel } from '../core/computer-display';
+import { ActionDialogShell, Button, Input } from '@ui';
+import { createSignal, createUniqueId, type JSX, Show } from 'solid-js';
+import { formatQuote } from '../core/computer-display';
 import { ComputerSizePicker } from './computer-size-picker';
 
 /**
- * Picks a size and name, and shows the exact price, before a computer is
- * added to the subscription.
+ * Guided setup's first step: pick a size and name, and see the exact price,
+ * before a computer is added to the subscription.
  */
-export function ComputerPurchaseDialog(props: {
+export function ComputerPurchaseStep(props: {
+  /** Guided setup's step header, above the title. */
+  header?: JSX.Element;
   offers: readonly SizeOffer[];
   /** Prefilled, editable: "Maya's Agent Box". */
   defaultName: string;
@@ -46,101 +47,79 @@ export function ComputerPurchaseDialog(props: {
   };
 
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => !open && !props.pending && props.onClose()}
-      position="center"
-      visibleScrim
-      class="w-[min(440px,calc(100vw-16px))]"
-    >
-      <ActionDialogShell class="h-auto">
-        <ActionDialogShell.Body>
-          <ActionDialogShell.Header>
-            <ActionDialogShell.Title>
-              {t('computers.sizeTitle')}
-            </ActionDialogShell.Title>
-            <ActionDialogShell.Description>
-              {t('computers.description')}
-            </ActionDialogShell.Description>
-          </ActionDialogShell.Header>
+    <>
+      <ActionDialogShell.Body>
+        {props.header}
+        <ActionDialogShell.Header>
+          <ActionDialogShell.Title>
+            {t('computers.sizeTitle')}
+          </ActionDialogShell.Title>
+          <ActionDialogShell.Description>
+            {t('computers.getComputerLine')}
+          </ActionDialogShell.Description>
+        </ActionDialogShell.Header>
 
-          <ComputerSizePicker
-            offers={props.offers}
-            selected={size()}
-            notifyPending={props.notifyPending}
-            onSelect={setSize}
-            onNotify={props.onNotify}
-          />
+        <ComputerSizePicker
+          offers={props.offers}
+          selected={size()}
+          notifyPending={props.notifyPending}
+          onSelect={setSize}
+          onNotify={props.onNotify}
+        />
 
-          <div class="flex flex-col gap-2">
-            <label for={nameId} class="text-sm leading-5 text-ink-muted">
-              {t('computers.name')}
-            </label>
-            <Input
-              id={nameId}
-              type="text"
-              value={name()}
-              maxLength={64}
-              disabled={props.pending}
-              onInput={(event) => setName(event.currentTarget.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') confirm();
-              }}
-            />
-          </div>
-
-          <Show when={offer()}>
-            {(chosen) => (
-              <PriceBreakdown
-                currency={chosen().quote.currency}
-                interval={chosen().quote.interval}
-                total={chosen().quote.amount}
-                included={chosen().quote.amount === 0}
-                items={[
-                  {
-                    name: t('settingsBilling.sizedComputer', {
-                      size: sizeLabel(chosen().size),
-                    }),
-                    description: offerSpecs(chosen()),
-                    amount: chosen().quote.amount,
-                    included: chosen().quote.amount === 0,
-                  },
-                ]}
-              />
-            )}
-          </Show>
-
-          <Show when={props.error}>
-            {(error) => (
-              <p role="alert" class="text-sm text-failure">
-                {error()}
-              </p>
-            )}
-          </Show>
-        </ActionDialogShell.Body>
-
-        <ActionDialogShell.Footer>
-          <Button
-            type="button"
-            variant="ghost"
+        <div class="flex flex-col gap-2">
+          <label for={nameId} class="text-sm leading-5 text-ink-muted">
+            {t('computers.name')}
+          </label>
+          <Input
+            id={nameId}
+            type="text"
+            value={name()}
+            maxLength={64}
             disabled={props.pending}
-            onClick={props.onClose}
-          >
-            {t('common.cancel')}
-          </Button>
-          <Button
-            type="button"
-            variant="primary"
-            disabled={props.pending || !offer()}
-            onClick={confirm}
-          >
-            <Show when={props.pending} fallback={buyLabel()}>
-              <SpinnerIcon class="size-4 animate-spin" />
-              <span class="sr-only">{t('computers.buying')}</span>
-            </Show>
-          </Button>
-        </ActionDialogShell.Footer>
-      </ActionDialogShell>
-    </Dialog>
+            onInput={(event) => setName(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') confirm();
+            }}
+          />
+        </div>
+
+        {/* The price is on each size and on Buy; one line says how it bills. */}
+        <p class="text-xs text-ink-muted">{t('settingsBilling.proration')}</p>
+
+        <Show when={props.error}>
+          {(error) => (
+            <p role="alert" class="text-sm text-failure">
+              {error()}
+            </p>
+          )}
+        </Show>
+      </ActionDialogShell.Body>
+
+      <ActionDialogShell.Footer>
+        <Button
+          type="button"
+          variant="ghost"
+          disabled={props.pending}
+          onClick={props.onClose}
+        >
+          {t('common.cancel')}
+        </Button>
+        <Button
+          type="button"
+          variant="primary"
+          disabled={props.pending || !offer()}
+          onClick={confirm}
+        >
+          <Show when={props.pending} fallback={buyLabel()}>
+            <SpinnerIcon class="size-4 animate-spin" />
+            <span class="sr-only">{t('computers.buying')}</span>
+          </Show>
+        </Button>
+        <p class="basis-full text-right text-xs text-ink-muted">
+          {t('computers.buyHeadsUp')}
+        </p>
+      </ActionDialogShell.Footer>
+    </>
   );
 }
