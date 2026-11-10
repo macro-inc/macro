@@ -83,40 +83,54 @@ pub fn parse_marker_priority(text: &str) -> Option<TaskPriority> {
 /// Collect direct root checklists without registering transforms or mutating state.
 /// This is an explicit bulk read, not an automatic per-keystroke listener.
 pub fn collect_checklist_metadata(state: &impl Read) -> Result<Vec<ChecklistMeta>, Error> {
-    let view = state.view();
     let mut lists = Vec::new();
-    for key in view.children(NodeKey::ROOT) {
-        let Some(list) = view.get::<ListNode>(key) else {
-            continue;
-        };
-        if list.list_type() != ListType::Check {
-            continue;
+    for key in state.view().children(NodeKey::ROOT) {
+        if let Some(meta) = collect_checklist_metadata_for_list(state, key)? {
+            lists.push(meta);
         }
-        let mut items: Vec<ChecklistItemMeta> = Vec::new();
-        let mut leading = Vec::new();
-        for child in view.children(key) {
-            if !view.is::<ListItemNode>(child) {
-                continue;
-            }
-            if view.children(child).any(|key| view.is::<ListNode>(key)) {
-                if let Some(last) = items.last_mut() {
-                    last.attached_keys.push(child);
-                } else {
-                    leading.push(child);
-                }
-                continue;
-            }
-            let mut item = collect_item(state, child)?;
-            item.leading_keys = std::mem::take(&mut leading);
-            items.push(item);
-        }
-        lists.push(ChecklistMeta {
-            list_key: key,
-            items,
-            settings: get_task_list_view_settings(state, key)?,
-        });
     }
     Ok(lists)
+}
+
+/// Read one actual direct-root checklist using the same collection coverage as bulk.
+/// Missing, detached, nested and non-checklist targets have no such coverage.
+pub fn collect_checklist_metadata_for_list(
+    state: &impl Read,
+    key: NodeKey,
+) -> Result<Option<ChecklistMeta>, Error> {
+    let view = state.view();
+    if view.parent(key) != Some(NodeKey::ROOT) {
+        return Ok(None);
+    }
+    let Some(list) = view.get::<ListNode>(key) else {
+        return Ok(None);
+    };
+    if list.list_type() != ListType::Check {
+        return Ok(None);
+    }
+    let mut items: Vec<ChecklistItemMeta> = Vec::new();
+    let mut leading = Vec::new();
+    for child in view.children(key) {
+        if !view.is::<ListItemNode>(child) {
+            continue;
+        }
+        if view.children(child).any(|key| view.is::<ListNode>(key)) {
+            if let Some(last) = items.last_mut() {
+                last.attached_keys.push(child);
+            } else {
+                leading.push(child);
+            }
+            continue;
+        }
+        let mut item = collect_item(state, child)?;
+        item.leading_keys = std::mem::take(&mut leading);
+        items.push(item);
+    }
+    Ok(Some(ChecklistMeta {
+        list_key: key,
+        items,
+        settings: get_task_list_view_settings(state, key)?,
+    }))
 }
 
 fn collect_item(state: &impl Read, key: NodeKey) -> Result<ChecklistItemMeta, Error> {

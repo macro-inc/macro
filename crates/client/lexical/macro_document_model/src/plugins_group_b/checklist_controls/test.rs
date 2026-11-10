@@ -275,3 +275,73 @@ fn absent_legacy_date_and_task_ids_remain_absent_instead_of_becoming_null() -> R
     assert_eq!(metadata[0].items[0].task_id, Maybe::Missing);
     Ok(())
 }
+
+#[test]
+fn per_list_collection_equals_bulk_union_and_preserves_unknown_settings() -> Result<(), Error> {
+    let mut editor =
+        crate::preset_builder_with_mode(EditorType::MarkdownSync, EditorMode::ViewAttached)
+            .build()
+            .expect("registry");
+    let ((first, paragraph, second, nested, detached), _) = editor.update(|tx| {
+        let first = tx.create(ListNode::new(ListType::Check, 1))?;
+        let row = tx.create(ListItemNode {
+            checked: Some(true),
+            ..Default::default()
+        })?;
+        let text = tx.create_text("First!")?;
+        tx.append(row, &[text.key()])?;
+        tx.append(first, &[row.key()])?;
+        let paragraph = tx.create(Paragraph::default())?;
+        let second = tx.create(ListNode::new(ListType::Check, 1))?;
+        let wrapper = tx.create(ListItemNode::default())?;
+        let nested = tx.create(ListNode::new(ListType::Check, 1))?;
+        let nested_row = tx.create(ListItemNode::default())?;
+        let nested_text = tx.create_text("Nested")?;
+        tx.append(nested_row, &[nested_text.key()])?;
+        tx.append(nested, &[nested_row.key()])?;
+        tx.append(wrapper, &[nested.key()])?;
+        let second_row = tx.create(ListItemNode::default())?;
+        let second_text = tx.create_text("Second!!")?;
+        tx.append(second_row, &[second_text.key()])?;
+        tx.append(second, &[wrapper.key(), second_row.key()])?;
+        let detached = tx.create(ListNode::new(ListType::Check, 1))?;
+        tx.append(NodeKey::ROOT, &[first.key(), paragraph.key(), second.key()])?;
+        set_task_list_view_settings(
+            tx,
+            second.key(),
+            Arc::new(serde_json::json!({"filters":{"future":["keep"]},"unknown":{"raw":true}})),
+        )?;
+        Ok((
+            first.key(),
+            paragraph.key(),
+            second.key(),
+            nested.key(),
+            detached.key(),
+        ))
+    })?;
+    let before = editor.state().to_json()?;
+    let bulk = collect_checklist_metadata(editor.state())?;
+    assert_eq!(
+        bulk.iter().map(|meta| meta.list_key).collect::<Vec<_>>(),
+        vec![first, second]
+    );
+    let mut per_list = Vec::new();
+    for key in editor.state().view().children(NodeKey::ROOT) {
+        if let Some(meta) = collect_checklist_metadata_for_list(editor.state(), key)? {
+            per_list.push(meta);
+        }
+    }
+    assert_eq!(per_list, bulk);
+    assert_eq!(
+        per_list[1].settings.as_ref(),
+        &serde_json::json!({"filters":{"future":["keep"]},"unknown":{"raw":true}})
+    );
+    for key in [NodeKey::ROOT, paragraph, nested, detached] {
+        assert_eq!(
+            collect_checklist_metadata_for_list(editor.state(), key)?,
+            None
+        );
+    }
+    assert_eq!(editor.state().to_json()?, before);
+    Ok(())
+}

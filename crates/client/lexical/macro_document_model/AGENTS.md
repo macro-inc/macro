@@ -109,6 +109,6 @@ Run cargo test -p macro_document_model --test sync_styled_cache for the stock Ch
 
 Emit existing ROOT state keys id then documentMetadata after unknown keys only in live profiles installing document metadata; preserve nested unknown values and keep initialization policy separate from export ordering.
 
-Read direct-root checklist metadata through checklist_controls::collect_checklist_metadata; its ordinary-row coverage excludes nested wrappers, so consumers must preserve unknown coverage rather than infer a plain row or install task-status behavior. Plan checklist controls through the pure checklist_plan API using actual task/name/calendar facts; preserve raw unsupported filter settings and keep query/FFI activation explicit.
+Read direct-root checklist metadata through checklist_controls::collect_checklist_metadata or collect_checklist_metadata_for_list for a single target; its ordinary-row coverage excludes nested wrappers, so consumers must preserve unknown coverage rather than infer a plain row or install task-status behavior. Plan checklist controls through the pure checklist_plan API using actual task/name/calendar facts; preserve raw unsupported filter settings and keep query/FFI activation explicit.
 
 Expose initial/on-demand checklist plans through group-b.checklist-plan using only current collected metadata and explicit typed task/name/raw Date facts; preserve whole-result unsupported coverage and do not cache facts in a query.
