@@ -21,6 +21,8 @@ use crate::{
 #[cfg(test)]
 mod atomicity_tests;
 #[cfg(test)]
+mod clock_tests;
+#[cfg(test)]
 mod performance_tests;
 
 #[cfg(test)]
@@ -278,6 +280,7 @@ struct UndoManagerInner {
     processing_undo: bool,
     paused: bool,
     last_undo_time: i64,
+    time_source: Option<Arc<dyn Fn() -> i64 + Send + Sync>>,
     merge_interval_in_ms: i64,
     max_stack_size: usize,
     exclude_origin_prefixes: Vec<Box<str>>,
@@ -604,6 +607,7 @@ impl UndoManagerInner {
             paused: false,
             merge_interval_in_ms: 0,
             last_undo_time: 0,
+            time_source: None,
             max_stack_size: usize::MAX,
             exclude_origin_prefixes: vec![],
             last_popped_selection: None,
@@ -643,7 +647,11 @@ impl UndoManagerInner {
             });
         }
 
-        let now = get_sys_timestamp() as Timestamp;
+        let time_source = this.borrow().time_source.clone();
+        let now = match time_source {
+            Some(source) => source(),
+            None => get_sys_timestamp() as Timestamp,
+        };
         let span = CounterSpan::new(this.borrow().next_counter.unwrap(), latest_counter);
         let meta = this
             .borrow()
@@ -655,7 +663,8 @@ impl UndoManagerInner {
         let mut this = this.borrow_mut();
         let this: &mut Self = &mut this;
         // Wether the change is within the accepted merge interval
-        let in_merge_interval = now - this.last_undo_time < this.merge_interval_in_ms;
+        let in_merge_interval = i128::from(now) - i128::from(this.last_undo_time)
+            < i128::from(this.merge_interval_in_ms);
 
         // If group is active, but there is nothing in the group, don't merge
         // If the group is active and it's not the first push in the group, merge
@@ -822,6 +831,20 @@ impl UndoManager {
 
     pub fn peer(&self) -> PeerID {
         self.peer.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Set the clock used by the undo merge interval, in milliseconds.
+    ///
+    /// `None` uses the system timestamp. Replacing the source does not rebase
+    /// previously recorded timestamps. The callback runs without an inner
+    /// history borrow and must return time in the same domain as prior records.
+    pub fn set_time_source(&self, source: Option<Arc<dyn Fn() -> i64 + Send + Sync>>) {
+        let previous = {
+            let lock = self.inner.lock();
+            let mut inner = lock.borrow_mut();
+            std::mem::replace(&mut inner.time_source, source)
+        };
+        drop(previous);
     }
 
     pub fn set_merge_interval(&self, interval: i64) {
