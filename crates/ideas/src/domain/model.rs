@@ -618,6 +618,21 @@ pub struct GenerationSession {
     /// The surfaces a routines session suggests for, by wire name; empty
     /// for ideas.
     pub surfaces: Vec<String>,
+    /// The trace its generation runs in. A session's tool calls reach the
+    /// API without its trace context, so they record this to be joined.
+    pub trace_id: Option<String>,
+}
+
+/// The person acting on an idea.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Accept {
+    /// When the idea was last changed as the caller's copy shows it: a
+    /// background idea runs only if it is still what they saw.
+    pub shown_updated_at: DateTime<Utc>,
+    /// Whether the person themself acts, in the app: only they start a
+    /// background idea's run. Anyone else (an agent of theirs) at most marks
+    /// it accepted, for them to run.
+    pub by_person: bool,
 }
 
 /// What a change-log entry records.
@@ -689,6 +704,9 @@ pub enum IdeaError {
     /// Only an open ideas session of the person's may call this.
     #[error("only an ideas generation session may do this")]
     NotGenerating,
+    /// The idea changed since the caller read it: read it again.
+    #[error("the idea changed since it was read; read it again")]
+    Changed,
     /// Anything else.
     #[error("internal ideas error: {0:?}")]
     Internal(rootcause::Report),

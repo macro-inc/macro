@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use feature_flags::FeatureFlags;
 use futures::{StreamExt as _, TryStreamExt as _};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -19,7 +19,7 @@ use model_owner::CreationPrincipal;
 
 use super::check;
 use super::model::{
-    AttachDraft, Change, ChangeAction, EntityAction, GenerationSession, GenerationTrigger, Idea,
+    Accept, AttachDraft, Change, ChangeAction, EntityAction, GenerationSession, GenerationTrigger, Idea,
     IdeaContent, IdeaError, IdeaKind, IdeaReview, IdeaRun, IdeaState, IdeaWriteOutcome, Ideas,
     KindName, RetireIdea, RewriteIdea, RunMode, RunProgress, RunSettled, RunStartError,
     SessionKind, SessionReadError, SessionState, StoredRun, SuggestIdea, Target,
@@ -45,6 +45,11 @@ pub const DONE_WITHIN: chrono::TimeDelta = chrono::TimeDelta::hours(24);
 
 /// Ideas whose items the feed checks at once.
 const ACCESS_CHECKS_AT_ONCE: usize = 8;
+
+/// How many of the person's closed ideas a session's review shows, most
+/// recently closed first: enough not to suggest again what they just turned
+/// down. Older ones still count: proposing one comes back to the same row.
+const REVIEW_CLOSED: u32 = 60;
 
 const LIMITS: Limits = Limits {
     open: OPEN_LIMIT,
@@ -136,9 +141,23 @@ where
         user: &MacroUserIdStr<'_>,
         ideas: &mut [Idea],
     ) -> Result<(), IdeaError> {
+        // Only background prompt ideas run.
+        let ids: Vec<Uuid> = ideas
+            .iter()
+            .filter(|idea| {
+                matches!(
+                    idea.kind,
+                    IdeaKind::Prompt {
+                        run_mode: RunMode::Background,
+                        ..
+                    }
+                )
+            })
+            .map(|idea| idea.id)
+            .collect();
         let runs = self
             .repo
-            .latest_runs(user)
+            .latest_runs(user, &ids)
             .await
             .map_err(IdeaError::internal)?;
         for idea in ideas.iter_mut() {
@@ -176,6 +195,7 @@ where
         user: &MacroUserIdStr<'static>,
         idea: &Idea,
         prompt: &str,
+        shown_updated_at: DateTime<Utc>,
     ) -> Result<(), IdeaError> {
         let span = tracing::Span::current();
         let Some(runs) = &self.runs else {
@@ -193,15 +213,29 @@ where
             settled: None,
         };
         span.record("agent.session.id", run.session.to_string());
+        // What runs is what the person saw: a card read before the idea
+        // was rewritten is read again first.
+        if idea.updated_at != shown_updated_at {
+            span.record("idea.run.outcome", "changed");
+            return Err(IdeaError::Changed);
+        }
         // The row first, so two accepts at once start one session.
         if !self
             .repo
-            .start_run(&run)
+            .start_run(&run, shown_updated_at)
             .await
             .map_err(IdeaError::internal)?
         {
             span.record("idea.run.outcome", "not_runnable");
-            return Err(IdeaError::NotFound);
+            let now = self
+                .repo
+                .idea(user, idea.id)
+                .await
+                .map_err(IdeaError::internal)?;
+            return Err(match now {
+                Some(now) if now.updated_at != shown_updated_at => IdeaError::Changed,
+                _ => IdeaError::NotFound,
+            });
         }
         match runs.sessions.start(&run, prompt).await {
             Ok(()) => {}
@@ -280,6 +314,9 @@ where
         let span = tracing::Span::current();
         span.record("agent.session.id", session.session.to_string());
         span.record("suggestion.generation.id", session.generation.to_string());
+        if let Some(trace) = &session.trace_id {
+            span.record("suggestion.generation.trace_id", trace.as_str());
+        }
         Ok(session)
     }
 
@@ -291,17 +328,33 @@ where
         problems: &mut Vec<String>,
     ) -> Result<(), IdeaError> {
         for target in targets {
-            let viewable = self
+            let mut viewable = self
                 .access
                 .can_view(user, target)
                 .await
                 .map_err(IdeaError::internal)?;
+            if let Some(part) = target.part_id.as_deref().filter(|_| viewable) {
+                viewable = self
+                    .access
+                    .is_part_of(target, part)
+                    .await
+                    .map_err(IdeaError::internal)?;
+            }
             if !viewable {
-                problems.push(format!(
-                    "the user can't open {} `{}`; an idea is only about items they can open",
-                    target.entity_type.as_ref(),
-                    target.entity_id
-                ));
+                let item = target.entity_type.as_ref();
+                problems.push(match &target.part_id {
+                    Some(part) => format!(
+                        "the user can't open {item} `{}`, or `{part}` isn't one of its parts \
+                         (a message of a channel or email thread); an idea is only about \
+                         items they can open",
+                        target.entity_id
+                    ),
+                    None => format!(
+                        "the user can't open {item} `{}`; an idea is only about items they \
+                         can open",
+                        target.entity_id
+                    ),
+                });
             }
         }
         Ok(())
@@ -398,15 +451,9 @@ where
         let done_since = Utc::now() - DONE_WITHIN;
         let shown: Vec<Idea> = self
             .repo
-            .ideas(user)
+            .shown(user, done_since)
             .await
-            .map_err(IdeaError::internal)?
-            .into_iter()
-            .filter(|idea| {
-                idea.state.is_open()
-                    || (idea.state == IdeaState::Done && idea.state_changed_at >= done_since)
-            })
-            .collect();
+            .map_err(IdeaError::internal)?;
         let before = shown.len();
         // Up to 30 ideas of up to 5 items each: check a few at a time.
         let viewable: Vec<Idea> = futures::stream::iter(shown)
@@ -418,10 +465,11 @@ where
             .try_collect()
             .await?;
         let hidden = before - viewable.len();
+        // One read of runs for the open and the done ideas.
+        let mut viewable = viewable;
+        self.attach_runs(user, &mut viewable).await?;
         let (mut ideas, mut done): (Vec<Idea>, Vec<Idea>) =
             viewable.into_iter().partition(|idea| idea.state.is_open());
-        self.attach_runs(user, &mut ideas).await?;
-        self.attach_runs(user, &mut done).await?;
         ideas.sort_by(|a, b| {
             b.importance
                 .cmp(&a.importance)
@@ -439,15 +487,20 @@ where
         prompt::brief(trigger, timezone.name(), Utc::now(), &self.sdk_reference)
     }
 
-    async fn kept(&self, session: Uuid) -> Result<u32, IdeaError> {
+    async fn kept(&self, generation: Uuid, session: Uuid) -> Result<u32, IdeaError> {
         self.repo
-            .kept_by(session)
+            .kept_by(generation, session)
             .await
             .map_err(IdeaError::internal)
     }
 
     #[tracing::instrument(name = "ideas.accept", skip_all, fields(idea.id = %id), err)]
-    async fn accept(&self, user: &MacroUserIdStr<'static>, id: Uuid) -> Result<(), IdeaError> {
+    async fn accept(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        id: Uuid,
+        accept: Accept,
+    ) -> Result<(), IdeaError> {
         self.require_flag(user).await?;
         let idea = self
             .repo
@@ -461,26 +514,56 @@ where
             sends,
         } = &idea.kind
         {
+            // Only the person, in the app, starts a run: anyone acting for
+            // them at most takes the idea on, for them to run.
+            if !accept.by_person {
+                if idea.state == IdeaState::Accepted {
+                    return Ok(());
+                }
+                let moved = self
+                    .repo
+                    .set_state(
+                        user,
+                        id,
+                        &[IdeaState::Proposed],
+                        IdeaState::Accepted,
+                        None,
+                        Utc::now(),
+                    )
+                    .await
+                    .map_err(IdeaError::internal)?;
+                if !moved {
+                    return Err(IdeaError::NotFound);
+                }
+                tracing::info!(event = "ideas.accepted", run = false);
+                return Ok(());
+            }
             return self
-                .start_run(user, &idea, &run_prompt(prompt, sends.as_deref()))
+                .start_run(
+                    user,
+                    &idea,
+                    &run_prompt(prompt, sends.as_deref()),
+                    accept.shown_updated_at,
+                )
                 .await;
         }
+        // Anything else the person acts on themself (opens the item, the
+        // composer, the routine) is done when they do; accepting a done idea
+        // again changes nothing.
+        if idea.state == IdeaState::Done {
+            return Ok(());
+        }
+        let (from, to): (&[IdeaState], IdeaState) =
+            (&[IdeaState::Proposed, IdeaState::Accepted], IdeaState::Done);
         let moved = self
             .repo
-            .set_state(
-                user,
-                id,
-                &[IdeaState::Proposed],
-                IdeaState::Accepted,
-                None,
-                Utc::now(),
-            )
+            .set_state(user, id, from, to, None, Utc::now())
             .await
             .map_err(IdeaError::internal)?;
         if !moved {
             return Err(IdeaError::NotFound);
         }
-        tracing::info!(event = "ideas.accepted");
+        tracing::info!(event = "ideas.accepted", done = true);
         Ok(())
     }
 
@@ -521,8 +604,14 @@ where
                 }
                 // Its runtime went away mid-run (a restart): once its session
                 // is gone it can't resume, and the idea may be tried again.
-                // Its prompt never arrived: likewise.
-                Ok(SessionState::AwaitingPrompt | SessionState::Disconnected) => {
+                // Its prompt never arrived: likewise. Nobody watches a run,
+                // so one waiting for an approval or an answer never gets one.
+                Ok(
+                    SessionState::AwaitingPrompt
+                    | SessionState::Disconnected
+                    | SessionState::NeedsApproval
+                    | SessionState::NeedsInput,
+                ) => {
                     if !started_long_ago {
                         continue;
                     }
@@ -549,9 +638,7 @@ where
                     (RunSettled::Finished, produced)
                 }
                 Ok(SessionState::Failed) => (RunSettled::Failed, Vec::new()),
-                Ok(
-                    SessionState::Running | SessionState::NeedsApproval | SessionState::NeedsInput,
-                ) => continue,
+                Ok(SessionState::Running) => continue,
             };
             let moved = self
                 .repo
@@ -625,6 +712,7 @@ where
     #[tracing::instrument(name = "ideas.review", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         ideas.count = tracing::field::Empty,
     ), err)]
     async fn review(
@@ -636,7 +724,7 @@ where
         let (ideas, added) = tokio::try_join!(
             async {
                 self.repo
-                    .ideas(&session.user)
+                    .for_review(&session.user, REVIEW_CLOSED)
                     .await
                     .map_err(IdeaError::internal)
             },
@@ -667,6 +755,7 @@ where
     #[tracing::instrument(name = "ideas.suggest", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         idea.kind = request.kind.as_ref(),
         idea.id = tracing::field::Empty,
         idea.outcome = tracing::field::Empty,
@@ -856,6 +945,7 @@ where
     #[tracing::instrument(name = "ideas.rewrite", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         idea.id = %id,
         idea.outcome = tracing::field::Empty,
         idea.problems = tracing::field::Empty,
@@ -982,6 +1072,7 @@ where
     #[tracing::instrument(name = "ideas.retire", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         idea.id = %id,
         idea.outcome = tracing::field::Empty,
         idea.problems = tracing::field::Empty,

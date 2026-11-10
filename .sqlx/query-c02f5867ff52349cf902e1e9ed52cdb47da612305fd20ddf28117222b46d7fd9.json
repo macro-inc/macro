@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE suggestion_audience SET next_run_at = $2 WHERE user_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c02f5867ff52349cf902e1e9ed52cdb47da612305fd20ddf28117222b46d7fd9"
+}

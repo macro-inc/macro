@@ -80,9 +80,12 @@ async fn log(
 }
 
 impl SuggestionRepo for PgSuggestionRepo {
-    async fn kept_by(&self, session: Uuid) -> Result<u32> {
+    async fn kept_by(&self, user: &MacroUserIdStr<'_>, session: Uuid) -> Result<u32> {
+        // By person first: their index bounds the scan to their suggestions.
         let count = sqlx::query_scalar!(
-            r#"SELECT count(*) AS "count!" FROM routine_suggestion WHERE session_id = $1"#,
+            r#"SELECT count(*) AS "count!" FROM routine_suggestion
+               WHERE user_id = $1 AND session_id = $2"#,
+            user.as_ref(),
             session,
         )
         .fetch_one(&self.pool)

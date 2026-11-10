@@ -20,7 +20,11 @@ use super::model::{
 /// What AI suggested for each person, and what became of it.
 pub trait SuggestionRepo: Send + Sync + 'static {
     /// How many suggestions session `session` handed back and kept.
-    fn kept_by(&self, session: Uuid) -> impl Future<Output = Result<u32>> + Send;
+    fn kept_by(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        session: Uuid,
+    ) -> impl Future<Output = Result<u32>> + Send;
 
     /// Keep `suggestion`, handed back by `session` of `generation` for the
     /// person, with its routine idea when it has one, and log both; its id,
@@ -135,8 +139,12 @@ pub trait RoutineSuggestionApi: Send + Sync + 'static {
         timezone: chrono_tz::Tz,
     ) -> impl Future<Output = Result<String>> + Send;
 
-    /// How many suggestions routines session `session` kept.
-    fn kept(&self, session: Uuid) -> impl Future<Output = Result<u32>> + Send;
+    /// How many suggestions the person's routines session `session` kept.
+    fn kept(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        session: Uuid,
+    ) -> impl Future<Output = Result<u32>> + Send;
 
     /// Log what a generation's routines sessions did for the person: one
     /// `routine_suggestions.generated` event and one

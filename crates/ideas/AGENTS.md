@@ -75,32 +75,42 @@ person. Served by the harness under the scheduler's gateway prefix
 
 - Routine ideas: every drafted ("smart") routine suggestion has exactly one,
   written with it by `macro.routines.suggest` through `crates/ideas_db_utils`
-  in one transaction; catalog picks never have one. Dismissing a routine idea
+  in one transaction; catalog picks never have one. One a replica on the
+  previous release drafts during a deploy has none: every path that closes
+  a routine idea tolerates a missing one. Dismissing a routine idea
   dismisses its suggestion through `RoutineSuggestionDismissal`; retiring its
   suggestion retires it; saving a routine from the suggestion makes it done
   with the routine as `produced`. Ideas sessions never add, rewrite or retire
   routine ideas.
 
-- Background runs: accepting a `prompt` idea with `runMode` `background`
-  starts an `idea_run` (`RunSessions`, wired in the harness): a hidden session
-  of the person's with the full toolset, billed as their agent usage.
-  Clicking Run is the approval: the run is told never to stop to ask or wait
-  (`run_prompt`), and posts or sends only what the idea's `sends` says (shown
-  on the card, approved by running it), or nothing. Its progress (`running`,
+- Background runs: the person accepting a `prompt` idea with `runMode`
+  `background` in the app (their own session, not a program: `Accept`'s
+  `by_person`) starts an `idea_run` (`RunSessions`, wired in the harness): a
+  hidden session of the person's, billed as their agent usage. Anyone acting
+  for them (an agent) only takes the idea on (`accepted`, no run) for them to
+  run. Accept carries the `updatedAt` the card showed; a run starts only if
+  the idea is unchanged since (409 otherwise). Clicking Run is the approval:
+  the run is told never to stop to ask or wait (`run_prompt`), and posts or
+  sends only what the idea's `sends` says (shown on the card, approved by
+  running it), or nothing. A run whose idea has no `sends` gets a `no_send`
+  scope where the harness mints its credential (`RunScopes`): every service
+  refuses its sends and posts. Its progress (`running`,
   `finished`, `failed`) is read from the session on every feed read, never
   stored; the idea's `run.sessionId` is where the UI shows the result. `settle_runs` (every 30 s
   in the harness) makes a finished run's idea done with the session and what
   it created as `produced`; a failed run leaves the idea accepted, and
   accepting it again retries. Retiring or dismissing an idea never stops its
-  run.
+  run. Accepting any other idea makes it done (`done` in the feed);
+  accepting a done idea again changes nothing.
 - A run is never started twice: a prompt whose answer was lost
   (`RunStartError::Uncertain`) leaves the run for its session to settle; only
   a definite refusal (the prompted session deleted) settles it failed at once.
   `settle_runs` checks runs in turn (`checked_at`) and gives a run up only on
   what is known: past a 10 minute start window, a session confirmed missing
   (`SessionReadError::Missing`, from the stored sessions), or one still waiting
-  for its prompt or cut off by a restart (`Disconnected`) once it is deleted. A session that can't be read is never
-  given up.
+  for its prompt, cut off by a restart (`Disconnected`), or waiting for an
+  approval or an answer nobody will give, once it is deleted. A session that
+  can't be read is never given up.
 
 ## Gotchas
 

@@ -34,6 +34,10 @@ impl IdeaAccess for FakeAccess {
     async fn can_view(&self, user: &MacroUserIdStr<'_>, _: &Target) -> Result<bool, Self::Err> {
         Ok(!self.denied.lock().unwrap().contains(user.as_ref()))
     }
+
+    async fn is_part_of(&self, _: &Target, _: &str) -> Result<bool, Self::Err> {
+        Ok(true)
+    }
 }
 
 struct Harness {

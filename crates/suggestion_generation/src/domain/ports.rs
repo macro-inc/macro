@@ -80,26 +80,52 @@ pub trait GenerationRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// The person opened their suggestions at `now` in zone `timezone`.
+    /// Their next nightly run becomes `next_run`, unless one is set for the
+    /// same zone already.
     fn see(
         &self,
         user: &MacroUserIdStr<'_>,
         timezone: &str,
         now: DateTime<Utc>,
+        next_run: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// At most `limit` people seen since `seen_since`, whose local hour at
-    /// `now` is in `night` (start inclusive, end exclusive), with no
-    /// generation running since `stale_before` and no nightly one started
-    /// after `nightly_since`; those seen longest ago first. A generation
-    /// still running from before `stale_before` was interrupted and holds
-    /// no one back.
+    /// The person's opaque account id, for traces: never their email-shaped
+    /// user id.
+    fn account(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
+    /// Delete at most `limit` change-log entries written before `before`;
+    /// how many.
+    fn prune_changes(
+        &self,
+        before: DateTime<Utc>,
+        limit: u16,
+    ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
+
+    /// Generation `generation` runs in trace `trace_id`.
+    fn traced(
+        &self,
+        generation: Uuid,
+        trace_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// The person's next nightly run is due at `at`.
+    fn reschedule(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// At most `limit` people whose nightly run is due at `now`, longest
+    /// waiting first, with no generation running since `stale_before` (one
+    /// still running from before was interrupted and holds no one back).
     fn due(
         &self,
         now: DateTime<Utc>,
-        seen_since: DateTime<Utc>,
-        nightly_since: DateTime<Utc>,
         stale_before: DateTime<Utc>,
-        night: (u8, u8),
         limit: u16,
     ) -> impl Future<Output = Result<Vec<AudienceMember>, Self::Err>> + Send;
 }
