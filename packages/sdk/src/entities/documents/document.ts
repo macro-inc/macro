@@ -48,6 +48,7 @@ import {
 } from './ai-edit';
 import { DocumentAnchor } from './anchor';
 import { Comment } from './comment';
+import { type FileContent, toBlob } from './file-content';
 import {
   type DocumentMarkdown,
   type DocumentMarkdownWritten,
@@ -62,6 +63,7 @@ import type {
   WordEditOperation,
   WordEditOptions,
 } from './office-files';
+import { type PagePublished, publishedPage } from './page';
 import {
   commentOnText,
   type TextComment,
@@ -177,13 +179,42 @@ export class Document
     ).data;
   }
 
-  /** Commit a simple file save; to change a markdown document's text, use `edit` or `setContent`. */
-  async simpleSave() {
+  /** Replace an uploaded file's content as a new version of this document; to change a markdown document's text, use `edit` or `setContent`. */
+  async simpleSave(content: FileContent) {
     return (
       await this.mutate((c) =>
-        c.storage.simpleSave({ path: { document_id: this.id } }),
+        c.storage.simpleSave({
+          path: { document_id: this.id },
+          body: { file: toBlob(content) },
+        }),
       )
     ).data;
+  }
+
+  /**
+   * Fix a page from `documents.publishPage` with `republishPage(html)`, passing the whole corrected page, until `problems` is empty.
+   *
+   * Saves `html` as a new version of this HTML document, under the same id and
+   * link, then builds it and returns its `build` status and problems by block;
+   * `build: 'built'` means it built, and `busy` means try the same page again
+   * later. The page contract (program and client blocks, no imports, no
+   * timers in programs, no form submits, `textContent` for data) is on
+   * `documents.publishPage`. Throws when this document isn't an HTML file.
+   *
+   * @example Fix the problems a publish reported.
+   * ```js
+   * const { problems } = await page.republishPage(fixedHtml);
+   * return { data: { page, problems } };
+   * ```
+   */
+  async republishPage(html: string): Promise<PagePublished> {
+    const fileType = await this.fileType();
+    if (fileType !== 'html' && fileType !== 'htm')
+      throw new MacroError(
+        `republishPage replaces an HTML page; this document is ${fileType ?? 'not a file'}`,
+      );
+    await this.simpleSave(html);
+    return publishedPage(this.client, this);
   }
 
   /** A shared message thread scoped to this resource. */

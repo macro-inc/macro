@@ -684,6 +684,7 @@ fn unattended(
         unattended: Some(Unattended {
             arguments: arguments.as_object().unwrap().clone(),
             dry_run,
+            output: UnattendedOutput::Step,
         }),
         ..RunEnvironment::default()
     }
@@ -744,6 +745,24 @@ async fn an_unattended_result_is_kept_whole_or_fails_over_the_limit() {
     assert_eq!(
         error.message,
         "The step's output is 71 KB as JSON; a step's output can be at most 64 KB. Return only what later steps need."
+    );
+
+    let mut page = unattended("fixture-run-token", &[], serde_json::json!({}), false);
+    if let Some(unattended) = page.unattended.as_mut() {
+        unattended.output = UnattendedOutput::Page;
+    }
+    let (_, outcome) = run_unattended(
+        &service,
+        "export function main() { return 'x'.repeat(70 * 1024); }",
+        page,
+    )
+    .await;
+    let Outcome::Failed { error } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        error.message,
+        "The program returned 71 KB as JSON; a page's program can return at most 64 KB. Return only what the page shows."
     );
     service.shutdown().await;
 }
@@ -906,4 +925,25 @@ async fn the_cpu_limit_stops_a_busy_program() {
         "{outcome:?}"
     );
     service.shutdown().await;
+}
+
+#[test]
+fn names_a_result_nested_too_deeply() {
+    let deep = format!(
+        r#"{{"type":"result","value":{{"data":{}{}}}}}"#,
+        "[".repeat(5000),
+        "]".repeat(5000)
+    );
+    let Err(error) = serde_json::from_str::<ChildFrame>(&deep) else {
+        panic!("a result nested this deep must not parse");
+    };
+    assert_eq!(
+        child_frame_problem(&error),
+        "the program's result nests too deeply to read; return a flatter value"
+    );
+
+    let Err(error) = serde_json::from_str::<ChildFrame>("{\"type\":") else {
+        panic!("a truncated frame must not parse");
+    };
+    assert_eq!(child_frame_problem(&error), "invalid child frame");
 }

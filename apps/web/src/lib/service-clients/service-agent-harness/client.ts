@@ -26,12 +26,14 @@ import type {
   CreateAgentSessionResponse,
   DiscoverAgentCapabilitiesRequest,
   DiscoverAgentCapabilitiesResponse,
+  DocumentBuildResponse,
   ExecutionRecord,
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsResponse,
   PullRequestSessionsResponse,
   PullRequestsSessionsResponse,
+  RunDocumentProgram,
   SandboxSize,
   SandboxSizeBody,
   SessionAutoArchiveResponse,
@@ -39,6 +41,7 @@ import type {
   SharePermissionV2,
   ToolApprovalAnswerDto,
   UpdateSharePermissionRequestV2,
+  UserExecutionReceipt,
   WarmAgentSessionResponse,
 } from './generated/schemas';
 import {
@@ -51,12 +54,51 @@ export type {
   AutoArchiveOverridesBody,
   AutoArchivePreferencesBody,
   CodingPreferencesBody,
+  DocumentBuildResponse,
+  RunDocumentProgram,
   SandboxSize,
   SandboxSizeBody,
   SessionAutoArchiveResponse,
+  UserExecutionReceipt,
 };
 
 const agentHarnessHost = SERVER_HOSTS['agent-harness'];
+
+/** A document program run's errors; `DOCUMENT_CHANGED` asks for a fresh build. */
+const documentProgramError: ErrorResponseHandler<'DOCUMENT_CHANGED'> = async (
+  response
+) => {
+  if (response.status !== 409) return sessionError(response);
+  return {
+    code: 'DOCUMENT_CHANGED',
+    message: 'This page changed since it was opened; it is reloading.',
+  };
+};
+
+/**
+ * A document build's errors. `BUILD_UNAVAILABLE` means the document can't
+ * be built for this viewer (outside the rollout, gone, not HTML), so the
+ * preview shows the file as it is; `BUILD_TOO_LARGE` that it is over the
+ * size a build takes, so its programs can't run; `SERVER_ERROR` is worth
+ * retrying.
+ */
+const documentBuildError: ErrorResponseHandler<
+  'BUILD_UNAVAILABLE' | 'BUILD_TOO_LARGE' | 'SERVER_ERROR'
+> = async (response) => {
+  if (response.status === 413)
+    return {
+      code: 'BUILD_TOO_LARGE',
+      message: 'This page is too large to build.',
+    };
+  if (response.status === 404 || response.status === 422)
+    return { code: 'BUILD_UNAVAILABLE', message: 'This page can’t be built.' };
+  if (response.status >= 500)
+    return {
+      code: 'SERVER_ERROR',
+      message: `The page build failed (HTTP ${response.status}).`,
+    };
+  return sessionError(response);
+};
 
 /** Session endpoints return safe, user-facing errors as plain text. */
 const sessionError: ErrorResponseHandler<never> = async (response) => {
@@ -400,6 +442,42 @@ export const agentHarnessServiceClient = {
     return fetchWithToken<ExecutionRecord>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/code-executions/${executionId}`,
       { method: 'GET', errorResponseHandler: sessionError }
+    );
+  },
+
+  /**
+   * The stored HTML document's build, as the server made it: the page to
+   * render and its program ids, or the author's problems.
+   */
+  getDocumentBuild(documentId: string, signal?: AbortSignal) {
+    return fetchWithToken<
+      DocumentBuildResponse,
+      'BUILD_UNAVAILABLE' | 'BUILD_TOO_LARGE' | 'SERVER_ERROR'
+    >(`${agentHarnessHost}/documents/${documentId}/build`, {
+      method: 'GET',
+      signal,
+      errorResponseHandler: documentBuildError,
+    });
+  },
+
+  /**
+   * Run one program of the build a page shows, as the user, and wait for its
+   * outcome. Answers 409 when the document changed since that build.
+   */
+  runDocumentProgram(
+    documentId: string,
+    request: RunDocumentProgram,
+    signal?: AbortSignal
+  ) {
+    return fetchWithToken<UserExecutionReceipt, 'DOCUMENT_CHANGED'>(
+      `${agentHarnessHost}/documents/${documentId}/code-executions`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+        signal,
+        errorResponseHandler: documentProgramError,
+      }
     );
   },
 

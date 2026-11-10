@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Follow-up radar</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9;
+    --cold: #1971c2; --frozen: #5f3dc4; --ok: #2f9e44;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27;
+      --cold: #74c0fc; --frozen: #b197fc; --ok: #69db7c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 16px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 17px; margin: 0 auto 0 0; }
+  button, select { font: inherit; color: inherit; }
+  select { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+  button { padding: 6px 12px; border: 0; border-radius: 8px; background: var(--accent);
+    color: #fff; cursor: pointer; white-space: nowrap; }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { color: var(--muted); padding: 8px 16px; margin: 0; }
+  main { padding: 0 16px 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px;
+    display: grid; gap: 6px; min-width: 0; }
+  .top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+  .name { font-weight: 600; word-break: break-word; }
+  .temp { font-size: 12px; font-weight: 600; white-space: nowrap; color: var(--cold); }
+  .temp.frozen { color: var(--frozen); }
+  .temp.warm { color: var(--ok); }
+  .meta { color: var(--muted); font-size: 13px; word-break: break-word; }
+  .line { display: flex; gap: 6px; font-size: 13px; }
+  .line b { flex: 0 0 64px; font-weight: 500; color: var(--muted); }
+  .line span { min-width: 0; word-break: break-word; }
+  .actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 4px; }
+  .planned { color: var(--ok); font-size: 13px; font-weight: 550; }
+  .empty { color: var(--muted); padding: 24px 0; grid-column: 1 / -1; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Follow-up radar</h1>
+  <select id="days" aria-label="Quiet for">
+    <option value="14">Quiet 14+ days</option>
+    <option value="30" selected>Quiet 30+ days</option>
+    <option value="60">Quiet 60+ days</option>
+  </select>
+  <select id="due" aria-label="Follow up within">
+    <option value="1">Follow up tomorrow</option>
+    <option value="3" selected>Follow up in 3 days</option>
+    <option value="7">Follow up next week</option>
+  </select>
+</header>
+<p class="status" id="status">Loading…</p>
+<main id="contacts"></main>
+
+<script type="text/macro" id="radar" lang="ts">
+  const STATUS = '00000001-0000-0000-0000-000000000002';
+  const DUE = '00000001-0000-0000-0000-000000000004';
+  const CLOSED = ['00000001-0000-0000-0002-000000000004', '00000001-0000-0000-0002-000000000005'];
+  const PREFIX = 'Follow up with ';
+  const DAY = 86_400_000;
+
+  export default async function ({ days }: { days: number }, { macro }: ProgramContext) {
+    // CRM contacts belong to the viewer's current team.
+    if ((await macro.teams.list()).length === 0) {
+      return { inTeam: false, emailConnected: false, total: 0, quiet: 0, contacts: [] };
+    }
+    const [found, links, taskPage] = await Promise.all([
+      macro.crm.searchContacts('', { limit: 100 }),
+      macro.email.links(),
+      macro.workspace.page({ includeTypes: ['document'], df: { l: { dst: 'task' } }, limit: 300 }),
+    ]);
+
+    // Open follow-up tasks this page created, by contact name.
+    const planned = new Map<string, string | null>();
+    for (const item of taskPage.items) {
+      if (item.type !== 'document' || !item.name.startsWith(PREFIX)) continue;
+      const properties = item.snapshot.data.properties;
+      const status = properties.find((p) => p.definition.id === STATUS)?.value;
+      if (status?.type === 'SelectOption' && status.value.some((id) => CLOSED.includes(id))) continue;
+      const due = properties.find((p) => p.definition.id === DUE)?.value;
+      planned.set(item.name.slice(PREFIX.length), due?.type === 'Date' ? due.value : null);
+    }
+
+    const now = Date.now();
+    const companies = new Map<string, Promise<string | null>>();
+    const rows = await Promise.all(found.map(async (contact) => {
+      const last = (await contact.lastInteraction()) ?? null;
+      const company = await contact.company();
+      if (company && !companies.has(company.id)) {
+        companies.set(company.id, company.name().then((name) => name ?? null));
+      }
+      const name = (await contact.name()) || (await contact.email()) || '(no name)';
+      return {
+        id: contact.id,
+        name,
+        email: (await contact.email()) ?? null,
+        company: company ? await companies.get(company.id)! : null,
+        lastInteraction: last,
+        addedAt: await contact.createdAt(),
+        quietDays: last ? Math.floor((now - new Date(last).getTime()) / DAY) : null,
+        followUpDue: planned.has(name) ? (planned.get(name) ?? 'someday') : null,
+      };
+    }));
+    // Coldest first; contacts heard from recently follow.
+    const sorted = rows
+      .map((row) => ({ ...row, quiet: row.quietDays === null || row.quietDays >= days }))
+      .sort((a, b) => (b.quietDays ?? Infinity) - (a.quietDays ?? Infinity));
+
+    // The latest thread with each cold contact, when an inbox is connected.
+    const connected = links.length > 0;
+    const withEmail = await Promise.all(sorted.slice(0, 24).map(async (row) => {
+      let lastThread: string | null = null;
+      if (connected && row.email) {
+        for await (const thread of macro.email.search(row.email, { pageSize: 1 })) {
+          lastThread = (await thread.subject()) ?? '(no subject)';
+          break;
+        }
+      }
+      return { ...row, lastThread };
+    }));
+    return {
+      inTeam: true,
+      emailConnected: connected,
+      total: rows.length,
+      quiet: sorted.filter((row) => row.quiet).length,
+      contacts: withEmail,
+    };
+  }
+</script>
+
+<script type="text/macro" id="planFollowUp" lang="ts">
+  export default async function (
+    { contactId, dueInDays }: { contactId: string; dueInDays: number },
+    { macro }: ProgramContext,
+  ) {
+    const contact = macro.crm.contactById(contactId);
+    const email = (await contact.email()) ?? null;
+    const name = (await contact.name()) || email || '(no name)';
+    const company = await contact.company();
+    const companyName = company ? await company.name() : null;
+    const details = [email, companyName].filter(Boolean).join(', ');
+    const task = await macro.tasks.create({
+      name: `Follow up with ${name}`,
+      markdown: `Reconnect with ${name}${details ? ` (${details})` : ''}: no recent email or meeting.`,
+      dueDate: new Date(Date.now() + dueInDays * 86_400_000),
+    });
+    await task.name();
+    // Leave a trail on the contact, so the CRM shows the plan too.
+    const link = task.toMention();
+    await contact.comment({ content: `Follow-up planned: ${link.tag}`, mentions: [link.mention] });
+    return { id: task.id };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { planFollowUp, radar } from 'macro:programs';
+
+  type Radar = Awaited<ReturnType<typeof radar>>;
+
+  const root = document.getElementById('contacts')!;
+  const status = document.getElementById('status')!;
+  const daysSelect = document.getElementById('days') as HTMLSelectElement;
+  const dueSelect = document.getElementById('due') as HTMLSelectElement;
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  const day = (at: string) => new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+  function line(label: string, text: string) {
+    const row = el('div', 'line');
+    row.append(el('b', '', label), el('span', '', text));
+    return row;
+  }
+
+  function render(data: Radar) {
+    if (!data.inTeam) {
+      root.replaceChildren(el('p', 'empty', 'CRM contacts belong to a team. Join one to see who has gone quiet.'));
+      return;
+    }
+    if (data.contacts.length === 0) {
+      root.replaceChildren(el('p', 'empty', 'No CRM contacts yet.'));
+      return;
+    }
+    root.replaceChildren(...data.contacts.map((contact) => {
+      const card = el('article', 'card');
+      const top = el('div', 'top');
+      let temp = 'In touch';
+      if (contact.quietDays === null) temp = 'Never contacted';
+      else if (contact.quiet) temp = `Quiet ${contact.quietDays}d`;
+      else if (contact.quietDays > 0) temp = `In touch ${contact.quietDays}d ago`;
+      const tone = contact.quietDays === null || (contact.quietDays ?? 0) >= 90 ? 'temp frozen' : contact.quiet ? 'temp' : 'temp warm';
+      top.append(el('div', 'name', contact.name), el('span', tone, temp));
+      card.append(top);
+      const who = [contact.email, contact.company].filter(Boolean).join(' · ');
+      if (who) card.append(el('div', 'meta', who));
+      card.append(line('Last seen', contact.lastInteraction ? day(contact.lastInteraction) : `added ${day(contact.addedAt)}, no interaction`));
+      if (data.emailConnected) card.append(line('Email', contact.lastThread ?? 'No threads found'));
+
+      const actions = el('div', 'actions');
+      if (contact.followUpDue) {
+        const due = contact.followUpDue === 'someday' ? 'no date' : day(contact.followUpDue);
+        actions.append(el('span', 'planned', `✓ Follow-up planned (${due})`));
+      } else {
+        const result = el('span', 'meta');
+        const button = el('button', '', 'Plan follow-up');
+        button.setAttribute('aria-label', `Plan a follow-up with ${contact.name}`);
+        button.addEventListener('click', async () => {
+          button.disabled = true;
+          try {
+            await planFollowUp({ contactId: contact.id, dueInDays: Number(dueSelect.value) });
+            result.textContent = 'Task created';
+          } catch (error) {
+            button.disabled = false;
+            // No reload here: it re-renders this card and would drop the message.
+            result.textContent = `Couldn't plan it: ${String(error)}`;
+            return;
+          }
+          await reload();
+        });
+        actions.append(result, button);
+      }
+      card.append(actions);
+      return card;
+    }));
+  }
+
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
+  async function load() {
+    try {
+      const data = await radar({ days: Number(daysSelect.value) });
+      render(data);
+      status.textContent = data.inTeam && data.total > 0
+        ? `${data.quiet} of ${data.total} contacts have gone quiet${data.emailConnected ? '' : ' · connect an inbox to see last threads'}`
+        : '';
+    } catch (error) {
+      status.textContent = `Couldn't load contacts: ${String(error)}`;
+    }
+  }
+
+  daysSelect.addEventListener('change', () => reload());
+  // CRM and email emit no live events; follow-up tasks are documents.
+  on(['document.created', 'document.updated', 'document.deleted'], reload);
+  window.addEventListener('focus', () => reload());
+  await reload();
+</script>
+</body>
+</html>

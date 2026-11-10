@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Standup composer</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9;
+    --ok: #2f9e44; --warn: #d9480f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27; --ok: #69db7c; --warn: #ff8a5c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 16px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 17px; margin: 0 auto 0 0; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
+  button, select, textarea { font: inherit; color: inherit; }
+  select, textarea { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); min-width: 0; }
+  button { padding: 7px 12px; border: 0; border-radius: 8px; background: var(--accent);
+    color: #fff; cursor: pointer; }
+  button.quiet { background: var(--chip); color: var(--text); }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { color: var(--muted); padding: 8px 16px; margin: 0; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 12px; padding: 16px; }
+  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
+  .sources { display: grid; gap: 12px; align-content: start; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { display: flex; gap: 8px; padding: 5px 0; align-items: baseline; word-break: break-word; }
+  li .tag { flex: 0 0 auto; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--muted); width: 62px; }
+  li .tag.done { color: var(--ok); }
+  li .tag.late { color: var(--warn); }
+  .empty { color: var(--muted); }
+  .composer { display: grid; gap: 8px; align-content: start; }
+  textarea { width: 100%; min-height: 300px; resize: vertical; font: 13px/1.55 ui-monospace, monospace; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .row select { flex: 1 1 160px; }
+  .note { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Standup</h1>
+  <select id="window" aria-label="Look back">
+    <option value="24">Since yesterday</option>
+    <option value="72">Since Friday</option>
+  </select>
+</header>
+<p class="status" id="status">Loading…</p>
+<main class="layout">
+  <div class="sources">
+    <section class="panel"><h2>Moved since then</h2><ul id="moved"></ul></section>
+    <section class="panel"><h2>Up next</h2><ul id="next"></ul></section>
+    <section class="panel"><h2>Documents you edited</h2><ul id="docs"></ul></section>
+  </div>
+  <section class="panel composer">
+    <h2>Your update</h2>
+    <textarea id="draft" aria-label="Standup text"></textarea>
+    <div class="row">
+      <select id="channel" aria-label="Channel to post to"></select>
+      <button class="quiet" id="regenerate">Rewrite from activity</button>
+      <button id="post">Post standup</button>
+    </div>
+    <div class="note" id="note">The draft is yours to edit; posting sends it as written.</div>
+  </section>
+</main>
+
+<script type="text/macro" id="myWork" lang="ts">
+  const STATUS = '00000001-0000-0000-0000-000000000002';
+  const ASSIGNEES = '00000001-0000-0000-0000-000000000001';
+  const DUE = '00000001-0000-0000-0000-000000000004';
+  const IN_PROGRESS = '00000001-0000-0000-0002-000000000002';
+  const COMPLETED = '00000001-0000-0000-0002-000000000004';
+  const CANCELED = '00000001-0000-0000-0002-000000000005';
+
+  export default async function ({ hours }: { hours: number }, { macro }: ProgramContext) {
+    const me = await macro.myPrincipalId();
+    const since = new Date(Date.now() - hours * 3_600_000).toISOString();
+    const [taskPage, documentPage, channelPage] = await Promise.all([
+      macro.workspace.page({
+        includeTypes: ['document'],
+        df: { l: { dst: 'task' } },
+        propf: { l: { pd: ASSIGNEES, et: 'TASK', v: { er: me } } },
+        limit: 200,
+      }),
+      macro.workspace.page({ includeTypes: ['document'], df: { l: { ua: { gte: since } } }, limit: 60 }),
+      macro.workspace.page({ includeTypes: ['channel'], limit: 40 }),
+    ]);
+
+    const now = Date.now();
+    const tasks = taskPage.items.flatMap((item) => {
+      if (item.type !== 'document') return [];
+      const properties = item.snapshot.data.properties;
+      const status = properties.find((p) => p.definition.id === STATUS)?.value;
+      const due = properties.find((p) => p.definition.id === DUE)?.value;
+      const statusId = status?.type === 'SelectOption' ? (status.value[0] ?? null) : null;
+      return [{
+        id: item.id,
+        name: item.name,
+        state: statusId === COMPLETED ? 'done' as const
+          : statusId === CANCELED ? 'canceled' as const
+          : statusId === IN_PROGRESS ? 'doing' as const
+          : 'todo' as const,
+        due: due?.type === 'Date' ? due.value : null,
+        updatedAt: item.snapshot.data.updatedAt,
+      }];
+    });
+
+    // Only tasks that are done or under way count as moved; an edit to a to-do doesn't.
+    const moved = tasks.filter((task) => task.updatedAt >= since && (task.state === 'done' || task.state === 'doing'));
+    const open = tasks.filter((task) => task.state === 'doing' || task.state === 'todo');
+    const next = open
+      .sort((a, b) => {
+        if (a.state !== b.state) return a.state === 'doing' ? -1 : 1;
+        return (a.due ?? '9999').localeCompare(b.due ?? '9999');
+      })
+      .slice(0, 6)
+      .map((task) => ({ ...task, late: task.due !== null && new Date(task.due).getTime() < now }));
+    const blockers = open.filter((task) => task.due !== null && new Date(task.due).getTime() < now);
+
+    const documents = documentPage.items.flatMap((item) =>
+      item.type === 'document' && item.subType !== 'task' && item.snapshot.data.ownerId === me
+        ? [{ id: item.id, name: item.name }]
+        : [],
+    );
+    const channels = channelPage.items.flatMap((item) =>
+      item.type === 'channel' && item.name ? [{ id: item.id, name: item.name }] : [],
+    );
+    return { moved, next, blockers: blockers.map((task) => task.name), documents, channels };
+  }
+</script>
+
+<script type="text/macro" id="post" lang="ts">
+  export default async function (
+    { channelId, text }: { channelId: string; text: string },
+    { macro }: ProgramContext,
+  ) {
+    const message = await macro.channels.byId(channelId).send(text);
+    return { id: message.id };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { myWork, post } from 'macro:programs';
+
+  type Work = Awaited<ReturnType<typeof myWork>>;
+
+  const status = document.getElementById('status')!;
+  const windowSelect = document.getElementById('window') as HTMLSelectElement;
+  const draft = document.getElementById('draft') as HTMLTextAreaElement;
+  const channelSelect = document.getElementById('channel') as HTMLSelectElement;
+  const postButton = document.getElementById('post') as HTMLButtonElement;
+  const regenerate = document.getElementById('regenerate') as HTMLButtonElement;
+  const note = document.getElementById('note')!;
+  const stateLabels = { done: 'done', doing: 'doing', todo: 'to do', canceled: 'canceled' };
+  let edited = false;
+  // A reload re-renders the button; this keeps it off while a post is under way.
+  let posting = false;
+  let latest: Work | null = null;
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  function row(tag: string, tagClass: string, text: string) {
+    const li = el('li');
+    li.append(el('span', `tag ${tagClass}`, tag), el('span', '', text));
+    return li;
+  }
+
+  function fill(id: string, rows: HTMLElement[], empty: string) {
+    document.getElementById(id)!.replaceChildren(...(rows.length ? rows : [el('li', 'empty', empty)]));
+  }
+
+  function compose(work: Work) {
+    const label = windowSelect.selectedOptions[0]?.textContent?.toLowerCase() ?? 'since yesterday';
+    const done = work.moved.filter((task) => task.state === 'done');
+    const doing = work.moved.filter((task) => task.state !== 'done');
+    const lines = [`**Standup** (${label})`, '', '**Done**'];
+    lines.push(...(done.length ? done.map((task) => `• ${task.name}`) : ['• Nothing closed out']));
+    if (doing.length || work.documents.length) {
+      lines.push('', '**Worked on**');
+      lines.push(...doing.map((task) => `• ${task.name}`));
+      lines.push(...work.documents.slice(0, 4).map((doc) => `• Edited “${doc.name}”`));
+    }
+    lines.push('', '**Next**');
+    lines.push(...(work.next.length ? work.next.slice(0, 4).map((task) => `• ${task.name}`) : ['• Planning']));
+    lines.push('', '**Blockers**');
+    lines.push(...(work.blockers.length ? work.blockers.map((name) => `• “${name}” is past due`) : ['• None']));
+    return lines.join('\n');
+  }
+
+  function render(work: Work) {
+    fill('moved', work.moved.map((task) => row(stateLabels[task.state], task.state, task.name)), 'No task moves in this window.');
+    fill('next', work.next.map((task) => row(task.late ? 'late' : stateLabels[task.state], task.late ? 'late' : task.state, task.name)), 'Nothing assigned to you.');
+    fill('docs', work.documents.map((doc) => row('doc', '', doc.name)), 'No documents edited.');
+
+    const selected = channelSelect.value;
+    channelSelect.replaceChildren(...work.channels.map((channel) => {
+      const option = el('option', '', `#${channel.name}`);
+      option.value = channel.id;
+      option.selected = channel.id === selected;
+      return option;
+    }));
+    postButton.disabled = posting || work.channels.length === 0;
+    if (!edited) draft.value = compose(work);
+  }
+
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
+  async function load() {
+    try {
+      latest = await myWork({ hours: Number(windowSelect.value) });
+      render(latest);
+      status.textContent = latest.channels.length ? '' : 'Join a channel to post your standup.';
+    } catch (error) {
+      status.textContent = `Couldn't read your activity: ${String(error)}`;
+    }
+  }
+
+  draft.addEventListener('input', () => {
+    edited = true;
+  });
+  windowSelect.addEventListener('change', () => {
+    edited = false;
+    reload();
+  });
+  regenerate.addEventListener('click', () => {
+    edited = false;
+    if (latest) draft.value = compose(latest);
+  });
+  postButton.addEventListener('click', async () => {
+    const text = draft.value.trim();
+    if (!text || !channelSelect.value || posting) return;
+    posting = true;
+    postButton.disabled = true;
+    try {
+      await post({ channelId: channelSelect.value, text });
+      note.textContent = `Posted to ${channelSelect.selectedOptions[0]?.textContent ?? 'the channel'}.`;
+    } catch (error) {
+      note.textContent = `Couldn't post: ${String(error)}`;
+    }
+    posting = false;
+    postButton.disabled = false;
+  });
+  // Content edits arrive only as document.interaction, about every 5 s while someone types.
+  on(['document.created', 'document.updated', 'document.deleted', 'document.interaction'], reload);
+  // Task Status, Assignee and Due changes emit no live event: refresh on focus too.
+  window.addEventListener('focus', () => reload());
+  await reload();
+</script>
+</body>
+</html>

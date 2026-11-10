@@ -2,6 +2,7 @@ import accountManager from './en/account-manager';
 import agentAutoArchive from './en/agent-auto-archive';
 import agentSetup from './en/agent-setup';
 import agentWork from './en/agent-work';
+import artifacts from './en/artifacts';
 import calls from './en/calls';
 import channelComposer from './en/channel-composer';
 import channelLabels from './en/channel-labels';
@@ -13,6 +14,7 @@ import create from './en/create';
 import crm from './en/crm';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
+import htmlPreview from './en/html-preview';
 import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
@@ -36,6 +38,7 @@ export default {
   accountManager,
   agentSetup,
   agentWork,
+  artifacts,
   calls,
   channelComposer,
   channelLabels,
@@ -47,6 +50,7 @@ export default {
   crm,
   emailViews,
   entityActions,
+  htmlPreview,
   localRuntime,
   mobile,
   nav,

@@ -26,6 +26,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { unreadFilterFn } from '@entity/utils/filter';
 import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
 import CodeIcon from '@icon/system/regular/code.svg';
+import ArtifactIcon from '@icon/system/regular/file-html.svg';
 import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlugIcon from '@icon/system/regular/plugs-connected.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
@@ -332,6 +333,15 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                   <RoutineIcon />
                 </ViewSidebar.Icon>
                 <span>Routines</span>
+              </ViewSidebar.Item>
+              <ViewSidebar.Item
+                active={props.activePage === 'artifacts'}
+                onClick={() => props.onOpenPage('artifacts')}
+              >
+                <ViewSidebar.Icon>
+                  <ArtifactIcon />
+                </ViewSidebar.Icon>
+                <span>{t('artifacts.title')}</span>
               </ViewSidebar.Item>
               <ViewSidebar.Item
                 active={props.activePage === 'connections'}

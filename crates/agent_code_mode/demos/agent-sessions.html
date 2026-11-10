@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agents</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9; --good: #2b8a3e; --warn: #e67700;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27; --good: #69db7c; --warn: #ffc078; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 16px; }
+  header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  h1 { font-size: 17px; margin: 0 auto 0 0; }
+  .tabs button { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 5px 10px; }
+  .tabs button[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+  ul { list-style: none; margin: 0; padding: 0; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  li { display: grid; grid-template-columns: 12px 1fr auto; gap: 12px; align-items: center;
+    padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  li:last-child { border-bottom: 0; }
+  .state { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  .state.running { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
+  .state.waiting { background: var(--warn); }
+  .name { font-weight: 550; word-break: break-word; }
+  .meta { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .archive { border: 0; background: var(--chip); border-radius: 8px; padding: 6px 10px; }
+  .empty { padding: 32px; text-align: center; color: var(--muted); }
+  .status { color: var(--muted); margin: 0 0 12px; }
+  .status:empty { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Agents</h1>
+    <div class="tabs">
+      <button id="show-active" aria-pressed="true">Active</button>
+      <button id="show-archived" aria-pressed="false">Archived</button>
+    </div>
+  </header>
+  <p class="status" id="status" role="status"></p>
+  <div id="list"><p class="empty">Loading…</p></div>
+</div>
+
+<script type="text/macro" id="sessions" lang="ts">
+  export default async function ({ archived }: { archived: boolean }, { macro }: ProgramContext) {
+    const page = await macro.workspace.page({
+      includeTypes: ['agent_session'],
+      limit: 60,
+    });
+    return page.items.flatMap((item) => {
+      if (item.type !== 'agent_session') return [];
+      const data = item.snapshot.data;
+      if (Boolean(data.archivedAt) !== archived) return [];
+      return [{
+        id: item.id,
+        name: data.name || 'Untitled session',
+        status: data.status,
+        turnState: data.turnState ?? null,
+        harness: data.harness,
+        repo: data.repoUrl ? data.repoUrl.replace(/^https:\/\/github\.com\//, '') : null,
+        pullRequest: data.pullRequestUrl ?? null,
+        updatedAt: data.updatedAt,
+      }];
+    });
+  }
+</script>
+
+<script type="text/macro" id="setArchived" lang="ts">
+  export default async function (
+    { id, archived }: { id: string; archived: boolean },
+    { macro }: ProgramContext,
+  ) {
+    const session = macro.agentSessions.byId(id);
+    if (archived) await session.archive();
+    else await session.unarchive();
+    return { archived };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { sessions, setArchived } from 'macro:programs';
+
+  const list = document.getElementById('list')!;
+  const activeTab = document.getElementById('show-active')!;
+  const archivedTab = document.getElementById('show-archived')!;
+  const status = document.getElementById('status')!;
+  let archived = false;
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  function stateClass(status: string, turnState: string | null) {
+    if (turnState === 'running' || status === 'running') return 'state running';
+    if (turnState === 'waiting_for_input' || status === 'waiting') return 'state waiting';
+    return 'state';
+  }
+
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
+  async function load() {
+    const wanted = archived;
+    let rows: Awaited<ReturnType<typeof sessions>>;
+    try {
+      rows = await sessions({ archived: wanted });
+    } catch (error) {
+      list.replaceChildren(el('p', 'empty', `Couldn't list agent sessions: ${String(error)}`));
+      return;
+    }
+    if (wanted !== archived) return;
+    if (rows.length === 0) {
+      list.replaceChildren(el('p', 'empty', wanted ? 'No archived sessions.' : 'No active agent sessions.'));
+      return;
+    }
+    const ul = el('ul');
+    for (const row of rows) {
+      const li = el('li');
+      const text = el('div');
+      const when = new Date(row.updatedAt).toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+      });
+      const meta = [row.turnState ?? row.status, row.harness, row.repo, when].filter(Boolean).join(' · ');
+      text.append(el('div', 'name', row.name), el('div', 'meta', meta));
+      if (row.pullRequest) text.append(el('div', 'meta', row.pullRequest));
+      const button = el('button', 'archive', wanted ? 'Restore' : 'Archive');
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        li.style.opacity = '.4';
+        status.textContent = '';
+        try {
+          await setArchived({ id: row.id, archived: !wanted });
+        } catch (error) {
+          button.disabled = false;
+          li.style.opacity = '';
+          status.textContent = `Couldn't ${wanted ? 'restore' : 'archive'} “${row.name}”: ${String(error)}`;
+          return;
+        }
+        await reload();
+      });
+      const dot = el('span', stateClass(row.status, row.turnState));
+      dot.title = row.turnState ?? row.status;
+      li.append(dot, text, button);
+      ul.append(li);
+    }
+    list.replaceChildren(ul);
+  }
+
+  function show(value: boolean) {
+    archived = value;
+    activeTab.setAttribute('aria-pressed', String(!value));
+    archivedTab.setAttribute('aria-pressed', String(value));
+    reload();
+  }
+
+  activeTab.addEventListener('click', () => show(false));
+  archivedTab.addEventListener('click', () => show(true));
+  on([
+    'agent_session.opened', 'agent_session.renamed', 'agent_session.turn_started',
+    'agent_session.turn_ended', 'agent_session.settled', 'agent_session.deleted',
+  ], reload);
+  await reload();
+</script>
+</body>
+</html>

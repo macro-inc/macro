@@ -1095,3 +1095,14 @@ export const enableWhatsappLinked = defineFlag({
   key: 'enable-whatsapp-linked',
   env: 'ENABLE_WHATSAPP_LINKED',
 });
+
+/**
+ * HTML file previews may run their `text/macro` program blocks on the server
+ * as the viewer (`features/block-code/code-mode`). The backend reads the same
+ * key per user; off leaves the preview a plain sandboxed frame.
+ */
+export const enableHtmlCodeMode = defineFlag({
+  key: 'enable-html-code-mode',
+  env: 'ENABLE_HTML_CODE_MODE',
+  default: onInDev,
+});

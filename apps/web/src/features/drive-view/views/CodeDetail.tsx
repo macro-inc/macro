@@ -55,6 +55,7 @@ function CodeDetailContent(props: {
       <div class="relative min-h-0 min-w-0 flex-1 overflow-hidden">
         <CodeContent
           text={props.text()}
+          documentId={documentId}
           fileType={fileType}
           readOnly={readOnly}
           mode={mode()}

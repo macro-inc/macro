@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agenda</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 16px; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  h1 { font-size: 17px; margin: 0 auto 0 0; }
+  .day { margin-bottom: 16px; }
+  .day h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 6px; }
+  .event { display: grid; grid-template-columns: 96px 1fr; gap: 12px; background: var(--panel);
+    border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px;
+    padding: 10px 12px; margin-bottom: 6px; }
+  .event.cancelled { opacity: .5; text-decoration: line-through; }
+  .time { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .what { font-weight: 550; word-break: break-word; }
+  .where { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .empty { padding: 40px 16px; text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Next 7 days</h1>
+  </header>
+  <div id="agenda"><p class="empty">Loading…</p></div>
+</div>
+
+<script type="text/macro" id="agenda" lang="ts">
+  export default async function ({ start, end }: { start: string; end: string }, { macro }: ProgramContext) {
+    const calendars = await macro.calendar.calendars();
+    if (calendars.length === 0) return { connected: false, events: [] };
+    const events = [];
+    for await (const item of macro.calendar.occurrences({ start, end, limit: 200 })) {
+      const time = item.occurrence.time;
+      events.push({
+        id: item.occurrence.occurrenceKey,
+        title: (await item.event.title()) || '(no title)',
+        location: (await item.event.location()) ?? null,
+        calendar: item.calendarName ?? null,
+        cancelled: item.occurrence.isCancelled,
+        allDay: time.kind === 'allDay',
+        startsAt: time.kind === 'timed' ? time.startsAt : `${time.startDate}T00:00:00`,
+        endsAt: time.kind === 'timed' ? time.endsAt : `${time.endDate}T00:00:00`,
+      });
+      if (events.length === 200) break;
+    }
+    events.sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    return { connected: true, events };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { agenda } from 'macro:programs';
+
+  const root = document.getElementById('agenda')!;
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  const clock = (at: string) => new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
+  async function load() {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start.getTime() + 7 * 24 * 3600 * 1000);
+    let result: Awaited<ReturnType<typeof agenda>>;
+    try {
+      result = await agenda({ start: start.toISOString(), end: end.toISOString() });
+    } catch (error) {
+      root.replaceChildren(el('p', 'empty', `Couldn't load your agenda: ${String(error)}`));
+      return;
+    }
+    const { connected, events } = result;
+    if (!connected) {
+      root.replaceChildren(el('p', 'empty', 'No calendar is connected. Connect Google or Outlook in Settings to see your agenda.'));
+      return;
+    }
+    if (events.length === 0) {
+      root.replaceChildren(el('p', 'empty', 'Nothing scheduled this week.'));
+      return;
+    }
+    const days = new Map<string, HTMLElement>();
+    for (const event of events) {
+      const day = new Date(event.startsAt).toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+      if (!days.has(day)) {
+        const section = el('section', 'day');
+        section.append(el('h2', '', day));
+        days.set(day, section);
+      }
+      const card = el('div', event.cancelled ? 'event cancelled' : 'event');
+      const time = event.allDay ? 'All day' : `${clock(event.startsAt)} – ${clock(event.endsAt)}`;
+      const text = el('div');
+      text.append(el('div', 'what', event.title));
+      const where = [event.location, event.calendar].filter(Boolean).join(' · ');
+      if (where) text.append(el('div', 'where', where));
+      card.append(el('div', 'time', time), text);
+      days.get(day)!.append(card);
+    }
+    root.replaceChildren(...days.values());
+  }
+
+  await load();
+</script>
+</body>
+</html>

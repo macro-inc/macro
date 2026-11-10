@@ -22,6 +22,48 @@ stacks. Process isolation belongs to
   receipts include observed SDK activity for inline conversation snapshots.
 - `src/domain/user.rs`: `UserCodeMode`, runs as an authenticated user with no
   session, journal or reviews; shares outcome validation with the session path.
+  `execute` takes the program's input shape: `None` is ExecuteCode's JavaScript
+  contract, `Some(Unattended)` the TypeScript `main({...arguments, macro})`
+  contract with optional dry run.
+- `src/domain/document_programs.rs` + `src/inbound/document_router.rs`:
+  stored HTML documents with server programs. `GET /documents/{id}/build`
+  returns the built page (or the author's diagnostics) and its `sourceHash`;
+  `POST /documents/{id}/code-executions` takes `{sourceHash, program,
+  arguments}` and runs that program's bundle from the server's own build,
+  `409` if the document changed since. The frame never sends source. Both
+  need view access (a receipt minted in the handler), the rollout gate
+  (`DocumentProgramGate`, `enable-html-code-mode`; harness adapter
+  `FlaggedDocumentPrograms`) and a signed-in user. Builds accept a token
+  minted for an agent's run, so the SDK's `publishPage` works in code mode;
+  runs refuse it and any request marked as a program's (`is_agent_run`), so
+  a program cannot start another run. Runs are `ToolCaller::Document` with the
+  inputs contract and a plain user token (no agent); a value over
+  `DOCUMENT_RESULT_BYTES` (1000 KiB) fails the run. `DocumentSources` reads
+  the stored file (harness adapter `code_mode/document_sources.rs`); builds
+  are cached by source hash in memory, so a miss only rebuilds. A viewer runs
+  `RUNS_PER_VIEWER` (2) programs at once (`document_programs/viewer_runs.rs`);
+  more wait, within their own deadline, and get `Busy` (503) past it. The
+  wait is `queued_ms` on `document_programs.run`, and the run gets what is
+  left of the deadline. The harness gives `DocumentPrograms` a runner on its
+  own executor.
+- `src/domain/document_programs/page_build.rs`: the build. `text/macro` blocks are
+  programs (`export default (args, { macro }: ProgramContext)`, plain JSON
+  out); the one `<script type="module" lang="ts">` imports them typed from
+  `macro:programs` and `on` from `macro:client` (`macro_client.ts`). Programs
+  check alone, then with the client; each bundles alone and the client
+  bundles without program source. A page with neither builds `Plain`, which
+  the preview shows as it is. The build also checks each program's first
+  parameter is an object and that it takes nothing after its
+  `ProgramContext` (`program_<n>_args.ts`), refuses reserved words and
+  `run` as ids, a program or bundle over the runtime's 64 KiB, timer calls
+  (each program is checked with module-scope `setTimeout`/`setInterval`/
+  `setImmediate` declarations, `NO_TIMERS`), and, in a page with programs,
+  refresh metas, connection hints and nested frames, which its policy can't
+  stop; and it types each `macro:programs` result as its JSON form
+  (`programs_prelude.ts`).
+  Diagnostics name blocks, not generated files. `demos/` holds pages that recreate built-in features, or combine
+  several areas, this way; the ignored Deno test `every_demo_page_builds`
+  builds each one, so keep them building when the SDK changes.
 - `src/domain/reviews.rs`: review revisions, claims and outcomes.
   `src/domain/reviews/drafts.rs` holds the typed drafts and results: items
   keyed by kind, reusing `SendEmail`, `CreateCalendarEvent` and their

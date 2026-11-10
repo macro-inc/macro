@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Release notes</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9; --ok: #2f9e44;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27; --ok: #69db7c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 16px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 17px; margin: 0 auto 0 0; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
+  button, select, input, textarea { font: inherit; color: inherit; }
+  select, input, textarea { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); min-width: 0; }
+  header select { max-width: 240px; }
+  button { padding: 7px 12px; border: 0; border-radius: 8px; background: var(--accent);
+    color: #fff; cursor: pointer; }
+  button.quiet { background: var(--chip); color: var(--text); }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { color: var(--muted); padding: 8px 16px; margin: 0; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 12px; padding: 16px; }
+  @media (max-width: 760px) { .layout { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+  .sources { display: grid; gap: 12px; align-content: start; }
+  .progress { display: flex; align-items: baseline; gap: 8px; }
+  .progress b { font-size: 26px; font-weight: 600; }
+  .bar { height: 6px; background: var(--chip); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--ok); }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { padding: 5px 0; border-top: 1px solid var(--line); word-break: break-word; }
+  li:first-child { border-top: 0; }
+  li.shipped::before { content: "✓ "; color: var(--ok); font-weight: 700; }
+  .empty { color: var(--muted); }
+  .editor { display: grid; gap: 8px; align-content: start; }
+  textarea { width: 100%; min-height: 320px; resize: vertical; font: 13px/1.55 ui-monospace, monospace; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .row select { flex: 1 1 160px; }
+  .note { color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Release notes</h1>
+  <select id="project" aria-label="Project"></select>
+  <select id="window" aria-label="Period">
+    <option value="7">Last 7 days</option>
+    <option value="14" selected>Last 14 days</option>
+    <option value="30">Last 30 days</option>
+  </select>
+</header>
+<p class="status" id="status">Loading…</p>
+<main class="layout">
+  <div class="sources">
+    <section class="panel">
+      <h2>Project progress</h2>
+      <div class="progress"><b id="pct">—</b><span id="ratio" class="empty"></span></div>
+      <div class="bar"><span id="bar" style="width: 0"></span></div>
+    </section>
+    <section class="panel"><h2>Shipped in this period</h2><ul id="shipped"></ul></section>
+    <section class="panel"><h2>Still in flight</h2><ul id="open"></ul></section>
+  </div>
+  <section class="panel editor">
+    <h2>Notes</h2>
+    <input id="title" aria-label="Document title">
+    <textarea id="notes" aria-label="Release notes"></textarea>
+    <div class="row">
+      <select id="channel" aria-label="Channel to announce in"></select>
+      <button class="quiet" id="regenerate">Rewrite from tasks</button>
+      <button id="publish">Publish and announce</button>
+    </div>
+    <div class="note" id="note">Publishing saves a document, announces it in the channel and notes it on the project.</div>
+  </section>
+</main>
+
+<script type="text/macro" id="projects" lang="ts">
+  export default async function (_args: {}, { macro }: ProgramContext) {
+    const projects = [];
+    for await (const listing of macro.initiatives.list({ sort: 'updated', limit: 50 })) {
+      projects.push({ id: listing.initiative.id, name: listing.name });
+      if (projects.length === 50) break;
+    }
+    const page = await macro.workspace.page({ includeTypes: ['channel'], limit: 40 });
+    const channels = page.items.flatMap((item) =>
+      item.type === 'channel' && item.name ? [{ id: item.id, name: item.name }] : [],
+    );
+    return { projects, channels };
+  }
+</script>
+
+<script type="text/macro" id="changes" lang="ts">
+  const STATUS = '00000001-0000-0000-0000-000000000002';
+  const PROJECT = '00000001-0000-0000-0000-000000000014';
+  const IN_PROGRESS = '00000001-0000-0000-0002-000000000002';
+  const COMPLETED = '00000001-0000-0000-0002-000000000004';
+  const CANCELED = '00000001-0000-0000-0002-000000000005';
+
+  export default async function ({ projectId, days }: { projectId: string; days: number }, { macro }: ProgramContext) {
+    const since = new Date(Date.now() - days * 86_400_000).toISOString();
+    const page = await macro.workspace.page({ includeTypes: ['document'], df: { l: { dst: 'task' } }, limit: 300 });
+    const shipped = [];
+    const open = [];
+    let total = 0;
+    let done = 0;
+    for (const item of page.items) {
+      if (item.type !== 'document') continue;
+      const properties = item.snapshot.data.properties;
+      const project = properties.find((p) => p.definition.id === PROJECT)?.value;
+      if (project?.type !== 'EntityReference' || !project.value.some((ref) => ref.entity_id === projectId)) continue;
+      const status = properties.find((p) => p.definition.id === STATUS)?.value;
+      const statusId = status?.type === 'SelectOption' ? (status.value[0] ?? null) : null;
+      if (statusId === CANCELED) continue;
+      total += 1;
+      if (statusId === COMPLETED) {
+        done += 1;
+        // updatedAt stands in for the completion time, which listings don't carry.
+        if (item.snapshot.data.updatedAt >= since) shipped.push(item.name);
+      } else {
+        open.push({ name: item.name, doing: statusId === IN_PROGRESS });
+      }
+    }
+    open.sort((a, b) => Number(b.doing) - Number(a.doing));
+    return { name: await macro.initiatives.byId(projectId).name(), since, total, done, shipped, open };
+  }
+</script>
+
+<script type="text/macro" id="publish" lang="ts">
+  export default async function (
+    { projectId, channelId, title, markdown }:
+      { projectId: string; channelId: string; title: string; markdown: string },
+    { macro }: ProgramContext,
+  ) {
+    const document = await macro.documents.create({ name: title, markdown });
+    await document.name();
+    const link = document.toMention();
+    await macro.channels.byId(channelId).send({
+      content: `📣 Release notes are out: ${link.tag}`,
+      mentions: [link.mention],
+    });
+    await macro.initiatives.byId(projectId).comment({
+      content: `Release notes published: ${link.tag}`,
+      mentions: [link.mention],
+    });
+    return { id: document.id };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { changes, projects, publish } from 'macro:programs';
+
+  type Changes = Awaited<ReturnType<typeof changes>>;
+
+  const status = document.getElementById('status')!;
+  const projectSelect = document.getElementById('project') as HTMLSelectElement;
+  const windowSelect = document.getElementById('window') as HTMLSelectElement;
+  const channelSelect = document.getElementById('channel') as HTMLSelectElement;
+  const title = document.getElementById('title') as HTMLInputElement;
+  const notes = document.getElementById('notes') as HTMLTextAreaElement;
+  const publishButton = document.getElementById('publish') as HTMLButtonElement;
+  const regenerate = document.getElementById('regenerate') as HTMLButtonElement;
+  const note = document.getElementById('note')!;
+  let edited = false;
+  let latest: Changes | null = null;
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  function options(select: HTMLSelectElement, items: { id: string; name: string }[], prefix = '') {
+    select.replaceChildren(...items.map((item) => {
+      const option = el('option', '', `${prefix}${item.name}`);
+      option.value = item.id;
+      return option;
+    }));
+  }
+
+  const day = (at: string) => new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+  function compose(data: Changes) {
+    const lines = [`# ${data.name}: what shipped`, '', `${day(data.since)} – ${day(new Date().toISOString())}`, '', '## Shipped'];
+    lines.push(...(data.shipped.length ? data.shipped.map((name) => `- ${name}`) : ['- Nothing closed in this period']));
+    const doing = data.open.filter((task) => task.doing);
+    if (doing.length) {
+      lines.push('', '## In progress');
+      lines.push(...doing.map((task) => `- ${task.name}`));
+    }
+    lines.push('', `${data.done} of ${data.total} tasks are done.`);
+    return lines.join('\n');
+  }
+
+  function render(data: Changes) {
+    const pct = data.total ? Math.round((data.done / data.total) * 100) : 0;
+    document.getElementById('pct')!.textContent = `${pct}%`;
+    document.getElementById('ratio')!.textContent = `${data.done} of ${data.total} tasks done`;
+    document.getElementById('bar')!.style.width = `${pct}%`;
+    const shipped = data.shipped.map((name) => el('li', 'shipped', name));
+    document.getElementById('shipped')!.replaceChildren(...(shipped.length ? shipped : [el('li', 'empty', 'Nothing closed in this period.')]));
+    const open = data.open.slice(0, 10).map((task) => el('li', '', task.doing ? `${task.name} (in progress)` : task.name));
+    document.getElementById('open')!.replaceChildren(...(open.length ? open : [el('li', 'empty', 'No open tasks.')]));
+    if (!edited) {
+      title.value = `${data.name} release notes, ${day(new Date().toISOString())}`;
+      notes.value = compose(data);
+    }
+  }
+
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
+  async function load() {
+    if (!projectSelect.value) return;
+    try {
+      latest = await changes({ projectId: projectSelect.value, days: Number(windowSelect.value) });
+      render(latest);
+      status.textContent = '';
+    } catch (error) {
+      status.textContent = `Couldn't read the project: ${String(error)}`;
+    }
+  }
+
+  for (const input of [title, notes]) {
+    input.addEventListener('input', () => {
+      edited = true;
+    });
+  }
+  for (const select of [projectSelect, windowSelect]) {
+    select.addEventListener('change', () => {
+      edited = false;
+      reload();
+    });
+  }
+  regenerate.addEventListener('click', () => {
+    edited = false;
+    if (latest) render(latest);
+  });
+  publishButton.addEventListener('click', async () => {
+    if (!title.value.trim() || !notes.value.trim()) return;
+    publishButton.disabled = true;
+    note.textContent = 'Publishing…';
+    try {
+      await publish({
+        projectId: projectSelect.value,
+        channelId: channelSelect.value,
+        title: title.value.trim(),
+        markdown: notes.value,
+      });
+      note.textContent = `Published and announced in ${channelSelect.selectedOptions[0]?.textContent ?? 'the channel'}.`;
+    } catch (error) {
+      note.textContent = `Couldn't publish: ${String(error)}`;
+    }
+    publishButton.disabled = false;
+  });
+
+  async function loadChoices() {
+    let start: Awaited<ReturnType<typeof projects>>;
+    try {
+      start = await projects();
+    } catch (error) {
+      publishButton.disabled = true;
+      status.textContent = `Couldn't load projects and channels: ${String(error)}`;
+      return;
+    }
+    options(projectSelect, start.projects);
+    options(channelSelect, start.channels, '#');
+    publishButton.disabled = start.projects.length === 0 || start.channels.length === 0;
+    if (start.projects.length === 0) {
+      status.textContent = 'Create a project with tasks to write its release notes.';
+      return;
+    }
+    await reload();
+  }
+
+  // Registered before the first load, so a failed one leaves the page listening.
+  on(['document.created', 'document.updated', 'document.deleted'], reload);
+  // Task Status, Assignee and Due changes emit no live event: refresh on focus too.
+  window.addEventListener('focus', () => reload());
+  await loadChoices();
+</script>
+</body>
+</html>

@@ -45,6 +45,7 @@ import type {
   DiscoverAgentCapabilitiesResponse,
   DiscoverConnectorsResponse,
   DiscoveryRequest,
+  DocumentBuildResponse,
   EditQueuedActionRequest,
   ExecutionRecord,
   ExtractInputRequest,
@@ -66,6 +67,7 @@ import type {
   RetryAgentConversationTurnRequest,
   ReviewDecision,
   ReviewRecord,
+  RunDocumentProgram,
   SandboxSizeBody,
   SearchConnectedAppToolsParams,
   SessionAutoArchiveResponse,
@@ -75,6 +77,7 @@ import type {
   StartFreshAgentConversationRequest,
   UnlinkAgentSessionPullRequestParams,
   UpdateSharePermissionRequestV2,
+  UserExecutionReceipt,
   WarmAgentSessionRequest,
   WarmAgentSessionResponse,
   WorkRegistrationResponse,
@@ -4345,6 +4348,188 @@ export const listCodingAgents = async (
     status: res.status,
     headers: res.headers,
   } as listCodingAgentsResponse;
+};
+
+/**
+ * @summary Build the document's current source, or return the cached build, for the
+preview to render.
+ */
+export type getDocumentBuildResponse200 = {
+  data: DocumentBuildResponse;
+  status: 200;
+};
+
+export type getDocumentBuildResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type getDocumentBuildResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type getDocumentBuildResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type getDocumentBuildResponse413 = {
+  data: void;
+  status: 413;
+};
+
+export type getDocumentBuildResponse422 = {
+  data: void;
+  status: 422;
+};
+
+export type getDocumentBuildResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type getDocumentBuildResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type getDocumentBuildResponseSuccess = getDocumentBuildResponse200 & {
+  headers: Headers;
+};
+export type getDocumentBuildResponseError = (
+  | getDocumentBuildResponse401
+  | getDocumentBuildResponse403
+  | getDocumentBuildResponse404
+  | getDocumentBuildResponse413
+  | getDocumentBuildResponse422
+  | getDocumentBuildResponse500
+  | getDocumentBuildResponse503
+) & {
+  headers: Headers;
+};
+
+export type getDocumentBuildResponse =
+  | getDocumentBuildResponseSuccess
+  | getDocumentBuildResponseError;
+
+export const getGetDocumentBuildUrl = (documentId: string) => {
+  return `/documents/${documentId}/build`;
+};
+
+export const getDocumentBuild = async (
+  documentId: string,
+  options?: RequestInit
+): Promise<getDocumentBuildResponse> => {
+  const res = await fetch(getGetDocumentBuildUrl(documentId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getDocumentBuildResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getDocumentBuildResponse;
+};
+
+/**
+ * @summary Run one program of the document's build as the signed-in user and return
+its outcome. `409` means the document changed since the page was built.
+ */
+export type runDocumentProgramResponse200 = {
+  data: UserExecutionReceipt;
+  status: 200;
+};
+
+export type runDocumentProgramResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type runDocumentProgramResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type runDocumentProgramResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type runDocumentProgramResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type runDocumentProgramResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type runDocumentProgramResponse422 = {
+  data: void;
+  status: 422;
+};
+
+export type runDocumentProgramResponse500 = {
+  data: void;
+  status: 500;
+};
+
+export type runDocumentProgramResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type runDocumentProgramResponseSuccess =
+  runDocumentProgramResponse200 & {
+    headers: Headers;
+  };
+export type runDocumentProgramResponseError = (
+  | runDocumentProgramResponse400
+  | runDocumentProgramResponse401
+  | runDocumentProgramResponse403
+  | runDocumentProgramResponse404
+  | runDocumentProgramResponse409
+  | runDocumentProgramResponse422
+  | runDocumentProgramResponse500
+  | runDocumentProgramResponse503
+) & {
+  headers: Headers;
+};
+
+export type runDocumentProgramResponse =
+  | runDocumentProgramResponseSuccess
+  | runDocumentProgramResponseError;
+
+export const getRunDocumentProgramUrl = (documentId: string) => {
+  return `/documents/${documentId}/code-executions`;
+};
+
+export const runDocumentProgram = async (
+  documentId: string,
+  runDocumentProgram: RunDocumentProgram,
+  options?: RequestInit
+): Promise<runDocumentProgramResponse> => {
+  const res = await fetch(getRunDocumentProgramUrl(documentId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(runDocumentProgram),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: runDocumentProgramResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as runDocumentProgramResponse;
 };
 
 /**

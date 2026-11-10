@@ -190,7 +190,7 @@ fn may_be_chatgpt(caller: &ToolCaller) -> bool {
     match caller {
         ToolCaller::McpClient { name: None } => true,
         ToolCaller::McpClient { name: Some(name) } => name.eq_ignore_ascii_case("chatgpt"),
-        ToolCaller::Agent(_) | ToolCaller::ApiKey => false,
+        ToolCaller::Agent(_) | ToolCaller::ApiKey | ToolCaller::Document => false,
     }
 }
 

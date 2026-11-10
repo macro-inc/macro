@@ -15,6 +15,7 @@ import { createRenderEffect, lazy, Show } from 'solid-js';
 import { getViewPreset } from '../next-soup/sidebar/soup-filter-presets';
 import { routineContent } from '../routines/routine-navigation';
 import { AgentsViewSkeleton } from './agents-view-skeleton';
+import { parseAgentsPage } from './core/pages';
 import { parseAgentsRoute } from './core/route';
 
 const SoupView = lazy(async () => ({
@@ -25,6 +26,9 @@ const AgentsView = lazy(async () => ({
 }));
 const RoutinesPage = lazy(async () => ({
   default: (await import('../routines/routines-page')).RoutinesPage,
+}));
+const ArtifactsPage = lazy(async () => ({
+  default: (await import('../artifacts/artifacts-page')).ArtifactsPage,
 }));
 const IntegrationsPage = lazy(async () => ({
   default: (await import('../settings/IntegrationsPage')).IntegrationsPage,
@@ -106,13 +110,10 @@ export const AgentsRouteView = withAuth(() => {
       splitPanelLayout: enabled() ? 'composable' : 'legacy',
     });
   });
-  const connectionsRequested = () => {
+  const requestedPage = () => {
     const content = panel.handle.content();
-    return (
-      content.type === 'component' &&
-      content.id !== 'routines' &&
-      content.params?.agentPage === 'connections'
-    );
+    if (content.type !== 'component' || content.id === 'routines') return;
+    return parseAgentsPage(content.params?.agentPage);
   };
   return (
     <Show when={!flag().loading} fallback={<AgentsViewSkeleton />}>
@@ -120,43 +121,52 @@ export const AgentsRouteView = withAuth(() => {
         when={enabled()}
         fallback={
           <Show
-            when={connectionsRequested()}
+            when={requestedPage() === 'artifacts'}
             fallback={
               <Show
-                when={route()}
+                when={requestedPage() === 'connections'}
                 fallback={
                   <Show
-                    when={(() => {
-                      const content = panel.handle.content();
-                      return (
-                        content.type === 'component' &&
-                        (content.id === 'routines' ||
-                          content.params?.agentPage === 'routines')
-                      );
-                    })()}
-                    fallback={<LegacyAgentsView />}
+                    when={route()}
+                    fallback={
+                      <Show
+                        when={(() => {
+                          const content = panel.handle.content();
+                          return (
+                            content.type === 'component' &&
+                            (content.id === 'routines' ||
+                              content.params?.agentPage === 'routines')
+                          );
+                        })()}
+                        fallback={<LegacyAgentsView />}
+                      >
+                        <div class="size-full overflow-auto touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+                          <RoutinesPage />
+                        </div>
+                      </Show>
+                    }
                   >
-                    <div class="size-full overflow-auto touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
-                      <RoutinesPage />
-                    </div>
+                    {(current) => (
+                      <RedirectSplit
+                        to={{
+                          type:
+                            current().conversation.type === 'agent_session'
+                              ? 'agent'
+                              : 'chat',
+                          id: current().conversation.id,
+                        }}
+                      />
+                    )}
                   </Show>
                 }
               >
-                {(current) => (
-                  <RedirectSplit
-                    to={{
-                      type:
-                        current().conversation.type === 'agent_session'
-                          ? 'agent'
-                          : 'chat',
-                      id: current().conversation.id,
-                    }}
-                  />
-                )}
+                <IntegrationsPage />
               </Show>
             }
           >
-            <IntegrationsPage />
+            <div class="size-full touch:pt-(--mobile-content-inset-top)">
+              <ArtifactsPage />
+            </div>
           </Show>
         }
       >

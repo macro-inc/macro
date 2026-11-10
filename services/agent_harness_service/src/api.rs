@@ -90,6 +90,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     tool_approvals: Router,
     app_connections: Router,
     code_executions: Router,
+    document_programs: Router,
     activity: Router,
     notifications: Router,
     changes: AgentChangesRouterState<Changes, Access, Auth>,
@@ -145,6 +146,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             tool_approvals: Router::new(),
             app_connections: Router::new(),
             code_executions: Router::new(),
+            document_programs: Router::new(),
             activity: Router::new(),
             notifications: Router::new(),
             changes,
@@ -220,6 +222,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
 
     pub fn with_code_executions(mut self, router: Router) -> Self {
         self.code_executions = router;
+        self
+    }
+
+    /// Attach the user-scoped runs of programs embedded in documents.
+    pub fn with_document_programs(mut self, router: Router) -> Self {
+        self.document_programs = router;
         self
     }
 
@@ -426,6 +434,7 @@ where
         .merge(agent_models_router(states.models))
         .merge(agent_repositories_router(states.repositories))
         .merge(states.routine_sessions)
+        .merge(states.document_programs)
         .merge(states.coding_agents)
         .merge(states.capabilities)
         .merge(states.mode_choice)

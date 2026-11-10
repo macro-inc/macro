@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projects</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9; --good: #2b8a3e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27; --good: #69db7c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  input, button, select { font: inherit; color: inherit; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 16px; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 14px; }
+  h1 { font-size: 17px; margin: 0 auto 0 0; }
+  input, select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--panel); min-width: 0; }
+  input { flex: 1 1 200px; max-width: 280px; }
+  button { padding: 8px 12px; border: 0; border-radius: 10px; background: var(--accent);
+    color: #fff; cursor: pointer; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  .card h2 { font-size: 15px; margin: 0 0 8px; word-break: break-word; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .tag { font-size: 12px; background: var(--chip); border-radius: 999px; padding: 2px 8px; color: var(--muted); }
+  .tag.urgent, .tag.high { color: #d9480f; }
+  .bar { height: 6px; border-radius: 3px; background: var(--chip); overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--good); }
+  .progress { display: flex; justify-content: space-between; color: var(--muted);
+    font-size: 12px; margin-top: 6px; }
+  .empty { padding: 32px; text-align: center; color: var(--muted); }
+  .status { color: var(--muted); margin: 0 0 12px; }
+  .status:empty { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Projects</h1>
+    <select id="filter" aria-label="Status">
+      <option value="">All statuses</option>
+      <option value="not_started">Not started</option>
+      <option value="in_progress">In progress</option>
+      <option value="in_review">In review</option>
+      <option value="completed">Completed</option>
+      <option value="canceled">Canceled</option>
+    </select>
+    <input id="name" placeholder="New project name" aria-label="New project name">
+    <button id="create">Create</button>
+  </header>
+  <p class="status" id="status" role="status"></p>
+  <div id="list"><p class="empty">Loading…</p></div>
+</div>
+
+<script type="text/macro" id="projects" lang="ts">
+  type Status = 'not_started' | 'in_progress' | 'in_review' | 'completed' | 'canceled';
+
+  export default async function ({ status }: { status?: Status }, { macro }: ProgramContext) {
+    const rows = [];
+    for await (const listing of macro.initiatives.list({ status, sort: 'updated', limit: 50 })) {
+      rows.push({
+        id: listing.initiative.id,
+        name: listing.name,
+        status: listing.status ?? null,
+        priority: listing.priority ?? null,
+        dueDate: listing.dueDate ?? null,
+        assignees: listing.assignees.length,
+        tasks: listing.taskCount,
+        done: listing.completedTaskCount,
+      });
+      if (rows.length === 50) break;
+    }
+    return rows;
+  }
+</script>
+
+<script type="text/macro" id="createProject" lang="ts">
+  export default async function ({ name }: { name: string }, { macro }: ProgramContext) {
+    const initiative = await macro.initiatives.create({ name, shareWithTeam: true });
+    return { id: initiative.id };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { createProject, projects } from 'macro:programs';
+
+  type Status = 'not_started' | 'in_progress' | 'in_review' | 'completed' | 'canceled';
+
+  const list = document.getElementById('list')!;
+  const filter = document.getElementById('filter') as HTMLSelectElement;
+  const nameInput = document.getElementById('name') as HTMLInputElement;
+  const createButton = document.getElementById('create') as HTMLButtonElement;
+  const status = document.getElementById('status')!;
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  const label = (value: string) => value.replaceAll('_', ' ').replace(/^./, (c) => c.toUpperCase());
+
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
+  async function load() {
+    const selected = (filter.value || undefined) as Status | undefined;
+    let rows: Awaited<ReturnType<typeof projects>>;
+    try {
+      rows = await projects({ status: selected });
+    } catch (error) {
+      list.replaceChildren(el('p', 'empty', `Couldn't load projects: ${String(error)}`));
+      return;
+    }
+    if (rows.length === 0) {
+      list.replaceChildren(el('p', 'empty', 'No projects match.'));
+      return;
+    }
+    const grid = el('div', 'grid');
+    for (const row of rows) {
+      const card = el('article', 'card');
+      const tags = el('div', 'tags');
+      tags.append(el('span', 'tag', label(row.status ?? 'not_started')));
+      if (row.priority) tags.append(el('span', `tag ${row.priority}`, `${label(row.priority)} priority`));
+      if (row.dueDate) {
+        const due = new Date(row.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        tags.append(el('span', 'tag', `Due ${due}`));
+      }
+      if (row.assignees) tags.append(el('span', 'tag', `${row.assignees} assigned`));
+
+      const bar = el('div', 'bar');
+      const fill = el('span');
+      fill.style.width = `${row.tasks ? Math.round((row.done / row.tasks) * 100) : 0}%`;
+      bar.append(fill);
+      const progress = el('div', 'progress');
+      progress.append(
+        el('span', '', `${row.done} of ${row.tasks} tasks done`),
+        el('span', '', row.tasks ? `${Math.round((row.done / row.tasks) * 100)}%` : '—'),
+      );
+      card.append(el('h2', '', row.name), tags, bar, progress);
+      grid.append(card);
+    }
+    list.replaceChildren(grid);
+  }
+
+  // One create at a time, so repeated Enter presses can't add duplicates.
+  let creating = false;
+  async function create() {
+    const name = nameInput.value.trim();
+    if (!name || creating) return;
+    creating = true;
+    createButton.disabled = true;
+    status.textContent = '';
+    try {
+      await createProject({ name });
+      nameInput.value = '';
+    } catch (error) {
+      status.textContent = `Couldn't create the project: ${String(error)}`;
+      return;
+    } finally {
+      creating = false;
+      createButton.disabled = false;
+    }
+    await reload();
+  }
+
+  filter.addEventListener('change', reload);
+  // Tasks are documents: a task created or completed changes a project's progress.
+  on(['document.created', 'document.updated', 'document.deleted'], reload);
+  // Task Status, Assignee and Due changes emit no live event: refresh on focus too.
+  window.addEventListener('focus', () => reload());
+  createButton.addEventListener('click', create);
+  nameInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') create();
+  });
+  await reload();
+</script>
+</body>
+</html>

@@ -17,4 +17,7 @@ mod activity;
 mod user;
 pub use user::*;
 
+mod document_programs;
+pub use document_programs::*;
+
 pub mod connected_apps;

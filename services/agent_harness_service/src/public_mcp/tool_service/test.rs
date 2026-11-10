@@ -310,6 +310,7 @@ mod code_mode {
             caller: &ToolCaller,
             session: Option<uuid::Uuid>,
             request: ExecuteRequest,
+            _: Option<code_execution::domain::Unattended>,
             _: CancellationToken,
         ) -> Result<UserExecutionReceipt, CodeModeError> {
             self.1.lock().unwrap().push(caller.clone());

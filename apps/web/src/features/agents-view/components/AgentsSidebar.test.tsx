@@ -204,7 +204,13 @@ describe('mixed Agents sidebar', () => {
         onLoadMore={vi.fn()}
       />
     ));
-    for (const label of ['Agents', 'Routines', 'Connections']) {
+    const tools = screen.getByRole('navigation', { name: 'Agent tools' });
+    expect(
+      within(tools)
+        .getAllByRole('button')
+        .map((button) => button.textContent)
+    ).toEqual(['Agents', 'Routines', 'Artifacts', 'Connections']);
+    for (const label of ['Agents', 'Routines', 'Artifacts', 'Connections']) {
       fireEvent.click(screen.getByRole('button', { name: label }));
       expect(openPage).toHaveBeenLastCalledWith(label.toLowerCase());
     }

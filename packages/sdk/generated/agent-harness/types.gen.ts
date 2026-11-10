@@ -895,6 +895,20 @@ export type AutoArchivePreferencesBody = {
 export type BotId = string;
 
 /**
+ * One problem in a document's source.
+ */
+export type BuildProblem = {
+    /**
+     * The block it is in, such as `program tasks` or `client script`.
+     */
+    file?: string | null;
+    /**
+     * What is wrong, with its location.
+     */
+    message: string;
+};
+
+/**
  * Editable fields for calendar inference, before submission and identity resolution.
  */
 export type CalendarSuggestions = {
@@ -1690,6 +1704,41 @@ export type DiscoveryResult = {
      * True when some advertised tools were omitted.
      */
     tools_truncated: boolean;
+};
+
+/**
+ * A document's build: the page to render, or why it doesn't build.
+ */
+export type DocumentBuildResponse = {
+    /**
+     * The page to render in the sandboxed preview.
+     */
+    html: string;
+    /**
+     * The ids of the programs the page may run.
+     */
+    programs: Array<string>;
+    /**
+     * Send with each run, so a run never uses a newer build than the page.
+     */
+    sourceHash: string;
+    status: 'built';
+} | {
+    /**
+     * Each problem, with where it is.
+     */
+    diagnostics: Array<BuildProblem>;
+    /**
+     * The source this verdict is for.
+     */
+    sourceHash: string;
+    status: 'failed';
+} | {
+    /**
+     * The source this verdict is for.
+     */
+    sourceHash: string;
+    status: 'plain';
 };
 
 /**
@@ -2699,6 +2748,30 @@ export type RoutineCause = {
 };
 
 /**
+ * Run one program of the build a page shows.
+ */
+export type RunDocumentProgram = {
+    /**
+     * The program's first argument.
+     */
+    arguments?: {
+        [key: string]: unknown;
+    };
+    /**
+     * The program's id: its block's `id`.
+     */
+    program: string;
+    /**
+     * `sourceHash` of the build the page was rendered from.
+     */
+    sourceHash: string;
+    /**
+     * Total deadline in milliseconds, from 1 to 30000.
+     */
+    timeoutMs?: number;
+};
+
+/**
  * Named compute tier for a managed sandbox.
  *
  * The API and database store the name. CPU, RAM, and disk live in
@@ -3034,6 +3107,32 @@ export type UpdateSharePermissionRequestV2 = {
     linkShare?: null | LinkShare;
     linkShareAccessLevel?: null | AccessLevel;
     teamShareAccessLevel?: null | AccessLevel;
+};
+
+/**
+ * Outcome returned to the caller without a saved execution journal.
+ */
+export type UserExecutionReceipt = {
+    /**
+     * Observed SDK operations, without arguments or responses.
+     */
+    activity: Array<ExecutionActivity>;
+    /**
+     * More SDK operations ran than the activity list records.
+     */
+    activityTruncated: boolean;
+    /**
+     * Safe failure text, when execution did not succeed.
+     */
+    error?: string | null;
+    /**
+     * Only the value explicitly returned by the program.
+     */
+    result?: unknown;
+    /**
+     * How the program ended.
+     */
+    status: ExecutionStatus;
 };
 
 /**
@@ -4796,6 +4895,63 @@ export type ListCodingAgentsResponses = {
 };
 
 export type ListCodingAgentsResponse = ListCodingAgentsResponses[keyof ListCodingAgentsResponses];
+
+export type GetDocumentBuildData = {
+    body?: never;
+    path: {
+        /**
+         * A stored HTML document
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/build';
+};
+
+export type GetDocumentBuildErrors = {
+    401: unknown;
+    403: unknown;
+    404: unknown;
+    413: unknown;
+    422: unknown;
+    500: unknown;
+    503: unknown;
+};
+
+export type GetDocumentBuildResponses = {
+    200: DocumentBuildResponse;
+};
+
+export type GetDocumentBuildResponse = GetDocumentBuildResponses[keyof GetDocumentBuildResponses];
+
+export type RunDocumentProgramData = {
+    body: RunDocumentProgram;
+    path: {
+        /**
+         * The document the program is in
+         */
+        document_id: string;
+    };
+    query?: never;
+    url: '/documents/{document_id}/code-executions';
+};
+
+export type RunDocumentProgramErrors = {
+    400: unknown;
+    401: unknown;
+    403: unknown;
+    404: unknown;
+    409: unknown;
+    422: unknown;
+    500: unknown;
+    503: unknown;
+};
+
+export type RunDocumentProgramResponses = {
+    200: UserExecutionReceipt;
+};
+
+export type RunDocumentProgramResponse = RunDocumentProgramResponses[keyof RunDocumentProgramResponses];
 
 export type ClassifyData = {
     body: ClassifyInputRequest;

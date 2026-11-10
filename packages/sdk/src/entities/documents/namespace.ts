@@ -8,6 +8,8 @@ import { Spreadsheet } from '../spreadsheets/spreadsheet';
 import type { Team } from '../teams/team';
 import { User } from '../users/user';
 import { Document } from './document';
+import { type FileContent, toBlob } from './file-content';
+import { type PagePublished, publishedPage } from './page';
 import { SystemSkill } from './system-skill';
 
 /** One skill found by {@link DocumentNamespace.skills}. */
@@ -25,13 +27,6 @@ export interface SkillListing {
   updatedAt: string | undefined;
 }
 
-/** A file's content: its bytes, or text stored as UTF-8. */
-export type FileContent = Uint8Array<ArrayBuffer> | ArrayBuffer | Blob | string;
-
-function toBlob(content: FileContent): Blob {
-  return content instanceof Blob ? content : new Blob([content]);
-}
-
 /**
  * @routing Use when writing, creating, reading or editing a document of any kind, such as a brief, notes, a spec, a canvas, a spreadsheet or a deck; not databases, tasks or email.
  *
@@ -44,6 +39,10 @@ function toBlob(content: FileContent): Blob {
  * ## Uploaded Office and design files
  *
  * Edit an uploaded Word file with `readWord()` then `editWord(operations)`, and a PowerPoint deck with `readPresentation()` then `editPresentation(operations)` (or `copyPresentation()` for a new deck): both address paragraphs, slides and shapes by the ids the read reports. Read Figma, Photoshop and Illustrator files with `readDesign()`, `readPhotoshop()` and `readIllustrator()`; they can't be edited. Never rebuild these files from `bytes()`.
+ *
+ * ## Live HTML pages
+ *
+ * A page that reads or changes Macro data when someone opens it (a dashboard, a tracker) is an HTML document whose `text/macro` programs run on the server as the viewer. Publish it with `publishPage` and fix its problems with `document.republishPage(html)`; read `publishPage`'s docs for the page contract before writing one. Never use `upload` for such a page: it doesn't report problems.
  *
  * ## New spreadsheets
  *
@@ -140,6 +139,109 @@ export class DocumentNamespace {
       }),
     );
     return Document.byId(this.client, documentId);
+  }
+
+  /**
+   * Publish a live HTML page, then fix each returned problem with `document.republishPage(html)` until `problems` is empty; never publish it again.
+   *
+   * Use it for a page that shows or changes Macro data when someone opens it,
+   * such as a dashboard or a tracker. It saves `html` as a new HTML document
+   * named `name` (`.html` is added when missing) in `project`, builds it, and
+   * returns the document with its `build` status and the build's problems by
+   * block. The document is saved even when it doesn't build, and the call
+   * never throws once it is saved. Each problem is a type error or a broken
+   * rule below: fix it and call `document.republishPage(html)` with the whole
+   * corrected page, which saves it as a new version of the same document.
+   * `build: 'busy'` means the build didn't finish in time: republish the same
+   * page later. `build: 'unavailable'` means live pages aren't available to
+   * this account: the page is saved and opens as plain HTML.
+   *
+   * A page has two kinds of block, in TypeScript:
+   *
+   * - Programs: `<script type="text/macro" id="tasks" lang="ts">`, at most 16,
+   *   each `id` a JavaScript identifier. The default export is
+   *   `export default async function (args: { query: string }, { macro }: ProgramContext)`
+   *   and returns plain JSON (strings, numbers, arrays, objects; handles
+   *   serialize to their `toJSON()`, such as `{ id }`, and dates to strings, so
+   *   return the fields you show), at most 1000 KB of it. The first parameter,
+   *   if any, is an object type, and nothing follows the `ProgramContext`. A
+   *   program runs on the server as the person viewing the page, with `macro`
+   *   this SDK signed in as them, for at most 30 seconds. Programs have no
+   *   `setTimeout` or `setInterval` (calling one fails the build): they can't
+   *   wait or poll; the page can.
+   * - The client script: one `<script type="module" lang="ts">`. It imports
+   *   each program as a typed async function from `macro:programs` and `on`
+   *   from `macro:client`. `on(events, handler, { ids })` calls the handler
+   *   with `{ type, id }` when one of the viewer's entities changes, using
+   *   `macro.events` names (`document.updated`; tasks are documents; a
+   *   `message.*` event's id is its channel or document), and with
+   *   `{ type: 'macro.resync' }` after a reconnect: call the program again to
+   *   read what changed. `document.updated` means a rename, move or sharing
+   *   change; a task's Status, Assignee or Due change emits no event yet, and
+   *   content edits arrive only as `document.interaction` (about every 5
+   *   seconds while someone types, and on open and close), so reload after
+   *   the page's own writes and on window focus. Other scripts are left as
+   *   they are and can't call programs.
+   *
+   * Neither block may import anything else: no `npm:` packages, remote URLs
+   * or JSX. Write plain TypeScript against the DOM and the SDK. The page runs
+   * in a sandboxed frame: a `<form>` never submits, so use buttons and key
+   * handlers, and nothing can fetch the network except through programs. No
+   * `<meta http-equiv="refresh">`, `<link rel="preconnect">` (or
+   * `dns-prefetch`, `prefetch`, `prerender`), `<iframe>`, `<object>` or
+   * `<embed>`: the build fails on them. Links don't navigate (a `#fragment`
+   * link scrolls to its target), and a page that sets `location` is closed. Put
+   * data into the page with `textContent` or `createElement`, never
+   * `innerHTML`, so a task named `<img onerror=…>` stays text.
+   *
+   * When you build `html` as a JavaScript template literal, the page's own
+   * `${…}` and backticks must be escaped (`\${`, `` \` ``) or avoided.
+   *
+   * @example Publish a page listing tasks and fix its problems.
+   * ```js
+   * const html = `<ul id="out"></ul>
+   * <script type="text/macro" id="tasks" lang="ts">
+   *   export default async function ({ query }: { query: string }, { macro }: ProgramContext) {
+   *     const found = [];
+   *     for await (const task of macro.tasks.search(query, { pageSize: 20 })) {
+   *       found.push(task);
+   *       if (found.length === 20) break;
+   *     }
+   *     return (await macro.tasks.summaries(found)).map((summary) => summary.name);
+   *   }
+   * </script>
+   * <script type="module" lang="ts">
+   *   import { on } from 'macro:client';
+   *   import { tasks } from 'macro:programs';
+   *
+   *   const out = document.getElementById('out')!;
+   *   async function load() {
+   *     const names = await tasks({ query: 'launch' });
+   *     out.replaceChildren(...names.map((name) => Object.assign(document.createElement('li'), { textContent: name })));
+   *   }
+   *   on(['document.created', 'document.updated', 'document.deleted'], load);
+   *   await load();
+   * </script>`;
+   * const { document, problems } = await macro.documents.publishPage({ name: 'Launch tasks', html });
+   * // build 'failed': fix the named blocks, then
+   * // await document.republishPage(fixedHtml), and repeat until problems is empty.
+   * return { data: { page: document, problems } };
+   * ```
+   */
+  async publishPage(options: {
+    name: string;
+    html: string;
+    project?: Project;
+  }): Promise<PagePublished> {
+    const name = options.name.endsWith('.html')
+      ? options.name
+      : `${options.name}.html`;
+    const document = await this.upload({
+      name,
+      content: options.html,
+      project: options.project,
+    });
+    return publishedPage(this.client, document);
   }
 
   /**

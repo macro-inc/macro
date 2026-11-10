@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Weekly digest</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9; --ok: #2f9e44;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27; --ok: #69db7c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 16px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 17px; margin: 0 auto 0 0; }
+  h2 { display: flex; justify-content: space-between; font-size: 12px; text-transform: uppercase;
+    letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
+  input, button, select, textarea { font: inherit; color: inherit; }
+  select, textarea { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel); min-width: 0; }
+  button { padding: 7px 12px; border: 0; border-radius: 8px; background: var(--accent);
+    color: #fff; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .status { color: var(--muted); padding: 8px 16px; margin: 0; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px; padding: 0 16px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .stat b { display: block; font-size: 24px; font-weight: 600; }
+  .stat span { color: var(--muted); font-size: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px; padding: 16px; align-items: start; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 12px 14px; min-width: 0; }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { padding: 7px 0; border-top: 1px solid var(--line); word-break: break-word; }
+  li:first-child { border-top: 0; }
+  .meta { color: var(--muted); font-size: 12px; }
+  .done::before { content: "✓ "; color: var(--ok); font-weight: 700; }
+  .quote { color: var(--muted); font-size: 13px; margin-top: 4px; padding-left: 8px;
+    border-left: 2px solid var(--line); }
+  .empty { color: var(--muted); }
+  .compose { display: grid; gap: 8px; }
+  .compose textarea { width: 100%; min-height: 150px; resize: vertical; font: 13px/1.5 ui-monospace, monospace; }
+  .compose .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .compose .row select { flex: 1 1 180px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Weekly digest</h1>
+  <select id="range" aria-label="Period">
+    <option value="7">Last 7 days</option>
+    <option value="14">Last 14 days</option>
+    <option value="30">Last 30 days</option>
+  </select>
+</header>
+<p class="status" id="status">Loading…</p>
+<section class="stats" id="stats"></section>
+<main class="grid">
+  <section class="panel"><h2><span>Tasks completed</span><span id="done-count"></span></h2><ul id="done"></ul></section>
+  <section class="panel"><h2><span>Documents edited</span><span id="docs-count"></span></h2><ul id="docs"></ul></section>
+  <section class="panel"><h2><span>Channel highlights</span><span id="chan-count"></span></h2><ul id="channels"></ul></section>
+  <section class="panel compose">
+    <h2><span>Post the digest</span></h2>
+    <textarea id="draft" aria-label="Digest text"></textarea>
+    <div class="row">
+      <select id="target" aria-label="Channel to post to"></select>
+      <button id="post">Post to channel</button>
+    </div>
+    <div class="meta" id="posted"></div>
+  </section>
+</main>
+
+<script type="text/macro" id="digest" lang="ts">
+  const STATUS = '00000001-0000-0000-0000-000000000002';
+  const COMPLETED = '00000001-0000-0000-0002-000000000004';
+
+  /** One of Macro's tags in message text: `<m-…>{json}</m-…>`. */
+  const MACRO_TAG = /<(m-[a-z-]+)>(.*?)<\/\1>/g;
+
+  type TagData = {
+    userId?: string; email?: string; displayName?: string; name?: string; documentName?: string;
+    groupAlias?: string; label?: string; date?: string; displayFormat?: string;
+  };
+
+  /**
+   * Message text with Macro's mention tags shown as names; any other text,
+   * angle brackets included, stays as written. A mention the SDK built
+   * carries only the user's id, so its name is loaded (once per id, in `names`).
+   */
+  async function plain(
+    text: string,
+    macro: ProgramContext['macro'],
+    names: Map<string, Promise<string | undefined>>,
+  ): Promise<string> {
+    const tags = [...text.matchAll(MACRO_TAG)].map((match) => {
+      try {
+        return JSON.parse(match[2] ?? '') as TagData;
+      } catch {
+        return {};
+      }
+    });
+    for (const tag of tags) {
+      if (tag.userId && !tag.displayName && !names.has(tag.userId)) {
+        names.set(tag.userId, macro.users.byId(tag.userId).name().catch(() => undefined));
+      }
+    }
+    const loaded = await Promise.all(tags.map((tag) => (tag.userId ? names.get(tag.userId) : undefined)));
+
+    let index = 0;
+    return text.replace(MACRO_TAG, (_match, kind: string) => {
+      const tag = tags[index] ?? {};
+      const loadedName = loaded[index];
+      index += 1;
+      if (kind === 'm-user-mention' || kind === 'm-contact-mention') {
+        // Someone with no profile name shows their email's local part.
+        const email = tag.email ?? tag.userId?.replace(/^macro\|/, '');
+        return `@${tag.displayName || tag.name || loadedName || email?.split('@')[0] || 'someone'}`;
+      }
+      if (kind === 'm-group-mention') return `@${tag.groupAlias ?? 'group'}`;
+      if (kind === 'm-date-mention') return tag.displayFormat || tag.date || '';
+      // Document, task, project and other chips carry their name; images and cards show nothing.
+      return tag.documentName || tag.label || tag.name || '';
+    });
+  }
+
+  export default async function ({ days }: { days: number }, { macro }: ProgramContext) {
+    const since = new Date(Date.now() - days * 86_400_000).toISOString();
+    const [taskPage, documentPage, channelPage] = await Promise.all([
+      macro.workspace.page({
+        includeTypes: ['document'],
+        df: { '&': [{ l: { dst: 'task' } }, { l: { ua: { gte: since } } }] },
+        limit: 200,
+      }),
+      macro.workspace.page({ includeTypes: ['document'], df: { l: { ua: { gte: since } } }, limit: 100 }),
+      macro.workspace.page({ includeTypes: ['channel'], limit: 40 }),
+    ]);
+
+    const completed = [];
+    let touched = 0;
+    for (const item of taskPage.items) {
+      if (item.type !== 'document') continue;
+      touched += 1;
+      const status = item.snapshot.data.properties.find((p) => p.definition.id === STATUS)?.value;
+      if (status?.type === 'SelectOption' && status.value.includes(COMPLETED)) {
+        completed.push({ id: item.id, name: item.name, at: item.snapshot.data.updatedAt });
+      }
+    }
+
+    const documents = documentPage.items.flatMap((item) =>
+      item.type === 'document' && item.subType !== 'task'
+        ? [{ id: item.id, name: item.name, kind: item.fileType ?? 'md', at: item.snapshot.data.updatedAt }]
+        : [],
+    );
+
+    const channels = channelPage.items.flatMap((item) =>
+      item.type === 'channel' ? [{ item, name: item.name ?? 'Direct message' }] : [],
+    );
+    const active = channels.filter(({ item }) => {
+      const latest = item.snapshot.data.latest_message?.created_at;
+      return latest !== undefined && latest >= since;
+    });
+
+    const names = new Map<string, Promise<string>>();
+    const mentioned = new Map<string, Promise<string | undefined>>();
+    const highlights = await Promise.all(active.slice(0, 6).map(async ({ item, name }) => {
+      const messages = [];
+      for await (const message of item.entity.messagesAfter(since, { pageSize: 50 })) {
+        messages.push(message);
+        if (messages.length === 50) break;
+      }
+      // The most-reacted message stands for the channel; the latest breaks ties.
+      const ranked = messages
+        .map((message) => ({ message, reactions: (message.toJSON().detail?.reactions ?? []).reduce((sum, r) => sum + r.users.length, 0) }))
+        .sort((a, b) => b.reactions - a.reactions);
+      const top = ranked[0];
+      let quote = null;
+      if (top) {
+        const author = await top.message.author();
+        if (!names.has(author.id)) {
+          const fallback = author.email()?.split('@')[0] ?? 'Someone';
+          names.set(author.id, author.name().then((n) => n ?? fallback, () => fallback));
+        }
+        quote = { author: await names.get(author.id)!, text: (await plain(await top.message.content(), macro, mentioned)).slice(0, 180), reactions: top.reactions };
+      }
+      return { id: item.id, name, messages: messages.length, quote };
+    }));
+    highlights.sort((a, b) => b.messages - a.messages);
+
+    return {
+      since,
+      completed,
+      inFlight: touched - completed.length,
+      documents,
+      channels: highlights,
+      targets: channels.map(({ item, name }) => ({ id: item.id, name })),
+    };
+  }
+</script>
+
+<script type="text/macro" id="postDigest" lang="ts">
+  export default async function (
+    { channelId, text }: { channelId: string; text: string },
+    { macro }: ProgramContext,
+  ) {
+    const message = await macro.channels.byId(channelId).send(text);
+    return { id: message.id };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { digest, postDigest } from 'macro:programs';
+
+  type Digest = Awaited<ReturnType<typeof digest>>;
+
+  const status = document.getElementById('status')!;
+  const range = document.getElementById('range') as HTMLSelectElement;
+  const draft = document.getElementById('draft') as HTMLTextAreaElement;
+  const target = document.getElementById('target') as HTMLSelectElement;
+  const postButton = document.getElementById('post') as HTMLButtonElement;
+  const posted = document.getElementById('posted')!;
+  let edited = false;
+  // A reload re-renders the button; this keeps it off while a post is under way.
+  let posting = false;
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  const day = (at: string) => new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+  function list(id: string, countId: string, items: HTMLElement[], empty: string) {
+    document.getElementById(countId)!.textContent = items.length ? String(items.length) : '';
+    document.getElementById(id)!.replaceChildren(...(items.length ? items : [el('li', 'empty', empty)]));
+  }
+
+  function summary(data: Digest) {
+    const lines = [`Weekly digest: ${day(data.since)} – ${day(new Date().toISOString())}`, ''];
+    lines.push(`✅ ${data.completed.length} tasks completed, ${data.inFlight} more moved`);
+    for (const task of data.completed.slice(0, 5)) lines.push(`  • ${task.name}`);
+    lines.push(`📝 ${data.documents.length} documents edited`);
+    for (const doc of data.documents.slice(0, 5)) lines.push(`  • ${doc.name}`);
+    if (data.channels.length) {
+      lines.push(`💬 Most active: ${data.channels.slice(0, 3).map((c) => `#${c.name} (${c.messages})`).join(', ')}`);
+    }
+    return lines.join('\n');
+  }
+
+  function render(data: Digest) {
+    const stats = [
+      [data.completed.length, 'tasks completed'],
+      [data.inFlight, 'tasks moved'],
+      [data.documents.length, 'documents edited'],
+      [data.channels.reduce((sum, c) => sum + c.messages, 0), 'messages'],
+    ] as const;
+    document.getElementById('stats')!.replaceChildren(...stats.map(([value, label]) => {
+      const card = el('div', 'stat');
+      card.append(el('b', '', String(value)), el('span', '', label));
+      return card;
+    }));
+
+    list('done', 'done-count', data.completed.map((task) => {
+      const li = el('li');
+      li.append(el('div', 'done', task.name), el('div', 'meta', day(task.at)));
+      return li;
+    }), 'No tasks completed in this period.');
+
+    list('docs', 'docs-count', data.documents.slice(0, 12).map((doc) => {
+      const li = el('li');
+      li.append(el('div', '', doc.name), el('div', 'meta', `${doc.kind} · ${day(doc.at)}`));
+      return li;
+    }), 'No documents edited in this period.');
+
+    list('channels', 'chan-count', data.channels.map((channel) => {
+      const li = el('li');
+      li.append(el('div', '', `#${channel.name}`), el('div', 'meta', `${channel.messages}${channel.messages === 50 ? '+' : ''} message${channel.messages === 1 ? '' : 's'}`));
+      if (channel.quote) {
+        const reactions = channel.quote.reactions ? ` · ${channel.quote.reactions} reactions` : '';
+        li.append(el('div', 'quote', `${channel.quote.author}: ${channel.quote.text}${reactions}`));
+      }
+      return li;
+    }), 'No channel activity in this period.');
+
+    const selected = target.value;
+    target.replaceChildren(...data.targets.map((channel) => {
+      const option = el('option', '', `#${channel.name}`);
+      option.value = channel.id;
+      option.selected = channel.id === selected;
+      return option;
+    }));
+    postButton.disabled = posting || data.targets.length === 0;
+    if (!edited) draft.value = summary(data);
+  }
+
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
+  async function load() {
+    try {
+      const data = await digest({ days: Number(range.value) });
+      render(data);
+      status.textContent = data.targets.length ? '' : 'Join a channel to post the digest.';
+    } catch (error) {
+      status.textContent = `Couldn't build the digest: ${String(error)}`;
+    }
+  }
+
+  draft.addEventListener('input', () => {
+    edited = true;
+  });
+  range.addEventListener('change', () => {
+    edited = false;
+    reload();
+  });
+  postButton.addEventListener('click', async () => {
+    const text = draft.value.trim();
+    if (!text || !target.value || posting) return;
+    posting = true;
+    postButton.disabled = true;
+    try {
+      await postDigest({ channelId: target.value, text });
+      posted.textContent = `Posted to ${target.selectedOptions[0]?.textContent ?? 'the channel'}.`;
+    } catch (error) {
+      posted.textContent = `Couldn't post: ${String(error)}`;
+    }
+    posting = false;
+    postButton.disabled = false;
+  });
+  // Content edits arrive only as document.interaction, about every 5 s while someone types.
+  on(['document.created', 'document.updated', 'document.deleted', 'document.interaction', 'message.posted'], reload);
+  // Task Status, Assignee and Due changes emit no live event: refresh on focus too.
+  window.addEventListener('focus', () => reload());
+  await reload();
+</script>
+</body>
+</html>

@@ -15707,6 +15707,16 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "",
@@ -53459,6 +53469,18 @@
           "entity_type": {
             "type": "string",
             "description": "Mentioned entity type."
+          }
+        }
+      },
+      "SimpleSaveRequest": {
+        "type": "object",
+        "description": "Multipart body of `simple_save`.",
+        "required": ["file"],
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "description": "The file's new content, saved as the document's next version."
           }
         }
       },

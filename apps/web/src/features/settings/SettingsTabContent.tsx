@@ -25,6 +25,10 @@ import { TeamPage } from './Team';
 import { TeamGeneral } from './TeamGeneral';
 import { TeamMembers } from './TeamMembers';
 
+const ArtifactsSettings = lazyNamed(
+  () => import('../artifacts/artifacts-page'),
+  'ArtifactsSettings'
+);
 const RoutineSettings = lazyNamed(
   () => import('../routines/routine-settings'),
   'RoutineSettings'
@@ -102,6 +106,9 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
       </Show>
       <Show when={isCurrentTab('Routines')}>
         <RoutineSettings />
+      </Show>
+      <Show when={isCurrentTab('Artifacts')}>
+        <ArtifactsSettings />
       </Show>
       <Show when={isCurrentTab('Harness')}>
         <AgentSettings initialSection="runtimes" />

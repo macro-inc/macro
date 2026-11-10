@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mail</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .wrap { max-width: 860px; margin: 0 auto; padding: 16px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+  h1 { font-size: 17px; margin: 0 auto 0 0; }
+  .tabs button { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 5px 10px; }
+  .tabs button[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+  ul { list-style: none; margin: 0; padding: 0; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  li { display: grid; grid-template-columns: minmax(0, 180px) minmax(0, 1fr) auto; gap: 12px;
+    align-items: center; padding: 11px 14px; border-bottom: 1px solid var(--line); }
+  li:last-child { border-bottom: 0; }
+  .from, .subject { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .unread .from, .unread .subject { font-weight: 650; }
+  .snippet { color: var(--muted); font-weight: 400; }
+  .archive { border: 0; background: var(--chip); border-radius: 8px; padding: 6px 10px; }
+  .empty { padding: 40px 16px; text-align: center; color: var(--muted); }
+  .status { color: var(--muted); margin: 0 0 12px; }
+  .status:empty { display: none; }
+  @media (max-width: 560px) {
+    li { grid-template-columns: minmax(0, 1fr) auto; }
+    .from { grid-column: 1; }
+    .subject { grid-column: 1; grid-row: 2; }
+    .archive { grid-row: 1 / 3; grid-column: 2; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Mail</h1>
+    <div class="tabs">
+      <button data-view="inbox" aria-pressed="true">Inbox</button>
+      <button data-view="important" aria-pressed="false">Important</button>
+      <button data-view="sent" aria-pressed="false">Sent</button>
+    </div>
+  </header>
+  <p class="status" id="status" role="status"></p>
+  <div id="list"><p class="empty">Loading…</p></div>
+</div>
+
+<script type="text/macro" id="threads" lang="ts">
+  export default async function (
+    { view }: { view: 'inbox' | 'important' | 'sent' },
+    { macro }: ProgramContext,
+  ) {
+    const inboxes = await macro.email.links();
+    if (inboxes.length === 0) return { connected: false, threads: [] };
+    const page = await macro.workspace.page({ includeTypes: ['email'], emailView: view, limit: 30 });
+    const threads = page.items.flatMap((item) =>
+      item.type === 'email'
+        ? [{
+            id: item.id,
+            from: item.senderName || item.senderEmail || 'Unknown sender',
+            subject: item.subject || '(no subject)',
+            snippet: item.snippet ?? '',
+            unread: !item.isRead,
+          }]
+        : [],
+    );
+    return { connected: true, threads };
+  }
+</script>
+
+<script type="text/macro" id="archive" lang="ts">
+  export default async function ({ id }: { id: string }, { macro }: ProgramContext) {
+    await macro.email.byId(id).archive();
+    return { archived: true };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { archive, threads } from 'macro:programs';
+
+  type View = 'inbox' | 'important' | 'sent';
+
+  const list = document.getElementById('list')!;
+  const status = document.getElementById('status')!;
+  const tabs = [...document.querySelectorAll<HTMLButtonElement>('.tabs button')];
+  let view: View = 'inbox';
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
+  async function load() {
+    const wanted = view;
+    let result: Awaited<ReturnType<typeof threads>>;
+    try {
+      result = await threads({ view: wanted });
+    } catch (error) {
+      if (wanted === view) list.replaceChildren(el('p', 'empty', `Couldn't load mail: ${String(error)}`));
+      return;
+    }
+    if (wanted !== view) return;
+    const { connected, threads: rows } = result;
+    if (!connected) {
+      list.replaceChildren(el('p', 'empty', 'No email account is connected. Connect Gmail or Outlook in Settings to see mail here.'));
+      return;
+    }
+    if (rows.length === 0) {
+      list.replaceChildren(el('p', 'empty', 'Nothing here. Inbox zero.'));
+      return;
+    }
+    const ul = el('ul');
+    for (const row of rows) {
+      const li = el('li', row.unread ? 'unread' : '');
+      const subject = el('div', 'subject', row.subject);
+      if (row.snippet) subject.append(el('span', 'snippet', ` — ${row.snippet}`));
+      const button = el('button', 'archive', 'Archive');
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        li.style.opacity = '.4';
+        status.textContent = '';
+        try {
+          await archive({ id: row.id });
+        } catch (error) {
+          button.disabled = false;
+          li.style.opacity = '';
+          status.textContent = `Couldn't archive “${row.subject}”: ${String(error)}`;
+          return;
+        }
+        await reload();
+      });
+      li.append(el('div', 'from', row.from), subject, button);
+      ul.append(li);
+    }
+    list.replaceChildren(ul);
+  }
+
+  for (const tab of tabs) {
+    tab.addEventListener('click', () => {
+      view = tab.dataset.view as View;
+      for (const other of tabs) other.setAttribute('aria-pressed', String(other === tab));
+      reload();
+    });
+  }
+  // Mail has no live event in the stream; refresh when the page regains focus.
+  window.addEventListener('focus', reload);
+  await reload();
+</script>
+</body>
+</html>

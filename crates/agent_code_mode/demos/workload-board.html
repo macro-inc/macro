@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workload board</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9; --warn: #d9480f; --caution: #e67700;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27; --warn: #ff8a5c; --caution: #ffc078; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 16px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 17px; margin: 0 auto 0 0; }
+  select { font: inherit; color: inherit; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--panel); padding: 3px 6px; font-size: 12px; max-width: 130px; }
+  .status { color: var(--muted); padding: 8px 16px; margin: 0; }
+  .board { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px; padding: 16px; align-items: start; }
+  .person { background: var(--chip); border-radius: 12px; padding: 10px; min-width: 0; }
+  .who { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 2px 4px 6px; }
+  .who b { font-size: 14px; word-break: break-word; }
+  .who span { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .meter { height: 6px; border-radius: 3px; background: var(--line); margin: 0 4px 6px; overflow: hidden; }
+  .meter span { display: block; height: 100%; background: var(--accent); }
+  .meter.heavy span { background: var(--warn); }
+  .counts { display: flex; gap: 10px; margin: 0 4px 10px; font-size: 12px; color: var(--muted); }
+  .counts .hot { color: var(--warn); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 9px 10px; margin-bottom: 8px; }
+  .card .name { font-weight: 550; margin-bottom: 6px; word-break: break-word; }
+  .card .meta { display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    color: var(--muted); font-size: 12px; }
+  .late { color: var(--warn); }
+  .soon { color: var(--caution); }
+  .empty { color: var(--muted); padding: 4px; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Workload</h1>
+</header>
+<p class="status" id="status">Loading…</p>
+<main class="board" id="board"></main>
+
+<script type="text/macro" id="workload" lang="ts">
+  const STATUS = '00000001-0000-0000-0000-000000000002';
+  const ASSIGNEES = '00000001-0000-0000-0000-000000000001';
+  const DUE = '00000001-0000-0000-0000-000000000004';
+  const IN_PROGRESS = '00000001-0000-0000-0002-000000000002';
+  const CLOSED = ['00000001-0000-0000-0002-000000000004', '00000001-0000-0000-0002-000000000005'];
+  const DAY = 86_400_000;
+
+  export default async function (_args: {}, { macro }: ProgramContext) {
+    const me = await macro.myPrincipalId();
+    const teams = await macro.teams.list();
+    const memberIds = teams.length
+      ? (await (await macro.teams.current()).members()).map((member) => member.user.id)
+      : [me];
+
+    const page = await macro.workspace.page({ includeTypes: ['document'], df: { l: { dst: 'task' } }, limit: 300 });
+    const now = Date.now();
+    const tasks = page.items.flatMap((item) => {
+      if (item.type !== 'document') return [];
+      const properties = item.snapshot.data.properties;
+      const value = (id: string) => properties.find((p) => p.definition.id === id)?.value;
+      const status = value(STATUS);
+      if (status?.type === 'SelectOption' && status.value.some((id) => CLOSED.includes(id))) return [];
+      const assignees = value(ASSIGNEES);
+      const due = value(DUE);
+      const dueAt = due?.type === 'Date' ? new Date(due.value).getTime() : null;
+      return [{
+        id: item.id,
+        name: item.name,
+        assignees: assignees?.type === 'EntityReference' ? assignees.value.map((ref) => ref.entity_id) : [],
+        due: due?.type === 'Date' ? due.value : null,
+        late: dueAt !== null && dueAt < now,
+        soon: dueAt !== null && dueAt >= now && dueAt < now + 7 * DAY,
+        doing: status?.type === 'SelectOption' && status.value.includes(IN_PROGRESS),
+      }];
+    });
+
+    // Assignees outside the team still get a column.
+    const ids = [...new Set([...memberIds, ...tasks.flatMap((task) => task.assignees)])];
+    const people = await Promise.all(ids.map(async (id) => {
+      const user = macro.users.byId(id);
+      const fallback = user.email()?.split('@')[0] ?? 'Someone';
+      const name = (await user.name().catch(() => undefined)) ?? fallback;
+      const mine = tasks
+        .filter((task) => task.assignees.includes(id))
+        .sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999'));
+      return {
+        id,
+        name: id === me ? `${name} (you)` : name,
+        tasks: mine,
+        late: mine.filter((task) => task.late).length,
+        soon: mine.filter((task) => task.soon).length,
+        doing: mine.filter((task) => task.doing).length,
+      };
+    }));
+    people.sort((a, b) => b.tasks.length - a.tasks.length || a.name.localeCompare(b.name));
+    const unassigned = tasks.filter((task) => task.assignees.length === 0);
+    return { inTeam: teams.length > 0, people, unassigned };
+  }
+</script>
+
+<script type="text/macro" id="reassign" lang="ts">
+  const ASSIGNEES = '00000001-0000-0000-0000-000000000001';
+
+  /**
+   * Swap one assignee of a task: `from` is the person whose column the task
+   * was moved from (null for Unassigned), `to` the person picked (null to only
+   * remove `from`). Everyone else assigned stays, read fresh from the task.
+   */
+  export default async function (
+    { taskId, from, to }: { taskId: string; from: string | null; to: string | null },
+    { macro }: ProgramContext,
+  ) {
+    const task = macro.tasks.byId(taskId);
+    const current = (await task.properties()).find((p) => p.definition.id === ASSIGNEES)?.value;
+    const ids = current?.type === 'EntityReference' ? current.value.map((ref) => ref.entity_id) : [];
+    const kept = ids.filter((id) => id !== from);
+    const next = to && !kept.includes(to) ? [...kept, to] : kept;
+    await task.setProperty(macro.properties.definition(ASSIGNEES), {
+      type: 'multi_entity_reference',
+      references: next.map((id) => ({ entity_id: id, entity_type: 'USER' })),
+    });
+    return { taskId, assignees: next };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { reassign, workload } from 'macro:programs';
+
+  type Workload = Awaited<ReturnType<typeof workload>>;
+  type Task = Workload['unassigned'][number];
+
+  const board = document.getElementById('board')!;
+  const status = document.getElementById('status')!;
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  function dueLabel(task: Task) {
+    if (!task.due) return el('span', '', 'No due date');
+    const date = new Date(task.due).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return el('span', task.late ? 'late' : task.soon ? 'soon' : '', task.late ? `Overdue · ${date}` : `Due ${date}`);
+  }
+
+  function card(task: Task, ownerId: string | null, data: Workload) {
+    const node = el('article', 'card');
+    const select = el('select');
+    select.setAttribute('aria-label', `Assignee of ${task.name}`);
+    // From a shared task's column, the empty choice takes only this person off it.
+    const shared = ownerId !== null && task.assignees.length > 1;
+    const choices = [
+      { id: '', name: shared ? 'Remove from task' : 'Unassigned' },
+      ...data.people.map((person) => ({ id: person.id, name: person.name })),
+    ];
+    for (const choice of choices) {
+      const option = el('option', '', choice.name);
+      option.value = choice.id;
+      option.selected = choice.id === (ownerId ?? '');
+      select.append(option);
+    }
+    select.addEventListener('change', async () => {
+      select.disabled = true;
+      status.textContent = `Reassigning “${task.name}”…`;
+      try {
+        await reassign({ taskId: task.id, from: ownerId, to: select.value || null });
+      } catch (error) {
+        select.value = ownerId ?? '';
+        select.disabled = false;
+        // No reload here: its success would replace this message.
+        status.textContent = `Couldn't reassign “${task.name}”: ${String(error)}`;
+        return;
+      }
+      await reload();
+    });
+    const meta = el('div', 'meta');
+    meta.append(dueLabel(task), select);
+    node.append(el('div', 'name', task.name), meta);
+    return node;
+  }
+
+  function render(data: Workload) {
+    const heaviest = Math.max(1, ...data.people.map((person) => person.tasks.length));
+    const columns = data.people.map((person) => {
+      const column = el('section', 'person');
+      const who = el('div', 'who');
+      who.append(el('b', '', person.name), el('span', '', `${person.tasks.length} open`));
+      const meter = el('div', person.tasks.length >= 8 || person.late >= 3 ? 'meter heavy' : 'meter');
+      const fill = el('span');
+      fill.style.width = `${Math.round((person.tasks.length / heaviest) * 100)}%`;
+      meter.append(fill);
+      const counts = el('div', 'counts');
+      counts.append(
+        el('span', person.late ? 'hot' : '', `${person.late} overdue`),
+        el('span', '', `${person.soon} this week`),
+        el('span', '', `${person.doing} in progress`),
+      );
+      column.append(who, meter, counts);
+      if (person.tasks.length === 0) column.append(el('div', 'empty', 'Free for new work'));
+      for (const task of person.tasks) column.append(card(task, person.id, data));
+      return column;
+    });
+
+    const pool = el('section', 'person');
+    const who = el('div', 'who');
+    who.append(el('b', '', 'Unassigned'), el('span', '', `${data.unassigned.length} open`));
+    pool.append(who);
+    if (data.unassigned.length === 0) pool.append(el('div', 'empty', 'Every open task has an owner.'));
+    for (const task of data.unassigned) pool.append(card(task, null, data));
+    board.replaceChildren(...columns, pool);
+  }
+
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
+  async function load() {
+    try {
+      const data = await workload();
+      render(data);
+      const open = data.people.reduce((sum, person) => sum + person.tasks.length, 0) + data.unassigned.length;
+      status.textContent = data.inTeam
+        ? `${open} open tasks across ${data.people.length} ${data.people.length === 1 ? 'person' : 'people'}`
+        : `${open} open tasks. Join a team to see teammates here.`;
+    } catch (error) {
+      status.textContent = `Couldn't load the workload: ${String(error)}`;
+    }
+  }
+
+  on(['document.created', 'document.updated', 'document.deleted'], reload);
+  // Task Status, Assignee and Due changes emit no live event: refresh on focus too.
+  window.addEventListener('focus', () => reload());
+  await reload();
+</script>
+</body>
+</html>

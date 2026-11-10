@@ -20,6 +20,9 @@ pub enum ToolCaller {
     },
     /// A Macro API key the user pasted into a client, which names no client.
     ApiKey,
+    /// A program embedded in a document the user opened in the app, run as
+    /// that user. Its writes are the user's own, with no agent attribution.
+    Document,
 }
 
 impl ToolCaller {
@@ -28,7 +31,7 @@ impl ToolCaller {
     pub fn via(&self) -> Option<&str> {
         match self {
             Self::McpClient { name } => Some(name.as_deref().unwrap_or("MCP client")),
-            Self::Agent(_) | Self::ApiKey => None,
+            Self::Agent(_) | Self::ApiKey | Self::Document => None,
         }
     }
 }

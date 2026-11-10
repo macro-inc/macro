@@ -69,6 +69,10 @@ impl ExecutionCredentials for RunCredentials {
 /// labelled with the MCP client's name - the same attribution the direct MCP
 /// tools give. The MCP client asks the user before each tool call, so there is
 /// no owner gate.
+///
+/// A document's embedded program runs as the user with no agent, whoever
+/// wrote the page: opening it runs its programs with the viewer's full
+/// access, and nothing asks them before a program writes.
 pub struct UserRunCredentials {
     pub signer: MacroApiTokenSigner,
     pub correlations: agent_correlation::outbound::PgCorrelationRepository,
@@ -84,13 +88,14 @@ impl UserExecutionCredentials for UserRunCredentials {
         session: Option<uuid::Uuid>,
     ) -> Result<RunEnvironment, CodeModeError> {
         let agent = match caller {
-            ai_toolset::ToolCaller::Agent(agent) => *agent,
+            ai_toolset::ToolCaller::Agent(agent) => Some(*agent),
             ai_toolset::ToolCaller::McpClient { .. } | ai_toolset::ToolCaller::ApiKey => {
-                bot_id::MACRO_AI_BOT_ID
+                Some(bot_id::MACRO_AI_BOT_ID)
             }
+            ai_toolset::ToolCaller::Document => None,
         };
-        let correlation = match session {
-            Some(session) => Some(
+        let correlation = match (session, agent) {
+            (Some(session), Some(agent)) => Some(
                 self.correlations
                     .create(session, agent.as_uuid())
                     .await
@@ -99,7 +104,7 @@ impl UserExecutionCredentials for UserRunCredentials {
                         CodeModeError::Unavailable
                     })?,
             ),
-            None => None,
+            _ => None,
         };
         // Same lifetime as session runs: the 30-second deadline plus clock margin.
         let token = self
@@ -107,7 +112,7 @@ impl UserExecutionCredentials for UserRunCredentials {
             .mint_for_agent(
                 user,
                 60,
-                Some(agent.as_uuid()),
+                agent.map(|agent| agent.as_uuid()),
                 caller.via().map(str::to_owned),
                 None,
                 correlation,
@@ -183,6 +188,8 @@ pub fn sdk_endpoints() -> anyhow::Result<SdkEndpoints> {
 }
 
 pub mod connected_apps;
+pub mod document_rollout;
+pub mod document_sources;
 pub mod reviews;
 
 async fn approve_run(

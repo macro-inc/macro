@@ -3144,6 +3144,145 @@ standalone desktop blocks and Drive detail views. Switch to Code to inspect or
 edit the source, then back to Render to see the current preview. Other code file
 types do not show these tabs.
 
+### Program blocks in HTML previews
+
+With the `enable-html-code-mode` flag on (on by default in dev and on every
+local stack), an HTML document opened in Render shows the server's build of
+its saved source, not the raw file. The build turns two kinds of block into
+code:
+
+- Each `<script type="text/macro" id="…" lang="ts">` is a program that runs on
+  the server as the viewer. Its default export takes `(args, { macro }:
+  ProgramContext)`, where `macro` is the Macro SDK already signed in, and
+  returns plain JSON, at most 1000 KB of it. Its first parameter, if any, is an
+  object type. The `id` must be a JavaScript identifier, not a reserved word
+  or `run`, and a document holds at most 16 programs.
+- A page with neither kind of block renders as it is, exactly as with the
+  flag off: CDN scripts, styles, fonts and images work there.
+- The one `<script type="module" lang="ts">` is the page's client code. It
+  imports each program as a typed function from `macro:programs` and `on` from
+  `macro:client`. A call resolves to the program's value as JSON: a `Date`
+  becomes a string and a handle its `toJSON()`. Other scripts are left as they
+  are and can't call programs.
+
+The server type-checks the programs, then the client with them, so a call with
+the wrong arguments fails the build. A failed build shows its problems by
+block (`program tasks`, `client script`) in place of the page. Switching from
+Code to Render builds once the editor's save lands, so the preview shows what
+was just typed. A build the server fails is retried, then shows an error with
+a Retry button. Program source
+never reaches the page, the frame never holds a credential and never sends
+code: a run names a program of the build the page shows, and the server
+refuses it with "this page changed" if the saved document has changed since,
+after which the preview fetches the new build. A failed run rejects the
+page's call with the program's error, and the preview also shows the latest
+failed run's message in a notice above the page (role `alert`, with a
+Dismiss button), so a page that doesn't catch it still shows what went wrong. A run lasts at most 30 seconds,
+counting any wait: a viewer runs two programs at once, and further calls wait
+on the server for one to finish rather than fail, failing only if their 30
+seconds pass first. Its writes stand as the user's own, with no agent attribution. Neither
+programs nor the client script can import packages (`npm:` or remote modules):
+write plain TypeScript against the DOM and the SDK.
+
+`on(events, handler, { ids })` delivers the viewer's live entity events (the
+same names as the SDK's `macro.events`, such as `document.created`,
+`document.updated` and `message.posted`; tasks are documents) and returns an
+`off` function. The handler gets `{ type, id }`, the event name and the entity
+it is about, never its data: call the program again to read what changed.
+`document.updated` means a rename, move or sharing change. A task's Status,
+Assignee or Due change emits no event yet, and content edits arrive only as
+`document.interaction`, about every 5 seconds while someone types and when a
+document is opened or closed; so a page reloads after its own writes and when
+it regains focus (`window.addEventListener('focus', …)`). Pass
+`ids` to hear about specific entities only; a message event is about its
+conversation, so narrow `message.*` by channel or document id. After a
+reconnect, or a reopen for changed subscriptions, the handler gets `{ type:
+'macro.resync' }`, because events in the gap are lost; a refused subscription
+(an empty or blank id, or one the server refuses) gets `{ type: 'macro.error',
+message }`, and a refused stream is not retried.
+The app keeps one server event stream per open preview, filtered and
+access-checked on the server, and closes it with the preview. A page may hold
+16 subscriptions.
+
+Three limits shape these pages. The built page runs under a strict
+Content-Security-Policy with no network: inline scripts and styles only,
+images, fonts and media only as `data:` or `blob:` URLs, and no `fetch`,
+beacons, remote scripts, stylesheets, fonts or image URLs, so every read and
+write goes through a program. The frame is sandboxed with scripts only, so a
+`<form>` never submits: use buttons and key handlers. Programs have no
+`setTimeout`, `setInterval` or `setImmediate`, so they cannot sleep or poll; a
+call to one fails the build (the page's own script can use them). A program
+takes at most two parameters, its arguments object and `{ macro }:
+ProgramContext`, or the build fails naming it.
+
+What the policy can't stop, the build and the frame refuse. A page with
+programs can't have `<meta http-equiv="refresh">`, connection hints (`<link
+rel="preconnect">`, `dns-prefetch`, `prefetch`, `prerender`) or nested frames
+(`<iframe>`, `<frame>`, `<object>`, `<embed>`): the build fails naming each,
+and ones a script adds later are removed. WebRTC (`RTCPeerConnection`) is
+unavailable. Links don't navigate: a `#fragment` link scrolls to its target,
+and every other link, `download` or `ping` does nothing. A page that navigates
+itself anyway (setting `location`, a refresh its script adds, or a click it
+dispatches on a link outside the document) is closed, and the preview shows
+"This page tried to navigate away" in its place. The request it started has
+already gone out by then, carrying whatever the page put in its URL: closing
+the frame stops only what the page would do next.
+
+A stored page over 2 MiB isn't built: one with programs says it is too large
+to run, and a page without programs renders as it is. When the page changes
+in another tab, the next call fails with "this page changed", the preview
+loads the new build, and a notice above it says the page was updated and to
+try again. A refetch of the same build (on reconnecting, or regaining focus)
+keeps the page, its state and its live events, which send `macro.resync` once
+the stream reopens. If the app moves the preview frame in its layout, the
+page loads again from the start in place, and keeps running.
+
+```html
+<ul id="out"></ul>
+<script type="text/macro" id="tasks" lang="ts">
+  export default async function ({ query }: { query: string }, { macro }: ProgramContext) {
+    const found = [];
+    for await (const task of macro.tasks.search(query, { pageSize: 5 })) {
+      found.push(task);
+      if (found.length === 5) break;
+    }
+    return (await macro.tasks.summaries(found)).map((summary) => summary.name);
+  }
+</script>
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { tasks } from 'macro:programs';
+
+  const out = document.getElementById('out')!;
+  async function load() {
+    const names = await tasks({ query: 'launch' });
+    out.replaceChildren(...names.map((name) => Object.assign(document.createElement('li'), { textContent: name })));
+  }
+  on(['document.created', 'document.updated', 'document.deleted'], load);
+  await load();
+</script>
+```
+
+Agents publish such a page with the SDK's `macro.documents.publishPage({ name,
+html, project })`, which uploads it, builds it and returns `{ document, build,
+problems }`: each problem names its block, and `build: 'built'` means the page
+built. Once the page is saved it never throws: `busy` asks for a republish
+later, and `unavailable` means live pages aren't available to the account. They fix it with `document.republishPage(html)`, which saves the whole
+page as a new version of the same document and builds again. Both work inside
+code mode. A plain upload or an edit in Drive builds when the page is first
+opened.
+
+To check it, publish such a page (or upload the file), open it, and confirm the list fills in Render;
+then rename a matching task in another split and watch the list follow without
+a reload. Change `query: 'launch'` to `query: 42`, save, and reopen Render: it
+shows the type error against `client script` instead of the page. With the
+flag off, or for a page with no program blocks, the preview renders the file
+as plain sandboxed HTML. In traces,
+`document_programs.build` covers a build (with `cached`), `block_code.run_document_program`
+and `document_programs.run` each run (with `queued_ms`, the wait for one of the
+viewer's two slots), and `block_code.document_events.stream`
+each stream connection, with the events it delivered.
+
 ## Large-document undo checks
 
 In a disposable Markdown document, change several paragraphs in one edit, then

@@ -36,6 +36,9 @@ export const agentHarnessExcluded = [
   'warmAgentSessionHandler',
   // The connect chip's continuation after an app connects is app-internal.
   'reportAgentSessionAppConnected',
+  // An HTML preview's program runs are app-internal: an SDK user runs code
+  // directly.
+  'runDocumentProgram',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const agentHarnessBacklog =

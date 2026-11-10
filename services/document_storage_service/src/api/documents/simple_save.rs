@@ -33,6 +33,15 @@ pub struct Params {
     pub document_id: String,
 }
 
+/// Multipart body of `simple_save`.
+#[derive(utoipa::ToSchema)]
+pub struct SimpleSaveRequest {
+    /// The file's new content, saved as the document's next version.
+    #[schema(value_type = String, format = Binary)]
+    #[expect(dead_code, reason = "documents the multipart field the handler reads")]
+    pub file: Vec<u8>,
+}
+
 /// For any file that isn't PDF or DOCX, use this endpoint for saving.
 /// This endpoint will allow you to save the document by providing the file content as part of a multipart request. Use key 'file' along with the file bytes.
 /// simple_save is different than the save_document endpoint because it does not return a presigned URL, Instead, it simply saves the file to S3 directly (and returns the document metadata).
@@ -44,6 +53,7 @@ pub struct Params {
         params(
             ("document_id" = String, Path, description = "Document ID")
         ),
+        request_body(content = SimpleSaveRequest, content_type = "multipart/form-data"),
         responses(
             (status = 200, body=SaveDocumentResponse),
             (status = 401, body=GenericErrorResponse),

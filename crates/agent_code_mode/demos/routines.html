@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Routines</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9; --good: #2b8a3e; --bad: #c92a2a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27; --good: #69db7c; --bad: #ff8787; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .wrap { max-width: 820px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 17px; margin: 0 0 14px; }
+  .routine { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px; margin-bottom: 10px; display: grid; grid-template-columns: 1fr auto; gap: 10px; }
+  .routine h2 { font-size: 15px; margin: 0; word-break: break-word; }
+  .when { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .runs { grid-column: 1 / -1; display: flex; gap: 4px; align-items: center; flex-wrap: wrap;
+    font-size: 12px; color: var(--muted); }
+  .run { width: 10px; height: 10px; border-radius: 3px; background: var(--good); }
+  .run.failed { background: var(--bad); }
+  .actions { display: flex; gap: 6px; align-items: start; }
+  .actions button { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 5px 10px; }
+  .switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .empty { padding: 32px; text-align: center; color: var(--muted); }
+  .status { color: var(--muted); margin: 0 0 12px; }
+  .status:empty { display: none; }
+  @media (max-width: 480px) { .routine { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Routines</h1>
+  <p class="status" id="status" role="status"></p>
+  <div id="list"><p class="empty">Loading…</p></div>
+</div>
+
+<script type="text/macro" id="routines" lang="ts">
+  export default async function (_args: {}, { macro }: ProgramContext) {
+    const routines = await macro.routines.list({ includeEvents: true });
+    return Promise.all(routines.map(async (routine) => {
+      const trigger = await routine.trigger();
+      const history = await routine.history();
+      const runs = history
+        .map((run) => ({ at: run.record.end_time, ok: run.record.is_success }))
+        .sort((a, b) => b.at.localeCompare(a.at))
+        .slice(0, 12);
+      let schedule = 'Runs on events';
+      if (trigger.type === 'cron') schedule = `Schedule ${trigger.schedule} (${trigger.timezone})`;
+      if (trigger.type === 'once') schedule = `Once at ${trigger.at}`;
+      if (trigger.type === 'multiple') schedule = 'Several triggers';
+      return {
+        id: routine.id,
+        name: await routine.name(),
+        enabled: await routine.enabled(),
+        nextRunAt: (await routine.nextRunAt()) ?? null,
+        schedule,
+        runs,
+      };
+    }));
+  }
+</script>
+
+<script type="text/macro" id="setEnabled" lang="ts">
+  export default async function (
+    { id, enabled }: { id: string; enabled: boolean },
+    { macro }: ProgramContext,
+  ) {
+    await macro.routines.byId(id).setEnabled(enabled);
+    return { enabled };
+  }
+</script>
+
+<script type="text/macro" id="runNow" lang="ts">
+  export default async function ({ id }: { id: string }, { macro }: ProgramContext) {
+    const started = await macro.routines.byId(id).execute();
+    return { started: started !== undefined };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { routines, runNow, setEnabled } from 'macro:programs';
+
+  const list = document.getElementById('list')!;
+  const status = document.getElementById('status')!;
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  const format = (at: string) =>
+    new Date(at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
+  async function load() {
+    let rows: Awaited<ReturnType<typeof routines>>;
+    try {
+      rows = await routines();
+    } catch (error) {
+      list.replaceChildren(el('p', 'empty', `Couldn't load routines: ${String(error)}`));
+      return;
+    }
+    if (rows.length === 0) {
+      list.replaceChildren(el('p', 'empty', 'No routines yet. Ask the agent to “remind me every Monday…”.'));
+      return;
+    }
+    list.replaceChildren(...rows.map((row) => {
+      const card = el('article', 'routine');
+      const text = el('div');
+      const next = row.enabled && row.nextRunAt ? ` · next ${format(row.nextRunAt)}` : '';
+      text.append(el('h2', '', row.name), el('div', 'when', `${row.schedule}${next}`));
+
+      const actions = el('div', 'actions');
+      const toggle = el('button', 'switch', row.enabled ? 'On' : 'Off');
+      toggle.setAttribute('role', 'switch');
+      toggle.setAttribute('aria-checked', String(row.enabled));
+      toggle.setAttribute('aria-label', `${row.name} enabled`);
+      toggle.addEventListener('click', async () => {
+        toggle.disabled = true;
+        status.textContent = '';
+        try {
+          await setEnabled({ id: row.id, enabled: !row.enabled });
+        } catch (error) {
+          toggle.disabled = false;
+          status.textContent = `Couldn't turn “${row.name}” ${row.enabled ? 'off' : 'on'}: ${String(error)}`;
+          return;
+        }
+        await reload();
+      });
+      const run = el('button', '', 'Run now');
+      run.addEventListener('click', async () => {
+        run.disabled = true;
+        run.textContent = 'Starting…';
+        status.textContent = '';
+        try {
+          const { started } = await runNow({ id: row.id });
+          run.textContent = started ? 'Started' : 'Queued';
+        } catch (error) {
+          run.disabled = false;
+          run.textContent = 'Run now';
+          status.textContent = `Couldn't run “${row.name}”: ${String(error)}`;
+        }
+      });
+      actions.append(run, toggle);
+
+      const runs = el('div', 'runs');
+      if (row.runs.length === 0) runs.append('No runs yet');
+      else {
+        runs.append('Recent runs ');
+        for (const past of row.runs) {
+          const dot = el('span', past.ok ? 'run' : 'run failed');
+          dot.title = `${past.ok ? 'Succeeded' : 'Failed'} ${format(past.at)}`;
+          runs.append(dot);
+        }
+      }
+      card.append(text, actions, runs);
+      return card;
+    }));
+  }
+
+  await reload();
+</script>
+</body>
+</html>

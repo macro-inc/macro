@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Triage desk</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66;
+    --line: #e4e3df; --accent: #3b5bdb; --chip: #efeee9;
+    --note: #7048e8; --task: #e67700; --mail: #1c7ed6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --panel: #1f1f1d; --text: #ecebe6; --muted: #9a9993;
+      --line: #2f2f2c; --accent: #7c96ff; --chip: #2a2a27;
+      --note: #b197fc; --task: #ffc078; --mail: #74c0fc; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+    padding: 16px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 17px; margin: 0 auto 0 0; }
+  button { font: inherit; color: inherit; padding: 6px 12px; border: 0; border-radius: 8px;
+    background: var(--accent); color: #fff; cursor: pointer; white-space: nowrap; }
+  button:disabled { opacity: .5; cursor: default; }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tabs button { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  .tabs button[aria-pressed="true"] { background: var(--chip); color: var(--text); }
+  .status { color: var(--muted); padding: 8px 16px; margin: 0; }
+  main { padding: 0 16px 16px; max-width: 860px; }
+  ul { list-style: none; margin: 0; padding: 0; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  li { display: flex; gap: 12px; align-items: center; padding: 11px 14px;
+    border-top: 1px solid var(--line); }
+  li:first-child { border-top: 0; }
+  .kind { flex: 0 0 auto; width: 48px; font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .04em; }
+  .kind.notification { color: var(--note); }
+  .kind.task { color: var(--task); }
+  .kind.email { color: var(--mail); }
+  .body { flex: 1; min-width: 0; }
+  .title { font-weight: 550; word-break: break-word; }
+  .detail { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; }
+  .when { color: var(--muted); font-size: 12px; flex: 0 0 auto; }
+  .empty { color: var(--muted); padding: 24px 16px; text-align: center; }
+  @media (max-width: 520px) {
+    li { flex-wrap: wrap; }
+    .kind { width: auto; }
+    .body { flex-basis: 100%; order: 3; }
+    .when { margin-right: auto; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Triage desk</h1>
+  <div class="tabs" id="tabs" role="group" aria-label="Filter"></div>
+</header>
+<p class="status" id="status">Loading…</p>
+<main id="queue"></main>
+
+<script type="text/macro" id="queue" lang="ts">
+  const STATUS = '00000001-0000-0000-0000-000000000002';
+  const ASSIGNEES = '00000001-0000-0000-0000-000000000001';
+  const DUE = '00000001-0000-0000-0000-000000000004';
+  const CLOSED = ['00000001-0000-0000-0002-000000000004', '00000001-0000-0000-0002-000000000005'];
+
+  /** The first string a notification's metadata carries under one of these keys. */
+  function pick(content: unknown, keys: string[]): string | null {
+    if (typeof content !== 'object' || content === null) return null;
+    const record = content as Record<string, unknown>;
+    for (const key of keys) {
+      const value = record[key];
+      if (typeof value === 'string' && value.trim()) return value;
+    }
+    return null;
+  }
+
+  /** One of Macro's tags in message text: `<m-…>{json}</m-…>`. */
+  const MACRO_TAG = /<(m-[a-z-]+)>(.*?)<\/\1>/g;
+
+  type TagData = {
+    userId?: string; email?: string; displayName?: string; name?: string; documentName?: string;
+    groupAlias?: string; label?: string; date?: string; displayFormat?: string;
+  };
+
+  /**
+   * Message text with Macro's mention tags shown as names; any other text,
+   * angle brackets included, stays as written. A mention the SDK built
+   * carries only the user's id, so its name is loaded (once per id, in `names`).
+   */
+  async function plain(
+    text: string,
+    macro: ProgramContext['macro'],
+    names: Map<string, Promise<string | undefined>>,
+  ): Promise<string> {
+    const tags = [...text.matchAll(MACRO_TAG)].map((match) => {
+      try {
+        return JSON.parse(match[2] ?? '') as TagData;
+      } catch {
+        return {};
+      }
+    });
+    for (const tag of tags) {
+      if (tag.userId && !tag.displayName && !names.has(tag.userId)) {
+        names.set(tag.userId, macro.users.byId(tag.userId).name().catch(() => undefined));
+      }
+    }
+    const loaded = await Promise.all(tags.map((tag) => (tag.userId ? names.get(tag.userId) : undefined)));
+
+    let index = 0;
+    return text.replace(MACRO_TAG, (_match, kind: string) => {
+      const tag = tags[index] ?? {};
+      const loadedName = loaded[index];
+      index += 1;
+      if (kind === 'm-user-mention' || kind === 'm-contact-mention') {
+        // Someone with no profile name shows their email's local part.
+        const email = tag.email ?? tag.userId?.replace(/^macro\|/, '');
+        return `@${tag.displayName || tag.name || loadedName || email?.split('@')[0] || 'someone'}`;
+      }
+      if (kind === 'm-group-mention') return `@${tag.groupAlias ?? 'group'}`;
+      if (kind === 'm-date-mention') return tag.displayFormat || tag.date || '';
+      // Document, task, project and other chips carry their name; images and cards show nothing.
+      return tag.documentName || tag.label || tag.name || '';
+    });
+  }
+
+  type Item = {
+    kind: 'notification' | 'task' | 'email';
+    id: string;
+    title: string;
+    detail: string | null;
+    at: string;
+  };
+
+  async function notifications(macro: ProgramContext['macro']): Promise<Item[]> {
+    const items: Item[] = [];
+    const mentioned = new Map<string, Promise<string | undefined>>();
+    for await (const notification of macro.notifications.list({ pageSize: 20 })) {
+      const metadata = await notification.metadata();
+      const sender = await notification.sender();
+      const kind = metadata.tag.replaceAll('_', ' ');
+      const from = sender
+        ? ((await sender.name().catch(() => undefined)) ?? sender.email() ?? null)
+        : pick(metadata.content, ['senderDisplayName']);
+      // A direct message's channel is named for the viewer; show who wrote instead.
+      const direct = pick(metadata.content, ['channelType']) === 'directMessage';
+      const named = pick(metadata.content, ['documentName', 'entityName', 'taskName', 'channelName', 'subject', 'title', 'name']);
+      const title = direct ? from : named;
+      const text = pick(metadata.content, ['messageContent', 'snippet', 'body', 'message', 'content']);
+      const snippet = text === null ? null : await plain(text, macro, mentioned);
+      items.push({
+        kind: 'notification',
+        id: notification.id,
+        title: title ?? kind.replace(/^./, (first) => first.toUpperCase()),
+        detail: [from ? `${kind} from ${from}` : kind, snippet].filter(Boolean).join(' — '),
+        at: await notification.createdAt(),
+      });
+      if (items.length === 20) break;
+    }
+    return items;
+  }
+
+  async function unassignedTasks(macro: ProgramContext['macro']): Promise<Item[]> {
+    const page = await macro.workspace.page({ includeTypes: ['document'], df: { l: { dst: 'task' } }, limit: 200 });
+    return page.items.flatMap((item): Item[] => {
+      if (item.type !== 'document') return [];
+      const properties = item.snapshot.data.properties;
+      const value = (id: string) => properties.find((p) => p.definition.id === id)?.value;
+      const status = value(STATUS);
+      const assignees = value(ASSIGNEES);
+      const due = value(DUE);
+      if (status?.type === 'SelectOption' && status.value.some((id) => CLOSED.includes(id))) return [];
+      if (assignees?.type === 'EntityReference' && assignees.value.length > 0) return [];
+      const dueText = due?.type === 'Date'
+        ? `Unassigned · due ${new Date(due.value).toISOString().slice(0, 10)}`
+        : 'Unassigned · no due date';
+      return [{ kind: 'task', id: item.id, title: item.name, detail: dueText, at: item.snapshot.data.updatedAt }];
+    }).slice(0, 15);
+  }
+
+  async function unreadEmail(macro: ProgramContext['macro']): Promise<{ connected: boolean; items: Item[] }> {
+    if ((await macro.email.links()).length === 0) return { connected: false, items: [] };
+    const page = await macro.workspace.page({ includeTypes: ['email'], emailView: 'inbox', limit: 30 });
+    const items = page.items.flatMap((item): Item[] =>
+      item.type === 'email' && !item.isRead
+        ? [{
+            kind: 'email',
+            id: item.id,
+            title: item.subject || '(no subject)',
+            detail: [item.senderName || item.senderEmail, item.snippet].filter(Boolean).join(' — '),
+            at: item.snapshot.data.sortTs,
+          }]
+        : [],
+    );
+    return { connected: true, items: items.slice(0, 15) };
+  }
+
+  export default async function (_args: {}, { macro }: ProgramContext) {
+    const [notes, tasks, email] = await Promise.all([
+      notifications(macro),
+      unassignedTasks(macro),
+      unreadEmail(macro),
+    ]);
+    const items = [...notes, ...tasks, ...email.items].sort((a, b) => b.at.localeCompare(a.at));
+    return { emailConnected: email.connected, items };
+  }
+</script>
+
+<script type="text/macro" id="act" lang="ts">
+  const ASSIGNEES = '00000001-0000-0000-0000-000000000001';
+
+  export default async function (
+    { kind, id }: { kind: 'notification' | 'task' | 'email'; id: string },
+    { macro }: ProgramContext,
+  ) {
+    if (kind === 'notification') {
+      await macro.notifications.byId(id).markDone();
+    } else if (kind === 'task') {
+      const me = await macro.myPrincipalId();
+      await macro.tasks.byId(id).setProperty(macro.properties.definition(ASSIGNEES), {
+        type: 'multi_entity_reference',
+        references: [{ entity_id: me, entity_type: 'USER' }],
+      });
+    } else {
+      await macro.email.byId(id).archive();
+    }
+    return { kind, id };
+  }
+</script>
+
+<script type="module" lang="ts">
+  import { on } from 'macro:client';
+  import { act, queue } from 'macro:programs';
+
+  type Queue = Awaited<ReturnType<typeof queue>>;
+  type Kind = Queue['items'][number]['kind'];
+
+  const root = document.getElementById('queue')!;
+  const tabs = document.getElementById('tabs')!;
+  const status = document.getElementById('status')!;
+  const actions: Record<Kind, string> = { notification: 'Done', task: 'Take it', email: 'Archive' };
+  const kindLabels: Record<Kind, string> = { notification: 'Alert', task: 'Task', email: 'Email' };
+  const kinds: { key: Kind | 'all'; label: string }[] = [
+    { key: 'all', label: 'All' },
+    { key: 'notification', label: 'Alerts' },
+    { key: 'task', label: 'Tasks' },
+    { key: 'email', label: 'Email' },
+  ];
+  let filter: Kind | 'all' = 'all';
+  let current: Queue | null = null;
+
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = '') {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text) node.textContent = text;
+    return node;
+  }
+
+  function relative(at: string) {
+    const minutes = Math.round((Date.now() - new Date(at).getTime()) / 60000);
+    if (minutes < 60) return `${Math.max(minutes, 1)}m`;
+    if (minutes < 60 * 24) return `${Math.round(minutes / 60)}h`;
+    return `${Math.round(minutes / 1440)}d`;
+  }
+
+  function render() {
+    if (!current) return;
+    const data = current;
+    tabs.replaceChildren(...kinds.map(({ key, label }) => {
+      const count = key === 'all' ? data.items.length : data.items.filter((item) => item.kind === key).length;
+      const button = el('button', '', `${label} ${count}`);
+      button.setAttribute('aria-pressed', String(filter === key));
+      button.addEventListener('click', () => {
+        filter = key;
+        render();
+      });
+      return button;
+    }));
+
+    const shown = data.items.filter((item) => filter === 'all' || item.kind === filter);
+    if (shown.length === 0) {
+      const message = filter === 'email' && !data.emailConnected
+        ? 'Connect an inbox to triage email here.'
+        : 'Nothing to triage. Nice.';
+      root.replaceChildren(el('p', 'empty', message));
+      return;
+    }
+    const list = el('ul');
+    for (const item of shown) {
+      const li = el('li');
+      const body = el('div', 'body');
+      body.append(el('div', 'title', item.title));
+      if (item.detail) body.append(el('div', 'detail', item.detail));
+      const button = el('button', '', actions[item.kind]);
+      button.setAttribute('aria-label', `${actions[item.kind]}: ${item.title}`);
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        li.style.opacity = '.4';
+        try {
+          await act({ kind: item.kind, id: item.id });
+        } catch (error) {
+          li.style.opacity = '';
+          button.disabled = false;
+          // No reload here: its success would replace this message.
+          status.textContent = `Couldn't ${actions[item.kind].toLowerCase()}: ${String(error)}`;
+          return;
+        }
+        data.items = data.items.filter((other) => other.id !== item.id);
+        render();
+        await reload();
+      });
+      li.append(el('span', `kind ${item.kind}`, kindLabels[item.kind]), body, el('span', 'when', relative(item.at)), button);
+      list.append(li);
+    }
+    root.replaceChildren(list);
+  }
+
+  // Coalesce reloads: live events arrive in bursts, and a page may run only
+  // two programs at once.
+  let reloading: Promise<void> | null = null;
+  let stale = false;
+  function reload(): Promise<void> {
+    stale = true;
+    reloading ??= (async () => {
+      while (stale) {
+        stale = false;
+        await load();
+      }
+    })().finally(() => {
+      reloading = null;
+    });
+    return reloading;
+  }
+
+  async function load() {
+    try {
+      current = await queue();
+      render();
+      status.textContent = current.emailConnected ? '' : 'No inbox connected: alerts and tasks only.';
+    } catch (error) {
+      status.textContent = `Couldn't load the queue: ${String(error)}`;
+    }
+  }
+
+  // Email has no live event; it refreshes when the page regains focus.
+  on(['message.posted', 'message.mentioned', 'document.created', 'document.updated', 'document.deleted'], reload);
+  window.addEventListener('focus', () => reload());
+  await reload();
+</script>
+</body>
+</html>

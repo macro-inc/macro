@@ -445,13 +445,18 @@ export {
   EditOutcomeUnknownError,
 } from './entities/documents/ai-edit';
 export { DocumentAnchor } from './entities/documents/anchor';
+export type { FileContent } from './entities/documents/file-content';
 export {
   DocumentChangedError,
   type DocumentMarkdown,
   type DocumentMarkdownWritten,
   type SetContentOptions,
 } from './entities/documents/markdown';
-export type { FileContent } from './entities/documents/namespace';
+export type {
+  PageBuildStatus,
+  PageProblem,
+  PagePublished,
+} from './entities/documents/page';
 export {
   CommentQuoteNotPlacedError,
   type TextComment,

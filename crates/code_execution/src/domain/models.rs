@@ -34,8 +34,9 @@ pub struct RunEnvironment {
     /// Where the SDK sends requests and what its links point at.
     #[serde(flatten)]
     pub endpoints: SdkEndpoints,
-    /// Set for a program that runs with nobody watching (a routine step)
-    /// instead of an agent's or a person's call.
+    /// Set for a program whose `main` receives inputs and never the
+    /// credential: a routine step running with nobody watching, or a program
+    /// embedded in a document the user opened.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unattended: Option<Unattended>,
 }
@@ -51,7 +52,7 @@ pub struct SdkEndpoints {
     pub web_app_url: String,
 }
 
-/// How an unattended program runs: its source is TypeScript, and `main`
+/// How a program with inputs runs: its source is TypeScript, and `main`
 /// receives `macro` and `arguments` but never the credential.
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,6 +64,19 @@ pub struct Unattended {
     /// are every catalog operation that isn't a known read, so an operation
     /// missing from the catalog is a write.
     pub dry_run: bool,
+    /// Who reads the program's value, which names it when it is too large.
+    pub output: UnattendedOutput,
+}
+
+/// Who reads an unattended program's value. Either way a value over the
+/// executor's `max_result_bytes` fails the run instead of being summarized.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum UnattendedOutput {
+    /// A routine step's output, which later steps read whole.
+    Step,
+    /// A page's program, whose value the page that called it reads.
+    Page,
 }
 
 /// Frame bytes kept beside a full-size result for its `{"type":"result",...}` envelope.
@@ -302,4 +316,22 @@ pub enum CheckError {
     /// The checker process failed or ran out of time.
     #[error("type checking failed to run")]
     Internal,
+}
+
+/// Where a bundle runs, which decides the platform it is built for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BundleTarget {
+    /// A page in the browser, minified.
+    Browser,
+    /// A program run by the Deno executor.
+    Deno,
+}
+
+/// A bundler's verdict on a set of modules.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Bundle {
+    /// One ES module holding the entry and everything it imports.
+    Code(String),
+    /// The modules could not be bundled, for these reasons.
+    Rejected(Vec<Diagnostic>),
 }
