@@ -64,6 +64,8 @@ export function RoutineListRow(props: {
   onExpand?: (expanded: boolean) => void;
   /** A routine another routine's run created, shown under that routine. */
   nested?: boolean;
+  /** Keep room for the caret, so names line up with rows that have one. */
+  caretGutter?: boolean;
 }) {
   const toggleDisabled = () =>
     !props.row.editable ||
@@ -100,7 +102,14 @@ export function RoutineListRow(props: {
             props.nested && 'pl-7'
           )}
         >
-          <Show when={props.onExpand}>
+          <Show
+            when={props.onExpand}
+            fallback={
+              <Show when={props.caretGutter}>
+                <span aria-hidden="true" class="-ml-1 size-5 shrink-0" />
+              </Show>
+            }
+          >
             {(expand) => (
               <button
                 type="button"

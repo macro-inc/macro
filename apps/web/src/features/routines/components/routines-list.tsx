@@ -318,6 +318,9 @@ function RoutinesTable(props: {
                         onOpen={props.onOpen}
                         onToggle={props.onToggle}
                         expanded={props.isExpanded(row)}
+                        caretGutter={props.rows.some(
+                          (other) => other.children.length > 0
+                        )}
                         onExpand={
                           row.children.length > 0
                             ? (open) => props.onExpand(row.id, open)
@@ -329,6 +332,7 @@ function RoutinesTable(props: {
                           {(child) => (
                             <RoutineListRow
                               nested
+                              caretGutter
                               row={child}
                               pending={props.pendingId === child.id}
                               onOpen={props.onOpen}
