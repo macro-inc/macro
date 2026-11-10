@@ -15,6 +15,7 @@ internal class EditorProjection {
         var state: SerializedNode? = null,
         var children: List<NodeKey> = emptyList(),
         var decorator: FfiDecorator? = null,
+        var decoratorRevision: ULong? = null,
     )
 
     data class Range(val key: NodeKey, val start: Int, val end: Int)
@@ -86,6 +87,14 @@ internal class EditorProjection {
         }
         for (op in diff.ops) {
             when (op) {
+                is DiffOp.SetDecoratorRevision -> {
+                    val node = requireNotNull(nodes[op.key])
+                    require(node.kind == NodeKind.DECORATOR)
+                    if (node.decoratorRevision != op.revision) {
+                        node.decoratorRevision = op.revision
+                        invalidateDecorators(listOf(op.key))
+                    }
+                }
                 is DiffOp.CreateElement -> nodes[op.key] = Node(
                     op.key, NodeKind.ELEMENT, op.typeIndex, elementProps = op.base, props = op.props,
                 )
@@ -123,6 +132,7 @@ internal class EditorProjection {
                 }
             }
         }
+        invalidateDecorators(diff.decoratorKeys)
         diff.viewTextMatches?.let { key ->
             require(displayedText?.first == key) { "Missing acknowledged native text" }
             requireNotNull(nodes[key]).text = requireNotNull(displayedText).second

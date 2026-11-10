@@ -5,6 +5,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class EditorProjectionTest {
+    @Test fun decoratorRevisionPreservesAllUnsignedBitsAndRejectsMissingTargets() {
+        val projection = EditorProjection()
+        val key = NodeKey(index = 1u, generation = 0u)
+        val root = NodeKey(index = 0u, generation = 0u)
+        projection.apply(Diff(0u, true, null, listOf(
+            DiffOp.CreateDecorator(key, 1u, emptyList()), DiffOp.Children(root, listOf(key)),
+            DiffOp.SetDecoratorRevision(key, ULong.MAX_VALUE),
+        ), emptyList()))
+        assertEquals(ULong.MAX_VALUE, projection.nodes.getValue(key).decoratorRevision)
+        assertThrows(IllegalArgumentException::class.java) {
+            projection.apply(Diff(0u, false, null, listOf(
+                DiffOp.SetDecoratorRevision(NodeKey(index = 9u, generation = 0u), 1uL),
+            ), emptyList()))
+        }
+    }
+
     @Test fun quoteFormattingRunsStayAdjacent() {
         val projection = EditorProjection()
         projection.registerTypes(listOf(FfiTypeRow(1u, "quote", NodeKind.ELEMENT, null)))
@@ -12,7 +28,7 @@ class EditorProjectionTest {
         val quote = KeyParts(0u, 1u)
         val first = KeyParts(0u, 2u)
         val second = KeyParts(0u, 3u)
-        projection.apply(Diff(0u, true, null, listOf(
+        projection.apply(Diff(0u, true, null, decoratorKeys = emptyList(), ops = listOf(
             DiffOp.CreateElement(quote, 1u, FfiElementProps(
                 ElementFormat.UNSET, 0u, null, 0u, "", ""), emptyList()),
             DiffOp.CreateText(first, 2u, "a", FfiTextProps(1u, TextMode.NORMAL, 0u, ""), emptyList()),
@@ -31,7 +47,7 @@ class EditorProjectionTest {
         val root = KeyParts(0u, 0u)
         val paragraph = KeyParts(0u, 1u)
         val text = KeyParts(0u, 2u)
-        projection.apply(Diff(0u, true, null, listOf(
+        projection.apply(Diff(0u, true, null, decoratorKeys = emptyList(), ops = listOf(
             DiffOp.CreateElement(paragraph, 1u, FfiElementProps(
                 ElementFormat.UNSET, 0u, null, 0u, "", ""), emptyList()),
             DiffOp.CreateText(text, 2u, "a😀b", FfiTextProps(0u, TextMode.NORMAL, 0u, ""), emptyList()),
@@ -54,13 +70,13 @@ class EditorProjectionTest {
         val replacement = KeyParts(0u, 3u)
         val text = KeyParts(0u, 2u)
         val base = FfiElementProps(ElementFormat.UNSET, 0u, null, 0u, "", "")
-        projection.apply(Diff(0u, true, null, listOf(
+        projection.apply(Diff(0u, true, null, decoratorKeys = emptyList(), ops = listOf(
             DiffOp.CreateElement(old, 1u, base, emptyList()),
             DiffOp.CreateText(text, 2u, "kept", FfiTextProps(0u, TextMode.NORMAL, 0u, ""), emptyList()),
             DiffOp.Children(old, listOf(text)),
             DiffOp.Children(root, listOf(old)),
         )))
-        projection.apply(Diff(0u, false, null, listOf(
+        projection.apply(Diff(0u, false, null, decoratorKeys = emptyList(), ops = listOf(
             DiffOp.Remove(old, true),
             DiffOp.CreateElement(replacement, 1u, base, emptyList()),
             DiffOp.Children(replacement, listOf(text)),
@@ -75,7 +91,7 @@ class EditorProjectionTest {
         val root = KeyParts(0u, 0u)
         val parent = KeyParts(0u, 1u)
         val mention = KeyParts(0u, 2u)
-        projection.apply(Diff(0u, true, null, listOf(
+        projection.apply(Diff(0u, true, null, decoratorKeys = emptyList(), ops = listOf(
             DiffOp.CreateElement(parent, 1u, FfiElementProps(ElementFormat.UNSET, 0u, null, 0u, "", ""), emptyList()),
             DiffOp.CreateDecorator(mention, 2u, emptyList()),
             DiffOp.Children(parent, listOf(mention)), DiffOp.Children(root, listOf(parent)),
@@ -83,10 +99,14 @@ class EditorProjectionTest {
         assertEquals(listOf(mention), projection.pendingDecorators())
         projection.installDecorators(listOf(FfiDecorator(mention, "@Person", true, true)))
         assertTrue(projection.pendingDecorators().isEmpty())
-        assertEquals("\uFFFC", projection.layout().text)
-        projection.apply(Diff(0u, false, null, listOf(DiffOp.NodeProps(mention, emptyList()))))
+        projection.apply(Diff(0u, false, null, ops = emptyList(), decoratorKeys = listOf(mention)))
         assertEquals(listOf(mention), projection.pendingDecorators())
-        projection.apply(Diff(0u, false, null, listOf(DiffOp.Remove(parent, true), DiffOp.Children(root, emptyList()))))
+        projection.installDecorators(listOf(FfiDecorator(mention, "@Person", true, true)))
+        assertTrue(projection.pendingDecorators().isEmpty())
+        assertEquals("\uFFFC", projection.layout().text)
+        projection.apply(Diff(0u, false, null, decoratorKeys = emptyList(), ops = listOf(DiffOp.NodeProps(mention, emptyList()))))
+        assertEquals(listOf(mention), projection.pendingDecorators())
+        projection.apply(Diff(0u, false, null, decoratorKeys = emptyList(), ops = listOf(DiffOp.Remove(parent, true), DiffOp.Children(root, emptyList()))))
         assertTrue(projection.pendingDecorators().isEmpty())
         assertEquals("", projection.layout().text)
     }

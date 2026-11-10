@@ -49,3 +49,5 @@ Android registration exposes bridge commands; it does not select native editing 
   emulator is available. Record the distinction in the acceptance report.
 - Run `scripts/generate-bridge.ts --check` and `scripts/android-check.ts` from the configured devshell.
 - Check and strictly lint `tauri-plugin-native-editor` in the Tauri Cargo workspace for the Android target.
+
+Consume full-width decorator revision operations exhaustively and refresh cached model facts on native sidecar invalidation keys; a native diff alone does not acknowledge signature consumption.
