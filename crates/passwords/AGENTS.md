@@ -110,3 +110,8 @@ metadata revision, so losing a lease cannot restore stale grants or TOTP pointer
 - Namespace cleanup uses parent JWT mount `macro-lifecycle`, per-team role
   `team-<team-id>`, and exact namespace read/delete policy. Require GET 404 before
   acknowledging asynchronous provider deletion. Never use a bootstrap token at runtime.
+
+- Lock the actual publisher's membership row through write-intent publication so
+  revocation's scan includes every admitted intent. Share the post-I/O disclosure
+  recheck across username, reveal/copy, history, and codes; record denied rechecks
+  with `post_io_access_denied=true` and reject retired TOTP generations.

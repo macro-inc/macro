@@ -110,7 +110,7 @@ impl Fixture {
                 },
             };
             if item == pending {
-                repository.stage(item.0, &record).await.unwrap();
+                repository.stage(item.0, &record, &member).await.unwrap();
             } else {
                 repository.save(&record, None).await.unwrap();
             }
@@ -368,6 +368,40 @@ async fn later_saga_failure_restores_membership_with_private_values_unfenced_and
     assert_eq!(shared.grants.len(), 2);
     assert!(matches!(
         vault.get(f.team, f.pending).await,
+        Err(Error::NotFound)
+    ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn revoked_member_cannot_publish_unseen_write_intent_after_the_scan(pool: PgPool) {
+    let f = Fixture::new(pool).await;
+    let vault = PgRepository::new(f.pool.clone()).unwrap();
+    let mut delayed = vault.get(f.team, f.private).await.unwrap();
+    let operation = Uuid::now_v7();
+    delayed.metadata.id = ItemId(operation);
+    delayed.revision = 0;
+    let repo = TeamRepositoryImpl::new(f.pool.clone()).with_member_vault(PasswordMemberVault);
+    repo.remove_user_from_team(&f.team.0, &f.member)
+        .await
+        .unwrap();
+    repo.finish_user_removal(&f.team.0, &f.member)
+        .await
+        .unwrap();
+    assert!(
+        matches!(
+            vault.stage(operation, &delayed, &f.member).await,
+            Err(Error::NotFound)
+        ),
+        "a stale admitted sender must not publish a new key after the revocation scan"
+    );
+    assert!(matches!(
+        vault.staged(f.team, delayed.metadata.id, operation).await,
+        Err(Error::NotFound)
+    ));
+    // An editor's admission must use its own identity, not the record's owner.
+    delayed.user_id = f.owner.clone();
+    assert!(matches!(
+        vault.stage(Uuid::now_v7(), &delayed, &f.member).await,
         Err(Error::NotFound)
     ));
 }

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT membership.user_id FROM team_user membership JOIN \"User\" profile ON profile.id=membership.user_id WHERE membership.team_id=$1 AND membership.user_id=$2 AND NOT EXISTS(SELECT 1 FROM password_team_lifecycle closed WHERE closed.team_id=membership.team_id) AND NOT EXISTS(SELECT 1 FROM password_account_lifecycle closed WHERE closed.account_id=profile.macro_user_id) FOR KEY SHARE OF membership",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1fc44d7d9c85d4a79927d4523f3fc249cd713d052433541a5e5075deda6f1607"
+}

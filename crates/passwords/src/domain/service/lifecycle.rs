@@ -143,6 +143,23 @@ mod test {
     use super::*;
     use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
     use std::sync::atomic::{AtomicBool, Ordering};
+    #[derive(Clone)]
+    struct TraceBuffer(Arc<std::sync::Mutex<Vec<u8>>>);
+    impl std::io::Write for TraceBuffer {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for TraceBuffer {
+        type Writer = Self;
+        fn make_writer(&'a self) -> Self {
+            self.clone()
+        }
+    }
     struct Fixture {
         service: PasswordService,
         repository: Arc<FakeRepository>,
@@ -228,6 +245,61 @@ mod test {
         assert_eq!(*f.provider.purged.lock().unwrap(), vec![f.team]);
         assert!(f.repository.records.lock().unwrap().is_empty());
     }
+    #[tokio::test]
+    async fn disclosure_after_lease_loss_and_membership_revocation_returns_no_secret() {
+        // The provider completes after the database lease was lost and revocation committed.
+        // A real lease prevents this interleaving; the marker fake intentionally allows it.
+        let buffer = TraceBuffer(Arc::new(std::sync::Mutex::new(vec![])));
+        let subscriber = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::TRACE)
+            .with_ansi(false)
+            .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
+            .with_writer(buffer.clone())
+            .finish();
+        let f = Fixture::new().await;
+        *f.provider.revoke_on_disclosure.lock().unwrap() = Some(f.repository.clone());
+        // Keep the collector alive for spans whose callsites other tests have cached.
+        // Provider redaction tests retain their own scoped subscribers.
+        tracing::subscriber::set_global_default(subscriber).unwrap();
+        let result = f
+            .service
+            .reveal(&f.actor, f.team, f.item, None, false)
+            .await;
+        assert!(matches!(result, Err(Error::NotFound)));
+        let trace = String::from_utf8(buffer.0.lock().unwrap().clone()).unwrap();
+        assert!(trace.contains("passwords.disclosure.recheck"), "{trace}");
+        assert!(trace.contains("post_io_access_denied=true"));
+        assert!(trace.contains("outcome=\"denied\""));
+        assert!(!trace.contains("synthetic"));
+        let f = Fixture::new().await;
+        *f.provider.revoke_on_disclosure.lock().unwrap() = Some(f.repository.clone());
+        assert!(matches!(
+            f.service.copy(&f.actor, f.team, f.item, None).await,
+            Err(Error::NotFound)
+        ));
+        let f = Fixture::new().await;
+        *f.provider.revoke_on_disclosure.lock().unwrap() = Some(f.repository.clone());
+        assert!(matches!(
+            f.service.history(&f.actor, f.team, f.item).await,
+            Err(Error::NotFound)
+        ));
+        let f = Fixture::new().await;
+        f.service
+            .configure_totp(
+                &f.actor,
+                f.team,
+                f.item,
+                Some(SecretString("JBSWY3DPEHPK3PXP".into())),
+            )
+            .await
+            .unwrap();
+        *f.provider.revoke_on_disclosure.lock().unwrap() = Some(f.repository.clone());
+        assert!(matches!(
+            f.service.totp(&f.actor, f.team, f.item).await,
+            Err(Error::NotFound)
+        ));
+    }
+
     #[tokio::test]
     async fn private_membership_fence_does_not_disclose_item_existence_to_other_members() {
         let f = Fixture::new().await;

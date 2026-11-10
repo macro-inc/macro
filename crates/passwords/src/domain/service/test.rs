@@ -504,7 +504,7 @@ async fn delayed_write_recovery_preserves_later_grant_revocation_and_metadata_ed
     staged.metadata.name = "Delayed metadata".into();
     let update_operation = Uuid::now_v7();
     repository
-        .stage(update_operation, &staged)
+        .stage(update_operation, &staged, &owner.user_id)
         .await
         .expect("stage");
     provider

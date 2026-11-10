@@ -101,9 +101,12 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
         },
     };
     let operation = Uuid::now_v7();
-    repository.stage(operation, &record).await.expect("stage");
     repository
-        .stage(operation, &record)
+        .stage(operation, &record, &record.user_id)
+        .await
+        .expect("stage");
+    repository
+        .stage(operation, &record, &record.user_id)
         .await
         .expect("idempotent stage");
     assert_eq!(
@@ -522,7 +525,7 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
         1
     );
     assert!(matches!(
-        repository.stage(operation, &record).await,
+        repository.stage(operation, &record, &record.user_id).await,
         Err(Error::Conflict)
     ));
     let stale_deleting = repository

@@ -265,7 +265,31 @@ impl Repository for FakeRepository {
         self.lock_calls.fetch_add(1, Ordering::SeqCst);
         Ok(Box::new(FakeLock))
     }
-    async fn stage(&self, operation: Uuid, record: &Record) -> Result<(), Error> {
+    async fn stage(
+        &self,
+        operation: Uuid,
+        record: &Record,
+        publisher: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<(), Error> {
+        if self
+            .closed_teams
+            .lock()
+            .unwrap()
+            .contains(&record.metadata.team_id.0)
+            || self
+                .closed_users
+                .lock()
+                .unwrap()
+                .contains(publisher.as_ref())
+            || !self
+                .memberships
+                .lock()
+                .unwrap()
+                .get(publisher.as_ref())
+                .is_some_and(|teams| teams.contains(&record.metadata.team_id))
+        {
+            return Err(Error::NotFound);
+        }
         let mut staged = self.staged.lock().expect("fixture lock");
         if let Some(previous) = staged.get(&operation) {
             if previous.metadata.id != record.metadata.id
@@ -397,9 +421,15 @@ pub struct FakeProvider {
     pub totp_seeds: Mutex<HashMap<Uuid, SecretString>>,
     pub fail_set: AtomicBool,
     pub revoke_on_username: Mutex<Option<Arc<FakeRepository>>>,
+    pub revoke_on_disclosure: Mutex<Option<Arc<FakeRepository>>>,
     pub username_gate: Mutex<Option<UsernameGate>>,
 }
 impl FakeProvider {
+    fn revoke_during_disclosure(&self) {
+        if let Some(repository) = self.revoke_on_disclosure.lock().unwrap().take() {
+            repository.memberships.lock().unwrap().clear();
+        }
+    }
     pub fn new() -> Self {
         Self {
             stored: Mutex::new(HashMap::new()),
@@ -411,6 +441,7 @@ impl FakeProvider {
             totp_seeds: Mutex::new(HashMap::new()),
             fail_set: AtomicBool::new(false),
             revoke_on_username: Mutex::new(None),
+            revoke_on_disclosure: Mutex::new(None),
             username_gate: Mutex::new(None),
         }
     }
@@ -496,6 +527,7 @@ impl SecretProvider for FakeProvider {
         Ok(expected + 1)
     }
     async fn read(&self, _: TeamId, item: ItemId, version: i32) -> Result<SecretValues, Error> {
+        self.revoke_during_disclosure();
         self.reads.fetch_add(1, Ordering::SeqCst);
         let stored = self.stored.lock().expect("fixture lock");
         let stored = stored.get(&item.0).ok_or(Error::NotFound)?;
@@ -513,6 +545,7 @@ impl SecretProvider for FakeProvider {
         Ok(())
     }
     async fn history(&self, _: TeamId, _: ItemId) -> Result<Vec<Version>, Error> {
+        self.revoke_during_disclosure();
         Ok(vec![])
     }
 
@@ -534,6 +567,7 @@ impl SecretProvider for FakeProvider {
         Ok(())
     }
     async fn totp(&self, _: TeamId, key: TotpKeyId) -> Result<TotpCode, Error> {
+        self.revoke_during_disclosure();
         if !self
             .totp_seeds
             .lock()

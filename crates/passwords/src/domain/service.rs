@@ -143,6 +143,32 @@ impl PasswordService {
         }
         Ok(record)
     }
+    /// Revalidate shared disclosure policy after external I/O, even if its lease was lost.
+    #[tracing::instrument(skip_all,err,name="passwords.disclosure.recheck",fields(team_id=%team.0,item_id=%item.0,post_io_access_denied=false,outcome=tracing::field::Empty))]
+    async fn recheck_disclosure(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        item: ItemId,
+        expected_key: Option<TotpKeyId>,
+    ) -> Result<Record, Error> {
+        let current = match self.access(actor, team, item, false).await {
+            Ok(record) => record,
+            Err(error) => {
+                tracing::Span::current().record("post_io_access_denied", true);
+                tracing::Span::current().record("outcome", "denied");
+                return Err(error);
+            }
+        };
+        if expected_key.is_some() && current.totp_key_id != expected_key {
+            tracing::Span::current().record("post_io_access_denied", true);
+            tracing::Span::current().record("outcome", "generation_changed");
+            return Err(Error::Busy);
+        }
+        tracing::Span::current().record("outcome", "allowed");
+        Ok(current)
+    }
+
     async fn validate_folder(&self, team: TeamId, id: Option<Uuid>) -> Result<(), Error> {
         if let Some(id) = id
             && !self
@@ -205,7 +231,7 @@ impl PasswordService {
             .provider
             .username(team, item, record.metadata.version)
             .await?;
-        let current = self.access(actor, team, item, false).await?;
+        let current = self.recheck_disclosure(actor, team, item, None).await?;
         if current.revision != record.revision
             || current.metadata.version != record.metadata.version
         {
@@ -283,7 +309,9 @@ impl PasswordService {
                 last_used_at: None,
             },
         };
-        self.repository.stage(command.operation_id, &record).await?;
+        self.repository
+            .stage(command.operation_id, &record, &actor.user_id)
+            .await?;
         self.provider
             .write(team, id, 0, command.operation_id, &command.values)
             .await?;
@@ -328,7 +356,9 @@ impl PasswordService {
         record.metadata.folder_id = command.folder_id;
         record.metadata.favorite = command.favorite;
         record.metadata.updated_at = Utc::now();
-        self.repository.stage(command.operation_id, &record).await?;
+        self.repository
+            .stage(command.operation_id, &record, &actor.user_id)
+            .await?;
         self.provider
             .write(team, item, expected, command.operation_id, &command.values)
             .await?;
@@ -448,10 +478,9 @@ impl PasswordService {
         self.repository
             .save(&record, Some(record.metadata.version))
             .await?;
-        Ok(Revealed {
-            values: self.provider.read(team, item, version).await?,
-            version,
-        })
+        let values = self.provider.read(team, item, version).await?;
+        self.recheck_disclosure(actor, team, item, None).await?;
+        Ok(Revealed { values, version })
     }
     /// List provider version metadata for an authorized item.
     pub async fn history(
@@ -461,7 +490,9 @@ impl PasswordService {
         item: ItemId,
     ) -> Result<Vec<Version>, Error> {
         self.access(actor, team, item, false).await?;
-        self.provider.history(team, item).await
+        let versions = self.provider.history(team, item).await?;
+        self.recheck_disclosure(actor, team, item, None).await?;
+        Ok(versions)
     }
     /// List bounded audit entries for an authorized item.
     pub async fn activity(
@@ -635,7 +666,10 @@ impl PasswordService {
         self.repository
             .audit(team, item, actor, Action::TotpCode, Uuid::now_v7())
             .await?;
-        self.provider.totp(team, key_id).await
+        let code = self.provider.totp(team, key_id).await?;
+        self.recheck_disclosure(actor, team, item, Some(key_id))
+            .await?;
+        Ok(code)
     }
     /// Erase retired or uncommitted generations after the provider's bounded in-flight request window.
     /// Retired identities remain journaled for periodic erasure; cancellation and failures remain retryable.

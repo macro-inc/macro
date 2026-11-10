@@ -45,7 +45,13 @@ Nonblocking team vault locks serialize changes across replicas and protect folde
 assignments and grant revocation. Rollout and membership are checked before
 lease admission and access is rechecked under the lease. Contention returns
 typed `vault_busy`, distinct from `version_conflict`; the client uses at most
-three attempts with jittered exponential backoff and traces the retry count.
+three attempts with jittered exponential backoff and traces the retry count. Journal
+publication locks the actual publisher's membership row until the intent commits,
+serializing it with revocation's scan. If revocation already committed, publication
+fails without leaving an unseen intent. Every disclosure shares a post-provider-I/O
+access check, so a lost lease cannot return values after access was revoked. A
+denied recheck records `post_io_access_denied=true`; verification codes also require
+the same active enrollment generation.
 
 Each TOTP setup uses a unique enrollment key and journals its identity before
 contacting OpenBao. Replacement switches the active pointer only after setup;

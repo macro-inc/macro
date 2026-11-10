@@ -302,19 +302,42 @@ impl Repository for PgRepository {
             _transaction: transaction,
         }))
     }
-    async fn stage(&self, operation: Uuid, record: &Record) -> Result<(), Error> {
+    #[tracing::instrument(skip_all,err,name="passwords.intent.publish",fields(team_id=%record.metadata.team_id.0,item_id=%record.metadata.id.0,outcome=tracing::field::Empty))]
+    async fn stage(
+        &self,
+        operation: Uuid,
+        record: &Record,
+        publisher: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<(), Error> {
+        let mut transaction = self.pool.begin().await.map_err(|_| Error::Unavailable)?;
+        // Match revocation's team -> member lock order. A publisher must commit
+        // before the revocation scan, or observe revoked admission after it.
+        let team = sqlx::query_scalar!(
+            "SELECT id FROM team WHERE id=$1 FOR KEY SHARE",
+            record.metadata.team_id.0
+        )
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(|_| Error::Unavailable)?;
+        let member=sqlx::query_scalar!(r#"SELECT membership.user_id FROM team_user membership JOIN "User" profile ON profile.id=membership.user_id WHERE membership.team_id=$1 AND membership.user_id=$2 AND NOT EXISTS(SELECT 1 FROM password_team_lifecycle closed WHERE closed.team_id=membership.team_id) AND NOT EXISTS(SELECT 1 FROM password_account_lifecycle closed WHERE closed.account_id=profile.macro_user_id) FOR KEY SHARE OF membership"#,record.metadata.team_id.0,publisher.as_ref()).fetch_optional(&mut *transaction).await.map_err(|_|Error::Unavailable)?;
+        if team.is_none() || member.is_none() {
+            tracing::Span::current().record("outcome", "admission_revoked");
+            return Err(Error::NotFound);
+        }
         let value = serde_json::to_value(record).map_err(|_| Error::Invalid)?;
-        let result=sqlx::query!("INSERT INTO password_write_intents(operation_id,team_id,item_id,record) VALUES($1,$2,$3,$4) ON CONFLICT(operation_id) DO NOTHING",operation,record.metadata.team_id.0,record.metadata.id.0,value).execute(&self.pool).await.map_err(|_|Error::Unavailable)?;
+        let result=sqlx::query!("INSERT INTO password_write_intents(operation_id,team_id,item_id,record) VALUES($1,$2,$3,$4) ON CONFLICT(operation_id) DO NOTHING",operation,record.metadata.team_id.0,record.metadata.id.0,value).execute(&mut *transaction).await.map_err(|_|Error::Unavailable)?;
         if result.rows_affected() == 0 {
-            let previous = self
-                .staged(record.metadata.team_id, record.metadata.id, operation)
-                .await?;
+            let row=sqlx::query!("SELECT record FROM password_write_intents WHERE operation_id=$1 AND team_id=$2 AND item_id=$3",operation,record.metadata.team_id.0,record.metadata.id.0).fetch_optional(&mut *transaction).await.map_err(|_|Error::Unavailable)?.ok_or(Error::Conflict)?;
+            let previous: Record =
+                serde_json::from_value(row.record).map_err(|_| Error::Unavailable)?;
             if previous.user_id != record.user_id
                 || previous.metadata.version != record.metadata.version
             {
                 return Err(Error::Conflict);
             }
         }
+        transaction.commit().await.map_err(|_| Error::Unavailable)?;
+        tracing::Span::current().record("outcome", "published");
         Ok(())
     }
     async fn staged(&self, team: TeamId, item: ItemId, operation: Uuid) -> Result<Record, Error> {

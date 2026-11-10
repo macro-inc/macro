@@ -76,8 +76,13 @@ pub trait Repository: Send + Sync {
 
     /// Hold the team's vault lock until the returned guard is dropped; contention returns typed Busy.
     async fn lock(&self, team: TeamId, item: ItemId) -> Result<Box<dyn ItemLock>, Error>;
-    /// Persist metadata-only intent before an external value write.
-    async fn stage(&self, operation: uuid::Uuid, record: &Record) -> Result<(), Error>;
+    /// Publish an admitted actor's metadata intent before a value write, serialized with membership revocation.
+    async fn stage(
+        &self,
+        operation: uuid::Uuid,
+        record: &Record,
+        publisher: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<(), Error>;
     /// Load the metadata intent belonging to this team, item, and operation.
     async fn staged(
         &self,
