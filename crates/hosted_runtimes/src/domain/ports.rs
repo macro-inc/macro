@@ -163,15 +163,6 @@ pub trait ComputerRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Running computers and explicit quarantines; only healthy records enter the idle sweep.
-    fn running(&self) -> impl Future<Output = Result<Vec<ComputerRecord>, Self::Err>> + Send;
-
-    /// The healthy frozen computer on `host` that has been frozen longest.
-    fn coldest_frozen(
-        &self,
-        host: HostId,
-    ) -> impl Future<Output = Result<Option<ComputerId>, Self::Err>> + Send;
-
     /// Computers the fleet should hold an instance for on `host`, including quarantined ids.
     fn instances_expected(
         &self,
@@ -368,25 +359,6 @@ pub trait Fleet: Send + Sync + 'static {
         &self,
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-    /// Pause a running guest in RAM.
-    fn freeze(&self, computer_id: ComputerId)
-    -> impl Future<Output = Result<(), Self::Err>> + Send;
-    /// Resume a guest paused in RAM.
-    fn unfreeze(
-        &self,
-        computer_id: ComputerId,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// Save RAM to disk and stop. A fleet without stateful stop stops cold
-    /// and its resume boots fresh; the lifecycle does not need to know.
-    fn suspend(
-        &self,
-        computer_id: ComputerId,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-    /// Restore a suspended guest from saved RAM.
-    fn resume(&self, computer_id: ComputerId)
-    -> impl Future<Output = Result<(), Self::Err>> + Send;
-
     /// Delete the instance and its disk. A missing instance is not an error.
     fn destroy(
         &self,

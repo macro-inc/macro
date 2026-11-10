@@ -18,13 +18,10 @@ fn now() -> DateTime<Utc> {
 }
 
 #[test]
-fn suspended_computer_with_saved_state_resumes_on_prompt() {
+fn stopped_computer_starts_on_power_on() {
     let state = ComputerState {
-        phase: Phase::Suspended {
-            host: HOST,
-            saved_state: true,
-        },
-        power: Power::On,
+        phase: Phase::Stopped { host: HOST },
+        power: Power::Off,
         billing: Billing::Active,
         payment: PaymentOutcome::Paid,
         comp_reason: None,
@@ -39,7 +36,7 @@ fn suspended_computer_with_saved_state_resumes_on_prompt() {
 
     let (next, effects) = transition(
         &state,
-        &Event::PromptArrived,
+        &Event::PowerOn,
         Context {
             enrollment_generation: crate::domain::enrollment::EnrollmentGeneration::new(0),
             now: now(),
@@ -67,7 +64,7 @@ fn suspended_computer_with_saved_state_resumes_on_prompt() {
     assert_eq!(
         effects,
         vec![
-            Effect::Resume { host: HOST },
+            Effect::Start { host: HOST },
             Effect::ScheduleTimer {
                 kind: TimerKind::MacrodMissing,
                 at: now() + MACROD_GRACE,
@@ -276,138 +273,6 @@ fn cases() -> Vec<Case> {
             expected_effects: vec![],
         },
         Case {
-            name: "idle sessions freeze and schedule a suspend",
-            phase: Phase::Running { host: HOST },
-            power: Power::On,
-            billing: Billing::Active,
-            macrod_connected: true,
-            recent_crashes: vec![],
-            wake_requested: false,
-            event: Event::SessionsIdle,
-            host_has_room: true,
-            expected_phase: Phase::Frozen { host: HOST },
-            expected_power: Power::On,
-            expected_billing: Billing::Active,
-            expected_wake_requested: false,
-            expected_effects: vec![
-                Effect::Freeze { host: HOST },
-                Effect::ScheduleTimer {
-                    kind: TimerKind::SuspendDue,
-                    at: now() + SUSPEND_AFTER,
-                },
-            ],
-        },
-        Case {
-            name: "prompt unfreezes",
-            phase: Phase::Frozen { host: HOST },
-            power: Power::On,
-            billing: Billing::Active,
-            macrod_connected: true,
-            recent_crashes: vec![],
-            wake_requested: false,
-            event: Event::PromptArrived,
-            host_has_room: false,
-            expected_phase: Phase::Running { host: HOST },
-            expected_power: Power::On,
-            expected_billing: Billing::Active,
-            expected_wake_requested: false,
-            expected_effects: vec![Effect::Unfreeze { host: HOST }],
-        },
-        Case {
-            name: "frozen long enough suspends",
-            phase: Phase::Frozen { host: HOST },
-            power: Power::On,
-            billing: Billing::Active,
-            macrod_connected: true,
-            recent_crashes: vec![],
-            wake_requested: false,
-            event: Event::SuspendDue,
-            host_has_room: true,
-            expected_phase: Phase::Suspended {
-                host: HOST,
-                saved_state: false,
-            },
-            expected_power: Power::On,
-            expected_billing: Billing::Active,
-            expected_wake_requested: false,
-            expected_effects: vec![Effect::Suspend { host: HOST }],
-        },
-        Case {
-            name: "prompt before the snapshot finishes waits for it",
-            phase: Phase::Suspended {
-                host: HOST,
-                saved_state: false,
-            },
-            power: Power::On,
-            billing: Billing::Active,
-            macrod_connected: false,
-            recent_crashes: vec![],
-            wake_requested: false,
-            event: Event::PromptArrived,
-            host_has_room: true,
-            expected_phase: Phase::Suspended {
-                host: HOST,
-                saved_state: false,
-            },
-            expected_power: Power::On,
-            expected_billing: Billing::Active,
-            expected_wake_requested: true,
-            expected_effects: vec![],
-        },
-        Case {
-            name: "snapshot saved with a waiting prompt resumes",
-            phase: Phase::Suspended {
-                host: HOST,
-                saved_state: false,
-            },
-            power: Power::On,
-            billing: Billing::Active,
-            macrod_connected: false,
-            recent_crashes: vec![],
-            wake_requested: true,
-            event: Event::SnapshotSaved,
-            host_has_room: true,
-            expected_phase: Phase::Booting { host: HOST },
-            expected_power: Power::On,
-            expected_billing: Billing::Active,
-            expected_wake_requested: false,
-            expected_effects: vec![
-                Effect::Resume { host: HOST },
-                Effect::ScheduleTimer {
-                    kind: TimerKind::MacrodMissing,
-                    at: now() + MACROD_GRACE,
-                },
-            ],
-        },
-        Case {
-            name: "prompt on a full host makes room and retries",
-            phase: Phase::Suspended {
-                host: HOST,
-                saved_state: true,
-            },
-            power: Power::On,
-            billing: Billing::Active,
-            macrod_connected: false,
-            recent_crashes: vec![],
-            wake_requested: false,
-            event: Event::PromptArrived,
-            host_has_room: false,
-            expected_phase: Phase::Suspended {
-                host: HOST,
-                saved_state: true,
-            },
-            expected_power: Power::On,
-            expected_billing: Billing::Active,
-            expected_wake_requested: true,
-            expected_effects: vec![
-                Effect::MakeRoom { host: HOST },
-                Effect::ScheduleTimer {
-                    kind: TimerKind::WakeRetry,
-                    at: now() + WAKE_RETRY,
-                },
-            ],
-        },
-        Case {
             name: "macrod gone while running restarts after backoff",
             phase: Phase::Running { host: HOST },
             power: Power::On,
@@ -504,25 +369,6 @@ fn cases() -> Vec<Case> {
             expected_effects: vec![Effect::Stop { host: HOST }],
         },
         Case {
-            name: "power off keeps a suspended computer's state as stopped",
-            phase: Phase::Suspended {
-                host: HOST,
-                saved_state: true,
-            },
-            power: Power::On,
-            billing: Billing::Active,
-            macrod_connected: false,
-            recent_crashes: vec![],
-            wake_requested: true,
-            event: Event::PowerOff,
-            host_has_room: true,
-            expected_phase: Phase::Stopped { host: HOST },
-            expected_power: Power::Off,
-            expected_billing: Billing::Active,
-            expected_wake_requested: false,
-            expected_effects: vec![],
-        },
-        Case {
             name: "stop finishes",
             phase: Phase::Stopping { host: HOST },
             power: Power::Off,
@@ -531,22 +377,6 @@ fn cases() -> Vec<Case> {
             recent_crashes: vec![],
             wake_requested: false,
             event: Event::InstanceStopped,
-            host_has_room: true,
-            expected_phase: Phase::Stopped { host: HOST },
-            expected_power: Power::Off,
-            expected_billing: Billing::Active,
-            expected_wake_requested: false,
-            expected_effects: vec![],
-        },
-        Case {
-            name: "prompt does not wake a computer turned off",
-            phase: Phase::Stopped { host: HOST },
-            power: Power::Off,
-            billing: Billing::Active,
-            macrod_connected: false,
-            recent_crashes: vec![],
-            wake_requested: false,
-            event: Event::PromptArrived,
             host_has_room: true,
             expected_phase: Phase::Stopped { host: HOST },
             expected_power: Power::Off,
@@ -644,13 +474,10 @@ fn cases() -> Vec<Case> {
             expected_power: Power::On,
             expected_billing: Billing::Active,
             expected_wake_requested: true,
-            expected_effects: vec![
-                Effect::MakeRoom { host: HOST },
-                Effect::ScheduleTimer {
-                    kind: TimerKind::WakeRetry,
-                    at: now() + WAKE_RETRY,
-                },
-            ],
+            expected_effects: vec![Effect::ScheduleTimer {
+                kind: TimerKind::WakeRetry,
+                at: now() + WAKE_RETRY,
+            }],
         },
         Case {
             name: "lost host fails and pages",
@@ -809,7 +636,7 @@ fn cases() -> Vec<Case> {
         },
         Case {
             name: "release now stops billing and destroys",
-            phase: Phase::Frozen { host: HOST },
+            phase: Phase::Running { host: HOST },
             power: Power::On,
             billing: Billing::CancelAtPeriodEnd { at },
             macrod_connected: true,
@@ -954,10 +781,6 @@ fn any_event() -> impl Strategy<Value = Event> {
         Just(Event::MacrodMissing {
             instance_status: Some(InstanceStatus::Stopped)
         }),
-        Just(Event::SessionsIdle),
-        Just(Event::PromptArrived),
-        Just(Event::SuspendDue),
-        Just(Event::SnapshotSaved),
         Just(Event::VmCrashed),
         Just(Event::InstanceLost),
         Just(Event::RestartDue),
@@ -966,7 +789,6 @@ fn any_event() -> impl Strategy<Value = Event> {
         Just(Event::PowerOff),
         Just(Event::WakeRetry),
         Just(Event::CapacityChanged),
-        Just(Event::RoomUnavailable),
         (1i64..60).prop_map(|days| Event::CancelAtPeriodEnd {
             at: now() + Duration::days(days)
         }),
@@ -1095,15 +917,10 @@ proptest! {
             if after.is_awake() {
                 prop_assert_eq!(after.host(), Some(HOST));
             }
-            if effects.iter().any(|effect| matches!(effect, Effect::Resume { .. })) {
+            if effects.iter().any(|effect| matches!(effect, Effect::Start { .. })) {
                 prop_assert!(
-                    matches!(before.phase, Phase::Suspended { host: HOST, .. }),
-                    "resume starts from a suspended computer on its host"
-                );
-                prop_assert!(
-                    matches!(before.phase, Phase::Suspended { saved_state: true, .. })
-                        || event == Event::SnapshotSaved,
-                    "resume requires a completed snapshot"
+                    matches!(before.phase, Phase::Stopped { host: HOST }),
+                    "start begins from a stopped computer on its host"
                 );
             }
             if after.power == Power::Off {

@@ -34,7 +34,6 @@ fn instance(
         name: name.to_owned(),
         status,
         kind: InstanceKind::VirtualMachine,
-        stateful: false,
         config: config
             .iter()
             .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
@@ -121,17 +120,6 @@ fn recorded_limits_and_units_survive_catalog_changes() {
         .devices
         .get_mut("root")
         .unwrap()
-        .insert("size.state".to_owned(), "9GiB".to_owned());
-    assert!(!limits_match(&observed, purchased));
-    observed
-        .devices
-        .get_mut("root")
-        .unwrap()
-        .insert("size.state".to_owned(), "17GiB".to_owned());
-    observed
-        .devices
-        .get_mut("root")
-        .unwrap()
         .insert("size".to_owned(), "100GiB".to_owned());
     assert!(!limits_match(&observed, purchased));
 
@@ -155,7 +143,6 @@ fn recorded_limits_and_units_survive_catalog_changes() {
                     "path": "/",
                     "pool": "default",
                     "size": "200GiB",
-                    "size.state": "17GiB",
                 },
             },
             "source": {
@@ -245,7 +232,7 @@ fn listing_keeps_only_computer_instances_and_maps_their_status() {
         ),
         instance(
             "mc-01900000000070008000000000000002",
-            incus_client::InstanceStatus::Freezing,
+            incus_client::InstanceStatus::Starting,
             &[
                 ("user.macro.control_plane", "test-a"),
                 (
@@ -291,7 +278,7 @@ fn listing_keeps_only_computer_instances_and_maps_their_status() {
                 computer_id: ComputerId::new_from_uuid(Uuid::from_u128(
                     0x0190_0000_0000_7000_8000_0000_0000_0002
                 )),
-                status: InstanceStatus::Frozen,
+                status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: None,
             },
@@ -369,7 +356,6 @@ fn listing_ignores_foreign_and_unlabelled_computers_before_parsing_them() {
             name: "mc-foreign".to_owned(),
             status: incus_client::InstanceStatus::Running,
             kind: InstanceKind::VirtualMachine,
-            stateful: false,
             config: BTreeMap::from([
                 ("user.macro.control_plane".to_owned(), "test-b".to_owned()),
                 ("user.macro.computer_id".to_owned(), "not-ours".to_owned()),
@@ -380,7 +366,6 @@ fn listing_ignores_foreign_and_unlabelled_computers_before_parsing_them() {
             name: "mc-legacy".to_owned(),
             status: incus_client::InstanceStatus::Running,
             kind: InstanceKind::VirtualMachine,
-            stateful: false,
             config: BTreeMap::from([("user.macro.computer_id".to_owned(), "not-ours".to_owned())]),
         },
         InstanceInfo {
@@ -388,7 +373,6 @@ fn listing_ignores_foreign_and_unlabelled_computers_before_parsing_them() {
             name: "mc-own".to_owned(),
             status: incus_client::InstanceStatus::Running,
             kind: InstanceKind::VirtualMachine,
-            stateful: false,
             config: BTreeMap::from([
                 ("user.macro.control_plane".to_owned(), "test-a".to_owned()),
                 (

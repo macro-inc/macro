@@ -66,7 +66,6 @@ async fn corrupt_row_does_not_abort_fleet_scans(pool: PgPool) {
         crate::domain::models::ComputerStatusKind::NeedsAttention
     );
     assert_eq!(repo.instances_expected(host.id).await.unwrap().len(), 2);
-    assert_eq!(repo.running().await.unwrap().len(), 2);
     assert!(matches!(
         repo.get(ComputerId::new_from_uuid(bad_id)).await.unwrap(),
         Some(ComputerRecord::NeedsAttention { .. })
@@ -102,7 +101,7 @@ async fn corrupt_row_does_not_abort_fleet_scans(pool: PgPool) {
         } else {
             now()
         };
-        sqlx::query!("INSERT INTO hosted_runtime_timer (computer_id, kind, fire_at) VALUES ($1, 'suspend_due', $2)", id, fire_at).execute(&pool).await.unwrap();
+        sqlx::query!("INSERT INTO hosted_runtime_timer (computer_id, kind, fire_at) VALUES ($1, 'restart_due', $2)", id, fire_at).execute(&pool).await.unwrap();
     }
     let timers = repo.due_timers(due, 1).await.unwrap();
     assert_eq!(timers.len(), 1);
@@ -114,25 +113,6 @@ async fn corrupt_row_does_not_abort_fleet_scans(pool: PgPool) {
     repo.postpone_macrod_timers(host.id, due).await.unwrap();
     let corrupt_timer = sqlx::query_scalar!("SELECT fire_at FROM hosted_runtime_timer WHERE computer_id = $1 AND kind = 'macrod_missing'", bad_id).fetch_one(&pool).await.unwrap();
     assert_eq!(corrupt_timer, now());
-
-    let mut frozen = healthy.healthy().unwrap().state.clone();
-    frozen.phase = Phase::Frozen { host: host.id };
-    sqlx::query!(
-        "UPDATE hosted_runtime SET state = $1 WHERE team_id = $2",
-        serde_json::to_value(frozen).unwrap(),
-        TEAM
-    )
-    .execute(&pool)
-    .await
-    .unwrap();
-    assert_eq!(
-        repo.coldest_frozen(host.id)
-            .await
-            .unwrap()
-            .unwrap()
-            .as_uuid(),
-        Uuid::from_u128(101)
-    );
 
     // Broken lifecycle JSON must still retain the guest's ownership identity.
     sqlx::query!(
