@@ -59,6 +59,10 @@ flexible admin query API.
 - `UsageContext::with_agent_api_key` marks usage an agent's own API key paid
   for: it is stored with `agent_api_key_id` and never counted. Set it only
   on calls that actually authenticate with that key.
+- `UsageContext::with_agent_session` stores the agent session a call is part
+  of in `agent_session_id`. Tools and subagents inherit it from the turn's
+  context: build their usage from the inherited context, not a fresh one,
+  or the session's spend loses them.
 
 ## Related
 
