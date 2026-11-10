@@ -76,18 +76,52 @@
 <script type="text/macro" id="messages" lang="ts">
   const TRACKED = '✅';
 
-  /** Message text with mention markup shown as names. */
-  function plain(text: string): string {
-    return text.replace(/<m-([a-z]+)-mention>(.*?)<\/m-[a-z]+-mention>/g, (_match, _kind: string, json: string) => {
+  /** One of Macro's tags in message text: `<m-…>{json}</m-…>`. */
+  const MACRO_TAG = /<(m-[a-z-]+)>(.*?)<\/\1>/g;
+
+  type TagData = {
+    userId?: string; email?: string; displayName?: string; name?: string; documentName?: string;
+    groupAlias?: string; label?: string; date?: string; displayFormat?: string;
+  };
+
+  /**
+   * Message text with Macro's mention tags shown as names; any other text,
+   * angle brackets included, stays as written. A mention the SDK built
+   * carries only the user's id, so its name is loaded (once per id, in `names`).
+   */
+  async function plain(
+    text: string,
+    macro: ProgramContext['macro'],
+    names: Map<string, Promise<string | undefined>>,
+  ): Promise<string> {
+    const tags = [...text.matchAll(MACRO_TAG)].map((match) => {
       try {
-        const mention = JSON.parse(json) as { email?: string; userId?: string; documentName?: string };
-        if (mention.documentName) return mention.documentName;
-        const email = mention.email ?? mention.userId?.replace(/^macro\|/, '');
-        return `@${email?.split('@')[0] ?? 'someone'}`;
+        return JSON.parse(match[2] ?? '') as TagData;
       } catch {
-        return '@someone';
+        return {};
       }
-    }).replace(/<[^>]+>/g, '');
+    });
+    for (const tag of tags) {
+      if (tag.userId && !tag.displayName && !names.has(tag.userId)) {
+        names.set(tag.userId, macro.users.byId(tag.userId).name().catch(() => undefined));
+      }
+    }
+    const loaded = await Promise.all(tags.map((tag) => (tag.userId ? names.get(tag.userId) : undefined)));
+
+    let index = 0;
+    return text.replace(MACRO_TAG, (_match, kind: string) => {
+      const tag = tags[index] ?? {};
+      const loadedName = loaded[index];
+      index += 1;
+      if (kind === 'm-user-mention' || kind === 'm-contact-mention') {
+        const email = tag.email ?? tag.userId?.replace(/^macro\|/, '');
+        return `@${tag.displayName || tag.name || loadedName || email || 'someone'}`;
+      }
+      if (kind === 'm-group-mention') return `@${tag.groupAlias ?? 'group'}`;
+      if (kind === 'm-date-mention') return tag.displayFormat || tag.date || '';
+      // Document, task, project and other chips carry their name; images and cards show nothing.
+      return tag.documentName || tag.label || tag.name || '';
+    });
   }
 
   export default async function ({ channelId }: { channelId: string }, { macro }: ProgramContext) {
@@ -98,6 +132,7 @@
       if (recent.length === 30) break;
     }
     const names = new Map<string, Promise<string>>();
+    const mentioned = new Map<string, Promise<string | undefined>>();
     const rows = await Promise.all(recent.map(async (message) => {
       const author = await message.author();
       if (!names.has(author.id)) {
@@ -109,7 +144,7 @@
       return {
         id: message.id,
         author: await names.get(author.id)!,
-        text: plain(await message.content()),
+        text: await plain(await message.content(), macro, mentioned),
         at: await message.createdAt(),
         tracked: reactions.some((reaction) => reaction.emoji === TRACKED && reaction.users.includes(me)),
       };
@@ -121,18 +156,52 @@
 <script type="text/macro" id="convert" lang="ts">
   const TRACKED = '✅';
 
-  /** Message text with mention markup shown as names. */
-  function plain(text: string): string {
-    return text.replace(/<m-([a-z]+)-mention>(.*?)<\/m-[a-z]+-mention>/g, (_match, _kind: string, json: string) => {
+  /** One of Macro's tags in message text: `<m-…>{json}</m-…>`. */
+  const MACRO_TAG = /<(m-[a-z-]+)>(.*?)<\/\1>/g;
+
+  type TagData = {
+    userId?: string; email?: string; displayName?: string; name?: string; documentName?: string;
+    groupAlias?: string; label?: string; date?: string; displayFormat?: string;
+  };
+
+  /**
+   * Message text with Macro's mention tags shown as names; any other text,
+   * angle brackets included, stays as written. A mention the SDK built
+   * carries only the user's id, so its name is loaded (once per id, in `names`).
+   */
+  async function plain(
+    text: string,
+    macro: ProgramContext['macro'],
+    names: Map<string, Promise<string | undefined>>,
+  ): Promise<string> {
+    const tags = [...text.matchAll(MACRO_TAG)].map((match) => {
       try {
-        const mention = JSON.parse(json) as { email?: string; userId?: string; documentName?: string };
-        if (mention.documentName) return mention.documentName;
-        const email = mention.email ?? mention.userId?.replace(/^macro\|/, '');
-        return `@${email?.split('@')[0] ?? 'someone'}`;
+        return JSON.parse(match[2] ?? '') as TagData;
       } catch {
-        return '@someone';
+        return {};
       }
-    }).replace(/<[^>]+>/g, '');
+    });
+    for (const tag of tags) {
+      if (tag.userId && !tag.displayName && !names.has(tag.userId)) {
+        names.set(tag.userId, macro.users.byId(tag.userId).name().catch(() => undefined));
+      }
+    }
+    const loaded = await Promise.all(tags.map((tag) => (tag.userId ? names.get(tag.userId) : undefined)));
+
+    let index = 0;
+    return text.replace(MACRO_TAG, (_match, kind: string) => {
+      const tag = tags[index] ?? {};
+      const loadedName = loaded[index];
+      index += 1;
+      if (kind === 'm-user-mention' || kind === 'm-contact-mention') {
+        const email = tag.email ?? tag.userId?.replace(/^macro\|/, '');
+        return `@${tag.displayName || tag.name || loadedName || email || 'someone'}`;
+      }
+      if (kind === 'm-group-mention') return `@${tag.groupAlias ?? 'group'}`;
+      if (kind === 'm-date-mention') return tag.displayFormat || tag.date || '';
+      // Document, task, project and other chips carry their name; images and cards show nothing.
+      return tag.documentName || tag.label || tag.name || '';
+    });
   }
 
   export default async function (
@@ -144,10 +213,11 @@
     const channelName = (await channel.name()) ?? 'channel';
     const dueDate = dueInDays > 0 ? new Date(Date.now() + dueInDays * 86_400_000) : undefined;
     const created = [];
+    const mentioned = new Map<string, Promise<string | undefined>>();
     // One at a time: each message gets its task, a reply linking to it, and a ✅.
     for (const id of messageIds.slice(0, 10)) {
       const message = channel.message(id);
-      const text = plain(await message.content()).trim();
+      const text = (await plain(await message.content(), macro, mentioned)).trim();
       const author = await message.author();
       const who = (await author.name().catch(() => undefined)) ?? author.email() ?? 'someone';
       const firstLine = text.split('\n')[0] ?? text;

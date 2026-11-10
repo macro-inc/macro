@@ -80,7 +80,8 @@
         name: hit.document_name,
         kind: hit.sub_type === 'task' ? 'task' : (hit.file_type ?? 'md'),
         updatedAt: hit.metadata?.updated_at ?? new Date().toISOString(),
-        snippet: passage ? passage.replace(/<[^>]*>/g, '') : null,
+        // Search marks matches with <macro_em>; any other angle brackets are the document's text.
+        snippet: passage ? passage.replace(/<\/?macro_em>/g, '') : null,
       }];
     });
   }

@@ -63,35 +63,78 @@
     return null;
   }
 
-  /** Message text with mention markup shown as @name. */
-  function plain(text: string | null): string | null {
-    if (!text) return text;
-    return text.replace(/<m-user-mention>(.*?)<\/m-user-mention>/g, (_match, json: string) => {
+  /** One of Macro's tags in message text: `<m-…>{json}</m-…>`. */
+  const MACRO_TAG = /<(m-[a-z-]+)>(.*?)<\/\1>/g;
+
+  type TagData = {
+    userId?: string; email?: string; displayName?: string; name?: string; documentName?: string;
+    groupAlias?: string; label?: string; date?: string; displayFormat?: string;
+  };
+
+  /**
+   * Message text with Macro's mention tags shown as names; any other text,
+   * angle brackets included, stays as written. A mention the SDK built
+   * carries only the user's id, so its name is loaded (once per id, in `names`).
+   */
+  async function plain(
+    text: string,
+    macro: ProgramContext['macro'],
+    names: Map<string, Promise<string | undefined>>,
+  ): Promise<string> {
+    const tags = [...text.matchAll(MACRO_TAG)].map((match) => {
       try {
-        const mention = JSON.parse(json) as { email?: string };
-        return `@${mention.email?.split('@')[0] ?? 'someone'}`;
+        return JSON.parse(match[2] ?? '') as TagData;
       } catch {
-        return '@someone';
+        return {};
       }
-    }).replace(/<[^>]+>/g, '');
+    });
+    for (const tag of tags) {
+      if (tag.userId && !tag.displayName && !names.has(tag.userId)) {
+        names.set(tag.userId, macro.users.byId(tag.userId).name().catch(() => undefined));
+      }
+    }
+    const loaded = await Promise.all(tags.map((tag) => (tag.userId ? names.get(tag.userId) : undefined)));
+
+    let index = 0;
+    return text.replace(MACRO_TAG, (_match, kind: string) => {
+      const tag = tags[index] ?? {};
+      const loadedName = loaded[index];
+      index += 1;
+      if (kind === 'm-user-mention' || kind === 'm-contact-mention') {
+        const email = tag.email ?? tag.userId?.replace(/^macro\|/, '');
+        return `@${tag.displayName || tag.name || loadedName || email || 'someone'}`;
+      }
+      if (kind === 'm-group-mention') return `@${tag.groupAlias ?? 'group'}`;
+      if (kind === 'm-date-mention') return tag.displayFormat || tag.date || '';
+      // Document, task, project and other chips carry their name; images and cards show nothing.
+      return tag.documentName || tag.label || tag.name || '';
+    });
   }
 
   export default async function (_args: {}, { macro }: ProgramContext) {
     // The feed holds unseen and seen notifications; done ones are left out.
     const rows = [];
     for await (const notification of macro.notifications.list({ pageSize: 30 })) {
+    const mentioned = new Map<string, Promise<string | undefined>>();
       const metadata = await notification.metadata();
       const sender = await notification.sender();
       const kind = metadata.tag.replaceAll('_', ' ');
       rows.push({
+      // A sender without a Macro profile, such as an outside contact, has no name to load.
+      const from = sender
+        ? ((await sender.name().catch(() => undefined)) ?? sender.email() ?? null)
+        : pick(metadata.content, ['senderDisplayName']);
+      // A direct message's channel is named for the viewer; show who wrote instead.
+      const direct = pick(metadata.content, ['channelType']) === 'directMessage';
+      const named = pick(metadata.content, [
+        'documentName', 'entityName', 'taskName', 'channelName', 'subject', 'title', 'name',
+      ]);
+      const snippet = pick(metadata.content, ['messageContent', 'snippet', 'body', 'message', 'content']);
         id: notification.id,
         kind,
-        title: pick(metadata.content, [
-          'documentName', 'entityName', 'taskName', 'channelName', 'subject', 'title', 'name',
-        ]) ?? kind.replace(/^./, (first) => first.toUpperCase()),
-        snippet: plain(pick(metadata.content, ['messageContent', 'snippet', 'body', 'message', 'content'])),
-        // A sender without a Macro profile, such as an outside contact, has no name to load.
-        from: sender ? ((await sender.name().catch(() => undefined)) ?? sender.email() ?? null) : null,
+        title: (direct ? from : named) ?? kind.replace(/^./, (first) => first.toUpperCase()),
+        snippet: snippet === null ? null : await plain(snippet, macro, mentioned),
+        from,
         at: await notification.createdAt(),
         seen: await notification.seen(),
       });

@@ -73,16 +73,52 @@
 </script>
 
 <script type="text/macro" id="messages" lang="ts">
-  /** Message text with mention markup shown as @name. */
-  function plain(text: string): string {
-    return text.replace(/<m-user-mention>(.*?)<\/m-user-mention>/g, (_match, json: string) => {
+  /** One of Macro's tags in message text: `<m-…>{json}</m-…>`. */
+  const MACRO_TAG = /<(m-[a-z-]+)>(.*?)<\/\1>/g;
+
+  type TagData = {
+    userId?: string; email?: string; displayName?: string; name?: string; documentName?: string;
+    groupAlias?: string; label?: string; date?: string; displayFormat?: string;
+  };
+
+  /**
+   * Message text with Macro's mention tags shown as names; any other text,
+   * angle brackets included, stays as written. A mention the SDK built
+   * carries only the user's id, so its name is loaded (once per id, in `names`).
+   */
+  async function plain(
+    text: string,
+    macro: ProgramContext['macro'],
+    names: Map<string, Promise<string | undefined>>,
+  ): Promise<string> {
+    const tags = [...text.matchAll(MACRO_TAG)].map((match) => {
       try {
-        const mention = JSON.parse(json) as { email?: string };
-        return `@${mention.email?.split('@')[0] ?? 'someone'}`;
+        return JSON.parse(match[2] ?? '') as TagData;
       } catch {
-        return '@someone';
+        return {};
       }
-    }).replace(/<[^>]+>/g, '');
+    });
+    for (const tag of tags) {
+      if (tag.userId && !tag.displayName && !names.has(tag.userId)) {
+        names.set(tag.userId, macro.users.byId(tag.userId).name().catch(() => undefined));
+      }
+    }
+    const loaded = await Promise.all(tags.map((tag) => (tag.userId ? names.get(tag.userId) : undefined)));
+
+    let index = 0;
+    return text.replace(MACRO_TAG, (_match, kind: string) => {
+      const tag = tags[index] ?? {};
+      const loadedName = loaded[index];
+      index += 1;
+      if (kind === 'm-user-mention' || kind === 'm-contact-mention') {
+        const email = tag.email ?? tag.userId?.replace(/^macro\|/, '');
+        return `@${tag.displayName || tag.name || loadedName || email || 'someone'}`;
+      }
+      if (kind === 'm-group-mention') return `@${tag.groupAlias ?? 'group'}`;
+      if (kind === 'm-date-mention') return tag.displayFormat || tag.date || '';
+      // Document, task, project and other chips carry their name; images and cards show nothing.
+      return tag.documentName || tag.label || tag.name || '';
+    });
   }
 
   export default async function ({ channelId }: { channelId: string }, { macro }: ProgramContext) {
@@ -97,6 +133,7 @@
     const rows = await Promise.all(recent.map(async (message) => {
       const author = await message.author();
       if (!names.has(author.id)) {
+    const mentioned = new Map<string, Promise<string | undefined>>();
         // People without a profile name show their email's local part.
         const fallback = author.email()?.split('@')[0] ?? 'Someone';
         names.set(author.id, author.name().then((name) => name ?? fallback, () => fallback));
@@ -104,7 +141,7 @@
       return {
         id: message.id,
         author: await names.get(author.id)!,
-        content: plain(await message.content()),
+        content: await plain(await message.content(), macro, mentioned),
         createdAt: await message.createdAt(),
       };
     }));

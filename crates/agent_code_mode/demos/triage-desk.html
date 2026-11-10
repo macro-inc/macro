@@ -79,19 +79,52 @@
     return null;
   }
 
-  /** Message text with mention markup shown as names. */
-  function plain(text: string | null): string | null {
-    if (!text) return text;
-    return text.replace(/<m-([a-z]+)-mention>(.*?)<\/m-[a-z]+-mention>/g, (_match, _kind: string, json: string) => {
+  /** One of Macro's tags in message text: `<m-…>{json}</m-…>`. */
+  const MACRO_TAG = /<(m-[a-z-]+)>(.*?)<\/\1>/g;
+
+  type TagData = {
+    userId?: string; email?: string; displayName?: string; name?: string; documentName?: string;
+    groupAlias?: string; label?: string; date?: string; displayFormat?: string;
+  };
+
+  /**
+   * Message text with Macro's mention tags shown as names; any other text,
+   * angle brackets included, stays as written. A mention the SDK built
+   * carries only the user's id, so its name is loaded (once per id, in `names`).
+   */
+  async function plain(
+    text: string,
+    macro: ProgramContext['macro'],
+    names: Map<string, Promise<string | undefined>>,
+  ): Promise<string> {
+    const tags = [...text.matchAll(MACRO_TAG)].map((match) => {
       try {
-        const mention = JSON.parse(json) as { email?: string; userId?: string; documentName?: string };
-        if (mention.documentName) return mention.documentName;
-        const email = mention.email ?? mention.userId?.replace(/^macro\|/, '');
-        return `@${email?.split('@')[0] ?? 'someone'}`;
+        return JSON.parse(match[2] ?? '') as TagData;
       } catch {
-        return '@someone';
+        return {};
       }
-    }).replace(/<[^>]+>/g, '');
+    });
+    for (const tag of tags) {
+      if (tag.userId && !tag.displayName && !names.has(tag.userId)) {
+        names.set(tag.userId, macro.users.byId(tag.userId).name().catch(() => undefined));
+      }
+    }
+    const loaded = await Promise.all(tags.map((tag) => (tag.userId ? names.get(tag.userId) : undefined)));
+
+    let index = 0;
+    return text.replace(MACRO_TAG, (_match, kind: string) => {
+      const tag = tags[index] ?? {};
+      const loadedName = loaded[index];
+      index += 1;
+      if (kind === 'm-user-mention' || kind === 'm-contact-mention') {
+        const email = tag.email ?? tag.userId?.replace(/^macro\|/, '');
+        return `@${tag.displayName || tag.name || loadedName || email || 'someone'}`;
+      }
+      if (kind === 'm-group-mention') return `@${tag.groupAlias ?? 'group'}`;
+      if (kind === 'm-date-mention') return tag.displayFormat || tag.date || '';
+      // Document, task, project and other chips carry their name; images and cards show nothing.
+      return tag.documentName || tag.label || tag.name || '';
+    });
   }
 
   type Item = {
@@ -104,13 +137,20 @@
 
   async function notifications(macro: ProgramContext['macro']): Promise<Item[]> {
     const items: Item[] = [];
+    const mentioned = new Map<string, Promise<string | undefined>>();
     for await (const notification of macro.notifications.list({ pageSize: 20 })) {
       const metadata = await notification.metadata();
       const sender = await notification.sender();
       const kind = metadata.tag.replaceAll('_', ' ');
-      const from = sender ? ((await sender.name().catch(() => undefined)) ?? sender.email() ?? null) : null;
-      const title = pick(metadata.content, ['documentName', 'entityName', 'taskName', 'channelName', 'subject', 'title', 'name']);
-      const snippet = plain(pick(metadata.content, ['messageContent', 'snippet', 'body', 'message', 'content']));
+      const from = sender
+        ? ((await sender.name().catch(() => undefined)) ?? sender.email() ?? null)
+        : pick(metadata.content, ['senderDisplayName']);
+      // A direct message's channel is named for the viewer; show who wrote instead.
+      const direct = pick(metadata.content, ['channelType']) === 'directMessage';
+      const named = pick(metadata.content, ['documentName', 'entityName', 'taskName', 'channelName', 'subject', 'title', 'name']);
+      const title = direct ? from : named;
+      const text = pick(metadata.content, ['messageContent', 'snippet', 'body', 'message', 'content']);
+      const snippet = text === null ? null : await plain(text, macro, mentioned);
       items.push({
         kind: 'notification',
         id: notification.id,
