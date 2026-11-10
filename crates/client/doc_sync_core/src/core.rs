@@ -358,6 +358,11 @@ impl SyncCore {
     pub fn connection(&self) -> &Connection {
         &self.connection.state
     }
+    /// Current authorization, bounded by the configured access ceiling.
+    /// Observation only: lifecycle, connection and later admission checks are separate.
+    pub fn effective_access(&self) -> Access {
+        self.effective_access
+    }
     /// Current derived user-visible status.
     pub fn status(&self) -> &SyncStatus {
         &self.status

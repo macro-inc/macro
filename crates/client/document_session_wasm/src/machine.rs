@@ -53,6 +53,17 @@ impl Machine {
         self.decorator_observer.expose();
         Ok(bytes)
     }
+    pub(crate) fn effective_access(&self) -> wire::Access {
+        let access = match &self.session {
+            Session::Editor(session) => session.effective_access(),
+            Session::Doc(session) => session.effective_access(),
+        };
+        match access {
+            Access::Read => wire::Access::Read,
+            Access::CommentOnly => wire::Access::CommentOnly,
+            Access::Edit => wire::Access::Edit,
+        }
+    }
     pub(crate) fn create(
         abi: u32,
         config: &[u8],

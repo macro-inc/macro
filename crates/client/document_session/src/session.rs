@@ -262,6 +262,10 @@ impl<S: Surface> DocumentSession<S> {
     pub fn surface(&self) -> &S {
         &self.surface
     }
+    /// Current authorization fact; a later input must still pass normal admission.
+    pub fn effective_access(&self) -> doc_sync_core::Access {
+        self.sync.effective_access()
+    }
     /// Current peer, including a fresh peer after replacement.
     pub fn peer_id(&self) -> u64 {
         self.doc.peer_id()
