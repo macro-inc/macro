@@ -555,7 +555,8 @@ async fn an_enrollment_never_finished_in_connect_is_dropped(pool: PgPool) {
         Arc::new(Calls::default()),
     );
     service.connect(&user(), Backfill::None).await.unwrap();
-    sqlx::query!("UPDATE dialpad_sync_connections SET enrolled_at = now() - interval '2 hours'")
+    // Past Macro Connect's ten-minute session, approval can no longer finish.
+    sqlx::query!("UPDATE dialpad_sync_connections SET enrolled_at = now() - interval '11 minutes'")
         .execute(&pool)
         .await
         .unwrap();

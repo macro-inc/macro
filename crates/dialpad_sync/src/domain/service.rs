@@ -11,8 +11,9 @@ use uuid::Uuid;
 
 /// Reconcile work per pass, so one pass never monopolizes the worker.
 const RECONCILE_BATCH: i64 = 20;
-/// An enrollment the user never finished in Macro Connect is dropped after this.
-const ENROLLMENT_TTL: chrono::Duration = chrono::Duration::hours(1);
+/// An enrollment the user never finished in Macro Connect is dropped once
+/// its Connect session would have expired.
+const ENROLLMENT_TTL: chrono::Duration = chrono::Duration::minutes(10);
 /// A failing call retries with backoff, about three hours in all, then waits
 /// for a new event from Dialpad.
 pub(crate) const MAX_CALL_ATTEMPTS: i32 = 12;
