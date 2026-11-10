@@ -1,4 +1,5 @@
 import { EditorView } from '@macro-inc/lexical-wasm-view';
+import { createNativeListenerScope } from '../../editing/overlay-hosts/native-listeners';
 import { dispatchApplicationCommand } from '../group-b/command';
 
 export function registerNativeChecklist(view: EditorView): () => void {
@@ -53,32 +54,38 @@ export function registerNativeChecklist(view: EditorView): () => void {
   for (const node of view.mirror.values()) {
     if (node.type === 'listitem') fixTabIndex(node.key);
   }
-  const releaseCommit = view.onMutations('listitem', (mutations) => {
-    for (const [key, mutation] of mutations) {
-      if (mutation !== 'destroyed') fixTabIndex(key);
-    }
-  });
-  const releaseEnter = view.registerKeyRoute((event) => {
-    const command =
-      navigator.platform.startsWith('Mac') ||
-      navigator.userAgent.includes('Mac')
-        ? event.metaKey
-        : event.ctrlKey;
-    if (
-      event.key !== 'Enter' ||
-      !command ||
-      event.shiftKey ||
-      event.isComposing
-    )
-      return null;
-    return { name: 'group-b.key', json: 'null' };
-  });
-  view.root.addEventListener('pointerdown', down);
-  view.root.addEventListener('click', click);
-  return () => {
-    releaseCommit();
-    releaseEnter();
-    view.root.removeEventListener('pointerdown', down);
-    view.root.removeEventListener('click', click);
-  };
+  const listeners = createNativeListenerScope();
+  try {
+    listeners.add(
+      view.onMutations('listitem', (mutations) => {
+        for (const [key, mutation] of mutations) {
+          if (mutation !== 'destroyed') fixTabIndex(key);
+        }
+      })
+    );
+    listeners.add(
+      view.registerKeyRoute((event) => {
+        const command =
+          navigator.platform.startsWith('Mac') ||
+          navigator.userAgent.includes('Mac')
+            ? event.metaKey
+            : event.ctrlKey;
+        if (
+          event.key !== 'Enter' ||
+          !command ||
+          event.shiftKey ||
+          event.isComposing
+        )
+          return null;
+        return { name: 'group-b.key', json: 'null' };
+      })
+    );
+    listeners.add(() => view.root.removeEventListener('pointerdown', down));
+    listeners.add(() => view.root.removeEventListener('click', click));
+    view.root.addEventListener('pointerdown', down);
+    view.root.addEventListener('click', click);
+    return listeners.dispose;
+  } catch (error) {
+    return listeners.fail(error);
+  }
 }

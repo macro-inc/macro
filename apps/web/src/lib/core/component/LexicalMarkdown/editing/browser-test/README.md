@@ -35,6 +35,21 @@ must wait for command completion and recheck disposal/read-only UI before
 calling browser focus. The fixture observes the real focus method and published
 DOM; it never fabricates flags, a synchronous executor step or model output.
 
+The installer also owns block-gap clicks and table long presses. Its required
+`canEdit` accessor comes from the document host; it does not infer reactive
+permission from DOM attributes. The gap fixture loads actual Source-produced
+code JSON and clears real native history after loading, then checks insertion,
+typing and exact model undo/redo. Retain loading in history only when testing
+loading itself. Trusted Chromium touch on tablet and phone checks single-cell
+selection and extension after the real long-press timer. This does not establish
+the table action bar's merge/split or clipboard behavior.
+
+Installer and gesture listener scopes release all completed registrations after
+partial failure, preserve the original opaque cause, and make disposal
+idempotent. Unit fault controls use real native sessions and actual DOM listener
+registrations; browser controls exercise normal mounted ownership. Static builds
+emit source maps so the exact compiled Source dependency bytes can be checked.
+
 The fixture seeds a checklist directly. It does not establish slash-menu
 creation, task-list filter/progress UI, real document transport/persistence or
 the complete document-app mount. Those acceptance checks remain separate.

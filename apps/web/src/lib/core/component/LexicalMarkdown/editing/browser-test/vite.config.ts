@@ -27,6 +27,7 @@ export default defineConfig({
     outDir: `${WEB_DIRECTORY}/node_modules/.native-overlays-dist`,
     emptyOutDir: true,
     minify: false,
+    sourcemap: true,
   },
   preview: {
     host: '127.0.0.1',

@@ -180,12 +180,18 @@ function mount(id: string) {
     mounted,
     () => root.contentEditable === 'true'
   );
-  const releaseGap = registerNativeTrailingParagraph(mounted);
+  const releaseGap = registerNativeTrailingParagraph(
+    mounted,
+    () => root.contentEditable === 'true'
+  );
   const releaseEnter = registerNativeNormalizeEnter(mounted);
   const releaseTab = registerNativeTabIndentation(mounted);
   const releaseTableKeys = registerNativeTableKeys(mounted);
   const releaseResize = registerNativeTableResizeEdges(mounted);
-  const releaseTouchSelection = registerNativeTableTouchSelection(mounted);
+  const releaseTouchSelection = registerNativeTableTouchSelection(
+    mounted,
+    () => root.contentEditable === 'true'
+  );
   return {
     tableDelete(cell: number, axis: 'row' | 'column' | 'table') {
       return deleteNativeTableAtHover(mounted, cell, axis);

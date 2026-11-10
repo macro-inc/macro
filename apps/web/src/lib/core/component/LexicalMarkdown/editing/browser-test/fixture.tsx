@@ -1,6 +1,7 @@
 import '@app/index.css';
 import {
   ABI_MAJOR,
+  CommandCode,
   EditorInputMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
 import {
@@ -10,12 +11,15 @@ import {
 } from '@macro-inc/lexical-wasm-view';
 import { selectionMessage } from '@macro-inc/lexical-wasm-view/view/session-port';
 import { isFirefox, isIOS, isSafari } from '@solid-primitives/platform';
+import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { loadDocumentSession } from '../../../../document-session/load';
 import { FocusClickTarget } from '../../component/core/FocusClickTarget';
 import { theme } from '../../theme';
 import { installNativeMarkdownOverlays } from '../installNativeMarkdownOverlays';
 import { createNativeFocusTarget } from '../overlay-hosts/native-focus';
+import blockGap from './fixtures/block-gap.json';
+import tableSelection from './fixtures/table-selection.json';
 
 function element(id: string) {
   const target = document.getElementById(id);
@@ -52,7 +56,8 @@ const runtime = mountLocalSessionView(
       ),
   }
 );
-let installation = installNativeMarkdownOverlays(runtime.view);
+const [canEdit, setCanEdit] = createSignal(true);
+let installation = installNativeMarkdownOverlays(runtime.view, { canEdit });
 let focusCalls = 0;
 const focus = runtime.view.focus.bind(runtime.view);
 runtime.view.focus = () => {
@@ -99,9 +104,11 @@ runtime.port.setState(
   })
 );
 element('readonly').addEventListener('click', () => {
+  setCanEdit(false);
   runtime.view.setEditable(false);
 });
 element('editable').addEventListener('click', () => {
+  setCanEdit(true);
   runtime.view.setEditable(true);
 });
 element('revoke').addEventListener('click', () => {
@@ -121,7 +128,7 @@ element('dispose').addEventListener('click', () => {
 });
 element('remount').addEventListener('click', () => {
   installation.dispose();
-  installation = installNativeMarkdownOverlays(runtime.view);
+  installation = installNativeMarkdownOverlays(runtime.view, { canEdit });
 });
 let saved: string | undefined;
 element('save').addEventListener('click', () => {
@@ -164,4 +171,59 @@ element('queue-dispose').addEventListener('click', () => queueFocus('dispose'));
 element('queue-readonly').addEventListener('click', () =>
   queueFocus('readonly')
 );
+const reportState = () => {
+  element('live-state').textContent =
+    runtime.executor.session.serializedState();
+  element('selection').textContent = JSON.stringify(
+    runtime.view.selection().selection
+  );
+};
+runtime.view.onCommit(() => queueMicrotask(reportState));
+element('load-gap').addEventListener('click', () => {
+  runtime.port.setState(JSON.stringify(blockGap));
+  runtime.port.command(CommandCode.ClearHistory);
+});
+element('load-table').addEventListener('click', () =>
+  runtime.port.setState(JSON.stringify(tableSelection))
+);
+function queueGap(effect: 'none' | 'dispose' | 'readonly') {
+  const before = focusCalls;
+  let duringCalls: number | undefined;
+  runtime.port.input(
+    EditorInputMsg.fromEditorSelection({
+      selection: selectionMessage({ kind: 'none' }),
+      change: {},
+    }),
+    () => {
+      const first = runtime.view.root.children[0].getBoundingClientRect();
+      const second = runtime.view.root.children[1].getBoundingClientRect();
+      runtime.view.root.dispatchEvent(
+        new MouseEvent('click', {
+          bubbles: true,
+          cancelable: true,
+          clientX: first.left + first.width / 2,
+          clientY: (first.bottom + second.top) / 2,
+        })
+      );
+      if (effect === 'dispose') installation.dispose();
+      if (effect === 'readonly') {
+        setCanEdit(false);
+        runtime.view.setEditable(false);
+      }
+      duringCalls = focusCalls - before;
+    }
+  );
+  element('queued').textContent = JSON.stringify({
+    duringCalls,
+    afterCalls: focusCalls - before,
+  });
+}
+element('queue-gap').addEventListener('click', () => queueGap('none'));
+element('queue-gap-dispose').addEventListener('click', () =>
+  queueGap('dispose')
+);
+element('queue-gap-readonly').addEventListener('click', () =>
+  queueGap('readonly')
+);
+reportState();
 document.documentElement.dataset.ready = 'true';
