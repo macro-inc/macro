@@ -377,6 +377,7 @@ export class SessionPort implements EditorPort {
     editor: EditorInputMsg,
     after?: (handled: boolean) => void
   ): void {
+    this.assertRootAdmission();
     this.executor.run(
       () => {
         if (this.effectiveAccess() !== Access.Edit) return 0;
