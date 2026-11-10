@@ -43,14 +43,23 @@ export function TodayTimeline(props: {
       >
         <div class="relative mt-3 h-27">
           <For each={props.strip.hours}>
-            {(hour) => (
+            {(hour, index) => (
               <div
-                class="absolute inset-y-0 border-l border-edge-divider first:border-transparent"
+                class="absolute inset-y-0 border-l border-edge-divider"
+                classList={{ 'border-transparent': index() === 0 }}
                 style={{
                   left: `${((hour - (props.strip.hours[0] ?? 0)) / span()) * 100}%`,
                 }}
               >
-                <span class="absolute top-0 -translate-x-1/2 text-[11px] text-ink-extra-muted first:translate-x-0">
+                <span
+                  class="absolute top-0 text-[11px] text-ink-extra-muted"
+                  classList={{
+                    '-translate-x-1/2':
+                      index() > 0 && index() < props.strip.hours.length - 1,
+                    '-translate-x-full':
+                      index() === props.strip.hours.length - 1,
+                  }}
+                >
                   {hourLabel(hour)}
                 </span>
               </div>

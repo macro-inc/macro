@@ -329,7 +329,11 @@ registerComponent(
 );
 registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 registerComponent('recent', () => <RecentRouteView />);
-registerComponent('for-you', () => <ForYouRouteView />);
+registerComponent(
+  'for-you',
+  () => <ForYouRouteView />,
+  () => composableLayout()
+);
 registerComponent('activity', () => <ActivityRouteView />);
 registerComponent(
   'notifications',

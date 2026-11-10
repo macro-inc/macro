@@ -47,7 +47,12 @@ export function HomeChatStart() {
             />
           </Show>
           <div
-            class="mx-auto grid min-h-64 min-w-0 w-full max-w-180 flex-1 grid-cols-1 grid-rows-[max(0px,calc(40%-60px))_auto_1fr] pt-6 pb-16"
+            class="mx-auto grid min-h-64 min-w-0 w-full max-w-180 flex-1 grid-cols-1 pt-6 pb-16"
+            classList={{
+              'grid-rows-[max(0px,calc(40%-60px))_auto_1fr]': !ideas(),
+              // Today and the priorities need the room below the composer.
+              'grid-rows-[2.5rem_auto_1fr]': ideas(),
+            }}
             data-home-composer-align="agents"
           >
             <div class="self-end" />
