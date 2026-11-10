@@ -18,6 +18,7 @@ import { SessionPort } from '@macro-inc/lexical-wasm-view/view/session-port';
 import type { Owner } from 'solid-js';
 import { theme } from '../../theme';
 import { createNativeFastSelectionDecoratorViews } from '../fast-selection-views';
+import { createNativeFastStaticDecoratorViews } from '../fast-static-views';
 import { createNativeSelectionDecoratorContext } from '../native-selection-host';
 import initialize, { EditorSession } from './wasm/document_session_wasm.js';
 
@@ -75,6 +76,10 @@ export async function mountNativeSurface(
   const port = new SessionPort(executor, sink, false);
   const selectionContext = createNativeSelectionDecoratorContext(theme);
   const registry = registerMacroElementViews(createBuiltinRegistry());
+  registerMacroDecoratorViews(
+    registry,
+    createNativeFastStaticDecoratorViews(selectionContext)
+  );
   registerMacroDecoratorViews(
     registry,
     createNativeFastSelectionDecoratorViews(selectionContext)

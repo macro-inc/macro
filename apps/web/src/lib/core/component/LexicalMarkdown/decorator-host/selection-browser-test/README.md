@@ -1,4 +1,4 @@
-# Selection-only decorator binding proof
+# Selection and static decorator binding proofs
 
 This isolated fixture covers GroupMention, UnknownMention, ThemeMention and
 ConnectApp. It uses their actual Source factories/components/providers and the
@@ -20,5 +20,13 @@ FAST_DECORATOR_PHASE=after and the three explicit browser executables when
 running playwright.config.ts. The ignored wasm directory requires all five
 hash-verified files from the sealed native-click-guard-fc9a5f1ae6 artifact. This
 fixture refuses missing or mismatched artifact hashes before collection. It
-neither builds nor promotes an artifact. It installs only the four
+neither builds nor promotes an artifact. It installs only the
 fixture-owned views; it is not the complete application decorator registry.
+
+static-six.browser.e2e.ts additionally covers Watermark, Await, AgentContext,
+ReplyTarget, AccountManagerRequest and CursorSystemNotification. See
+../static-views.md for exact render/interaction scope and open gates. Supply
+FAST_DECORATOR_STATIC_BASELINE for the original Watermark/Await/AgentContext
+captures and FAST_DECORATOR_BASELINE for the other three immutable Source
+captures. The control compares fresh Source bytes before running its matched
+Source/native import cohort. The existing selection-only cases remain separate.
