@@ -183,8 +183,14 @@ async fn a_redial_reopens_sessions_an_idle_teardown_closed() {
         service.reattach_live_sessions(
             harness_for_bot(bot_id),
             vec![
-                SessionId::new(first.to_string()),
-                SessionId::new(second.to_string()),
+                ListedSession {
+                    id: SessionId::new(first.to_string()),
+                    updated_at: None,
+                },
+                ListedSession {
+                    id: SessionId::new(second.to_string()),
+                    updated_at: None,
+                },
             ],
             tracing::Span::none(),
         ),
