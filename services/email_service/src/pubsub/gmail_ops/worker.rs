@@ -1,19 +1,20 @@
-use crate::outbound::email_api::GmailApi;
+use crate::outbound::message_labels::gmail_ops::{GmailOpsProvider, GmailOpsQueue, PgGmailOps};
 use crate::pubsub::gmail_ops::process;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
+use email::domain::message_labels::gmail_ops::GmailOpsService;
 use futures::StreamExt;
 use sqlx::PgPool;
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 
-/// Context for the Gmail operations worker. Simpler than PubSubContext since
-/// these operations only need Gmail API access and DB for reverts.
+/// The queued label-write use case composed from production adapters.
+pub type GmailOpsUseCase = GmailOpsService<PgGmailOps, GmailOpsProvider, GmailOpsQueue>;
+
+/// Domain use case and the SQS handle needed to acknowledge its disposition.
 #[derive(Clone)]
 pub struct GmailOpsContext {
-    pub db: PgPool,
+    pub service: Arc<GmailOpsUseCase>,
     pub sqs_worker: sqs_worker::SQSWorker,
-    pub sqs_client: sqs_client::SQS,
-    pub email_api: GmailApi,
-    pub retry_worker: bool,
 }
 
 /// Runs the Gmail operations worker, processing messages from the queue.
@@ -21,7 +22,7 @@ pub async fn run_worker(
     db: PgPool,
     worker: sqs_worker::SQSWorker,
     sqs_client: sqs_client::SQS,
-    email_api: GmailApi,
+    email_api: impl Into<GmailOpsProvider> + Send + 'static,
     retry_worker: bool,
 ) {
     run_worker_with_cancellation(
@@ -40,15 +41,17 @@ pub(crate) fn context(
     db: PgPool,
     worker: &sqs_worker::SQSWorker,
     sqs_client: sqs_client::SQS,
-    email_api: GmailApi,
+    email_api: impl Into<GmailOpsProvider> + Send + 'static,
     retry_worker: bool,
 ) -> GmailOpsContext {
     GmailOpsContext {
-        db,
+        service: Arc::new(GmailOpsService {
+            repository: PgGmailOps(db),
+            gmail: email_api.into(),
+            retry_queue: GmailOpsQueue(sqs_client),
+            retry_worker,
+        }),
         sqs_worker: worker.clone(),
-        sqs_client,
-        email_api,
-        retry_worker,
     }
 }
 
@@ -59,7 +62,7 @@ pub async fn run_worker_with_cancellation(
     db: PgPool,
     worker: sqs_worker::SQSWorker,
     sqs_client: sqs_client::SQS,
-    email_api: GmailApi,
+    email_api: impl Into<GmailOpsProvider> + Send + 'static,
     retry_worker: bool,
     cancellation_token: CancellationToken,
 ) {

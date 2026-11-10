@@ -136,7 +136,11 @@ tools — hexagonal, heavily feature-gated.
   (`stage_thread_labels` / `commit_thread_label_write` in
   `domain/service/thread_labels.rs`); route new thread label actions through them.
   Message-label batches go through `domain/message_labels.rs`, with their atomic
-  staging and unqueued-write undo behind `MessageLabelRepository`.
+  staging and unqueued-write undo behind `MessageLabelRepository`. The queued
+  half lives in `domain/message_labels/gmail_ops.rs`: it owns turn ordering,
+  partial acceptance/reversion, retry routing, and delivery dispositions through
+  link, settlement, provider, and retry-queue ports. Provider admission remains
+  inside the host's existing Gmail adapter.
 - Recompute thread metadata inside staged Gmail SPAM/TRASH writes so restored All Mail previews, ordering, and signal state do not wait for the provider worker.
 - `domain/recent_inbox.rs` merges a user's newest messages read live from
   each of their own inboxes (50 by default, at most 100); an inbox whose read
