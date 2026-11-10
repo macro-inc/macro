@@ -409,6 +409,15 @@
         };
       };
 
+      # crane's Cargo fileset keeps only Rust and Cargo files. Desktop crates
+      # that read other files at compile time need them added here: cache-core
+      # generates metadata from the GraphQL schema, and cache-turso embeds its
+      # SQL with include_str!.
+      desktopCargoCompileInputs = lib.fileset.unions [
+        ../static_assets/schema.graphql
+        (lib.fileset.fileFilter (file: file.hasExt "sql") ../crates/client/cache-turso/src)
+      ];
+
       tauri = crane-tauri.lib.buildTauriApp { inherit pkgs craneLib; } {
         pname = "macro-tauri-desktop";
         version = appVersion;
@@ -419,10 +428,8 @@
         # filtered Cargo source used by crane.
         cargoRoot = ../.;
         cargoLock = ../apps/web/tauri/Cargo.lock;
-        # cache-core's build script generates metadata from the GraphQL schema.
-        # Non-Cargo inputs must be added explicitly to crane's app fileset.
         extraFileset = lib.fileset.unions [
-          ../static_assets/schema.graphql
+          desktopCargoCompileInputs
           ../apps/web/tauri/src-tauri/tauri.macos.conf.json
         ];
         inherit frontend;
@@ -1008,7 +1015,7 @@
         root = ../.;
         fileset = lib.fileset.unions [
           cefCargoSources
-          ../static_assets/schema.graphql
+          desktopCargoCompileInputs
           ../apps/web/tauri/desktop-cef/tauri.conf.json
           ../apps/web/tauri/desktop-cef/entitlements.plist
           ../apps/web/tauri/src-tauri/tauri.conf.json
