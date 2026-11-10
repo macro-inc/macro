@@ -2,10 +2,71 @@ use super::*;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_email::gmail::gmail_ops::ModifyMessageLabelsPayload;
 use models_email::gmail::gmail_ops::{GmailMessageRef, ModifyMessageLabelsBatchPayload};
+use std::io::Write;
+use std::sync::{Arc, Mutex};
+use tracing::instrument::WithSubscriber;
 
 const THREAD: Uuid = Uuid::from_u128(0xb1);
 const ARCHIVE: Uuid = Uuid::from_u128(0xf1);
 const UNARCHIVE: Uuid = Uuid::from_u128(0xf2);
+
+#[derive(Clone, Default)]
+struct EventOutput(Arc<Mutex<Vec<u8>>>);
+
+impl Write for EventOutput {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn retryable_listener_emits_one_debug_event_with_error_and_payload_in_its_handler_span() {
+    use models_email::gmail::gmail_ops::GmailOpsOperation;
+    use models_email::service::pubsub::{DetailedError, FailureReason};
+
+    let data = GmailOpsPubsubMessage {
+        link_id: Uuid::from_u128(0xa1),
+        operation: GmailOpsOperation::ModifyMessageLabels(ModifyMessageLabelsPayload {
+            db_message_id: Uuid::from_u128(0xb1),
+            provider_message_id: "message-1".into(),
+            labels_to_add: vec!["Label_work".into()],
+            labels_to_remove: vec!["INBOX".into()],
+            pending_write_id: Some(ARCHIVE),
+        }),
+    };
+    let error = DetailedError {
+        reason: FailureReason::DatabaseQueryFailed,
+        source: anyhow::anyhow!("database unavailable")
+            .context("Failed to fetch link from database"),
+    };
+    let output = EventOutput::default();
+    let writer = output.clone();
+    let subscriber = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .without_time()
+        .with_ansi(false)
+        .with_target(false)
+        .with_writer(move || writer.clone())
+        .finish();
+
+    crate::pubsub::gmail_ops::error_handlers::handle_retryable_error(&data, &error)
+        .with_subscriber(subscriber)
+        .await
+        .expect("retryable delivery remains unacknowledged");
+
+    assert_eq!(
+        String::from_utf8(output.0.lock().unwrap().clone()).unwrap(),
+        format!(
+            "DEBUG handle_retryable_error: Retryable error processing gmail ops message. error={error:?} payload={:?}\n",
+            data.operation
+        )
+    );
+}
 
 async fn messages_with_label(pool: &PgPool, provider_label_id: &str) -> Vec<Uuid> {
     sqlx::query_scalar!(

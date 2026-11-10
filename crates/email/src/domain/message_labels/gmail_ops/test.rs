@@ -6,6 +6,7 @@ use models_email::gmail::gmail_ops::{
 };
 use uuid::Uuid;
 
+mod events;
 mod fixtures;
 use fixtures::*;
 
