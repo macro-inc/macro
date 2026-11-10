@@ -145,32 +145,25 @@ pub enum BackfillState {
 /// Why a sync is not healthy. Connection issues are stored as the
 /// connection's `last_error`; call issues are read from [`CallHealth`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr, strum::EnumString)]
+#[strum(serialize_all = "snake_case")]
 pub enum SyncIssue {
     /// The Dialpad connection was removed from Macro Connect.
-    #[strum(serialize = "Sync stopped")]
     Stopped,
     /// Macro Connect needs the user to reconnect Dialpad.
-    #[strum(serialize = "Reconnect Dialpad to keep syncing calls")]
     NeedsReauth,
     /// Webhook registration failed; retried after a delay.
-    #[strum(serialize = "Could not subscribe to Dialpad calls")]
     SetupFailed,
     /// A call failed to sync; it is retried with backoff.
-    #[strum(serialize = "Call sync failed; retrying automatically")]
     CallSyncFailed,
     /// A call failed every attempt; it is retried only if Dialpad sends a
     /// new event for it.
-    #[strum(serialize = "Some calls could not be imported")]
     CallsAbandoned,
     /// Setup failed every attempt; it waits for the user to reconnect.
-    #[strum(serialize = "Setup could not finish")]
     SetupAbandoned,
     /// A page of past calls failed to import; it retries with backoff.
-    #[strum(serialize = "Importing past calls failed; retrying")]
     BackfillFailed,
     /// The user disconnected Dialpad, or never finished connecting. The row
     /// stays so a reconnect keeps the import namespace.
-    #[strum(serialize = "Disconnected")]
     Disconnected,
 }
 

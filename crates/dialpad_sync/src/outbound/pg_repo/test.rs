@@ -1454,3 +1454,27 @@ async fn reconnecting_a_running_sync_retries_the_calls_that_gave_up(pool: PgPool
     assert_eq!(calls.0.lock().unwrap().len(), 1);
     assert_eq!(issue(service.status(&user()).await.unwrap()), None);
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn issues_are_stored_as_stable_codes(pool: PgPool) {
+    let service = service(pool, GrantState::Active, Arc::new(Calls::default()));
+    service.connect(&user(), Backfill::None).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    let connection = service.repo.by_user(&user()).await.unwrap().unwrap();
+    service
+        .repo
+        .flag(&connection, SyncIssue::NeedsReauth)
+        .await
+        .unwrap();
+    let stored = sqlx::query_scalar!(
+        "SELECT last_error FROM dialpad_sync_connections WHERE id = $1",
+        connection.id
+    )
+    .fetch_one(&service.repo.pool)
+    .await
+    .unwrap();
+    assert_eq!(stored.as_deref(), Some("needs_reauth"));
+}
