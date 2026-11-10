@@ -36,12 +36,21 @@ vi.mock('@core/user/util', () => ({
   },
 }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => <span /> }));
+vi.mock('@queries/contacts/use-directory', () => ({
+  usePinnedContactUsers: () => () => [],
+}));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
     isLoading: () => false,
-    useList: (...buckets: string[]) => ({
+    useList: (options: { buckets: string[]; searchTerm?: () => string }) => ({
+      isLoading: () => false,
+      isLoadingMore: () => false,
+      hasMore: () => false,
+      error: () => undefined,
+      windowKey: () => undefined,
+      loadMore: async () => {},
       items: () =>
-        buckets.includes('initiative')
+        (options.buckets.includes('initiative')
           ? [
               {
                 kind: 'initiative',
@@ -72,7 +81,12 @@ vi.mock('@core/context/quickAccess', () => ({
                   email: 'outside@example.com',
                 },
               },
-            ],
+            ]
+        ).filter((item) =>
+          item.data.name
+            .toLowerCase()
+            .includes(options.searchTerm?.().toLowerCase() ?? '')
+        ),
     }),
   }),
 }));
