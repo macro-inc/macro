@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
 import { LoroDoc } from "loro-crdt";
+import { InitializeFromSnapshotRequest } from "../../../crates/sync_protocol/bebop/generated/schema";
 import { auditFixture } from "../scripts/audit-activated-transcripts.mjs";
 
 function append(
@@ -180,4 +181,42 @@ test("audit preserves unrelated deletes and rejects oversized inline receipts", 
 			append(bytes, 1, "op<0>.00000000", true),
 		),
 	).toThrow();
+});
+
+test("snapshot coverage requires the successful response in the same generation", () => {
+	const doc = new LoroDoc();
+	doc.setPeerId("10");
+	doc.getText("text").insert(0, "durable history");
+	const bytes = [...doc.export({ mode: "update" })];
+	const body = Buffer.from(
+		InitializeFromSnapshotRequest.encode({
+			snapshot: doc.export({ mode: "snapshot" }),
+		}),
+	).toString("base64");
+	doc.free();
+	const init = {
+		room: "room",
+		generation: 0,
+		callback: 1,
+		in: "fetch",
+		method: "POST",
+		path: "/initialize",
+		body_b64: body,
+	};
+	const later = {
+		room: "room",
+		generation: 1,
+		callback: 1,
+		out: "response",
+		status: 200,
+	};
+	const before = [init, later, ...append(bytes, 2, "op<0>.00000000", false)];
+	expect(() => auditFixture(before, [init, later])).toThrow();
+	const committed = { ...later, generation: 0 };
+	expect(
+		auditFixture(
+			[init, committed, ...append(bytes, 2, "op<0>.00000000", false)],
+			[init, committed],
+		).equal,
+	).toBe(true);
 });

@@ -158,6 +158,7 @@ export function auditFixture(oldRows, rows) {
 				(out) =>
 					out.room === row.room &&
 					out.callback === row.callback &&
+					out.generation === row.generation &&
 					out.out === "response" &&
 					out.status === 200,
 			)
