@@ -2378,7 +2378,7 @@ public object FfiConverterTypeConvergePolicy: FfiConverterRustBuffer<ConvergePol
 
 
 /**
- * Native Diff; fields retain their domain meaning.
+ * Owned native patch; render policies remain private to the fact consumer.
  */
 data class Diff (
     /**
@@ -2400,6 +2400,11 @@ data class Diff (
      * Ordered operations.
      */
     var `ops`: List<DiffOp>
+    , 
+    /**
+     * Decorators whose current facts must be consumed, including metadata-only changes.
+     */
+    var `decoratorKeys`: List<NodeKey>
     
 ){
     
@@ -2420,6 +2425,7 @@ public object FfiConverterTypeDiff: FfiConverterRustBuffer<Diff> {
             FfiConverterBoolean.read(buf),
             FfiConverterOptionalTypeNodeKey.read(buf),
             FfiConverterSequenceTypeDiffOp.read(buf),
+            FfiConverterSequenceTypeNodeKey.read(buf),
         )
     }
 
@@ -2427,7 +2433,8 @@ public object FfiConverterTypeDiff: FfiConverterRustBuffer<Diff> {
             FfiConverterUInt.allocationSize(value.`generation`) +
             FfiConverterBoolean.allocationSize(value.`fullReconcile`) +
             FfiConverterOptionalTypeNodeKey.allocationSize(value.`viewTextMatches`) +
-            FfiConverterSequenceTypeDiffOp.allocationSize(value.`ops`)
+            FfiConverterSequenceTypeDiffOp.allocationSize(value.`ops`) +
+            FfiConverterSequenceTypeNodeKey.allocationSize(value.`decoratorKeys`)
     )
 
     override fun write(value: Diff, buf: ByteBuffer) {
@@ -2435,6 +2442,7 @@ public object FfiConverterTypeDiff: FfiConverterRustBuffer<Diff> {
             FfiConverterBoolean.write(value.`fullReconcile`, buf)
             FfiConverterOptionalTypeNodeKey.write(value.`viewTextMatches`, buf)
             FfiConverterSequenceTypeDiffOp.write(value.`ops`, buf)
+            FfiConverterSequenceTypeNodeKey.write(value.`decoratorKeys`, buf)
     }
 }
 
@@ -6206,6 +6214,25 @@ sealed class DiffOp {
         companion object
     }
     
+    /**
+     * Set the consuming view's full-width decorator lifetime.
+     */
+    data class SetDecoratorRevision(
+        /**
+         * Generation-aware node identity.
+         */
+        val `key`: com.macro.documentsession.NodeKey, 
+        /**
+         * Exact unsigned 64-bit revision.
+         */
+        val `revision`: kotlin.ULong) : DiffOp()
+        
+    {
+        
+
+        companion object
+    }
+    
 
     
 
@@ -6271,6 +6298,10 @@ public object FfiConverterTypeDiffOp : FfiConverterRustBuffer<DiffOp>{
             11 -> DiffOp.State(
                 FfiConverterTypeNodeKey.read(buf),
                 FfiConverterOptionalTypeSerializedNode.read(buf),
+                )
+            12 -> DiffOp.SetDecoratorRevision(
+                FfiConverterTypeNodeKey.read(buf),
+                FfiConverterULong.read(buf),
                 )
             else -> throw RuntimeException("invalid enum value, something is very wrong!!")
         }
@@ -6371,6 +6402,14 @@ public object FfiConverterTypeDiffOp : FfiConverterRustBuffer<DiffOp>{
                 + FfiConverterOptionalTypeSerializedNode.allocationSize(value.`state`)
             )
         }
+        is DiffOp.SetDecoratorRevision -> {
+            // Add the size for the Int that specifies the variant plus the size needed for all fields
+            (
+                4UL
+                + FfiConverterTypeNodeKey.allocationSize(value.`key`)
+                + FfiConverterULong.allocationSize(value.`revision`)
+            )
+        }
     }
 
     override fun write(value: DiffOp, buf: ByteBuffer) {
@@ -6445,6 +6484,12 @@ public object FfiConverterTypeDiffOp : FfiConverterRustBuffer<DiffOp>{
                 buf.putInt(11)
                 FfiConverterTypeNodeKey.write(value.`key`, buf)
                 FfiConverterOptionalTypeSerializedNode.write(value.`state`, buf)
+                Unit
+            }
+            is DiffOp.SetDecoratorRevision -> {
+                buf.putInt(12)
+                FfiConverterTypeNodeKey.write(value.`key`, buf)
+                FfiConverterULong.write(value.`revision`, buf)
                 Unit
             }
         }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }

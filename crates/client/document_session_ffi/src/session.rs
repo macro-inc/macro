@@ -5,6 +5,7 @@ struct NativeHost<S: Surface> {
     last_mono: u64,
     clock: Arc<AtomicI64>,
     application: Option<FfiApplicationConfig>,
+    pending_decorators: native_diff::PendingDecorators,
 }
 fn config(
     value: FfiSessionConfig,
@@ -65,7 +66,10 @@ impl<S: Surface> NativeHost<S> {
         }
         self.last_mono = now.mono_ms;
         self.clock.store(now.wall_ms, Ordering::Relaxed);
-        convert::output(self.session.handle(now.into(), input))
+        convert::output(
+            self.session.handle(now.into(), input),
+            &mut self.pending_decorators,
+        )
     }
 }
 /// Native-view editor. Calls are serialized across UI and sync threads.
@@ -96,6 +100,7 @@ impl NativeEditorSession {
                 last_mono,
                 clock,
                 application,
+                pending_decorators: native_diff::PendingDecorators::default(),
             }),
         }))
     }
@@ -203,8 +208,14 @@ impl NativeEditorSession {
     }
     /// Perform one typed native bulk query.
     pub fn query(&self, request: FfiQuery) -> Result<FfiQueryReply, FfiSessionError> {
-        let host = lock(&self.inner)?;
-        query::query(&host.session, host.application.as_ref(), request)
+        let mut host = lock(&self.inner)?;
+        let NativeHost {
+            session,
+            application,
+            pending_decorators,
+            ..
+        } = &mut *host;
+        query::query(session, application.as_ref(), request, pending_decorators)
     }
 }
 /// Native generic collaborative document with the same lifecycle and host effects.
@@ -235,6 +246,7 @@ impl NativeDocSession {
                 last_mono,
                 clock,
                 application,
+                pending_decorators: native_diff::PendingDecorators::default(),
             }),
         }))
     }

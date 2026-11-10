@@ -1487,7 +1487,7 @@ public func FfiConverterTypeConvergePolicy_lower(_ value: ConvergePolicy) -> Rus
 
 
 /**
- * Native Diff; fields retain their domain meaning.
+ * Owned native patch; render policies remain private to the fact consumer.
  */
 public struct Diff: Equatable, Hashable {
     /**
@@ -1506,6 +1506,10 @@ public struct Diff: Equatable, Hashable {
      * Ordered operations.
      */
     public var ops: [DiffOp]
+    /**
+     * Decorators whose current facts must be consumed, including metadata-only changes.
+     */
+    public var decoratorKeys: [NodeKey]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -1521,11 +1525,15 @@ public struct Diff: Equatable, Hashable {
          */viewTextMatches: NodeKey?, 
         /**
          * Ordered operations.
-         */ops: [DiffOp]) {
+         */ops: [DiffOp], 
+        /**
+         * Decorators whose current facts must be consumed, including metadata-only changes.
+         */decoratorKeys: [NodeKey]) {
         self.generation = generation
         self.fullReconcile = fullReconcile
         self.viewTextMatches = viewTextMatches
         self.ops = ops
+        self.decoratorKeys = decoratorKeys
     }
 
     
@@ -1547,7 +1555,8 @@ public struct FfiConverterTypeDiff: FfiConverterRustBuffer {
                 generation: FfiConverterUInt32.read(from: &buf), 
                 fullReconcile: FfiConverterBool.read(from: &buf), 
                 viewTextMatches: FfiConverterOptionTypeNodeKey.read(from: &buf), 
-                ops: FfiConverterSequenceTypeDiffOp.read(from: &buf)
+                ops: FfiConverterSequenceTypeDiffOp.read(from: &buf), 
+                decoratorKeys: FfiConverterSequenceTypeNodeKey.read(from: &buf)
         )
     }
 
@@ -1556,6 +1565,7 @@ public struct FfiConverterTypeDiff: FfiConverterRustBuffer {
         FfiConverterBool.write(value.fullReconcile, into: &buf)
         FfiConverterOptionTypeNodeKey.write(value.viewTextMatches, into: &buf)
         FfiConverterSequenceTypeDiffOp.write(value.ops, into: &buf)
+        FfiConverterSequenceTypeNodeKey.write(value.decoratorKeys, into: &buf)
     }
 }
 
@@ -6472,6 +6482,17 @@ public enum DiffOp: Equatable, Hashable {
          * Exported state fields, or no state.
          */state: SerializedNode?
     )
+    /**
+     * Set the consuming view's full-width decorator lifetime.
+     */
+    case setDecoratorRevision(
+        /**
+         * Generation-aware node identity.
+         */key: NodeKey, 
+        /**
+         * Exact unsigned 64-bit revision.
+         */revision: UInt64
+    )
 
 
 
@@ -6524,6 +6545,9 @@ public struct FfiConverterTypeDiffOp: FfiConverterRustBuffer {
         )
         
         case 11: return .state(key: try FfiConverterTypeNodeKey.read(from: &buf), state: try FfiConverterOptionTypeSerializedNode.read(from: &buf)
+        )
+        
+        case 12: return .setDecoratorRevision(key: try FfiConverterTypeNodeKey.read(from: &buf), revision: try FfiConverterUInt64.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -6604,6 +6628,12 @@ public struct FfiConverterTypeDiffOp: FfiConverterRustBuffer {
             writeInt(&buf, Int32(11))
             FfiConverterTypeNodeKey.write(key, into: &buf)
             FfiConverterOptionTypeSerializedNode.write(state, into: &buf)
+            
+        
+        case let .setDecoratorRevision(key,revision):
+            writeInt(&buf, Int32(12))
+            FfiConverterTypeNodeKey.write(key, into: &buf)
+            FfiConverterUInt64.write(revision, into: &buf)
             
         }
     }

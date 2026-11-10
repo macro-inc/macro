@@ -110,7 +110,7 @@ pub enum FfiQueryReply {
     /// Full keyed view patch from an empty renderer.
     ViewDiff {
         /// Structured native patch.
-        diff: Diff,
+        diff: FfiDiff,
         /// Current selection for a newly attached native view.
         selection: ViewSelection,
     },
@@ -196,13 +196,14 @@ pub(crate) fn query(
     session: &DocumentSession<EditorSurface>,
     application: Option<&FfiApplicationConfig>,
     request: FfiQuery,
+    pending: &mut native_diff::PendingDecorators,
 ) -> Result<FfiQueryReply, FfiSessionError> {
     let surface = session.surface();
     let state = surface.state();
     let view = state.view();
     Ok(match request {
         FfiQuery::ViewDiff => FfiQueryReply::ViewDiff {
-            diff: surface.view_diff().map_err(invalid)?,
+            diff: pending.project(surface.view_diff().map_err(invalid)?),
             selection: view_selection(state.selection()),
         },
         FfiQuery::Node { key } => FfiQueryReply::Nodes {

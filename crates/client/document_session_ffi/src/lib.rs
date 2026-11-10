@@ -7,6 +7,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 mod model_types;
+/// Owned native transport patch, excluding private component policies.
+pub use model_types::Diff as FfiDiff;
+mod native_diff;
 mod query;
 mod sync_types;
 pub use query::*;
