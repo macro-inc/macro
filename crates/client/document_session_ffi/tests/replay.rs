@@ -53,7 +53,15 @@ fn main() {
     let blocked = Arc::new(Mutex::new(BTreeMap::<String, usize>::new()));
     let mut trials = Vec::new();
     for (package, path, fixture) in cases {
-        let name = format!("upstream::{package}::{}", fixture.source.test.join(" > "));
+        let id = path
+            .file_stem()
+            .expect("fixture file stem")
+            .to_string_lossy();
+        let name = format!(
+            "upstream::{package}::{}::{}",
+            id.escape_debug(),
+            fixture.source.test.join(" > ").escape_debug()
+        );
         let expected = ledger.entry(&fixture).cloned();
         let strict = ledger.strict_packages.contains(&package);
         let counts = counts.clone();
@@ -104,6 +112,9 @@ fn main() {
     }
     trials.sort_by(|a, b| a.name().cmp(b.name()));
     let conclusion = libtest_mimic::run(&args, trials);
+    if args.list {
+        conclusion.exit();
+    }
     let counts = counts.lock().expect("counts");
     let report = counts
         .iter()
