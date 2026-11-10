@@ -140,3 +140,7 @@ The Worker retains credential verification, body limits, HTTP parsing and runtim
 transports. Native replay and fault recovery run with
 `cargo test -p sync_server_core -p sync_server_sim -p sync_protocol` from the root;
 see `../../crates/sync_server_sim/AGENTS.md` for coverage and transcript recipes.
+
+Treat `.jsonl` and `.jsonl.gz` as the same logical transcript in directory and Git
+comparisons; decode gzip losslessly and reject duplicate logical names or damaged
+compressed input. Never omit a compressed case from the diff.
