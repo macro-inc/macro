@@ -32,7 +32,6 @@ export type NotificationTone = {
 
 export type NotificationSound = {
   id: NotificationSoundId | CallSoundId;
-  label: string;
   /** Full-volume master gain; omitted sounds keep the notification level. */
   gain?: number;
   /** Final tone gain relative to its peak; omitted sounds decay to 0.0001. */
@@ -43,7 +42,6 @@ export type NotificationSound = {
 export const NOTIFICATION_SOUNDS: readonly NotificationSound[] = [
   {
     id: 'ding',
-    label: 'Ding',
     tones: [
       { frequency: 1318.5, start: 0, duration: 0.9, gain: 1, wave: 'sine' },
       { frequency: 2637, start: 0, duration: 0.35, gain: 0.25, wave: 'sine' },
@@ -51,7 +49,6 @@ export const NOTIFICATION_SOUNDS: readonly NotificationSound[] = [
   },
   {
     id: 'chime',
-    label: 'Chime',
     tones: [
       { frequency: 880, start: 0, duration: 0.45, gain: 0.9, wave: 'sine' },
       {
@@ -65,7 +62,6 @@ export const NOTIFICATION_SOUNDS: readonly NotificationSound[] = [
   },
   {
     id: 'pop',
-    label: 'Pop',
     tones: [
       {
         frequency: 480,
@@ -79,7 +75,6 @@ export const NOTIFICATION_SOUNDS: readonly NotificationSound[] = [
   },
   {
     id: 'knock',
-    label: 'Knock',
     tones: [
       { frequency: 196, start: 0, duration: 0.09, gain: 1, wave: 'triangle' },
       {
@@ -93,7 +88,6 @@ export const NOTIFICATION_SOUNDS: readonly NotificationSound[] = [
   },
   {
     id: 'pluck',
-    label: 'Pluck',
     tones: [
       { frequency: 659.3, start: 0, duration: 0.25, gain: 1, wave: 'triangle' },
       {
@@ -107,14 +101,12 @@ export const NOTIFICATION_SOUNDS: readonly NotificationSound[] = [
   },
   {
     id: 'ping',
-    label: 'Ping',
     tones: [
       { frequency: 1760, start: 0, duration: 0.35, gain: 0.75, wave: 'sine' },
     ],
   },
   {
     id: 'bloom',
-    label: 'Bloom',
     tones: [523.25, 659.25, 783.99, 1046.5].map((frequency, index) => ({
       frequency,
       start: index * 0.06,
@@ -132,7 +124,6 @@ export const NOTIFICATION_SOUNDS: readonly NotificationSound[] = [
 export const CALL_SOUNDS: readonly NotificationSound[] = [
   {
     id: 'call-join',
-    label: 'Call join',
     gain: 0.4966653521918195,
     decayRatio: 0.001,
     tones: [
@@ -179,7 +170,6 @@ export const CALL_SOUNDS: readonly NotificationSound[] = [
   },
   {
     id: 'call-leave',
-    label: 'Call leave',
     gain: 0.4966653521918195,
     decayRatio: 0.001,
     tones: [

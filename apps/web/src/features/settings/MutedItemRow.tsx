@@ -1,3 +1,4 @@
+import { formatLocale, t } from '@app/lib/i18n';
 import {
   EntityIcon,
   type EntityIconSelector,
@@ -129,7 +130,9 @@ function MutedItemLayout(props: {
         <Show when={props.item.snoozed_until}>
           {(until) => (
             <div class="text-xs text-ink-muted">
-              Until {formatSnoozeDeadline(until())}
+              {t('settingsNotifications.snoozedUntil', {
+                time: formatSnoozeDeadline(until(), formatLocale()),
+              })}
             </div>
           )}
         </Show>
@@ -142,7 +145,9 @@ function MutedItemLayout(props: {
             disabled={props.pending}
             onClick={props.onSnooze}
           >
-            {props.item.snoozed_until ? 'Change time' : 'Snooze instead'}
+            {props.item.snoozed_until
+              ? t('settingsNotifications.changeTime')
+              : t('settingsNotifications.snoozeInstead')}
           </button>
         </Show>
         <button
@@ -151,7 +156,9 @@ function MutedItemLayout(props: {
           onClick={props.onUnmute}
           disabled={props.pending}
         >
-          {props.item.snoozed_until ? 'Resume' : 'Unmute'}
+          {props.item.snoozed_until
+            ? t('settingsNotifications.resume')
+            : t('settingsNotifications.unmute')}
         </button>
       </div>
     </div>

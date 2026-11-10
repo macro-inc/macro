@@ -65,7 +65,7 @@ export function toNotificationEntity(entity: EntityData): Entity {
 
 /**
  * Item types the notification service can mute. Keep aligned with
- * `MUTED_ENTITY_TYPE_LABELS` and the events that actually fan out.
+ * `mutedEntityTypeLabel` and the events that actually fan out.
  */
 const MUTEABLE_ITEM_TYPES = new Set([
   'calendar_event',
