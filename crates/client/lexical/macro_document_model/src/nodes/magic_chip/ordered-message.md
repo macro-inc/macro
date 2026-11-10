@@ -29,3 +29,13 @@ Strict Clippy over all targets of both affected crates and scoped checks pass.
 The compositor wire suite is a separate validation gate. This payload checkpoint
 does not establish signature observation, mounted native remounts or acceptance
 of the full decorator binding.
+
+
+The pure MagicChip and AgentActivity render_signature hooks now use the actual
+owned ordered props and the existing JavaScript JSON ordering writer. They do
+not mutate counters and leave eager render_revision unset. Real native model
+transactions prove an order-only change survives publication and appears in the
+actual mutation set even when JSON map equality reports equal values. These
+controls read retained and published payloads; they do not simulate or establish
+the consuming view's last-exposed baseline, takeOutput transfer or remounts.
+Pair the existing native observer and actual view consumer for that acceptance.
