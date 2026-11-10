@@ -28,6 +28,14 @@ impl HarnessBindings for Arc<FakeBindings> {
         Ok(self.bindings.lock().unwrap().get(&bot).copied())
     }
 
+    async fn access_facts(
+        &self,
+        _bot: BotId,
+        _actor: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
+    ) -> anyhow::Result<Option<crate::domain::model::RuntimeAccessFacts>> {
+        Ok(None)
+    }
+
     async fn sessions_on_harness(
         &self,
         _harness: HarnessId,

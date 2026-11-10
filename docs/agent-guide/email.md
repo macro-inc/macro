@@ -136,7 +136,10 @@ delivery progress is silent, as on Gmail: a composer or sent message shows a
 notice only for a conflict, uncertain or rejected delivery, revoked access,
 unsavable content, or an inbox move. Use its recovery actions and check the
 provider copy before choosing an explicit resend; a resend in flight shows as
-the send button's pending state. A new-email draft locked by a conflict or an
+the send button's pending state. A draft whose sync failed or could not be
+confirmed (the "Draft could not be synced" banner) still sends: Send carries the
+editor's latest text through the outbox. Check that it sends once, with the
+latest text, and that Undo brings the draft back. A new-email draft locked by a conflict or an
 unconfirmed draft or attachment write still discards from its trash and
 Cmd+Shift+D; delivery in progress, unknown or rejected delivery, and revoked
 access keep discard locked. Switching the sender

@@ -195,7 +195,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/welcome` | Login page (when unauthenticated) |
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
-| `/app/internal/status` | Macro staff only (`@macro.com`): set the system status (Operational, Degraded, Major outage + message), see its history and the `POST /auth/system-status` API. A non-operational status shows a banner across the top of the app for every user; open apps update over the connection gateway |
+| `/app/internal/status` | Macro staff only (`@macro.com`): set the system status (Operational, Degraded, Major outage + message), see its history and the `POST /auth/system-status` API. A non-operational status shows a banner across the top of the app for every user; open apps update over the connection gateway. Its close button hides it until the page reloads (nothing is saved), and a changed level or message shows it again |
 | `/app/home` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
 | `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
 | `/app/mail` | Email client |
@@ -1133,11 +1133,16 @@ count) on the left and **New** and search on the right; **Cmd/Ctrl+F** focuses
 search, which matches name, Trigger and Steps. When
 `enable-routine-starter-templates` is on (on in development; PostHog decides in
 deployed environments), **Templates** above the rows shows
-four template cards (icon, name, one line and its trigger → first step, such as
+the catalog's first four available template cards (icon, name, one line and its trigger → first step, such as
 **New email → Label with AI**) with **All templates** at the right, which opens
 New routine's start screen. A card opens New routine already filled in from that
 template. The strip hides while searching and on **On**; on phones the cards
-scroll sideways. Columns are **Name**, **Trigger**, **Steps** and **Last run**.
+scroll sideways. With `enable-routine-suggestions` and
+`enable-routine-code-steps` on, **Suggested for you** follows the list, below
+the last row: every suggestion (AI's first, then templates from Macro) as the
+rows described in [setup cards](setup-cards.md#suggested-routines), with
+**All** and one tab per area that has any (`Suggestion area`) when there are
+two or more areas; under **All** each row carries its area's chip. Columns are **Name**, **Trigger**, **Steps** and **Last run**.
 Rows are grouped under **When something happens** and **On a schedule**, each a
 band like the tasks list's group headers, with a count. Each row has an icon for
 its trigger's kind, the name with its description below it when it has one,
@@ -1175,12 +1180,16 @@ channels, folders, people and agents it names with the user's access; one it
 can't find, or that matches several, is left for the user to pick, and
 anything it had to create for the routine, such as a new database, is listed
 on the review), **Templates** (with
-`enable-routine-starter-templates` on; Macro's cards: **Sort
-my inbox**, **Triage new tasks**, **Morning brief**, **Chase stuck tasks**, and
-**Share updates** only where AI decisions are enabled, for its trigger
-condition; each shows its icon, what it does and its trigger → first step.
-**Sort my inbox**, **Triage new tasks** and **Share updates** start with the
-scheduler's starter code, or an Ask AI step where code can't be saved), and
+`enable-routine-starter-templates` on; the scheduler's routine catalog,
+`GET /scheduled-actions/catalog`, in its order: **Sort my inbox**, **Triage new
+tasks**, **Morning brief**, **Share updates** only where AI decisions are
+enabled, for its trigger condition, then **Chase stuck tasks**, **Tag new
+email**, **Tag new documents**, **Tasks from my calls**, **Weekly pipeline
+review**, **Catch up on mentions**, **Sum up new pull requests** and **Weekly
+agent digest**; each shows its icon, what it does and its trigger → first
+step. Routines with code start with it when `enable-routine-code-steps` is on
+and the scheduler can save code, otherwise with an Ask AI step; schedules are
+in the browser's zone), and
 **Start fresh** beside the
 close button. Each choice closes it and opens the new routine's page at
 `/app/routines/new`, as do the list's template cards directly. That page is
@@ -1280,7 +1289,8 @@ GitHub sends, such as `workflow_run` and `completed`; empty means any), checks
 Macro's app can't retrigger itself). Deliveries only reach owners whose
 currently linked GitHub account installed the delivering installation, or whose
 team did. While GitHub is disconnected the panel shows **Connect GitHub**
-instead, and an enabled GitHub routine can't be saved. The panel also has
+instead, as does the triggers section above the list whenever a GitHub
+trigger is present, and an enabled GitHub routine can't be saved. The panel also has
 **Only when the payload…** rows: a dotted field (`*` checks every list item, e.g.
 `pull_request.labels.*.name`), a comparison (**is**, **is one of**, **is not one
 of**, **matches** glob, **is set**, **is not set**) and a value. Every row must
@@ -1535,6 +1545,12 @@ does not invite or notify that email address. Assignee and other user-only
 pickers continue to list Macro users only. Mobile keeps a single list, with
 only Macro users and groups pinned ahead of ranked entity results.
 
+The PostHog `disable-crm-contact-search` kill switch hides CRM contact results
+and disables their searches in `@` menus, Cmd+K, and mobile name search.
+Companies and Macro users remain searchable; existing contact mentions and
+record pages are unaffected. Override locally with
+`VITE_DISABLE_CRM_CONTACT_SEARCH=true`.
+
 Typed Cmd+K **People** and **All** queries find known Macro users, including
 teammates supplied by the contacts service, before their first DM and without a
 CRM record or the CRM feature. Search by name or email. Selecting a person opens
@@ -1666,7 +1682,7 @@ restart rules still apply.
 - In any text surface: `@` mentions (bidirectional links), `#` tags, `/` block commands,
   `:` emoji. Clicking a rendered tag opens a Search split filtered to that tag.
 
-Settings → Agents, its Cursor guide, and Runtimes render while their requests are pending.
+Settings → Agents, its Cursor guide, and Machines render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
 Settings → Agents → Agents ends with **Coding sessions**: a **Default repository**

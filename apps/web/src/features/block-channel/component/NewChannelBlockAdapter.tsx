@@ -8,6 +8,7 @@ import {
   makeRenameAction,
   useBlockEntityCommands,
 } from '@app/features/next-soup/actions';
+import { AgentDmRuntimeStatus } from '@app/features/runtime-sharing/views/AgentDmRuntimeStatus';
 import { t } from '@app/lib/i18n';
 import { createSearchParams } from '@app/lib/split-router';
 import { TraceFlow } from '@app/observability/flow';
@@ -312,6 +313,7 @@ function NewTop(props: { channelId: string }) {
           ]}
         />
       </SplitTitleFileMenu>
+      <AgentDmRuntimeStatus botId={channel()?.agent_dm?.bot_id} />
       <Show when={!isActivePhoneCall()}>
         <SplitHeaderRight>
           {/* Only header islands receive taps on touch screens. */}

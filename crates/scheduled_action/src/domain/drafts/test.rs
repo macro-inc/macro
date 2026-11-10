@@ -384,8 +384,13 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
         panic!("one session per draft");
     };
     assert_eq!(prepared.visibility, SessionVisibility::Hidden);
-    // The person's own session, never a routine's run.
+    // The person's own session, never a routine's run, billed as their
+    // agent session usage.
     assert_eq!(prepared.source, SessionSource::User);
+    assert_eq!(
+        prepared.billing,
+        agent_session::domain::model::SessionBilling::Billable
+    );
     assert_eq!(
         prepared.origin,
         trigger_context::TriggerOrigin::Requested { by: owner() }
@@ -406,6 +411,15 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
         "{prompt}"
     );
     assert!(prompt.contains("You can't ask them anything"), "{prompt}");
+    // Macro's code routines are its worked examples.
+    let inbox = routine_program::CATALOG
+        .iter()
+        .find(|routine| routine.key == "inbox")
+        .unwrap();
+    assert!(
+        prompt.contains(&format!("<request>{}</request>", inbox.request)),
+        "{prompt}"
+    );
     assert!(drafted.created.is_empty());
     // The session and its row are gone once the draft is back.
     let session = prepared.session_id;
@@ -725,6 +739,43 @@ async fn refuses_a_step_it_cannot_add() {
         failed(NO_CODE)
     );
     assert!(sessions.prepared.lock().unwrap().is_empty());
+}
+
+/// Where code can't be saved, the brief shows no code to copy.
+#[tokio::test]
+async fn without_code_the_brief_has_no_code_examples() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
+    let no_code = DraftContext {
+        code: false,
+        ..context()
+    };
+    drafts(&rows, &sessions)
+        .draft(owner(), routine("every morning sort my inbox"), no_code)
+        .await
+        .unwrap();
+    let prompt = sessions.prompts.lock().unwrap()[0].clone();
+    assert!(prompt.contains("Code steps can't be used"), "{prompt}");
+    assert!(!prompt.contains("<example>"), "{prompt}");
+}
+
+#[tokio::test]
+async fn without_conditions_no_example_trigger_asks_one() {
+    for (conditions, asked) in [(false, false), (true, true)] {
+        let rows = Arc::new(Rows::default());
+        let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
+        let context = DraftContext {
+            conditions,
+            ..context()
+        };
+        drafts(&rows, &sessions)
+            .draft(owner(), routine("every morning sort my inbox"), context)
+            .await
+            .unwrap();
+        let prompt = sessions.prompts.lock().unwrap()[0].clone();
+        assert!(prompt.contains("<example>"), "{prompt}");
+        assert_eq!(prompt.contains("\"condition\":"), asked, "{prompt}");
+    }
 }
 
 #[tokio::test]
