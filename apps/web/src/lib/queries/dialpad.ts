@@ -10,14 +10,17 @@ const KEYS = {
   connection: ['dialpad', 'connection'] as const,
 };
 
+function fetchDialpadConnection() {
+  return throwOnErr(
+    async () => await cognitionApiServiceClient.getDialpadConnection()
+  );
+}
+
 /** The user's Dialpad call sync. */
 export function useDialpadConnectionQuery(enabled: Accessor<boolean>) {
   return useQuery(() => ({
     queryKey: KEYS.connection,
-    queryFn: () =>
-      throwOnErr(
-        async () => await cognitionApiServiceClient.getDialpadConnection()
-      ),
+    queryFn: fetchDialpadConnection,
     refetchOnWindowFocus: 'always' as const,
     enabled: enabled(),
   }));
