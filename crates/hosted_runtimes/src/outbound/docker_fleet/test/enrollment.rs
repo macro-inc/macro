@@ -60,7 +60,7 @@ impl FleetEnrollment for TestEnrollment {
 #[tokio::test]
 async fn docker_create_replays_refresh_unclaimed_enrollment_without_rebooting() {
     for (exists, claimed, expected_issue_calls, expected_commands) in [
-        (false, false, 1, vec!["ps", "volume", "create", "start"]),
+        (false, false, 1, vec!["ps", "create", "start"]),
         (true, false, 1, vec!["ps", "inspect", "exec"]),
         (true, true, 0, vec!["ps", "inspect"]),
     ] {

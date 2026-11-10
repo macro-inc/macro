@@ -6,7 +6,7 @@
 //! a custom block volume `<instance>-data` (disk device `data`, the rest of
 //! the quota) that the guest mounts at `/home` and that survives updates.
 //! Incus does not delete custom volumes with their instance, so destroy
-//! deletes it afterwards.
+//! deletes it afterwards. A guest recreated after a loss reuses the volume.
 //!
 //! Verbs check the instance's status first so a retried effect is a no-op
 //! instead of an Incus "already running" error.
@@ -284,17 +284,20 @@ impl Fleet for IncusFleet {
                         disk_gib: computer.resources.disk_gib.get(),
                     })?;
                 let volume = volume_name(computer.id)?;
-                // A volume left by a lost guest (or by an attempt that failed
-                // before creating the instance) is replaced: its enrollment
-                // marker would skip the new pairing.
-                self.delete_data_volume(computer.id).await?;
-                self.client
+                // A volume left by a lost guest is kept: the new guest enrolls
+                // again for its newer generation and leaves the rest alone.
+                match self
+                    .client
                     .create_block_volume(
                         &self.config.storage_pool,
                         &volume,
                         &format!("{data_gib}GiB"),
                     )
-                    .await?;
+                    .await
+                {
+                    Ok(()) | Err(IncusError::Rejected { status: 409, .. }) => {}
+                    Err(error) => return Err(error.into()),
+                }
                 let enrollment = enrollment.issue().await?;
                 let enrollment_json = zeroize::Zeroizing::new(serde_json::to_string(&enrollment)?);
                 let mut body = instance_body(

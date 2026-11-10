@@ -240,9 +240,10 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   computer with no guest becomes Destroyed and revokes its harness without
   removing billing again. Missing stop/destroy are idempotent successes.
 - **Reprovision**: `InstanceLost` recreates the guest from the fleet's
-  configured image with a fresh pairing for the same harness and a fresh data
-  disk: Create deletes a data volume a lost guest left behind, since its
-  enrollment marker would skip the new pairing. Nothing is restored.
+  configured image with a fresh pairing for the same harness, on the data
+  disk the lost guest left (homes, Claude login and Docker data survive).
+  The new enrollment generation makes `macrod enroll` run again: it claims
+  the new pairing and replaces only the enrollment marker and credential.
 - **Data disk**: every computer has one, created with the guest and deleted
   by `Fleet::destroy` after the instance (Incus keeps custom volumes). Incus:
   block volume `<instance>-data` in the configured pool, disk device `data`

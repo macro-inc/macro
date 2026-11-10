@@ -6,7 +6,7 @@
 //! Like an Incus computer's data disk, two named volumes keep `/home` and
 //! `/var/lib/macrod` (the enrollment marker and Claude token store) across
 //! an image update, which recreates the container from the new image.
-//! Destroy deletes them; a new guest replaces any left by a lost one. They
+//! Destroy deletes them; a guest recreated after a loss reuses them. They
 //! carry the computer and control-plane labels, so a stack reset finds them.
 //!
 //! Enrollment is a file: `<enrollment_dir>/<computer id>/enrollment.json` on
@@ -275,9 +275,6 @@ impl Fleet for DockerFleet {
                     computer_id: computer.id,
                 });
             }
-            // Volumes left by a lost guest hold its enrollment marker.
-            self.docker("volume", &remove_volumes_args(computer.id))
-                .await?;
             let enrollment = enrollment.issue().await?;
             let dir = self.write_enrollment(computer.id, &enrollment).await?;
             let spec = CreateSpec {

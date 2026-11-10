@@ -370,8 +370,9 @@ pub trait Fleet: Send + Sync + 'static {
     /// Create lazily: an existing guest with the same generation and claimed
     /// pairing completes without polling `enrollment.issue()`. An unclaimed
     /// guest gets a fresh payload and restarts its enrollment units, preserving guest uptime.
-    /// A new guest gets a fresh data disk (any left from a lost guest is
-    /// deleted) and the fleet's configured image. Returns the image the guest runs.
+    /// A new guest gets the fleet's configured image and a data disk, reusing
+    /// one a lost guest left (the guest enrolls again for the newer
+    /// generation). Returns the image the guest runs.
     fn create(
         &self,
         computer: &Computer,

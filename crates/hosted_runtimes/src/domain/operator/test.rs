@@ -106,10 +106,12 @@ impl Fleet for FakeFleet {
         if existing.is_some() {
             self.restart(computer.id).await?;
         } else {
+            // A recreated guest reuses a volume its lost predecessor left.
             self.volumes
                 .lock()
                 .unwrap()
-                .insert(computer.id, format!("data-{}", generation.get()));
+                .entry(computer.id)
+                .or_insert_with(|| format!("data-{}", generation.get()));
         }
         Ok(image)
     }
