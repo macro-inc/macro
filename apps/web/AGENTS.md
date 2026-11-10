@@ -234,6 +234,10 @@ It checks draft blank lines across remounts, that a sent message renders its
 lines with the spacing the draft showed, that the one-line composer centers its
 buttons on the text line, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
+It also covers phone attaching: the add drawer opens the file picker within the
+tap, and when the iOS app's native photo library fails, a toast's Choose files
+button opens it, because WKWebView ignores a file input click made after the
+native round trip. Route iOS photo picks through `pickPhotoLibraryMediaOrFiles`.
 Its phone formatting regression opens the ribbon from the add drawer in the
 production message editor, removes selected strikethrough, and saves; keep
 the ribbon horizontally scrollable and preserve editor focus on its controls.
