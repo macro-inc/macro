@@ -222,10 +222,11 @@ impl ServerHandler for InternalTools {
                 )
                 .await
                 .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))?;
-            return Ok(match result {
+            let result = match result {
                 Ok(value) => CallToolResult::structured(value),
-                Err(error) => CallToolResult::error(vec![Content::text(error.description)]),
-            });
+                Err(error) => CallToolResult::error(vec![ContentBlock::text(error.description)]),
+            };
+            return Ok(result.into());
         }
         let review_tools = agent_code_mode::inbound::reviews::toolset();
         if review_tools.tools.contains_key(request.name.as_ref()) {

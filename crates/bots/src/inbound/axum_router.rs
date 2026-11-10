@@ -5,9 +5,10 @@ mod tests;
 
 use crate::domain::{
     models::{
-        AddChannelBotRequest, Agent, AgentMemory, Bot, BotChannel, BotChannelListCaller, BotId, BotOwnerProfile,
-        BotToken, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-        CreateBotTokenResponse, PatchAgentRequest, PatchBotRequest, UpdateAgentMemoryRequest, UpdateAgentRequest,
+        AddChannelBotRequest, Agent, AgentMemory, Bot, BotChannel, BotChannelListCaller, BotId,
+        BotOwnerProfile, BotToken, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+        CreateBotTokenResponse, PatchAgentRequest, PatchBotRequest, UpdateAgentMemoryRequest,
+        UpdateAgentRequest,
     },
     ports::{BotError, BotService},
 };
