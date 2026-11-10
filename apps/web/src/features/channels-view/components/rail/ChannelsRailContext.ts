@@ -133,16 +133,6 @@ export type ChannelRailActivationMetadata = {
   newSplit?: boolean;
 };
 
-export type SectionDraft = {
-  scope: ChannelLabelScopeSelection;
-  existing: ChannelLabel;
-};
-
-export type SectionValue = {
-  name: string;
-  rule?: ChannelLabelRule;
-  scope: ChannelLabelScopeSelection;
-};
 export type ChannelsRailContext = {
   railId: string;
   list: ListController<ChannelRailRow, ChannelRailActivationMetadata>;
@@ -183,9 +173,6 @@ export type ChannelsRailContext = {
     channelIds: string[],
     scope?: 'personal' | 'team'
   ) => Promise<void>;
-  sectionDraft: Accessor<SectionDraft | undefined>;
-  saveSectionDraft: (value: SectionValue) => Promise<void>;
-  cancelSectionDraft: () => void;
   updateSection: (
     label: ChannelLabel,
     name: string,

@@ -14,7 +14,7 @@ import { useChannelLabelsQuery } from '@queries/channel-labels/channel-labels';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { Button, Dialog, TabSelector, Tooltip } from '@ui';
+import { Button, TabSelector, Tooltip } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -29,9 +29,7 @@ import { deduplicateChannels } from '../../../../queries';
 import { useChannelListSearchPool } from '../../../../queries/channel-list-search-pool';
 import { ChannelsMobileView } from '../../../ChannelsMobileView';
 import { createSectionSearchSource } from '../channel-discovery-source';
-import { InlineSectionDraft } from '../InlineSectionDraft';
 import { SectionChannelsPicker } from '../SectionChannelsDialog';
-import { SectionRuleEditor } from '../SectionRuleEditor';
 import { MobileSectionOptions } from './MobileSectionOptions';
 import {
   channelsForMobileSection,
@@ -164,7 +162,7 @@ export function MobileSectionsView(props: {
     }
   };
   const [optionsFor, setOptionsFor] = createSignal<string>();
-  const [sectionEditor, setSectionEditor] = createSignal<'add' | 'match'>();
+  const [sectionEditorOpen, setSectionEditorOpen] = createSignal(false);
   const optionsLabel = () =>
     labels().find((label) => label.id === optionsFor());
   const team = useCurrentTeamQuery();
@@ -241,22 +239,6 @@ export function MobileSectionsView(props: {
         }
         header={
           <div class="flex flex-col gap-2 px-(--mobile-chrome-gutter) pb-2">
-            <Show when={actions.sectionDraft()}>
-              {(draft) => (
-                <InlineSectionDraft
-                  label={draft().existing}
-                  scope={draft().scope}
-                  canShare={
-                    queryReadyGate(shared) && Boolean(shared.data?.teamId)
-                  }
-                  teamName={
-                    queryReadyGate(team) ? team.data?.team.name : undefined
-                  }
-                  onSave={actions.saveSectionDraft}
-                  onCancel={actions.cancelSectionDraft}
-                />
-              )}
-            </Show>
             <Show
               when={searchOpen()}
               fallback={
@@ -366,16 +348,13 @@ export function MobileSectionsView(props: {
               setSectionPreferences(`label:${label().id}`, preferences)
             }
             onScope={(shared) => actions.changeScope(label(), shared)}
-            onRename={async () => {
+            onEdit={async () => {
               const current = label();
               setOptionsFor(undefined);
               await actions.renameLabel(current);
             }}
             onAdd={async () => {
-              setSectionEditor('add');
-            }}
-            onMatch={async () => {
-              setSectionEditor('match');
+              setSectionEditorOpen(true);
             }}
             onMarkRead={() => actions.markSectionRead(`label:${label().id}`)}
             onDelete={() => actions.deleteLabel(label())}
@@ -387,46 +366,23 @@ export function MobileSectionsView(props: {
             }
             disabled={members.isLoading() || actions.scopePending()}
             onClose={() => {
-              setSectionEditor(undefined);
+              setSectionEditorOpen(false);
               setOptionsFor(undefined);
             }}
             editors={
-              <>
-                <PickerSheet.Root
-                  open={sectionEditor() === 'add'}
-                  onCancel={() => setSectionEditor(undefined)}
-                >
-                  <Show when={sectionEditor() === 'add'}>
-                    <SectionChannelsPicker
-                      presentation="sheet"
-                      label={label()}
-                      onConfirm={(ids) =>
-                        actions.addLabelChannels(label(), ids)
-                      }
-                      onClose={() => setSectionEditor(undefined)}
-                    />
-                  </Show>
-                </PickerSheet.Root>
-                <Show when={sectionEditor() === 'match'}>
-                  <Dialog
-                    open
-                    onOpenChange={(open) => {
-                      if (!open) setSectionEditor(undefined);
-                    }}
-                  >
-                    <Dialog.Title class="sr-only">
-                      {t('channelSections.matchByName')}
-                    </Dialog.Title>
-                    <SectionRuleEditor
-                      label={label()}
-                      onSave={(rule) =>
-                        actions.updateSection(label(), label().name, rule)
-                      }
-                      onClose={() => setSectionEditor(undefined)}
-                    />
-                  </Dialog>
+              <PickerSheet.Root
+                open={sectionEditorOpen()}
+                onCancel={() => setSectionEditorOpen(false)}
+              >
+                <Show when={sectionEditorOpen()}>
+                  <SectionChannelsPicker
+                    presentation="sheet"
+                    label={label()}
+                    onConfirm={(ids) => actions.addLabelChannels(label(), ids)}
+                    onClose={() => setSectionEditorOpen(false)}
+                  />
                 </Show>
-              </>
+              </PickerSheet.Root>
             }
           />
         )}

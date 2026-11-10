@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   fetchChannel: vi.fn<(id: string) => Promise<ChannelEntity>>(),
   bulkPreferences: vi.fn(),
   createSection: vi.fn(),
+  updateSection: vi.fn(),
+  confirmDialog: vi.fn(),
   promptSection:
     vi.fn<typeof import('./next/SectionDialog')['promptSection']>(),
   favoriteId: undefined as string | undefined,
@@ -286,7 +288,7 @@ vi.mock('@queries/channel-labels/channel-labels', () => ({
   }),
   useCreateChannelLabelMutation: () => ({ mutateAsync: mocks.createSection }),
   useDeleteChannelLabelMutation: () => ({}),
-  useRenameChannelLabelMutation: () => ({}),
+  useRenameChannelLabelMutation: () => ({ mutateAsync: mocks.updateSection }),
   useSetChannelLabelMutation: () => ({}),
 }));
 vi.mock('@queries/favorites/favorites', () => ({
@@ -300,7 +302,7 @@ vi.mock('@thisbeyond/solid-dnd', () => ({
   createDroppable: () => ({ ref: () => {}, isActiveDroppable: false }),
   useDragDropContext: () => undefined,
 }));
-vi.mock('@ui', () => ({ confirmDialog: vi.fn() }));
+vi.mock('@ui', () => ({ confirmDialog: mocks.confirmDialog }));
 vi.mock('../../channels-view-context', () => ({
   useChannelsView: () => ({
     state: {
@@ -1315,12 +1317,71 @@ describe('section creation', () => {
     });
     const pending = actions.createLabel([]);
     await waitFor(() => expect(mocks.createSection).toHaveBeenCalledOnce());
-    expect(actions.sectionDraft()).toBeUndefined();
     expect(onSectionCreated).not.toHaveBeenCalled();
     close();
     await pending;
     expect(onSectionCreated).toHaveBeenCalledExactlyOnceWith('created-section');
   });
+});
+
+describe('section editing', () => {
+  it.each([false, true])(
+    'confirms a team transfer once and honors cancellation (%s)',
+    async (confirmed) => {
+      const label: ChannelLabel = {
+        id: 'section',
+        teamId: 'team',
+        name: 'Section',
+        channelIds: [],
+        channelCount: 0,
+        sortOrder: 0,
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      };
+      const rule = { attribute: 'name' as const, contains: 'support' };
+      mocks.confirmDialog.mockResolvedValueOnce(confirmed);
+      mocks.updateSection.mockResolvedValueOnce(undefined);
+      mocks.promptSection.mockImplementationOnce(async (props) => {
+        expect(props.initial).toBe(label);
+        expect(
+          await props.onConfirm({ name: 'Support', rule, scope: 'personal' })
+        ).toBe(confirmed);
+      });
+      let actions!: ReturnType<typeof useChannelLabelActions>;
+      render(() => {
+        const owner = getOwner();
+        actions = useChannelLabelActions({
+          sectionsEnabled: () => true,
+          channelTagsEnabled: () => true,
+          labelsAvailable: () => true,
+          labelsUnavailableReason: () => '',
+          sharedLabels: () => true,
+          teamId: () => 'team',
+          labels: () => [label],
+          channelsById: () => new Map(),
+          searchResults: () => [],
+          labelDialogOwner: () => owner,
+          setGroupOpen: vi.fn(),
+          setLabelOpen: vi.fn(),
+        });
+        return null;
+      });
+      await actions.renameLabel(label);
+      expect(mocks.confirmDialog).toHaveBeenCalledOnce();
+      if (confirmed) {
+        expect(mocks.updateSection).toHaveBeenCalledExactlyOnceWith({
+          labelId: 'section',
+          name: 'Support',
+          rule,
+          targetScope: 'personal',
+          actorId: 'viewer',
+          sectionMode: true,
+        });
+      } else {
+        expect(mocks.updateSection).not.toHaveBeenCalled();
+      }
+    }
+  );
 });
 
 describe('section notification actions', () => {

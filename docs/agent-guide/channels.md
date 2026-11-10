@@ -1147,7 +1147,7 @@ the fallback while its name is unavailable. The team section always shows joined
 including channels assigned to manual or smart custom sections. Each custom
 section is a top-level heading, independent of the Team channels disclosure. Empty sections
 use padded, bordered cards with a short explanation, Add channels as the primary action,
-and Match by name beside it. Read-only sections omit editing actions. Empty Favorites explains how to add a favorite. Private conversations
+and Edit section beside it. Read-only sections omit editing actions. Empty Favorites explains how to add a favorite. Private conversations
 use a lock icon in the sidebar and mobile feed, including favorited private
 conversations.
 All section headers use the shared collapsible-section styling without leading
@@ -1170,8 +1170,8 @@ list, and search results. Rows retain stable identities and measured positions
 through live refreshes and section reordering; focused and dragged rows remain
 mounted when they leave the visible range. Each section tracks its own measured
 position, including when other sections change height without changing the total
-stack height, so rows do not leave blank gaps behind. Inline renaming remains
-within its section; creation uses a separate dialog.
+stack height, so rows do not leave blank gaps behind. Creation and editing use
+the same separate dialog without replacing the section heading.
 Keyboard navigation scrolls immediately, without animation, only when the
 highlighted row enters the viewport's two-row context margin, leaving neighboring
 rows visible above and below. The margin shrinks in short sections.
@@ -1264,29 +1264,31 @@ Use **New → New section** to open the section dialog. **Add to section → New
 opens the same dialog with that channel selected. Create saves the section; Cancel
 or Escape discards the draft. New sections append before All channels without
 re-sorting existing sections, and the sidebar reveals the new heading. On phones,
-creation selects the new section tab. Rename still edits the section name in place.
-Failed saves retain the draft.
+creation selects the new section tab. **Edit section** opens the same dialog for
+an existing section's name and name-matching rule. Failed saves retain the draft.
 
 A manual section's header **+** and empty **Add channels** action open an anchored searchable
 checkbox picker. The desktop picker has a full-width top search, no visible title or
 description, and a height-bounded scrollable channel list above its fixed actions.
 Additions retain successful writes when part of a batch fails.
-**Match by name** opens a separate anchored editor with **Name contains**, a live
-preview, a match count, and Save. Matching is literal and case-insensitive.
+In **Edit section**, enable **Match by name** to show **Name contains** and a live
+match count with a preview list. Existing rule sections show the current pattern
+for editing. Matching is literal and case-insensitive.
 Shared sections show a people icon; saved name rules show a funnel.
 
-A section uses either hand-picked channels or a name rule, never both. Applying
-**Match by name** to a populated manual section warns that the rule replaces the
-hand-picked list; **Replace channel list** confirms the change. Cancel leaves
-picks untouched. Saving clears the manual assignments without deleting channels.
+A section uses either hand-picked channels or a name rule, never both. Enabling
+**Match by name** in a populated manual section warns that saving replaces the
+hand-picked list; **Replace channel list** confirms the change. Cancel or turning
+matching back off before saving leaves picks untouched. Saving clears the manual
+assignments without deleting channels.
 Rule-based sections hide Add channels and reject manual assignment or drag-and-drop;
 edit their rule to change membership. Shared sections can include viewable unjoined
 channels in their verified team; personal sections remain participant-only. The
 additive section API keeps unjoined visibility separate from legacy labels used
 when the flag is off.
 
-Custom section menus contain Rename, Add channels for manual sections, Match by
-name, Visible to, Sort, Display, Mark all as read, notification controls, and Delete.
+Custom section menus contain Edit section, Add channels for manual sections,
+Visible to, Sort, Display, Mark all as read, notification controls, and Delete.
 Click and right-click menus share the same controls and isolate menu loading from
 the sidebar. Editing actions require verified access; unavailable scope transfers
 are hidden. **Visible to** uses a checkbox layout but permits only
@@ -1338,11 +1340,12 @@ navigation, top-level read marking, incoming-call actions, and pull-to-refresh.
 Long-press a section tab, or use its visible options action, to open the shared
 mobile sheet. Visible to, Sort, Display, and mute drill into the sheet with Back,
 not nested touch submenus. Sharing uses the verified current team, including when
-no other shared sections exist. Rename returns to the inline name field. Add channels
+no other shared sections exist. **Edit section** closes the options sheet and opens
+the shared creation/editing dialog with the same replacement warning. Rule matches
+appear directly in a bounded list on touch devices rather than requiring hover. Add channels
 opens the shared full-height picker above the options sheet with Cancel and Done;
 choosing rows keeps search focused, and Cancel discards the draft without closing
-the options sheet. The name-rule editor also stacks above the options sheet. A
-deleted selected section falls back to All. Phone selection is transient, not a
+the options sheet. A deleted selected section falls back to All. Phone selection is transient, not a
 new persisted preference.
 
 Verify desktop and touch-phone widths in both themes, flag-off restoration,

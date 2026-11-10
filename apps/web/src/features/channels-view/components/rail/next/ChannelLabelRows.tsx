@@ -37,22 +37,18 @@ import {
   ChannelSectionContextMenu,
   ChannelSectionDropdown,
 } from './ChannelSectionMenu';
-import { InlineSectionDraft } from './InlineSectionDraft';
 import { SectionChannelsPicker } from './SectionChannelsDialog';
-import { SectionRuleEditor } from './SectionRuleEditor';
-
-type SectionEditor = 'add' | 'match';
 
 function SectionEditorPopover(props: {
   label: ChannelLabel;
-  mode?: SectionEditor;
+  open: boolean;
   onClose: () => void;
   children: JSX.Element;
 }) {
   const rail = useChannelsRail();
   return (
     <Popover
-      open={Boolean(props.mode)}
+      open={props.open}
       onOpenChange={(open) => {
         if (!open) props.onClose();
       }}
@@ -65,30 +61,13 @@ function SectionEditorPopover(props: {
       <Popover.Portal>
         <Popover.Content class="menu-surface z-action-menu w-80 max-w-[calc(100vw-1rem)] outline-none">
           <Popover.Title class="sr-only">
-            {t(
-              props.mode === 'add'
-                ? 'channelSections.addChannels'
-                : 'channelSections.matchByName'
-            )}
+            {t('channelSections.addChannels')}
           </Popover.Title>
-          <Show
-            when={props.mode === 'add'}
-            fallback={
-              <SectionRuleEditor
-                label={props.label}
-                onSave={(rule) =>
-                  rail.updateSection(props.label, props.label.name, rule)
-                }
-                onClose={props.onClose}
-              />
-            }
-          >
-            <SectionChannelsPicker
-              label={props.label}
-              onConfirm={(ids) => rail.addLabelChannels(props.label, ids)}
-              onClose={props.onClose}
-            />
-          </Show>
+          <SectionChannelsPicker
+            label={props.label}
+            onConfirm={(ids) => rail.addLabelChannels(props.label, ids)}
+            onClose={props.onClose}
+          />
         </Popover.Content>
       </Popover.Portal>
     </Popover>
@@ -156,7 +135,7 @@ function SectionVisibilityMenu(props: { label: ChannelLabel }) {
 
 function ChannelLabelActions(props: {
   label: ChannelLabel;
-  onEdit: (mode: SectionEditor) => void;
+  onAdd: () => void;
 }) {
   const rail = useChannelsRail();
   return (
@@ -164,7 +143,7 @@ function ChannelLabelActions(props: {
       <MenuGroup>
         <MenuItem
           icon={PencilIcon}
-          text={t('channelSections.renameSection')}
+          text={t('channelSections.editSection')}
           onClick={() =>
             fireAndForget(rail.renameLabel(props.label), 'channels-view')
           }
@@ -174,15 +153,9 @@ function ChannelLabelActions(props: {
             icon={PlusIcon}
             text={t('channelSections.addChannels')}
             disabled={!rail.labelsAvailable()}
-            onClick={() => props.onEdit('add')}
+            onClick={props.onAdd}
           />
         </Show>
-        <MenuItem
-          icon={FunnelIcon}
-          text={t('channelSections.matchByName')}
-          disabled={!rail.labelsAvailable()}
-          onClick={() => props.onEdit('match')}
-        />
       </MenuGroup>
       <Show when={rail.canChangeSectionScope(props.label)}>
         <MenuSeparator />
@@ -216,113 +189,98 @@ function DeleteSectionItem(props: { label: ChannelLabel }) {
 export function ChannelLabelRow(props: { label: ChannelLabel }) {
   const rail = useChannelsRail();
   const state = useChannelRailLabelState(() => props.label);
-  const [editor, setEditor] = createSignal<SectionEditor>();
-  const draft = () => {
-    const current = rail.sectionDraft();
-    return current?.existing?.id === props.label.id ? current : undefined;
-  };
+  const [editorOpen, setEditorOpen] = createSignal(false);
   return (
-    <Show
-      when={draft()}
-      fallback={
-        <SectionEditorPopover
-          label={props.label}
-          mode={editor()}
-          onClose={() => setEditor(undefined)}
-        >
-          <ChannelSectionContextMenu
-            section={rowKeyForLabel(props.label.id)}
-            before={
-              <ChannelLabelActions label={props.label} onEdit={setEditor} />
-            }
-            actions={<DeleteSectionItem label={props.label} />}
-          >
-            <ChannelSectionHeading
-              id={state().domId}
-              label={props.label.name}
-              tooltip={props.label.name}
-              open={state().open}
-              focused={state().focused}
-              unreadCount={state().unreadCount}
-              onToggle={() => rail.activateRow(rowKeyForLabel(props.label.id))}
-              badge={
-                <>
-                  <Show when={props.label.teamId}>
-                    <Tooltip
-                      as="span"
-                      label={t('channelSections.sharedSectionHint')}
-                      class="shrink-0"
-                    >
-                      <UsersIcon class="size-3.5" />
-                    </Tooltip>
-                  </Show>
-                  <Show when={props.label.rule}>
-                    <Tooltip
-                      as="span"
-                      label={t('channelLabels.nameContains', {
-                        text: props.label.rule?.contains ?? '',
-                      })}
-                      class="shrink-0"
-                    >
-                      <FunnelIcon class="size-3.5" />
-                    </Tooltip>
-                  </Show>
-                </>
-              }
-            >
-              <Show
-                when={!props.label.rule && rail.canEditSection(props.label)}
-              >
-                <ViewSidebar.Control
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={t('channelSections.addChannelsTo', {
-                    name: props.label.name,
-                  })}
-                  tooltip={t('channelSections.addChannels')}
-                  disabled={!rail.labelsAvailable()}
-                  onClick={() => setEditor('add')}
-                >
-                  <PlusIcon class="size-3.5" />
-                </ViewSidebar.Control>
-              </Show>
-              <ChannelSectionDropdown
-                section={rowKeyForLabel(props.label.id)}
-                label={props.label.name}
-                before={
-                  <ChannelLabelActions label={props.label} onEdit={setEditor} />
-                }
-              >
-                <DeleteSectionItem label={props.label} />
-              </ChannelSectionDropdown>
-            </ChannelSectionHeading>
-          </ChannelSectionContextMenu>
-        </SectionEditorPopover>
-      }
+    <SectionEditorPopover
+      label={props.label}
+      open={editorOpen()}
+      onClose={() => setEditorOpen(false)}
     >
-      {(draft) => (
-        <InlineSectionDraft
-          label={props.label}
-          scope={draft().scope}
-          canShare={rail.canShareSections()}
-          onSave={rail.saveSectionDraft}
-          onCancel={rail.cancelSectionDraft}
-        />
-      )}
-    </Show>
+      <ChannelSectionContextMenu
+        section={rowKeyForLabel(props.label.id)}
+        before={
+          <ChannelLabelActions
+            label={props.label}
+            onAdd={() => setEditorOpen(true)}
+          />
+        }
+        actions={<DeleteSectionItem label={props.label} />}
+      >
+        <ChannelSectionHeading
+          id={state().domId}
+          label={props.label.name}
+          tooltip={props.label.name}
+          open={state().open}
+          focused={state().focused}
+          unreadCount={state().unreadCount}
+          onToggle={() => rail.activateRow(rowKeyForLabel(props.label.id))}
+          badge={
+            <>
+              <Show when={props.label.teamId}>
+                <Tooltip
+                  as="span"
+                  label={t('channelSections.sharedSectionHint')}
+                  class="shrink-0"
+                >
+                  <UsersIcon class="size-3.5" />
+                </Tooltip>
+              </Show>
+              <Show when={props.label.rule}>
+                <Tooltip
+                  as="span"
+                  label={t('channelLabels.nameContains', {
+                    text: props.label.rule?.contains ?? '',
+                  })}
+                  class="shrink-0"
+                >
+                  <FunnelIcon class="size-3.5" />
+                </Tooltip>
+              </Show>
+            </>
+          }
+        >
+          <Show when={!props.label.rule && rail.canEditSection(props.label)}>
+            <ViewSidebar.Control
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('channelSections.addChannelsTo', {
+                name: props.label.name,
+              })}
+              tooltip={t('channelSections.addChannels')}
+              disabled={!rail.labelsAvailable()}
+              onClick={() => setEditorOpen(true)}
+            >
+              <PlusIcon class="size-3.5" />
+            </ViewSidebar.Control>
+          </Show>
+          <ChannelSectionDropdown
+            section={rowKeyForLabel(props.label.id)}
+            label={props.label.name}
+            before={
+              <ChannelLabelActions
+                label={props.label}
+                onAdd={() => setEditorOpen(true)}
+              />
+            }
+          >
+            <DeleteSectionItem label={props.label} />
+          </ChannelSectionDropdown>
+        </ChannelSectionHeading>
+      </ChannelSectionContextMenu>
+    </SectionEditorPopover>
   );
 }
 
 export function ChannelLabelEmptyState(props: { label: ChannelLabel }) {
   const rail = useChannelsRail();
-  const [editor, setEditor] = createSignal<SectionEditor>();
+  const [editorOpen, setEditorOpen] = createSignal(false);
   const unreadOnly = () =>
     rail.sectionPreferences(rowKeyForLabel(props.label.id)).unreadOnly;
   return (
     <SectionEditorPopover
       label={props.label}
-      mode={editor()}
-      onClose={() => setEditor(undefined)}
+      open={editorOpen()}
+      onClose={() => setEditorOpen(false)}
     >
       <ChannelSectionEmptyState>
         <Show
@@ -345,7 +303,7 @@ export function ChannelLabelEmptyState(props: { label: ChannelLabel }) {
                     <Button
                       variant="secondary"
                       size="xs"
-                      onClick={() => setEditor('add')}
+                      onClick={() => setEditorOpen(true)}
                     >
                       {t('channelSections.addChannels')}
                     </Button>
@@ -353,13 +311,14 @@ export function ChannelLabelEmptyState(props: { label: ChannelLabel }) {
                   <Button
                     variant="ghost"
                     size="xs"
-                    onClick={() => setEditor('match')}
+                    onClick={() =>
+                      fireAndForget(
+                        rail.renameLabel(props.label),
+                        'channels-view'
+                      )
+                    }
                   >
-                    {t(
-                      props.label.rule
-                        ? 'channelSections.editRule'
-                        : 'channelSections.matchByName'
-                    )}
+                    {t('channelSections.editSection')}
                   </Button>
                 </div>
               </Show>

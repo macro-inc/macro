@@ -29,9 +29,8 @@ export function MobileSectionOptions(props: {
   preferences: ChannelSectionPreferences;
   onPreferences: (preferences: ChannelSectionPreferences) => void;
   onScope: (shared: boolean) => Promise<void>;
-  onRename: () => Promise<void>;
+  onEdit: () => Promise<void>;
   onAdd: () => Promise<void>;
-  onMatch: () => Promise<void>;
   onDelete: () => Promise<void>;
   onMute: (muted: boolean) => Promise<void>;
   onSnooze: (until?: Date) => Promise<void>;
@@ -96,11 +95,11 @@ export function MobileSectionOptions(props: {
                   <MobileDrawer.Item
                     disabled={props.disabled}
                     onClick={() =>
-                      fireAndForget(props.onRename(), 'channels-view')
+                      fireAndForget(props.onEdit(), 'channels-view')
                     }
                   >
                     <PencilIcon class="size-5" />
-                    {t('channelSections.renameSection')}
+                    {t('channelSections.editSection')}
                   </MobileDrawer.Item>
                   <Show when={!props.label.rule}>
                     <MobileDrawer.Item
@@ -115,15 +114,6 @@ export function MobileSectionOptions(props: {
                       {t('channelSections.addChannels')}
                     </MobileDrawer.Item>
                   </Show>
-                  <MobileDrawer.Item
-                    disabled={props.disabled}
-                    onClick={() =>
-                      fireAndForget(props.onMatch(), 'channels-view')
-                    }
-                  >
-                    <FunnelIcon class="size-5" />
-                    {t('channelSections.matchByName')}
-                  </MobileDrawer.Item>
                   <Show when={props.canChangeScope}>
                     <MobileDrawer.Item onClick={() => setPage('visibility')}>
                       <UsersIcon class="size-5" />

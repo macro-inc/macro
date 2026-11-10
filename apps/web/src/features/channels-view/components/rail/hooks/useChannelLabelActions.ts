@@ -18,14 +18,7 @@ import type { ChannelLabel } from '@service-storage/generated/schemas/channelLab
 import type { ChannelLabelRule } from '@service-storage/generated/schemas/channelLabelRule';
 import type { ChannelLabelScopeSelection } from '@service-storage/generated/schemas/channelLabelScopeSelection';
 import { confirmDialog } from '@ui';
-import {
-  type Accessor,
-  createEffect,
-  createSignal,
-  getOwner,
-  type Owner,
-  on,
-} from 'solid-js';
+import { type Accessor, getOwner, type Owner } from 'solid-js';
 import {
   canAssignChannel,
   canLabelChannel,
@@ -34,7 +27,6 @@ import {
 } from '../../../core/channel-label-eligibility';
 import type { ChannelsRailSection } from '../../../types';
 import { promptLabelName } from '../ChannelLabelNameDialog';
-import type { SectionDraft, SectionValue } from '../ChannelsRailContext';
 import { promptSectionChannels } from '../next/SectionChannelsDialog';
 import { promptSection, type SectionDialogValue } from '../next/SectionDialog';
 import { promptSmartTag } from '../SmartTagDialog';
@@ -58,8 +50,6 @@ type ChannelLabelActionsOptions = {
 export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
-  const [sectionDraft, setSectionDraft] = createSignal<SectionDraft>();
-  let draftActorId: ReturnType<typeof userId>;
   const owner = getOwner();
 
   const {
@@ -156,40 +146,6 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     return !channelSectionScopeChangeError(label, channelsById(), {
       teamId: targetTeamId,
     });
-  };
-  const cancelSectionDraft = () => setSectionDraft(undefined);
-  createEffect(
-    on([userId, sectionsEnabled, channelTagsEnabled], cancelSectionDraft, {
-      defer: true,
-    })
-  );
-
-  const saveSectionDraft = async (value: SectionValue) => {
-    const draft = sectionDraft();
-    const actorId = draftActorId;
-    if (!draft || actorId !== userId() || !sectionsEnabled()) {
-      throw new Error(t('channelSections.unavailable'));
-    }
-
-    const saved = await persistUpdate(
-      draft.existing,
-      value.name,
-      value.rule,
-      value.scope,
-      actorId,
-      true
-    );
-    if (!saved) return;
-
-    if (
-      actorId !== userId() ||
-      !sectionsEnabled() ||
-      sectionDraft() !== draft
-    ) {
-      throw new Error(t('channelSections.unavailable'));
-    }
-
-    setSectionDraft(undefined);
   };
 
   const persistCreate = (
@@ -434,11 +390,16 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     const scope = scopeForLabel(label);
     if (sectionMode) {
       if (!canEditSection(label)) return;
-      draftActorId = actorId;
-      setSectionDraft({
-        scope,
-        existing: label,
-      });
+      await promptSection(
+        {
+          scope,
+          canShare: sharedLabels(),
+          initial: label,
+          onConfirm: ({ name, rule, scope: nextScope }) =>
+            persistUpdate(label, name, rule, nextScope, actorId, sectionMode),
+        },
+        { owner: labelDialogOwner() }
+      );
       return;
     }
 
@@ -763,9 +724,6 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     createLabel,
     canEditSection,
     canChangeSectionScope,
-    sectionDraft,
-    saveSectionDraft,
-    cancelSectionDraft,
     updateSection,
     createSmartTag,
     renameLabel,
