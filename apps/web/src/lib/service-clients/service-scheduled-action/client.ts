@@ -38,7 +38,6 @@ import type {
   Draft,
   DraftRoutineRequest,
   InProgressExecution,
-  RoutineSuggestions,
   RoutineTemplate,
   ScheduledAction,
   ScheduledActionResponse,
@@ -142,22 +141,6 @@ export const scheduledActionClient = {
     scheduledActionFetch<CatalogEntry[]>(
       `/scheduled-actions/catalog?${new URLSearchParams({ timezone: args.timezone })}`,
       { method: 'GET' }
-    ),
-
-  /**
-   * The caller's routine suggestions on every surface: AI's first, then
-   * Macro's templates. 404 while suggestions are off for them.
-   */
-  routineSuggestions: async () =>
-    scheduledActionFetch<RoutineSuggestions>('/scheduled-actions/suggestions', {
-      method: 'GET',
-    }),
-
-  /** The caller isn't interested in a suggestion; it isn't suggested again. */
-  dismissRoutineSuggestion: (args: { suggestionId: string }) =>
-    scheduledActionFetch(
-      `/scheduled-actions/suggestions/${args.suggestionId}/dismiss`,
-      { method: 'POST' }
     ),
 
   /** Have AI draft a routine or one of its steps, its code checked as saving would. */
