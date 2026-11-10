@@ -1,0 +1,168 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: provider result
+request:
+  {
+    "method": "POST",
+    "path": "/email/init?link_id=<attempt>",
+    "auth": "user C",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Email provider operation failed",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "31"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 500
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":500,"http.route":"/email/init","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 500 Internal Server Error","request.id":"<volatile>","url.path":"/email/init"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO handler {"fusionauth_user_id":"<fusion:C>","query":"Query(InitParams { link_id: Some(<attempt>), force_share: false })","user_id":"<user:C>"}
+        INFO get_user_id_by_email {"email":"new@example.com"}
+        INFO link_by_fusionauth_email_provider {"fusionauth_user_id":"<fusion:C>","provider":"Gmail"}
+        INFO fetch_link_by_email {"provider":"Gmail"}
+        INFO register_subscription_without_cache {"gate_cap":5,"gate_in_flight":1,"link_id":"<uuid:1>"}
+          INFO fetch_gmail_access_token_no_cache {}
+            INFO fetch_token_from_auth_service {}
+              INFO get_google_access_token {"email":"new@example.com","fusionauth_user_id":"<fusion:C>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "Init called",
+      "fields": {
+        "link_id": "Some(<attempt>)",
+        "user_id": "<user:C>"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler",
+        "register_subscription_without_cache"
+      ],
+      "message": "Transient access-token acquisition failure",
+      "fields": {
+        "error": "Failed to get Google access token from auth service. TokenCacheKey: TokenCacheKey { fusion_user_id: \"<fusion:C>\", email_address: \"new@example.com\", provider: \"GMAIL\" }\n\nCaused by:\n    error decoding response body for url (<services>/internal/google_access_token?fusionauth_user_id=<fusion:C>&email=new%40example.com)"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler",
+        "register_subscription_without_cache"
+      ],
+      "message": null,
+      "fields": {
+        "error": "transient email provider failure: email provider access token is temporarily unavailable"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "init failed",
+      "fields": {
+        "error": "ProviderError(Transient { message: \"email provider access token is temporarily unavailable\" })"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 500 Internal Server Error",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  a28059111a26 rows_affected=1 rows_returned=1
+  bf55c799c24d rows_affected=1 rows_returned=1
+  4ca3138b9b7a rows_affected=0 rows_returned=0
+  e593927c5102 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  6b1c1b68d276 rows_affected=0 rows_returned=0
+  24c199abca7e rows_affected=0 rows_returned=0
+  8762cd0e0ea4 rows_affected=1 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:C>&email=new%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {
+    "gmail:{<uuid:1>}:window": {
+      "before": null,
+      "after": {
+        "<window-units>": "100"
+      }
+    }
+  }
+db:
+  {
+    "in_progress_user_link": {
+      "removed": [
+        {
+          "id": "<attempt>",
+          "created_at": "<ts>",
+          "linked_email": "new@example.com",
+          "macro_user_id": "<fusion:C>",
+          "email_provider": "GMAIL",
+          "granted_google_scopes": [],
+          "requested_google_scopes": []
+        }
+      ],
+      "added": [],
+      "changed": []
+    }
+  }

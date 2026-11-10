@@ -103,6 +103,14 @@ pub struct GmailState {
     pub send_as: Option<(u16, Value)>,
     /// Abort the send-as response stream to exercise a dropped connection.
     pub drop_send_as: bool,
+    /// Opt-in endpoint responses for HTTP characterization suites.
+    pub endpoint_replies: BTreeMap<String, VecDeque<(u16, Value)>>,
+    /// Abort selected endpoint streams without contacting a real provider.
+    pub drop_endpoints: BTreeSet<String>,
+    /// Allow this many requests to an endpoint before aborting its responses.
+    pub drop_after_requests: BTreeMap<String, usize>,
+    /// Optional provider headers, such as Retry-After, for scripted endpoints.
+    pub endpoint_headers: BTreeMap<String, Vec<(String, String)>>,
     pause: Option<Pause>,
 }
 
@@ -126,6 +134,8 @@ enum Request {
         id: String,
     },
     ListLabels,
+    Profile,
+    Watch,
     History {
         start: u64,
     },
@@ -280,6 +290,19 @@ impl FakeGmail {
                         .collect();
                     (StatusCode::OK, axum::Json(json!({ "labels": labels }))).into_response()
                 }
+                Request::Profile => (
+                    StatusCode::OK,
+                    axum::Json(json!({"emailAddress":"parity@example.com",
+                        "messagesTotal":state.messages.len(), "threadsTotal":3,
+                        "historyId":state.history_id.to_string()})),
+                )
+                    .into_response(),
+                Request::Watch => (
+                    StatusCode::OK,
+                    axum::Json(json!({"historyId":state.history_id.to_string(),
+                        "expiration":"1893456000000"})),
+                )
+                    .into_response(),
                 Request::History { start } => {
                     let history: Vec<Value> = state
                         .history
@@ -355,7 +378,18 @@ impl GmailState {
 }
 
 async fn handle(State(gmail): State<FakeGmail>, method: Method, uri: Uri, body: Bytes) -> Response {
-    let dropped = gmail.lock().drop_send_as && uri.path() == "/gmail/v1/users/me/settings/sendAs";
+    let dropped = {
+        let mut state = gmail.lock();
+        if let Some(remaining) = state.drop_after_requests.get_mut(uri.path()) {
+            if *remaining == 0 {
+                state.drop_endpoints.insert(uri.path().to_owned());
+            } else {
+                *remaining -= 1;
+            }
+        }
+        (state.drop_send_as && uri.path() == "/gmail/v1/users/me/settings/sendAs")
+            || state.drop_endpoints.contains(uri.path())
+    };
     let recording = gmail.lock().http_recording.clone();
     // Reserve the entry at arrival so a paused request keeps its position.
     let entry = recording.as_ref().and_then(|recording| {
@@ -370,7 +404,16 @@ async fn handle(State(gmail): State<FakeGmail>, method: Method, uri: Uri, body: 
         );
         Some(index)
     });
-    let response = reply(State(gmail.clone()), method, uri, body).await;
+    let endpoint_headers = gmail.lock().endpoint_headers.get(uri.path()).cloned();
+    let mut response = reply(State(gmail.clone()), method, uri, body).await;
+    if let Some(headers) = endpoint_headers {
+        for (name, value) in headers {
+            response.headers_mut().insert(
+                axum::http::HeaderName::from_bytes(name.as_bytes()).expect("provider header name"),
+                axum::http::HeaderValue::from_str(&value).expect("provider header value"),
+            );
+        }
+    }
     if let (Some(recording), Some(index)) = (recording, entry) {
         let mut recording = recording.lock().expect("HTTP recording");
         if dropped {
@@ -383,6 +426,32 @@ async fn handle(State(gmail): State<FakeGmail>, method: Method, uri: Uri, body: 
 }
 
 async fn reply(State(gmail): State<FakeGmail>, method: Method, uri: Uri, body: Bytes) -> Response {
+    {
+        let mut state = gmail.lock();
+        if state.drop_endpoints.contains(uri.path()) {
+            return axum::body::Body::from_stream(futures::stream::once(async {
+                Err::<Bytes, _>(std::io::Error::new(
+                    std::io::ErrorKind::ConnectionReset,
+                    "scripted Gmail disconnect",
+                ))
+            }))
+            .into_response();
+        }
+        if let Some(replies) = state.endpoint_replies.get_mut(uri.path()) {
+            let reply = if replies.len() > 1 {
+                replies.pop_front()
+            } else {
+                replies.front().cloned()
+            };
+            if let Some((status, value)) = reply {
+                return (
+                    StatusCode::from_u16(status).expect("scripted Gmail status"),
+                    axum::Json(value),
+                )
+                    .into_response();
+            }
+        }
+    }
     if method == Method::GET && uri.path() == "/gmail/v1/users/me/settings/sendAs" {
         let state = gmail.lock();
         if state.drop_send_as {
@@ -459,6 +528,8 @@ fn parse(method: &Method, uri: &Uri, body: &[u8]) -> Request {
         },
         ("GET", ["threads", id]) => Request::GetThread { id: id.to_string() },
         ("GET", ["labels"]) => Request::ListLabels,
+        ("GET", ["profile"]) => Request::Profile,
+        ("POST", ["watch"]) => Request::Watch,
         ("GET", ["history"]) => Request::History {
             start: query
                 .split('&')

@@ -1,0 +1,1108 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: invalid message field type
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": "eyJlbWFpbEFkZHJlc3MiOiJwYXJpdHktNTEwMTItQUBleGFtcGxlLmNvbSIsImhpc3RvcnlJZCI6MTAwfQ==",
+        "messageId": 1,
+        "publishTime": "<ts>"
+      },
+      "subscription": "projects/parity/subscriptions/gmail"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: message.messageId: invalid type: integer `1`, expected a string at line 1 column 119",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "142"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid message field type
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": "eyJlbWFpbEFkZHJlc3MiOiJwYXJpdHktNTEwMTItQUBleGFtcGxlLmNvbSIsImhpc3RvcnlJZCI6MTAwfQ==",
+        "messageId": "message-1",
+        "publishTime": null
+      },
+      "subscription": "projects/parity/subscriptions/gmail"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: message.publishTime: invalid type: null, expected a string at line 1 column 148",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "137"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid subscription type
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": "eyJlbWFpbEFkZHJlc3MiOiJwYXJpdHktNTEwMTItQUBleGFtcGxlLmNvbSIsImhpc3RvcnlJZCI6MTAwfQ==",
+        "messageId": "message-1",
+        "publishTime": "<ts>"
+      },
+      "subscription": 1
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: subscription: invalid type: integer `1`, expected a string at line 1 column 184",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "137"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: empty envelope metadata is accepted
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": "eyJlbWFpbEFkZHJlc3MiOiJtaXNzaW5nQGV4YW1wbGUuY29tIiwiaGlzdG9yeUlkIjoxfQ==",
+        "messageId": "",
+        "publishTime": "not a timestamp"
+      },
+      "subscription": ""
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 202
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":202,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+      INFO get_google_public_keys {}
+        INFO fetch_and_cache_google_public_keys {}
+          INFO get_google_public_keys {}
+      INFO verify_google_token {}
+      INFO fetch_link_by_email {"provider":"Gmail"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  e593927c5102 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  24c199abca7e rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/certs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {
+    "google_public_keys": {
+      "before": null,
+      "after": "{\"current\":{\"kid\":\"current\",\"alg\":\"RS256\",\"kty\":\"RSA\",\"n\":\"<rsa-modulus:current>\",\"e\":\"AQAB\",\"use_\":null,\"use\":null}}"
+    }
+  }
+db:
+  {}
+
+step: missing message field
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "publishTime": "<ts>",
+        "messageId": "message-1"
+      },
+      "subscription": "projects/parity/subscriptions/gmail"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: message: missing field `data` at line 1 column 73",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "107"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing message field
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": "eyJlbWFpbEFkZHJlc3MiOiJwYXJpdHktNTEwMTItQUBleGFtcGxlLmNvbSIsImhpc3RvcnlJZCI6MTAwfQ==",
+        "publishTime": "<ts>"
+      },
+      "subscription": "projects/parity/subscriptions/gmail"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: message: missing field `messageId` at line 1 column 143",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "113"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing message field
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": "eyJlbWFpbEFkZHJlc3MiOiJwYXJpdHktNTEwMTItQUBleGFtcGxlLmNvbSIsImhpc3RvcnlJZCI6MTAwfQ==",
+        "messageId": "message-1"
+      },
+      "subscription": "projects/parity/subscriptions/gmail"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: message: missing field `publishTime` at line 1 column 130",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "115"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: missing subscription
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": "eyJlbWFpbEFkZHJlc3MiOiJwYXJpdHktNTEwMTItQUBleGFtcGxlLmNvbSIsImhpc3RvcnlJZCI6MTAwfQ==",
+        "messageId": "message-1",
+        "publishTime": "<ts>"
+      }
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: missing field `subscription` at line 1 column 168",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "107"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: malformed envelope
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {},
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: missing field `message` at line 1 column 2",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "100"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: malformed envelope
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {}
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: message: missing field `data` at line 1 column 13",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "107"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: malformed envelope
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": null,
+      "subscription": "s"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: message: invalid type: null, expected struct PubSubMessage at line 1 column 15",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "136"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: malformed envelope
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": "e30=",
+        "messageId": "m",
+        "publishTime": "t"
+      }
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: message.data: missing field `emailAddress` at line 1 column 2",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "119"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: malformed envelope
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": {},
+        "messageId": "m",
+        "publishTime": "t"
+      },
+      "subscription": "s"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: message.data: invalid type: map, expected a string at line 1 column 19",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "128"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: malformed envelope
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": "e30=",
+        "publishTime": "t"
+      },
+      "subscription": "s"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: message.data: missing field `emailAddress` at line 1 column 2",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "119"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: malformed envelope
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": "e30=",
+        "messageId": "m"
+      },
+      "subscription": "s"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "Failed to deserialize the JSON body into the target type: message.data: missing field `emailAddress` at line 1 column 2",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "119"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 422
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":422,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

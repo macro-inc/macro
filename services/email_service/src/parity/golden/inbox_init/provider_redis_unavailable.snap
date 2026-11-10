@@ -1,0 +1,107 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: admission fails closed
+request:
+  {
+    "method": "POST",
+    "path": "/email/init",
+    "auth": "user C",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Email provider operation failed",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "31"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "retry-after": [
+        "5"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 429
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":429,"http.route":"/email/init","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/init"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO handler {"fusionauth_user_id":"<fusion:C>","query":"Query(InitParams { link_id: None, force_share: false })","user_id":"<user:C>"}
+        INFO link_by_fusionauth_and_macro_id {"fusionauth_user_id":"<fusion:C>","provider":"Gmail"}
+        INFO register_subscription_without_cache {"link_id":"<uuid:1>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "Init called",
+      "fields": {
+        "link_id": "None",
+        "user_id": "<user:C>"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler",
+        "register_subscription_without_cache"
+      ],
+      "message": "Gmail request admission is unavailable",
+      "fields": {
+        "error": "NoPerm: User <redis-fault-user> has no permissions to run the 'evalsha' command",
+        "link_id": "<uuid:1>"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "init declined",
+      "fields": {
+        "link_id": "None",
+        "outcome": "Email provider operation failed",
+        "status": 429
+      }
+    }
+  ]
+sql:
+  e593927c5102 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  2edd3234f117 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

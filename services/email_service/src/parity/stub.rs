@@ -18,6 +18,7 @@ pub(super) struct Stub {
 #[derive(Default)]
 struct StateData {
     replies: Vec<(String, String, u16, Value)>,
+    sequences: Vec<(String, String, std::collections::VecDeque<(u16, Value)>)>,
     byte_replies: Vec<(String, String, u16, Vec<u8>, String)>,
     wire_replies: Vec<WireReply>,
     requests: super::HttpRecording,
@@ -64,6 +65,15 @@ impl Stub {
             prefix.into(),
             status,
             body,
+        ));
+    }
+
+    /// Consume successive responses, then retain the final response for retries.
+    pub fn reply_sequence(&self, method: &str, prefix: &str, replies: Vec<(u16, Value)>) {
+        self.state.lock().expect("stub mutex").sequences.push((
+            method.into(),
+            prefix.into(),
+            replies.into(),
         ));
     }
 
@@ -164,19 +174,33 @@ async fn handle(
         }
         return response.body(body).expect("scripted image response");
     }
-    let state = state.lock().expect("stub mutex");
+    let mut state = state.lock().expect("stub mutex");
+    let sequence = state
+        .sequences
+        .iter_mut()
+        .rev()
+        .find(|(m, prefix, _)| m == method.as_str() && uri.path().starts_with(prefix))
+        .and_then(|(_, _, replies)| {
+            if replies.len() > 1 {
+                replies.pop_front()
+            } else {
+                replies.front().cloned()
+            }
+        });
     let bytes = state
         .byte_replies
         .iter()
         .rev()
         .find(|(m, prefix, _, _, _)| m == method.as_str() && uri.path().starts_with(prefix));
-    let (mut status, response) = state
-        .replies
-        .iter()
-        .rev()
-        .find(|(m, prefix, _, _)| m == method.as_str() && uri.path().starts_with(prefix))
-        .map(|(_, _, status, body)| (*status, body.clone()))
-        .unwrap_or((200, json!({})));
+    let (mut status, response) = sequence.unwrap_or_else(|| {
+        state
+            .replies
+            .iter()
+            .rev()
+            .find(|(m, prefix, _, _)| m == method.as_str() && uri.path().starts_with(prefix))
+            .map(|(_, _, status, body)| (*status, body.clone()))
+            .unwrap_or((200, json!({})))
+    });
     if let Some((_, _, byte_status, _, _)) = bytes {
         status = *byte_status;
     }

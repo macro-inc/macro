@@ -69,6 +69,23 @@ impl Lab {
         reason = "The test-only Redis URL comes from the explicitly supported REDIS_URI override"
     )]
     pub async fn start(db: PgPool, options: LabOptions) -> Self {
+        let redis_uri =
+            std::env::var("REDIS_URI").unwrap_or_else(|_| "redis://127.0.0.1:6379".into());
+        Self::start_with_redis(db, options, redis_uri).await
+    }
+
+    /// A suite can isolate global provider caches in a Redis logical database.
+    pub async fn start_with_redis(db: PgPool, options: LabOptions, redis_uri: String) -> Self {
+        Self::start_configured(db, options, redis_uri, false).await
+    }
+
+    /// Explicit mailbox-rollout setting for initialization parity scenarios.
+    pub async fn start_configured(
+        db: PgPool,
+        options: LabOptions,
+        redis_uri: String,
+        outlook_connections_enabled: bool,
+    ) -> Self {
         let name = options.name;
         // The production cancellation shield spawns a root task without tracing
         // context. Capture its global events for this step as well. Nextest runs
@@ -93,8 +110,6 @@ impl Lab {
         );
         normalizer.replace(sqs.url.trim_start_matches("http://"), "<sqs-address>");
         normalizer.replace(stub.url.trim_start_matches("http://"), "<services-address>");
-        let redis_uri =
-            std::env::var("REDIS_URI").unwrap_or_else(|_| "redis://127.0.0.1:6379".into());
         let redis_client = ::redis::Client::open(redis_uri.as_str()).expect("private Redis");
         let mut redis = redis_client
             .get_multiplexed_async_connection()
@@ -157,6 +172,7 @@ impl Lab {
             "EMAIL_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY": "parity",
             "EMAIL_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID": "parity", "INTERNAL_API_KEY": "parity",
             "ENVIRONMENT": "local", "GMAIL_LABEL_WRITE_BATCHES_ENABLED": options.gmail_label_write_batches,
+            "OUTLOOK_CONNECTIONS_ENABLED": outlook_connections_enabled,
         })).expect("fixture configuration with production defaults");
         // Deny provider-token requests. These unused fixed-endpoint adapters may
         // be constructed, but parity scenarios must never call their providers.
@@ -270,6 +286,11 @@ impl Lab {
             .await
             .expect("suite token");
         self.redis_scopes.push(key);
+    }
+
+    /// Capture a suite-owned Redis namespace, including newly created inboxes.
+    pub fn record_redis_scope(&mut self, scope: &str) {
+        self.redis_scopes.push(scope.to_owned());
     }
 
     pub async fn assert_missing_credentials(&self) {

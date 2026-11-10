@@ -1,0 +1,1 @@
+SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _", is_sync_active, is_primary, needs_reauth, last_sync_error_at, created_at, updated_at FROM email_links WHERE email_address = $1 AND provider = $2 LIMIT 1

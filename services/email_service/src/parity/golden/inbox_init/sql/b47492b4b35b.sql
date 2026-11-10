@@ -1,0 +1,1 @@
+WITH prev AS ( SELECT needs_reauth FROM email_links WHERE id = $1 FOR UPDATE ) UPDATE email_links e SET needs_reauth = true, last_sync_error_at = NOW(), updated_at = NOW() FROM prev WHERE e.id = $1 RETURNING (NOT prev.needs_reauth) AS "did_transition!"

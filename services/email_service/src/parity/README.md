@@ -89,7 +89,9 @@ credentials/endpoints, the read-receipt pixel URL, and Kafka transport are expli
 so `ENVIRONMENT` (unset/local/dev/prod), `LOCAL_AWS_URL`, and service URL overrides
 do not select dependencies. Error backtraces are stripped while keeping enclosing
 Debug enum delimiters, so `RUST_BACKTRACE` does not change transcripts. Only `DATABASE_URL`, `REDIS_URI`, `INSTA_UPDATE`, and
-`PARITY_OUT` configure a run; `NEXTEST` is the required runner marker. The label requests have no Origin header, so the
+`PARITY_OUT` configure a run; `NEXTEST` is the required runner marker. The two
+provider-global suites additionally require nextest's `NEXTEST_TEST_GROUP` and
+`NEXTEST_TEST_GROUP_SLOT` assignments. The label requests have no Origin header, so the
 production CORS origin predicate does not consult ambient allowed origins.
 
 Each scenario holds a test database and two Postgres connections while it runs, so
@@ -116,8 +118,8 @@ eight scenarios at once) whatever the runner's thread count.
 - The AWS SDK retry policy is configured in `macro_aws_config`/the SDK and is not
   part of `email_service` code or characterized here; the lab disables SQS retries
   and records one attempt per injected failure.
-- Redis capture is scoped to fixture-owned keys so parallel scenarios cannot
-  record one another's activity; it does not observe unrelated shared keys.
+- Redis capture in the original suites is scoped to fixture-owned keys. The
+  provider-global suites below capture their entire isolated logical database.
 - External process logs, native librdkafka diagnostics, filesystem effects, and
   tables outside the Postgres public schema are outside the transcript.
 - Unscoped process monitors, including Tower's runtime starvation detector, are
@@ -273,3 +275,69 @@ Some branches are unavailable over this HTTP surface:
   The literal selector and valid UTF-8 rewriter setup cannot be made invalid by
   an HTTP request. The `sfs_map`-disabled branch is absent in the default-feature
   test build.
+
+## Inbox initialization and Gmail ingress
+
+`inbox_init` drives `POST /email/init`, including Gmail grants, Outlook grant
+adoption, entitlement checks, reconnects, delegated inboxes, shared promotion,
+calendar permission upgrades, and backfill publication. Its fixture alone gives
+FusionAuth identities valid UUIDs. `gmail_ingress` drives the public Google push
+webhook and the internal delete-user route. The default Cargo features include
+`gmail_webhook_auth`, so these goldens characterize the verified-token branch.
+JWTs are signed in process with `jsonwebtoken` and the local-only identity key
+already included by the lab from `tooling/xtask`. `Jwk::from_encoding_key` derives
+public n/e values; no new key material, executable or temporary file is needed.
+Distinct kids exercise cache misses, while a modified public modulus exercises
+same-kid signature mismatch and refresh. The recording stub serves those JWKS.
+Fresh expiry claims use the current clock because the production verifier checks
+real time; the complete JWT is normalized before recording.
+
+These two suites connect only through `REDIS_URI`, replacing its database path
+with `1 + NEXTEST_TEST_GROUP_SLOT`, and `FLUSHDB` that logical database before
+setup. Missing, nonnumeric or out-of-range slots fail clearly; the helper also
+requires `NEXTEST_TEST_GROUP=email-parity`. With `max-threads = 8`, indexes 1–8
+are reserved for these tests. [Nextest guarantees](https://nexte.st/docs/glossary/#slot-numbers)
+that group slots are unique for each running test's entire lifetime, and reuses
+a slot only after its test ends. Thus concurrent scenarios never share a database,
+even under `-j 32`; separate nextest invocations must not run against the same
+server concurrently. Original suites still use database 0 and fixture-scoped keys.
+The explicit database URI reaches all clients, including token caches and Gmail
+admission, and the new suites capture all Redis keys in that database.
+
+The admission and cache-write fault scenarios create a slot-named ACL user with
+fresh credentials. Only the scenario's service connections authenticate as that
+user; the helper keeps its base connection for setup and cleanup. Denying `EVAL`
+and `EVALSHA`, or `SETEX`, affects only that user. The tests never change the default
+user, server memory limits or other global configuration. They remove the user
+before checking the snapshot; a subsequent fault scenario resets the slot's user
+if an earlier failed test left it behind. `REDIS_URI` must permit `SELECT`,
+`FLUSHDB` and these test-user ACL operations, as the CI Redis service does.
+`Lab::start_configured` keeps rollout flags explicit; the existing lab entry point
+retains the original defaults.
+
+The initialization suite opts into `normalize_gmail_redis_clock`. Gmail quota
+window fields are wall-clock seconds: the transcript retains their total charged
+units, while omitting the clock-dependent bucket names. Adaptive capacity retains
+its cap and masks its `at` timestamp. Redis keys normalize their UUIDs through the
+same identity map as other sections. This option is off for every existing suite.
+Neither new suite has a response array requiring a `ResponseArrayRule`.
+Scripted 429s include a 60-second `Retry-After` so their cooldown keys survive
+transcript capture even on a loaded runner; snapshots record key values, not TTLs.
+
+Initialization currently calls Gmail watch registration (and stops/retries a
+conflicting watch). It does not call Gmail profile, label/history reads, People
+API contact sync, SFS, or the connection gateway. Those operations happen later
+in workers. FakeGmail supports profile/watch and optional endpoint reply sequences
+without changing its label/history behavior. The service stub's optional reply
+sequence can succeed for watch credentials, then deny token discovery.
+
+The direct token-info request in `api/email/init.rs:924` cannot be redirected.
+Scenarios reach its preceding branches using recorded grant generations, failed
+grant lookups, and local token acquisition failures. They never call the fixed
+Google URL. Consequently `fetch_token_scopes` and the discovery-success/error
+handling after its call (`init.rs:882`, `888–904`, `909–935`) remain outside this
+HTTP lab. Calendar grants supplied by completed consent use the real database
+service and its durable outbox; they do not contact Google Calendar or Graph.
+Shared-mailbox promotion generates a customer-ID string containing its generated
+UUID. Only `inbox_init` enables `normalize_embedded_uuids`, retaining the
+`cus_shared_` prefix and the same symbolic UUID identity used elsewhere.

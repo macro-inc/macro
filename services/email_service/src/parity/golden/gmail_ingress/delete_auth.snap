@@ -1,0 +1,296 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: internal authorization required
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/delete_user/<fusion:A>",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "forbidden"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "23"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 403
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":403,"http.route":"/internal/delete_user/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/delete_user/<fusion:A>"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: internal authorization required
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/delete_user/<fusion:A>",
+    "auth": "user B",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "forbidden"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "23"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 403
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":403,"http.route":"/internal/delete_user/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/delete_user/<fusion:A>"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: internal authorization required
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/delete_user/<fusion:A>",
+    "auth": "wrong internal key",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":401,"http.route":"/internal/delete_user/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/delete_user/<fusion:A>"}
+    INFO agent_sdk_request {}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request"
+      ],
+      "message": "internal authorization failed",
+      "fields": {
+        "error": "\n ● InvalidCredentials\n ╰ crates/macro_authorization/src/domain/service.rs:271\n"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: internal authorization required
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/delete_user/<fusion:A>",
+    "auth": "internal identity without key",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":401,"http.route":"/internal/delete_user/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/delete_user/<fusion:A>"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: internal authorization required
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/delete_user/<fusion:A>",
+    "auth": "none (invalid bearer)",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "unauthorized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "26"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":401,"http.route":"/internal/delete_user/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/delete_user/<fusion:A>"}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "http.request",
+        "agent_sdk_request"
+      ],
+      "message": "credential authorization failed",
+      "fields": {
+        "error": "\n ● InvalidCredentials\n ├ crates/macro_authorization/src/outbound/macro_auth.rs:88\n │\n ● Generic(GenericErrorResponse { message: \"unable to decode token\" })\n ╰ crates/macro_authorization/src/outbound/macro_auth.rs:88\n"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

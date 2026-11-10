@@ -1,6 +1,61 @@
 use super::*;
 
 #[tokio::test]
+async fn initialization_endpoints_and_scripted_watch_failures() {
+    let gmail = FakeGmail::start(GmailState {
+        history_id: 101,
+        ..GmailState::default()
+    })
+    .await;
+    let client = reqwest::Client::new();
+    let profile: Value = client
+        .get(format!("{}/users/me/profile", gmail.url))
+        .send()
+        .await
+        .expect("profile")
+        .json()
+        .await
+        .expect("profile JSON");
+    assert_eq!(profile["historyId"], "101");
+    let watch: Value = client
+        .post(format!("{}/users/me/watch", gmail.url))
+        .send()
+        .await
+        .expect("watch")
+        .json()
+        .await
+        .expect("watch JSON");
+    assert_eq!(watch["historyId"], "101");
+    gmail.lock().endpoint_replies.insert(
+        "/gmail/v1/users/me/watch".into(),
+        vec![
+            (401, json!({"error":{"message":"expired"}})),
+            (200, json!({"historyId":"102","expiration":"1893456000000"})),
+        ]
+        .into(),
+    );
+    for expected in [401, 200, 200] {
+        let response = client
+            .post(format!("{}/users/me/watch", gmail.url))
+            .send()
+            .await
+            .expect("scripted watch");
+        assert_eq!(response.status().as_u16(), expected);
+    }
+    gmail
+        .lock()
+        .drop_endpoints
+        .insert("/gmail/v1/users/me/watch".into());
+    let response = client
+        .post(format!("{}/users/me/watch", gmail.url))
+        .send()
+        .await;
+    if let Ok(response) = response {
+        assert!(response.bytes().await.is_err());
+    }
+}
+
+#[tokio::test]
 async fn scripted_send_as_does_not_change_label_requests() {
     let gmail = FakeGmail::start(GmailState::default()).await;
     gmail.lock().send_as = Some((

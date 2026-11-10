@@ -1,0 +1,1 @@
+INSERT INTO email_links (id,macro_id,fusionauth_user_id,email_address,provider, grant_id,grant_generation,provider_tenant_id,provider_mailbox_id,is_sync_active) VALUES ($1,$2,$3,$4,'OUTLOOK',$5,$6,$7,$8,true)

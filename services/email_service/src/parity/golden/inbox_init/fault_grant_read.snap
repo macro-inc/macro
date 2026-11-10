@@ -1,0 +1,153 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: injected failure
+request:
+  {
+    "method": "POST",
+    "path": "/email/init?link_id=<attempt>",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Database query error",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "20"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 500
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":500,"http.route":"/email/init","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 500 Internal Server Error","request.id":"<volatile>","url.path":"/email/init"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO handler {"fusionauth_user_id":"<fusion:A>","query":"Query(InitParams { link_id: Some(<attempt>), force_share: false })","user_id":"<user:A>"}
+        INFO get_user_id_by_email {"email":"parity-a@example.com"}
+        INFO link_by_fusionauth_email_provider {"fusionauth_user_id":"<fusion:A>","provider":"Gmail"}
+        INFO apply_google_grant {"email_link_id":"<link:A>","intent":"Incidental"}
+          INFO apply_google_grant {"email_link_id":"<link:A>","intent":"Incidental"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "Init called",
+      "fields": {
+        "link_id": "Some(<attempt>)",
+        "user_id": "<user:A>"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler",
+        "apply_google_grant",
+        "apply_google_grant"
+      ],
+      "message": null,
+      "fields": {
+        "error": "\n ● error returned from database: relation \"email_link_google_scopes\" does not exist\n ╰ crates/calendar_events/src/outbound/pg.rs:5244\n"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler",
+        "apply_google_grant"
+      ],
+      "message": null,
+      "fields": {
+        "error": "\n ● error returned from database: relation \"email_link_google_scopes\" does not exist\n ╰ crates/calendar_events/src/outbound/pg.rs:5244\n"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "init failed",
+      "fields": {
+        "error": "DatabaseError(failed to apply Google grant to email link: \n ● Database(PgDatabaseError { severity: Error, code: \"42P01\", message: \"relation \\\"email_link_google_scopes\\\" does not exist\", detail: None, hint: None, position: Some(Original(337)), where: None, schema: None, table: None, column: None, data_type: None, constraint: None, file: Some(\"parse_relation.c\"), line: Some(<postgres-source-line>), routine: Some(\"parserOpenTable\") })\n ╰ crates/calendar_events/src/outbound/pg.rs:5244\n)"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 500 Internal Server Error",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  a28059111a26 rows_affected=1 rows_returned=1
+  bf55c799c24d rows_affected=1 rows_returned=1
+  4ca3138b9b7a rows_affected=1 rows_returned=1
+  e593927c5102 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  6b1c1b68d276 rows_affected=1 rows_returned=1
+  746258d4a995 rows_affected=0 rows_returned=0
+  8762cd0e0ea4 rows_affected=1 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "in_progress_user_link": {
+      "removed": [
+        {
+          "id": "<attempt>",
+          "created_at": "<ts>",
+          "linked_email": "parity-a@example.com",
+          "macro_user_id": "<fusion:A>",
+          "email_provider": "GMAIL",
+          "granted_google_scopes": [
+            "https://www.googleapis.com/auth/gmail.modify"
+          ],
+          "requested_google_scopes": [
+            "https://www.googleapis.com/auth/gmail.modify"
+          ]
+        }
+      ],
+      "added": [],
+      "changed": []
+    }
+  }

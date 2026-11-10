@@ -12,6 +12,10 @@ static UUID: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
         .expect("UUID expression")
 });
+static EMBEDDED_UUID: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+        .expect("embedded UUID expression")
+});
 /// A Postgres error's debug text names the server source file and line that
 /// raised it. The line differs between server versions; the file and routine
 /// are kept.
@@ -29,6 +33,8 @@ pub(super) struct Normalizer {
     pub symbols: BTreeMap<String, String>,
     pub sort_response_keys: bool,
     pub sort_sfs_source_sets: bool,
+    pub normalize_gmail_redis_clock: bool,
+    pub normalize_embedded_uuids: bool,
     replacements: BTreeMap<String, String>,
     uuids: BTreeMap<String, String>,
 }
@@ -48,7 +54,12 @@ impl Normalizer {
             key = key.replace(id, symbol);
         }
         let key = TIMESTAMP.replace_all(&key, "<ts>");
-        UUID.replace_all(&key, "<uuid>").into_owned()
+        let pattern = if self.normalize_embedded_uuids {
+            &*EMBEDDED_UUID
+        } else {
+            &*UUID
+        };
+        pattern.replace_all(&key, "<uuid>").into_owned()
     }
 
     pub fn text(&mut self, text: &str) -> String {
@@ -59,14 +70,20 @@ impl Normalizer {
             text = text.replace(value, replacement);
         }
         text = TIMESTAMP.replace_all(&text, "<ts>").into_owned();
-        UUID.replace_all(&text, |captures: &regex::Captures<'_>| {
-            let next = self.uuids.len() + 1;
-            self.uuids
-                .entry(captures[0].to_lowercase())
-                .or_insert_with(|| format!("<uuid:{next}>"))
-                .clone()
-        })
-        .into_owned()
+        let pattern = if self.normalize_embedded_uuids {
+            &*EMBEDDED_UUID
+        } else {
+            &*UUID
+        };
+        pattern
+            .replace_all(&text, |captures: &regex::Captures<'_>| {
+                let next = self.uuids.len() + 1;
+                self.uuids
+                    .entry(captures[0].to_lowercase())
+                    .or_insert_with(|| format!("<uuid:{next}>"))
+                    .clone()
+            })
+            .into_owned()
     }
 
     pub fn value(&mut self, section: &str, value: Value) -> Value {
@@ -90,6 +107,35 @@ impl Normalizer {
                 Value::Array(values.into_iter().map(|v| self.value(section, v)).collect())
             }
             Value::Object(mut values) => {
+                if self.normalize_gmail_redis_clock && section == "redis" {
+                    for (key, change) in values.iter_mut() {
+                        if key.starts_with("gmail:{") && key.ends_with(":window") {
+                            for side in ["before", "after"] {
+                                if let Some(buckets) = change[side].as_object() {
+                                    let units: i64 = buckets
+                                        .values()
+                                        .map(|v| {
+                                            v.as_str()
+                                                .expect("Redis quota units")
+                                                .parse::<i64>()
+                                                .expect("integer quota units")
+                                        })
+                                        .sum();
+                                    change[side] =
+                                        serde_json::json!({"<window-units>":units.to_string()});
+                                }
+                            }
+                        } else if key.starts_with("gmail:{") && key.ends_with(":limit") {
+                            for side in ["before", "after"] {
+                                if let Some(limit) = change[side].as_object_mut()
+                                    && limit.contains_key("at")
+                                {
+                                    limit.insert("at".into(), Value::String("<redis-time>".into()));
+                                }
+                            }
+                        }
+                    }
+                }
                 if self.sort_sfs_source_sets
                     && section == "spans"
                     && values.get("name").and_then(Value::as_str) == Some("fetch_sfs_mappings")
@@ -127,6 +173,11 @@ impl Normalizer {
                             value
                         } else {
                             self.value(section, value)
+                        };
+                        let key = if self.normalize_gmail_redis_clock && section == "redis" {
+                            self.text(&key)
+                        } else {
+                            key
                         };
                         (key, value)
                     })

@@ -1,0 +1,1 @@
+SELECT id, fusionauth_user_id, macro_id, email_address, provider as "provider: _", is_sync_active, is_primary, needs_reauth, last_sync_error_at, created_at, updated_at FROM email_links WHERE fusionauth_user_id = $1 ORDER BY created_at DESC

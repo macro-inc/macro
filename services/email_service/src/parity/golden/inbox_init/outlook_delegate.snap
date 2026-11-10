@@ -1,0 +1,413 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: verified Outlook grant
+request:
+  {
+    "method": "POST",
+    "path": "/email/init?link_id=<attempt>",
+    "auth": "user C",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "link_id": "<link:B>"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "50"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/email/init","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/init"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO handler {"fusionauth_user_id":"<fusion:C>","query":"Query(InitParams { link_id: Some(<attempt>), force_share: false })","user_id":"<user:C>"}
+        INFO insert_edge {"child_macro_id":"<user:B>","link_id":"<link:B>","primary_macro_id":"<user:C>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "outlook import started",
+      "fields": {
+        "link_id": "<link:B>",
+        "sync_generation": 2
+      }
+    }
+  ]
+sql:
+  a28059111a26 rows_affected=1 rows_returned=1
+  923dccb6e9f2 rows_affected=0 rows_returned=0
+  344755119561 rows_affected=1 rows_returned=1
+  33af26dd8f19 rows_affected=1 rows_returned=1
+  7f007de3dd36 rows_affected=1 rows_returned=1
+  1e75826aa985 rows_affected=1 rows_returned=1
+  1e75826aa985 rows_affected=1 rows_returned=1
+  1e75826aa985 rows_affected=1 rows_returned=1
+  344755119561 rows_affected=1 rows_returned=1
+  33af26dd8f19 rows_affected=1 rows_returned=1
+  7f007de3dd36 rows_affected=1 rows_returned=1
+  9cd9d56d0399 rows_affected=1 rows_returned=0
+  eb621d9ba62e rows_affected=1 rows_returned=1
+  11189ca8463f rows_affected=1 rows_returned=0
+  611952e24c1a rows_affected=1 rows_returned=0
+  0292f7e4cdbd rows_affected=1 rows_returned=0
+  d9c2859ad464 rows_affected=1 rows_returned=0
+  09441650c623 rows_affected=0 rows_returned=0
+  e3ab05e37e69 rows_affected=1 rows_returned=0
+  fce8fac36e2d rows_affected=1 rows_returned=0
+  e4f707d57379 rows_affected=1 rows_returned=0
+  22b031a3ea95 rows_affected=1 rows_returned=0
+  22b031a3ea95 rows_affected=1 rows_returned=0
+  be61caef9915 rows_affected=0 rows_returned=0
+  8cc7805af1d5 rows_affected=1 rows_returned=0
+  aeb5b1fb152f rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/internal/microsoft_grant?attempt_id=<attempt>&owner=<fusion:C>",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_link_initializations": {
+      "removed": [],
+      "added": [
+        {
+          "link_id": "<link:B>",
+          "actor_id": "<user:C>",
+          "attempt_id": "<attempt>",
+          "created_at": "<ts>"
+        }
+      ],
+      "changed": []
+    },
+    "email_link_microsoft_scopes": {
+      "removed": [],
+      "added": [
+        {
+          "link_id": "<link:B>",
+          "updated_at": "<ts>",
+          "granted_scopes": [
+            "Mail.ReadWrite",
+            "Mail.Send",
+            "Calendars.ReadWrite"
+          ],
+          "grant_generation": 1,
+          "calendar_disabled_at": null
+        }
+      ],
+      "changed": []
+    },
+    "email_links": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "fusionauth_user_id": {
+            "before": "<fusion:B>",
+            "after": "<fusion:C>"
+          },
+          "grant_generation": {
+            "before": 0,
+            "after": 1
+          },
+          "grant_id": {
+            "before": null,
+            "after": "<grant>"
+          },
+          "id": "<link:B>",
+          "sync_generation": {
+            "before": 1,
+            "after": 2
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    },
+    "email_mailbox_custodians": {
+      "removed": [],
+      "added": [
+        {
+          "link_id": "<link:B>",
+          "actor_id": "<user:C>",
+          "grant_id": "<grant>",
+          "verified_at": "<ts>",
+          "granted_scopes": [
+            "Mail.ReadWrite",
+            "Mail.Send",
+            "Calendars.ReadWrite"
+          ],
+          "grant_generation": 1,
+          "fusionauth_user_id": "<fusion:C>"
+        }
+      ],
+      "changed": []
+    },
+    "email_mailbox_settings_work": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:1>",
+          "kind": "catalog",
+          "desired": true,
+          "failure": null,
+          "link_id": "<link:B>",
+          "attempts": 0,
+          "lease_id": null,
+          "revision": 1,
+          "lease_until": null,
+          "next_run_at": "<ts>",
+          "resource_key": "",
+          "provider_rule_id": null,
+          "completed_revision": 0
+        }
+      ],
+      "changed": []
+    },
+    "email_mailbox_watch_work": {
+      "removed": [],
+      "added": [
+        {
+          "link_id": "<link:B>",
+          "lease_id": null,
+          "revision": 1,
+          "lease_until": null,
+          "next_run_at": "<ts>"
+        }
+      ],
+      "changed": []
+    },
+    "email_projection_outbox": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:2>",
+          "link_id": "<link:B>",
+          "payload": {
+            "kind": "link_connected",
+            "is_new": false,
+            "actor_id": "<user:C>"
+          },
+          "attempts": 0,
+          "lease_id": null,
+          "dedupe_key": null,
+          "generation": 2,
+          "lease_until": null,
+          "available_at": "<ts>"
+        }
+      ],
+      "changed": []
+    },
+    "email_settings": {
+      "removed": [],
+      "added": [
+        {
+          "link_id": "<link:B>",
+          "signature": null,
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "read_receipts_enabled": true,
+          "signature_on_replies_forwards": false
+        }
+      ],
+      "changed": []
+    },
+    "email_sync_streams": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:3>",
+          "kind": "contacts_catalog",
+          "fence": 0,
+          "link_id": "<link:B>",
+          "scan_id": "<uuid:4>",
+          "lease_id": null,
+          "position": null,
+          "scope_id": "address_book",
+          "generation": 2,
+          "lease_until": null,
+          "next_run_at": "<ts>",
+          "notified_at": null,
+          "initial_complete": false,
+          "lease_started_at": null,
+          "import_started_at": "<ts>",
+          "last_completed_at": null,
+          "import_completed_at": null,
+          "notified_traceparent": null,
+          "attachments_rechecked": false
+        },
+        {
+          "id": "<uuid:5>",
+          "kind": "contacts_profile",
+          "fence": 0,
+          "link_id": "<link:B>",
+          "scan_id": "<uuid:6>",
+          "lease_id": null,
+          "position": null,
+          "scope_id": "address_book",
+          "generation": 2,
+          "lease_until": null,
+          "next_run_at": "<ts>",
+          "notified_at": null,
+          "initial_complete": false,
+          "lease_started_at": null,
+          "import_started_at": "<ts>",
+          "last_completed_at": null,
+          "import_completed_at": null,
+          "notified_traceparent": null,
+          "attachments_rechecked": false
+        },
+        {
+          "id": "<uuid:7>",
+          "kind": "folder_catalog",
+          "fence": 0,
+          "link_id": "<link:B>",
+          "scan_id": "<uuid:8>",
+          "lease_id": null,
+          "position": null,
+          "scope_id": "mail",
+          "generation": 2,
+          "lease_until": null,
+          "next_run_at": "<ts>",
+          "notified_at": null,
+          "initial_complete": false,
+          "lease_started_at": null,
+          "import_started_at": "<ts>",
+          "last_completed_at": null,
+          "import_completed_at": null,
+          "notified_traceparent": null,
+          "attachments_rechecked": false
+        }
+      ],
+      "changed": []
+    },
+    "in_progress_user_link": {
+      "removed": [
+        {
+          "id": "<attempt>",
+          "created_at": "<ts>",
+          "linked_email": "parity-b@example.com",
+          "macro_user_id": "<fusion:C>",
+          "email_provider": "OUTLOOK",
+          "granted_google_scopes": [],
+          "requested_google_scopes": []
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "macro_user_links": {
+      "removed": [],
+      "added": [
+        {
+          "link_id": "<link:B>",
+          "created_at": "<ts>",
+          "child_macro_id": "<user:B>",
+          "primary_macro_id": "<user:C>"
+        }
+      ],
+      "changed": []
+    }
+  }
+
+step: completed Outlook attempt is idempotent
+request:
+  {
+    "method": "POST",
+    "path": "/email/init?link_id=<attempt>",
+    "auth": "user C",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "link_id": "<link:B>"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "50"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/email/init","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/init"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO handler {"fusionauth_user_id":"<fusion:C>","query":"Query(InitParams { link_id: Some(<attempt>), force_share: false })","user_id":"<user:C>"}
+logs:
+  []
+sql:
+  a28059111a26 rows_affected=1 rows_returned=1
+  923dccb6e9f2 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

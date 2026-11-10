@@ -1,0 +1,120 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: verify Google push token
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": "eyJlbWFpbEFkZHJlc3MiOiJtaXNzaW5nQGV4YW1wbGUuY29tIiwiaGlzdG9yeUlkIjoxfQ==",
+        "messageId": "message-1",
+        "publishTime": "<ts>"
+      },
+      "subscription": "projects/parity/subscriptions/gmail"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:auth_expired>"
+      ]
+    }
+  }
+response:
+  {
+    "body": {
+      "message": "Invalid authentication token"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "42"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 401
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":401,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+      INFO get_google_public_keys {}
+        INFO fetch_and_cache_google_public_keys {}
+          INFO get_google_public_keys {}
+      INFO verify_google_token {}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "verify_google_token"
+      ],
+      "message": null,
+      "fields": {
+        "error": "JWT validation failed: ExpiredSignature"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request"
+      ],
+      "message": "Token verification failed with non-key related error",
+      "fields": {
+        "error": "ValidationError(ExpiredSignature)"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/certs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {
+    "google_public_keys": {
+      "before": null,
+      "after": "{\"current\":{\"kid\":\"current\",\"alg\":\"RS256\",\"kty\":\"RSA\",\"n\":\"<rsa-modulus:current>\",\"e\":\"AQAB\",\"use_\":null,\"use\":null}}"
+    }
+  }
+db:
+  {}

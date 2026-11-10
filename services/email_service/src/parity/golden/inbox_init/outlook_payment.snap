@@ -1,0 +1,72 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: verified Outlook grant
+request:
+  {
+    "method": "POST",
+    "path": "/email/init?link_id=<attempt>",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "a professional subscription is required to link an additional inbox",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "67"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 402
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":402,"http.route":"/email/init","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/init"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO handler {"fusionauth_user_id":"<fusion:A>","query":"Query(InitParams { link_id: Some(<attempt>), force_share: false })","user_id":"<user:A>"}
+logs:
+  []
+sql:
+  a28059111a26 rows_affected=1 rows_returned=1
+  923dccb6e9f2 rows_affected=0 rows_returned=0
+  344755119561 rows_affected=0 rows_returned=0
+  33af26dd8f19 rows_affected=0 rows_returned=0
+  7f007de3dd36 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/internal/microsoft_grant?attempt_id=<attempt>&owner=<fusion:A>",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

@@ -1,0 +1,205 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: calendar grant follows requested consent
+request:
+  {
+    "method": "POST",
+    "path": "/email/init?link_id=<attempt>",
+    "auth": "user A",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "link_id": "<link:A>"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "50"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 200
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":200,"http.route":"/email/init","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/init"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO handler {"fusionauth_user_id":"<fusion:A>","query":"Query(InitParams { link_id: Some(<attempt>), force_share: false })","user_id":"<user:A>"}
+        INFO get_user_id_by_email {"email":"parity-a@example.com"}
+        INFO link_by_fusionauth_email_provider {"fusionauth_user_id":"<fusion:A>","provider":"Gmail"}
+        INFO apply_google_grant {"email_link_id":"<link:A>","intent":"CalendarRequested"}
+          INFO apply_google_grant {"email_link_id":"<link:A>","intent":"CalendarRequested"}
+        INFO clear_link_needs_reauth {"link_id":"<link:A>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "Init called",
+      "fields": {
+        "link_id": "Some(<attempt>)",
+        "user_id": "<user:A>"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "Applied Google permission upgrade to existing inbox",
+      "fields": {
+        "calendar_jobs": 1,
+        "changed": true,
+        "grant_version": 1,
+        "link_id": "<link:A>"
+      }
+    }
+  ]
+sql:
+  a28059111a26 rows_affected=1 rows_returned=1
+  bf55c799c24d rows_affected=1 rows_returned=1
+  4ca3138b9b7a rows_affected=1 rows_returned=1
+  e593927c5102 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  6b1c1b68d276 rows_affected=1 rows_returned=1
+  746258d4a995 rows_affected=1 rows_returned=1
+  4a6b32a0947d rows_affected=1 rows_returned=0
+  a0b3b4cba1f2 rows_affected=0 rows_returned=0
+  441d52a4613c rows_affected=1 rows_returned=1
+  3f1dd41a445a rows_affected=1 rows_returned=1
+  d44605b48583 rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  b92a8af6e328 rows_affected=1 rows_returned=0
+  c97aaf8cf221 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "calendar_accounts": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:1>",
+          "owner_id": "<user:A>",
+          "provider": "google",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "sync_status": "pending",
+          "email_link_id": "<link:A>",
+          "last_synced_at": null,
+          "last_sync_error": null,
+          "provider_account_id": "parity-a@example.com"
+        }
+      ],
+      "changed": []
+    },
+    "calendar_backfill_jobs": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:2>",
+          "kind": "google_calendar",
+          "cursor": {},
+          "status": "pending",
+          "account_id": "<uuid:1>",
+          "created_at": "<ts>",
+          "last_error": null,
+          "started_at": null,
+          "updated_at": "<ts>",
+          "lease_token": null,
+          "completed_at": null,
+          "email_link_id": "<link:A>",
+          "grant_version": 1,
+          "scanned_count": 0,
+          "extracted_count": 0,
+          "lease_expires_at": null
+        }
+      ],
+      "changed": []
+    },
+    "calendar_sync_outbox": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:3>",
+          "created_at": "<ts>",
+          "published_at": null,
+          "backfill_job_id": "<uuid:2>"
+        }
+      ],
+      "changed": []
+    },
+    "email_link_google_scopes": {
+      "removed": [],
+      "added": [
+        {
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "grant_version": 1,
+          "granted_scopes": [
+            "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
+            "https://www.googleapis.com/auth/calendar.events",
+            "https://www.googleapis.com/auth/gmail.modify"
+          ],
+          "calendar_disabled_at": null
+        }
+      ],
+      "changed": []
+    },
+    "in_progress_user_link": {
+      "removed": [
+        {
+          "id": "<attempt>",
+          "created_at": "<ts>",
+          "linked_email": "parity-a@example.com",
+          "macro_user_id": "<fusion:A>",
+          "email_provider": "GMAIL",
+          "granted_google_scopes": [
+            "https://www.googleapis.com/auth/gmail.modify",
+            "https://www.googleapis.com/auth/calendar.events",
+            "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
+          ],
+          "requested_google_scopes": [
+            "https://www.googleapis.com/auth/gmail.modify",
+            "https://www.googleapis.com/auth/calendar.events",
+            "https://www.googleapis.com/auth/calendar.calendarlist.readonly"
+          ]
+        }
+      ],
+      "added": [],
+      "changed": []
+    }
+  }

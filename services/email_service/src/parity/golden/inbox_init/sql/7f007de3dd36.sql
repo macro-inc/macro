@@ -1,0 +1,1 @@
+SELECT EXISTS(SELECT 1 FROM "RolesOnUsers" ru JOIN "RolesOnPermissions" rp ON rp."roleId"=ru."roleId" WHERE ru."userId"=$1 AND rp."permissionId"='read:professional_features') AS "professional!", (SELECT count(*) FROM email_links l WHERE l.macro_id=$1 OR EXISTS(SELECT 1 FROM macro_user_links u WHERE u.link_id=l.id AND u.primary_macro_id=$1)) AS "inboxes!"

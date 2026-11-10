@@ -1,0 +1,190 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: identity with no inboxes
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/delete_user/missing",
+    "auth": "internal key only",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/internal/delete_user/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/delete_user/missing"}
+    INFO agent_sdk_request {}
+      INFO handler {"fusionauth_user_id":"\"missing\""}
+        INFO fetch_links_by_fusionauth_user_id {"fusionauth_user_id":"missing"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "Delete user called",
+      "fields": {
+        "user_id": "missing"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  5bd53f3372d6 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: identity with no inboxes
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/delete_user/not-a-uuid",
+    "auth": "internal key only",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/internal/delete_user/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/delete_user/not-a-uuid"}
+    INFO agent_sdk_request {}
+      INFO handler {"fusionauth_user_id":"\"not-a-uuid\""}
+        INFO fetch_links_by_fusionauth_user_id {"fusionauth_user_id":"not-a-uuid"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "Delete user called",
+      "fields": {
+        "user_id": "not-a-uuid"
+      }
+    }
+  ]
+sql:
+  5bd53f3372d6 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: identity with no inboxes
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/delete_user/macro%7Cparity-a%40example.com",
+    "auth": "internal key only",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/internal/delete_user/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/delete_user/macro%7Cparity-a%40example.com"}
+    INFO agent_sdk_request {}
+      INFO handler {"fusionauth_user_id":"\"<user:A>\""}
+        INFO fetch_links_by_fusionauth_user_id {"fusionauth_user_id":"<user:A>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "Delete user called",
+      "fields": {
+        "user_id": "<user:A>"
+      }
+    }
+  ]
+sql:
+  5bd53f3372d6 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

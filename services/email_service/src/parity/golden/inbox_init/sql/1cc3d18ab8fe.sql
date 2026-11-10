@@ -1,0 +1,1 @@
+SELECT id, link_id, fusionauth_user_id, threads_requested_limit, total_threads, threads_retrieved_count, status as "status: db::backfill::BackfillJobStatus", created_at, updated_at FROM email_backfill_jobs WHERE link_id = $1 AND status IN ('Init', 'InProgress')

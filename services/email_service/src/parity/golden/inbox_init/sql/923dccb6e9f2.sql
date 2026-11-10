@@ -1,0 +1,1 @@
+SELECT r.link_id FROM email_link_initializations r JOIN email_links l ON l.id = r.link_id WHERE r.attempt_id = $1 AND r.actor_id = $2 AND (l.macro_id = $2 OR EXISTS ( SELECT 1 FROM macro_user_links e WHERE e.link_id = l.id AND e.primary_macro_id = $2 AND e.child_macro_id = l.macro_id))

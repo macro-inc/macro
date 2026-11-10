@@ -1,0 +1,86 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: missing path identity
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/delete_user/",
+    "auth": "internal key only",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "",
+    "headers": {},
+    "status": 404
+  }
+spans:
+  []
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid UTF-8 path identity
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/delete_user/%FF",
+    "auth": "internal key only",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "Invalid URL: Invalid UTF-8 in `id`",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "34"
+      ],
+      "content-type": [
+        "text/plain; charset=utf-8"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":400,"http.route":"/internal/delete_user/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/delete_user/%FF"}
+    INFO agent_sdk_request {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

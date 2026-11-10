@@ -1,0 +1,502 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: known inbox
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": "eyJlbWFpbEFkZHJlc3MiOiJwYXJpdHktNTEwMDAtQUBleGFtcGxlLmNvbSIsImhpc3RvcnlJZCI6MTAxfQ==",
+        "messageId": "message-1",
+        "publishTime": "<ts>"
+      },
+      "subscription": "projects/parity/subscriptions/gmail"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 202
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":202,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+      INFO get_google_public_keys {}
+        INFO fetch_and_cache_google_public_keys {}
+          INFO get_google_public_keys {}
+      INFO verify_google_token {}
+      INFO fetch_link_by_email {"provider":"Gmail"}
+      INFO enqueue_gmail_inbox_sync_notification {"message":"InboxSyncPubsubMessage { link_id: <link:A>, operation: GmailMessage(GmailMessagePayload { history_id: 101 }) }"}
+        INFO enqueue_notification {"queue_url":"<sqs>/000000000000/gmail-webhook"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  e593927c5102 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  24c199abca7e rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/certs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageBody": {
+          "linkId": "<link:A>",
+          "operation": {
+            "gmail_message": {
+              "history_id": 101
+            }
+          }
+        },
+        "DelaySeconds": 0,
+        "Entries": null
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-1"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "google_public_keys": {
+      "before": null,
+      "after": "{\"current\":{\"kid\":\"current\",\"alg\":\"RS256\",\"kty\":\"RSA\",\"n\":\"<rsa-modulus:current>\",\"e\":\"AQAB\",\"use_\":null,\"use\":null}}"
+    }
+  }
+db:
+  {}
+
+step: redelivery
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": "eyJlbWFpbEFkZHJlc3MiOiJwYXJpdHktNTEwMDAtQUBleGFtcGxlLmNvbSIsImhpc3RvcnlJZCI6MTAxfQ==",
+        "messageId": "message-1",
+        "publishTime": "<ts>"
+      },
+      "subscription": "projects/parity/subscriptions/gmail"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 202
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":202,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+      INFO get_google_public_keys {}
+      INFO verify_google_token {}
+      INFO fetch_link_by_email {"provider":"Gmail"}
+      INFO enqueue_gmail_inbox_sync_notification {"message":"InboxSyncPubsubMessage { link_id: <link:A>, operation: GmailMessage(GmailMessagePayload { history_id: 101 }) }"}
+        INFO enqueue_notification {"queue_url":"<sqs>/000000000000/gmail-webhook"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  24c199abca7e rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageBody": {
+          "linkId": "<link:A>",
+          "operation": {
+            "gmail_message": {
+              "history_id": 101
+            }
+          }
+        },
+        "DelaySeconds": 0,
+        "Entries": null
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-2"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: older history
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": "eyJlbWFpbEFkZHJlc3MiOiJwYXJpdHktNTEwMDAtQUBleGFtcGxlLmNvbSIsImhpc3RvcnlJZCI6OTl9",
+        "messageId": "message-1",
+        "publishTime": "<ts>"
+      },
+      "subscription": "projects/parity/subscriptions/gmail"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 202
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":202,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+      INFO get_google_public_keys {}
+      INFO verify_google_token {}
+      INFO fetch_link_by_email {"provider":"Gmail"}
+      INFO enqueue_gmail_inbox_sync_notification {"message":"InboxSyncPubsubMessage { link_id: <link:A>, operation: GmailMessage(GmailMessagePayload { history_id: 99 }) }"}
+        INFO enqueue_notification {"queue_url":"<sqs>/000000000000/gmail-webhook"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  24c199abca7e rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageBody": {
+          "linkId": "<link:A>",
+          "operation": {
+            "gmail_message": {
+              "history_id": 99
+            }
+          }
+        },
+        "DelaySeconds": 0,
+        "Entries": null
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-3"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: zero history
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": "eyJlbWFpbEFkZHJlc3MiOiJwYXJpdHktNTEwMDAtQUBleGFtcGxlLmNvbSIsImhpc3RvcnlJZCI6MH0=",
+        "messageId": "message-1",
+        "publishTime": "<ts>"
+      },
+      "subscription": "projects/parity/subscriptions/gmail"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 202
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":202,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+      INFO get_google_public_keys {}
+      INFO verify_google_token {}
+      INFO fetch_link_by_email {"provider":"Gmail"}
+      INFO enqueue_gmail_inbox_sync_notification {"message":"InboxSyncPubsubMessage { link_id: <link:A>, operation: GmailMessage(GmailMessagePayload { history_id: 0 }) }"}
+        INFO enqueue_notification {"queue_url":"<sqs>/000000000000/gmail-webhook"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  24c199abca7e rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageBody": {
+          "linkId": "<link:A>",
+          "operation": {
+            "gmail_message": {
+              "history_id": 0
+            }
+          }
+        },
+        "DelaySeconds": 0,
+        "Entries": null
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-4"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: maximum history
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": "eyJlbWFpbEFkZHJlc3MiOiJwYXJpdHktNTEwMDAtQUBleGFtcGxlLmNvbSIsImhpc3RvcnlJZCI6MTg0NDY3NDQwNzM3MDk1NTE2MTV9",
+        "messageId": "message-1",
+        "publishTime": "<ts>"
+      },
+      "subscription": "projects/parity/subscriptions/gmail"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 202
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":202,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+      INFO get_google_public_keys {}
+      INFO verify_google_token {}
+      INFO fetch_link_by_email {"provider":"Gmail"}
+      INFO enqueue_gmail_inbox_sync_notification {"message":"InboxSyncPubsubMessage { link_id: <link:A>, operation: GmailMessage(GmailMessagePayload { history_id: 18446744073709551615 }) }"}
+        INFO enqueue_notification {"queue_url":"<sqs>/000000000000/gmail-webhook"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    }
+  ]
+sql:
+  24c199abca7e rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageBody": {
+          "linkId": "<link:A>",
+          "operation": {
+            "gmail_message": {
+              "history_id": 18446744073709551615
+            }
+          }
+        },
+        "DelaySeconds": 0,
+        "Entries": null
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-5"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

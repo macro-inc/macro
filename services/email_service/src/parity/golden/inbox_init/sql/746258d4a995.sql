@@ -1,0 +1,1 @@
+SELECT l.macro_id, l.email_address::text AS "email_address!", COALESCE(g.granted_scopes, '{}') AS "granted_scopes!", COALESCE(g.grant_version, 0) AS "grant_version!", g.calendar_disabled_at FROM email_links l LEFT JOIN email_link_google_scopes g ON g.link_id = l.id WHERE l.id = $1 FOR UPDATE OF l

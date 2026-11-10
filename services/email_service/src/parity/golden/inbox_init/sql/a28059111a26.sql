@@ -1,0 +1,1 @@
+SELECT (EXISTS(SELECT 1 FROM in_progress_user_link WHERE id = $1 AND macro_user_id = $2 AND email_provider = 'OUTLOOK') OR EXISTS(SELECT 1 FROM email_link_initializations WHERE attempt_id = $1 AND actor_id = $3)) AS "recognized!"

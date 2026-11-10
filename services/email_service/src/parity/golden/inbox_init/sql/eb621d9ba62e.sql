@@ -1,0 +1,1 @@
+UPDATE email_links SET grant_id = $2,grant_generation = $3, fusionauth_user_id = $4,email_address = $5,is_sync_active = true,needs_reauth = false, last_sync_error_at = NULL,updated_at = now(), sync_generation = sync_generation + CASE WHEN $6 AND $7 THEN 1 ELSE 0 END WHERE id = $1 RETURNING sync_generation

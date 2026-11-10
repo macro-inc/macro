@@ -1,0 +1,245 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: init ignores inbox-selection header and body
+request:
+  {
+    "method": "POST",
+    "path": "/email/init",
+    "auth": "user A",
+    "body": "not JSON",
+    "body_format": "raw",
+    "content-type": "text/plain",
+    "headers": {
+      "x-email-link-id": [
+        "not-a-uuid"
+      ]
+    }
+  }
+response:
+  {
+    "body": {
+      "code": "ALREADY_INITIALIZED",
+      "message": "User is already initialized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "70"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":400,"http.route":"/email/init","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/init"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO handler {"fusionauth_user_id":"<fusion:A>","query":"Query(InitParams { link_id: None, force_share: false })","user_id":"<user:A>"}
+        INFO link_by_fusionauth_and_macro_id {"fusionauth_user_id":"<fusion:A>","provider":"Gmail"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "Init called",
+      "fields": {
+        "link_id": "None",
+        "user_id": "<user:A>"
+      }
+    }
+  ]
+sql:
+  e593927c5102 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  2edd3234f117 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: init ignores inbox-selection header and body
+request:
+  {
+    "method": "POST",
+    "path": "/email/init",
+    "auth": "user A",
+    "body": "not JSON",
+    "body_format": "raw",
+    "content-type": "text/plain",
+    "headers": {
+      "x-email-link-id": [
+        ""
+      ]
+    }
+  }
+response:
+  {
+    "body": {
+      "code": "ALREADY_INITIALIZED",
+      "message": "User is already initialized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "70"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":400,"http.route":"/email/init","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/init"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO handler {"fusionauth_user_id":"<fusion:A>","query":"Query(InitParams { link_id: None, force_share: false })","user_id":"<user:A>"}
+        INFO link_by_fusionauth_and_macro_id {"fusionauth_user_id":"<fusion:A>","provider":"Gmail"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "Init called",
+      "fields": {
+        "link_id": "None",
+        "user_id": "<user:A>"
+      }
+    }
+  ]
+sql:
+  2edd3234f117 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: init ignores inbox-selection header and body
+request:
+  {
+    "method": "POST",
+    "path": "/email/init",
+    "auth": "user A",
+    "body": "not JSON",
+    "body_format": "raw",
+    "content-type": "text/plain",
+    "headers": {
+      "x-email-link-id": [
+        {
+          "bytes": 1,
+          "sha256": "a8100ae6aa1940d0b663bb31cd466142ebbdbd5187131b92d93818987832eb89"
+        }
+      ]
+    }
+  }
+response:
+  {
+    "body": {
+      "code": "ALREADY_INITIALIZED",
+      "message": "User is already initialized"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "70"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 400
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":400,"http.route":"/email/init","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/init"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+      INFO authorize_identity {}
+        INFO validate_credential {}
+          INFO validate_macro_api_token {}
+      INFO handler {"fusionauth_user_id":"<fusion:A>","query":"Query(InitParams { link_id: None, force_share: false })","user_id":"<user:A>"}
+        INFO link_by_fusionauth_and_macro_id {"fusionauth_user_id":"<fusion:A>","provider":"Gmail"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "Init called",
+      "fields": {
+        "link_id": "None",
+        "user_id": "<user:A>"
+      }
+    }
+  ]
+sql:
+  2edd3234f117 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

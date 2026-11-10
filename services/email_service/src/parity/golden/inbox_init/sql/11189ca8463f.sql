@@ -1,0 +1,1 @@
+INSERT INTO email_mailbox_custodians(link_id,actor_id,fusionauth_user_id,grant_id,grant_generation,granted_scopes) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT(link_id,actor_id) DO UPDATE SET fusionauth_user_id = EXCLUDED.fusionauth_user_id, grant_id = EXCLUDED.grant_id,grant_generation = EXCLUDED.grant_generation,granted_scopes = EXCLUDED.granted_scopes,verified_at = now()

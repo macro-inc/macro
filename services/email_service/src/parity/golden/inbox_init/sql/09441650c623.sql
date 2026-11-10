@@ -1,0 +1,1 @@
+UPDATE email_mailbox_drafts SET generation = $2,lease_id = NULL,lease_until = NULL, state = CASE WHEN state = 'running' THEN 'pending' ELSE state END, available_at = now(),updated_at = now() WHERE link_id = $1 AND generation <> $2

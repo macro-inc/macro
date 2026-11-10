@@ -1,0 +1,160 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: SQS unavailable
+request:
+  {
+    "method": "POST",
+    "path": "/gmail/webhook",
+    "auth": "none",
+    "body": {
+      "message": {
+        "data": "eyJlbWFpbEFkZHJlc3MiOiJwYXJpdHktNTEwMjEtQUBleGFtcGxlLmNvbSIsImhpc3RvcnlJZCI6MTA1fQ==",
+        "messageId": "message-1",
+        "publishTime": "<ts>"
+      },
+      "subscription": "projects/parity/subscriptions/gmail"
+    },
+    "body_format": "json",
+    "content-type": "application/json",
+    "headers": {
+      "authorization": [
+        "Bearer <google-jwt:valid>"
+      ]
+    }
+  }
+response:
+  {
+    "body": {
+      "message": "unable to enqueue gmail notification"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "50"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 500
+  }
+spans:
+  INFO http.request {"http.request.method":"POST","http.response.status_code":500,"http.route":"/gmail/webhook","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 500 Internal Server Error","request.id":"<volatile>","url.path":"/gmail/webhook"}
+    INFO agent_sdk_request {}
+      INFO get_google_public_keys {}
+        INFO fetch_and_cache_google_public_keys {}
+          INFO get_google_public_keys {}
+      INFO verify_google_token {}
+      INFO fetch_link_by_email {"provider":"Gmail"}
+      INFO enqueue_gmail_inbox_sync_notification {"message":"InboxSyncPubsubMessage { link_id: <link:A>, operation: GmailMessage(GmailMessagePayload { history_id: 105 }) }"}
+        INFO enqueue_notification {"queue_url":"<sqs>/000000000000/gmail-webhook"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "unable to decode jwt",
+      "fields": {
+        "error": "JwtValidationFailed { details: \"InvalidAlgorithm\" }"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "enqueue_gmail_inbox_sync_notification",
+        "enqueue_notification"
+      ],
+      "message": "Connection encountered an issue and should not be re-used. Marking it for closure",
+      "fields": {
+        "see_for_more_info": "https://smithy-lang.github.io/smithy-rs/design/client/detailed_error_explanations.html"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request"
+      ],
+      "message": "unable to enqueue gmail notification",
+      "fields": {
+        "error": "service error\n\nCaused by:\n    0: unhandled error (InternalError)\n    1: Error { code: \"InternalError\", message: \"injected outage\" }"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 500 Internal Server Error",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  e593927c5102 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  24c199abca7e rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/certs",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/gmail-webhook",
+        "MessageBody": {
+          "linkId": "<link:A>",
+          "operation": {
+            "gmail_message": {
+              "history_id": 105
+            }
+          }
+        },
+        "DelaySeconds": 0,
+        "Entries": null
+      },
+      "status": 500,
+      "response": {
+        "__type": "com.amazonaws.sqs#InternalError",
+        "message": "injected outage"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "google_public_keys": {
+      "before": null,
+      "after": "{\"current\":{\"kid\":\"current\",\"alg\":\"RS256\",\"kty\":\"RSA\",\"n\":\"<rsa-modulus:current>\",\"e\":\"AQAB\",\"use_\":null,\"use\":null}}"
+    }
+  }
+db:
+  {}

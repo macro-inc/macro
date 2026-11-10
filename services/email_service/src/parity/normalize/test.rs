@@ -2,6 +2,54 @@ use super::Normalizer;
 use serde_json::json;
 
 #[test]
+fn generated_shared_customer_id_keeps_its_prefix_and_uuid_identity() {
+    if !crate::parity::process_per_test() {
+        return;
+    }
+    let uuid = "51000000-0000-0000-0000-000000000001";
+    let value = json!({"id":uuid,"stripe_customer_id":format!("cus_shared_{uuid}")});
+    let mut default = Normalizer::default();
+    assert_eq!(
+        default.value("db", value.clone())["stripe_customer_id"],
+        format!("cus_shared_{uuid}")
+    );
+    let mut enabled = Normalizer {
+        normalize_embedded_uuids: true,
+        ..Normalizer::default()
+    };
+    assert_eq!(
+        enabled.value("db", value),
+        json!({"id":"<uuid:1>","stripe_customer_id":"cus_shared_<uuid:1>"})
+    );
+}
+
+#[test]
+fn gmail_redis_clocks_are_opt_in_and_keep_quota_and_capacity() {
+    if !crate::parity::process_per_test() {
+        return;
+    }
+    let original = json!({
+        "gmail:{51000000-0000-0000-0000-000000000001}:window": {
+            "before": null, "after": {"1790000000":"100"}
+        },
+        "gmail:{51000000-0000-0000-0000-000000000001}:limit": {
+            "before": null, "after": {"at":"1790000000123", "cap":"3"}
+        }
+    });
+    let mut normalizer = Normalizer::default();
+    normalizer.symbol("51000000-0000-0000-0000-000000000001", "<link>");
+    assert_eq!(normalizer.value("redis", original.clone()), original);
+    normalizer.normalize_gmail_redis_clock = true;
+    assert_eq!(
+        normalizer.value("redis", original),
+        json!({
+            "gmail:{<link>}:window": {"before":null, "after":{"<window-units>":"100"}},
+            "gmail:{<link>}:limit": {"before":null, "after":{"at":"<redis-time>", "cap":"3"}}
+        })
+    );
+}
+
+#[test]
 fn response_key_sorting_is_opt_in_and_keeps_array_order() {
     if !crate::parity::process_per_test() {
         return;

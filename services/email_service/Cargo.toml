@@ -200,6 +200,7 @@ workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
 insta = { workspace = true }
+jsonwebtoken = { workspace = true }
 log = { workspace = true }
 rdkafka = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }

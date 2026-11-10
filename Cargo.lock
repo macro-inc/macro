@@ -7587,6 +7587,7 @@ dependencies = [
  "infer 0.19.0",
  "insta",
  "item_filters",
+ "jsonwebtoken 10.3.0",
  "log",
  "lol_html",
  "macro_auth",

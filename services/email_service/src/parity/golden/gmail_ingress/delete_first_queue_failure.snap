@@ -1,0 +1,133 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: queue failures do not fail deletion
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/delete_user/<fusion:A>",
+    "auth": "internal key only",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": "",
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "0"
+      ],
+      "vary": [
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 204
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":204,"http.route":"/internal/delete_user/{id}","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/internal/delete_user/<fusion:A>"}
+    INFO agent_sdk_request {}
+      INFO handler {"fusionauth_user_id":"\"<fusion:A>\""}
+        INFO fetch_links_by_fusionauth_user_id {"fusionauth_user_id":"<fusion:A>"}
+        INFO enqueue_link_manager_notification {"message":"DeleteLink { link_id: <link:A2>, deletion_reason: UserDeleted }"}
+          INFO enqueue_link_manager_notification {"message":"DeleteLink { link_id: <link:A2>, deletion_reason: UserDeleted }","queue_url":"<sqs>/000000000000/link-manager"}
+        INFO enqueue_link_manager_notification {"message":"DeleteLink { link_id: <link:A>, deletion_reason: UserDeleted }"}
+          INFO enqueue_link_manager_notification {"message":"DeleteLink { link_id: <link:A>, deletion_reason: UserDeleted }","queue_url":"<sqs>/000000000000/link-manager"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "Delete user called",
+      "fields": {
+        "user_id": "<fusion:A>"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler",
+        "enqueue_link_manager_notification",
+        "enqueue_link_manager_notification"
+      ],
+      "message": "Connection encountered an issue and should not be re-used. Marking it for closure",
+      "fields": {
+        "see_for_more_info": "https://smithy-lang.github.io/smithy-rs/design/client/detailed_error_explanations.html"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "Failed to enqueue delete notification",
+      "fields": {
+        "error": "service error\n\nCaused by:\n    0: unhandled error (InternalError)\n    1: Error { code: \"InternalError\", message: \"injected outage\" }",
+        "link_id": "<link:A2>"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  5bd53f3372d6 rows_affected=2 rows_returned=2
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/link-manager",
+        "MessageBody": {
+          "operation": "DeleteLink",
+          "link_id": "<link:A2>",
+          "deletion_reason": "UserDeleted"
+        },
+        "DelaySeconds": 0,
+        "Entries": null
+      },
+      "status": 500,
+      "response": {
+        "__type": "com.amazonaws.sqs#InternalError",
+        "message": "injected outage"
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/link-manager",
+        "MessageBody": {
+          "operation": "DeleteLink",
+          "link_id": "<link:A>",
+          "deletion_reason": "UserDeleted"
+        },
+        "DelaySeconds": 0,
+        "Entries": null
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-2"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

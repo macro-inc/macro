@@ -1,0 +1,1 @@
+UPDATE email_mailbox_commands SET generation = $2,lease_id = NULL,lease_until = NULL, status = 'pending',available_at = now(),updated_at = now() WHERE link_id = $1 AND generation <> $2 AND status IN ('pending','running','confirming')

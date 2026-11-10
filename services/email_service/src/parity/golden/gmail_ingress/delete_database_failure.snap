@@ -1,0 +1,106 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: link lookup fails
+request:
+  {
+    "method": "DELETE",
+    "path": "/internal/delete_user/<fusion:A>",
+    "auth": "internal key only",
+    "body": null,
+    "body_format": "none",
+    "content-type": null
+  }
+response:
+  {
+    "body": {
+      "message": "unable to fetch links"
+    },
+    "headers": {
+      "access-control-allow-credentials": [
+        "true"
+      ],
+      "content-length": [
+        "35"
+      ],
+      "content-type": [
+        "application/json"
+      ],
+      "vary": [
+        "accept-encoding",
+        "origin, access-control-request-method, access-control-request-headers"
+      ],
+      "x-request-id": [
+        "<volatile>"
+      ]
+    },
+    "status": 500
+  }
+spans:
+  INFO http.request {"http.request.method":"DELETE","http.response.status_code":500,"http.route":"/internal/delete_user/{id}","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 500 Internal Server Error","request.id":"<volatile>","url.path":"/internal/delete_user/<fusion:A>"}
+    INFO agent_sdk_request {}
+      INFO handler {"fusionauth_user_id":"\"<fusion:A>\""}
+        INFO fetch_links_by_fusionauth_user_id {"fusionauth_user_id":"<fusion:A>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "Delete user called",
+      "fields": {
+        "user_id": "<fusion:A>"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler",
+        "fetch_links_by_fusionauth_user_id"
+      ],
+      "message": null,
+      "fields": {
+        "error": "error returned from database: relation \"email_links\" does not exist"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request",
+        "agent_sdk_request",
+        "handler"
+      ],
+      "message": "unable to fetch links",
+      "fields": {
+        "error": "error returned from database: relation \"email_links\" does not exist\n\nCaused by:\n    relation \"email_links\" does not exist"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 500 Internal Server Error",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  5bd53f3372d6 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
