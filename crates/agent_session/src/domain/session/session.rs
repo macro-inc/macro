@@ -162,7 +162,6 @@ impl<Token> SessionMachine<Token> {
         });
     }
 
-    /// Current phase.
     /// Whether the connection has nothing open: live, with no turn, held
     /// elicitation, permission request or queued action. Only such a
     /// connection may be released without telling anyone, because nothing
@@ -181,6 +180,7 @@ impl<Token> SessionMachine<Token> {
             && !self.mcp_refresh_required
     }
 
+    /// Current phase.
     pub fn status(&self) -> RuntimeStatus {
         match &self.phase {
             SessionPhase::Booting => RuntimeStatus::Booting,

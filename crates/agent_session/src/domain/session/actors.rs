@@ -661,7 +661,16 @@ where
             let _ = completed.send(Ok(crate::domain::model::SessionRelease::Busy));
             return Stepped::Continue;
         }
-        if let Err(error) = self.logs.flush().await {
+        // Bounded like a delivery: a store that does not answer keeps the
+        // session's command worker waiting behind this.
+        let flushed = match tokio::time::timeout(COMMAND_DELIVERY_TIMEOUT, self.logs.flush()).await
+        {
+            Ok(flushed) => flushed,
+            Err(_) => Err(AgentSessionError::Unknown(anyhow::anyhow!(
+                "timed out flushing buffered log frames before a release"
+            ))),
+        };
+        if let Err(error) = flushed {
             tracing::error!(
                 error = ?error,
                 id = %self.machine.id(),
