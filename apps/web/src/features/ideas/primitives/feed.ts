@@ -1,3 +1,4 @@
+import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
@@ -39,12 +40,16 @@ export type IdeasFeedOptions = {
   lastSeenAt?: Accessor<string | undefined>;
   /** The idea to show first, ringed: the one clicked on Home. */
   focusedId?: Accessor<string | undefined>;
+  /** How long a dismissal waits for Undo before it is sent. */
+  undoMs?: number;
 };
 
+const UNDO_MS = 8_000;
+
 /**
- * The feed's state: its filter, each card's action, and dismissals, which are
- * held here with an Undo and sent when the person leaves, because the server
- * has no way to take one back.
+ * The feed's state: its filter, each card's action, and dismissals. The
+ * server has no way to take a dismissal back, so each is held here with an
+ * Undo and sent a few seconds after the last one, or when the person leaves.
  */
 export function createIdeasFeed(
   source: IdeasSource,
@@ -53,6 +58,8 @@ export function createIdeasFeed(
 ) {
   const [filter, setFilter] = createSignal<FeedFilter>('all');
   const [dismissedIds, setDismissedIds] = createSignal<string[]>([]);
+  // Sent to the server; hidden until the feed stops listing them.
+  const [sentIds, setSentIds] = createSignal<string[]>([]);
   const [busyIds, setBusyIds] = createSignal<string[]>([]);
   const [failedIds, setFailedIds] = createSignal<string[]>([]);
 
@@ -60,7 +67,8 @@ export function createIdeasFeed(
     const ideas = source.ideas();
     if (!ideas) return undefined;
 
-    const feed = orderFeed(ideas);
+    const sent = sentIds();
+    const feed = orderFeed(ideas.filter((idea) => !sent.includes(idea.id)));
     const focusedId = options.focusedId?.();
     const focused = feed.find((idea) => idea.id === focusedId);
     if (!focused) return feed;
@@ -141,19 +149,37 @@ export function createIdeasFeed(
       await source.accept(idea.id);
     });
 
+  const sendDismissal = async (id: string, leaving: boolean) => {
+    try {
+      await source.dismiss(id, { leaving });
+    } catch (error) {
+      // Refused: the idea is back in the feed, to dismiss again.
+      setSentIds(without(id));
+      throw error;
+    }
+  };
+
   const sendDismissals = (leaving: boolean) => {
     const ids = dismissedIds();
     if (ids.length === 0) return;
 
     setDismissedIds([]);
+    setSentIds((sent) => [...sent, ...ids]);
     for (const id of ids) {
-      // Detached: the page may be going away, and a failure leaves the idea
-      // in the feed to dismiss again.
-      fireAndForget(source.dismiss(id, { leaving }), 'ideas');
+      // Detached: the page may be going away.
+      fireAndForget(sendDismissal(id, leaving), 'ideas');
     }
   };
 
-  onCleanup(() => sendDismissals(false));
+  const sendAfterUndoWindow = debounce(
+    () => sendDismissals(false),
+    options.undoMs ?? UNDO_MS
+  );
+
+  onCleanup(() => {
+    sendAfterUndoWindow.clear();
+    sendDismissals(false);
+  });
 
   return {
     filter,
@@ -173,6 +199,7 @@ export function createIdeasFeed(
     },
     dismiss(idea: Idea) {
       setDismissedIds((ids) => [...without(idea.id)(ids), idea.id]);
+      sendAfterUndoWindow();
     },
     undoDismiss(idea: Idea) {
       setDismissedIds(without(idea.id));

@@ -43,7 +43,9 @@ only, behind `enable-ideas`.
 
 - Clicking Run on a background idea is the approval: the card must show
   `sends` (or that it sends nothing) before Run, and there is no approval UI.
-- The server has no un-dismiss. A dismissal is held with Undo and sent when
-  the person leaves the page (`sendDismissals`), with `keepalive` on unload.
+- The server has no un-dismiss. A dismissal is held with Undo and sent a few
+  seconds after the last one, or when the person leaves (`sendDismissals`,
+  with `keepalive` on unload). Splits can stay mounted after navigating away,
+  so leaving alone would not send it.
 - Violet marks what AI picked (a routine's values, the new dot) and nothing else.
 - Gate every entry point with `useIdeasFlag`, which is also false on touch.

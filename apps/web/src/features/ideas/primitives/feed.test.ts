@@ -212,4 +212,48 @@ describe('ideas feed', () => {
       leaving: true,
     });
   });
+
+  it('sends a dismissal by itself once the Undo window passes, and not one that was undone', async () => {
+    vi.useFakeTimers();
+    const deps = host([composerIdea, replyIdea]);
+
+    await createRoot(async (dispose) => {
+      const feed = createIdeasFeed(deps.source, deps.actions, { undoMs: 8000 });
+      feed.dismiss(composerIdea);
+      feed.dismiss(replyIdea);
+      feed.undoDismiss(replyIdea);
+
+      vi.advanceTimersByTime(7999);
+      expect(deps.source.dismiss).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(1);
+      expect(deps.source.dismiss).toHaveBeenCalledTimes(1);
+      expect(deps.source.dismiss).toHaveBeenCalledWith('idea-composer', {
+        leaving: false,
+      });
+      // Sent: gone from the feed without waiting for the next read.
+      expect(shownIds(feed)).toEqual(['idea-reply']);
+      dispose();
+    });
+
+    expect(deps.source.dismiss).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
+  it('puts an idea back when the server refused its dismissal', async () => {
+    const deps = host([composerIdea]);
+    deps.source.dismiss.mockRejectedValueOnce(new Error('refused'));
+
+    await createRoot(async (dispose) => {
+      const feed = createIdeasFeed(deps.source, deps.actions);
+      feed.dismiss(composerIdea);
+      feed.sendDismissals();
+      expect(shownIds(feed)).toEqual([]);
+
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(shownIds(feed)).toEqual(['idea-composer']);
+      dispose();
+    });
+  });
 });

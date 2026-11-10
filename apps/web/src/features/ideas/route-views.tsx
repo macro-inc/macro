@@ -1,5 +1,5 @@
 import { ViewShell, ViewSidebar } from '@app/components/view-shell';
-import { usePosthog } from '@app/lib/analytics/posthog';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { createSearchParams } from '@app/lib/split-router';
 import { TraceFlow, usePending } from '@app/observability/flow';
@@ -8,6 +8,7 @@ import {
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { enableIdeas } from '@core/constant/featureFlags';
 import { onCleanup, Show } from 'solid-js';
 import { forYouSearch } from './for-you-search';
 import { useIdeas } from './ideas';
@@ -50,13 +51,14 @@ function ForYouPage() {
 /** `/app/for-you`: desktop only, behind `enable-ideas`; otherwise Home. */
 export const ForYouRouteView = withAuth(() => {
   const enabled = useIdeasFlag();
-  const posthog = usePosthog();
+  const flag = useFeatureFlag(enableIdeas);
 
   return (
     <Show
       when={enabled()}
       fallback={
-        <Show when={posthog.flagsLoaded()}>
+        // A flag still loading is not off; a deep link waits for it.
+        <Show when={!flag().loading}>
           <RedirectSplit to={{ type: 'component', id: 'home' }} />
         </Show>
       }

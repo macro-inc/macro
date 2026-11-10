@@ -307,5 +307,6 @@ with the prompt; **Run in background** starts the run at once (the card says
 what it will post or send first), then shows Running and, when done, **Open
 result**; **Open** or **Open draft** opens the item or the drafted reply;
 **Turn on** saves a routine idea and **Review** opens it in the routine
-editor. The `x` dismisses with an Undo row until you leave the page.
+editor. The `x` dismisses with an Undo row; the dismissal is sent a few
+seconds later, or when you leave the page.
 
