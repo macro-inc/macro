@@ -1,11 +1,12 @@
 //! Filtered notification edges, limited independently for every requested entity.
 //! Each recipient row carries its notification's entity and type, so the
 //! primary-entity path reads only the viewer's rows from
-//! `idx_user_notification_viewer_entity` instead of the entity's notifications
-//! for every user, and an event-type filter reads the type from that index
-//! entry: only matching rows join `notification`. The secondary and message-id
-//! paths match few notifications each and keep their `notification` indexes;
-//! the message-id path's `COALESCE` must match `idx_notification_message_id`.
+//! `idx_user_notification_viewer_entity_lane` instead of the entity's
+//! notifications for every user, and an event-type filter reads the type from
+//! that index entry: only matching rows join `notification`. The secondary and
+//! message-id paths match few notifications each and keep their `notification`
+//! indexes; the message-id path's `COALESCE` must match
+//! `idx_notification_message_id`.
 
 use std::{collections::HashMap, str::FromStr};
 

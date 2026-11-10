@@ -970,7 +970,7 @@ impl NotificationDbOps for PgPool {
                 FROM UNNEST($2::text[], $3::text[]) AS entity(entity_type, entity_id)
             )
             -- The primary entity reads only the viewer's rows from
-            -- idx_user_notification_viewer_entity; secondary entities and
+            -- idx_user_notification_viewer_entity_lane; secondary entities and
             -- message ids match few notifications each.
             -- No lane filter: opening an entity marks its noise seen too, so
             -- the Noise view clears without a second action.

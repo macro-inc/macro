@@ -100,8 +100,8 @@ DMs, and the shared message store other domains discuss things on.
 - Notification filters read `user_notification`'s copied entity columns, never a
   `notification` join: through `notification`, a per-channel check walks every
   user's history on the channel (once ~24% of the prod read replica's buffer
-  hits). The channel list seeks `idx_user_notification_viewer_entity` once per
-  candidate channel; an array of the user's notified channels reads every
+  hits). The channel list seeks `idx_user_notification_viewer_entity_lane` once
+  per candidate channel; an array of the user's notified channels reads every
   notification the user has in that state, PR ones included.
 - The thread feed's notified roots skip `channel_message_send` rows, which never
   name a thread, so `idx_user_notification_channel_threads` holds only rows

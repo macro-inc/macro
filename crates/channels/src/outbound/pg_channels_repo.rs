@@ -592,12 +592,13 @@ static CHANNEL_LIST_SELECT: &str = r#"
 /// Noise never counts: a channel whose only unseen notifications are noise is
 /// not unread.
 ///
-/// Each candidate channel is one seek on `idx_user_notification_viewer_entity`,
-/// whose key is the user, the entity and the state, so the cost is bounded by
-/// the user's channels. Collecting the user's notified channels into an array
-/// first reads every notification the user has in `state`: the planner reaches
-/// them through `(user_id, state)` and discards other entity types on the heap,
-/// which for a user with many pull request notifications is most of the read.
+/// Each candidate channel is one seek on
+/// `idx_user_notification_viewer_entity_lane`, whose key is the user, the entity
+/// and the state, so the cost is bounded by the user's channels. Collecting the
+/// user's notified channels into an array first reads every notification the
+/// user has in `state`: the planner reaches them through `(user_id, state)` and
+/// discards other entity types on the heap, which for a user with many pull
+/// request notifications is most of the read.
 #[cfg(feature = "list")]
 fn build_channel_notification_state_clause(state: item_filters::NotificationState) -> String {
     let predicate = notification_state_predicate(state);

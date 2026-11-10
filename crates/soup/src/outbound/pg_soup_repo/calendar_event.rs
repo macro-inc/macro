@@ -167,7 +167,7 @@ fn push_access(query: &mut QueryBuilder<'_, Postgres>, user_id: MacroUserIdStr<'
 
 /// Ids of the events the caller holds a non-deleted notification for in the
 /// predicate's states. Each recipient row carries its notification's entity,
-/// so `idx_user_notification_viewer_entity` answers this without touching
+/// so `idx_user_notification_viewer_entity_lane` answers this without touching
 /// `notification`. The id column is unconstrained text: a malformed id is
 /// filtered out before the projection casts it.
 fn notified_event_ids_sql(predicate: NotificationPredicate) -> String {
