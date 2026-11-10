@@ -578,6 +578,15 @@ export const enableReminders = defineFlag({
   default: onInDev,
 });
 
+// Saved email views: named filters (people, domains, subjects, inboxes, status)
+// pinned in Mail's sidebar and mobile picker, with personal order and unread
+// dots. Needs the saved-view order and subject/attachment filter backend.
+export const enableEmailSavedViews = defineFlag({
+  key: 'enable-email-saved-views',
+  env: 'ENABLE_EMAIL_SAVED_VIEWS',
+  default: onInDev,
+});
+
 // The Focus tab in Mail: signal threads the email focus worker classified as
 // worth the owner's attention. Only allowlisted inboxes are classified, so the
 // tab is empty for everyone else.
@@ -604,6 +613,14 @@ export const enableGitBlame = defineFlag({
 export const enableInlineAiEditing = defineFlag({
   key: 'inline-ai-editing',
   env: 'INLINE_AI_EDITING',
+  default: onInDev,
+});
+
+// Continue with Microsoft on sign-up, sign-in and the onboarding work step,
+// including the Outlook connect that follows a Microsoft sign-up.
+export const enableMicrosoftSignup = defineFlag({
+  key: 'enable-microsoft-signup',
+  env: 'ENABLE_MICROSOFT_SIGNUP',
   default: onInDev,
 });
 

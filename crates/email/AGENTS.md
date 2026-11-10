@@ -56,6 +56,21 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
+- `Subject` is a message-level filter literal. With a top-level subject term,
+  each owned inbox gets a bound (not `unnest`) two-step subscan: threads in
+  order with only the trigram-indexed subject match, then the full match
+  (mailbox facts) per thread until LIMIT. Keep the `OFFSET 0` fences and the
+  absence of an outer sort, or the planner joins every hit to its facts first;
+  binding the inbox gives it that inbox's statistics instead of the average
+  one. Spam and Trash skip the subscan (it can't read their folder date), and
+  a subscan never picks its preview in the candidate stage
+  (`uses_subject_subscans`). Subscan queries run with parallel workers off
+  (`SET LOCAL max_parallel_workers_per_gather = 0`): workers ran far past the
+  page LIMIT and read 15 times the buffers. Other subject trees keep the
+  `has_thread_literals` mirror, so a page's LIMIT never counts threads the
+  lateral drops. Match the bare `subject` column so the planner keeps its
+  statistics. `Attachment(kind)` reads the denormalized thread flags
+  `email_db_client` maintains.
 - The send route refuses an agent's program (`refuse_program_send`, 403), and
   the schedule route admits one only with a quoted `user_confirmation`: a
   program sends through a session review, the harness's confirmed send
@@ -184,6 +199,18 @@ tools — hexagonal, heavily feature-gated.
   through `record_done`/`record_deferred`/`record_abandoned`/`record_failed`.
   The mailbox loops log their own deferrals with `link_id` (gate refusals at
   DEBUG), so the worker must not log them again. Add a new defer reason in `defer_reason`.
+  Notification lag rides the same rows: a Graph change notification stamps
+  the folder streams' `notified_at` and `notified_traceparent`. Every claim
+  of the stream carries `notified_at` onto the reconciliation rows its pages
+  queue (newest notification wins) until a checkpoint that started reading
+  after the notification clears it; enumerate and reconcile spans record
+  `outlook.notification_wait_ms` and `outlook.notification_lag_ms`. The first
+  claim of a stream or row takes the traceparent (clearing it) and adopts the
+  webhook's trace (`crate::trace_context`), so webhook to import is one
+  trace, while retries get traces of their own and a long deferral can't grow
+  it. Subscription upkeep and webhook deliveries open
+  `outlook.subscription.maintain` and `outlook.subscription.notify`; each
+  lifecycle event logs "outlook subscription lifecycle event".
 - Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
   for `email_db_client` calls) so the SQLSTATE reaches the log; keep
   `MailboxError::Persistence` for stored data that cannot be decoded.

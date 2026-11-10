@@ -103,7 +103,7 @@ export function RuntimePairingPage(props: {
         teamId: share() === 'Team' ? currentTeamId() : undefined,
       });
       setApproved(true);
-      toast.success('Runtime connected');
+      toast.success('Machine connected');
     } catch (error) {
       setApproveError(failureMessage(error, PAIRING_ERROR_FALLBACK));
     }
@@ -111,7 +111,7 @@ export function RuntimePairingPage(props: {
 
   return (
     <SettingsPage
-      title={approved() ? 'Runtime connected' : 'New runtime'}
+      title={approved() ? 'Machine connected' : 'New machine'}
       showTitleInSheet
       description="Connect an agent running on your own machine."
       actions={
@@ -126,12 +126,12 @@ export function RuntimePairingPage(props: {
         </Button>
       }
     >
-      <section aria-label="New runtime">
+      <section aria-label="New machine">
         <SettingsSurface class="@container p-6">
           <Switch>
             <Match when={approved()}>
               <p class="text-sm leading-5 text-ink-muted">
-                Runtime connected. macrod will finish pairing automatically.
+                Machine connected. macrod will finish pairing automatically.
               </p>
             </Match>
 
@@ -202,7 +202,7 @@ export function RuntimePairingPage(props: {
                       value="private"
                       checked={share() === 'Private'}
                       title="Private"
-                      description="Only you can run agents on this runtime."
+                      description="Only you can run agents on this machine."
                       onChange={() => setShare('Private')}
                     />
                     <ChoiceRow
@@ -212,8 +212,8 @@ export function RuntimePairingPage(props: {
                       title="Team"
                       description={
                         canShareWithTeam()
-                          ? 'Your team can run agents on this runtime.'
-                          : 'Create or join a team before sharing runtimes.'
+                          ? 'Your team can run agents on this machine.'
+                          : 'Create or join a team before sharing machines.'
                       }
                       disabled={!canShareWithTeam()}
                       onChange={() => setShare('Team')}
@@ -231,14 +231,14 @@ export function RuntimePairingPage(props: {
                       </Checkbox.Label>
                     </Checkbox>
                     <p class="text-xs text-ink-muted">
-                      When off, every agent on this runtime must ask for
-                      permission. You can change this later in Runtimes.
+                      When off, every agent on this machine must ask for
+                      permission. You can change this later in Machines.
                     </p>
                     <Show when={allowPermissionBypass()}>
                       <p class="text-xs text-negative" role="alert">
                         Agents can run commands and edit files on this machine
                         without approval. Only enable this if you trust everyone
-                        who can create agents on this runtime.
+                        who can create agents on this machine.
                       </p>
                     </Show>
                   </div>

@@ -133,6 +133,10 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("the router never previews sessions")
     }
 
+    async fn has_unfinished_turn(&self, _id: AgentSessionId) -> SessionResult<bool> {
+        Ok(false)
+    }
+
     async fn billing(
         &self,
         _id: AgentSessionId,

@@ -538,6 +538,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "pipedream_mcp",
+ "rand 0.9.4",
  "redis",
  "reqwest 0.13.4",
  "rootcause",
@@ -3746,16 +3747,20 @@ dependencies = [
  "apollo-compiler",
  "apollo-parser",
  "chrono",
+ "database_sql",
  "lru 0.16.4",
+ "macro_user_id",
  "maybe_send",
  "miniz_oxide",
  "pollster",
  "postcard",
  "predicate-index",
  "proptest",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "subsequence_match",
  "thiserror 2.0.18",
  "uuid",
 ]
@@ -3962,7 +3967,10 @@ dependencies = [
  "macro_event_broker",
  "macro_queues",
  "macro_service_urls",
+ "macro_tower_layers",
  "models_email",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "redis",
  "reqwest 0.13.4",
  "rootcause",
@@ -3978,6 +3986,8 @@ dependencies = [
  "tower 0.5.3",
  "tower-http",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
@@ -4849,6 +4859,7 @@ dependencies = [
  "bots",
  "calendar_events",
  "chrono",
+ "contacts",
  "crm",
  "databases",
  "databases_sql",
@@ -4860,6 +4871,7 @@ dependencies = [
  "graphql_calendar",
  "graphql_channel",
  "graphql_common",
+ "graphql_contacts",
  "graphql_crm",
  "graphql_databases",
  "graphql_email",
@@ -5165,8 +5177,10 @@ dependencies = [
  "futures",
  "http-body-util",
  "macro_authorization",
+ "macro_db_client",
  "macro_db_migrator",
  "macro_user_id",
+ "non_empty",
  "rate_limit",
  "reqwest 0.13.4",
  "rootcause",
@@ -5174,6 +5188,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "sqs_worker",
+ "subsequence_match",
  "tokio",
  "tower 0.5.3",
  "tracing",
@@ -6655,6 +6670,7 @@ dependencies = [
  "github_pull_requests",
  "gmail_client",
  "graphql_calendar",
+ "graphql_contacts",
  "graphql_crm",
  "graphql_databases",
  "graphql_initiative",
@@ -7327,6 +7343,8 @@ dependencies = [
  "models_email",
  "models_pagination",
  "non_empty",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "rand 0.9.4",
  "recursion",
  "redis",
@@ -7346,6 +7364,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "tracing-opentelemetry",
  "tracing-subscriber",
  "url",
  "utoipa",
@@ -7593,6 +7612,7 @@ dependencies = [
  "macro_middleware",
  "macro_queues",
  "macro_service_urls",
+ "macro_tower_layers",
  "macro_user_id",
  "macro_uuid",
  "mime_guess",
@@ -9221,6 +9241,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "graphql_contacts"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "contacts",
+ "graphql_common",
+ "macro_user_id",
+ "models_pagination",
+ "rootcause",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "graphql_crm"
 version = "0.1.0"
 dependencies = [
@@ -9775,6 +9811,7 @@ dependencies = [
  "bot_id",
  "chrono",
  "constant_time_eq 0.3.1",
+ "entity_access_db_utils",
  "harness_id",
  "harness_token",
  "hex",
@@ -9783,6 +9820,7 @@ dependencies = [
  "macro_user_id",
  "mockall",
  "model-error-response",
+ "models_permissions",
  "rand 0.9.4",
  "serde",
  "sqlx",
@@ -17483,6 +17521,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "macro_db_migrator",
  "macro_uuid",
  "rootcause",
  "serde",
@@ -19653,6 +19692,10 @@ dependencies = [
  "quote",
  "syn 2.0.117",
 ]
+
+[[package]]
+name = "subsequence_match"
+version = "0.1.0"
 
 [[package]]
 name = "subtle"

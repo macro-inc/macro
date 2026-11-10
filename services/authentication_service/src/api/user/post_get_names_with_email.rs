@@ -30,7 +30,7 @@ pub struct GetNamesWithEmailRequestBody {
             (status = 500, body=ErrorResponse),
     ),
 )]
-#[tracing::instrument(skip(ctx, authorization))]
+#[tracing::instrument(skip_all, fields(user_count = req.user_ids.len()))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,

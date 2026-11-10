@@ -708,3 +708,35 @@ fn a_manual_notification_is_an_agent_row_from_its_agent_or_its_sender() {
         ))
     );
 }
+
+#[test]
+fn each_removal_of_runtime_access_is_its_own_row_that_opens() {
+    let removed = |id: u128, minute: u32| {
+        notification(
+            id,
+            entity(EntityType::Harness, 0xAB),
+            "runtime_access_removed",
+            json!({
+                "runtimeName": "Studio Mac",
+                "agents": [{ "botId": uuid(0xB0), "name": "Scout" }],
+            }),
+            minute,
+            NotificationState::Unseen,
+        )
+    };
+    let listed = rows_of(
+        &group(EntityType::Harness, 0xAB),
+        &[removed(1, 1), removed(2, 2)],
+    );
+    assert_eq!(
+        shape(&listed),
+        vec![
+            (InboxRowType::AccessRemoved, vec![uuid(2)], vec![]),
+            (InboxRowType::AccessRemoved, vec![uuid(1)], vec![]),
+        ]
+    );
+    assert_eq!(
+        listed[0].actions,
+        vec![action(InboxRowActionKind::Open, None, None)]
+    );
+}

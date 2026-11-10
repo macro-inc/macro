@@ -35,7 +35,7 @@ use model_notifications::{
     InviteToTeamMetadata, ManualMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
     NotifEvent, NotificationDocumentSubType, ReminderMetadata,
     RepliedToDocumentCommentThreadMetadata, RoutineRunFinishedMetadata, RoutineRunOutcome,
-    TaskAssignedMetadata,
+    RuntimeAccessRemovedMetadata, StoppedAgent, TaskAssignedMetadata,
 };
 
 /// GraphQL channel type used by notification metadata.
@@ -810,6 +810,45 @@ impl GraphqlManualMetadata {
     }
 }
 
+/// GraphQL wrapper for removed runtime access metadata.
+pub struct GraphqlRuntimeAccessRemovedMetadata(RuntimeAccessRemovedMetadata);
+
+/// An agent that stopped with its owner's runtime access.
+pub struct GraphqlStoppedAgent(StoppedAgent);
+
+/// An agent that stopped with its owner's runtime access.
+#[Object]
+impl GraphqlStoppedAgent {
+    /// The agent's bot id.
+    async fn bot_id(&self) -> ID {
+        ID(self.0.bot_id.to_string())
+    }
+
+    /// The agent's display name.
+    async fn name(&self) -> &str {
+        &self.0.name
+    }
+}
+
+/// Metadata for removed runtime access that stopped the recipient's agents.
+#[Object]
+impl GraphqlRuntimeAccessRemovedMetadata {
+    /// The runtime's name.
+    async fn runtime_name(&self) -> &str {
+        &self.0.runtime_name
+    }
+
+    /// The recipient's agents that stopped.
+    async fn agents(&self) -> Vec<GraphqlStoppedAgent> {
+        self.0
+            .agents
+            .iter()
+            .cloned()
+            .map(GraphqlStoppedAgent)
+            .collect()
+    }
+}
+
 /// GraphQL wrapper for team invitation metadata.
 pub struct GraphqlInviteToTeamMetadata(InviteToTeamMetadata);
 
@@ -1378,6 +1417,8 @@ pub enum GraphqlNotifEvent {
     Manual(GraphqlManualMetadata),
     /// Schema-only stub for released clients. Never returned.
     WhatsappGroupMessage(GraphqlWhatsappGroupMessageMetadata),
+    /// Removed runtime access that stopped the recipient's agents.
+    RuntimeAccessRemoved(GraphqlRuntimeAccessRemovedMetadata),
 }
 
 impl From<NotifEvent> for GraphqlNotifEvent {
@@ -1439,6 +1480,9 @@ impl From<NotifEvent> for GraphqlNotifEvent {
                 Self::RoutineRunFinished(GraphqlRoutineRunFinishedMetadata(metadata))
             }
             NotifEvent::Manual(metadata) => Self::Manual(GraphqlManualMetadata(metadata)),
+            NotifEvent::RuntimeAccessRemoved(metadata) => {
+                Self::RuntimeAccessRemoved(GraphqlRuntimeAccessRemovedMetadata(metadata))
+            }
             NotifEvent::InboxReauthRequired(metadata) => {
                 Self::InboxReauthRequired(GraphqlInboxReauthRequiredMetadata(metadata))
             }
