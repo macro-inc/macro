@@ -12,6 +12,12 @@ missing/invalid fields, nesting, legacy code/list and type rewrites. Text split
 mutations preserve valid UTF-16 edit boundaries. Every normalized result and
 verdict is compared, including rejected states and errors.
 
+Resolve the deterministic nanoid mock through Bun's ESM resolver, matching
+AwaitNode's actual import. Before writing rows, verify the real service gate
+fills a missing Await ID deterministically and compares repeated input equally.
+Run this check after row capture so its editor allocations do not shift exact
+parse-error node keys.
+
 `loro.ts` generates 2,048 binary client updates using real Loro operations. The
 native test imports the seed and calls sync_server_core::DocumentState::root_change,
 checks the exact projected pair, then compares both normalizations and verdicts.

@@ -2,7 +2,6 @@
 import { mock, setSystemTime } from 'bun:test';
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import type { SerializedEditorState, SerializedLexicalNode } from 'lexical';
 
@@ -37,9 +36,7 @@ const seeds = spawnSync(
 if (seeds.status !== 0) throw new Error(seeds.stdout + seeds.stderr);
 setSystemTime(new Date('2026-11-07T12:00:00.000Z'));
 mock.module(
-  createRequire(root + 'packages/lexical-core/nodes/AwaitNode.ts').resolve(
-    'nanoid'
-  ),
+  Bun.resolveSync('nanoid', root + 'packages/lexical-core/nodes/AwaitNode.ts'),
   () => ({ nanoid: (size = 21) => 'u'.repeat(size) })
 );
 await import(root + 'services/lexical-service/src/polyfills/prism.ts');
@@ -255,6 +252,28 @@ for (let index = 0; index < 20000; index++) {
   sourceErrorRows.push({ index, errors: sourceErrors });
 }
 console.error = sourceConsoleError;
+// Preserve the oracle node-key stream used by exact parse-error receipts.
+const awaitProbe: SerializedEditorState = {
+  root: {
+    type: 'root',
+    version: 1,
+    direction: null,
+    format: '',
+    indent: 0,
+    children: [{ type: 'await', version: 1 }],
+  },
+};
+const awaitNode = contentWithoutComments(awaitProbe).root.children[0];
+if (
+  !awaitNode ||
+  !('awaitId' in awaitNode) ||
+  awaitNode.awaitId !== 'u'.repeat(21) ||
+  !isCommentOnlyChange(awaitProbe, awaitProbe)
+) {
+  throw new Error(
+    'Await service oracle must use the deterministic ESM ID source'
+  );
+}
 writeFileSync(output, lines.join('\n') + '\n');
 writeFileSync(output + '.errors.json', JSON.stringify(sourceErrorRows));
 console.log(
