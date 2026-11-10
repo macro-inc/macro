@@ -30,7 +30,7 @@ fn decode(buffer: &DiffBuffer) -> Value {
     serde_json::from_slice(&output.stdout).unwrap()
 }
 #[test]
-fn all_eleven_opcodes_decode_with_exact_utf8_offsets_and_json() {
+fn all_twelve_opcodes_decode_with_exact_utf8_offsets_and_json() {
     let editor = Editor::builder(EditorMode::Headless).build().unwrap();
     let one = NodeKey::from_parts(KeyParts {
         generation: 7,
@@ -52,6 +52,7 @@ fn all_eleven_opcodes_decode_with_exact_utf8_offsets_and_json() {
         generation: 7,
         full_reconcile: true,
         view_text_matches: Some(two),
+        decorator_renders: vec![],
         ops: vec![
             DiffOp::Remove {
                 key: one,
@@ -114,6 +115,10 @@ fn all_eleven_opcodes_decode_with_exact_utf8_offsets_and_json() {
                 key: one,
                 state: Some(SerializedNode::new()),
             },
+            DiffOp::SetDecoratorRevision {
+                key: one,
+                revision: (1u64 << 53) + 9,
+            },
         ],
     };
     let mut buffer = DiffBuffer::default();
@@ -130,7 +135,8 @@ fn all_eleven_opcodes_decode_with_exact_utf8_offsets_and_json() {
         {"opcode":9,"key":1,"format":3,"indent":3,"direction":2,"textFormat":2,"style":"x: é","textStyle":"font: 😀"},
         {"opcode":10,"key":1,"props":{}},
         {"opcode":11,"key":2,"state":null},
-        {"opcode":11,"key":1,"state":{}}
+        {"opcode":11,"key":1,"state":{}},
+        {"opcode":12,"key":1,"revisionLo":9,"revisionHi":2097152}
     ]});
     assert_eq!(decode(&buffer), json!({"ok":true,"value":expected}));
     let original = buffer.clone();

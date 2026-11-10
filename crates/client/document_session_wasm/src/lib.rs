@@ -11,6 +11,7 @@ pub mod foreign_host_generated;
 pub mod foreign_native_fields_generated;
 mod application_exports;
 mod codec;
+mod decorator_observer;
 mod document;
 mod editor;
 mod editor_input;
@@ -33,6 +34,10 @@ use generated::owned as wire;
 pub use router::SyncRouter;
 use wasm_bindgen::prelude::*;
 const _: () = assert!(lexical_model::DIFF_FORMAT_VERSION == generated::DIFF_FORMAT_VERSION);
+const _: () = assert!(
+    lexical_model::DiffOpcode::SetDecoratorRevision as u32
+        == wire::DiffOpcode::SetDecoratorRevision as u32
+);
 #[derive(Debug, thiserror::Error)]
 enum BoundaryError {
     #[error(transparent)]

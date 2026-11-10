@@ -44,6 +44,40 @@ pub(crate) fn encode(
     correction: Option<TextCorrection>,
     selection_feedback: Option<ViewEffect>,
 ) -> Result<u32, BoundaryError> {
+    encode_inner(
+        output,
+        terminal,
+        buffer,
+        correction,
+        selection_feedback,
+        None,
+    )
+}
+pub(crate) fn encode_observed(
+    output: &SessionOutput,
+    terminal: bool,
+    buffer: &mut Vec<u8>,
+    correction: Option<TextCorrection>,
+    selection_feedback: Option<ViewEffect>,
+    observer: &mut crate::decorator_observer::DecoratorObserver,
+) -> Result<u32, BoundaryError> {
+    encode_inner(
+        output,
+        terminal,
+        buffer,
+        correction,
+        selection_feedback,
+        Some(observer),
+    )
+}
+fn encode_inner(
+    output: &SessionOutput,
+    terminal: bool,
+    buffer: &mut Vec<u8>,
+    correction: Option<TextCorrection>,
+    selection_feedback: Option<ViewEffect>,
+    observer: Option<&mut crate::decorator_observer::DecoratorObserver>,
+) -> Result<u32, BoundaryError> {
     if output.view.is_empty()
         && output.io.is_empty()
         && !output.need_peer_ids
@@ -51,6 +85,9 @@ pub(crate) fn encode(
         && selection_feedback.is_none()
     {
         buffer.clear();
+        if let Some(observer) = observer {
+            observer.stage(None);
+        }
         return Ok(0);
     }
     let mut diff = DiffBuffer::default();
@@ -58,20 +95,26 @@ pub(crate) fn encode(
     let mut entries = vec![];
     let mut count = 0;
     let mut flags = 0;
+    let mut remount = false;
     for v in output.view.iter().chain(selection_feedback.as_ref()) {
         flags |= 1;
         let mut m = view(0);
         match v {
             ViewEffect::Initialize(InitialView::Editor { diff: d, .. }) | ViewEffect::Diff(d) => {
                 if matches!(v, ViewEffect::Initialize(_)) {
+                    remount = true;
                     entry(&mut entries, 16, 8, 0, &bytes(&view(8))?);
                     count += 1;
                 }
                 if let Some(previous) = &mut combined {
-                    if d.full_reconcile {
+                    if matches!(v, ViewEffect::Initialize(_)) {
                         *previous = d.clone();
                     } else if previous.generation == d.generation {
+                        previous.full_reconcile |= d.full_reconcile;
                         previous.ops.extend(d.ops.clone());
+                        previous
+                            .decorator_renders
+                            .extend(d.decorator_renders.clone());
                         previous.view_text_matches = d.view_text_matches;
                     } else {
                         return Err(BoundaryError::Invalid("diff generation"));
@@ -277,17 +320,25 @@ pub(crate) fn encode(
     if let Some(correction) = correction {
         flags |= 1;
         if correction.initialize {
+            remount = true;
             combined = Some(correction.diff);
             entry(&mut entries, 16, 8, 0, &bytes(&view(8))?);
             count += 1;
         } else if let Some(previous) = &mut combined {
             previous.ops.extend(correction.diff.ops);
+            previous
+                .decorator_renders
+                .extend(correction.diff.decorator_renders);
             previous.view_text_matches = None;
         } else {
             combined = Some(correction.diff);
         }
     }
-    if let Some(combined) = combined {
+    let mut observation = None;
+    if let Some(mut combined) = combined {
+        if let Some(observer) = observer.as_ref() {
+            observation = Some(observer.prepare(&mut combined, remount)?);
+        }
         combined.encode(&mut diff);
     }
     for e in &output.io {
@@ -416,5 +467,8 @@ pub(crate) fn encode(
     buffer.extend(diff.strings);
     pad(buffer);
     buffer.extend(entries);
+    if let Some(observer) = observer {
+        observer.stage(observation);
+    }
     Ok(flags)
 }

@@ -60,6 +60,7 @@ pub struct NodeVTable {
     pub(crate) transforms: TransformsHook,
     pub(crate) language: bool,
     pub(crate) per_instance: bool,
+    pub(crate) decorator_render: fn(&dyn Any) -> Result<Option<DecoratorRenderPolicy>, Error>,
     pub(crate) project: fn(&dyn Any, TypeId) -> Option<&dyn Any>,
     pub(crate) project_mut: fn(&mut dyn Any, TypeId) -> Option<&mut dyn Any>,
     #[cfg(feature = "foreign-nodes")]

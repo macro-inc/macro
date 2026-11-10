@@ -268,6 +268,12 @@ fn view_tree(state: &EditorState) -> BTreeMap<NodeKey, ViewNode> {
 fn patch(view: &mut BTreeMap<NodeKey, ViewNode>, diff: Diff) {
     for op in diff.ops {
         match op {
+            DiffOp::SetDecoratorRevision { key, .. } => {
+                assert!(
+                    view.contains_key(&key),
+                    "component metadata requires a live node"
+                );
+            }
             DiffOp::Remove { key, .. } => {
                 assert!(view.remove(&key).is_some());
             }

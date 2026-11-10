@@ -391,6 +391,7 @@ fn ordered_diff_chain_keeps_both_text_patches_and_nested_observation_paths() {
                 generation: 0,
                 full_reconcile: false,
                 view_text_matches: None,
+                decorator_renders: vec![],
                 ops: vec![DiffOp::Text {
                     key,
                     text: "first".into(),
@@ -400,6 +401,7 @@ fn ordered_diff_chain_keeps_both_text_patches_and_nested_observation_paths() {
                 generation: 0,
                 full_reconcile: false,
                 view_text_matches: None,
+                decorator_renders: vec![],
                 ops: vec![DiffOp::Text {
                     key,
                     text: "second".into(),

@@ -69,6 +69,7 @@ pub(in crate::node) fn element<Node: ElementNode>() -> NodeVTable {
         transforms,
         language,
         per_instance,
+        decorator_render: |_| Ok(None),
         project: project_element::<Node>,
         project_mut: project_element_mut::<Node>,
         probe: || Node::flag_probe().map(|n| Arc::new(n) as Arc<dyn AnyNodeData>),

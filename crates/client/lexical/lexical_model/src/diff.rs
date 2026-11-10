@@ -21,6 +21,18 @@ pub struct Diff {
     pub view_text_matches: Option<NodeKey>,
     /// Ordered operations.
     pub ops: Vec<DiffOp>,
+    /// Native-only observations resolved by the consuming view at exposure.
+    /// Flat encoding does not serialize signatures or assign observation revisions.
+    pub decorator_renders: Vec<DecoratorRenderChange>,
+}
+/// Final component policy for one touched decorator in this patch.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct DecoratorRenderChange {
+    /// Full lifetime identity, including key generation.
+    pub key: NodeKey,
+    /// Pure final policy, without observing an intermediate publication.
+    /// None retires a removed decorator's consuming-view observation.
+    pub policy: Option<DecoratorRenderPolicy>,
 }
 /// All view-relevant text fields except content.
 #[derive(Clone, PartialEq, Debug)]
@@ -83,6 +95,13 @@ fn element_props(view: StateRef<'_>, key: NodeKey) -> Result<ElementProps, Error
 /// One structural or property-group operation.
 #[derive(Clone, PartialEq, Debug)]
 pub enum DiffOp {
+    /// Set the actual consuming-view component lifetime with full u64 precision.
+    SetDecoratorRevision {
+        /// Full node lifetime identity.
+        key: NodeKey,
+        /// Eager native invalidation or resolved signature observation revision.
+        revision: u64,
+    },
     /// Remove a node; a subtree root has no removed parent.
     Remove {
         /// Removed key.
@@ -254,8 +273,44 @@ impl Commit {
             full_reconcile: self.chain().any(|c| c.full_reconcile),
             view_text_matches: None,
             ops: vec![],
+            decorator_renders: vec![],
         };
         self.visit_diff(options, |op| diff.ops.push(op))?;
+        let mut keys = IndexSet::default();
+        if diff.full_reconcile {
+            keys.extend(last.next.nodes.keys().copied());
+        } else {
+            for commit in self.chain() {
+                keys.extend(
+                    commit
+                        .changes
+                        .dirty_leaves
+                        .iter()
+                        .chain(commit.changes.dirty_elements.keys())
+                        .copied(),
+                );
+            }
+        }
+        keys.extend(diff.ops.iter().filter_map(|op| match op {
+            DiffOp::Remove { key, .. } => Some(*key),
+            _ => None,
+        }));
+        for key in keys {
+            if last.next.view().contains(key)
+                && let Some(policy) = last.next.view().decorator_render_policy(key)?
+            {
+                diff.decorator_renders.push(DecoratorRenderChange {
+                    key,
+                    policy: Some(policy),
+                });
+            } else if !last.next.view().contains(key)
+                && self.chain().next().unwrap_or(self).prev.view().kind(key)
+                    == Some(NodeKind::Decorator)
+            {
+                diff.decorator_renders
+                    .push(DecoratorRenderChange { key, policy: None });
+            }
+        }
         Ok(diff)
     }
     pub(crate) fn visit_diff(

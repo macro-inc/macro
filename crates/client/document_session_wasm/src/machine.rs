@@ -13,6 +13,7 @@ pub(crate) enum Session {
 pub(crate) struct Machine {
     pub(crate) session: Session,
     pub(crate) output: Vec<u8>,
+    pub(crate) decorator_observer: crate::decorator_observer::DecoratorObserver,
     pub(crate) wake: Option<Millis>,
     wall_origin: f64,
     terminal: bool,
@@ -20,6 +21,38 @@ pub(crate) struct Machine {
     constructor_clock: Option<Arc<AtomicI64>>,
 }
 impl Machine {
+    pub(crate) fn take_output(&mut self) -> Vec<u8> {
+        self.decorator_observer.expose();
+        std::mem::take(&mut self.output)
+    }
+    pub(crate) fn initialize_view(&mut self) -> Result<Vec<u8>, BoundaryError> {
+        if !self.output.is_empty() {
+            return Err(BoundaryError::Invalid(
+                "initialize before pending output transfer",
+            ));
+        }
+        let Session::Editor(session) = &self.session else {
+            return Err(BoundaryError::Invalid("editor"));
+        };
+        let out = SessionOutput {
+            view: vec![ViewEffect::Initialize(InitialView::Editor {
+                diff: session.surface().view_diff()?,
+                state: session.surface().state().to_json()?,
+            })],
+            ..Default::default()
+        };
+        let mut bytes = vec![];
+        output::encode_observed(
+            &out,
+            false,
+            &mut bytes,
+            None,
+            None,
+            &mut self.decorator_observer,
+        )?;
+        self.decorator_observer.expose();
+        Ok(bytes)
+    }
     pub(crate) fn create(
         abi: u32,
         config: &[u8],
@@ -87,6 +120,7 @@ impl Machine {
         Ok(Self {
             session,
             output: vec![],
+            decorator_observer: Default::default(),
             wake: None,
             wall_origin: wall - mono,
             terminal: false,
@@ -261,6 +295,7 @@ impl Machine {
                             generation: state.max_key().generation(),
                             full_reconcile: false,
                             view_text_matches: None,
+                            decorator_renders: vec![],
                             ops: vec![lexical_model::DiffOp::Text {
                                 key,
                                 text: text.text.as_str().to_owned(),
@@ -280,12 +315,13 @@ impl Machine {
         } else {
             None
         };
-        let mut flags = output::encode(
+        let mut flags = output::encode_observed(
             out,
             self.terminal,
             &mut self.output,
             correction,
             selection_feedback,
+            &mut self.decorator_observer,
         )?;
         flags |= crate::telemetry::append(messages, &mut self.output)?;
         if command
@@ -316,7 +352,7 @@ impl Machine {
             view: vec![ViewEffect::Error(SessionError::Configuration(reason))],
             ..Default::default()
         };
-        output::encode(
+        output::encode_observed(
             &output,
             self.terminal,
             &mut self.output,
@@ -325,6 +361,7 @@ impl Machine {
                 initialize: true,
             }),
             None,
+            &mut self.decorator_observer,
         )
     }
     pub(crate) fn editor(&mut self, input: Input, mono: f64) -> Result<u32, BoundaryError> {
