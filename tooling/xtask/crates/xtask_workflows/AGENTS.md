@@ -39,3 +39,5 @@ TypeScript job logic in the owning package.
 Keep the web Typecheck export check on the pinned full namespace comparison, including
 blocked modules and ordinary emitted declarations; never filter failures to the
 subset of names currently used by callers.
+
+Build native session and development conformance WASM in the required editor artifact job before restoring its run-scoped outputs into typecheck and unit shards; keep Rust compilation out of typecheck itself.

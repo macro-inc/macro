@@ -1,9 +1,11 @@
 use super::*;
 
+mod editor_artifacts;
+
 #[test]
 fn android_native_check_is_an_unconditional_required_merge_check() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
-    let android = job(&yaml, "android-native-check", "typescript");
+    let android = job(&yaml, "android-native-check", "editor-wasm");
     assert!(
         !android.contains("\n    if:"),
         "native enforcement must always run (steps may be gated, the job may not): {android}"
