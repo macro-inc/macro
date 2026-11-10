@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by,\n                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id\n            FROM hosted_runtime\n            WHERE id = $1\n            ",
+  "query": "SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by, created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, previous_image FROM hosted_runtime\n             WHERE id IN (\n                 SELECT computer_id FROM hosted_runtime_effect WHERE worker = $1 AND run_after <= $2\n                 UNION\n                 SELECT computer_id FROM hosted_runtime_timer WHERE $1::text IS NULL AND fire_at <= $2\n             )",
   "describe": {
     "columns": [
       {
@@ -92,11 +92,22 @@
         "ordinal": 17,
         "name": "default_agent_id",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 18,
+        "name": "image",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 19,
+        "name": "previous_image",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Text",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -117,8 +128,10 @@
       true,
       false,
       true,
+      true,
+      true,
       true
     ]
   },
-  "hash": "907e1a38a01c67b2c23f08a311eeb0e70af47c72c437327c13843ff844b2c59a"
+  "hash": "3c62ad9ae05c803d55f66aa123c294cd3e2f95849ace204cbcf49220a24f808f"
 }
