@@ -46,6 +46,7 @@ import {
   userTeamsQueryOptions,
   useUserTeamsQuery,
 } from '@queries/team/teams';
+import { match } from 'ts-pattern';
 import { applyWorkspaceAccent } from './apply-workspace-accent';
 import type {
   OnboardingContext,
@@ -57,6 +58,7 @@ import {
   onboardingToolState,
 } from './queries/connected-tools';
 import { loadableQuery } from './queries/loadable-query';
+import { createAppOutlookAvailability } from './queries/outlook-availability';
 import {
   createAppRoutinesStep,
   generateRoutineSuggestions,
@@ -225,7 +227,16 @@ export function createAppOnboardingContext(): OnboardingContext {
         refresh: async () => invalidateEmailLinks(),
       };
     },
-    connectInbox: () => startAddInbox(),
+    connectInbox: (provider) => {
+      if (!provider) return startAddInbox();
+      return match(provider)
+        .with('google', () => startAddInbox({ provider: 'GMAIL' }))
+        .with('microsoft', () =>
+          startAddInbox({ provider: 'OUTLOOK', scopes: 'gmail_and_calendar' })
+        )
+        .exhaustive();
+    },
+    createOutlookAvailability: createAppOutlookAvailability,
 
     createToolCatalog: createOnboardingToolCatalog,
     createConnectedTools: ({ poll }) => {

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                feature,\n                user_id,\n                entity,\n                agent_api_key_id,\n                model,\n                input_tokens,\n                output_tokens,\n                cache_read_input_tokens,\n                cache_write_input_tokens,\n                audio_seconds,\n                provider_credits,\n                price_per_million_in,\n                price_per_million_out,\n                price_per_million_cache_read,\n                price_per_million_cache_write,\n                price_per_audio_minute,\n                price_per_provider_credit,\n                total,\n                created_at\n            FROM ai_usage\n            WHERE ($1::timestamptz IS NULL OR created_at >= $1)\n              AND ($2::timestamptz IS NULL OR created_at < $2)\n              AND (cardinality($3::text[]) = 0 OR user_id = ANY($3))\n              AND (cardinality($4::text[]) = 0 OR feature = ANY($4))\n            ORDER BY created_at DESC\n            ",
+  "query": "\n            SELECT\n                feature,\n                user_id,\n                entity,\n                agent_api_key_id,\n                agent_session_id,\n                model,\n                input_tokens,\n                output_tokens,\n                cache_read_input_tokens,\n                cache_write_input_tokens,\n                audio_seconds,\n                provider_credits,\n                price_per_million_in,\n                price_per_million_out,\n                price_per_million_cache_read,\n                price_per_million_cache_write,\n                price_per_audio_minute,\n                price_per_provider_credit,\n                total,\n                created_at\n            FROM ai_usage\n            WHERE ($1::timestamptz IS NULL OR created_at >= $1)\n              AND ($2::timestamptz IS NULL OR created_at < $2)\n              AND (cardinality($3::text[]) = 0 OR user_id = ANY($3))\n              AND (cardinality($4::text[]) = 0 OR feature = ANY($4))\n            ORDER BY created_at DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -25,76 +25,81 @@
       },
       {
         "ordinal": 4,
+        "name": "agent_session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
         "name": "model",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "input_tokens",
         "type_info": "Int8"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "output_tokens",
         "type_info": "Int8"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "cache_read_input_tokens",
         "type_info": "Int8"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "cache_write_input_tokens",
         "type_info": "Int8"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "audio_seconds",
         "type_info": "Float8"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "provider_credits",
         "type_info": "Int8"
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "price_per_million_in",
         "type_info": "Float4"
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "price_per_million_out",
         "type_info": "Float4"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "price_per_million_cache_read",
         "type_info": "Float4"
       },
       {
-        "ordinal": 14,
+        "ordinal": 15,
         "name": "price_per_million_cache_write",
         "type_info": "Float4"
       },
       {
-        "ordinal": 15,
+        "ordinal": 16,
         "name": "price_per_audio_minute",
         "type_info": "Float4"
       },
       {
-        "ordinal": 16,
+        "ordinal": 17,
         "name": "price_per_provider_credit",
         "type_info": "Float4"
       },
       {
-        "ordinal": 17,
+        "ordinal": 18,
         "name": "total",
         "type_info": "Float4"
       },
       {
-        "ordinal": 18,
+        "ordinal": 19,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
@@ -110,6 +115,7 @@
     "nullable": [
       false,
       false,
+      true,
       true,
       true,
       false,
@@ -129,5 +135,5 @@
       false
     ]
   },
-  "hash": "b3fb0aa8ab84bbdc8650d781db0bf9cdc369b6caaf15398e876445f3988e02e9"
+  "hash": "58001884cc7d81c9960d18bdc5ec0a5dbe9ae23abe260d4f308363ff3212237f"
 }

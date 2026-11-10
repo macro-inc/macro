@@ -51,6 +51,12 @@ export {
   InlineCheckbox,
   SingleSelectCheck,
 } from './components/Checkbox';
+export type {
+  ChipComboboxDisplay,
+  ChipComboboxOption,
+  ChipComboboxProps,
+} from './components/ChipCombobox';
+export { ChipCombobox } from './components/ChipCombobox';
 export type { CollapsedInputProps } from './components/CollapsedInput';
 export { CollapsedInput } from './components/CollapsedInput';
 export type {
