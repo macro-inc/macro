@@ -38,8 +38,7 @@ async fn create_block_volume_posts_an_empty_custom_block_volume() {
     client
         .create_block_volume(
             &crate::StoragePoolName::try_new("default").unwrap(),
-            &crate::StorageVolumeName::try_new("mc-01900000000070008000000000000001-data")
-                .unwrap(),
+            &crate::StorageVolumeName::try_new("mc-01900000000070008000000000000001-data").unwrap(),
             "20GiB",
         )
         .await
@@ -89,8 +88,7 @@ async fn attach_volume_patches_only_the_data_disk_device() {
             &InstanceName::try_new("mc-01900000000070008000000000000001").unwrap(),
             "macro-data",
             &crate::StoragePoolName::try_new("default").unwrap(),
-            &crate::StorageVolumeName::try_new("mc-01900000000070008000000000000001-data")
-                .unwrap(),
+            &crate::StorageVolumeName::try_new("mc-01900000000070008000000000000001-data").unwrap(),
         )
         .await
         .unwrap();
