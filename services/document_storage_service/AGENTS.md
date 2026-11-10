@@ -133,5 +133,9 @@ partial configuration fails startup, and absent configuration leaves vault route
 explicitly unavailable. Hosted human operations evaluate remote `enable-passwords`;
 Local uses an explicit enabled snapshot. Cleanup runs independently of rollout.
 The existing primary pool stores metadata only; values stay in OpenBao.
-`src/passwords_cleanup.rs` runs durable enrollment cleanup through the domain
+`src/passwords_cleanup.rs` runs durable private-item and enrollment cleanup through the domain
 service every minute; the consumer task tracker cancels and drains it on shutdown.
+
+`/internal/passwords` accepts only internal service credentials for account closure,
+private erasure, and team namespace purge. These trusted lifecycle operations run
+independently of rollout; provider failures produce errors and retain retry metadata.

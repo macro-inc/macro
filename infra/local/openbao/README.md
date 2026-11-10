@@ -126,9 +126,11 @@ maximum TTL. It has no default policy. Services sign short-lived JWTs; the local
 bootstrap token remains local and is never used at runtime. Hosted environments
 require equivalent role provisioning before enabling namespace cleanup.
 
-Set `PASSWORDS_TEST_OPENBAO_RUST_BIN` to a compiled passwords unit-test executable
-when running the disposable lifecycle regression to exercise the Rust adapter's
-namespace deletion acknowledgement against the same provider.
+To include Rust checks, set `PASSWORDS_TEST_OPENBAO_RUST_BIN` to a compiled
+passwords unit-test executable and set `DATABASE_URL` to an explicit disposable
+metadata database when running the lifecycle regression. It runs both ignored Rust provider regressions serially against the
+same disposable server, including namespace deletion acknowledgement and delayed
+TOTP retirement with real metadata.
 
 On first provisioning, bootstrap waits with bounded retries for a newly mounted
 KV v2 backend to accept configuration. Existing configuration failures are not

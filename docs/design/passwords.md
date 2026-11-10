@@ -53,11 +53,43 @@ activation and user removal compare the authorized metadata revision so a lost
 lease cannot let an older request override a newer enrollment decision.
 Removal and item deletion retire enrollments. A tracked worker quarantines retired
 and abandoned enrollments under the team lease, then erases them after 180 seconds,
-preserving the active generation. Retained tombstones schedule hourly erasure
-retries even after success, covering arbitrarily delayed provider completions
+preserving the active generation. Never-erased enrollments and initial quarantine
+receive priority over acknowledged hourly repeats in each bounded batch. Erasure
+acknowledgement is explicit; journal tombstones remain indefinitely while the
+namespace exists. Retained tombstones schedule hourly erasure retries even after
+success, covering arbitrarily delayed provider completions
 after a lost database lease. The grace covers the 60-second runtime token, a
 provider request bound of at most 90 seconds, and clock margin. Hosted OpenBao
 must enforce that bound and synchronized clocks with JWT leeway disabled.
+
+## Membership and deletion
+
+A voluntary departure returns typed `vault_items_owned` while the person owns
+live vault items or an unfinished create. Administrative removal is never blocked
+by item ownership or provider availability. Membership revocation and a reversible
+vault fence commit in the same database transaction, under the existing team
+lease. Affected disclosures return retryable `vault_busy` until the removal saga
+finishes or rolls back; values remain intact during that phase.
+
+After the saga's final required step succeeds, one transaction marks its outbox
+record finished, transfers already-shared items to the current team owner with
+existing grants preserved, drops the removed member's own grants, and queues
+private erasure. Uncommitted write intents are fenced privately; their snapshots
+cannot create new sharing grants. Rollback restores membership and removes the
+reversible fence without enqueueing erasure. Private values are never transferred
+to another person. The tracked worker retries private erasures independently of
+rollout or the removed member's session; each failure warns and marks its child
+span as an error. Acknowledged KV erasure retains a CAS fence; TOTP generations
+retain the quarantine and repeat-erasure journal.
+
+Account deletion closes vault admission for the immutable account identity before
+team discovery, then awaits team cleanup and private erasure before deleting a
+profile. Closure survives retries without blocking a later new account that reuses
+an address. Acknowledged private erasures strip identifying metadata and retain
+only anonymous lifecycle fences. Team deletion first purges the provider namespace,
+then vault metadata, then billing and the team row. No operator purge step is
+required. A failed or pending purge returns a typed error and marks the deletion
+span as failed; it does not report partial success or remove the retry metadata.
 
 ## OpenBao
 
@@ -69,8 +101,9 @@ the namespace from the authenticated team's identity, never a caller-supplied
 provider path. The bootstrap script provisions mounts and JWT roles idempotently.
 
 Macro-issued JWTs use a dedicated audience, short expiry, and a team claim bound
-by the namespace's JWT role. Runtime policy allows only the required KV/TOTP
-paths. Runtime tokens cannot create namespaces, policies, or auth roles. A
+by the namespace's JWT role. Value-role policy allows only the required KV/TOTP
+paths; the separate lifecycle role permits exact-team namespace read/delete.
+Runtime tokens cannot create namespaces, policies, or auth roles. A
 separate provisioning identity owns those operations; never ship a root token
 to the browser or use it for hosted runtime requests. Agents may become typed
 grantees later, but v1 exposes no agent tool, requests, approvals, or agent UI.
@@ -139,10 +172,16 @@ TLS, KMS auto-unseal, persistent replicated storage, backups with restore drills
 restricted networking, least-privilege runtime identities, durable audit storage,
 rotation, and monitored availability. This change does not deploy OpenBao or
 alter production. Disable discovery until the backing environment is ready.
-Provision team namespaces explicitly before use. Team deletion does not yet
-provision provider teardown: operators must purge the team's OpenBao namespace
-before deleting the Macro team, because deleting its metadata also removes
-enrollment cleanup journals. The runtime identity cannot administer namespaces.
+Provision team namespaces explicitly before use. Namespace erasure uses a separate
+parent JWT role, `auth/macro-lifecycle/role/team-<team-id>`, bound to the lifecycle
+subject/audience and exact team claim. Its token may read/delete only that team's
+namespace and expires within 60 seconds; the normal values role gains no parent
+privileges. Local bootstrap provisions it idempotently. Hosted deployment must
+provision the same role before deploying this deletion path; missing roles fail
+loudly. Runtime services never receive the bootstrap token. OpenBao DELETE begins
+asynchronous erasure, so the adapter confirms namespace disappearance before
+acknowledging success and removing vault metadata. Closed team identities remain
+fenced against delayed senders.
 
 Future work includes independently managed team envelopes/BYOK, end-to-end
 encrypted private items, provider adapters, and agent grants with explicit

@@ -21,6 +21,7 @@ fn owner_and_grants_are_scoped_to_the_team_and_permission() {
             permission: Permission::View,
         }],
         deleting: false,
+        member_removal_pending: false,
         revision: 0,
         totp_key_id: None,
         metadata: ItemMetadata {

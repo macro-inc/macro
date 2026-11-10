@@ -46,7 +46,11 @@ impl PasswordService {
         item: ItemId,
     ) -> Result<Box<dyn ItemLock>, Error> {
         self.membership(actor, team).await?;
-        self.repository.lock(team, item).await
+        let lock = self.repository.lock(team, item).await?;
+        // A lifecycle mutation can revoke membership or close the vault between
+        // pre-admission and lease acquisition, including for item creation.
+        self.membership(actor, team).await?;
+        Ok(lock)
     }
     fn permission(actor: &Actor, team: TeamId, record: &Record, edit: bool) -> bool {
         record.user_id == actor.user_id
@@ -60,9 +64,21 @@ impl PasswordService {
     }
     /// A lost provider response can be reconciled from its operation UUID and durable metadata intent.
     /// Every caller holds the same distributed item lock throughout this and the protected action.
-    async fn reconcile(&self, team: TeamId, item: ItemId) -> Result<(), Error> {
+    async fn reconcile(&self, actor: &Actor, team: TeamId, item: ItemId) -> Result<(), Error> {
         let current = self.repository.get(team, item).await;
         let current_record = current.as_ref().ok().cloned();
+        if let Some(record) = current_record
+            .as_ref()
+            .filter(|record| record.member_removal_pending)
+        {
+            if record.deleting
+                || record.metadata.team_id != team
+                || !Self::permission(actor, team, record, false)
+            {
+                return Err(Error::NotFound);
+            }
+            return Err(Error::Busy);
+        }
         if matches!(&current,Ok(record) if record.deleting) {
             return Ok(());
         }
@@ -121,6 +137,9 @@ impl PasswordService {
             || !Self::permission(actor, team, &record, edit)
         {
             return Err(Error::NotFound);
+        }
+        if record.member_removal_pending {
+            return Err(Error::Busy);
         }
         Ok(record)
     }
@@ -227,7 +246,7 @@ impl PasswordService {
         {
             return Err(Error::Forbidden);
         }
-        self.reconcile(team, id).await?;
+        self.reconcile(actor, team, id).await?;
         match self.repository.get(team, id).await {
             Ok(record) if record.user_id == actor.user_id && !record.deleting => {
                 self.repository
@@ -244,6 +263,7 @@ impl PasswordService {
             user_id: actor.user_id.clone(),
             grants: vec![],
             deleting: false,
+            member_removal_pending: false,
             revision: 0,
             totp_key_id: None,
             metadata: ItemMetadata {
@@ -267,7 +287,7 @@ impl PasswordService {
         self.provider
             .write(team, id, 0, command.operation_id, &command.values)
             .await?;
-        self.reconcile(team, id).await?;
+        self.reconcile(actor, team, id).await?;
         self.repository
             .audit(team, id, actor, Action::Create, command.operation_id)
             .await?;
@@ -284,7 +304,7 @@ impl PasswordService {
     ) -> Result<ItemMetadata, Error> {
         let _lock = self.admit(actor, team, item).await?;
         self.access(actor, team, item, true).await?;
-        self.reconcile(team, item).await?;
+        self.reconcile(actor, team, item).await?;
         let mut record = self.access(actor, team, item, true).await?;
         command.validate()?;
         if command.expected_version != Some(record.metadata.version) {
@@ -312,7 +332,7 @@ impl PasswordService {
         self.provider
             .write(team, item, expected, command.operation_id, &command.values)
             .await?;
-        self.reconcile(team, item).await?;
+        self.reconcile(actor, team, item).await?;
         self.repository
             .audit(team, item, actor, Action::Update, command.operation_id)
             .await?;
@@ -371,6 +391,9 @@ impl PasswordService {
         if record.user_id != actor.user_id {
             return Err(Error::Forbidden);
         }
+        if record.member_removal_pending {
+            return Err(Error::Busy);
+        }
         if !record.deleting {
             record.deleting = true;
             self.repository
@@ -380,12 +403,7 @@ impl PasswordService {
                 .audit(team, item, actor, Action::Delete, Uuid::now_v7())
                 .await?;
         }
-        self.repository.retire_totp(team, item, None).await?;
-        for key_id in self.repository.totp_keys(team, item).await? {
-            self.provider.delete_totp(team, key_id).await?;
-        }
-        self.provider.delete(team, item).await?;
-        self.repository.delete(team, item).await
+        self.erase_retired_record(team, item).await.map(|_| ())
     }
     /// Copy an authorized version with a distinct action span and the disclosure reauthentication policy.
     #[tracing::instrument(skip_all,err,name="passwords.copy",fields(team_id=%team.0,item_id=%item.0))]
@@ -411,7 +429,7 @@ impl PasswordService {
         let _lock = self.admit(actor, team, item).await?;
         self.access(actor, team, item, false).await?;
         self.reauthentication.verify(actor).await?;
-        self.reconcile(team, item).await?;
+        self.reconcile(actor, team, item).await?;
         let mut record = self.access(actor, team, item, false).await?;
         let version = version.unwrap_or(record.metadata.version);
         if version < 1 || version > record.metadata.version {
@@ -621,40 +639,22 @@ impl PasswordService {
     }
     /// Erase retired or uncommitted generations after the provider's bounded in-flight request window.
     /// Retired identities remain journaled for periodic erasure; cancellation and failures remain retryable.
-    #[tracing::instrument(skip_all, err, name = "passwords.totp.cleanup")]
+    #[tracing::instrument(skip_all, err, name = "passwords.totp.cleanup",fields(completed=tracing::field::Empty,failed=tracing::field::Empty))]
     pub async fn cleanup_expired_totp_enrollments(&self) -> Result<usize, Error> {
         let mut completed = 0;
+        let mut failed = 0;
         for cleanup in self.repository.totp_cleanup_due().await? {
-            let _lock = match self.repository.lock(cleanup.team_id, cleanup.item_id).await {
-                Ok(lock) => lock,
-                Err(Error::Busy) => continue,
+            match self.erase_retired_totp(cleanup).await {
+                Ok(true) => completed += 1,
+                Ok(false) => {}
                 Err(error) => {
-                    tracing::warn!(error=%error,"passwords cleanup lease unavailable");
-                    continue;
-                }
-            };
-            match self.repository.totp_cleanup_ready(cleanup).await {
-                Ok(true) => {}
-                Ok(false) => continue,
-                Err(error) => {
-                    tracing::warn!(error=%error,"passwords cleanup state unavailable");
-                    continue;
+                    failed += 1;
+                    tracing::warn!(team_id=%cleanup.team_id.0,key_id=%cleanup.key_id.0,error=%error,"passwords retired enrollment cleanup failed; retained for retry");
                 }
             }
-            if let Err(error) = self
-                .provider
-                .delete_totp(cleanup.team_id, cleanup.key_id)
-                .await
-            {
-                tracing::warn!(error=%error,"passwords retired enrollment cleanup failed");
-                continue;
-            }
-            if let Err(error) = self.repository.finish_totp_cleanup(cleanup).await {
-                tracing::warn!(error=%error,"passwords cleanup completion failed");
-                continue;
-            }
-            completed += 1;
         }
+        tracing::Span::current().record("completed", completed);
+        tracing::Span::current().record("failed", failed);
         Ok(completed)
     }
 }
@@ -663,3 +663,5 @@ pub(crate) mod test;
 
 #[cfg(test)]
 mod review_test;
+
+mod lifecycle;

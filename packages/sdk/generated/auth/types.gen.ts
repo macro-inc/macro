@@ -2036,6 +2036,21 @@ export type TeamPlan = 'idea' | 'pre_seed' | 'seed' | 'series_a' | 'growth';
 export type TeamRole = 'member' | 'admin' | 'owner';
 
 /**
+ * Sanitized lifecycle response; contains no provider or credential data.
+ */
+export type TeamVaultFailure = {
+    /**
+     * Machine-readable failure category.
+     */
+    code: TeamVaultFailureCode;
+};
+
+/**
+ * Typed vault lifecycle failures shared with generated clients.
+ */
+export type TeamVaultFailureCode = 'vault_busy' | 'vault_items_owned' | 'vault_unavailable';
+
+/**
  * A team with its members
  */
 export type TeamWithMembers = {
@@ -3947,7 +3962,9 @@ export type DeleteTeamData = {
 export type DeleteTeamErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    409: TeamVaultFailure;
     500: ErrorResponse;
+    503: TeamVaultFailure;
 };
 
 export type DeleteTeamError = DeleteTeamErrors[keyof DeleteTeamErrors];
@@ -4390,7 +4407,9 @@ export type RemoveUserFromTeamData = {
 export type RemoveUserFromTeamErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    409: TeamVaultFailure;
     500: ErrorResponse;
+    503: TeamVaultFailure;
 };
 
 export type RemoveUserFromTeamError = RemoveUserFromTeamErrors[keyof RemoveUserFromTeamErrors];

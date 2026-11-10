@@ -19,6 +19,12 @@ struct StoredSecret {
     values: SecretValues,
 }
 
+#[derive(Clone, Copy)]
+enum NamespaceAccess {
+    Values,
+    Lifecycle,
+}
+
 /// Namespace-isolated OpenBao KV v2 and TOTP adapter with short-lived team JWT login.
 pub struct OpenBaoProvider {
     address: String,
@@ -67,6 +73,30 @@ impl OpenBaoProvider {
     }
     #[tracing::instrument(skip_all, err, name = "passwords.openbao.authenticate")]
     async fn client(&self, team: TeamId) -> Result<VaultClient, Error> {
+        self.authenticated_client(team, NamespaceAccess::Values)
+            .await
+    }
+    async fn authenticated_client(
+        &self,
+        team: TeamId,
+        access: NamespaceAccess,
+    ) -> Result<VaultClient, Error> {
+        let (subject, audience, mount, role, namespace) = match access {
+            NamespaceAccess::Values => (
+                "macro-passwords-service",
+                "macro-passwords",
+                "macro",
+                "passwords-service".to_string(),
+                Some(format!("team-{}", team.0)),
+            ),
+            NamespaceAccess::Lifecycle => (
+                "macro-passwords-lifecycle",
+                "macro-passwords-lifecycle",
+                "macro-lifecycle",
+                format!("team-{}", team.0),
+                None,
+            ),
+        };
         #[derive(Serialize)]
         struct Claims<'a> {
             iss: &'a str,
@@ -83,8 +113,8 @@ impl OpenBaoProvider {
                 &Header::new(Algorithm::RS256),
                 &Claims {
                     iss: &self.issuer,
-                    sub: "macro-passwords-service",
-                    aud: "macro-passwords",
+                    sub: subject,
+                    aud: audience,
                     team_id: team.0.to_string(),
                     iat: now,
                     exp: now + 60,
@@ -100,7 +130,7 @@ impl OpenBaoProvider {
             .map_err(|_| Error::Unavailable)?,
         );
         let mut settings = self.settings.clone();
-        settings.namespace = Some(format!("team-{}", team.0));
+        settings.namespace = namespace;
         let middle = vaultrs::api::EndpointMiddleware {
             token: String::new(),
             version: "v1".into(),
@@ -116,9 +146,9 @@ impl OpenBaoProvider {
         };
         let auth = quiet(vaultrs::auth::oidc::login(
             &client,
-            "macro",
+            mount,
             &jwt.0,
-            Some("passwords-service".into()),
+            Some(role),
         ))
         .await
         .map_err(|_| Error::Unavailable)?;
@@ -185,6 +215,64 @@ impl OpenBaoProvider {
 }
 #[async_trait]
 impl SecretProvider for OpenBaoProvider {
+    #[tracing::instrument(skip_all,err,name="passwords.openbao.purge_namespace",fields(team_id=%team.0,outcome=tracing::field::Empty))]
+    async fn purge_namespace(&self, team: TeamId) -> Result<(), Error> {
+        let client = self
+            .authenticated_client(team, NamespaceAccess::Lifecycle)
+            .await?;
+        let token = SecretString(client.settings().token.clone());
+        let audit_id = tracing::Span::current()
+            .context()
+            .span()
+            .span_context()
+            .trace_id()
+            .to_string();
+        let response = self
+            .http
+            .delete(format!(
+                "{}/v1/sys/namespaces/team-{}",
+                self.address, team.0
+            ))
+            .header("X-Vault-Token", &token.0)
+            .header("x-macro-audit-id", &audit_id)
+            .send()
+            .await
+            .map_err(|_| Error::Unavailable)?;
+        if !matches!(
+            response.status(),
+            reqwest::StatusCode::OK
+                | reqwest::StatusCode::NO_CONTENT
+                | reqwest::StatusCode::NOT_FOUND
+        ) {
+            return Err(Error::Unavailable);
+        }
+        // DELETE taints the namespace and starts asynchronous revocation. A 200/204
+        // alone is not proof of erasure; retain metadata until lookup returns 404.
+        for attempt in 0u32..8 {
+            let status = self
+                .http
+                .get(format!(
+                    "{}/v1/sys/namespaces/team-{}",
+                    self.address, team.0
+                ))
+                .header("X-Vault-Token", &token.0)
+                .header("x-macro-audit-id", &audit_id)
+                .send()
+                .await
+                .map_err(|_| Error::Unavailable)?
+                .status();
+            if status == reqwest::StatusCode::NOT_FOUND {
+                tracing::Span::current().record("outcome", "namespace_purged");
+                return Ok(());
+            }
+            if status != reqwest::StatusCode::OK {
+                return Err(Error::Unavailable);
+            }
+            tokio::time::sleep(Duration::from_millis(100 * 2u64.pow(attempt.min(3)))).await;
+        }
+        Err(Error::Busy)
+    }
+
     #[tracing::instrument(skip_all,err,name="passwords.openbao.current_version",fields(team_id=%team.0,item_id=%item.0))]
     async fn current_version(&self, team: TeamId, item: ItemId) -> Result<Option<i32>, Error> {
         let client = self.client(team).await?;
@@ -401,6 +489,9 @@ async fn quiet<T>(future: impl std::future::Future<Output = T>) -> T {
 pub struct UnavailableProvider;
 #[async_trait]
 impl SecretProvider for UnavailableProvider {
+    async fn purge_namespace(&self, _: TeamId) -> Result<(), Error> {
+        Err(Error::Unavailable)
+    }
     async fn current_version(&self, _: TeamId, _: ItemId) -> Result<Option<i32>, Error> {
         Err(Error::Unavailable)
     }

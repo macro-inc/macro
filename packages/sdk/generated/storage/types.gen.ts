@@ -15100,7 +15100,7 @@ export type PasswordActivity = {
 /**
  * Closed, payload-free failure codes exposed by the human vault API.
  */
-export type PasswordErrorCode = 'not_found' | 'forbidden' | 'reauthentication_required' | 'invalid_request' | 'version_conflict' | 'vault_busy' | 'vault_unavailable';
+export type PasswordErrorCode = 'vault_items_owned' | 'not_found' | 'forbidden' | 'reauthentication_required' | 'invalid_request' | 'version_conflict' | 'vault_busy' | 'vault_unavailable';
 
 /**
  * Sanitized vault failure shared with generated HTTP clients.

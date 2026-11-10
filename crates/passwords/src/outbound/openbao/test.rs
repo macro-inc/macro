@@ -187,6 +187,35 @@ async fn local_provider_versions_totp_isolation_and_deletion_fence() {
         .delete(first, item)
         .await
         .expect("idempotent delete");
+    provider
+        .write(second, item, 0, uuid::Uuid::now_v7(), &values)
+        .await
+        .expect("other team survives");
+    provider
+        .purge_namespace(first)
+        .await
+        .expect("parent JWT namespace erasure");
+    provider
+        .purge_namespace(first)
+        .await
+        .expect("retry after namespace already erased");
+    assert!(provider.read(first, item, 1).await.is_err());
+    assert_eq!(
+        provider
+            .read(second, item, 1)
+            .await
+            .expect("other team unaffected")
+            .password
+            .0,
+        "synthetic-second"
+    );
+    assert!(
+        matches!(
+            provider.purge_namespace(TeamId(uuid::Uuid::now_v7())).await,
+            Err(Error::Unavailable)
+        ),
+        "missing lifecycle role must fail closed"
+    );
 }
 
 #[derive(Clone)]
@@ -355,6 +384,7 @@ async fn delayed_enrollment_cannot_replace_live_key_or_survive_retirement_cleanu
                 user_id: owner.user_id.clone(),
                 grants: vec![],
                 deleting: false,
+                member_removal_pending: false,
                 revision: 0,
                 totp_key_id: None,
                 metadata: ItemMetadata {

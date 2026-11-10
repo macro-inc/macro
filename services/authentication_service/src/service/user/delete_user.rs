@@ -9,6 +9,17 @@ mod test;
 
 /// Owning services and persistence needed to remove an account.
 pub trait UserDeletionGateway: Send + Sync {
+    /// Close vault admissions before discovering team membership cleanup.
+    fn close_vault_access(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+    /// Await private-item erasure after owned team namespaces have been purged.
+    fn delete_vault_items(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
     /// Stop future scheduled work before tearing down sessions.
     fn delete_scheduled_actions(
         &self,
@@ -72,8 +83,12 @@ pub async fn delete_user_data(
         tracing::info!(%user, "deleted scheduled actions");
         gateway.delete_agent_sessions(user).await?;
         tracing::info!(%user, "deleted agent sessions");
+        gateway.close_vault_access(user).await?;
+        tracing::info!("closed vault admission");
         gateway.leave_teams(user).await?;
         tracing::info!(%user, "left and cleaned up teams");
+        gateway.delete_vault_items(user).await?;
+        tracing::info!("purged private vault items");
         gateway.delete_items(user).await?;
         tracing::info!(%user, "deleted documents, chats, and projects");
         gateway.delete_onboarding(user).await?;

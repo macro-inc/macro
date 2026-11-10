@@ -210,6 +210,9 @@ pub struct Record {
     pub grants: Vec<Grant>,
     /// Deletion fence; prevents reads and delayed-write resurrection.
     pub deleting: bool,
+    /// A reversible membership-removal fence; values remain intact until finalization.
+    #[serde(default)]
+    pub member_removal_pending: bool,
     /// Metadata revision used to preserve later edits during recovery.
     pub revision: i64,
     /// Active generation of the TOTP enrollment; never a seed.
@@ -310,6 +313,9 @@ pub struct TotpCode {
 /// Sanitized domain failures. Provider messages may contain secrets, so are discarded.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// A voluntary departure would abandon live owned vault items.
+    #[error("dispose of owned vault items before leaving")]
+    OwnedItems,
     #[error("vault item not found")]
     /// Resource absent or hidden by its authorization boundary.
     NotFound,

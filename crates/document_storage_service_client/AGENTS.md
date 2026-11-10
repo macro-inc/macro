@@ -52,3 +52,7 @@ documents, projects, threads, notifications, and uploads.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`
+
+- Vault lifecycle requests use internal authentication, trace propagation, a
+  bounded timeout and no redirects. Accept only HTTP 204 as completed; preserve
+  typed busy/unavailable failures and reject every other status.

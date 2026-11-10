@@ -190,3 +190,12 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   `.agents/rules/rust/security.md` · Skill: `new-service`
 
 - The HTTP boundary validates optional signed agent correlation without changing existing authorization.
+
+## Vault lifecycle
+
+- Wire `PasswordMemberVault` into TeamRepositoryImpl so membership commit,
+  reversible fencing, compensation, and final erasure publication share transactions.
+- Account deletion closes vault admission before team cleanup and awaits private
+  erasure before deleting profile/account metadata; any failure stops the job.
+- Use internal DSS lifecycle endpoints for provider work. Keep runtime bootstrap
+  credentials out of the service; local provisioning supplies the scoped parent JWT role.

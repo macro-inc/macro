@@ -78,6 +78,7 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
         user_id: owner.user_id.clone(),
         grants: vec![],
         deleting: false,
+        member_removal_pending: false,
         totp_key_id: None,
         revision: 0,
         metadata: ItemMetadata {
@@ -689,6 +690,7 @@ async fn stale_totp_setup_and_removal_cannot_override_a_newer_enrollment_or_remo
                 user_id: owner,
                 grants: vec![],
                 deleting: false,
+                member_removal_pending: false,
                 revision: 0,
                 totp_key_id: None,
                 metadata: ItemMetadata {
@@ -778,4 +780,65 @@ async fn stale_totp_setup_and_removal_cannot_override_a_newer_enrollment_or_remo
     assert!(removed.totp_key_id.is_none());
     assert!(!removed.metadata.has_totp);
     assert!(removed.revision > active.revision);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn first_erasure_and_quarantine_are_not_starved_by_repeat_tombstones(pool: PgPool) {
+    let team = TeamId(Uuid::now_v7());
+    let item = ItemId(Uuid::now_v7());
+    let account = Uuid::now_v7();
+    sqlx::query!("INSERT INTO macro_user(id,username,email,stripe_customer_id) VALUES($1,'queue@example.test','queue@example.test',$2)", account, format!("fixture-{account}"))
+        .execute(&pool).await.expect("account");
+    sqlx::query!(r#"INSERT INTO "User"(id,email,macro_user_id) VALUES('macro|queue@example.test','queue@example.test',$1)"#, account)
+        .execute(&pool).await.expect("user");
+    sqlx::query!(
+        "INSERT INTO team(id,name,owner_id) VALUES($1,'Fixture','macro|queue@example.test')",
+        team.0
+    )
+    .execute(&pool)
+    .await
+    .expect("team");
+    sqlx::query!("INSERT INTO password_item_entities(team_id,id,user_id,metadata,version) VALUES($1,$2,'macro|queue@example.test','{}',1)", team.0,item.0)
+        .execute(&pool).await.expect("item");
+    let repository = PgRepository::new(pool).expect("repository");
+    for _ in 0..100 {
+        let key_id = TotpKeyId(Uuid::now_v7());
+        repository
+            .stage_totp(team, item, key_id)
+            .await
+            .expect("repeat fixture");
+        repository
+            .finish_totp_cleanup(TotpCleanup {
+                team_id: team,
+                item_id: item,
+                key_id,
+            })
+            .await
+            .expect("acknowledged erasure");
+    }
+    sqlx::query!("UPDATE password_totp_enrollments SET cleanup_after=now()-interval '1 hour' WHERE team_id=$1", team.0)
+        .execute(&repository.pool).await.expect("repeat erasures due");
+    let first_erasure = TotpKeyId(Uuid::now_v7());
+    repository
+        .stage_totp(team, item, first_erasure)
+        .await
+        .expect("first erasure");
+    assert!(
+        repository
+            .totp_cleanup_due()
+            .await
+            .expect("batch")
+            .iter()
+            .any(|entry| entry.key_id == first_erasure)
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM password_totp_enrollments WHERE team_id=$1",
+            team.0
+        )
+        .fetch_one(&repository.pool)
+        .await
+        .expect("retained tombstones"),
+        Some(101)
+    );
 }

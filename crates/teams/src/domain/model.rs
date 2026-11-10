@@ -723,6 +723,16 @@ pub enum InviteUsersToTeamError {
 /// Errors for removing a user from a team
 #[derive(Debug, thiserror::Error)]
 pub enum RemoveUserFromTeamError {
+    /// Another reversible vault transition is pending.
+    #[error("vault lifecycle busy")]
+    VaultBusy,
+    /// A voluntary departure would abandon live owned vault items.
+    #[error("dispose of owned vault items before leaving")]
+    VaultItemsOwned,
+    /// Vault metadata could not be safely fenced with membership revocation.
+    #[error("vault lifecycle unavailable")]
+    VaultUnavailable,
+
     /// The team does not exist
     #[error("The team does not exist")]
     TeamDoesNotExist,
@@ -826,6 +836,10 @@ pub enum RemoveTeamInviteError {
 /// Errors for deleting a team
 #[derive(Debug, thiserror::Error)]
 pub enum DeleteTeamError {
+    /// Namespace and metadata erasure did not complete.
+    #[error("vault cleanup failed")]
+    VaultCleanup(#[from] crate::domain::vault::VaultLifecycleError),
+
     /// Storage layer error
     #[error("Storage layer error")]
     StorageLayerError(#[from] anyhow::Error),

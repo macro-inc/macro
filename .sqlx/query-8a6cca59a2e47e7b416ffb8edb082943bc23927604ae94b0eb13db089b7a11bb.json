@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT team_id AS \"team_id!\" FROM (SELECT team_id FROM password_item_entities WHERE user_id=$1 UNION SELECT team_id FROM password_item_entities WHERE deleted_at IS NULL AND grants @> $2 UNION SELECT team_id FROM password_write_intents WHERE record->>'user_id'=$1) vaults ORDER BY team_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8a6cca59a2e47e7b416ffb8edb082943bc23927604ae94b0eb13db089b7a11bb"
+}

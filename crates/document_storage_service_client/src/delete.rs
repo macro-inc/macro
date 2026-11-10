@@ -89,3 +89,79 @@ impl DocumentStorageServiceClient {
         }
     }
 }
+
+/// A vault namespace was not acknowledged as erased by its owning service.
+#[derive(Debug, Clone, Copy, thiserror::Error)]
+pub enum VaultLifecycleRequestError {
+    /// Namespace erasure is still pending and can be retried.
+    #[error("vault cleanup pending")]
+    Busy,
+    /// The required lifecycle provider or role is unavailable.
+    #[error("vault cleanup unavailable")]
+    Unavailable,
+
+    /// The deletion request did not complete.
+    #[error("unable to reach vault owning service")]
+    Unreachable,
+    /// Only an explicit 204 acknowledgement permits team metadata deletion.
+    #[error("vault owning service rejected erasure with status {0}")]
+    Rejected(u16),
+}
+impl DocumentStorageServiceClient {
+    /// Purge the team's vault before cascading metadata can lose its cleanup identities.
+    #[tracing::instrument(skip_all, err, name="passwords.lifecycle.purge.request",fields(team_id=%team))]
+    pub async fn purge_team_vault(&self, team: Uuid) -> Result<(), VaultLifecycleRequestError> {
+        self.vault_lifecycle_request(reqwest::Method::DELETE, &["teams", &team.to_string()])
+            .await
+    }
+    /// Close account admission before the deletion job discovers memberships.
+    #[tracing::instrument(skip_all, err, name = "passwords.lifecycle.account.close.request")]
+    pub async fn close_user_vault(&self, user: &str) -> Result<(), VaultLifecycleRequestError> {
+        self.vault_lifecycle_request(reqwest::Method::POST, &["users", user])
+            .await
+    }
+    /// Await private erasures before the deletion job removes the profile.
+    #[tracing::instrument(skip_all, err, name = "passwords.lifecycle.account.purge.request")]
+    pub async fn purge_user_vault(&self, user: &str) -> Result<(), VaultLifecycleRequestError> {
+        self.vault_lifecycle_request(reqwest::Method::DELETE, &["users", user])
+            .await
+    }
+    async fn vault_lifecycle_request(
+        &self,
+        method: reqwest::Method,
+        resource: &[&str],
+    ) -> Result<(), VaultLifecycleRequestError> {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .map_err(|_| VaultLifecycleRequestError::Unreachable)?;
+        let mut url =
+            reqwest::Url::parse(&self.url).map_err(|_| VaultLifecycleRequestError::Unreachable)?;
+        url.path_segments_mut()
+            .map_err(|_| VaultLifecycleRequestError::Unreachable)?
+            .pop_if_empty()
+            .extend(["internal", "passwords"])
+            .extend(resource);
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        let response = client
+            .request(method, url)
+            .headers(headers)
+            .header(
+                crate::constants::MACRO_DOCUMENT_STORAGE_SERVICE_AUTH_HEADER_KEY,
+                &self.internal_auth_key,
+            )
+            .send()
+            .await
+            .map_err(|_| VaultLifecycleRequestError::Unreachable)?;
+        match response.status() {
+            reqwest::StatusCode::NO_CONTENT => Ok(()),
+            reqwest::StatusCode::CONFLICT => Err(VaultLifecycleRequestError::Busy),
+            reqwest::StatusCode::SERVICE_UNAVAILABLE => {
+                Err(VaultLifecycleRequestError::Unavailable)
+            }
+            status => Err(VaultLifecycleRequestError::Rejected(status.as_u16())),
+        }
+    }
+}

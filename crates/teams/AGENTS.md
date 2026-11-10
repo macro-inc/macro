@@ -97,3 +97,17 @@ event contract (schema, sanitization, delivery semantics).
 ## Related
 
 - Docs: `crates/teams/README.md` · Rules: `.agents/rules/rust/db.md`
+
+## Vault lifecycle
+
+- Compose `MemberVault` with the vault adapter in authentication_service; an
+  unwired membership mutation fails closed. Teams does not write vault tables.
+- Hold the team vault lease when committing membership revocation and its
+  reversible metadata fence. Preserve existing billing and channel compensation:
+  rollback restores membership and unfences together. After the last required
+  saga step, finish the removal and enqueue erasure atomically before best-effort work.
+- Block voluntary leave for live owned items. Administrative removal preserves
+  existing shared grants, drops the removed member's grants, and transfers shared
+  ownership to the current team owner; private values are erased by the durable worker.
+- Purge the vault namespace before deleting the team row. Missing provider roles
+  and incomplete erasure are errors, never successful partial deletion.

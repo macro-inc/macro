@@ -2292,6 +2292,7 @@ dependencies = [
  "non_empty",
  "notification",
  "onboarding",
+ "passwords",
  "rand 0.9.4",
  "rate_limit",
  "redis",
@@ -6777,6 +6778,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bot_id",
+ "macro_tower_layers",
  "model",
  "model_owner",
  "models_bulk_upload",

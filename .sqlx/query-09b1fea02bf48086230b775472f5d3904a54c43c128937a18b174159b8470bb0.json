@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id FROM password_item_entities WHERE team_id=$1 AND id=$2 AND deleted_at IS NULL FOR UPDATE",
+  "query": "SELECT id FROM password_member_removals WHERE team_id=$1 AND user_id=$2 AND state='prepared' FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -12,12 +12,12 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid"
+        "Text"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "63486118d7f9761f2483b6ec2819b4608fbc1a57586f3809ea94e497b4e6f35c"
+  "hash": "09b1fea02bf48086230b775472f5d3904a54c43c128937a18b174159b8470bb0"
 }

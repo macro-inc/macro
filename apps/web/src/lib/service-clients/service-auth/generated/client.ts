@@ -113,6 +113,7 @@ import type {
   TeamInviteLinkTokenRequest,
   TeamInvitesResponse,
   TeamMember,
+  TeamVaultFailure,
   TeamWithMembers,
   ToggleAutoJoinDomainResponse,
   ToggleNonAdminInvitesResponse,
@@ -4601,9 +4602,19 @@ export type deleteTeamResponse401 = {
   status: 401;
 };
 
+export type deleteTeamResponse409 = {
+  data: TeamVaultFailure;
+  status: 409;
+};
+
 export type deleteTeamResponse500 = {
   data: ErrorResponse;
   status: 500;
+};
+
+export type deleteTeamResponse503 = {
+  data: TeamVaultFailure;
+  status: 503;
 };
 
 export type deleteTeamResponseSuccess = deleteTeamResponse200 & {
@@ -4612,7 +4623,9 @@ export type deleteTeamResponseSuccess = deleteTeamResponse200 & {
 export type deleteTeamResponseError = (
   | deleteTeamResponse400
   | deleteTeamResponse401
+  | deleteTeamResponse409
   | deleteTeamResponse500
+  | deleteTeamResponse503
 ) & {
   headers: Headers;
 };
@@ -5785,9 +5798,19 @@ export type removeUserFromTeamResponse401 = {
   status: 401;
 };
 
+export type removeUserFromTeamResponse409 = {
+  data: TeamVaultFailure;
+  status: 409;
+};
+
 export type removeUserFromTeamResponse500 = {
   data: ErrorResponse;
   status: 500;
+};
+
+export type removeUserFromTeamResponse503 = {
+  data: TeamVaultFailure;
+  status: 503;
 };
 
 export type removeUserFromTeamResponseSuccess =
@@ -5797,7 +5820,9 @@ export type removeUserFromTeamResponseSuccess =
 export type removeUserFromTeamResponseError = (
   | removeUserFromTeamResponse400
   | removeUserFromTeamResponse401
+  | removeUserFromTeamResponse409
   | removeUserFromTeamResponse500
+  | removeUserFromTeamResponse503
 ) & {
   headers: Headers;
 };

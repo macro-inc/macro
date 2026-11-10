@@ -5,6 +5,49 @@ use async_trait::async_trait;
 #[async_trait]
 /// Metadata storage and cross-replica serialization. Object-safe for composition.
 pub trait Repository: Send + Sync {
+    /// Bounded account-owned erasures that have not yet been acknowledged.
+    async fn retired_user_items(
+        &self,
+        team: TeamId,
+        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<Vec<ItemId>, Error>;
+
+    /// Permanently close a deleting account's admissions before enumerating erasures.
+    async fn close_user(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<(), Error>;
+    /// Team vaults containing the user's records or durable pending write intents.
+    async fn user_vault_teams(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<Vec<TeamId>, Error>;
+    /// Current team owner used by the domain's shared-item transfer policy.
+    async fn team_owner(
+        &self,
+        team: TeamId,
+    ) -> Result<macro_user_id::user_id::MacroUserIdStr<'static>, Error>;
+    /// Apply administrative metadata fencing while the caller holds the team lease.
+    async fn depart_user(
+        &self,
+        team: TeamId,
+        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        owner: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<(), Error>;
+    /// Strip user metadata from acknowledged private erasures, retaining only lifecycle fences.
+    async fn scrub_user_metadata(
+        &self,
+        team: TeamId,
+        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<(), Error>;
+
+    /// Durably close a team vault before provider deletion; future human admissions fail.
+    async fn close_team(&self, team: TeamId) -> Result<(), Error>;
+    /// Remove team vault metadata only after acknowledged namespace erasure.
+    async fn purge_team_metadata(&self, team: TeamId) -> Result<(), Error>;
+    /// Discover bounded durable item erasures, with first erasures ahead of repeats.
+    async fn item_cleanup_due(&self) -> Result<Vec<(TeamId, ItemId)>, Error>;
+
     /// Persist a unique pending enrollment before any provider mutation.
     async fn stage_totp(&self, team: TeamId, item: ItemId, key: TotpKeyId) -> Result<(), Error>;
     /// Select a successful enrollment only while its authorized metadata revision remains current.
@@ -31,7 +74,7 @@ pub trait Repository: Send + Sync {
     /// Retain the retired generation and schedule periodic erasure after acknowledged cleanup.
     async fn finish_totp_cleanup(&self, cleanup: TotpCleanup) -> Result<(), Error>;
 
-    /// Hold the team's vault lock until the returned guard is dropped; contention returns a conflict.
+    /// Hold the team's vault lock until the returned guard is dropped; contention returns typed Busy.
     async fn lock(&self, team: TeamId, item: ItemId) -> Result<Box<dyn ItemLock>, Error>;
     /// Persist metadata-only intent before an external value write.
     async fn stage(&self, operation: uuid::Uuid, record: &Record) -> Result<(), Error>;
@@ -76,6 +119,8 @@ pub trait Repository: Send + Sync {
 #[async_trait]
 /// Namespace-isolated private value storage. Object-safe for replaceable providers.
 pub trait SecretProvider: Send + Sync {
+    /// Delete the namespace through a separate, team-bound parent identity.
+    async fn purge_namespace(&self, team: TeamId) -> Result<(), Error>;
     /// Read only provider version metadata, without loading a private payload.
     async fn current_version(&self, team: TeamId, item: ItemId) -> Result<Option<i32>, Error>;
     /// Read the accepted operation marker during an explicitly authorized recovery.

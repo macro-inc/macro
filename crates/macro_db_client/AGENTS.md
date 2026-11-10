@@ -129,7 +129,11 @@ foreign keys; the broker deletes expired rows.
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.
 
 `password_item_entities`, `password_folders`, `password_activity`,
-`password_write_intents`, and `password_totp_enrollments` belong to `passwords`.
+`password_write_intents`, `password_totp_enrollments`, `password_member_removals`,
+`password_team_lifecycle`, and `password_account_lifecycle` belong to `passwords`.
 They contain metadata, grants, audit correlation and lifecycle journals only; values
 and TOTP seeds remain in OpenBao. Keep completed operation and retired enrollment
 identities for retry safety and delayed cleanup, with team cascades for metadata.
+Keep account UUID and team closure fences independent of deletion cascades. A
+member-removal outbox fences reversibly, then publishes private erasure in the
+same transaction that marks the removal finished after saga success.

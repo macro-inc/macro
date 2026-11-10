@@ -96,12 +96,11 @@ class PersistenceIntegration(unittest.TestCase):
                 self.assertEqual(provider.returncode, 0, provider.stderr.decode())
                 rust_binary = os.environ.get("PASSWORDS_TEST_OPENBAO_RUST_BIN")
                 if rust_binary:
+                    self.assertTrue(os.environ.get("DATABASE_URL"), "Rust regressions require an explicit disposable metadata DATABASE_URL")
                     public_key_path = Path(directory) / "jwt-public.pem"
                     public_key_path.write_text(public_key)
                     rust = subprocess.run([
-                        rust_binary, "--ignored", "--exact",
-                        "outbound::openbao::test::local_provider_versions_totp_isolation_and_deletion_fence",
-                        "--nocapture",
+                        rust_binary, "--ignored", "--test-threads=1", "--nocapture",
                     ], cwd=source.parents[2] / "crates/passwords", env={
                         **os.environ,
                         "BAO_TOKEN": json.loads(credentials)["root_token"],

@@ -420,7 +420,8 @@ async fn run_server() -> anyhow::Result<()> {
         tracing::warn!("STRIPE_MAX_PRICE_ID is not set; the Max plan cannot be sold");
     }
 
-    let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
+    let teams_repo_impl = TeamRepositoryImpl::new(db.clone())
+        .with_member_vault(crate::outbound::vault::PasswordMemberVault);
     let customer_repo_impl = CustomerRepositoryImpl::new(
         stripe_client.clone(),
         stripe_prices.seat_prices(),
@@ -689,6 +690,9 @@ async fn run_server() -> anyhow::Result<()> {
     .with_event_broker(macro_event_broker.clone())
     .with_open_seat_release((*ai_billing_service).clone())
     .with_owned_entity_cleanup(team_owned_entity_cleanup)
+    .with_vault_cleanup(crate::outbound::vault::PasswordVaultCleanup(
+        document_storage_service_client.clone(),
+    ))
     .with_invite_rewarder(Arc::new(invite_rewards));
     let teams_service = Arc::new(teams_service_impl);
     let domain_notice_service =

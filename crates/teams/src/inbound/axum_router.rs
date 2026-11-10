@@ -273,6 +273,25 @@ impl IntoResponse for CreateTeamError {
     }
 }
 
+/// Typed vault lifecycle failures shared with generated clients.
+#[derive(Debug, Clone, Copy, serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum TeamVaultFailureCode {
+    /// Namespace erasure has started and completion is retryable.
+    VaultBusy,
+
+    /// Dispose of live owned vault items before voluntarily leaving.
+    VaultItemsOwned,
+    /// Vault fencing or namespace erasure did not complete.
+    VaultUnavailable,
+}
+/// Sanitized lifecycle response; contains no provider or credential data.
+#[derive(serde::Serialize, utoipa::ToSchema)]
+pub struct TeamVaultFailure {
+    /// Machine-readable failure category.
+    pub code: TeamVaultFailureCode,
+}
+
 impl IntoResponse for DeleteTeamError {
     fn into_response(self) -> Response {
         match self {
@@ -294,6 +313,24 @@ impl IntoResponse for DeleteTeamError {
                     message: "internal server error".into(),
                 }),
             ),
+            DeleteTeamError::VaultCleanup(crate::domain::vault::VaultLifecycleError::Busy) => {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(TeamVaultFailure {
+                        code: TeamVaultFailureCode::VaultBusy,
+                    }),
+                )
+                    .into_response();
+            }
+            DeleteTeamError::VaultCleanup(_) => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(TeamVaultFailure {
+                        code: TeamVaultFailureCode::VaultUnavailable,
+                    }),
+                )
+                    .into_response();
+            }
             DeleteTeamError::OwnedEntityCleanup(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -423,6 +460,33 @@ impl IntoResponse for SetTeamMemberPlanError {
 impl IntoResponse for RemoveUserFromTeamError {
     fn into_response(self) -> Response {
         match self {
+            RemoveUserFromTeamError::VaultBusy => {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(TeamVaultFailure {
+                        code: TeamVaultFailureCode::VaultBusy,
+                    }),
+                )
+                    .into_response();
+            }
+            RemoveUserFromTeamError::VaultItemsOwned => {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(TeamVaultFailure {
+                        code: TeamVaultFailureCode::VaultItemsOwned,
+                    }),
+                )
+                    .into_response();
+            }
+            RemoveUserFromTeamError::VaultUnavailable => {
+                return (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    Json(TeamVaultFailure {
+                        code: TeamVaultFailureCode::VaultUnavailable,
+                    }),
+                )
+                    .into_response();
+            }
             RemoveUserFromTeamError::TeamDoesNotExist => (
                 StatusCode::NOT_FOUND,
                 Json(ErrorResponse {

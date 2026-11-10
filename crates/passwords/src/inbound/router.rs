@@ -10,7 +10,7 @@ use axum::{
 };
 use macro_auth::headers::AccessTokenExtractor;
 use macro_authorization::{
-    CredentialOrigin, MacroAuthorizationExtractor, MacroAuthorizationService,
+    CredentialOrigin, InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService,
     MacroAuthorizationState, UserOnly,
 };
 use serde::{Deserialize, Serialize};
@@ -83,6 +83,49 @@ pub fn router<A: MacroAuthorizationService, T: Send + Sync + 'static>(
         .layer(map_response(no_store))
         .with_state(state)
 }
+/// Internal lifecycle routes accept only authenticated service identities.
+/// They deliberately remain outside the public Swagger and human CSRF routes.
+pub fn internal_router<A: MacroAuthorizationService, T: Send + Sync + 'static>(
+    state: PasswordRouterState<A>,
+) -> Router<T> {
+    Router::new()
+        .route("/teams/{team}", delete(purge_team_internal::<A>))
+        .route(
+            "/users/{user}",
+            post(close_user_internal::<A>).delete(purge_user_internal::<A>),
+        )
+        .layer(map_response(no_store))
+        .with_state(state)
+}
+#[tracing::instrument(skip_all,err,name="passwords.team.purge.internal",fields(team_id=%team))]
+async fn purge_team_internal<A: MacroAuthorizationService>(
+    _: MacroAuthorizationExtractor<A, InternalOnly>,
+    State(state): State<PasswordRouterState<A>>,
+    Path(team): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    state.service.purge_team(TeamId(team)).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[tracing::instrument(skip_all, err, name = "passwords.account.close.internal")]
+async fn close_user_internal<A: MacroAuthorizationService>(
+    _: MacroAuthorizationExtractor<A, InternalOnly>,
+    State(state): State<PasswordRouterState<A>>,
+    Path(user): Path<macro_user_id::user_id::MacroUserIdStr<'static>>,
+) -> Result<StatusCode, ApiError> {
+    state.service.close_user(&user).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+#[tracing::instrument(skip_all, err, name = "passwords.account.purge.internal")]
+async fn purge_user_internal<A: MacroAuthorizationService>(
+    _: MacroAuthorizationExtractor<A, InternalOnly>,
+    State(state): State<PasswordRouterState<A>>,
+    Path(user): Path<macro_user_id::user_id::MacroUserIdStr<'static>>,
+) -> Result<StatusCode, ApiError> {
+    state.service.purge_user(&user).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
 async fn csrf(request: axum::extract::Request, next: Next) -> Response {
     if !matches!(
         *request.method(),
@@ -131,6 +174,8 @@ async fn no_store(mut response: Response) -> Response {
 #[serde(rename_all = "snake_case")]
 #[schema(as = PasswordErrorCode)]
 pub enum FailureCode {
+    /// A voluntary departure must first dispose of owned items.
+    VaultItemsOwned,
     /// Absent or concealed by the caller's access boundary.
     NotFound,
     /// The caller lacks the required capability.
@@ -156,6 +201,8 @@ pub struct Failure {
 }
 
 /// Sanitized domain failure mapped to an HTTP status and fixed error code.
+#[derive(Debug, thiserror::Error)]
+#[error(transparent)]
 pub struct ApiError(Error);
 impl From<Error> for ApiError {
     fn from(error: Error) -> Self {
@@ -165,6 +212,7 @@ impl From<Error> for ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code) = match self.0 {
+            Error::OwnedItems => (StatusCode::CONFLICT, FailureCode::VaultItemsOwned),
             Error::NotFound => (StatusCode::NOT_FOUND, FailureCode::NotFound),
             Error::Forbidden => (StatusCode::FORBIDDEN, FailureCode::Forbidden),
             Error::ReauthenticationRequired => {

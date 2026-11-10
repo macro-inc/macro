@@ -319,6 +319,7 @@ async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgP
             .into_owned(),
         grants: vec![],
         deleting: false,
+        member_removal_pending: false,
         totp_key_id: None,
         revision: 0,
         metadata: ItemMetadata {
@@ -700,4 +701,64 @@ async fn stale_sign_in_and_lease_contention_have_distinct_typed_failures() {
         .unwrap()["code"],
         "version_conflict"
     );
+}
+
+#[tokio::test]
+async fn lifecycle_routes_reject_human_agent_and_api_credentials_before_any_mutation() {
+    use crate::domain::service::test::fakes::FakeRepository;
+    let repository = Arc::new(FakeRepository::new());
+    let app: Router = internal_router(PasswordRouterState {
+        authorization: MacroAuthorizationState::new(Arc::new(Authorization)),
+        service: Arc::new(PasswordService {
+            repository: repository.clone(),
+            provider: Arc::new(UnavailableProvider),
+            availability: Arc::new(Disabled),
+            reauthentication: Arc::new(SessionReauthentication {
+                validation: macro_auth::middleware::decode_jwt::JwtValidationArgs::new_testing(),
+            }),
+        }),
+    });
+    for token in ["session", "api", "key", "agent", "internal"] {
+        for (method, path) in [
+            ("DELETE", format!("/teams/{}", Uuid::from_u128(1))),
+            ("POST", "/users/macro%7Csynthetic@example.test".into()),
+            ("DELETE", "/users/macro%7Csynthetic@example.test".into()),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .method(method)
+                        .uri(path)
+                        .header("authorization", format!("Bearer {token}"))
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+            assert_eq!(response.headers()[CACHE_CONTROL], "private, no-store");
+        }
+    }
+    assert!(repository.closed_users.lock().unwrap().is_empty());
+    assert!(repository.closed_teams.lock().unwrap().is_empty());
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri(format!("/teams/{}", Uuid::from_u128(1)))
+                .header("x-internal-auth-key", "synthetic-credential")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        response.status(),
+        StatusCode::SERVICE_UNAVAILABLE,
+        "verified internal callers reach fail-closed lifecycle service"
+    );
+    let bytes = to_bytes(response.into_body(), 1024).await.unwrap();
+    let failure: Failure = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(failure.code, FailureCode::VaultUnavailable);
 }

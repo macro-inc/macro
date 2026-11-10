@@ -118,6 +118,20 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<TeamMember<'static>, RemoveUserFromTeamError>> + Send;
 
+    /// Remove a voluntarily departing member only after their live vault items are gone.
+    fn leave_user_from_team(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<TeamMember<'static>, RemoveUserFromTeamError>> + Send;
+
+    /// Finish membership removal and durably publish vault erasure together.
+    fn finish_user_removal(
+        &self,
+        team_id: &uuid::Uuid,
+        user_id: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), RemoveUserFromTeamError>> + Send;
+
     ///Gets a team invite by id
     fn get_team_invite_by_id(
         &self,

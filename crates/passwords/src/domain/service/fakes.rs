@@ -14,6 +14,10 @@ pub struct FakeRepository {
     pub memberships: Mutex<HashMap<String, Vec<TeamId>>>,
     pub fail_save: AtomicBool,
     pub lock_calls: AtomicUsize,
+    pub closed_teams: Mutex<HashSet<Uuid>>,
+    pub closed_users: Mutex<HashSet<String>>,
+    pub erased_items: Mutex<HashSet<Uuid>>,
+    pub team_owners: Mutex<HashMap<Uuid, macro_user_id::user_id::MacroUserIdStr<'static>>>,
     pub audits: Mutex<Vec<Action>>,
     pub enrollments: Mutex<HashMap<Uuid, (TeamId, ItemId, bool, bool, bool)>>,
 }
@@ -25,6 +29,10 @@ impl FakeRepository {
             memberships: Mutex::new(HashMap::new()),
             fail_save: AtomicBool::new(false),
             lock_calls: AtomicUsize::new(0),
+            closed_teams: Mutex::new(HashSet::new()),
+            closed_users: Mutex::new(HashSet::new()),
+            erased_items: Mutex::new(HashSet::new()),
+            team_owners: Mutex::new(HashMap::new()),
             audits: Mutex::new(vec![]),
             enrollments: Mutex::new(HashMap::new()),
         }
@@ -34,6 +42,108 @@ struct FakeLock;
 impl ItemLock for FakeLock {}
 #[async_trait]
 impl Repository for FakeRepository {
+    async fn retired_user_items(
+        &self,
+        team: TeamId,
+        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<Vec<ItemId>, Error> {
+        Ok(self
+            .records
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|r| {
+                r.metadata.team_id == team
+                    && r.user_id == *user
+                    && r.deleting
+                    && !self.erased_items.lock().unwrap().contains(&r.metadata.id.0)
+            })
+            .map(|r| r.metadata.id)
+            .collect())
+    }
+    async fn close_user(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<(), Error> {
+        self.closed_users.lock().unwrap().insert(user.to_string());
+        Ok(())
+    }
+    async fn user_vault_teams(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<Vec<TeamId>, Error> {
+        Ok(self
+            .records
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|r| r.user_id == *user)
+            .map(|r| r.metadata.team_id)
+            .collect())
+    }
+    async fn team_owner(
+        &self,
+        team: TeamId,
+    ) -> Result<macro_user_id::user_id::MacroUserIdStr<'static>, Error> {
+        self.team_owners
+            .lock()
+            .unwrap()
+            .get(&team.0)
+            .cloned()
+            .ok_or(Error::NotFound)
+    }
+    async fn depart_user(
+        &self,
+        team: TeamId,
+        user: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        owner: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<(), Error> {
+        for record in self
+            .records
+            .lock()
+            .unwrap()
+            .values_mut()
+            .filter(|r| r.metadata.team_id == team)
+        {
+            crate::domain::lifecycle::depart_member(
+                record,
+                user,
+                owner,
+                crate::domain::lifecycle::Departure::Administrative,
+            )?;
+        }
+        Ok(())
+    }
+    async fn scrub_user_metadata(
+        &self,
+        _: TeamId,
+        _: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<(), Error> {
+        Ok(())
+    }
+
+    async fn close_team(&self, team: TeamId) -> Result<(), Error> {
+        self.closed_teams.lock().unwrap().insert(team.0);
+        Ok(())
+    }
+    async fn purge_team_metadata(&self, team: TeamId) -> Result<(), Error> {
+        self.records
+            .lock()
+            .unwrap()
+            .retain(|_, record| record.metadata.team_id != team);
+        Ok(())
+    }
+    async fn item_cleanup_due(&self) -> Result<Vec<(TeamId, ItemId)>, Error> {
+        Ok(self
+            .records
+            .lock()
+            .unwrap()
+            .values()
+            .filter(|r| r.deleting && !self.erased_items.lock().unwrap().contains(&r.metadata.id.0))
+            .map(|r| (r.metadata.team_id, r.metadata.id))
+            .collect())
+    }
+
     async fn stage_totp(&self, team: TeamId, item: ItemId, key: TotpKeyId) -> Result<(), Error> {
         self.enrollments
             .lock()
@@ -187,13 +297,24 @@ impl Repository for FakeRepository {
         Ok(())
     }
     async fn teams(&self, actor: &Actor) -> Result<Vec<TeamId>, Error> {
+        if self
+            .closed_users
+            .lock()
+            .unwrap()
+            .contains(actor.user_id.as_ref())
+        {
+            return Ok(vec![]);
+        }
         Ok(self
             .memberships
             .lock()
             .expect("fixture lock")
             .get(actor.user_id.as_ref())
             .cloned()
-            .unwrap_or_default())
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|team| !self.closed_teams.lock().unwrap().contains(&team.0))
+            .collect())
     }
     async fn list(&self, _: &Actor, team: TeamId, _: &str) -> Result<Vec<Record>, Error> {
         Ok(self
@@ -235,6 +356,7 @@ impl Repository for FakeRepository {
         Ok(())
     }
     async fn delete(&self, _: TeamId, item: ItemId) -> Result<(), Error> {
+        self.erased_items.lock().unwrap().insert(item.0);
         if let Some(record) = self.records.lock().expect("fixture lock").get_mut(&item.0) {
             record.deleting = true;
         }
@@ -269,6 +391,8 @@ pub struct FakeProvider {
     pub stored: Mutex<HashMap<Uuid, (i32, Uuid, SecretValues)>>,
     pub reads: AtomicUsize,
     pub fail_delete: AtomicBool,
+    pub fail_purge: AtomicBool,
+    pub purged: Mutex<Vec<TeamId>>,
     pub tombstones: Mutex<HashSet<Uuid>>,
     pub totp_seeds: Mutex<HashMap<Uuid, SecretString>>,
     pub fail_set: AtomicBool,
@@ -281,6 +405,8 @@ impl FakeProvider {
             stored: Mutex::new(HashMap::new()),
             reads: AtomicUsize::new(0),
             fail_delete: AtomicBool::new(false),
+            fail_purge: AtomicBool::new(false),
+            purged: Mutex::new(vec![]),
             tombstones: Mutex::new(HashSet::new()),
             totp_seeds: Mutex::new(HashMap::new()),
             fail_set: AtomicBool::new(false),
@@ -291,6 +417,13 @@ impl FakeProvider {
 }
 #[async_trait]
 impl SecretProvider for FakeProvider {
+    async fn purge_namespace(&self, team: TeamId) -> Result<(), Error> {
+        if self.fail_purge.load(Ordering::SeqCst) {
+            return Err(Error::Unavailable);
+        }
+        self.purged.lock().unwrap().push(team);
+        Ok(())
+    }
     async fn username(&self, _: TeamId, item: ItemId, version: i32) -> Result<SecretString, Error> {
         let gate = self.username_gate.lock().expect("fixture lock").clone();
         if let Some((started, release)) = gate {

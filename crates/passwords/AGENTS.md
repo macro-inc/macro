@@ -92,3 +92,21 @@ Construct one shared `PgRepository::new(pool)` for the service. Its nonblocking
 admission semaphore limits lease transactions to half the pool and leaves capacity
 for metadata queries. Every full-record save checks both provider version and
 metadata revision, so losing a lease cannot restore stale grants or TOTP pointers.
+
+## Membership and deletion
+
+- Keep departure policy in `domain/lifecycle.rs` and transaction SQL in
+  `outbound/postgres/lifecycle.rs`; the membership adapter holds the team lease.
+- Fence affected records reversibly at membership commit. Pending records return
+  typed `vault_busy` only after normal grant checks; keep unauthorized items opaque.
+  Only saga completion publishes private erasure and marks
+  the removal finished in one transaction. Rollback restores the original grants
+  and ownership without erasing values. Never transfer private values.
+- Close account admission by immutable account UUID, and close team admission
+  before namespace deletion. Purge metadata only after provider deletion is
+  acknowledged; retain the closed identity to reject suspended senders.
+- Prioritize first erasure/quarantine before hourly repeats. Retain journal
+  tombstones for the lifetime of the namespace, including acknowledged erasures.
+- Namespace cleanup uses parent JWT mount `macro-lifecycle`, per-team role
+  `team-<team-id>`, and exact namespace read/delete policy. Require GET 404 before
+  acknowledging asynchronous provider deletion. Never use a bootstrap token at runtime.

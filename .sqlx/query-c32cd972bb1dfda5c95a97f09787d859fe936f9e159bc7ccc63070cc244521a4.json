@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT metadata,user_id,grants,deleting,revision,totp_key_id FROM password_item_entities WHERE team_id=$1 AND deleted_at IS NULL AND NOT deleting AND (user_id=$3 OR EXISTS (SELECT 1 FROM jsonb_array_elements(grants) grant_entry WHERE (grant_entry->>'kind'='user' AND grant_entry->>'id'=$3) OR (grant_entry->>'kind'='team' AND grant_entry->>'id'=$1::text))) AND position(lower($2) in lower(metadata->>'name') || ' ' || lower(COALESCE(metadata->>'url',''))) > 0 ORDER BY id DESC LIMIT 500",
+  "query": "SELECT metadata,user_id,grants,(deleting OR deleted_at IS NOT NULL) AS \"deleting!\",revision,totp_key_id,(member_removal_id IS NOT NULL) AS \"member_removal_pending!\" FROM password_item_entities WHERE team_id=$1 AND id=$2",
   "describe": {
     "columns": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "ordinal": 3,
-        "name": "deleting",
+        "name": "deleting!",
         "type_info": "Bool"
       },
       {
@@ -32,23 +32,28 @@
         "ordinal": 5,
         "name": "totp_key_id",
         "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "member_removal_pending!",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
-        "Text",
-        "Text"
+        "Uuid"
       ]
     },
     "nullable": [
       false,
       false,
       false,
+      null,
       false,
-      false,
-      true
+      true,
+      null
     ]
   },
-  "hash": "cd2f0486b78a4c96c4fef2e7a9bc21147da30f68f1af75aee8ed117cf8f2e799"
+  "hash": "c32cd972bb1dfda5c95a97f09787d859fe936f9e159bc7ccc63070cc244521a4"
 }

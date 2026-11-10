@@ -1,4 +1,4 @@
-//! Cancellation-aware scheduling for the vault's durable enrollment cleanup.
+//! Cancellation-aware scheduling for the vault's durable item and enrollment cleanup.
 
 use passwords::domain::service::PasswordService;
 use std::{sync::Arc, time::Duration};
@@ -22,11 +22,14 @@ pub(crate) async fn run(service: Arc<PasswordService>, cancellation: Cancellatio
         tokio::select! {
             biased;
             _ = cancellation.cancelled() => return,
-            result = service.cleanup_expired_totp_enrollments() => {
-                // The domain emits per-enrollment spans and retains unsuccessful
+            result = async {
+                service.cleanup_retired_items().await?;
+                service.cleanup_expired_totp_enrollments().await
+            } => {
+                // The domain emits per-item and enrollment spans and retains unsuccessful
                 // work in the journal for the next pass. Never log vault data.
                 let _ = result.inspect_err(|error| {
-                    tracing::warn!(error = ?error, "passwords enrollment cleanup failed");
+                    tracing::warn!(error = ?error, "passwords vault cleanup failed");
                 });
             }
         }
