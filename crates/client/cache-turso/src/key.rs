@@ -35,12 +35,8 @@ impl RecordKey {
     }
 
     pub(crate) fn into_entity(self) -> Result<EntityKey<'static>, TursoStorageError> {
-        let canonical = self.canonical_string_from_row()?;
-        let reparsed = Self::from_entity(&EntityKey(Cow::Borrowed(&canonical)))
-            .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Corruption))?;
-        if reparsed != self {
-            return Err(TursoStorageError::reset(PhysicalResetReason::Corruption));
-        }
+        let mut canonical = String::new();
+        Self::borrow_entity(&self.typename, &self.id, &mut canonical)?;
         Ok(EntityKey(Cow::Owned(canonical)))
     }
 
@@ -55,9 +51,23 @@ impl RecordKey {
         }
     }
 
-    fn canonical_string_from_row(&self) -> Result<String, TursoStorageError> {
-        self.canonical_string()
-            .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Corruption))
+    /// Checks row components and reuses a caller-owned key buffer while scanning.
+    pub(crate) fn borrow_entity<'a>(
+        typename: &str,
+        id: &str,
+        buffer: &'a mut String,
+    ) -> Result<EntityKey<'a>, TursoStorageError> {
+        // A colon in the typename changes the first component on round-trip.
+        if typename.is_empty() || typename.contains(':') {
+            return Err(TursoStorageError::reset(PhysicalResetReason::Corruption));
+        }
+        buffer.clear();
+        buffer.push_str(typename);
+        if typename != ROOT_QUERY || !id.is_empty() {
+            buffer.push(':');
+            buffer.push_str(id);
+        }
+        Ok(EntityKey(Cow::Borrowed(buffer)))
     }
 }
 

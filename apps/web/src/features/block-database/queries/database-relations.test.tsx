@@ -116,7 +116,11 @@ function engine(names: () => string[]) {
   const read: DatabaseSqlQueryCapabilities = {
     client: () => client,
     cacheHost: () => undefined,
-    people: async () => [],
+    account: () => ({ userId: 'macro|viewer@example.com', session: 0 }),
+    describe: async (catalog) => ({
+      readTables: catalog.tables.map((table) => table.id),
+      columns: [],
+    }),
     catalog: async () => catalog,
     open: async (_catalog, sql) => {
       reads.push(sql);

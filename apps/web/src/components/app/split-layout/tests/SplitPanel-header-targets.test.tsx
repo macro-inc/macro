@@ -10,7 +10,14 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { SplitHeaderLeft, SplitHeaderRight } from '../components/SplitHeader';
 import { SplitPanel } from '../components/SplitPanel';
 import { SplitPanelContext, type SplitPanelContextType } from '../context';
-import type { SplitHandle, SplitId, SplitState } from '../layoutManager';
+import type {
+  SplitContent,
+  SplitHandle,
+  SplitId,
+  SplitState,
+} from '../layoutManager';
+
+const routeState = vi.hoisted(() => ({ externalChat: false }));
 
 // Keep the production panel, header, portal contributions, and target refs.
 // Collection data, routing, and unrelated chrome are outside this lifecycle test.
@@ -31,6 +38,15 @@ vi.mock('@app/features/next-soup/utils', () => ({
   openEntityInSplitFromUnifiedList: vi.fn(),
 }));
 vi.mock('@app/lib/split-router', () => ({
+  useOptionalSplitRouter: () => ({
+    entry: () => ({
+      location: {
+        route: {
+          matches: routeState.externalChat ? [{ id: 'external-chat' }] : [],
+        },
+      },
+    }),
+  }),
   SplitRouter: {
     Outlet: (props: { fallback: ParentProps['children'] }) => props.fallback,
   },
@@ -42,7 +58,7 @@ vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => undefined,
 }));
 vi.mock('@components/app/mobile/MobileEdgeFade', () => ({
-  MobileTopEdgeFade: () => null,
+  MobileTopEdgeFade: () => <div data-testid="top-edge-fade" />,
 }));
 vi.mock('@components/app/mobile/MobilePageActionRow', () => ({
   MobilePageActionRow: () => null,
@@ -95,6 +111,7 @@ vi.mock('../components/SplitHeaderContextMenu', () => ({
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  routeState.externalChat = false;
 });
 
 it('mounts header contributions when chrome appears and follows its replacement without remounting the view', () => {
@@ -108,12 +125,17 @@ it('mounts header contributions when chrome appears and follows its replacement 
   );
   const [composable, setComposable] = createSignal(true);
   const id = 'header-target-test' as SplitId;
-  const content = { type: 'component', id: 'mail' } as const;
+  const [content, setContent] = createSignal<SplitContent>({
+    type: 'component',
+    id: 'mail',
+  });
   let mountedViews = 0;
   let panel: SplitPanelContextType | undefined;
   const split: SplitState = {
     id,
-    content,
+    get content() {
+      return content();
+    },
     referredFrom: null,
     lastNavigationSource: null,
     lastNavigationCause: 'fresh',
@@ -151,7 +173,7 @@ it('mounts header contributions when chrome appears and follows its replacement 
   };
   const handle: SplitHandle = {
     id,
-    content: () => content,
+    content,
     unregisterContentChangeListener: () => {},
     registerContentChangeListener: () => {},
     replace: () => {},
@@ -174,7 +196,7 @@ it('mounts header contributions when chrome appears and follows its replacement 
     close: () => {},
     reset: () => {},
     previousContent: () => null,
-    history: () => [content],
+    history: () => [content()],
     meta: () =>
       split.mount.kind === 'component' ? split.mount.meta : undefined,
     updateMeta: () => {},
@@ -235,6 +257,20 @@ it('mounts header contributions when chrome appears and follows its replacement 
   expect(
     within(firstHeader).queryByRole('button', { name: 'Unread' })
   ).toBeNull();
+  expect(screen.getByRole('textbox', { name: 'Retained view' })).toBe(
+    retainedView
+  );
+  routeState.externalChat = true;
+  setContent({ type: 'component', id: 'external' });
+  expect(screen.getByRole('button', { name: 'Unread' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Compose' })).toBeTruthy();
+
+  expect(screen.getByTestId('top-edge-fade')).toBeTruthy();
+
+  routeState.externalChat = false;
+  setContent({ type: 'component', id: 'external' });
+  expect(container.querySelector('[data-split-header]')).toBeNull();
+  expect(screen.queryByTestId('top-edge-fade')).toBeNull();
   expect(screen.getByRole('textbox', { name: 'Retained view' })).toBe(
     retainedView
   );

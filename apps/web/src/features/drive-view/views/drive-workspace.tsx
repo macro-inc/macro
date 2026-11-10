@@ -11,6 +11,10 @@ import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
 import { DRIVE_TABS } from '../core/types';
 import { useDriveDetailNavigation } from '../drive-detail-navigation';
 import { DriveBreadcrumbs } from './drive-breadcrumbs';
+import {
+  DriveFolderHierarchy,
+  useDriveFolderHierarchyVisible,
+} from './drive-folder-hierarchy';
 import { DriveHeader } from './drive-header';
 import { DriveList } from './drive-list';
 import { DriveSidebar } from './drive-sidebar';
@@ -24,6 +28,16 @@ export function DriveLoading() {
         class="size-5 animate-spin"
       />
     </div>
+  );
+}
+
+function DriveBrowser() {
+  const folderHierarchy = useDriveFolderHierarchyVisible();
+
+  return (
+    <Show when={folderHierarchy()} fallback={<DriveList />}>
+      <DriveFolderHierarchy />
+    </Show>
   );
 }
 
@@ -77,7 +91,7 @@ export function DriveWorkspace(props: { tour?: JSX.Element }) {
                       <Suspense fallback={<DriveLoading />}>
                         <FolderDropZone folderId={state.projectId()}>
                           <DriveFileDropzone onDrop={actions.dropFiles}>
-                            <DriveList />
+                            <DriveBrowser />
                           </DriveFileDropzone>
                         </FolderDropZone>
                       </Suspense>

@@ -1,4 +1,4 @@
-use harnesses::domain::models::{Harness, HarnessOwner};
+use harnesses::domain::models::{Harness, HarnessAccess, HarnessOwner};
 use harnesses::domain::ports::MockHarnessRepo;
 
 use super::*;
@@ -12,6 +12,8 @@ fn harness(id: HarnessId, connected: bool) -> Harness {
         owner: HarnessOwner::User {
             user_id: "macro|persona-owner@example.com".into(),
         },
+        access: HarnessAccess::Owner,
+        shared_team_ids: Vec::new(),
         created_by: "macro|persona-owner@example.com".into(),
         created_at: "2026-10-02T00:00:00Z".parse().unwrap(),
         updated_at: "2026-10-02T00:00:00Z".parse().unwrap(),

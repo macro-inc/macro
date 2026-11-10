@@ -7,6 +7,27 @@ use entity_access::domain::models::{AccessLevel, EntityPermission};
 use super::DeclineCallPermission;
 
 #[test]
+fn meeting_join_schema_preserves_optional_sdk_body() {
+    use utoipa::OpenApi;
+
+    #[derive(OpenApi)]
+    #[openapi(paths(super::meetings::join))]
+    struct Api;
+
+    let schema = serde_json::to_value(Api::openapi()).unwrap();
+    assert_eq!(
+        schema["paths"]["/call/meetings/join/{token}"]["post"]["requestBody"],
+        serde_json::json!({
+            "content": {
+                "application/json": {
+                    "schema": { "$ref": "#/components/schemas/JoinCallRequest" }
+                }
+            }
+        })
+    );
+}
+
+#[test]
 fn maps_domain_errors_to_status_codes() {
     let cases = [
         (
@@ -366,41 +387,128 @@ mod authenticated_join_routes {
 
     #[tokio::test]
     async fn meeting_join_without_body_uses_app_options_and_person_client() {
-        let call_id = Uuid::now_v7();
-        let mut service = MockCallService::new();
-        service
-            .expect_join_meeting_with_options()
-            .times(1)
-            .returning(move |_, _, request, is_program, _| {
-                assert!(matches!(
-                    request.on_other_call,
-                    crate::domain::models::OnOtherCall::Switch
-                ));
-                assert!(request.replace);
-                assert!(!is_program);
-                Box::pin(async move {
-                    Ok(CallTokenResponse {
-                        started: false,
-                        participant_id: "macro|member@example.com".to_string(),
-                        share_token: None,
-                        call_id,
-                        channel_id: None,
-                        token: "test-token".to_string(),
-                        room_name: call_id.to_string(),
-                        server_url: "wss://example.com".to_string(),
-                    })
-                })
-            });
+        for enabled in [false, true] {
+            for json_header in [false, true] {
+                for actor in ["member", "program"] {
+                    let call_id = Uuid::now_v7();
+                    let mut service = MockCallService::new();
+                    service
+                        .expect_join_meeting_with_options()
+                        .times(1)
+                        .returning(move |_, _, request, is_program, _| {
+                            assert!(matches!(
+                                request.on_other_call,
+                                crate::domain::models::OnOtherCall::Switch
+                            ));
+                            assert!(request.replace);
+                            assert!(!is_program);
+                            Box::pin(async move {
+                                Ok(CallTokenResponse {
+                                    started: false,
+                                    participant_id: "macro|member@example.com".to_string(),
+                                    share_token: None,
+                                    call_id,
+                                    channel_id: None,
+                                    token: "test-token".to_string(),
+                                    room_name: call_id.to_string(),
+                                    server_url: "wss://example.com".to_string(),
+                                })
+                            })
+                        });
 
-        let response = router(service)
+                    let mut request = Request::post(format!("/meetings/join/{}", "a".repeat(64)))
+                        .header("authorization", format!("Bearer {actor}"));
+                    if json_header {
+                        request = request.header("content-type", "application/json");
+                    }
+                    let response = router_with_flag(service, enabled)
+                        .oneshot(request.body(Body::empty()).unwrap())
+                        .await
+                        .unwrap();
+                    assert_eq!(response.status(), StatusCode::OK);
+                }
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn meeting_join_only_applies_sdk_options_when_enabled() {
+        for enabled in [false, true] {
+            let mut service = MockCallService::new();
+            service
+                .expect_join_meeting_with_options()
+                .times(1)
+                .returning(move |_, _, request, is_program, _| {
+                    assert_eq!(is_program, enabled);
+                    assert_eq!(request.replace, !enabled);
+                    assert!(matches!(
+                        (enabled, request.on_other_call),
+                        (true, crate::domain::models::OnOtherCall::Fail)
+                            | (false, crate::domain::models::OnOtherCall::Switch)
+                    ));
+                    assert_eq!(
+                        request.name.as_deref(),
+                        enabled.then_some("SDK participant")
+                    );
+                    Box::pin(async { Err(CallError::NotFound("call".to_string())) })
+                });
+            let response = router_with_flag(service, enabled)
+                .oneshot(
+                    Request::post(format!("/meetings/join/{}", "a".repeat(64)))
+                        .header("authorization", "Bearer program")
+                        .header("content-type", "application/json")
+                        .body(Body::from(
+                            r#"{"onOtherCall":"fail","replace":false,"name":"SDK participant"}"#,
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        }
+    }
+
+    #[tokio::test]
+    async fn meeting_join_rejects_invalid_nonempty_bodies_before_the_service() {
+        for enabled in [false, true] {
+            for (content_type, body, status) in [
+                (Some("application/json"), "{", StatusCode::BAD_REQUEST),
+                (Some("application/json"), " ", StatusCode::BAD_REQUEST),
+                (
+                    Some("application/json"),
+                    r#"{"replace":"yes"}"#,
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                ),
+                (Some("text/plain"), "{}", StatusCode::UNSUPPORTED_MEDIA_TYPE),
+                (None, "{}", StatusCode::UNSUPPORTED_MEDIA_TYPE),
+            ] {
+                let mut request = Request::post(format!("/meetings/join/{}", "a".repeat(64)))
+                    .header("authorization", "Bearer member");
+                if let Some(content_type) = content_type {
+                    request = request.header("content-type", content_type);
+                }
+                let response = router_with_flag(MockCallService::new(), enabled)
+                    .oneshot(request.body(Body::from(body)).unwrap())
+                    .await
+                    .unwrap();
+                assert_eq!(response.status(), status);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn meeting_join_keeps_the_configured_body_limit() {
+        let response = router(MockCallService::new())
+            .layer(axum::extract::DefaultBodyLimit::max(4))
             .oneshot(
                 Request::post(format!("/meetings/join/{}", "a".repeat(64)))
-                    .header("authorization", "Bearer program")
-                    .body(Body::empty())
+                    .header("authorization", "Bearer member")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"replace":true}"#))
                     .unwrap(),
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
     }
 }
