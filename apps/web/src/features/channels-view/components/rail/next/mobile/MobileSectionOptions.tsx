@@ -1,4 +1,4 @@
-import { formatLocale, t } from '@app/lib/i18n';
+import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { longPressActivated } from '@core/directive/touchHandler';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -11,18 +11,13 @@ import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
-import {
-  formatSnoozeDeadline,
-  snoozePresets,
-} from '@notifications/core/snooze';
+import { NotificationMuteOptions } from '@notifications/components/NotificationMuteMenu';
 import { queryReadyGate } from '@queries/gate';
 import { useMutedEntitiesQuery } from '@queries/notification/unsubscribes';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import { Button, Checkbox, SingleSelectCheck, ToggleSwitch } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import type { ChannelSectionPreferences } from '../../../../types';
-
-import { presetTranslationKey } from '../ChannelMuteMenu';
 
 type OptionsPage = 'main' | 'visibility' | 'sort' | 'display' | 'mute';
 
@@ -239,42 +234,15 @@ export function MobileSectionOptions(props: {
                 />
               </Match>
               <Match when={page() === 'mute'}>
-                <MobileDrawer.Item
+                <NotificationMuteOptions
                   disabled={props.disabled}
-                  onClick={() =>
-                    fireAndForget(props.onMute(true), 'channels-view')
+                  onMute={(muted) =>
+                    fireAndForget(props.onMute(muted), 'channels-view')
                   }
-                >
-                  {t('channelSections.muteIndefinitely')}
-                </MobileDrawer.Item>
-                <For each={snoozePresets(new Date())}>
-                  {(preset) => (
-                    <MobileDrawer.Item
-                      disabled={props.disabled}
-                      onClick={() =>
-                        fireAndForget(
-                          props.onSnooze(preset.until),
-                          'channels-view'
-                        )
-                      }
-                    >
-                      <span class="flex-1">
-                        {t(presetTranslationKey(preset.id))}
-                      </span>
-                      <span class="text-xs text-ink-muted">
-                        {formatSnoozeDeadline(preset.until, formatLocale())}
-                      </span>
-                    </MobileDrawer.Item>
-                  )}
-                </For>
-                <MobileDrawer.Item
-                  disabled={props.disabled}
-                  onClick={() =>
-                    fireAndForget(props.onSnooze(), 'channels-view')
+                  onSnooze={(until) =>
+                    fireAndForget(props.onSnooze(until), 'channels-view')
                   }
-                >
-                  {t('channelSections.customMute')}
-                </MobileDrawer.Item>
+                />
               </Match>
             </Switch>
           </MobileDrawer.ScrollBody>

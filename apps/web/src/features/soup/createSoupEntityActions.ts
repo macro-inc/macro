@@ -50,6 +50,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { isEmailEntity, isGithubPrEntity, isTaskEntity } from '@entity';
+import type { NotificationMuteMenuProps } from '@notifications/components/NotificationMuteMenu';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { useIsTeamAdmin } from '@queries/team/teams';
@@ -64,6 +65,7 @@ export type SoupEntityActionItem = {
   onClick: () => void | Promise<void>;
   destructive?: boolean;
   disabled?: boolean;
+  muteMenu?: NotificationMuteMenuProps;
 };
 
 type SoupEntityActionGroup = {
@@ -376,11 +378,6 @@ export function createSoupEntityActions(
     }
 
     if (canExecuteAll(muteAction.canExecute)) {
-      middleItems.push({
-        id: 'snooze',
-        label: t('entityActions.snoozeNotifications'),
-        onClick: () => muteAction.snooze(entities),
-      });
       const allMuted = entities.every((entity) => muteAction.isMuted(entity));
       middleItems.push({
         id: 'mute',
@@ -388,6 +385,7 @@ export function createSoupEntityActions(
           ? t('entityActions.unmuteNotifications')
           : t('entityActions.muteNotifications'),
         onClick: handle(muteAction.executeWithSoup),
+        muteMenu: muteAction.menu(entities),
       });
     }
 

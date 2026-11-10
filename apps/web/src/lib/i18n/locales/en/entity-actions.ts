@@ -36,7 +36,7 @@ export default {
   viewItemsWithTag: 'View all items with tag',
   editTag: 'Edit tag',
   removeTag: 'Remove tag',
-  snoozeNotifications: 'Snooze notifications…',
+  snoozeNotifications: 'Snooze notifications',
   muteNotifications: 'Mute notifications',
   unmuteNotifications: 'Unmute notifications',
   remindMe: 'Remind me',

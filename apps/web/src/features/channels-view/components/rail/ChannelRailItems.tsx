@@ -26,7 +26,6 @@ import {
   rowKeyForChannel,
   useChannelsRail,
 } from './ChannelsRailContext';
-import { ChannelRowMuteMenu } from './next/ChannelMuteMenu';
 
 export type ChannelCallStatus = 'active' | 'incoming';
 
@@ -85,13 +84,6 @@ export function ChannelRailItemContextMenu(
       viewContext={CHANNEL_ACTION_VIEW_CONTEXT}
       class={props.class}
       extraItems={props.extraItems}
-      renderAction={(action, defaultItem) => {
-        if (!rail.sectionsEnabled()) return defaultItem;
-        if (action.id === 'snooze') return null;
-        if (action.id === 'mute')
-          return <ChannelRowMuteMenu channelId={props.channel.id} />;
-        return defaultItem;
-      }}
       onOpenChange={(open) => {
         if (!open) return;
 

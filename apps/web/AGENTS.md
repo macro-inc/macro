@@ -530,6 +530,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Label the notification permission toast **Enable notifications** on every
   platform, and keep the desktop and Android Enable actions on the native
   notification provider.
+- Share one notification mute menu across entity rows, detail headers, conversations, and sections; offer permanent mute, timed presets, and the existing custom-time picker, with matching mobile drill-in choices and no separate Snooze notifications row.
 - Keep toast behavior in `@core/component/Toast/Toast`: desktop notices stack, mobile transients replace, and persistent notices use their own regions. Mobile notices omit the close icon and support swiping left or right. Follow the [toast presentation contract](../../.agents/rules/web/design-system.md) for shared surfaces, compact mobile notices, aligned content, and optional close controls.
   Review current toast specimens under **Current app toasts** at `/app/component/ui?ui=toast`; keep the gallery's actions inert, regions isolated, and account details synthetic.
 - Keep signed-out Drive document routes on the shared detail viewer without

@@ -1290,7 +1290,7 @@ offer **Unmute all channels**. These actions affect only the viewer's current
 complete membership, including unloaded and filtered rows, never later additions.
 Built-in lists include joined channels only; Favorites targets channel favorites.
 Bulk writes retain successful chunks on partial failures. Channel row menus use
-the same durations under **Mute channel**, without a leading mute icon. Preset
+the same durations under **Mute notifications**, without a leading mute icon. Preset
 end dates and times align with the menu's right content edge.
 
 **Add to section** lists eligible sections with checked membership, then New
@@ -1654,7 +1654,7 @@ the host supplies one, as in Home — and opens the same entity actions as
 right-clicking the conversation's rail row: `Open in new split` (when available),
 `Rename`, `Set channel picture`,
 `Remove channel picture` (only when the channel has one),
-`Favorite`/`Unfavorite`, `Snooze notifications…`, `Mute notifications`,
+`Favorite`/`Unfavorite`, `Mute notifications`/`Unmute notifications`,
 `Remind me`, `Copy Link`, `Copy ID`. A channel can therefore be favorited or
 given a picture without finding its row, from Chat and from every view that
 opens one inline. The menu appears once the conversation itself has loaded,
