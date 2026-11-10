@@ -35,6 +35,53 @@ fn imported_foreign_defaults_stay_raw_until_first_read() -> Result<(), Error> {
     assert!(after["$"].get("counter").is_none());
     assert_eq!(after["$"]["untouched"], serde_json::json!({"v":1}));
     assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(state.view().export_stored_json(key)?["$"]["counter"], 0);
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+    Ok(())
+}
+
+#[test]
+fn foreign_equal_set_retains_imported_presence_and_real_write_supersedes_it()
+-> Result<(), Box<dyn std::error::Error>> {
+    struct Codec;
+    impl ForeignStateCodec for Codec {
+        fn is_equal(&self, a: &Value, b: &Value) -> bool {
+            a == b
+        }
+        fn is_default(&self, value: &Value) -> bool {
+            value == 0
+        }
+    }
+    let mut editor = Editor::builder(EditorMode::Headless)
+        .foreign_state(ForeignStateConfig {
+            key: "counter".into(),
+            flat: false,
+            codec: Arc::new(Codec),
+        })
+        .initial_state(serde_json::from_str(
+            r#"{"root":{"type":"root","children":[{"type":"paragraph","children":[],"$":{"counter":0,"unknown":true}}]}}"#,
+        )?)
+        .build()?;
+    let key = editor.state().first_child_or_err(NodeKey::ROOT)?;
+    let before = editor.state().clone();
+    let (_, equal) = editor.update(|tx| tx.set_foreign_state(key, "counter", 0.into()))?;
+    assert!(equal.is_noop());
+    assert_eq!(
+        editor.state().view().export_stored_json(key)?["$"]["counter"],
+        0
+    );
+    editor.update(|tx| tx.set_foreign_state(key, "counter", 9.into()))?;
+    assert_eq!(
+        editor.state().view().export_stored_json(key)?["$"]["counter"],
+        9
+    );
+    editor.update(|tx| tx.set_foreign_state(key, "counter", 0.into()))?;
+    assert!(
+        editor.state().view().export_stored_json(key)?["$"]
+            .get("counter")
+            .is_none()
+    );
+    assert_eq!(before.view().export_stored_json(key)?["$"]["counter"], 0);
     Ok(())
 }
 

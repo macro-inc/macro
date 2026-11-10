@@ -134,22 +134,96 @@ fn application_custom_code_reopens_from_a_fresh_loro_snapshot() {
             &mut Vec::new(),
         )
         .unwrap();
-    let expected = writer.state().to_json().unwrap();
+    let mut expected = writer.state().to_json().unwrap();
     assert_eq!(expected.root["children"][0]["$"]["id"], "application-code");
     assert_eq!(
         expected.root["children"][0]["children"][0]["$"]["id"],
         "application-leaf"
     );
+    // OFF first edit persists the bare version (receipt SHA-256
+    // 17135650998faced89334561c0fed993b0f4c5113a3da1740b47bb6dfe511eec).
+    let bare = serde_json::json!({"version":10});
+    assert_eq!(expected.root["$"]["documentMetadata"], bare);
+    let persisted = lexical_loro::reconstruct_state(&doc, config.policy).unwrap();
+    assert_eq!(persisted.root["$"]["documentMetadata"], bare);
     let snapshot = doc.export(loro::ExportMode::Snapshot).unwrap();
     drop(writer);
     drop(doc);
     let restored = lexical_loro::new_doc(8).unwrap();
     restored.import(&snapshot).unwrap();
+    let restored_vv = restored.oplog_vv();
+    let policy = config.policy;
+    assert_eq!(
+        lexical_loro::reconstruct_state(&restored, policy).unwrap(),
+        persisted
+    );
     let mut reader = EditorSurface::new(config, 8, now).unwrap();
     reader
         .init(&restored, now, Access::Edit, &mut Vec::new())
         .unwrap();
+    // Ordinary Source parse/reopen export adds the null slot (receipt SHA-256
+    // e85063a242345ba0cb23cbdcdacdf89643961f16ac978d8602729b0aae0c75e2).
+    expected.root["$"]["documentMetadata"] =
+        serde_json::json!({"version":10,"environmentTags":null});
     assert_eq!(reader.state().to_json().unwrap(), expected);
+    assert_eq!(
+        lexical_loro::reconstruct_state(&restored, policy).unwrap(),
+        persisted
+    );
+    assert_eq!(restored.oplog_vv(), restored_vv);
+}
+
+#[test]
+fn editable_draft_cleanup_preserves_bare_metadata_storage() {
+    let now = Now {
+        mono: doc_sync_core::Millis(0),
+        wall: doc_sync_core::UnixMillis(0),
+    };
+    let config = crate::application_editor_config(
+        EditorConfig::default(),
+        Arc::new(std::sync::atomic::AtomicI64::new(0)),
+        macro_document_model::EditorType::MarkdownSync,
+    );
+    let policy = config.policy;
+    let doc = lexical_loro::new_doc(7).unwrap();
+    lexical_loro::mirror::set_state(&doc, &serde_json::json!({
+        "type":"root","version":1,"format":"","indent":0,"direction":null,
+        "$":{"id":"cleanup-root","documentMetadata":{"version":10}},
+        "children":[{"type":"paragraph","version":1,"format":"","indent":0,"direction":null,
+            "$":{"id":"cleanup-paragraph"},"children":[{
+                "type":"comment-mark","version":1,"isDraft":true,"ids":["draft"],
+                "format":"","indent":0,"direction":null,"$":{"id":"cleanup-wrapper"},
+                "children":[{"type":"text","version":1,"text":"preserved","$":{"id":"cleanup-text"}}]
+            }]
+        }]
+    })).unwrap();
+    let before = lexical_loro::reconstruct_initial_state(&doc, policy).unwrap();
+    assert!(before.has_transparent_wrappers);
+    let before_vv = doc.oplog_vv();
+    let mut reader = EditorSurface::new(config, 8, now).unwrap();
+    reader
+        .init(&doc, now, Access::Edit, &mut Vec::new())
+        .unwrap();
+    let after = lexical_loro::reconstruct_initial_state(&doc, policy).unwrap();
+    assert!(!after.has_transparent_wrappers);
+    assert_ne!(doc.oplog_vv(), before_vv);
+    assert_eq!(
+        after.state.root["$"]["documentMetadata"],
+        serde_json::json!({"version":10})
+    );
+    let text = &after.state.root["children"][0]["children"][0];
+    assert_eq!(text["text"], "preserved");
+    assert_eq!(text["$"]["id"], "cleanup-text");
+    assert_eq!(
+        reader.state().to_json().unwrap().root["$"]["documentMetadata"],
+        serde_json::json!({"version":10,"environmentTags":null})
+    );
+    reader
+        .projection
+        .as_ref()
+        .unwrap()
+        .check(&doc, reader.state())
+        .unwrap();
 }
 
 #[test]

@@ -51,6 +51,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Preserve optional StateValue inner identity and imported undefined text fields through paragraph exports.
 - Preserve known typed state on raw remote updates only when its effective serialized value is unchanged; parse changed/explicit-null values and reset removals, while ordinary JSON imports always reparse.
 - Memoize reads of present unknown state without dirtying or cloning nodes; retain raw slots, copy completed typed values at the write barrier, and run parsers, equality and serializers outside memo locks.
+- Use stored JSON export for persistence: preserve imported state slots through parsing and COW, supersede them only on explicit writes or copy resets, and keep ordinary JSON export canonical. Both modes preserve callback order and the final custom export adjustment.
 
 - Preserve owning-package extension callback errors in Error::Extension; never classify them as unrelated model failures.
 - Use Error::invariant for runtime diagnostic context; static and owned messages display verbatim and share the Invariant classification.

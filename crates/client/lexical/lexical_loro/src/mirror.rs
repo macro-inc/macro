@@ -10,7 +10,7 @@ pub fn set_state(doc: &LoroDoc, root: &Value) -> Result<()> {
     set_state_inner(doc, root, None)
 }
 /// Fully reconcile already-synced editor state while retaining protected local fields.
-/// Use synced_json to produce the state; new nodes contain only that synced payload.
+/// For a live editor snapshot, use [`set_synced_editor_state`] to retain imported storage.
 #[tracing::instrument(name = "doc.projection.full_sync", skip_all, err)]
 pub fn set_synced_state(
     doc: &LoroDoc,
@@ -18,6 +18,16 @@ pub fn set_synced_state(
     policy: &dyn SyncPolicy,
 ) -> Result<()> {
     set_state_inner(doc, &Value::Object(state.root.clone()), Some(policy))
+}
+/// Reconcile an editor snapshot while retaining its imported storage values.
+#[tracing::instrument(name = "doc.projection.full_sync", skip_all, err)]
+pub fn set_synced_editor_state(
+    doc: &LoroDoc,
+    state: &EditorState,
+    policy: &dyn SyncPolicy,
+) -> Result<()> {
+    let root = crate::policy::stored_node(state.view(), NodeKey::ROOT, policy)?;
+    set_state_inner(doc, &Value::Object(root), Some(policy))
 }
 fn set_state_inner(doc: &LoroDoc, root: &Value, policy: Option<&dyn SyncPolicy>) -> Result<()> {
     let root = root.as_object().ok_or_else(|| schema_error("root"))?;

@@ -239,8 +239,11 @@ impl EditorSurface {
             return Ok(());
         }
         let mut projection = if cleanup {
-            let state = lexical_loro::synced_json(self.core.state(), self.config.policy)?;
-            lexical_loro::mirror::set_synced_state(doc, &state, self.config.policy)?;
+            lexical_loro::mirror::set_synced_editor_state(
+                doc,
+                self.core.state(),
+                self.config.policy,
+            )?;
             LoroProjection::attach(doc, self.core.state(), self.config.policy)?
         } else if has_root {
             LoroProjection::attach(doc, base, self.config.policy)?
