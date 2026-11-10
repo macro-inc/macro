@@ -10,9 +10,9 @@ import type { RoutineSurface } from '../core/surfaces';
 /**
  * The card at the top of a view sidebar: the first few suggestions' icons in
  * an overlapping stack, how many there are and their names, inside a border
- * that fades from violet at the top through blue to the card's edge. The
- * whole card opens the suggestions; on hover its close button takes the
- * caret's place, like the other sidebar cards' close buttons.
+ * that fades from violet through blue to the card's edge. The whole card
+ * opens the suggestions; on hover its close button takes the caret's place,
+ * like the other sidebar cards' close buttons.
  */
 export function RoutineSuggestionsCard(props: {
   count: number;
@@ -48,7 +48,7 @@ export function RoutineSuggestionsCard(props: {
           background: [
             'linear-gradient(var(--routine-card-hover), var(--routine-card-hover)) padding-box',
             'linear-gradient(var(--color-control), var(--color-control)) padding-box',
-            'linear-gradient(180deg, color-mix(in oklch, var(--color-violet) var(--routine-card-violet), transparent), color-mix(in oklch, var(--color-accent) var(--routine-card-accent), transparent) 45%, var(--color-edge-muted) 90%) border-box',
+            'linear-gradient(120deg, color-mix(in oklch, var(--color-violet) var(--routine-card-violet), transparent), color-mix(in oklch, var(--color-accent) var(--routine-card-accent), transparent) 45%, var(--color-edge-muted) 80%) border-box',
           ].join(', '),
         }}
         onClick={(event) => props.onOpen(event.currentTarget)}
