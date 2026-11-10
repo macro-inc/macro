@@ -239,7 +239,7 @@ async fn smart_preview_and_membership_include_only_eligible_team_channels(pool: 
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn sections_union_explicit_picks_and_rules_for_unjoined_team_members(pool: PgPool) {
+async fn sections_replace_picks_with_rules_for_unjoined_team_members(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
     let team = insert_team(&pool, USER_A).await;
@@ -258,10 +258,17 @@ async fn sections_union_explicit_picks_and_rules_for_unjoined_team_members(pool:
     let sections = PgChannelLabelsRepo::for_sections(pool.clone());
     let label = written(
         sections
-            .create_label(
+            .create_label(&scope, "Planning", &[picked, both], &user(USER_A), None)
+            .await
+            .unwrap(),
+    );
+    assert_eq!(label.explicit_channel_ids, Some(vec![picked, both]));
+    let label = written(
+        sections
+            .rename_label(
                 &scope,
+                label.id,
                 "Planning",
-                &[picked, both],
                 &user(USER_A),
                 Some(&ChannelLabelRule::Name {
                     contains: "Roadmap".into(),
@@ -270,12 +277,28 @@ async fn sections_union_explicit_picks_and_rules_for_unjoined_team_members(pool:
             .await
             .unwrap(),
     );
-    assert_eq!(label.explicit_channel_ids, Some(vec![picked, both]));
+    assert_eq!(label.explicit_channel_ids, Some(vec![]));
+    let assignments = sqlx::query_scalar!(
+        "SELECT channel_id FROM channel_label_channel WHERE label_id = $1",
+        label.id,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert!(assignments.is_empty());
+    assert_eq!(
+        sections
+            .set_channel_label(&scope, picked, Some(label.id), &user(USER_A))
+            .await
+            .unwrap(),
+        SetChannelLabelOutcome::SmartTagReadOnly
+    );
     let shared = sections.list_labels(&scope, &user(USER_B)).await.unwrap();
-    assert_eq!(shared[0].channel_ids.len(), 3);
+    assert_eq!(shared[0].channel_ids.len(), 2);
     assert!(shared[0].channel_ids.contains(&matched));
-    assert_eq!(shared[0].explicit_channel_ids, Some(vec![picked, both]));
-    assert_eq!(shared[0].channel_count, 3);
+    assert!(!shared[0].channel_ids.contains(&picked));
+    assert_eq!(shared[0].explicit_channel_ids, Some(vec![]));
+    assert_eq!(shared[0].channel_count, 2);
     let preview = sections
         .preview_smart_tag(
             &scope,
@@ -321,7 +344,7 @@ async fn sections_union_explicit_picks_and_rules_for_unjoined_team_members(pool:
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn sections_reject_cross_team_and_preserve_picks_on_rule_edits_and_transfers(pool: PgPool) {
+async fn sections_reject_cross_team_and_clear_picks_on_rule_edits_and_transfers(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;
     let team = insert_team(&pool, USER_A).await;
@@ -344,6 +367,34 @@ async fn sections_reject_cross_team_and_preserve_picks_on_rule_edits_and_transfe
             .unwrap(),
         SetChannelLabelOutcome::ChannelNotLabelable
     );
+    written(
+        sections
+            .create_label(&scope, "Taken", &[], &user(USER_A), None)
+            .await
+            .unwrap(),
+    );
+    assert_eq!(
+        sections
+            .rename_label(
+                &scope,
+                label.id,
+                "Taken",
+                &user(USER_A),
+                Some(&ChannelLabelRule::Name {
+                    contains: "Roadmap".into()
+                }),
+            )
+            .await
+            .unwrap(),
+        LabelWriteOutcome::NameTaken
+    );
+    let unchanged = sections
+        .get_label(&scope, label.id, &user(USER_A))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(unchanged.rule.is_none());
+    assert_eq!(unchanged.explicit_channel_ids, Some(vec![picked]));
     let edited = written(
         sections
             .rename_label(
@@ -358,7 +409,8 @@ async fn sections_reject_cross_team_and_preserve_picks_on_rule_edits_and_transfe
             .await
             .unwrap(),
     );
-    assert_eq!(edited.explicit_channel_ids, Some(vec![picked]));
+    assert_eq!(edited.explicit_channel_ids, Some(vec![]));
+    assert!(edited.channel_ids.is_empty());
     let personal = ChannelLabelsScope::User(user(USER_A).into_owned());
     let transferred = written(
         sections
@@ -366,12 +418,12 @@ async fn sections_reject_cross_team_and_preserve_picks_on_rule_edits_and_transfe
             .await
             .unwrap(),
     );
-    assert_eq!(transferred.explicit_channel_ids, Some(vec![picked]));
-    assert!(transferred.channel_ids.contains(&picked));
+    assert_eq!(transferred.explicit_channel_ids, Some(vec![]));
+    assert_eq!(transferred.channel_ids, vec![foreign]);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn manual_section_transfer_with_new_rule_keeps_picks_separate_from_matches(pool: PgPool) {
+async fn manual_section_transfer_with_new_rule_replaces_picks_without_moving_matches(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let team = insert_team(&pool, USER_A).await;
     let personal = ChannelLabelsScope::User(user(USER_A).into_owned());
@@ -415,9 +467,8 @@ async fn manual_section_transfer_with_new_rule_keeps_picks_separate_from_matches
             .unwrap(),
     );
     assert_eq!(moved.id, source.id);
-    assert_eq!(moved.explicit_channel_ids, Some(vec![other_pick, picked]));
-    assert_eq!(moved.channel_ids.len(), 3);
-    assert!(moved.channel_ids.contains(&matched));
+    assert_eq!(moved.explicit_channel_ids, Some(vec![]));
+    assert_eq!(moved.channel_ids, vec![matched]);
     assert_eq!(
         sections
             .get_label(&shared, destination.id, &user(USER_A))
@@ -425,8 +476,8 @@ async fn manual_section_transfer_with_new_rule_keeps_picks_separate_from_matches
             .unwrap()
             .unwrap()
             .explicit_channel_ids,
-        Some(vec![matched]),
-        "only conflicting explicit picks move to the transferred section"
+        Some(vec![picked, matched]),
+        "rule conversion leaves destination manual assignments unchanged"
     );
     let assigned_to = sqlx::query_scalar!(
         "SELECT label_id FROM channel_label_channel WHERE scope_key = $1 AND channel_id = $2",

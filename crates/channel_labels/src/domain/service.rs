@@ -144,7 +144,7 @@ where
     ) -> Result<ChannelLabel, ChannelLabelsError> {
         let name = validate_name(&label.name)?;
         let rule = label.rule.map(validate_rule).transpose()?;
-        if !self.sections && rule.is_some() && !label.channel_ids.is_empty() {
+        if rule.is_some() && !label.channel_ids.is_empty() {
             return Err(ChannelLabelsError::BadRequest(
                 "smart tags match channels automatically and cannot have manual assignments".into(),
             ));

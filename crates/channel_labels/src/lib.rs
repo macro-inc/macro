@@ -13,7 +13,7 @@
 //! sections transferred to personal scope leave the team sidebar.
 //! Smart tags match current channel attributes automatically. Their memberships
 //! may overlap other tags and manual labels, and only include visible channels.
-//! The additive sections API combines explicit picks with name-rule matches.
+//! The additive sections API replaces explicit picks when a name rule is applied.
 //! Verified team members can also see unjoined channels of that team in sections;
 //! personal sections and legacy labels remain participant-only.
 //!

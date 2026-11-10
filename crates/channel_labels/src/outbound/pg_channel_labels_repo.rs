@@ -117,12 +117,7 @@ impl PgChannelLabelsRepo {
                              AND c.team_id = l.team_id AND EXISTS (
                                  SELECT 1 FROM team_user tu
                                  WHERE tu.team_id = l.team_id AND tu.user_id = $3)))
-                    AND (EXISTS (
-                        SELECT 1 FROM channel_label_channel lc
-                        WHERE lc.label_id = l.id AND lc.channel_id = c.id
-                    ) OR (l.name_contains IS NOT NULL
-                        AND strpos(lower(c.name), lower(l.name_contains)) > 0))
-                    AND ($5 OR (l.name_contains IS NULL AND EXISTS (
+                    AND ((l.name_contains IS NULL AND EXISTS (
                         SELECT 1 FROM channel_label_channel lc
                         WHERE lc.label_id = l.id AND lc.channel_id = c.id
                     )) OR (l.name_contains IS NOT NULL
@@ -132,7 +127,7 @@ impl PgChannelLabelsRepo {
                 ARRAY(
                     SELECT c.id FROM channel_label_channel lc
                     JOIN comms_channels c ON c.id = lc.channel_id
-                    WHERE lc.label_id = l.id
+                    WHERE lc.label_id = l.id AND l.name_contains IS NULL
                       AND ((l.team_id IS NULL AND c.channel_type IN ('team', 'public', 'private'))
                         OR (l.team_id IS NOT NULL AND c.channel_type = 'team' AND c.team_id = l.team_id))
                       AND (EXISTS (SELECT 1 FROM comms_channel_participants p
@@ -295,6 +290,15 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
             }
             Err(error) => return Err(error.into()),
         }
+        if self.sections && rule.is_some() {
+            sqlx::query!(
+                "DELETE FROM channel_label_channel WHERE scope_key = $1 AND label_id = $2",
+                scope_key,
+                label_id,
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
         tx.commit().await?;
         match self.get_label(scope, label_id, viewer).await? {
             Some(label) => Ok(LabelWriteOutcome::Written(label)),
@@ -332,12 +336,12 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
         let Some(existing) = existing else {
             return Ok(LabelWriteOutcome::NotFound);
         };
-        let mut channel_ids: Vec<Uuid> = if let Some(pattern) = rule
+        let manual = rule.is_none() && existing.name_contains.is_none();
+        let channel_ids: Vec<Uuid> = if let Some(pattern) = rule
             .map(ChannelLabelRule::name_contains)
             .or(existing.name_contains.as_deref())
         {
-            // Validate current rule matches in the source scope before moving picks.
-            // Matches are derived membership, never destination assignments.
+            // Validate rule matches before transferring the section; never persist them as picks.
             sqlx::query_scalar!(
                 r#"SELECT c.id FROM comms_channels c
                    LEFT JOIN comms_channel_participants p ON p.channel_id = c.id
@@ -365,20 +369,6 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
             .fetch_all(&mut *tx)
             .await?
         };
-        let mut explicit_ids = channel_ids.clone();
-        if self.sections {
-            let picks = sqlx::query_scalar!(
-                "SELECT channel_id FROM channel_label_channel WHERE scope_key = $1 AND label_id = $2 ORDER BY channel_id FOR UPDATE",
-                source_key,
-                label_id,
-            )
-            .fetch_all(&mut *tx)
-            .await?;
-            explicit_ids = picks.clone();
-            channel_ids.extend(picks);
-            channel_ids.sort_unstable();
-            channel_ids.dedup();
-        }
         let validity = validate_channels(
             &mut tx,
             &channel_ids,
@@ -423,14 +413,14 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
             Err(error) if is_unique_violation(&error) => return Ok(LabelWriteOutcome::NameTaken),
             Err(error) => return Err(error.into()),
         }
-        if existing.name_contains.is_none() || self.sections {
+        if manual {
             sqlx::query!(
                 r#"INSERT INTO channel_label_channel (scope_key, channel_id, label_id)
                    SELECT $1, channel_id, $2 FROM unnest($3::uuid[]) AS channel_id
                    ON CONFLICT (scope_key, channel_id) DO UPDATE SET label_id = EXCLUDED.label_id"#,
                 target_key,
                 label_id,
-                &explicit_ids,
+                &channel_ids,
             )
             .execute(&mut *tx)
             .await?;
@@ -485,7 +475,7 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
             let Some(label) = label else {
                 return Ok(SetChannelLabelOutcome::LabelNotFound);
             };
-            if label.name_contains.is_some() && !self.sections {
+            if label.name_contains.is_some() {
                 return Ok(SetChannelLabelOutcome::SmartTagReadOnly);
             }
         }
