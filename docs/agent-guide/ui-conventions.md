@@ -326,9 +326,8 @@ and contact views (both inside the CRM workspace and in standalone blocks).
 Interface glyphs use the original Macro SVG family. Open `/app/debug/icon-gallery`
 to review regular, filled, and bold variants at 14/16/20/24 px in light and dark
 themes. The Original icons tab is the default; Legacy animated icons remains
-available. Interactive icons provide brief press feedback and selective mouse
-hover feedback, respecting reduced motion. Control layouts and hit targets are
-independent of glyph geometry. See the [icon guide](../../apps/web/src/components/icon/system/README.md).
+available. Interface icons never animate on press or hover. Control layouts and
+hit targets are independent of glyph geometry. See the [icon guide](../../apps/web/src/components/icon/system/README.md).
 
 ![Original icons in the live gallery](images/icon-system.png)
 

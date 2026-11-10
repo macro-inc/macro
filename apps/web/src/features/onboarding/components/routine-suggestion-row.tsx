@@ -116,11 +116,7 @@ export function RoutineSuggestionRow(props: {
             <Show when={props.row.when}>
               {(when) => (
                 <span class="flex items-center gap-1 text-violet-ink">
-                  <LightningIcon
-                    class="size-3.5"
-                    aria-hidden="true"
-                    data-icon-motion="none"
-                  />
+                  <LightningIcon class="size-3.5" aria-hidden="true" />
                   {when()}
                 </span>
               )}
