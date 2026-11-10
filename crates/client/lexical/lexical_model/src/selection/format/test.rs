@@ -172,12 +172,12 @@ impl TextNode for NonFormattingText {
 }
 
 #[test]
-fn format_order_retains_skipped_last_text_fallback() -> Result<(), Error> {
+fn format_text_ignores_last_capability_but_invokes_virtual_format() -> Result<(), Error> {
     let mut editor = Editor::builder(EditorMode::Headless)
         .node::<NonFormattingText>()
         .build()
         .expect("builder");
-    let ((p, a, b, skipped), _) = editor.update(|tx| {
+    let ((p, a, _b, skipped), _) = editor.update(|tx| {
         let p = tx.create(Paragraph::default())?.key();
         let a = tx.create_text("aa")?.key();
         let b = tx.create_text("b")?.key();
@@ -202,22 +202,22 @@ fn format_order_retains_skipped_last_text_fallback() -> Result<(), Error> {
         .selection()
         .and_then(Selection::as_range)
         .expect("range");
-    assert_eq!(range.focus, Point::text(b, Utf16Offset(1)));
+    assert_eq!(range.focus, Point::text(skipped, Utf16Offset(1)));
     assert_eq!(
         state.view().text(skipped).expect("skipped").format,
-        TextFormat::SUBSCRIPT
+        TextFormat::SUBSCRIPT | TextFormat::BOLD
     );
     Ok(())
 }
 
 #[test]
-fn format_order_retains_skipped_first_text_target() -> Result<(), Error> {
+fn format_text_ignores_first_capability_for_partial_and_element_starts() -> Result<(), Error> {
     for element_start in [false, true] {
         let mut editor = Editor::builder(EditorMode::Headless)
             .node::<NonFormattingText>()
             .build()
             .expect("builder");
-        let ((p, skipped, middle, last), _) = editor.update(|tx| {
+        let ((p, skipped, _middle, last), _) = editor.update(|tx| {
             let p = tx.create(Paragraph::default())?.key();
             let skipped = tx.create(NonFormattingText)?.key();
             tx.text(skipped)?.set_text_content("aa")?;
@@ -244,11 +244,23 @@ fn format_order_retains_skipped_first_text_target() -> Result<(), Error> {
             .selection()
             .and_then(Selection::as_range)
             .expect("range");
-        assert_eq!(range.anchor, Point::text(middle, Utf16Offset(0)));
+        let first_target = if element_start {
+            skipped
+        } else {
+            state
+                .view()
+                .child_at_index(p, ChildIndex(1))
+                .expect("formatted split")
+        };
+        assert_eq!(range.anchor, Point::text(first_target, Utf16Offset(0)));
         assert_eq!(range.focus, Point::text(last, Utf16Offset(1)));
         assert_eq!(
             state.view().text(skipped).expect("skipped").format,
-            TextFormat::empty()
+            if element_start {
+                TextFormat::BOLD
+            } else {
+                TextFormat::empty()
+            }
         );
     }
     Ok(())

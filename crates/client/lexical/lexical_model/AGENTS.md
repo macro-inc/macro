@@ -59,7 +59,8 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - Use base parent splices for sibling insertion and replacement; element append retains virtual splice dispatch.
 - Clamp element offsets during caret reads while retaining the stored selection points.
 - Node removal relocates affected points to adjacent sibling element boundaries without descending into their text.
-- Format selected text in pinned first/last/interior write order so normalization preserves element endpoints across multiple merge groups; retain the last eligible formatting target when an endpoint cannot be formatted.
+- Format selected text in pinned first/last/interior write order so normalization preserves element endpoints across multiple merge groups; retain the last eligible formatting target when an endpoint range is empty or excluded.
+- Ignore can_have_format in range formatting; invoke set_format so virtual coercion still applies, and retain the separate style-patch capability guard.
 - Selection direction caches survive text-only edits; point setters and range clones invalidate them.
 - Selection slots, formatting and range edits preserve upstream active-versus-detached selection side effects; inline insertion derives its split index from the current Active range and splices the receiver block, while empty block insertion skips that split.
 - Movement consumes explicit host points; `NoView` runs structural rules only.

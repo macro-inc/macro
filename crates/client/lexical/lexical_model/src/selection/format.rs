@@ -147,9 +147,6 @@ impl Transaction<'_> {
             let Some(data) = self.view().text(node) else {
                 continue;
             };
-            if !self.can_have_format(node) {
-                continue;
-            }
             let size = data.text.utf16_len();
             let from = if node == start.key() {
                 Utf16Offset(start.offset())

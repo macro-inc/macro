@@ -11,6 +11,7 @@ feature exports owned HTML; browser DOM import and layout stay in views.
 - `mark` wraps inline runs, splits at line breaks and retains annotations only in internal clones.
 - Register highlight orphan cleanup explicitly; registering CodeHighlightNode alone preserves stored orphans.
 - `code` keeps stored highlights distinct and never tokenizes; new content uses plain text.
+- Preserve CodeHighlight's virtual format no-op while range formatting still splits partial highlights and updates selection formatting.
 - Code factories resolve the default replacement class before setting language and theme.
 - `code::line`, `code::plain` and `code::language` own line navigation, LF/tab splitting and language catalogs.
 - Keep selection CSS parsing ordered and uncached; detached style inputs differ from active selected text.
