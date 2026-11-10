@@ -181,8 +181,11 @@ db:
           "provider_id": "resync-thread",
           "inbox_visible": false,
           "has_received_mail": false,
+          "has_pdf_attachment": false,
+          "has_image_attachment": false,
           "reminder_returned_at": null,
           "has_calendar_attachment": false,
+          "has_document_attachment": false,
           "latest_inbound_message_ts": null,
           "latest_non_spam_message_ts": null,
           "latest_outbound_message_ts": null

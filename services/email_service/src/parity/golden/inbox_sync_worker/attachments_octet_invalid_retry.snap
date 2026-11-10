@@ -65,6 +65,7 @@ spans:
           INFO pending_provider_label_ids {"message_id":"<uuid:2>"}
           INFO insert_attachments {}
             INFO map_service_attachments_to_db {"message_db_id":"<uuid:2>"}
+            INFO sync_thread_attachment_flags {"thread_db_id":"<thread:t1>"}
           INFO update_message_replying_to_from_headers {"link_id":"<link:A>","message_db_id":"<uuid:2>"}
       INFO get_message_and_thread_id_by_provider_id {"link_id":"<link:A>","provider_id":"attachment-message"}
       INFO handle_attachment_upload {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","payload":"UpsertMessagePayload { provider_message_id: \"attachment-message\" }"}
@@ -118,6 +119,8 @@ sql:
   32acf65c4e94 rows_affected=1 rows_returned=1
   32539674eb96 rows_affected=0 rows_returned=0
   de24caefb0ca rows_affected=1 rows_returned=0
+  78ccc1f8259d rows_affected=1 rows_returned=1
+  5c018c9cf66b rows_affected=0 rows_returned=0
   ca6b0d1b5889 rows_affected=0 rows_returned=0
   8eb20757c433 rows_affected=0 rows_returned=0
   ad640ecb32fd rows_affected=0 rows_returned=0

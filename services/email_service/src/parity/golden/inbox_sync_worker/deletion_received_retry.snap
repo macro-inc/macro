@@ -37,7 +37,7 @@ spans:
       INFO delete_message_with_tx {"link_id":"<link:A>"}
         INFO delete_db_message {"message_id":"<msg:m1a>"}
         INFO delete_thread_if_empty {"thread_id":"<thread:t1>"}
-        INFO sync_thread_calendar_flag {"thread_db_id":"<thread:t1>"}
+        INFO sync_thread_attachment_flags {"thread_db_id":"<thread:t1>"}
       INFO insert_candidates {"link_id":"<link:A>"}
       INFO refresh_email {"user_id":"<user:A>"}
       INFO kafka.publish {"key":"<link:A>","messaging.destination.name":"macro.email","messaging.operation.name":"publish","messaging.operation.type":"send","messaging.system":"kafka","otel.kind":"producer","topic":"macro.email"}
@@ -58,7 +58,7 @@ sql:
   ca6b0d1b5889 rows_affected=0 rows_returned=0
   8eb20757c433 rows_affected=1 rows_returned=0
   ad640ecb32fd rows_affected=0 rows_returned=0
-  712224a670a9 rows_affected=0 rows_returned=0
+  5c018c9cf66b rows_affected=0 rows_returned=0
   d1c567f058bb rows_affected=1 rows_returned=0
   d54dedf42be9 rows_affected=0 rows_returned=0
 provider_http:
