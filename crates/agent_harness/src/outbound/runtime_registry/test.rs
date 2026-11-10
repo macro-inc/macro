@@ -40,8 +40,8 @@ impl HarnessBindings for Arc<FakeBindings> {
         &self,
         _harness: HarnessId,
         _acp_sessions: &[SessionId],
-    ) -> anyhow::Result<Vec<AgentSessionId>> {
-        Ok(Vec::new())
+    ) -> anyhow::Result<crate::domain::model::ListedSessions> {
+        Ok(crate::domain::model::ListedSessions::default())
     }
 }
 

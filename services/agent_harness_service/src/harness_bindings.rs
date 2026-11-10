@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agent_client_protocol::schema::v1::SessionId;
-use agent_harness::domain::model::RuntimeAccessFacts;
+use agent_harness::domain::model::{DORMANT_AFTER, ListedSessions, RuntimeAccessFacts};
 use agent_harness::domain::ports::{HarnessBindings, HarnessPresence, RuntimeConnectionId};
 use agent_session::domain::model::{AgentSessionId, ReplicaId};
 use bot_id::BotId;
@@ -98,17 +98,51 @@ impl HarnessBindings for PgHarnessBindings {
         &self,
         harness: HarnessId,
         acp_sessions: &[SessionId],
-    ) -> anyhow::Result<Vec<AgentSessionId>> {
+    ) -> anyhow::Result<ListedSessions> {
         let acp_sessions: Vec<String> = acp_sessions
             .iter()
             .map(|session| session.to_string())
             .collect();
-        let ids = sqlx::query_scalar!(
+        let dormant_before = chrono::Utc::now() - DORMANT_AFTER;
+        // Activity is the later of `modified_at`, which moves with turn starts,
+        // blocks and metadata changes, and the newest log entry, which moves
+        // with everything a turn does. A turn not yet ended or anything still
+        // queued for the session keeps it out of dormancy however old.
+        let rows = sqlx::query!(
             r#"
-            SELECT s.id
+            SELECT s.id,
+                (
+                    GREATEST(s.modified_at, latest.created_at) < $3
+                    AND s.turn_state IS DISTINCT FROM 'starting'
+                    AND s.turn_state IS DISTINCT FROM 'running'
+                    AND s.turn_state IS DISTINCT FROM 'blocked'
+                    AND s.turn_state IS DISTINCT FROM 'stopping'
+                    AND NOT s.turn_interrupted
+                    AND NOT EXISTS (
+                        SELECT 1 FROM agent_session_queue queue
+                        WHERE queue.agent_session_id = s.id
+                          AND jsonb_array_length(queue.entries) > 0
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1 FROM agent_session_tool_approval approval
+                        WHERE approval.agent_session_id = s.id AND approval.status = 'pending'
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1 FROM agent_session_notification notification
+                        WHERE notification.session_id = s.id AND notification.delivered_at IS NULL
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1 FROM agent_conversation_sessions conversation
+                        WHERE conversation.session_id = s.id AND conversation.is_current
+                    )
+                ) AS "dormant!"
             FROM agent_session s
             JOIN agent_configs ac ON ac.bot_id = s.bot_id
             JOIN harnesses h ON h.id = ac.harness_id
+            LEFT JOIN LATERAL (
+                SELECT created_at FROM agent_session_log
+                WHERE agent_session_id = s.id ORDER BY created_at DESC LIMIT 1
+            ) latest ON true
             WHERE ac.harness_id = $1
               AND h.deleted_at IS NULL
               AND s.acp_session_id = ANY($2)
@@ -116,11 +150,20 @@ impl HarnessBindings for PgHarnessBindings {
             "#,
             harness.as_uuid(),
             &acp_sessions,
+            dormant_before,
         )
         .fetch_all(&self.pool)
         .await?;
 
-        Ok(ids.into_iter().map(AgentSessionId::new_from_uuid).collect())
+        let mut listed = ListedSessions::default();
+        for row in rows {
+            if row.dormant {
+                listed.dormant += 1;
+            } else {
+                listed.live.push(AgentSessionId::new_from_uuid(row.id));
+            }
+        }
+        Ok(listed)
     }
 }
 

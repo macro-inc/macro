@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT s.id,\n                (\n                    GREATEST(s.modified_at, latest.created_at) < $3\n                    AND s.turn_state IS DISTINCT FROM 'starting'\n                    AND s.turn_state IS DISTINCT FROM 'running'\n                    AND s.turn_state IS DISTINCT FROM 'blocked'\n                    AND s.turn_state IS DISTINCT FROM 'stopping'\n                    AND NOT s.turn_interrupted\n                    AND NOT EXISTS (\n                        SELECT 1 FROM agent_session_queue queue\n                        WHERE queue.agent_session_id = s.id\n                          AND jsonb_array_length(queue.entries) > 0\n                    )\n                    AND NOT EXISTS (\n                        SELECT 1 FROM agent_session_tool_approval approval\n                        WHERE approval.agent_session_id = s.id AND approval.status = 'pending'\n                    )\n                    AND NOT EXISTS (\n                        SELECT 1 FROM agent_session_notification notification\n                        WHERE notification.session_id = s.id AND notification.delivered_at IS NULL\n                    )\n                    AND NOT EXISTS (\n                        SELECT 1 FROM agent_conversation_sessions conversation\n                        WHERE conversation.session_id = s.id AND conversation.is_current\n                    )\n                ) AS \"dormant!\"\n            FROM agent_session s\n            JOIN agent_configs ac ON ac.bot_id = s.bot_id\n            JOIN harnesses h ON h.id = ac.harness_id\n            LEFT JOIN LATERAL (\n                SELECT created_at FROM agent_session_log\n                WHERE agent_session_id = s.id ORDER BY created_at DESC LIMIT 1\n            ) latest ON true\n            WHERE ac.harness_id = $1\n              AND h.deleted_at IS NULL\n              AND s.acp_session_id = ANY($2)\n              AND s.archived_by IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "dormant!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "d71582a2bd44f1428cf4061c913528dcb36e77fa196f2ef69046c9b158da3cf1"
+}

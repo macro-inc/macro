@@ -1,8 +1,8 @@
 //! Restoring the sessions a runtime still serves when it dials in again.
 //!
 //! A runtime can list hundreds of sessions, and it redials whenever its
-//! socket drops, so a dial must never stampede the replica: idle sessions
-//! wait for their next prompt, every dial on this replica shares
+//! socket drops, so a dial must never stampede the replica: dormant sessions
+//! cost it nothing, idle sessions wait for their next prompt, every dial on this replica shares
 //! [`REATTACH_CONCURRENCY`] permits, each held until the session's ACP
 //! restore finishes, and a harness dialing again stops its previous dial
 //! from starting more (restores already running finish under their permit).
@@ -42,6 +42,9 @@ pub struct ReattachReport {
     pub eager: usize,
     /// Left to bind on their next prompt or delivery.
     pub lazy: usize,
+    /// Dormant (see [`crate::domain::model::ListedSessions::dormant`]): left
+    /// to their next prompt or delivery without any per-session work.
+    pub dormant: usize,
     /// Archived, or not an external session.
     pub skipped: usize,
     /// Not restored after every attempt this dial allowed.
@@ -132,6 +135,7 @@ where
             agent.runtime.reattach_sessions = tracing::field::Empty,
             agent.runtime.reattach_eager = tracing::field::Empty,
             agent.runtime.reattach_lazy = tracing::field::Empty,
+            agent.runtime.reattach_dormant = tracing::field::Empty,
             agent.runtime.reattach_skipped = tracing::field::Empty,
             agent.runtime.reattach_failures = tracing::field::Empty,
             agent.runtime.reattach_abandoned = tracing::field::Empty,
@@ -167,6 +171,7 @@ where
         let span = tracing::Span::current();
         span.record("agent.runtime.reattach_eager", report.eager);
         span.record("agent.runtime.reattach_lazy", report.lazy);
+        span.record("agent.runtime.reattach_dormant", report.dormant);
         span.record("agent.runtime.reattach_skipped", report.skipped);
         span.record("agent.runtime.reattach_failures", report.failed);
         span.record("agent.runtime.reattach_abandoned", report.abandoned);
@@ -188,16 +193,16 @@ where
             .into_iter()
             .filter_map(|listed| Some((listed.id, listed.updated_at?)))
             .collect();
-        let sessions = match self.inner.runtimes.sessions_on_harness(harness, &ids).await {
-            Ok(sessions) => sessions,
+        let listed = match self.inner.runtimes.sessions_on_harness(harness, &ids).await {
+            Ok(listed) => listed,
             Err(error) => {
                 tracing::error!(error = ?error, "could not resolve a runtime's live sessions");
                 return ReattachReport::default();
             }
         };
-        tracing::Span::current().record("agent.runtime.reattach_sessions", sessions.len());
+        tracing::Span::current().record("agent.runtime.reattach_sessions", listed.live.len());
 
-        let outcomes: Vec<(Outcome, u32)> = futures::stream::iter(sessions)
+        let outcomes: Vec<(Outcome, u32)> = futures::stream::iter(listed.live)
             .map(|session_id| {
                 self.reattach_live_session(harness, session_id, &runtime_activity, cancelled)
             })
@@ -205,7 +210,10 @@ where
             .collect()
             .await;
 
-        let mut report = ReattachReport::default();
+        let mut report = ReattachReport {
+            dormant: listed.dormant,
+            ..ReattachReport::default()
+        };
         for (outcome, retries) in outcomes {
             report.retries += retries;
             match outcome {

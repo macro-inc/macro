@@ -774,3 +774,36 @@ async fn a_redial_restores_a_session_its_runtime_saw_active_recently() {
     assert_eq!((report.eager, report.lazy), (1, 1), "{report:?}");
     assert_eq!(loaded(&runtime.agent()), [worked_locally.to_string()]);
 }
+
+#[tokio::test]
+async fn a_dormant_listed_session_costs_the_dial_nothing() {
+    // The dormant session exists nowhere and no runtime is connected: any
+    // per-session lookup would fail it or abandon it instead of counting it.
+    let dormant = AgentSessionId::new();
+    let service = harness_sharing_repo_with_bindings(
+        InMemoryAgentSessionRepo::new(),
+        MirrorBindings {
+            dormant: vec![dormant],
+            ..MirrorBindings::default()
+        },
+    );
+
+    let report = service
+        .reattach_live_sessions(
+            harness_id::HarnessId::new_from_uuid(macro_uuid::generate_uuid_v7()),
+            vec![ListedSession {
+                id: SessionId::new(dormant.to_string()),
+                updated_at: None,
+            }],
+            tracing::Span::none(),
+        )
+        .await;
+
+    assert_eq!(
+        report,
+        super::super::reattach::ReattachReport {
+            dormant: 1,
+            ..Default::default()
+        }
+    );
+}

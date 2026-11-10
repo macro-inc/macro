@@ -561,6 +561,29 @@ pub struct DeliverAction {
     pub context: Option<TriggerContext>,
 }
 
+/// How long a session on an external runtime goes without activity before it
+/// is dormant. See [`ListedSessions::dormant`].
+pub const DORMANT_AFTER: chrono::TimeDelta = chrono::TimeDelta::days(7);
+
+/// The unarchived sessions a dialing runtime listed whose bot is bound to its
+/// harness.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ListedSessions {
+    /// Sessions the dial considers: restored now or left to their next prompt.
+    pub live: Vec<AgentSessionId>,
+    /// How many listed sessions are dormant: no activity (list-moving change
+    /// or log entry) for [`DORMANT_AFTER`], and nothing waiting on them: no
+    /// turn starting, running, stopping, waiting for input or interrupted by
+    /// a disconnect, no queued prompt, no tool call awaiting approval, no
+    /// undelivered notification, and no conversation they answer. Derived on
+    /// every dial from server-side state only (never the runtime's own
+    /// timestamps), never stored, and invisible to users. A dial does no
+    /// per-session work for them; their next prompt or delivery reconnects
+    /// them like any lazy session. A limit on how many sessions a runtime
+    /// keeps live counts [`Self::live`] only.
+    pub dormant: usize,
+}
+
 /// What decides whether a turn may run on an agent's registered runtime.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeAccessFacts {

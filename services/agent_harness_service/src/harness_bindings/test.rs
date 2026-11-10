@@ -92,7 +92,13 @@ async fn live_sessions_resolve_only_on_the_harness_their_bot_is_bound_to(pool: P
         .await
         .unwrap();
 
-    assert_eq!(found, [mine]);
+    assert_eq!(
+        found,
+        ListedSessions {
+            live: vec![mine],
+            dormant: 0,
+        }
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -113,7 +119,7 @@ async fn a_deleted_harness_reattaches_nothing(pool: PgPool) {
         .await
         .unwrap();
 
-    assert!(found.is_empty());
+    assert_eq!(found, ListedSessions::default());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -138,7 +144,181 @@ async fn an_archived_session_is_not_reattached(pool: PgPool) {
         .await
         .unwrap();
 
-    assert_eq!(found, [live]);
+    assert_eq!(
+        found,
+        ListedSessions {
+            live: vec![live],
+            dormant: 0,
+        }
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_session_untouched_for_a_week_with_nothing_waiting_is_dormant(pool: PgPool) {
+    let laptop = insert_harness(&pool).await;
+    let bot = insert_bot(&pool, laptop).await;
+    let dormant = insert_session(&pool, bot, "acp-dormant").await;
+    let fresh = insert_session(&pool, bot, "acp-fresh").await;
+    let recent_log = insert_session(&pool, bot, "acp-recent-log").await;
+    let starting = insert_session(&pool, bot, "acp-starting").await;
+    let running = insert_session(&pool, bot, "acp-running").await;
+    let blocked = insert_session(&pool, bot, "acp-blocked").await;
+    let stopping = insert_session(&pool, bot, "acp-stopping").await;
+    let interrupted = insert_session(&pool, bot, "acp-interrupted").await;
+    let queued = insert_session(&pool, bot, "acp-queued").await;
+    let approval = insert_session(&pool, bot, "acp-approval").await;
+    let notified = insert_session(&pool, bot, "acp-notified").await;
+    let answering = insert_session(&pool, bot, "acp-answering").await;
+    let old = [
+        dormant,
+        recent_log,
+        starting,
+        running,
+        blocked,
+        stopping,
+        interrupted,
+        queued,
+        approval,
+        notified,
+        answering,
+    ];
+    for session in old {
+        sqlx::query!(
+            "UPDATE agent_session SET modified_at = now() - interval '8 days', turn_state = 'idle' WHERE id = $1",
+            session.as_uuid()
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_session_log (id, agent_session_id, direction, content, created_at)
+        VALUES ($1, $2, 'to_server', '{}', now() - interval '9 days'),
+               ($3, $2, 'to_server', '{}', now() - interval '1 day'),
+               ($4, $5, 'to_server', '{}', now() - interval '9 days')
+        "#,
+        macro_uuid::generate_uuid_v7(),
+        recent_log.as_uuid(),
+        macro_uuid::generate_uuid_v7(),
+        macro_uuid::generate_uuid_v7(),
+        dormant.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    for (session, state) in [
+        (starting, "starting"),
+        (running, "running"),
+        (blocked, "blocked"),
+        (stopping, "stopping"),
+    ] {
+        sqlx::query!(
+            "UPDATE agent_session SET turn_state = $2 WHERE id = $1",
+            session.as_uuid(),
+            state
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    sqlx::query!(
+        "UPDATE agent_session SET turn_state = 'disconnected', turn_interrupted = true WHERE id = $1",
+        interrupted.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO agent_session_queue (agent_session_id, entries) VALUES ($1, '[{"id": "queued"}]')"#,
+        queued.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_session_tool_approval
+            (id, agent_session_id, turn_action_id, request_id, owner_id, server_slug,
+             server_name, tool_name, arguments)
+        VALUES ($1, $2, $3, '1', $4, 'macro', 'Macro', 'ReadDocument', '{}')
+        "#,
+        macro_uuid::generate_uuid_v7(),
+        approval.as_uuid(),
+        macro_uuid::generate_uuid_v7(),
+        OWNER,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_session_notification
+            (id, session_id, kind, subject_id, payload, dedupe_key, wake)
+        VALUES ($1, $2, 'test', 'subject', '{}', 'dedupe', true)
+        "#,
+        macro_uuid::generate_uuid_v7(),
+        notified.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let channel = macro_uuid::generate_uuid_v7();
+    sqlx::query!(
+        "INSERT INTO comms_channels (id, channel_type, owner_id) VALUES ($1, 'direct_message', $2)",
+        channel,
+        OWNER
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO agent_conversation_sessions (session_id, channel_id, bot_id) VALUES ($1, $2, $3)",
+        answering.as_uuid(),
+        channel,
+        bot
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let mut found = PgHarnessBindings::new(pool.clone())
+        .sessions_on_harness(
+            laptop,
+            &[
+                SessionId::new("acp-dormant"),
+                SessionId::new("acp-fresh"),
+                SessionId::new("acp-recent-log"),
+                SessionId::new("acp-starting"),
+                SessionId::new("acp-running"),
+                SessionId::new("acp-blocked"),
+                SessionId::new("acp-stopping"),
+                SessionId::new("acp-interrupted"),
+                SessionId::new("acp-queued"),
+                SessionId::new("acp-approval"),
+                SessionId::new("acp-notified"),
+                SessionId::new("acp-answering"),
+            ],
+        )
+        .await
+        .unwrap();
+    found.live.sort_by_key(|session| session.as_uuid());
+
+    let mut live = vec![
+        fresh,
+        recent_log,
+        starting,
+        running,
+        blocked,
+        stopping,
+        interrupted,
+        queued,
+        approval,
+        notified,
+        answering,
+    ];
+    live.sort_by_key(|session| session.as_uuid());
+    assert_eq!(found, ListedSessions { live, dormant: 1 });
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
