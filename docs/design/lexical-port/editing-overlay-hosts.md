@@ -72,3 +72,137 @@ It covers desktop/touch checkbox gestures, read-only and queued Session access,
 listener disposal/remount, and exterior focus after actual native completion.
 The metadata roundtrip control separately compares the real Source parser;
 these tests do not establish full document-app or native menu acceptance.
+
+## Link menu host
+
+```ts
+interface LinkMenuCallbacks {
+  hover(info?: ILinkInfo): void;
+  click(info?: ILinkInfo): void;
+  create(info?: ILinkInfo): void;
+}
+
+interface LinkMenuHost {
+  isEditable(): boolean;
+  isInteractable(): boolean;
+  root(): HTMLElement | null;
+  focus(): void;
+  registerMenu(
+    callbacks: LinkMenuCallbacks,
+    autoLinkMatchMode?: AutoLinkMatchMode
+  ): void;
+  registerKeys(callbacks: {
+    escape(): boolean;
+    enter(): boolean;
+  }): () => void;
+  insert(url: string, label: string): void;
+  update(url: string, label: string): void;
+  updateUrl(url: string | null): void;
+  unlink(): void;
+}
+```
+
+Source wrapper resolves its real context and constructs this host. The shared
+component requires the host, with no Source-context fallback. Source
+`registerMenu` retains `plugins.use(linksPlugin(...))`; `registerKeys` retains
+HIGH Escape and CRITICAL Enter and merge-register cleanup. Plugin registration
+belongs to the host lifetime: Source's PluginManager owns its actual cleanup;
+the native host must retain and dispose its native listeners. `insert` and `update`
+map `label` to Source `linkText` without changing command boundaries.
+
+Native host uses existing typed link adapters and real Session selection. It
+must capture the clicked link's model target before the form steals focus, and
+must not mutate whichever unrelated range happens to be current on submit.
+Create-picker opening is an explicit host request, not a synthetic Lexical
+command. Native registration must prove command priority and disposal parity.
+
+Proposed first hunks: new `editing/overlay-hosts/link.ts` contract;
+new `editing/overlay-hosts/lexical-link.ts` Source adapter;
+`component/menu/FloatingLinkMenu.tsx` wrapper plus shared host-driven component.
+No changes to decorator native factories, full registry, EditorView, SessionPort,
+Normal Enter or executor construction are needed for that extraction.
+
+## Source slash decision trace
+
+`shared/registerInlineMenuTrigger.ts` registers root keydown/keyup and captured
+beforeinput. A matching keydown invokes the trigger once and remembers it, with
+no composition/default-prevention test. The beforeinput fallback invokes only
+for `insertText` with the exact symbol, no already-handled keydown, no composition
+and no default prevention. Keyup, beforeinput and root replacement reset the
+deduplication flag. These are distinct paths, including Android Unidentified
+keydown behavior.
+
+`actionsPlugin` invokes `validTriggerPosition` before inserting an actual
+InlineSearchNode. That function reads the committed RangeSelection anchor; it
+does not require a collapsed range or check composition. It rejects an existing
+InlineSearchNode anchor and code ancestry. Before-text must be empty or end in
+whitespace and must not end in a backtick. After-text must be empty or begin with
+whitespace for slash, emoji and snippets. Mentions pass `after=null`, allowing a
+word after the trigger. Text offsets are UTF-16. An element anchor joins its
+children before/after its child offset; text offset zero also checks the previous
+text sibling, preserving formatted word boundaries.
+
+The slash trigger inserts an InlineSearchNode containing `/` at the actual
+selection. Its transform collapses a leading `//` to `/` and selects its end.
+The peer-valid mutation listener opens only when a newly created node's text is
+exactly `/`; updates remove U+200B, trim and remove one leading trigger before
+publishing the search term. Destroy closes the menu. This is model lifecycle,
+not a DOM regex or a newly inferred native eligibility rule.
+
+CLOSE dispatches `$collapseInlineSearch`: replace every peer-valid search node
+with a new ordinary TextNode containing its literal text. REMOVE dispatches
+`$removeInlineSearch`: remove every peer-valid search node. Both traverse the
+whole editor, rather than only the selected slash node. They differ in JSON,
+selection and text format ownership; do not implement CLOSE as REMOVE plus
+retyping or preserve search-node formatting speculatively.
+
+Executed `action-search-contract.test.ts` controls cover empty/whitespace/word,
+backtick/code exclusions and an astral prefix at UTF-16 offset 3. For the actual
+`/🐺term` search, CLOSE produces ordinary text `/🐺term` with collapsed text
+caret offset 7; REMOVE produces an empty paragraph with collapsed element caret
+offset 0. Both remove the search node and close the menu. These controls are
+Source evidence. Existing native menu-select validation separately requires an
+attached exact range, no composition/code and a collapsed caret at its end;
+it does not establish a native query API.
+
+## Source catalog action and I/O boundaries
+
+`ActionMenu` retains the actual merged catalog, database availability gate,
+dependency filter and fuzzy ranking. Pointer selection removes search first,
+then rechecks dependencies before calling the selected action. Keyboard selection
+also removes search first, but calls the selected action without that second
+dependency check. Empty results still remove the search on Enter. Escape, focus
+loss, outside press and the existing space-state controller collapse the search.
+Do not change these transactions while extracting a host.
+
+| Catalog choice | Source action after removing search | Boundary that native still needs |
+| --- | --- | --- |
+| paragraph/headings/quote/code/lists | Actual shared block-transform commands | Existing native block choice; preserve node availability and configuration. |
+| image/video | Microtask dispatch of TRY_INSERT_MEDIA_UPLOAD with `all` | Host file dialog/upload request and actual media insertion. Both choices currently use `all`; do not narrow one by its row label. |
+| GIF | Microtask dispatch of TRY_INSERT_GIF | Real picker request; upload completion targets the captured insertion range, revalidates current editability and cleans unused uploads. |
+| link | Microtask dispatch of TRY_INSERT_LINK | Actual create callback and retained model selection before URL-input focus. Link browser controls execute this boundary. |
+| equation | Microtask dispatch of TRY_INSERT_EQUATION | Actual equation menu request and native insert; preserve the existing Source Enter behavior rather than silently repairing it. |
+| table | Microtask TRY_INSERT_TABLE_PICKER; if unhandled, INSERT_TABLE with rows/columns `3` and headers `false` | Typed picker request with handled result and actual native insertion policy. The fallback belongs to the existing Source action, not a fallback to Source from native. |
+| divider | Synchronous INSERT_HORIZONTAL_RULE | Native insertion action with Source selection/history semantics. |
+| task/document | Opens the actual creation composer; start inserts Await, failure removes it, success replaces it or inserts a mention | Host service/popover request with owned await identity, mention tracking and native completion. No service request occurs merely by showing the row. |
+| database query | Feature gate, then microtask update inserting an empty scalar DatabaseQuery | Native node insertion with the same gate/configuration. |
+| database | Feature gate, microtask inserts Await before lazy module download and creation | Host service workflow and native placeholder completion/cancellation. |
+
+`slash-picker-contract.test.ts` executes the real catalog's deferred media,
+GIF, link and equation requests after search removal, the handled table picker
+and actual 3-by-3 no-header fallback, and synchronous divider insertion.
+`slash-creation-contract.test.ts` executes task/document opening and the actual
+Await/mention model transitions for start, failure and completion, with only the
+popover host boundary supplied. These do not prove file dialogs, remote service
+creation, or native request execution. Database catalog-entry requests still need
+their own executed Source controls before freezing native request contracts.
+
+## Acceptance
+
+Before each Source extraction, capture the real component/controller DOM and raw
+JSON in Chromium, Firefox and WebKit; compare exact before/after captures. Then
+run the same area through the actual native app mount and make its previously red
+cases green. Include pointer/keyboard, desktop/touch, dynamic read-only, stale
+async answers, selection restoration and disposal. A leaf fixture or model unit
+test alone cannot close app acceptance. Report exact per-area counts and keep
+failed/blocked evidence, including pre-existing Source defects.

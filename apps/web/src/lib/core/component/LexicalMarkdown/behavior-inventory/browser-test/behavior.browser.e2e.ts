@@ -239,15 +239,16 @@ test('slash stays literal inside a word', async ({ page }) => {
 
 test('slash menu pointer or touch selection preserves editor focus', async ({
   page,
-}, info) => {
+  hasTouch,
+}) => {
   const body = page.getByRole('textbox', { name: 'Body', exact: true });
   await body.click();
   await page.keyboard.type('/');
   const item = page
     .locator('.menu-surface')
     .getByText('Heading 3', { exact: true });
-  if (info.project.name === 'desktop') await item.click();
-  else await item.tap();
+  if (hasTouch) await item.tap();
+  else await item.click();
   await expect(body).toBeFocused();
   await expect(page.locator('.menu-surface')).toHaveCount(0);
   await page.keyboard.type('Pointer heading');

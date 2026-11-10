@@ -15,22 +15,21 @@ import {
   onCleanup,
   onMount,
   Show,
+  splitProps,
   untrack,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { floatWithSelection } from '../../directive/floatWithSelection';
-import {
-  autoRegister,
-  CLOSE_ACTION_SEARCH_COMMAND,
-  REMOVE_ACTION_SEARCH_COMMAND,
-} from '../../plugins';
+import type { ActionMenuHost } from '../../editing/overlay-hosts/actions';
+import { createLexicalActionMenuHost } from '../../editing/overlay-hosts/lexical-actions';
 import { ACTIONS } from '../../plugins/actions/actions';
 import {
   availableActions,
   mergeActions,
 } from '../../plugins/actions/available-actions';
 import type { Action, ActionContext } from '../../plugins/actions/types';
+import { autoRegister } from '../../plugins/shared/utils';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 
@@ -46,7 +45,7 @@ function ActionsMenuItem(props: {
   action: Action;
   index: number;
   selected: boolean;
-  editor: LexicalEditor;
+  host: ActionMenuHost;
   actionContext?: ActionContext;
   setIndex: (index: number) => void;
   setOpen: (open: boolean) => void;
@@ -78,22 +77,7 @@ function ActionsMenuItem(props: {
       on:click={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        props.editor.dispatchCommand(REMOVE_ACTION_SEARCH_COMMAND, undefined);
-        const { action, dependencies } = props.action;
-        if (action) {
-          if (dependencies !== undefined) {
-            if (props.editor.hasNodes(dependencies)) {
-              action(props.editor, props.actionContext);
-            } else {
-              console.error(
-                'Dispatched Action with missing dependencies:',
-                props.action
-              );
-            }
-          } else {
-            action(props.editor, props.actionContext);
-          }
-        }
+        props.host.select(props.action, 'pointer', props.actionContext);
         props.setOpen(false);
       }}
       on:mouseover={() => props.setIndex(props.index)}
@@ -116,8 +100,7 @@ function ActionsMenuItem(props: {
   );
 }
 
-export function ActionMenu(props: {
-  editor: LexicalEditor;
+type ActionMenuOptions = {
   menu: MenuOperations;
   anchor?: HTMLElement | null;
   portalScope?: PortalScope;
@@ -128,7 +111,24 @@ export function ActionMenu(props: {
   /** IDs of default actions to exclude from the menu. */
   ignoreActionIds?: string[];
   actionContext?: ActionContext;
-}) {
+};
+
+export function ActionMenu(
+  props: ActionMenuOptions & { editor: LexicalEditor }
+) {
+  const [local, options] = splitProps(props, ['editor']);
+  return (
+    <HostedActionMenu
+      {...options}
+      host={createLexicalActionMenuHost(() => local.editor)}
+    />
+  );
+}
+
+/** Shared slash-menu controller and markup over the mounting surface's host. */
+export function HostedActionMenu(
+  props: ActionMenuOptions & { host: ActionMenuHost }
+) {
   const { isOpen, setIsOpen } = props.menu;
 
   const [selectedIndex, setSelectedIndex] = createSignal(0);
@@ -166,10 +166,8 @@ export function ActionMenu(props: {
 
   const [, setEditorParent] = createSignal<HTMLElement>();
   autoRegister(() =>
-    props.editor.registerRootListener(() => {
-      setEditorParent(
-        props.editor.getRootElement()?.parentElement ?? undefined
-      );
+    props.host.subscribeRoot(() => {
+      setEditorParent(props.host.root()?.parentElement ?? undefined);
     })
   );
 
@@ -179,7 +177,7 @@ export function ActionMenu(props: {
     availableActions(merged, {
       databasesEnabled: databasesEnabled().enabled,
       ignoreActionIds: props.ignoreActionIds,
-      hasNodes: (dependencies) => props.editor.hasNodes(dependencies),
+      hasNodes: (dependencies) => props.host.hasDependencies(dependencies),
     });
 
   createEffect(() => {
@@ -213,17 +211,14 @@ export function ActionMenu(props: {
   });
 
   const closeMenu = () => {
-    props.editor.dispatchCommand(CLOSE_ACTION_SEARCH_COMMAND, undefined);
+    props.host.closeSearch();
     setIsOpen(false);
   };
 
   const selectCurrentItem = () => {
     const items = filteredItems();
     const selectedItem = items[selectedIndex()];
-    props.editor.dispatchCommand(REMOVE_ACTION_SEARCH_COMMAND, undefined);
-    if (selectedItem) {
-      selectedItem.action(props.editor, props.actionContext);
-    }
+    props.host.select(selectedItem, 'keyboard', props.actionContext);
     setIsOpen(false);
   };
 
@@ -293,7 +288,7 @@ export function ActionMenu(props: {
                 action={item}
                 index={index()}
                 selected={index() === selectedIndex()}
-                editor={props.editor}
+                host={props.host}
                 actionContext={props.actionContext}
                 setIndex={setSelectedIndexFromMouse}
                 setOpen={setIsOpen}
@@ -321,7 +316,7 @@ export function ActionMenu(props: {
     !props.anchor
       ? {
           selection: untrack(mountSelection),
-          reactiveOnContainer: props.editor.getRootElement(),
+          reactiveOnContainer: props.host.root(),
           useBlockBoundary: props.useBlockBoundary,
           onAvailableHeight: setMenuAvailableHeight,
           fullHeight: MAX_CONTENT_HEIGHT + PANEL_DECORATION_HEIGHT,
