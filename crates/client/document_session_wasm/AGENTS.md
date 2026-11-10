@@ -243,3 +243,9 @@ failure requires remount recovery, not a successful-paint acknowledgement. Custo
 asynchronous consumers require an explicit consumption acknowledgement.
 
 Use the pure EditorSession.effectiveAccess() observation for current authorization, mapped through the generated Access enum; it does not drain output or grant admission. Ordinary getters are not a recursive callback transaction port: scoped native callbacks must reject ordinary session reentry or use separately issued scoped authority.
+
+Preserve EditorPaste tag 4 byte-for-byte at ABI major 2. Send the additive
+EditorPasteWithIntent tag 10 only for captured Shift intent on a matched reader;
+carry PasteIntentMsg.plainOnly explicitly. Legacy paste/drop maps to the real
+model default false; never infer intent from unknown branches or private MIME.
+Keep HTML/Lexical precedence and use this flag only for Markdown policy.

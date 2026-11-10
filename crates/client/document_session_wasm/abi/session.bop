@@ -11,6 +11,8 @@ struct SessionConfigMsg { string doc; string session; string user; uint64[] peer
 struct PointMsg { uint32 key; uint32 offset; byte type; }
 struct SelectionMsg { byte kind; PointMsg anchor; PointMsg focus; uint32[] nodes; uint32 table; bool dirty; }
 struct ClipboardEntryMsg { string mime; string value; }
+// Captured before asynchronous clipboard preparation; affects Markdown policy only.
+struct PasteIntentMsg { bool plainOnly; }
 struct ModifyTargetMsg { byte kind; PointMsg anchor; PointMsg focus; bool dirty; bool backward; }
 struct MarkedSelectionMsg { uint32 format; string style; PointMsg anchor; }
 struct RangeSelectionMsg { PointMsg anchor; PointMsg focus; uint32 format; string style; }
@@ -27,6 +29,8 @@ union EditorInputMsg {
  8 -> struct EditorKeyDown { uint32 code; uint32 mods; string key; CommandCode command; uint32 argument; SelectionMsg selection; ModifyTargetMsg target; ModifyTargetMsg characterTarget; }
  7 -> struct EditorText { uint32 key; uint16[] text; uint32 anchorOffset; uint32 focusOffset; bool compositionEnd; string compositionData; SelectionMsg selection; }
  9 -> struct EditorApplication { string name; string json; uint32 generation; SelectionMsg selection; bool keyboard; string key; uint32 mods; uint32 code; }
+ // Additive opt-in: legacy EditorPaste (4) remains byte-identical and implies default intent.
+ 10 -> struct EditorPasteWithIntent { SelectionMsg selection; ClipboardEntryMsg[] clipboard; bool hasFiles; string[] htmlNodes; PasteIntentMsg intent; }
 }
 
 struct PathStepMsg { byte kind; string key; uint32 index; }
