@@ -71,9 +71,20 @@ and root removal/rebinding preserves the same core and session. Never create a
 temporary root or local model to satisfy construction.
 
 The optional `installEditing` callback installs the surface's native UI port.
-The returned runtime disposes that port before the view and session and closes
-its own telemetry. The document feature's old primitive path re-exports this
-shared implementation.
+The independent `installOverlays` callback installs the document body's actual
+overlay capabilities and returns `runtime.overlays`. Unimplemented renderers
+remain absent; it supplies no placeholder toolbar/comment methods. The document
+body installs the native checkbox pointer bridge and exterior-focus action
+through this hook. Exterior focus retains the current focused-range guard,
+admits `group-b.focus-end` through the real SessionPort and focuses the browser
+only after command completion while the installation remains live and editable.
+Existing `runtime.editing` consumers remain separate.
+
+The returned runtime disposes overlays, then editing, then the view/session and
+its own telemetry. A completed overlay installation is unwound if a later
+installer throws; an installer must release partial resources before throwing.
+Close retains one in-flight promise even when a dispose callback reenters it.
+The document feature's old primitive path re-exports this shared implementation.
 
 Local composers and static views use `mountLocalSessionView` from
 `@macro-inc/lexical-wasm-view` instead. It disables transport, persistence and

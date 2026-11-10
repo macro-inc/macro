@@ -1,4 +1,5 @@
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
+import { createNativeFocusTarget } from '@core/component/LexicalMarkdown/editing/overlay-hosts/native-focus';
 import type { SyncDocumentOpenContext } from '@queries/storage/documentLoad/sync-document-context-loader';
 import { createSignal } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -41,28 +42,10 @@ export default function SessionMarkdownEditor(props: {
       focusTarget={
         <FocusClickTarget
           style={{ height: '80px' }}
-          native={{
-            editable: permissions.canEdit,
-            hasSelection() {
-              const selection =
-                state.editor.md.nativeRuntime?.view.selection().selection;
-              return (
-                selection?.kind === 'range' &&
-                (selection.anchor.key !== selection.focus.key ||
-                  selection.anchor.offset !== selection.focus.offset)
-              );
-            },
-            focusAtEnd() {
-              const runtime = state.editor.md.nativeRuntime;
-              if (!runtime?.editing) return;
-              if (
-                runtime.view.root.contains(document.activeElement) &&
-                runtime.view.selection().selection.kind === 'range'
-              )
-                return;
-              runtime.editing.focus.appendEmptyParagraph();
-            },
-          }}
+          native={createNativeFocusTarget(
+            () => state.editor.md.nativeRuntime,
+            permissions.canEdit
+          )}
         />
       }
     />
