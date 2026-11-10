@@ -680,10 +680,10 @@ access; channel import is a separate action where the user chooses channels.
 Provider Back returns to the combined integrations overview; navigation
 is local to each mounted Integrations page.
 
-Macro agents and external AI clients using Macro's MCP server can run
-`ImportNotionPage`, `ImportFromNotion`, `ImportFromLinear`, `ImportFromJira`
-and the shared import ledger tools against the user's
-connections saved in Macro.
+Macro agents and external AI clients using Macro's MCP server import through
+code mode's `macro.imports` (`notion`, `linear` and `jira` plan, start, status
+and cancel; `notion.importPage`; and the shared `ledger`) against the user's
+connections saved in Macro. Code mode hides the direct import tools.
 Verify a Notion import returns a document and a repeated import returns the
 existing document. For Linear/Jira workspace imports, verify planning writes no
 Macro tasks before approval, source-specific reviews show task/project totals,

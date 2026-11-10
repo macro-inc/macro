@@ -88,7 +88,7 @@ disabled), and a searchable folder hierarchy.
 The Drive sidebar's import card (**Import files**, see
 [setup cards](setup-cards.md#import-from-connected-apps)) lists Notion; its
 **Import** (or a successful **Connect**) opens a new agent chat beside Drive
-that sends "Import my Notion workspace into Macro." (the agent plans with ImportFromNotion, or shows the
+that sends "Import my Notion workspace into Macro." (the agent plans with `macro.imports.notion.plan`, or shows the
 Notion connect chip first; a user on a team is first asked whether to share
 the import with the team, keep it personal, or let AI decide per page, and a
 user without a team gets a personal import without being asked). The plan

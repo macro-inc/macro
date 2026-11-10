@@ -22,7 +22,7 @@ Every other app opens Pipedream's Connect UI inside the dialog. A connected row
 
 - Every **Import** closes the dialog and opens an agent chat beside the current
   view with an unsent prompt. Notion, Linear and Jira open workspace importers
-  (`ImportFromNotion`, `ImportFromLinear`, `ImportFromJira`) with “Import my
+  (`macro.imports.notion`, `.linear`, `.jira`) with “Import my
   <Provider> workspace into Macro.” They read only, ask who should see the import
   when needed, and present a review before creating anything. Other connectors
   list candidates and ask which ones to create. No importer writes to its source.
