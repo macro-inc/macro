@@ -206,6 +206,9 @@ function screenShareCaptureOptions(
       echoCancellation: false,
       noiseSuppression: false,
       autoGainControl: false,
+      // System audio otherwise includes the call itself, so everyone hears
+      // themselves echoed back through the share.
+      restrictOwnAudio: true,
     },
     // Chromium offers system audio only when asked (Windows, ChromeOS); other
     // platforms and browsers capture tab audio or none.
