@@ -39,16 +39,13 @@ function toKind(idea: WireIdea): IdeaKind | undefined {
   return (
     match(idea)
       .returnType<IdeaKind | undefined>()
-      .with({ kind: 'prompt', runMode: 'background' }, (prompt) => {
-        const sends = 'sends' in prompt ? prompt.sends : undefined;
-        return {
-          kind: 'prompt',
-          runMode: 'background',
-          prompt: prompt.prompt,
-          ...(typeof sends === 'string' && sends ? { sends } : {}),
-          run: toRun(idea.run),
-        };
-      })
+      .with({ kind: 'prompt', runMode: 'background' }, (prompt) => ({
+        kind: 'prompt',
+        runMode: 'background',
+        prompt: prompt.prompt,
+        ...(prompt.sends ? { sends: prompt.sends } : {}),
+        run: toRun(idea.run),
+      }))
       .with({ kind: 'prompt' }, (prompt) => ({
         kind: 'prompt',
         runMode: 'composer',
@@ -110,8 +107,8 @@ export function toIdea(idea: WireIdea): Idea | undefined {
 }
 
 /** The feed's open ideas, then the ones done lately. */
-export function toIdeas(feed: WireIdeas & { done?: WireIdea[] }): Idea[] {
-  return [...feed.ideas, ...(feed.done ?? [])].flatMap((wire) => {
+export function toIdeas(feed: WireIdeas): Idea[] {
+  return [...feed.ideas, ...feed.done].flatMap((wire) => {
     const idea = toIdea(wire);
     return idea ? [idea] : [];
   });

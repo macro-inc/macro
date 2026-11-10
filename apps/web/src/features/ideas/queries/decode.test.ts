@@ -3,8 +3,6 @@ import { expect, it } from 'vitest';
 import { ideaStatus } from '../core/idea';
 import { toIdea, toIdeas } from './decode';
 
-const SENDS = { sends: 'Posts the weekly status summary in #ops' };
-
 const WIRE: WireIdea = {
   id: 'idea-1',
   title: 'Post the weekly status summary',
@@ -26,7 +24,7 @@ const WIRE: WireIdea = {
   kind: 'prompt',
   prompt: 'Summarize this week and post it.',
   runMode: 'background',
-  ...SENDS,
+  sends: 'Posts the weekly status summary in #ops',
 };
 
 it('reads a running background idea with what it will send', () => {
