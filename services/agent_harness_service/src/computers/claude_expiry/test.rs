@@ -37,8 +37,9 @@ async fn signed_in_computers_carry_their_signer_report_and_last_notice(pool: PgP
     for computer in [signed_in, on_credits] {
         sqlx::query!(
             r#"
-            INSERT INTO hosted_runtime (id, team_id, name, size, state, created_by, price_id)
-            VALUES ($1, $2, 'Build box', 'standard', '{}', 'macro|owner@example.com', 'price_standard')
+            INSERT INTO hosted_runtime
+                (id, team_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, state, created_by, price_id)
+            VALUES ($1, $2, 'Build box', 'standard', 4, 8, 100, 'standard@2026-11', '{}', 'macro|owner@example.com', 'price_standard')
             "#,
             computer.as_uuid(),
             TEAM,
