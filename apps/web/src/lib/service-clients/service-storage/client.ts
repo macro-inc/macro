@@ -378,6 +378,8 @@ export type Harness = {
   updated_at: string;
   connected: boolean;
   last_connected_at: string | null;
+  /** The Macro computer it runs on; absent for a machine paired by hand. */
+  computer_id?: string | null;
 };
 
 /** A pending macrod pairing request, looked up by its printed code. */

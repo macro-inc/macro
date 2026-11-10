@@ -573,8 +573,8 @@ before buying a computer.
 
 Provision the same required keys in each service's deployment Doppler config
 before enabling a fleet there. Request/connect/operation/state-change/shutdown
-deadlines are infrastructure config; lifecycle idle, suspension, retention,
-retry and reconciliation timings remain named policy constants.
+deadlines are infrastructure config; lifecycle retention, retry and
+reconciliation timings remain named policy constants.
 
 Select a fleet with:
 

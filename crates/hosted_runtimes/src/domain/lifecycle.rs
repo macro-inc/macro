@@ -13,15 +13,13 @@ use crate::domain::models::SubscriptionItem;
 
 mod capacity;
 pub use capacity::CapacityWait;
-use capacity::{make_room, wake};
+use capacity::{power_on, wait_for_room};
 
 #[cfg(test)]
 mod test;
 
 /// Delay before the outbox resolves a purchase whose normal path did not finish.
 pub const PAYMENT_CONFIRM_DELAY: Duration = Duration::minutes(2);
-/// Frozen this long without a prompt, a computer saves its RAM and suspends.
-pub const SUSPEND_AFTER: Duration = Duration::minutes(30);
 /// Grace between fleet-backed checks of a missing macrod.
 pub const MACROD_GRACE: Duration = Duration::minutes(3);
 /// Consecutive missing connections on a running guest before restarting macrod.
@@ -32,10 +30,10 @@ pub const CRASH_WINDOW: Duration = Duration::minutes(15);
 pub const MAX_CRASHES: usize = 3;
 /// A canceled computer's disk is kept this long before it is destroyed.
 pub const RETENTION: Duration = Duration::days(14);
-/// How soon a wake blocked by full host capacity is retried.
-pub const WAKE_RETRY: Duration = Duration::seconds(20);
+/// How soon a power-on blocked by full host capacity is retried.
+pub const POWER_ON_RETRY: Duration = Duration::seconds(20);
 /// Maximum interval between capacity checks for a waiting computer.
-pub const MAX_WAKE_RETRY: Duration = Duration::minutes(10);
+pub const MAX_POWER_ON_RETRY: Duration = Duration::minutes(10);
 /// First restart backoff after a crash; doubles per recent crash.
 pub const RESTART_BACKOFF: Duration = Duration::seconds(30);
 
@@ -53,14 +51,14 @@ pub enum Phase {
     /// Payment was definitely refused; no capacity or billing item is held.
     PaymentFailed,
     /// Purchase confirmed; the instance is created on `host`, started when `start`
-    /// (a full host creates it stopped and wakes it later).
+    /// (a full host creates it stopped and starts it later).
     Provisioning {
         /// Host holding the computer.
         host: HostId,
         /// Whether creation should also start the guest.
         start: bool,
     },
-    /// The VM is starting (first boot, resume or restart); macrod not yet connected.
+    /// The VM is starting (first boot, power on or restart); macrod not yet connected.
     Booting {
         /// Host holding the computer.
         host: HostId,
@@ -74,18 +72,6 @@ pub enum Phase {
     Restarting {
         /// Host holding the computer.
         host: HostId,
-    },
-    /// Paused in RAM; wakes in milliseconds.
-    Frozen {
-        /// Host holding the computer.
-        host: HostId,
-    },
-    /// RAM written to disk (`saved_state` once the snapshot finished); takes no host RAM.
-    Suspended {
-        /// Host holding the computer.
-        host: HostId,
-        /// Whether RAM has been saved to disk.
-        saved_state: bool,
     },
     /// Guest is shutting down.
     Stopping {
@@ -176,9 +162,9 @@ pub struct ComputerState {
     pub macrod_misses: u8,
     /// Crash times inside the current [`CRASH_WINDOW`].
     pub recent_crashes: Vec<DateTime<Utc>>,
-    /// A prompt or power-on is waiting for the computer to wake.
-    pub wake_requested: bool,
-    /// Absent until a wake first asks for room; older rows start a fresh backoff.
+    /// A power-on is waiting for the computer to start.
+    pub power_on_requested: bool,
+    /// Absent until a start first waits for room.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capacity_wait: Option<CapacityWait>,
 }
@@ -197,7 +183,7 @@ impl ComputerState {
             macrod_connected: false,
             macrod_misses: 0,
             recent_crashes: Vec::new(),
-            wake_requested: false,
+            power_on_requested: false,
             capacity_wait: None,
         }
     }
@@ -219,8 +205,6 @@ impl ComputerState {
             | Phase::Booting { host }
             | Phase::Restarting { host }
             | Phase::Running { host }
-            | Phase::Frozen { host }
-            | Phase::Suspended { host, .. }
             | Phase::Stopping { host }
             | Phase::Stopped { host }
             | Phase::Failed { host } => Some(host),
@@ -231,15 +215,10 @@ impl ComputerState {
     /// Whether an on request is waiting for host capacity rather than setup.
     pub fn waiting_for_capacity(&self) -> bool {
         self.power == Power::On
-            && self.wake_requested
+            && self.power_on_requested
             && matches!(
                 self.phase,
-                Phase::Provisioning { start: false, .. }
-                    | Phase::Stopped { .. }
-                    | Phase::Suspended {
-                        saved_state: true,
-                        ..
-                    }
+                Phase::Provisioning { start: false, .. } | Phase::Stopped { .. }
             )
     }
 
@@ -256,7 +235,6 @@ impl ComputerState {
                 | Phase::Booting { .. }
                 | Phase::Restarting { .. }
                 | Phase::Running { .. }
-                | Phase::Frozen { .. }
                 | Phase::Stopping { .. }
         )
     }
@@ -288,14 +266,6 @@ pub enum Event {
         /// Guest status; None means the fleet confirmed the instance is absent.
         instance_status: Option<InstanceStatus>,
     },
-    /// All guest sessions are idle.
-    SessionsIdle,
-    /// A prompt needs the guest awake.
-    PromptArrived,
-    /// Timer: frozen for [`SUSPEND_AFTER`].
-    SuspendDue,
-    /// Guest RAM was saved to disk.
-    SnapshotSaved,
     /// The guest stopped unexpectedly.
     VmCrashed,
     /// The guest no longer exists; recreate it on its assigned host.
@@ -308,12 +278,10 @@ pub enum Event {
     PowerOn,
     /// Request power off.
     PowerOff,
-    /// Timer: retry a wake that found the host full.
-    WakeRetry,
+    /// Timer: retry a start that found the host full.
+    PowerOnRetry,
     /// Another computer on the host released awake units.
     CapacityChanged,
-    /// MakeRoom found no frozen computer to suspend.
-    RoomUnavailable,
     /// Schedule cancellation at the billing period end.
     CancelAtPeriodEnd {
         /// Time the operation takes effect.
@@ -356,12 +324,10 @@ pub enum Event {
 pub enum TimerKind {
     /// Check whether macrod exceeded its connection grace period.
     MacrodMissing,
-    /// Suspend an idle frozen guest.
-    SuspendDue,
     /// Retry after the crash backoff.
     RestartDue,
-    /// Retry a wake blocked by host capacity.
-    WakeRetry,
+    /// Retry a start blocked by host capacity.
+    PowerOnRetry,
     /// Another computer on the host released awake units.
     CapacityChanged,
     /// Apply the scheduled billing cancellation.
@@ -375,9 +341,8 @@ impl TimerKind {
     pub fn event(self, instance_status: Option<InstanceStatus>) -> Event {
         match self {
             Self::MacrodMissing => Event::MacrodMissing { instance_status },
-            Self::SuspendDue => Event::SuspendDue,
             Self::RestartDue => Event::RestartDue,
-            Self::WakeRetry => Event::WakeRetry,
+            Self::PowerOnRetry => Event::PowerOnRetry,
             Self::CapacityChanged => Event::CapacityChanged,
             Self::PeriodEnded => Event::PeriodEnded,
             Self::RetentionExpired => Event::RetentionExpired,
@@ -408,26 +373,6 @@ pub enum Effect {
         /// Host holding the computer.
         host: HostId,
     },
-    /// Pause the guest in RAM.
-    Freeze {
-        /// Host holding the computer.
-        host: HostId,
-    },
-    /// Resume a guest paused in RAM.
-    Unfreeze {
-        /// Host holding the computer.
-        host: HostId,
-    },
-    /// Stateful stop: save RAM to disk.
-    Suspend {
-        /// Host holding the computer.
-        host: HostId,
-    },
-    /// Start from saved state.
-    Resume {
-        /// Host holding the computer.
-        host: HostId,
-    },
     /// Shut down the guest.
     Stop {
         /// Host holding the computer.
@@ -445,11 +390,6 @@ pub enum Effect {
     },
     /// Delete the guest and its disk.
     Destroy {
-        /// Host holding the computer.
-        host: HostId,
-    },
-    /// Suspend the coldest idle awake computer on `host` to free units.
-    MakeRoom {
         /// Host holding the computer.
         host: HostId,
     },
@@ -505,8 +445,6 @@ pub enum EffectWorker {
 pub enum InstanceStatus {
     /// Guest is running.
     Running,
-    /// Guest is paused in RAM.
-    Frozen,
     /// Guest is powered off.
     Stopped,
 }
@@ -518,7 +456,7 @@ pub struct Context {
     pub enrollment_generation: EnrollmentGeneration,
     /// Current time used for this transition.
     pub now: DateTime<Utc>,
-    /// Whether the computer's host has awake units free for it to wake.
+    /// Whether the computer's host has awake units free for it to start.
     pub host_has_room: bool,
 }
 
@@ -556,7 +494,7 @@ pub fn transition(
                 }
                 let start = state.power == Power::On && context.host_has_room;
                 next.phase = Phase::Provisioning { host, start };
-                next.wake_requested = state.power == Power::On && !start;
+                next.power_on_requested = state.power == Power::On && !start;
                 schedule_create(
                     &mut next,
                     &mut effects,
@@ -581,12 +519,12 @@ pub fn transition(
             next.macrod_connected = false;
             if matches!(state.billing, Billing::Canceled { .. }) {
                 next.phase = Phase::Destroyed;
-                next.wake_requested = false;
+                next.power_on_requested = false;
                 effects.push(Effect::RevokeHarness);
             } else {
                 let start = state.power == Power::On && context.host_has_room;
                 next.phase = Phase::Provisioning { host, start };
-                next.wake_requested = state.power == Power::On && !start;
+                next.power_on_requested = state.power == Power::On && !start;
                 schedule_create(
                     &mut next,
                     &mut effects,
@@ -602,7 +540,7 @@ pub fn transition(
                 if state.power == Power::On {
                     if state.macrod_connected {
                         next.phase = Phase::Running { host };
-                        next.wake_requested = false;
+                        next.power_on_requested = false;
                     } else {
                         boot(&mut next, &mut effects, host, now, None);
                     }
@@ -619,10 +557,10 @@ pub fn transition(
             ) {
                 next.phase = Phase::Stopped { host };
                 next.macrod_connected = false;
-                if state.power == Power::On && state.wake_requested {
+                if state.power == Power::On && state.power_on_requested {
                     effects.push(Effect::ScheduleTimer {
-                        kind: TimerKind::WakeRetry,
-                        at: now + WAKE_RETRY,
+                        kind: TimerKind::PowerOnRetry,
+                        at: now + POWER_ON_RETRY,
                     });
                 }
             }
@@ -634,7 +572,7 @@ pub fn transition(
             if let Phase::Booting { .. } = state.phase {
                 if state.power == Power::On {
                     next.phase = Phase::Running { host };
-                    next.wake_requested = false;
+                    next.power_on_requested = false;
                 } else {
                     stop(&mut next, &mut effects, host);
                 }
@@ -678,7 +616,7 @@ pub fn transition(
         }
 
         Event::VmCrashed => match state.phase {
-            Phase::Booting { .. } | Phase::Running { .. } | Phase::Frozen { .. } => {
+            Phase::Booting { .. } | Phase::Running { .. } => {
                 crash(&mut next, &mut effects, host, now);
             }
             Phase::Stopping { .. } => {
@@ -700,86 +638,27 @@ pub fn transition(
             }
         }
 
-        Event::SessionsIdle => {
-            if let Phase::Running { .. } = state.phase {
-                next.phase = Phase::Frozen { host };
-                effects.push(Effect::Freeze { host });
-                effects.push(Effect::ScheduleTimer {
-                    kind: TimerKind::SuspendDue,
-                    at: now + SUSPEND_AFTER,
-                });
-            }
-        }
-
-        Event::SuspendDue => {
-            if let Phase::Frozen { .. } = state.phase {
-                next.phase = Phase::Suspended {
-                    host,
-                    saved_state: false,
-                };
-                next.macrod_connected = false;
-                effects.push(Effect::Suspend { host });
-            }
-        }
-
-        Event::SnapshotSaved => {
-            if let Phase::Suspended { .. } = state.phase {
-                next.phase = Phase::Suspended {
-                    host,
-                    saved_state: true,
-                };
-                if state.wake_requested && state.power == Power::On {
-                    wake(&mut next, &mut effects, host, context);
-                }
-            }
-        }
-
-        Event::PromptArrived => {
-            if state.power == Power::On {
-                if let Phase::Frozen { .. } = state.phase {
-                    next.phase = Phase::Running { host };
-                    effects.push(Effect::Unfreeze { host });
-                    if !state.macrod_connected {
-                        effects.push(Effect::ScheduleTimer {
-                            kind: TimerKind::MacrodMissing,
-                            at: now + MACROD_GRACE,
-                        });
-                    }
-                } else {
-                    wake(&mut next, &mut effects, host, context);
-                }
-            }
-        }
-
-        Event::WakeRetry => {
+        Event::PowerOnRetry => {
             let due = state
                 .capacity_wait
                 .as_ref()
                 .is_none_or(|wait| now >= wait.retry_at);
-            if state.power == Power::On && state.wake_requested && due {
-                wake(&mut next, &mut effects, host, context);
+            if state.power == Power::On && state.power_on_requested && due {
+                power_on(&mut next, &mut effects, host, context);
             }
         }
 
         Event::CapacityChanged => {
             if state.waiting_for_capacity() {
                 next.capacity_wait = None;
-                wake(&mut next, &mut effects, host, context);
-            }
-        }
-
-        Event::RoomUnavailable => {
-            if state.waiting_for_capacity()
-                && let Some(wait) = &mut next.capacity_wait
-            {
-                wait.room_unavailable = true;
+                power_on(&mut next, &mut effects, host, context);
             }
         }
 
         Event::PowerOn => {
             if !matches!(state.billing, Billing::Canceled { .. }) {
                 next.power = Power::On;
-                wake(&mut next, &mut effects, host, context);
+                power_on(&mut next, &mut effects, host, context);
             }
         }
 
@@ -802,8 +681,8 @@ pub fn transition(
                         );
                     } else {
                         next.phase = Phase::Stopped { host };
-                        next.wake_requested = true;
-                        make_room(&mut next, &mut effects, host, now);
+                        next.power_on_requested = true;
+                        wait_for_room(&mut next, &mut effects, now);
                     }
                 } else {
                     next.phase = Phase::Stopped { host };
@@ -895,7 +774,7 @@ fn boot(
     next.phase = Phase::Booting { host };
     next.capacity_wait = None;
     next.macrod_misses = 0;
-    next.wake_requested = false;
+    next.power_on_requested = false;
     next.macrod_connected = false;
     effects.extend(start);
     effects.push(Effect::ScheduleTimer {
@@ -934,7 +813,7 @@ fn crash(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId, now:
 
 fn fail(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId, reason: String) {
     next.phase = Phase::Failed { host };
-    next.wake_requested = false;
+    next.power_on_requested = false;
     next.macrod_connected = false;
     effects.push(Effect::PageOperator { reason });
 }
@@ -946,20 +825,15 @@ fn stop(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId) {
 
 /// Bring the computer to rest after the team turned it off.
 fn power_down(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId) {
-    next.wake_requested = false;
+    next.power_on_requested = false;
     match next.phase {
-        Phase::Booting { .. }
-        | Phase::Running { .. }
-        | Phase::Frozen { .. }
-        | Phase::Restarting { .. } => stop(next, effects, host),
+        Phase::Booting { .. } | Phase::Running { .. } | Phase::Restarting { .. } => {
+            stop(next, effects, host)
+        }
         // A failed instance holds no units; stop whatever is left of it.
         Phase::Failed { .. } => {
             next.phase = Phase::Stopped { host };
             effects.push(Effect::Stop { host });
-        }
-        Phase::Suspended { .. } => {
-            next.phase = Phase::Stopped { host };
-            next.macrod_connected = false;
         }
         Phase::PendingPayment { .. }
         | Phase::Provisioning { .. }
@@ -984,7 +858,7 @@ fn cancel(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId, now
 
 fn destroy(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId) {
     next.phase = Phase::Destroyed;
-    next.wake_requested = false;
+    next.power_on_requested = false;
     next.macrod_connected = false;
     effects.push(Effect::Destroy { host });
     effects.push(Effect::RevokeHarness);

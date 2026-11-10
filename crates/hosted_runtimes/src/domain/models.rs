@@ -406,14 +406,12 @@ pub enum ComputerStatusKind {
     SettingUp,
     /// Stored data requires operator repair.
     NeedsAttention,
-    /// Wake is blocked by the host's awake capacity.
+    /// Power-on is blocked by the host's awake capacity.
     WaitingForCapacity,
     /// Guest is connected and ready.
     Ready,
-    /// Guest is frozen or suspended.
-    Asleep,
-    /// Guest is starting or resuming.
-    Waking,
+    /// Guest is starting.
+    Starting,
     /// Guest is shutting down.
     Stopping,
     /// Guest is powered off.
@@ -513,12 +511,8 @@ impl Computer {
             _ if waiting_for_capacity => ComputerStatusKind::WaitingForCapacity,
             _ if setup_step.is_some() => ComputerStatusKind::SettingUp,
             Phase::Running { .. } => ComputerStatusKind::Ready,
-            Phase::Frozen { .. } | Phase::Suspended { .. } if self.state.wake_requested => {
-                ComputerStatusKind::Waking
-            }
-            Phase::Frozen { .. } | Phase::Suspended { .. } => ComputerStatusKind::Asleep,
-            Phase::Booting { .. } | Phase::Restarting { .. } => ComputerStatusKind::Waking,
-            Phase::Stopped { .. } if self.state.wake_requested => ComputerStatusKind::Waking,
+            Phase::Booting { .. } | Phase::Restarting { .. } => ComputerStatusKind::Starting,
+            Phase::Stopped { .. } if self.state.power_on_requested => ComputerStatusKind::Starting,
             Phase::Stopping { .. } => ComputerStatusKind::Stopping,
             Phase::Stopped { .. } => ComputerStatusKind::Stopped,
             Phase::Failed { .. } => ComputerStatusKind::Failed,

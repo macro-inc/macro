@@ -196,7 +196,7 @@ async fn listing_cannot_expose_another_fleets_containers_to_reconciliation() {
 #[test]
 fn listing_maps_docker_states_to_instance_statuses() {
     let output = "01900000-0000-7000-8000-000000000001\trunning\ttest-a\t2026-11-05T10:00:00Z\n\
-                  01900000-0000-7000-8000-000000000002\tpaused\ttest-a\t2026-11-05T10:00:00Z\n\
+                  01900000-0000-7000-8000-000000000002\trestarting\ttest-a\t2026-11-05T10:00:00Z\n\
                   01900000-0000-7000-8000-000000000003\texited\ttest-a\t2026-11-05T10:00:00Z\n\
                   01900000-0000-7000-8000-000000000004\tcreated\ttest-a\t2026-11-05T10:00:00Z\n";
 
@@ -215,7 +215,7 @@ fn listing_maps_docker_states_to_instance_statuses() {
                 computer_id: ComputerId::new_from_uuid(Uuid::from_u128(
                     0x0190_0000_0000_7000_8000_0000_0000_0002
                 )),
-                status: InstanceStatus::Frozen,
+                status: InstanceStatus::Running,
                 control_plane_id: ControlPlaneId::parse("test-a".to_owned()).unwrap(),
                 created_at: Some("2026-11-05T10:00:00Z".parse().unwrap()),
             },

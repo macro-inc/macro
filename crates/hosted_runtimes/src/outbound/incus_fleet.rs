@@ -44,7 +44,7 @@ pub struct IncusFleetConfig {
     pub endpoint: IncusEndpoint,
     /// Usually the local alias `macro-box`.
     pub image: ImageSource,
-    /// Profile carrying the NIC, `migration.stateful` and `security.guestapi`.
+    /// Profile carrying the NIC and `security.guestapi`.
     pub profile: ProfileName,
     /// Storage pool of the root disk override; Incus requires it.
     pub storage_pool: StoragePoolName,
@@ -140,7 +140,7 @@ impl IncusFleet {
     }
 
     async fn force_stop(&self, name: &InstanceName) -> Result<(), IncusFleetError> {
-        match self.client.stop(name, false, true).await {
+        match self.client.stop(name, true).await {
             Ok(()) | Err(IncusError::NotFound { .. }) => Ok(()),
             Err(error) => Err(error.into()),
         }
@@ -256,10 +256,8 @@ impl Fleet for IncusFleet {
     #[tracing::instrument(name = "incus_fleet.start", skip(self), err)]
     async fn start(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
         let name = instance_name(computer_id);
-        match self.status(computer_id).await? {
-            Some(InstanceStatus::Running) => {}
-            Some(InstanceStatus::Frozen) => self.client.unfreeze(&name).await?,
-            _ => self.client.start(&name).await?,
+        if self.status(computer_id).await? != Some(InstanceStatus::Running) {
+            self.client.start(&name).await?;
         }
         Ok(())
     }
@@ -271,14 +269,10 @@ impl Fleet for IncusFleet {
             let name = instance_name(computer_id);
             match self.status(computer_id).await? {
                 None | Some(InstanceStatus::Stopped) => return Ok(()),
-                Some(InstanceStatus::Frozen) => self.client.unfreeze(&name).await?,
-                _ => {}
+                Some(InstanceStatus::Running) => {}
             }
-            match tokio::time::timeout(
-                self.config.shutdown_grace,
-                self.client.stop(&name, false, false),
-            )
-            .await
+            match tokio::time::timeout(self.config.shutdown_grace, self.client.stop(&name, false))
+                .await
             {
                 Ok(result) => result?,
                 Err(_) => {
@@ -300,10 +294,6 @@ impl Fleet for IncusFleet {
         let name = instance_name(computer_id);
         match self.status(computer_id).await? {
             Some(InstanceStatus::Running) => self.client.restart(&name, true).await?,
-            Some(InstanceStatus::Frozen) => {
-                self.client.unfreeze(&name).await?;
-                self.client.restart(&name, true).await?;
-            }
             _ => self.client.start(&name).await?,
         }
         Ok(())
@@ -320,51 +310,13 @@ impl Fleet for IncusFleet {
         Ok(())
     }
 
-    #[tracing::instrument(name = "incus_fleet.freeze", skip(self), err)]
-    async fn freeze(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
-        if self.status(computer_id).await? != Some(InstanceStatus::Frozen) {
-            self.client.freeze(&instance_name(computer_id)).await?;
-        }
-        Ok(())
-    }
-
-    #[tracing::instrument(name = "incus_fleet.unfreeze", skip(self), err)]
-    async fn unfreeze(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
-        match self.status(computer_id).await? {
-            None => return Err(IncusFleetError::Missing { computer_id }),
-            Some(InstanceStatus::Frozen) => {
-                self.client.unfreeze(&instance_name(computer_id)).await?
-            }
-            _ => {}
-        }
-        Ok(())
-    }
-
-    /// Stateful stop: RAM goes to the root volume's `size.state` space.
-    #[tracing::instrument(name = "incus_fleet.suspend", skip(self), err)]
-    async fn suspend(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
-        let name = instance_name(computer_id);
-        match self.status(computer_id).await? {
-            Some(InstanceStatus::Stopped) => return Ok(()),
-            Some(InstanceStatus::Frozen) => self.client.unfreeze(&name).await?,
-            _ => {}
-        }
-        self.client.stop(&name, true, false).await?;
-        Ok(())
-    }
-
-    /// Starting a statefully stopped VM restores its RAM.
-    async fn resume(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
-        self.start(computer_id).await
-    }
-
     #[tracing::instrument(name = "incus_fleet.destroy", skip(self), err)]
     async fn destroy(&self, computer_id: ComputerId) -> Result<(), IncusFleetError> {
         let name = instance_name(computer_id);
         match self.status(computer_id).await? {
             None => return Ok(()),
             Some(InstanceStatus::Stopped) => {}
-            Some(InstanceStatus::Running | InstanceStatus::Frozen) => {
+            Some(InstanceStatus::Running) => {
                 self.force_stop(&name).await?;
             }
         }
@@ -458,8 +410,7 @@ fn instance_config(
     ])
 }
 
-/// The root disk, sized to the computer, with `size.state` room for a
-/// stateful stop's RAM image (RAM plus 1 GiB of device state).
+/// The root disk, sized to the computer.
 fn root_device(pool: &str, resources: ComputerResources) -> BTreeMap<String, String> {
     BTreeMap::from([
         ("type".to_owned(), "disk".to_owned()),
@@ -469,16 +420,12 @@ fn root_device(pool: &str, resources: ComputerResources) -> BTreeMap<String, Str
             "size".to_owned(),
             format!("{}GiB", resources.disk_gib.get()),
         ),
-        (
-            "size.state".to_owned(),
-            format!("{}GiB", u64::from(resources.memory_gib.get()) + 1),
-        ),
     ])
 }
 
 /// `POST /1.0/instances` for one computer, created stopped. Built here rather
-/// than through `IncusClient::create_instance`, whose root disk has no
-/// `size.state`.
+/// than through `IncusClient::create_instance` so creation can stamp the
+/// enrollment generation and pairing before posting.
 fn instance_body(
     config: &IncusFleetConfig,
     computer: &Computer,
@@ -533,7 +480,6 @@ fn observed_status(instance: &InstanceInfo) -> Result<InstanceStatus, IncusFleet
     use incus_client::InstanceStatus as Incus;
     match &instance.status {
         Incus::Running | Incus::Starting => Ok(InstanceStatus::Running),
-        Incus::Frozen | Incus::Freezing => Ok(InstanceStatus::Frozen),
         Incus::Stopped | Incus::Stopping | Incus::Aborting | Incus::Error => {
             Ok(InstanceStatus::Stopped)
         }
@@ -589,7 +535,5 @@ fn limits_match(instance: &InstanceInfo, resources: ComputerResources) -> bool {
             == Some(&format!("{}GiB", resources.memory_gib.get()))
         && instance.devices.get("root").is_some_and(|root| {
             root.get("size") == Some(&format!("{}GiB", resources.disk_gib.get()))
-                && root.get("size.state")
-                    == Some(&format!("{}GiB", u64::from(resources.memory_gib.get()) + 1))
         })
 }

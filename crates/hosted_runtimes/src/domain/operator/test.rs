@@ -132,26 +132,6 @@ impl Fleet for FakeFleet {
         Ok(())
     }
 
-    async fn freeze(&self, id: ComputerId) -> Result<(), FakeFleetError> {
-        self.calls.lock().unwrap().push(format!("freeze {id}"));
-        Ok(())
-    }
-
-    async fn unfreeze(&self, id: ComputerId) -> Result<(), FakeFleetError> {
-        self.calls.lock().unwrap().push(format!("unfreeze {id}"));
-        Ok(())
-    }
-
-    async fn suspend(&self, id: ComputerId) -> Result<(), FakeFleetError> {
-        self.calls.lock().unwrap().push(format!("suspend {id}"));
-        Ok(())
-    }
-
-    async fn resume(&self, id: ComputerId) -> Result<(), FakeFleetError> {
-        self.calls.lock().unwrap().push(format!("resume {id}"));
-        Ok(())
-    }
-
     async fn destroy(&self, id: ComputerId) -> Result<(), FakeFleetError> {
         self.calls.lock().unwrap().push(format!("destroy {id}"));
         Ok(())
@@ -357,88 +337,6 @@ async fn paid_computer(
     id
 }
 
-struct IdleSessions;
-
-impl SessionActivity for IdleSessions {
-    type Err = FakeError;
-
-    async fn is_idle_since(
-        &self,
-        harness_id: HarnessId,
-        since: DateTime<Utc>,
-    ) -> Result<bool, FakeError> {
-        assert_eq!(harness_id, HARNESS);
-        assert_eq!(since, now() - IDLE_AFTER);
-        Ok(true)
-    }
-}
-
-#[tokio::test]
-async fn idle_sleep_freezes_quiet_computers() {
-    let operator = operator(FakeFleet::default()).await;
-    let id = paid_computer(&operator).await;
-    operator.run_fleet_effects().await.unwrap();
-    operator.macrod_connected(HARNESS).await.unwrap();
-    operator.fleet.calls.lock().unwrap().clear();
-
-    assert_eq!(operator.sleep_idle(&IdleSessions).await.unwrap(), 1);
-    let computer = operator
-        .repo
-        .get(id)
-        .await
-        .unwrap()
-        .unwrap()
-        .into_healthy()
-        .unwrap();
-    assert_eq!(computer.state.phase, Phase::Frozen { host: HOST });
-    operator.run_fleet_effects().await.unwrap();
-    assert_eq!(
-        *operator.fleet.calls.lock().unwrap(),
-        vec![format!("freeze {id}")]
-    );
-}
-
-/// A frozen guest's socket can be gone by the time a prompt thaws it; the
-/// prompt must wait for macrod to dial again rather than be sent to nobody.
-#[tokio::test]
-async fn a_prompt_for_a_frozen_computer_waits_until_macrod_reconnects() {
-    let operator = operator(FakeFleet::default()).await;
-    let id = paid_computer(&operator).await;
-    operator.run_fleet_effects().await.unwrap();
-    operator.macrod_connected(HARNESS).await.unwrap();
-    assert_eq!(operator.sleep_idle(&IdleSessions).await.unwrap(), 1);
-    operator.run_fleet_effects().await.unwrap();
-    operator.macrod_disconnected(HARNESS).await.unwrap();
-
-    assert!(operator.prompt_arrived(HARNESS).await.unwrap());
-    let thawed = operator
-        .repo
-        .get(id)
-        .await
-        .unwrap()
-        .unwrap()
-        .into_healthy()
-        .unwrap();
-    assert_eq!(thawed.state.phase, Phase::Running { host: HOST });
-    assert!(operator.prompt_arrived(HARNESS).await.unwrap());
-
-    assert!(operator.macrod_connected(HARNESS).await.unwrap());
-    assert!(!operator.prompt_arrived(HARNESS).await.unwrap());
-}
-
-/// A guest frozen with its socket still open resumes it on thaw.
-#[tokio::test]
-async fn a_prompt_for_a_frozen_computer_that_kept_its_socket_is_sent_at_once() {
-    let operator = operator(FakeFleet::default()).await;
-    paid_computer(&operator).await;
-    operator.run_fleet_effects().await.unwrap();
-    operator.macrod_connected(HARNESS).await.unwrap();
-    assert_eq!(operator.sleep_idle(&IdleSessions).await.unwrap(), 1);
-    operator.run_fleet_effects().await.unwrap();
-
-    assert!(!operator.prompt_arrived(HARNESS).await.unwrap());
-}
-
 #[tokio::test]
 async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
     let operator = operator(FakeFleet::default()).await;
@@ -484,7 +382,6 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
         .unwrap();
     assert_eq!(ready.state.phase, Phase::Running { host: HOST });
     assert_eq!(ready.harness_id, Some(HARNESS));
-    assert!(!operator.prompt_arrived(HARNESS).await.unwrap());
     assert_eq!(
         *operator.fleet.calls.lock().unwrap(),
         vec![format!("clear_enrollment {id}")]
@@ -689,15 +586,8 @@ async fn retry_of_a_lost_guest_reprovisions_the_same_computer_and_harness() {
 }
 
 #[tokio::test]
-async fn reconcile_recreates_missing_cold_or_failed_guests_but_keeps_existing_guests() {
-    for phase in [
-        Phase::Failed { host: HOST },
-        Phase::Stopped { host: HOST },
-        Phase::Suspended {
-            host: HOST,
-            saved_state: true,
-        },
-    ] {
+async fn reconcile_recreates_missing_stopped_or_failed_guests_but_keeps_existing_guests() {
+    for phase in [Phase::Failed { host: HOST }, Phase::Stopped { host: HOST }] {
         for present in [false, true] {
             let operator = operator(FakeFleet::default()).await;
             let id = paid_computer(&operator).await;
@@ -844,8 +734,6 @@ fn control_plane_identity_rejects_missing_or_invalid_values() {
 }
 
 mod enrollment;
-
-mod capacity;
 
 #[tokio::test]
 async fn reconcile_keeps_quarantined_guests_and_processes_healthy_computers() {

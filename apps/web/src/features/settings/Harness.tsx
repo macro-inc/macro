@@ -13,9 +13,9 @@ import {
   useSaveCursorApiKey,
 } from '@queries/auth/cursor-api-key';
 import {
+  invalidateHarnesses,
   useDeleteHarnessMutation,
   useHarnessesQuery,
-  invalidateHarnesses,
   usePatchHarnessMutation,
 } from '@queries/harnesses/harnesses';
 import { useIsTeamOwner } from '@queries/team/teams';

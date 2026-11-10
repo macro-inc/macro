@@ -298,24 +298,6 @@ impl ComputerRepo for FakeRepo {
         Ok(())
     }
 
-    async fn running(&self) -> Result<Vec<ComputerRecord>, FakeError> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        Ok(self
-            .computers
-            .lock()
-            .unwrap()
-            .values()
-            .filter(|computer| matches!(computer.state.phase, Phase::Running { .. }))
-            .cloned()
-            .map(|computer| self.record(computer))
-            .collect())
-    }
-
-    async fn coldest_frozen(&self, _host: HostId) -> Result<Option<ComputerId>, FakeError> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        Ok(None)
-    }
-
     async fn instances_expected(&self, host: HostId) -> Result<Vec<ComputerRecord>, FakeError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         Ok(self

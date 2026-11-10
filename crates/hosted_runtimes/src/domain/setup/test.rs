@@ -185,7 +185,7 @@ fn timelines_round_trip_and_older_rows_without_one_still_decode() {
         "payment": "paid",
         "macrod_connected": true,
         "recent_crashes": [],
-        "wake_requested": false
+        "power_on_requested": false
     });
     let state: crate::domain::lifecycle::ComputerState = serde_json::from_value(legacy).unwrap();
     assert_eq!(state.setup, None);

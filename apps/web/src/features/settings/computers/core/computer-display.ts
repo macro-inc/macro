@@ -101,12 +101,10 @@ export function computerStatusLabel(computer: ComputerStatus): {
       tone: 'failure',
     }))
     .with('ready', () => ({ label: t('computers.ready'), tone: 'success' }))
-    .with('asleep', () => ({
-      label: t('computers.asleep'),
-      detail: t('computers.wakeHint'),
-      tone: 'muted',
+    .with('starting', () => ({
+      label: t('computers.starting'),
+      tone: 'progress',
     }))
-    .with('waking', () => ({ label: t('computers.waking'), tone: 'progress' }))
     .with('stopping', () => ({
       label: t('computers.stopping'),
       tone: 'progress',
@@ -131,10 +129,10 @@ export function computerStatusLabel(computer: ComputerStatus): {
 /** Power can change only once a computer is set up and before it is gone. */
 export function canTogglePower(computer: ComputerStatus): boolean {
   return match(computer.status)
-    .with('ready', 'asleep', 'stopped', 'waiting_for_capacity', () => true)
+    .with('ready', 'stopped', 'waiting_for_capacity', () => true)
     .with(
       'setting_up',
-      'waking',
+      'starting',
       'stopping',
       'failed',
       'payment_failed',
