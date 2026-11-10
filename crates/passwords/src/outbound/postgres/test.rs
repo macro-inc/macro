@@ -574,7 +574,7 @@ async fn metadata_grants_intents_folders_and_deletion_are_team_isolated(pool: Pg
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn contended_team_lock_returns_conflict_without_holding_a_waiting_connection(pool: PgPool) {
+async fn contended_team_lock_returns_busy_without_holding_a_waiting_connection(pool: PgPool) {
     let repository = PgRepository::new(pool).expect("repository capacity");
     let team = TeamId(Uuid::now_v7());
     let first = repository
@@ -583,7 +583,7 @@ async fn contended_team_lock_returns_conflict_without_holding_a_waiting_connecti
         .expect("first lease");
     assert!(matches!(
         repository.lock(team, ItemId(Uuid::now_v7())).await,
-        Err(Error::Conflict)
+        Err(Error::Busy)
     ));
     let different_team = repository
         .lock(TeamId(Uuid::now_v7()), ItemId(Uuid::now_v7()))
@@ -626,7 +626,7 @@ async fn distinct_team_leases_share_admission_and_reserve_database_query_capacit
         repository
             .lock(TeamId(Uuid::now_v7()), ItemId(Uuid::now_v7()))
             .await,
-        Err(Error::Conflict)
+        Err(Error::Busy)
     ));
     let query = tokio::time::timeout(
         std::time::Duration::from_secs(2),
@@ -645,7 +645,7 @@ async fn distinct_team_leases_share_admission_and_reserve_database_query_capacit
         shared_repository
             .lock(TeamId(Uuid::now_v7()), ItemId(Uuid::now_v7()))
             .await,
-        Err(Error::Conflict)
+        Err(Error::Busy)
     ));
     drop(second);
     drop(replacement);

@@ -1,8 +1,11 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import { throwOnErr } from '@core/util/result';
+import { statusError } from '@core/util/safeFetch';
+import { sleep } from '@core/util/sleep';
 import { Telemetry } from '@macro-inc/observability';
 import type { PasswordActivity as ActivityDto } from '@service-storage/generated/schemas/passwordActivity';
+import { PasswordErrorCode } from '@service-storage/generated/schemas/passwordErrorCode';
 import type { PasswordFolder as FolderDto } from '@service-storage/generated/schemas/passwordFolder';
 import type { PasswordFolderBody } from '@service-storage/generated/schemas/passwordFolderBody';
 import type { PasswordGrant as GrantDto } from '@service-storage/generated/schemas/passwordGrant';
@@ -40,16 +43,61 @@ export function createPasswordSource(teamId: string): PasswordSource {
     method: string,
     body?: object
   ): PasswordResult<T> {
-    const response = await fetchWithToken<T>(`${root}${path}`, {
-      method,
-      headers: { 'Content-Type': 'application/json', 'X-Macro-Passwords': '1' },
-      body: body ? JSON.stringify(body) : undefined,
-      retry: { maxTries: 1 },
-    });
-    return response.mapErr((errors): PasswordFailure => {
-      if (errors.some((error) => error.code === 'UNAUTHORIZED'))
-        return 'reauth';
-      return 'failed';
+    const payload = body ? JSON.stringify(body) : undefined;
+    return Telemetry.span('passwords.request', async (span) => {
+      for (let retries = 0; ; retries++) {
+        span.setAttr('retry.count', retries);
+        const response = await fetchWithToken<T, PasswordErrorCode>(
+          `${root}${path}`,
+          {
+            method,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Macro-Passwords': '1',
+            },
+            body: payload,
+            retry: { maxTries: 1 },
+            trace: { parentSpan: span },
+            errorResponseHandler: async (response) => {
+              const fallback = statusError(response.status);
+              if (response.status !== 403 && response.status !== 409)
+                return fallback;
+              const failure: unknown = await response
+                .json()
+                .catch(() => undefined);
+              if (
+                !failure ||
+                typeof failure !== 'object' ||
+                !('code' in failure)
+              )
+                return fallback;
+              const code = Object.values(PasswordErrorCode).find(
+                (code) => code === failure.code
+              );
+              return code ? { code, message: code } : fallback;
+            },
+          }
+        );
+        if (
+          response.isErr() &&
+          retries < 2 &&
+          response.error.some(
+            (error) => error.code === PasswordErrorCode.vault_busy
+          )
+        ) {
+          await sleep(100 * 2 ** retries * (0.5 + Math.random()));
+          continue;
+        }
+        return response.mapErr(
+          (errors): PasswordFailure =>
+            errors.some(
+              (error) =>
+                error.code === PasswordErrorCode.reauthentication_required
+            )
+              ? 'reauth'
+              : 'failed'
+        );
+      }
     });
   }
   async function action<T extends object>(

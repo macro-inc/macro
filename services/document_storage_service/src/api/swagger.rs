@@ -698,6 +698,8 @@ use utoipa::OpenApi;
     ),
     components(
         schemas(
+            passwords::inbound::router::Failure,
+            passwords::inbound::router::FailureCode,
             access_requests::domain::models::ShareEntity,
             DocumentStorageServiceApiVersion,
             GenericResponse,

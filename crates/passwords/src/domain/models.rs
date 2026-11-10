@@ -325,6 +325,9 @@ pub enum Error {
     #[error("vault version conflict")]
     /// Observed version or retry operation no longer matches.
     Conflict,
+    #[error("vault is busy; retry the request")]
+    /// Lease admission or the team lease is currently held by another operation.
+    Busy,
     #[error("vault provider unavailable")]
     /// Provider, metadata storage, or rollout evaluation is unavailable.
     Unavailable,

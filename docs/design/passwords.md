@@ -42,7 +42,10 @@ during explicitly authorized mutations or recent-authenticated disclosure;
 ordinary metadata reads never fetch payloads. Deletes retain a provider metadata
 fence so a delayed write cannot recreate values after deletion.
 Nonblocking team vault locks serialize changes across replicas and protect folder
-assignments and grant revocation; contention returns a retryable conflict.
+assignments and grant revocation. Rollout and membership are checked before
+lease admission and access is rechecked under the lease. Contention returns
+typed `vault_busy`, distinct from `version_conflict`; the client uses at most
+three attempts with jittered exponential backoff and traces the retry count.
 
 Each TOTP setup uses a unique enrollment key and journals its identity before
 contacting OpenBao. Replacement switches the active pointer only after setup;
@@ -83,7 +86,9 @@ Never represent an unimplemented encryption layer as shipped protection.
 Protected reveal/copy, historical-value disclosure, and current TOTP codes
 require a signed authentication time within five minutes. Token refresh must not
 advance that time. Missing, expired, or future authentication times fail closed; the UI
-must complete an interactive login before retrying. API keys and agent identities
+must complete an interactive login before retrying. Stale sign-in returns
+HTTP 403 with typed `reauthentication_required`; expired sessions retain HTTP
+401 and the normal refresh path. API keys and agent identities
 cannot obtain human disclosure privileges. Username-only view and copy use the
 same human item authorization without the recent-authentication requirement.
 

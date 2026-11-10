@@ -2130,6 +2130,8 @@ export * from './paraPatchSpaceBefore';
 export * from './participantRole';
 export * from './passwordAction';
 export * from './passwordActivity';
+export * from './passwordErrorCode';
+export * from './passwordFailure';
 export * from './passwordFolder';
 export * from './passwordFolderBody';
 export * from './passwordGrant';

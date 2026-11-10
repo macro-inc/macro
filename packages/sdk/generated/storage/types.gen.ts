@@ -15059,6 +15059,21 @@ export type PasswordActivity = {
 };
 
 /**
+ * Closed, payload-free failure codes exposed by the human vault API.
+ */
+export type PasswordErrorCode = 'not_found' | 'forbidden' | 'reauthentication_required' | 'invalid_request' | 'version_conflict' | 'vault_busy' | 'vault_unavailable';
+
+/**
+ * Sanitized vault failure shared with generated HTTP clients.
+ */
+export type PasswordFailure = {
+    /**
+     * Machine-readable category; never contains request or secret values.
+     */
+    code: PasswordErrorCode;
+};
+
+/**
  * Folder names are metadata only.
  */
 export type PasswordFolder = {
@@ -32383,6 +32398,13 @@ export type PasswordsTeamsData = {
     url: '/passwords/teams';
 };
 
+export type PasswordsTeamsErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsTeamsError = PasswordsTeamsErrors[keyof PasswordsTeamsErrors];
+
 export type PasswordsTeamsResponses = {
     200: Array<PasswordTeamId>;
 };
@@ -32397,6 +32419,13 @@ export type PasswordsFoldersData = {
     query?: never;
     url: '/passwords/teams/{team}/folders';
 };
+
+export type PasswordsFoldersErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsFoldersError = PasswordsFoldersErrors[keyof PasswordsFoldersErrors];
 
 export type PasswordsFoldersResponses = {
     200: Array<PasswordFolder>;
@@ -32418,6 +32447,13 @@ export type PasswordsCreateFolderData = {
     query?: never;
     url: '/passwords/teams/{team}/folders';
 };
+
+export type PasswordsCreateFolderErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsCreateFolderError = PasswordsCreateFolderErrors[keyof PasswordsCreateFolderErrors];
 
 export type PasswordsCreateFolderResponses = {
     200: PasswordFolder;
@@ -32441,6 +32477,13 @@ export type PasswordsRemoveFolderData = {
     url: '/passwords/teams/{team}/folders/{folder}';
 };
 
+export type PasswordsRemoveFolderErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsRemoveFolderError = PasswordsRemoveFolderErrors[keyof PasswordsRemoveFolderErrors];
+
 export type PasswordsRemoveFolderResponses = {
     204: void;
 };
@@ -32463,6 +32506,13 @@ export type PasswordsRenameFolderData = {
     url: '/passwords/teams/{team}/folders/{folder}';
 };
 
+export type PasswordsRenameFolderErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsRenameFolderError = PasswordsRenameFolderErrors[keyof PasswordsRenameFolderErrors];
+
 export type PasswordsRenameFolderResponses = {
     200: PasswordFolder;
 };
@@ -32482,6 +32532,13 @@ export type PasswordsListData = {
     };
     url: '/passwords/teams/{team}/items';
 };
+
+export type PasswordsListErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsListError = PasswordsListErrors[keyof PasswordsListErrors];
 
 export type PasswordsListResponses = {
     200: Array<PasswordItemMetadata>;
@@ -32503,6 +32560,13 @@ export type PasswordsCreateData = {
     query?: never;
     url: '/passwords/teams/{team}/items';
 };
+
+export type PasswordsCreateErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsCreateError = PasswordsCreateErrors[keyof PasswordsCreateErrors];
 
 export type PasswordsCreateResponses = {
     200: PasswordItemMetadata;
@@ -32526,6 +32590,13 @@ export type PasswordsRemoveData = {
     url: '/passwords/teams/{team}/items/{item}';
 };
 
+export type PasswordsRemoveErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsRemoveError = PasswordsRemoveErrors[keyof PasswordsRemoveErrors];
+
 export type PasswordsRemoveResponses = {
     204: void;
 };
@@ -32541,6 +32612,13 @@ export type PasswordsDetailData = {
     query?: never;
     url: '/passwords/teams/{team}/items/{item}';
 };
+
+export type PasswordsDetailErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsDetailError = PasswordsDetailErrors[keyof PasswordsDetailErrors];
 
 export type PasswordsDetailResponses = {
     200: PasswordItemMetadata;
@@ -32564,6 +32642,13 @@ export type PasswordsPatchData = {
     url: '/passwords/teams/{team}/items/{item}';
 };
 
+export type PasswordsPatchErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsPatchError = PasswordsPatchErrors[keyof PasswordsPatchErrors];
+
 export type PasswordsPatchResponses = {
     200: PasswordItemMetadata;
 };
@@ -32586,6 +32671,13 @@ export type PasswordsUpdateData = {
     url: '/passwords/teams/{team}/items/{item}';
 };
 
+export type PasswordsUpdateErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsUpdateError = PasswordsUpdateErrors[keyof PasswordsUpdateErrors];
+
 export type PasswordsUpdateResponses = {
     200: PasswordItemMetadata;
 };
@@ -32601,6 +32693,13 @@ export type PasswordsActivityData = {
     query?: never;
     url: '/passwords/teams/{team}/items/{item}/activity';
 };
+
+export type PasswordsActivityErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsActivityError = PasswordsActivityErrors[keyof PasswordsActivityErrors];
 
 export type PasswordsActivityResponses = {
     200: Array<PasswordActivity>;
@@ -32624,6 +32723,13 @@ export type PasswordsCopyData = {
     url: '/passwords/teams/{team}/items/{item}/copy';
 };
 
+export type PasswordsCopyErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsCopyError = PasswordsCopyErrors[keyof PasswordsCopyErrors];
+
 export type PasswordsCopyResponses = {
     200: PasswordRevealed;
 };
@@ -32639,6 +32745,13 @@ export type PasswordsHistoryData = {
     query?: never;
     url: '/passwords/teams/{team}/items/{item}/history';
 };
+
+export type PasswordsHistoryErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsHistoryError = PasswordsHistoryErrors[keyof PasswordsHistoryErrors];
 
 export type PasswordsHistoryResponses = {
     200: Array<PasswordVersion>;
@@ -32662,6 +32775,13 @@ export type PasswordsRevealData = {
     url: '/passwords/teams/{team}/items/{item}/reveal';
 };
 
+export type PasswordsRevealErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsRevealError = PasswordsRevealErrors[keyof PasswordsRevealErrors];
+
 export type PasswordsRevealResponses = {
     200: PasswordRevealed;
 };
@@ -32677,6 +32797,13 @@ export type PasswordsGrantsData = {
     query?: never;
     url: '/passwords/teams/{team}/items/{item}/share';
 };
+
+export type PasswordsGrantsErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsGrantsError = PasswordsGrantsErrors[keyof PasswordsGrantsErrors];
 
 export type PasswordsGrantsResponses = {
     200: Array<PasswordGrant>;
@@ -32700,6 +32827,13 @@ export type PasswordsShareData = {
     url: '/passwords/teams/{team}/items/{item}/share';
 };
 
+export type PasswordsShareErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsShareError = PasswordsShareErrors[keyof PasswordsShareErrors];
+
 export type PasswordsShareResponses = {
     204: void;
 };
@@ -32721,6 +32855,13 @@ export type PasswordsRemoveTotpData = {
     query?: never;
     url: '/passwords/teams/{team}/items/{item}/totp';
 };
+
+export type PasswordsRemoveTotpErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsRemoveTotpError = PasswordsRemoveTotpErrors[keyof PasswordsRemoveTotpErrors];
 
 export type PasswordsRemoveTotpResponses = {
     204: void;
@@ -32744,6 +32885,13 @@ export type PasswordsSetTotpData = {
     url: '/passwords/teams/{team}/items/{item}/totp';
 };
 
+export type PasswordsSetTotpErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsSetTotpError = PasswordsSetTotpErrors[keyof PasswordsSetTotpErrors];
+
 export type PasswordsSetTotpResponses = {
     204: void;
 };
@@ -32766,6 +32914,13 @@ export type PasswordsTotpData = {
     url: '/passwords/teams/{team}/items/{item}/totp/code';
 };
 
+export type PasswordsTotpErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsTotpError = PasswordsTotpErrors[keyof PasswordsTotpErrors];
+
 export type PasswordsTotpResponses = {
     200: PasswordTotpCode;
 };
@@ -32781,6 +32936,13 @@ export type PasswordsUsernameData = {
     query?: never;
     url: '/passwords/teams/{team}/items/{item}/username';
 };
+
+export type PasswordsUsernameErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsUsernameError = PasswordsUsernameErrors[keyof PasswordsUsernameErrors];
 
 export type PasswordsUsernameResponses = {
     200: PasswordUsername;
@@ -32803,6 +32965,13 @@ export type PasswordsCopyUsernameData = {
     query?: never;
     url: '/passwords/teams/{team}/items/{item}/username/copy';
 };
+
+export type PasswordsCopyUsernameErrors = {
+    403: PasswordFailure;
+    409: PasswordFailure;
+};
+
+export type PasswordsCopyUsernameError = PasswordsCopyUsernameErrors[keyof PasswordsCopyUsernameErrors];
 
 export type PasswordsCopyUsernameResponses = {
     200: PasswordUsername;

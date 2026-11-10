@@ -406,7 +406,7 @@ async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgP
             .totp(&actor, first, record.metadata.id)
             .await;
         if copy {
-            assert!(matches!(interaction, Err(Error::Conflict)));
+            assert!(matches!(interaction, Err(Error::Busy)));
         } else {
             assert_eq!(
                 interaction
@@ -451,12 +451,12 @@ async fn live_metadata_routes_and_share_reject_cross_team_access(pool: sqlx::PgP
         (
             "POST",
             format!("/teams/{}/items/{item}/reveal", first.0),
-            StatusCode::UNAUTHORIZED,
+            StatusCode::FORBIDDEN,
         ),
         (
             "POST",
             format!("/teams/{}/items/{item}/copy", first.0),
-            StatusCode::UNAUTHORIZED,
+            StatusCode::FORBIDDEN,
         ),
     ] {
         let response = app
@@ -596,4 +596,76 @@ async fn every_route_rejects_verified_internal_and_api_key_headers() {
             assert_eq!(response.headers()[CACHE_CONTROL], "private, no-store");
         }
     }
+}
+
+#[tokio::test]
+async fn stale_sign_in_and_lease_contention_have_distinct_typed_failures() {
+    for (error, status, code) in [
+        (
+            Error::ReauthenticationRequired,
+            StatusCode::FORBIDDEN,
+            FailureCode::ReauthenticationRequired,
+        ),
+        (
+            Error::Forbidden,
+            StatusCode::FORBIDDEN,
+            FailureCode::Forbidden,
+        ),
+        (Error::Busy, StatusCode::CONFLICT, FailureCode::VaultBusy),
+        (
+            Error::Conflict,
+            StatusCode::CONFLICT,
+            FailureCode::VersionConflict,
+        ),
+        (
+            Error::NotFound,
+            StatusCode::NOT_FOUND,
+            FailureCode::NotFound,
+        ),
+        (
+            Error::Invalid,
+            StatusCode::BAD_REQUEST,
+            FailureCode::InvalidRequest,
+        ),
+        (
+            Error::Unavailable,
+            StatusCode::SERVICE_UNAVAILABLE,
+            FailureCode::VaultUnavailable,
+        ),
+    ] {
+        let response = ApiError(error).into_response();
+        assert_eq!(response.status(), status);
+        let bytes = to_bytes(response.into_body(), 1024).await.unwrap();
+        let failure: Failure = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(failure.code, code);
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&bytes)
+                .unwrap()
+                .as_object()
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+    assert_eq!(
+        serde_json::to_value(Failure {
+            code: FailureCode::ReauthenticationRequired
+        })
+        .unwrap()["code"],
+        "reauthentication_required"
+    );
+    assert_eq!(
+        serde_json::to_value(Failure {
+            code: FailureCode::VaultBusy
+        })
+        .unwrap()["code"],
+        "vault_busy"
+    );
+    assert_eq!(
+        serde_json::to_value(Failure {
+            code: FailureCode::VersionConflict
+        })
+        .unwrap()["code"],
+        "version_conflict"
+    );
 }

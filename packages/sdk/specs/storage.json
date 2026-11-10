@@ -22124,6 +22124,26 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
           }
         }
       }
@@ -22154,6 +22174,26 @@
                   "items": {
                     "$ref": "#/components/schemas/PasswordFolder"
                   }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
                 }
               }
             }
@@ -22201,6 +22241,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PasswordFolder"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
                 }
               }
             }
@@ -22262,6 +22322,26 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
           }
         }
       },
@@ -22301,6 +22381,26 @@
         "responses": {
           "204": {
             "description": ""
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
           }
         }
       }
@@ -22340,6 +22440,26 @@
                   "items": {
                     "$ref": "#/components/schemas/PasswordItemMetadata"
                   }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
                 }
               }
             }
@@ -22390,6 +22510,26 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
           }
         }
       }
@@ -22426,6 +22566,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PasswordItemMetadata"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
                 }
               }
             }
@@ -22485,6 +22645,26 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
           }
         }
       },
@@ -22524,6 +22704,26 @@
         "responses": {
           "204": {
             "description": ""
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
           }
         }
       },
@@ -22580,6 +22780,26 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
           }
         }
       }
@@ -22619,6 +22839,26 @@
                   "items": {
                     "$ref": "#/components/schemas/PasswordActivity"
                   }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
                 }
               }
             }
@@ -22680,6 +22920,26 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
           }
         }
       }
@@ -22719,6 +22979,26 @@
                   "items": {
                     "$ref": "#/components/schemas/PasswordVersion"
                   }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
                 }
               }
             }
@@ -22780,6 +23060,26 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
           }
         }
       }
@@ -22819,6 +23119,26 @@
                   "items": {
                     "$ref": "#/components/schemas/PasswordGrant"
                   }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
                 }
               }
             }
@@ -22871,6 +23191,26 @@
         "responses": {
           "204": {
             "description": ""
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
           }
         }
       }
@@ -22922,6 +23262,26 @@
         "responses": {
           "204": {
             "description": ""
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
           }
         }
       },
@@ -22961,6 +23321,26 @@
         "responses": {
           "204": {
             "description": ""
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
           }
         }
       }
@@ -23009,6 +23389,26 @@
                 }
               }
             }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
           }
         }
       }
@@ -23045,6 +23445,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PasswordUsername"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
                 }
               }
             }
@@ -23093,6 +23513,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PasswordUsername"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
                 }
               }
             }
@@ -49593,6 +50033,30 @@
           "userId": {
             "type": "string",
             "description": "Authenticated Macro user identity; never a provider credential."
+          }
+        }
+      },
+      "PasswordErrorCode": {
+        "type": "string",
+        "description": "Closed, payload-free failure codes exposed by the human vault API.",
+        "enum": [
+          "not_found",
+          "forbidden",
+          "reauthentication_required",
+          "invalid_request",
+          "version_conflict",
+          "vault_busy",
+          "vault_unavailable"
+        ]
+      },
+      "PasswordFailure": {
+        "type": "object",
+        "description": "Sanitized vault failure shared with generated HTTP clients.",
+        "required": ["code"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/PasswordErrorCode",
+            "description": "Machine-readable category; never contains request or secret values."
           }
         }
       },

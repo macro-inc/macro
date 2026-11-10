@@ -172,7 +172,7 @@ impl Repository for PgRepository {
             .lock_admission
             .clone()
             .try_acquire_owned()
-            .map_err(|_| Error::Conflict)?;
+            .map_err(|_| Error::Busy)?;
         let mut transaction = self.pool.begin().await.map_err(|_| Error::Unavailable)?;
         let key = format!("passwords/{}", team.0);
         let lock = sqlx::query!(
@@ -183,7 +183,7 @@ impl Repository for PgRepository {
         .await
         .map_err(|_| Error::Unavailable)?;
         if lock.locked != Some(true) {
-            return Err(Error::Conflict);
+            return Err(Error::Busy);
         }
         Ok(Box::new(PgItemLock {
             _admission: admission,

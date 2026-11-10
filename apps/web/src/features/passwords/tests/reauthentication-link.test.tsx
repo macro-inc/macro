@@ -72,7 +72,6 @@ for (const native of [false, true]) {
     fireEvent.click(
       await screen.findByRole('button', {
         name: 'Reveal password',
-        exact: true,
       })
     );
     const link = await screen.findByRole('link', { name: 'Sign in again' });
