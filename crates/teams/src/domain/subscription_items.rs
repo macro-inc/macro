@@ -1,7 +1,7 @@
 //! Non-seat items (Macro computers) on a team's subscription, keyed by price.
 
 use crate::domain::model::{
-    CustomerError, ItemQuantityChange, PriceInfo, SubscriptionTerms, TeamError,
+    CustomerError, ItemProration, ItemQuantityChange, PriceInfo, SubscriptionTerms, TeamError,
 };
 
 /// Errors from changing or reading a team subscription's items.
@@ -36,6 +36,7 @@ pub trait TeamSubscriptionItems: Clone + Send + Sync + 'static {
         &self,
         team_id: &uuid::Uuid,
         changes: Vec<ItemQuantityChange>,
+        proration: ItemProration,
         idempotency_key: &str,
     ) -> impl Future<Output = Result<(), TeamSubscriptionItemsError>> + Send;
 

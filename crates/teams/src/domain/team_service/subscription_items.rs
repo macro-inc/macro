@@ -11,7 +11,7 @@ use crate::domain::{
     contacts_enqueuer::ContactsEnqueuer,
     crm_enqueuer::CrmEnqueuer,
     customer_repo::CustomerRepository,
-    model::{ItemQuantityChange, PriceInfo, SubscriptionTerms},
+    model::{ItemProration, ItemQuantityChange, PriceInfo, SubscriptionTerms},
     open_seat_release::OpenSeatRelease,
     owned_entity_cleanup::OwnedEntityCleanup,
     subscription_items::{TeamSubscriptionItems, TeamSubscriptionItemsError},
@@ -79,13 +79,14 @@ where
         &self,
         team_id: &uuid::Uuid,
         changes: Vec<ItemQuantityChange>,
+        proration: ItemProration,
         idempotency_key: &str,
     ) -> Result<(), TeamSubscriptionItemsError> {
         let _billing = self.customer_repository.lock_team_billing(team_id).await?;
         let subscription = self.team_subscription(team_id).await?;
         Ok(self
             .customer_repository
-            .change_item_quantities(&subscription, changes, idempotency_key)
+            .change_item_quantities(&subscription, changes, proration, idempotency_key)
             .await?)
     }
 
