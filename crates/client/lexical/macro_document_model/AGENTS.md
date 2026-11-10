@@ -12,6 +12,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 
 - Compose application plugins, command decoders and bulk-query handlers in surface.rs with append-only group registration blocks; keep editor.rs registry-only presets free of surface mutations. Register Macro shortcuts through isolated post-insertion updates and the source Enter listener, preserving first-paragraph-child matching even for interior/expanded selections.
 - Keep Group B registration and command adapters in plugins_group_b.rs with child modules under plugins_group_b/; preserve its public module paths and keep mod.rs files declarations-only.
+- Keep exterior focus atomic: leave an absent last child unchanged, reuse only an actual paragraph with empty text, otherwise append a configured paragraph before selecting root end; browser focus stays in the host.
 
 
 - Own unknown HTML node names in exporter errors; opaque type names borrow their snapshot.
