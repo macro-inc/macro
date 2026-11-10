@@ -15,9 +15,11 @@ import { match } from 'ts-pattern';
 import { type RoutineTemplate, templateChain } from '../core/routine-templates';
 import { RoutineSurface } from './routine-editor';
 
-/** Each template's icon and tint, by the part of the app it belongs to most. */
-function templateLook(surfaces: RoutineTemplate['surfaces']) {
-  return match(surfaces[0] ?? 'agents')
+type AppSurface = RoutineTemplate['surfaces'][number];
+
+/** A part of the app's icon and tint, as routine cards show it. */
+export function surfaceLook(surface: AppSurface) {
+  return match(surface)
     .with('email', () => ({ icon: EnvelopeIcon, tint: 'text-blue' }))
     .with('tasks', () => ({ icon: CheckSquareIcon, tint: 'text-green' }))
     .with('calendar', () => ({ icon: ClockIcon, tint: 'text-orange' }))
@@ -30,27 +32,54 @@ function templateLook(surfaces: RoutineTemplate['surfaces']) {
     .exhaustive();
 }
 
-/** What starts the template's routine and what it does, in a line. */
-function TemplateChain(props: { template: RoutineTemplate }) {
-  const look = () => templateLook(props.template.surfaces);
-  const chain = () => templateChain(props.template);
+/** Each template's icon and tint, by the part of the app it belongs to most. */
+function templateLook(surfaces: RoutineTemplate['surfaces']) {
+  return surfaceLook(surfaces[0] ?? 'agents');
+}
+
+/** What starts a routine and what it does, in a line. */
+export function RoutineChain(props: {
+  /** Its trigger's icon is this part of the app's. */
+  surface: AppSurface;
+  trigger: string;
+  action: string;
+  /** Marks the action as AI's with a sparkle. */
+  actionAi: boolean;
+  /** False on compact cards, whose own icon already shows the part of the app. */
+  triggerIcon?: boolean;
+}) {
   return (
     <span class="flex min-w-0 items-center gap-1.5 text-xs text-ink-muted">
-      <Dynamic
-        component={look().icon}
-        class="size-3 shrink-0 text-ink-extra-muted"
-        aria-hidden="true"
-      />
-      <span class="truncate">{chain().trigger}</span>
+      <Show when={props.triggerIcon !== false}>
+        <Dynamic
+          component={surfaceLook(props.surface).icon}
+          class="size-3 shrink-0 text-ink-extra-muted"
+          aria-hidden="true"
+        />
+      </Show>
+      <span class="truncate">{props.trigger}</span>
       <ArrowRightIcon
         class="size-2.5 shrink-0 text-ink-placeholder"
         aria-hidden="true"
       />
-      <Show when={chain().actionAi}>
+      <Show when={props.actionAi}>
         <SparkleIcon class="size-3 shrink-0 text-accent" aria-hidden="true" />
       </Show>
-      <span class="truncate">{chain().action}</span>
+      <span class="truncate">{props.action}</span>
     </span>
+  );
+}
+
+/** What starts the template's routine and what it does, in a line. */
+function TemplateChain(props: { template: RoutineTemplate }) {
+  const chain = () => templateChain(props.template);
+  return (
+    <RoutineChain
+      surface={props.template.surfaces[0] ?? 'agents'}
+      trigger={chain().trigger}
+      action={chain().action}
+      actionAi={chain().actionAi}
+    />
   );
 }
 

@@ -456,16 +456,18 @@ export type AppEvents = {
     surface: string;
     suggestions: number;
   };
-  /** A sidebar's suggestions card was closed for good. */
+  /** A sidebar's suggestions card was closed on every device. */
   routine_suggestions_card_dismissed: { surface: string };
-  /** A suggestion's row was on screen in an opened list. */
+  /** Undo right after closing a sidebar's suggestions card. */
+  routine_suggestions_card_restored: { surface: string };
+  /** A suggestion's card was on screen in an opened list. */
   routine_suggestion_shown: RoutineSuggestionEvent;
-  /** Enabled in one click from its row; `edited` if changed there first. */
+  /** Turned on in one click from its card; `edited` if changed there first. */
   routine_suggestion_enabled: RoutineSuggestionEvent & {
     routineId: string;
     edited: boolean;
   };
-  /** First change to a suggestion's name, instructions or notifications. */
+  /** First change to one of a suggestion's knob values on its card. */
   routine_suggestion_edited: RoutineSuggestionEvent;
   /** Opened in the full routine editor before saving. */
   routine_suggestion_customized: RoutineSuggestionEvent & { edited: boolean };
@@ -476,6 +478,18 @@ export type AppEvents = {
     routineId: string;
     trigger: 'manual';
     targetKind?: 'agent' | 'model' | 'steps';
+  };
+
+  // --- Saved email views ---------------------------------------------------
+  /** A confirmed create, by where the definition started. */
+  email_saved_view_created: {
+    savedViewId: string;
+    source: 'builder' | 'save_filters' | 'duplicate';
+  };
+  /** Opened from the sidebar or picker; `viewCount` is how many the viewer has. */
+  email_saved_view_opened: {
+    savedViewId: string;
+    viewCount: number;
   };
 };
 
