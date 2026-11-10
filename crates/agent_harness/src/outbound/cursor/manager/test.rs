@@ -81,7 +81,7 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("the manager never previews sessions")
     }
 
-    async fn turn_is_open(&self, _id: AgentSessionId) -> SessionResult<bool> {
+    async fn has_unfinished_turn(&self, _id: AgentSessionId) -> SessionResult<bool> {
         Ok(false)
     }
 

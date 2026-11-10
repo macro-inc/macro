@@ -74,6 +74,8 @@ pub struct InMemoryAgentSessionRepo {
     log_transaction: Arc<Mutex<()>>,
     history_boundaries: Arc<Mutex<HashMap<AgentSessionId, macro_uuid::Uuid>>>,
     turn_states: Arc<Mutex<HashMap<AgentSessionId, agent_fold::domain::model::TurnState>>>,
+    /// Sessions whose turn was open when they last disconnected.
+    interrupted_turns: Arc<Mutex<std::collections::HashSet<AgentSessionId>>>,
     working_branches: Arc<Mutex<HashMap<AgentSessionId, String>>>,
     user_sizes: Arc<Mutex<HashMap<String, SandboxSize>>>,
     user_coding_preferences: Arc<Mutex<HashMap<String, CodingPreferences>>>,
@@ -113,15 +115,6 @@ impl InMemoryAgentSessionRepo {
             .lock()
             .expect("in-memory session store is not poisoned")
             .insert(session.id, session);
-    }
-
-    /// Set the turn projection `session` last committed, as its log would.
-    pub fn set_turn_state(
-        &self,
-        session: AgentSessionId,
-        turn_state: agent_fold::domain::model::TurnState,
-    ) {
-        self.turn_states.lock().unwrap().insert(session, turn_state);
     }
 
     /// Backdate `session`'s last user-visible activity, as if nobody had
@@ -324,7 +317,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         self.find(id).await?.ok_or(AgentSessionError::NotFound(id))
     }
 
-    async fn turn_is_open(&self, id: AgentSessionId) -> Result<bool> {
+    async fn has_unfinished_turn(&self, id: AgentSessionId) -> Result<bool> {
         if !self
             .sessions
             .lock()
@@ -333,15 +326,13 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         {
             return Err(AgentSessionError::NotFound(id));
         }
-        Ok(matches!(
-            self.turn_states.lock().unwrap().get(&id),
-            Some(
-                agent_fold::domain::model::TurnState::Starting
-                    | agent_fold::domain::model::TurnState::Running
-                    | agent_fold::domain::model::TurnState::Stopping
-                    | agent_fold::domain::model::TurnState::Blocked
-            )
-        ))
+        Ok(match self.turn_states.lock().unwrap().get(&id) {
+            Some(agent_fold::domain::model::TurnState::Disconnected) => {
+                self.interrupted_turns.lock().unwrap().contains(&id)
+            }
+            Some(turn) => crate::domain::turn_state::moves_session_list(*turn),
+            None => false,
+        })
     }
 
     async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
@@ -1117,7 +1108,13 @@ impl AgentSessionLogRepo for InMemoryAgentSessionRepo {
                 .insert(session, boundary.initialization_log_id);
         }
         if let Some(turn_state) = turn_state {
-            self.turn_states.lock().unwrap().insert(session, turn_state);
+            let previous = self.turn_states.lock().unwrap().insert(session, turn_state);
+            let mut interrupted = self.interrupted_turns.lock().unwrap();
+            if turn_state != agent_fold::domain::model::TurnState::Disconnected {
+                interrupted.remove(&session);
+            } else if previous.is_some_and(crate::domain::turn_state::moves_session_list) {
+                interrupted.insert(session);
+            }
         }
         Ok(stored)
     }

@@ -108,3 +108,63 @@ async fn stale_recovery_does_not_reorder_the_session_list(pool: PgPool) {
     );
     assert_eq!(modified_at(&pool, session.id).await, aged);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_turn_open_when_the_session_disconnected_stays_unfinished_until_another_turn_state(
+    pool: PgPool,
+) {
+    let repo = test_repo(&pool);
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+    let claim = claimed(
+        repo.claim(session.id, ReplicaId::mint())
+            .await
+            .expect("claim"),
+    );
+
+    repo.create_projected(
+        fenced_log(session.id),
+        Some(&claim),
+        None,
+        Some(TurnState::Running),
+    )
+    .await
+    .expect("project running turn");
+    assert!(repo.has_unfinished_turn(session.id).await.expect("read"));
+
+    repo.create_projected(
+        fenced_log(session.id),
+        Some(&claim),
+        None,
+        Some(TurnState::Disconnected),
+    )
+    .await
+    .expect("project disconnect");
+    assert!(
+        repo.has_unfinished_turn(session.id).await.expect("read"),
+        "the running turn was cut off, not finished"
+    );
+
+    repo.create_projected(
+        fenced_log(session.id),
+        Some(&claim),
+        None,
+        Some(TurnState::Idle),
+    )
+    .await
+    .expect("project idle after a reload");
+    assert!(!repo.has_unfinished_turn(session.id).await.expect("read"));
+
+    repo.create_projected(
+        fenced_log(session.id),
+        Some(&claim),
+        None,
+        Some(TurnState::Disconnected),
+    )
+    .await
+    .expect("project a disconnect between turns");
+    assert!(
+        !repo.has_unfinished_turn(session.id).await.expect("read"),
+        "a disconnect between turns leaves nothing unfinished"
+    );
+}

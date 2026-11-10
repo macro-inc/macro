@@ -68,7 +68,9 @@ impl<B: BotFacts + 'static> StaleSessionRepo for PgAgentSessionRepo<B> {
             UPDATE agent_session AS session
             SET manager_replica_id = NULL,
                 manager_fence = manager_fence + 1,
-                status = $4, status_event_name = $5, turn_state = $6
+                status = $4, status_event_name = $5, turn_state = $6,
+                turn_interrupted = session.turn_interrupted
+                    OR session.turn_state IN ('starting', 'running', 'stopping', 'blocked')
             WHERE session.id = $1
               AND session.manager_replica_id = $2 AND session.manager_fence = $3
               AND EXISTS (

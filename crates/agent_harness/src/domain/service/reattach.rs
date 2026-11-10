@@ -4,11 +4,15 @@
 //! socket drops, so a dial must never stampede the replica: idle sessions
 //! wait for their next prompt, every dial on this replica shares
 //! [`REATTACH_CONCURRENCY`] permits, each held until the session's ACP
-//! restore finishes, and a harness dialing again cancels its previous dial.
+//! restore finishes, and a harness dialing again stops its previous dial
+//! from starting more (restores already running finish under their permit).
 
 use super::deliver::DialReattach;
 use super::*;
+use agent_client_protocol::schema::v1::SessionId;
+use agent_session::domain::connection::ListedSession;
 use futures::StreamExt as _;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use tokio_util::sync::CancellationToken;
 
@@ -42,7 +46,8 @@ pub struct ReattachReport {
     pub skipped: usize,
     /// Not restored after every attempt this dial allowed.
     pub failed: usize,
-    /// Given up because the harness disconnected or dialed again.
+    /// Not started, or not retried, because the harness disconnected or
+    /// dialed again.
     pub abandoned: usize,
     /// Attempts beyond each session's first.
     pub retries: u32,
@@ -115,17 +120,15 @@ where
     /// Only sessions whose bot is bound to `harness` are touched, each on its
     /// own command worker, so a reattach waits behind whatever that session
     /// is already doing. Which sessions are restored now is `dial_reattach`'s
-    /// call; `forwards_local_turns` says the runtime's agent forwards turns
-    /// nobody prompted from Macro, so all of its sessions are. A failed
-    /// restore is retried with jittered backoff unless retrying cannot help.
-    /// One session failing never stops the others.
+    /// call, which reads each session's `updated_at` from the listing. A
+    /// failed restore is retried with jittered backoff unless retrying cannot
+    /// help. One session failing never stops the others.
     #[tracing::instrument(
         name = "agent.runtime.reattach",
         skip_all,
         fields(
             %harness,
             agent.runtime.live_sessions = acp_sessions.len(),
-            agent.runtime.forwards_local_turns = forwards_local_turns,
             agent.runtime.reattach_sessions = tracing::field::Empty,
             agent.runtime.reattach_eager = tracing::field::Empty,
             agent.runtime.reattach_lazy = tracing::field::Empty,
@@ -138,8 +141,7 @@ where
     pub async fn reattach_live_sessions(
         &self,
         harness: harness_id::HarnessId,
-        acp_sessions: Vec<agent_client_protocol::schema::v1::SessionId>,
-        forwards_local_turns: bool,
+        acp_sessions: Vec<ListedSession>,
         cause: tracing::Span,
     ) -> ReattachReport {
         tracing::Span::current().follows_from(&cause);
@@ -156,7 +158,7 @@ where
         }
 
         let report = self
-            .reattach_listed(harness, &acp_sessions, forwards_local_turns, &cancelled)
+            .reattach_listed(harness, acp_sessions, &cancelled)
             .await;
         self.inner
             .dials
@@ -175,16 +177,18 @@ where
     async fn reattach_listed(
         &self,
         harness: harness_id::HarnessId,
-        acp_sessions: &[agent_client_protocol::schema::v1::SessionId],
-        forwards_local_turns: bool,
+        acp_sessions: Vec<ListedSession>,
         cancelled: &CancellationToken,
     ) -> ReattachReport {
-        let sessions = match self
-            .inner
-            .runtimes
-            .sessions_on_harness(harness, acp_sessions)
-            .await
-        {
+        let ids: Vec<SessionId> = acp_sessions
+            .iter()
+            .map(|listed| listed.id.clone())
+            .collect();
+        let runtime_activity: HashMap<SessionId, chrono::DateTime<chrono::Utc>> = acp_sessions
+            .into_iter()
+            .filter_map(|listed| Some((listed.id, listed.updated_at?)))
+            .collect();
+        let sessions = match self.inner.runtimes.sessions_on_harness(harness, &ids).await {
             Ok(sessions) => sessions,
             Err(error) => {
                 tracing::error!(error = ?error, "could not resolve a runtime's live sessions");
@@ -195,7 +199,7 @@ where
 
         let outcomes: Vec<(Outcome, u32)> = futures::stream::iter(sessions)
             .map(|session_id| {
-                self.reattach_live_session(harness, session_id, forwards_local_turns, cancelled)
+                self.reattach_live_session(harness, session_id, &runtime_activity, cancelled)
             })
             .buffer_unordered(REATTACH_CONCURRENCY)
             .collect()
@@ -221,17 +225,13 @@ where
         &self,
         harness: harness_id::HarnessId,
         session_id: AgentSessionId,
-        forwards_local_turns: bool,
+        runtime_activity: &HashMap<SessionId, chrono::DateTime<chrono::Utc>>,
         cancelled: &CancellationToken,
     ) -> (Outcome, u32) {
         if cancelled.is_cancelled() || !self.inner.runtimes.is_connected(harness) {
             return (Outcome::Abandoned, 0);
         }
-        match self
-            .inner
-            .dial_reattach(session_id, forwards_local_turns)
-            .await
-        {
+        match self.inner.dial_reattach(session_id, runtime_activity).await {
             Ok(DialReattach::Eager) => {}
             Ok(DialReattach::Lazy) => return (Outcome::Lazy, 0),
             Ok(DialReattach::Skip) => return (Outcome::Skipped, 0),
@@ -244,10 +244,19 @@ where
         let mut delay = REATTACH_RETRY_BASE;
         let mut retries = 0;
         loop {
-            let attempt = tokio::select! {
+            // Cancelling the dial stops it from starting a restore, never
+            // from waiting for one: the Reattach runs on the session's worker
+            // whatever happens to this future, so its permit stays held until
+            // the restore is done.
+            let permit = tokio::select! {
                 () = cancelled.cancelled() => return (Outcome::Abandoned, retries),
-                attempt = self.restore_with_permit(session_id) => attempt,
+                permit = self.inner.reattach_permits.acquire() => permit,
             };
+            let Ok(_permit) = permit else {
+                return (Outcome::Abandoned, retries);
+            };
+            let attempt = self.restore(session_id).await;
+            drop(_permit);
             let Err(error) = attempt else {
                 return (Outcome::Restored, retries);
             };
@@ -255,7 +264,7 @@ where
             if is_permanent(&error) || retries + 1 == REATTACH_ATTEMPTS {
                 return (Outcome::Failed, retries);
             }
-            if !self.inner.runtimes.is_connected(harness) {
+            if cancelled.is_cancelled() || !self.inner.runtimes.is_connected(harness) {
                 return (Outcome::Abandoned, retries);
             }
             let jitter = delay.mul_f64(rand::random::<f64>());
@@ -268,15 +277,8 @@ where
         }
     }
 
-    /// Attach the session on its own worker and wait for its ACP restore,
-    /// holding one of this replica's reattach permits throughout.
-    async fn restore_with_permit(&self, session_id: AgentSessionId) -> Result<()> {
-        let _permit = self
-            .inner
-            .reattach_permits
-            .acquire()
-            .await
-            .map_err(|_| HarnessError::Disconnected(session_id))?;
+    /// Attach the session on its own worker and wait for its ACP restore.
+    async fn restore(&self, session_id: AgentSessionId) -> Result<()> {
         self.execute(session_id, HarnessCommand::Reattach).await?;
         match self.inner.sessions.wait_opened(session_id).await {
             Ok(true) => Ok(()),

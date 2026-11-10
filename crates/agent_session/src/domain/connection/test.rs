@@ -570,7 +570,9 @@ async fn a_dialed_runtime_is_initialized_once_and_lists_every_page_of_its_sessio
             .await
             .expect("list task")
             .expect("the runtime listed")
-            .sessions,
+            .into_iter()
+            .map(|session| session.id)
+            .collect::<Vec<_>>(),
         [SessionId::from("acp-1"), SessionId::from("acp-2")]
     );
     // Sessions binding afterwards reuse this handshake instead of sending
@@ -612,7 +614,6 @@ async fn an_agent_that_cannot_list_sessions_lists_none() {
             .await
             .expect("list task")
             .expect("not listing is no failure")
-            .sessions
             .is_empty()
     );
     assert!(runtime.rx.try_recv().is_err(), "no session/list was sent");
@@ -663,16 +664,24 @@ async fn a_handshake_a_session_runs_is_reused_for_listing() {
         .tx
         .send(answer(
             &list,
-            serde_json::json!({"sessions": [{"sessionId": "acp-1", "cwd": "/srv"}]}),
+            serde_json::json!({"sessions": [
+                {"sessionId": "acp-1", "cwd": "/srv", "updatedAt": "2026-11-10T17:05:00Z"},
+            ]}),
         ))
         .expect("list answer should send");
     assert_eq!(
         listing
             .await
             .expect("list task")
-            .expect("the runtime listed")
-            .sessions,
-        [SessionId::from("acp-1")]
+            .expect("the runtime listed"),
+        [ListedSession {
+            id: SessionId::from("acp-1"),
+            updated_at: Some(
+                chrono::DateTime::parse_from_rfc3339("2026-11-10T17:05:00Z")
+                    .unwrap()
+                    .with_timezone(&chrono::Utc)
+            ),
+        }]
     );
 }
 
@@ -720,47 +729,4 @@ async fn a_closed_connection_ends_the_listing() {
         listing.await.expect("list task"),
         Err(ListSessionsError::Closed)
     ));
-}
-
-#[tokio::test]
-async fn a_herdr_agent_listing_says_it_forwards_local_turns() {
-    let (carrier, mut runtime) = Channel::duplex();
-    let connection = RuntimeConnection::connect(carrier);
-    let listing = {
-        let connection = Arc::clone(&connection);
-        tokio::spawn(async move { connection.list_sessions().await })
-    };
-    runtime.tx.send(ready()).expect("ready should send");
-
-    let initialize = sent_request(runtime.rx.recv().await);
-    runtime
-        .tx
-        .send(answer(
-            &initialize,
-            serde_json::json!({
-                "protocolVersion": 1,
-                "agentCapabilities": {"loadSession": true, "sessionCapabilities": {"list": {}}},
-                "agentInfo": {"name": "macrod-herdr", "version": "0.1.0"},
-            }),
-        ))
-        .expect("initialize answer should send");
-    let list = sent_request(runtime.rx.recv().await);
-    runtime
-        .tx
-        .send(answer(
-            &list,
-            serde_json::json!({"sessions": [{"sessionId": "acp-1", "cwd": "/srv"}]}),
-        ))
-        .expect("list answer should send");
-
-    assert_eq!(
-        listing
-            .await
-            .expect("list task")
-            .expect("the runtime listed"),
-        ListedSessions {
-            sessions: vec![SessionId::from("acp-1")],
-            forwards_local_turns: true,
-        }
-    );
 }

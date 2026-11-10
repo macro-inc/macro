@@ -200,8 +200,8 @@ pub trait AgentSessionService: Send + Sync + 'static {
     fn get_session(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
     /// Whether the session's persisted turn projection says a turn is open,
-    /// as [`AgentSessionRepo::turn_is_open`] answers.
-    fn turn_is_open(&self, id: AgentSessionId) -> impl Future<Output = Result<bool>> + Send;
+    /// as [`AgentSessionRepo::has_unfinished_turn`] answers.
+    fn has_unfinished_turn(&self, id: AgentSessionId) -> impl Future<Output = Result<bool>> + Send;
 
     /// Wait for the session's live actor to finish opening its ACP session
     /// (`session/new`, `session/load` or `session/resume`): `true` once it
@@ -952,8 +952,8 @@ where
         self.repo.get(id).await
     }
 
-    async fn turn_is_open(&self, id: AgentSessionId) -> Result<bool> {
-        self.repo.turn_is_open(id).await
+    async fn has_unfinished_turn(&self, id: AgentSessionId) -> Result<bool> {
+        self.repo.has_unfinished_turn(id).await
     }
 
     async fn wait_opened(&self, id: AgentSessionId) -> Result<bool> {
@@ -2175,8 +2175,8 @@ where
         self.repo.get(id).await
     }
 
-    async fn turn_is_open(&self, id: AgentSessionId) -> Result<bool> {
-        self.repo.turn_is_open(id).await
+    async fn has_unfinished_turn(&self, id: AgentSessionId) -> Result<bool> {
+        self.repo.has_unfinished_turn(id).await
     }
 
     async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {

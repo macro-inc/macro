@@ -87,15 +87,19 @@ and ACP `session/list`, and `AgentHarnessService::reattach_live_sessions` runs
 `HarnessCommand::Reattach` for the listed sessions bound to that harness,
 restoring each (`session/load` or `session/resume`) without a prompt, then
 dispatching whatever its durable queue still holds when no turn is running;
-attached, archived and managed sessions are skipped. Only sessions with a command
-in flight, a durable queue, or `modified_at` within the last hour are restored at
-dial time; idle ones bind on their next prompt or delivery, so a runtime listing
-hundreds of sessions cannot stampede a replica. At most `REATTACH_CONCURRENCY`
-attaches run at once, and one that fails is retried with jittered backoff while
-the runtime stays connected. An attach returns once the actor starts; its
-`session/load` or `session/resume` finishes on the actor. The `agent.runtime.reattach` span counts
-eager, lazy, skipped and failed sessions. macrod's herdr-acp lists native
-sessions whose Herdr agent still runs.
+attached, archived and managed sessions are skipped. A dial restores only sessions
+with a command in flight here, an unfinished turn (`has_unfinished_turn`: open, or
+open when the session disconnected, from `agent_session.turn_interrupted`), a
+durable queue, or activity in the last hour (`modified_at`, or the listing's
+`updatedAt`); idle ones bind on their next prompt or delivery
+(`service/reattach.rs`). Every dial on a replica shares `REATTACH_CONCURRENCY`
+permits, each held until the session's `session/load` or `session/resume`
+finishes; a harness dialing again stops its previous dial from starting more.
+Permanent errors are not retried; others are, with jittered backoff, while the
+runtime stays connected. The `agent.runtime.reattach` span counts eager, lazy,
+skipped, failed and abandoned sessions and retries. macrod's herdr-acp lists
+native sessions whose Herdr agent still runs, without `updatedAt` yet, so work
+typed into a Herdr pane reaches Macro only once its session is restored.
 
 Durable system events use the `agent_session` outbox, distinct from the user
 push notifications planned in `domain/notifications.rs`. The serialized session
