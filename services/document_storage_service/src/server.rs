@@ -619,6 +619,7 @@ async fn run_server() -> anyhow::Result<()> {
         ShaCountAdapter::new(Redis::new(redis_client.clone())),
         entity_access_management_service.clone(),
         SqsProjectSearchIndexer::new(Arc::new(sqs_client.clone()), macro_event_broker.clone()),
+        crate::outbound::filed_items::FiledItemsUnfilerAdapter::new(db.clone()),
         if cfg!(feature = "local") {
             Some(uuid::uuid!("d50676e2-0a12-4c62-bc07-4b1cb6d8e9bc"))
         } else {
@@ -1471,17 +1472,59 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     );
     let admission = macro_agent_tool_context.admission.clone();
-    // Document AI edits over HTTP share the channel agent's admission.
-    let document_editing_worker = Arc::new(
+    // The pipeline entry and CSV routes run through the same workflows the
+    // agent's pipeline tools use.
+    let pipeline_workflows = macro_agent_tool_context
+        .pipeline_tool_context
+        .service
+        .clone();
+    let crm_transfer = macro_agent_tool_context
+        .crm_transfer_tool_context
+        .service
+        .clone();
+    let editing_worker = Arc::new(
         documents_hex::outbound::editing_worker_client::ReqwestEditingWorkerClient::from_url(
             AiEditingWorkerUrl::new()?.to_string(),
         ),
     );
+    let document_ai_usage =
+        ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement);
+    // Document and canvas AI edits over HTTP share the channel agent's admission.
     let document_ai_editing = Arc::new(documents_hex::domain::ai_editing::AiEditingService::new(
-        document_editing_worker.clone(),
+        editing_worker.clone(),
         admission.clone(),
-        ai_usage::pg_recorder_with_enforcement(db.clone(), config.enable_ai_usage_enforcement),
+        document_ai_usage.clone(),
     ));
+    let canvas_routes = documents_hex::inbound::axum_router::CanvasRouteDeps {
+        worker: editing_worker.clone(),
+        admission: admission.clone(),
+        recorder: document_ai_usage.clone(),
+        // Off when PostHog isn't configured, as for the agents' Canvas tools.
+        artifacts: ai_tools::canvas_artifacts_rollout_from_env()?
+            .unwrap_or_else(|| Arc::new(|_| Box::pin(async { false }))),
+        images: Arc::new(crate::outbound::canvas_images::StaticFileCanvasImages(
+            static_file_service_client::StaticFileServiceClient::new(
+                config.internal_api_key.to_string(),
+                StaticFileServiceUrl::new()?.to_string(),
+            ),
+        )),
+    };
+    // The spreadsheet tools' engine, for SDK spreadsheet reads and edits.
+    let document_spreadsheet =
+        Arc::new(documents_hex::domain::spreadsheet::SpreadsheetService::new(
+            document_service.clone(),
+            editing_worker.clone(),
+            config.document_permission_jwt.as_ref().to_string(),
+        ));
+    let document_spreadsheet_ai_edit = Arc::new(
+        documents_hex::domain::spreadsheet::SpreadsheetAiEditService::new(
+            document_service.clone(),
+            editing_worker.clone(),
+            config.document_permission_jwt.as_ref().to_string(),
+            admission.clone(),
+            document_ai_usage,
+        ),
+    );
     // The file-document routes read and write what the matching AI tools do.
     let document_files = Arc::new(
         documents_hex::outbound::s3_document_files::S3DocumentFiles::new(
@@ -1493,7 +1536,7 @@ async fn run_server() -> anyhow::Result<()> {
     let word_documents = Arc::new(
         documents_hex::domain::word_document::WordDocumentService::new(
             document_service.clone(),
-            document_editing_worker,
+            editing_worker.clone(),
             sync_service_client.clone(),
             document_files.clone(),
             config.document_permission_jwt.as_ref().to_string(),
@@ -1696,13 +1739,16 @@ async fn run_server() -> anyhow::Result<()> {
     // Individual initiative and agent-session reads preserve read-after-write
     // consistency when a newly created entity opens immediately, as does
     // realtime patch hydration, which runs right after the write it announces.
-    // Lists retain the replica reader. Reuse Soup hydration so detail and
+    // Ordinary lists retain the replica reader. Reuse Soup hydration so detail and
     // mutation metadata include viewer history.
     let primary_entity_soup = Arc::new(
         SoupImpl::new(
             PgSoupRepo::new(readonly_pool::ReadOnlyPool(db.clone())),
             frecency_service.clone(),
-            ReadonlyEmailPreviewAdapter(email_service.clone()),
+            service::email_previews::ConsistentEmailPreviewReader::new(
+                ReadonlyEmailPreviewAdapter(email_service.clone()),
+                ReadonlyEmailPreviewAdapter(email_service.clone()),
+            ),
             ChannelListServiceImpl::new(
                 PgChannelsRepo::new(db.clone()),
                 PgChannelsRepo::new(db.clone()),
@@ -1735,15 +1781,17 @@ async fn run_server() -> anyhow::Result<()> {
 
     let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
 
-    // Keep the replica-backed Soup reader alongside the primary-backed email
-    // writer in SoupRouterState. REST and GraphQL lists share this reader;
-    // only email mutations and their reply loader use the writer service, so
-    // normal list traffic never switches to the primary.
+    // REST and GraphQL lists share this reader. CRM email eligibility must
+    // observe committed withdrawals/exclusions immediately; only that preview
+    // leg reads the primary. Ordinary inbox lists keep using the replica.
     let soup_service = Arc::new(
         SoupImpl::new(
             PgSoupRepo::new(readonly_pool::ReadOnlyPool(readonly_db.clone())),
             frecency_service,
-            readonly_email_service.clone(),
+            service::email_previews::ConsistentEmailPreviewReader::new(
+                ReadonlyEmailPreviewAdapter(email_service.clone()),
+                readonly_email_service.clone(),
+            ),
             ChannelListServiceImpl::new(
                 PgChannelsRepo::new(readonly_db.clone()),
                 PgChannelsRepo::new(readonly_db.clone()),
@@ -2376,6 +2424,15 @@ async fn run_server() -> anyhow::Result<()> {
             entity_access_service.clone(),
             authorization_state.clone(),
         ),
+        initiative_activity_state:
+            initiative::inbound::axum_router::InitiativeActivityRouterState::new(
+                Arc::new(initiative::domain::history::InitiativeHistory::new(
+                    activity::outbound::pg_activity_repo::PgActivityRepo::new(readonly_db.clone()),
+                    entity_access_service.clone(),
+                )),
+                entity_access_service.clone(),
+                authorization_state.clone(),
+            ),
         sql_state: databases_sql::inbound::axum_router::SqlRouterState::new(
             sql_service,
             authorization_state.clone(),
@@ -2474,6 +2531,11 @@ async fn run_server() -> anyhow::Result<()> {
             lexical_client: lexical_client.clone(),
             creator: document_creator,
             ai_editing: document_ai_editing,
+            editing_worker,
+            messages: message_service.clone(),
+            canvas: canvas_routes,
+            spreadsheet: document_spreadsheet,
+            spreadsheet_ai_edit: document_spreadsheet_ai_edit,
             presentations: Arc::new(
                 documents_hex::domain::presentation::PresentationService::new(
                     document_files.clone(),
@@ -2523,6 +2585,11 @@ async fn run_server() -> anyhow::Result<()> {
         pipeline_state: crm::inbound::pipelines::PipelineRouterState {
             service: pipeline_service,
             access: entity_access_service.clone(),
+            authorization: authorization_state.clone(),
+        },
+        pipeline_workflow_state: crm::inbound::pipeline_workflows::PipelineWorkflowRouterState {
+            workflows: pipeline_workflows,
+            transfer: crm_transfer,
             authorization: authorization_state.clone(),
         },
         crm_state: crm::inbound::axum_router::CrmRouterState {
