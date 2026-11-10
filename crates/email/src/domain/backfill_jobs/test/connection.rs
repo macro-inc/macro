@@ -100,6 +100,29 @@ async fn initial_connection_failure_state_write_is_reported_separately() {
 }
 
 #[tokio::test]
+async fn initial_connection_distinguishes_a_failed_conflict_lookup_and_stops_publication() {
+    let (svc, data) = service(Data {
+        force_conflict: true,
+        fail_active_on_call: Some(2),
+        ..Data::default()
+    });
+    let effects = Fake(data.clone());
+    assert!(matches!(
+        svc.start_connected(&inbox(INBOX, true, UserProvider::Gmail), &effects, &effects)
+            .await,
+        Err(InitialBackfillError::ConflictLookup(FakeError))
+    ));
+    assert_eq!(
+        data.lock().unwrap().calls,
+        [
+            Call::Active(INBOX),
+            Call::Insert(INBOX, "fusion-owner".into(), None, false),
+            Call::Active(INBOX),
+        ]
+    );
+}
+
+#[tokio::test]
 async fn initial_connection_stops_before_publication_on_lookup_insert_or_conflict_failure() {
     for failure in [Some(Step::Active), Some(Step::Insert), None] {
         let (svc, data) = service(Data {

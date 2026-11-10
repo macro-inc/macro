@@ -30,6 +30,7 @@ pub(super) struct Data {
     pub by_grant: Option<Link>,
     pub by_identity: Option<Link>,
     pub child_fusion: Option<Uuid>,
+    pub login_email: String,
     pub recognizes: bool,
     pub fail: Option<&'static str>,
     pub unrecorded: bool,
@@ -54,6 +55,7 @@ impl Default for Data {
             by_grant: None,
             by_identity: None,
             child_fusion: Some(Uuid::from_u128(5)),
+            login_email: "actor@example.com".into(),
             recognizes: false,
             fail: None,
             unrecorded: false,
@@ -309,7 +311,7 @@ impl ConnectionIdentity for Fake {
     fn login_email(&self, _: &str) -> Result<String, ConnectionError> {
         self.record("login_email")
             .map_err(|_| ConnectionError::LoginEmailUnavailable)?;
-        Ok("actor@example.com".into())
+        Ok(self.0.lock().unwrap().login_email.clone())
     }
 }
 impl ConnectionFailureObserver for Fake {

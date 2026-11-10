@@ -2,6 +2,8 @@ use super::*;
 use crate::outbound::inbox_connection::grants::has_unrecorded_google_grant;
 use email::domain::mailbox::connection::{CompletedGoogleGrant, GoogleConnectionAttempt};
 
+mod ports;
+
 fn classify_provider_init_error(error: EmailApiError) -> ConnectionError {
     email::domain::mailbox::connection::classify_provider_init_error(error)
 }

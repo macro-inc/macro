@@ -50,6 +50,7 @@ struct Data {
     calls: Vec<Call>,
     failures: Vec<(Step, Option<Uuid>)>,
     force_conflict: bool,
+    fail_active_on_call: Option<usize>,
     complete_before_queue_failure: bool,
 }
 
@@ -103,6 +104,14 @@ impl BackfillJobRepository for Fake {
     async fn active_job(&self, link: Uuid) -> Result<Option<BackfillJob>, FakeError> {
         let mut data = self.0.lock().unwrap();
         data.record(Step::Active, link, Call::Active(link))?;
+        let active_calls = data
+            .calls
+            .iter()
+            .filter(|call| matches!(call, Call::Active(_)))
+            .count();
+        if data.fail_active_on_call == Some(active_calls) {
+            return Err(FakeError);
+        }
         Ok(data
             .jobs
             .iter()

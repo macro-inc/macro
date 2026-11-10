@@ -108,6 +108,40 @@ async fn delegation_commits_before_grant_and_never_starts_a_second_backfill() {
 }
 
 #[tokio::test]
+async fn child_lookup_failures_preserve_context_and_stop_before_delegation_or_bootstrap() {
+    for (failure, context) in [
+        ("by_email", "Failed to look up child link before delegation"),
+        (
+            "child_fusion",
+            "Failed to look up child's fusion id for self-link bootstrap",
+        ),
+    ] {
+        let (service, fake) = service(Data {
+            owner: Some("macro|child@example.com".into()),
+            fail: Some(failure),
+            ..Data::default()
+        });
+        let error = service.connect(request(true)).await.unwrap_err();
+        let debug = format!("{error:?}");
+        let ConnectionError::DatabaseError(source) = error else {
+            panic!("expected database error, got {debug}");
+        };
+        assert_eq!(
+            source.chain().map(ToString::to_string).collect::<Vec<_>>(),
+            [context, "scripted failure"]
+        );
+        assert!(debug.contains(context), "{debug}");
+        assert!(debug.contains("scripted failure"), "{debug}");
+        let mut expected = vec!["recognizes", "attempt", "account", "by_email"];
+        if failure == "child_fusion" {
+            expected.push("child_fusion");
+        }
+        expected.extend(["failure", "cleanup"]);
+        assert_eq!(fake.0.lock().unwrap().calls, expected);
+    }
+}
+
+#[tokio::test]
 async fn bootstrap_uses_the_child_credential_owner_and_starts_one_backfill() {
     let (service, fake) = service(Data {
         owner: Some("macro|child@example.com".into()),
@@ -259,6 +293,96 @@ async fn relocation_retries_only_the_owner_write_and_keeps_terminal_failure_best
     }
 }
 
+#[tokio::test(start_paused = true)]
+async fn credential_owner_retry_backoff_totals_600ms_before_third_attempt_succeeds() {
+    assert_credential_owner_retry_backoff(2, false).await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn credential_owner_retry_exhaustion_has_no_sleep_after_the_third_failure() {
+    assert_credential_owner_retry_backoff(3, true).await;
+}
+
+async fn assert_credential_owner_retry_backoff(failures: usize, terminal_failure: bool) {
+    let (service, fake) = service(Data {
+        by_email: Some(link("macro|owner@example.com")),
+        update_failures: failures,
+        ..Data::default()
+    });
+    let mut request = request(true);
+    request.force_share = true;
+    let logs = Logs(Arc::new(Mutex::new(Vec::new())));
+    let started = tokio::time::Instant::now();
+    assert_eq!(
+        service
+            .connect(request)
+            .with_subscriber(tracing_subscriber::registry().with(logs.clone()))
+            .await
+            .unwrap(),
+        ConnectionOutcome {
+            link_id: LINK,
+            backfill_job_id: None,
+        }
+    );
+    assert_eq!(started.elapsed(), std::time::Duration::from_millis(600));
+    assert_eq!(
+        fake.0.lock().unwrap().calls,
+        [
+            "recognizes",
+            "attempt",
+            "account",
+            "by_grant",
+            "by_email",
+            "organization",
+            "promote",
+            "relocate",
+            "update_owner",
+            "update_owner",
+            "update_owner",
+            "apply:false:",
+            "consume",
+            "clear_reauth",
+        ]
+    );
+    let mut expected = [1, 2]
+        .into_iter()
+        .map(|attempt| Log {
+            level: "WARN".into(),
+            fields: BTreeMap::from([
+                (
+                    "message".into(),
+                    "Retrying link fusionauth_user_id update after grant relocation".into(),
+                ),
+                ("error".into(), "FakeError(\"update\")".into()),
+                ("attempt".into(), attempt.to_string()),
+            ]),
+        })
+        .collect::<Vec<_>>();
+    if terminal_failure {
+        expected.push(Log {
+            level: "ERROR".into(),
+            fields: BTreeMap::from([
+                (
+                    "message".into(),
+                    "Failed to re-home link fusionauth_user_id after grant relocation; inbox token fetches will fail until the link is re-homed to the shared user".into(),
+                ),
+                ("error".into(), "FakeError(\"update\")".into()),
+                ("link_id".into(), LINK.to_string()),
+                ("shared_fusionauth_user_id".into(), "shared-owner".into()),
+            ]),
+        });
+    }
+    let actual = logs
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|log| matches!(log.level.as_str(), "WARN" | "ERROR"))
+        .cloned()
+        .collect::<Vec<_>>();
+    assert_eq!(actual, expected);
+}
+
 #[tokio::test]
 async fn an_existing_grant_applies_permissions_without_registering_a_watch() {
     let mut data = Data {
@@ -269,7 +393,18 @@ async fn an_existing_grant_applies_permissions_without_registering_a_watch() {
         .map(str::to_owned)
         .to_vec();
     let (service, fake) = service(data);
-    assert!(service.connect(request(true)).await.is_ok());
+    let logs = Logs(Arc::new(Mutex::new(Vec::new())));
+    assert_eq!(
+        service
+            .connect(request(true))
+            .with_subscriber(tracing_subscriber::registry().with(logs.clone()))
+            .await
+            .unwrap(),
+        ConnectionOutcome {
+            link_id: LINK,
+            backfill_job_id: None,
+        }
+    );
     assert_eq!(
         fake.0.lock().unwrap().calls,
         [
@@ -281,6 +416,30 @@ async fn an_existing_grant_applies_permissions_without_registering_a_watch() {
             "consume",
             "clear_reauth"
         ]
+    );
+    let logs = logs.0.lock().unwrap();
+    let upgrade = logs
+        .iter()
+        .find(|log| {
+            log.fields.get("message").map(String::as_str)
+                == Some("Applied Google permission upgrade to existing inbox")
+        })
+        .expect("permission upgrade is logged");
+    assert_eq!(
+        upgrade,
+        &Log {
+            level: "INFO".into(),
+            fields: BTreeMap::from([
+                (
+                    "message".into(),
+                    "Applied Google permission upgrade to existing inbox".into()
+                ),
+                ("link_id".into(), LINK.to_string()),
+                ("grant_version".into(), "1".into()),
+                ("changed".into(), "true".into()),
+                ("calendar_jobs".into(), "0".into()),
+            ]),
+        }
     );
 }
 
@@ -459,5 +618,52 @@ async fn unavailable_login_email_is_a_typed_refusal_before_provider_calls() {
     assert_eq!(
         fake.0.lock().unwrap().calls,
         ["by_identity", "login_email", "failure"]
+    );
+}
+
+#[tokio::test]
+async fn invalid_login_email_stops_before_watch_registration_and_persistence() {
+    let (service, fake) = service(Data {
+        login_email: "invalid-email".into(),
+        ..Data::default()
+    });
+    assert!(matches!(
+        service.connect(request(false)).await,
+        Err(ConnectionError::Parse(_))
+    ));
+    assert_eq!(
+        fake.0.lock().unwrap().calls,
+        ["by_identity", "login_email", "failure"]
+    );
+}
+
+#[tokio::test]
+async fn first_login_discovers_permissions_before_starting_backfill_without_consuming_an_attempt() {
+    let gmail_scope = "https://www.googleapis.com/auth/gmail.modify";
+    let (service, fake) = service(Data {
+        unrecorded: true,
+        scopes: vec![gmail_scope.into()],
+        ..Data::default()
+    });
+    assert_eq!(
+        service.connect(request(false)).await.unwrap(),
+        ConnectionOutcome {
+            link_id: LINK,
+            backfill_job_id: Some(JOB),
+        }
+    );
+    assert_eq!(
+        fake.0.lock().unwrap().calls,
+        [
+            "by_identity",
+            "login_email",
+            "watch",
+            "create",
+            "unrecorded",
+            "token",
+            "scopes",
+            &format!("apply:false:{gmail_scope}"),
+            "backfill",
+        ]
     );
 }
