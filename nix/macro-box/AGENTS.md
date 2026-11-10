@@ -18,7 +18,11 @@ and a Docker image (the dev-only DockerFleet).
   every deb under Ubuntu's `fakeroot`, which records the ownership one mapped
   uid cannot hold. The Nix closure of `tools` (macrod, claude-code, chromium,
   Node 24, herdr, chrome-devtools-mcp) is copied into the guest's `/nix/store`
-  and linked from `/usr/local/bin`. `files/` supplies scripts and documentation;
+  and linked from `/usr/local/bin`. `_claude-agent-acp.nix` builds the Claude
+  Code ACP adapter from `claude-agent-acp/package-lock.json` (without the SDK's
+  per-platform Claude binaries); `rootfs.sh` links it where macrod installs
+  adapters, `~macro/.macrod/adapters/<package>@<version>`, so macrod never runs
+  npm. `files/` supplies scripts and documentation;
   `_config.nix` renders configuration from attrsets into the same rootfs overlay.
 - `_build.nix` packs `rootfs.tar` into `disk.qcow2` (GPT: ESP with shim →
   signed GRUB → `/boot/vmlinuz`, ext4 root via `mkfs.ext4 -d tar`) plus
@@ -31,6 +35,7 @@ and a Docker image (the dev-only DockerFleet).
 - `nix build .#macro-box-docker` → `docker load < result` → `macro-box:latest`.
 - `nix build .#macro-box-rootfs` → the two tarballs.
 - `nix build .#macro-box-claude-code` → the pinned model-compatible Claude Code.
+- `nix build .#macro-box-claude-agent-acp` → the ACP adapter npm prefix.
 - `nix build .#macro-box-config` → generated rootfs config, Incus metadata, GRUB,
   and Docker enrollment config without building the Rust/tool closure.
 
@@ -77,6 +82,10 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
 
 ## Checks
 
+- `nix build .#macro-box-claude-agent-acp` (and `nix flake check`, which runs
+  ACP `initialize` against it). Evaluation fails when its version differs
+  from macrod's pin in `crates/coding_agent_worker/src/tui/agent_catalog/claude_code.rs`;
+  run `claude-agent-acp/lock.sh` after changing the pin.
 - `nix build .#macro-box-claude-code`: keeps nixpkgs' binary patching, wrapper
   and version check. `_claude-code.nix` pins the minimum version required by
   the models computers default to. Regenerate its hash from that version's
@@ -86,7 +95,7 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
   against the previous generation (parse INI/JSON/YAML when ordering changes).
 - Inside a running guest as root, run `bash tests/enrollment-agent-detection.sh`
   (copy it from this directory); it discovers Claude using the enrollment unit's
-  environment in a fresh system service.
+  environment in a fresh system service, with no adapter left to install.
 - After `packages.txt` changes: `nix/macro-box/lock.sh`, then rebuild both outputs.
 - `nix build .#macro-box-incus .#macro-box-docker`, then the Docker smoke
   test above without the enrollment mount: `macrod-enroll` must fail with the
