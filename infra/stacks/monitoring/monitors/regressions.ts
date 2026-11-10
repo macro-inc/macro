@@ -33,7 +33,7 @@ const dashboard = new datadog.Dashboard('regression-alerts', {
       thresholdGraph({
         title: 'Internal span errors abnormally high',
         query:
-          "anomalies(sum:trace.Internal.errors{env:prod AND NOT service:web-app} by {service}.as_count(), 'agile', 3)",
+          "anomalies(sum:trace.Internal.errors{env:prod AND NOT service:web-app} by {service}.as_count(), 'basic', 3)",
       }),
       thresholdGraph({
         title: 'Queue consumer errors abnormally high',
@@ -79,13 +79,22 @@ prodMonitor('apm-server-error-anomaly', {
 
 // Excludes web-app: browser spans fail on users' networks and devices, so its
 // band swings with traffic. Browser errors have their own RUM monitors.
+//
+// Background workers fail steadily (expired tokens, closed sessions, provider
+// rate limits), and 'agile' over 30 minutes flagged ordinary swings in that
+// about 115 times a week. 'basic' over 45 minutes would have fired a quarter
+// as often in the 7 days to 2026-11-10 and still caught convert-service's
+// disk-full failures and the cloud-storage-service 5xx incident of 2026-11-09.
 prodMonitor('apm-internal-error-anomaly', {
   title: 'Internal span errors abnormally high',
   service: 'apm',
   query:
-    "avg(last_4h):anomalies(sum:trace.Internal.errors{env:prod AND NOT service:web-app} by {service}.as_count(), 'agile', 3, direction='above', interval=300, alert_window='last_30m', count_default_zero='true') >= 1",
+    "avg(last_4h):anomalies(sum:trace.Internal.errors{env:prod AND NOT service:web-app} by {service}.as_count(), 'basic', 3, direction='above', interval=300, alert_window='last_45m', count_default_zero='true') >= 1",
   monitorThresholds: ANOMALY_THRESHOLDS,
-  monitorThresholdWindows: ANOMALY_WINDOWS,
+  monitorThresholdWindows: {
+    triggerWindow: 'last_45m',
+    recoveryWindow: 'last_15m',
+  },
   pages: false,
   description:
     '{{service.name}} is recording more failed internal spans (background jobs, workers) than its usual band. Check the latest deploy of that service first.',

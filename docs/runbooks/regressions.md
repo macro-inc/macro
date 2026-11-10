@@ -2,8 +2,10 @@
 
 Runbook for the per-service anomaly monitors in
 [`monitors/regressions.ts`](../../infra/stacks/monitoring/monitors/regressions.ts). Each compares a
-service's errors or latency with its own usual band for that time of day, so it
-fires on a change, not on a fixed count.
+service's errors or latency with its own usual band, so it fires on a change,
+not on a fixed count. The band follows the time of day, except for internal
+span errors, which compare with the last few hours and must stay above the band
+for 45 minutes.
 
 ## Errors
 

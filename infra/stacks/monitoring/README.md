@@ -120,7 +120,9 @@ The gate is that preview:
 - **Already-deployed monitors update their `message`** (GoAlert handles instead
   of the channel), and the GraphQL soup volume, websocket upgrade, gateway
   connections and task count monitors their `query` and thresholds (volume
-  and websocket upgrades also gain recovery thresholds).
+  and websocket upgrades also gain recovery thresholds). The internal span
+  errors anomaly changes its algorithm (`agile` → `basic`) and alert window
+  (30 → 45 minutes).
 - **104 resources to create**: 75 monitors (32 prod threshold and anomaly, 19 GraphQL soup, 9
   notification retention, 10 WhatsApp session, 1 native call push, 2 harness
   presence, the ALB request floor and its composite), 2 webhooks,
