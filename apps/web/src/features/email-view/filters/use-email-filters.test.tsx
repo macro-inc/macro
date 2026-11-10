@@ -97,14 +97,15 @@ describe('useEmailFilters', () => {
     expect(filters.activeCount()).toBe(0);
   });
 
-  it('adds typed people and offers Match from once someone is chosen', () => {
+  it('adds typed people and offers Match from under them once someone is chosen', () => {
     const { filters, state } = mountFilters('all');
-    const people = filters.groups().find((group) => group.id === 'people');
-    const typed = people?.createOption?.('@Vendor.example');
+    const people = () =>
+      filters.groups().find((group) => group.id === 'people');
+    const typed = people()?.createOption?.('@Vendor.example');
 
-    expect(people?.createOption?.('not a domain')).toBeUndefined();
+    expect(people()?.createOption?.('not a domain')).toBeUndefined();
     expect(typed?.id).toBe('domain:vendor.example');
-    expect(groupIds(filters)).not.toContain('matchFrom');
+    expect(people()?.footer).toBeUndefined();
 
     filters.setGroupSelection('people', ['person:ada@example.com', typed!.id]);
 
@@ -112,10 +113,22 @@ describe('useEmailFilters', () => {
       { type: 'address', email: 'ada@example.com' },
       { type: 'domain', domain: 'vendor.example' },
     ]);
-    expect(groupIds(filters)).toContain('matchFrom');
+    const footer = people()?.footer as HTMLElement;
+    // Solid delegates clicks from the document.
+    document.body.append(footer);
+    const toggle = (label: string) =>
+      [...footer.querySelectorAll('button')]
+        .find((button) => button.textContent === label)
+        ?.click();
 
-    filters.setGroupSelection('matchFrom', []);
-    expect(state.conditions?.participantFields).toEqual(['from', 'to', 'cc']);
+    toggle('To');
+    expect(state.conditions?.participantFields).toEqual(['from', 'cc']);
+    toggle('From');
+    toggle('Cc');
+    // Looking nowhere matches nothing, so the last field stays on.
+    expect(state.conditions?.participantFields).toEqual(['cc']);
+    expect(people()?.footer).toBe(footer);
+    footer.remove();
   });
 
   it('keeps Starred and calendar invites in one Has list', () => {

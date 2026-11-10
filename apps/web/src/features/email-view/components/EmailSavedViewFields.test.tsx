@@ -62,7 +62,7 @@ function renderFields(initial = EMPTY_EMAIL_SAVED_VIEW_FILTERS) {
   ));
   return {
     input: screen.getByRole<HTMLInputElement>('combobox', {
-      name: 'People and companies',
+      name: 'People',
     }),
     participants: () => filters().participants,
     tags: () => filters().tags,

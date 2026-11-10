@@ -135,6 +135,44 @@ const keepEnterInField = (event: KeyboardEvent) => {
   if (event.key === 'Enter') event.preventDefault();
 };
 
+/** Where to look for the chosen people: From, To, Cc and Bcc toggles. */
+export function EmailMatchFromField(props: {
+  fields: readonly EmailParticipantField[];
+  onChange: (fields: EmailParticipantField[]) => void;
+  size?: 'xs' | 'sm';
+}) {
+  const labelId = createUniqueId();
+  return (
+    <div class="flex flex-wrap items-center gap-1.5">
+      <span id={labelId} class="mr-1 text-xs text-ink-muted">
+        {t('emailViews.matchFrom')}
+      </span>
+      <div
+        role="group"
+        aria-labelledby={labelId}
+        class="flex flex-wrap gap-1.5"
+      >
+        <For each={PARTICIPANT_FIELDS}>
+          {(field) => (
+            <Button
+              type="button"
+              variant="secondary"
+              size={props.size ?? 'sm'}
+              aria-pressed={props.fields.includes(field)}
+              onClick={() => {
+                const next = toggleParticipantField(props.fields, field);
+                if (next) props.onChange(next);
+              }}
+            >
+              {participantFieldLabel(field)}
+            </Button>
+          )}
+        </For>
+      </div>
+    </div>
+  );
+}
+
 /** People and companies in one chip picker, with where to look for them. */
 export function EmailParticipantsField(props: {
   participants: readonly EmailParticipant[];
@@ -143,7 +181,6 @@ export function EmailParticipantsField(props: {
   onFieldsChange: (fields: EmailParticipantField[]) => void;
   suggestions: Accessor<EmailParticipantSuggestion[]>;
 }) {
-  const matchFromId = createUniqueId();
   // Other edits rebuild the filters; keep the chips unless the people change.
   const values = createMemo(
     () => props.participants.map(participantValue),
@@ -170,36 +207,10 @@ export function EmailParticipantsField(props: {
         removeLabel={(entry) => t('emailViews.removeEntry', { entry })}
         portalScope="local"
       />
-      <div class="flex flex-wrap items-center gap-1.5">
-        <span id={matchFromId} class="mr-1 text-xs text-ink-muted">
-          {t('emailViews.matchFrom')}
-        </span>
-        <div
-          role="group"
-          aria-labelledby={matchFromId}
-          class="flex flex-wrap gap-1.5"
-        >
-          <For each={PARTICIPANT_FIELDS}>
-            {(field) => (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                aria-pressed={props.participantFields.includes(field)}
-                onClick={() => {
-                  const next = toggleParticipantField(
-                    props.participantFields,
-                    field
-                  );
-                  if (next) props.onFieldsChange(next);
-                }}
-              >
-                {participantFieldLabel(field)}
-              </Button>
-            )}
-          </For>
-        </div>
-      </div>
+      <EmailMatchFromField
+        fields={props.participantFields}
+        onChange={props.onFieldsChange}
+      />
     </>
   );
 }

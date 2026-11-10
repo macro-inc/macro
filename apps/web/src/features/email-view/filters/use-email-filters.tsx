@@ -11,9 +11,8 @@ import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   describeParticipant,
-  PARTICIPANT_FIELDS,
+  EmailMatchFromField,
   parseParticipant,
-  participantFieldLabel,
   participantOption,
   participantsOf,
   participantValue,
@@ -116,18 +115,6 @@ const emailFilterField = (groupId: EmailFilterGroupId): EmailFilterField =>
       conditionField(
         (conditions) => conditions.participants.map(participantValue),
         (ids) => ({ participants: participantsOf(ids) })
-      )
-    )
-    .with('matchFrom', () =>
-      conditionField(
-        (conditions) => conditions.participantFields,
-        (ids) => {
-          const fields = PARTICIPANT_FIELDS.filter((field) =>
-            ids.includes(field)
-          );
-          // Looking nowhere matches nothing, so the last field stays on.
-          return fields.length > 0 ? { participantFields: fields } : {};
-        }
       )
     )
     .with('importance', () =>
@@ -309,6 +296,20 @@ export function useEmailFilters() {
   const people = () =>
     state.conditions?.participants.map(participantValue) ?? [];
   const peopleOptions = useParticipantOptions(people);
+  // Built once, so rebuilding the groups on a toggle keeps the same row.
+  const matchFrom = (
+    <div class="border-t border-edge-muted px-3 py-2">
+      <EmailMatchFromField
+        size="xs"
+        fields={state.conditions?.participantFields ?? []}
+        onChange={(participantFields) => {
+          const conditions = state.conditions;
+          if (conditions)
+            setFilters({ conditions: { ...conditions, participantFields } });
+        }}
+      />
+    </div>
+  );
   const tags = () => (tagGroup().options.length > 0 ? [tagGroup()] : []);
   const inboxes = (): EmailFilterGroup[] =>
     inboxOptions().length > 1 || state.aliasFilter
@@ -339,19 +340,9 @@ export function useEmailFilters() {
             }
           : undefined;
       },
+      // Where to look only means something once someone is chosen.
+      footer: people().length > 0 ? matchFrom : undefined,
     },
-    ...(people().length > 0
-      ? [
-          {
-            id: 'matchFrom' as const,
-            label: t('emailViews.matchFrom'),
-            options: PARTICIPANT_FIELDS.map((field) => ({
-              id: field,
-              label: participantFieldLabel(field),
-            })),
-          },
-        ]
-      : []),
     ...tags(),
     {
       id: 'importance',

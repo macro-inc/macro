@@ -5,7 +5,6 @@ export type { EmailFocusSort, EmailTab };
 
 export type EmailFilterGroupId =
   | 'people'
-  | 'matchFrom'
   | 'importance'
   | 'read'
   | 'done'

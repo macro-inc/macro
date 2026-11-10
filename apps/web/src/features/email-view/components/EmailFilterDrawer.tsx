@@ -148,12 +148,8 @@ export function EmailFilterDrawer() {
                     </MobileFilterDrawer.Section>
                   }
                 >
-                  {/* Inboxes have their own section above; Match from sits under People. */}
-                  <Match
-                    when={group.id === 'inboxes' || group.id === 'matchFrom'}
-                  >
-                    {null}
-                  </Match>
+                  {/* Inboxes have their own section above. */}
+                  <Match when={group.id === 'inboxes'}>{null}</Match>
                   <Match when={group.id === 'people' && state.conditions}>
                     {(conditions) => (
                       <MobileFilterDrawer.Section

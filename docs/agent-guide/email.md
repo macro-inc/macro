@@ -348,9 +348,9 @@ on opening, and is omitted when no tags exist. **f** opens the filter menu.
 
 On Signal, Noise, All, Archived, Favorites and Calendar, Filters holds every
 condition a saved view can except Subject contains, which only the Save view
-dialog sets: People and companies (search, or type an address, domain,
-`@domain` or website and pick `Add “…”`), Match from (once someone is chosen;
-the last field stays on), Tags, Importance, Read status, Done, Latest activity,
+dialog sets: People (search, or type an address, domain, `@domain` or website
+and pick `Add “…”`; once someone is chosen, Match from toggles From/To/Cc/Bcc at
+the bottom of the submenu, and the last field stays on), Tags, Importance, Read status, Done, Latest activity,
 Inboxes (with two or more linked; several can be chosen, in step with the
 account picker), Has and Attachments. Each tab's own restrictions show as
 selected (Signal: Importance Signal and Done Not done; Favorites: Has Starred;
@@ -1553,7 +1553,7 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
 
 - **Create.** The sidebar **Saved views** `+` (or the empty state's Create view)
   opens the builder: name, a hint that agents can create saved views too,
-  People and companies (one chip picker listing
+  People (one chip picker listing
   companies first, CRM companies by name and then your contacts' domains by
   how many contacts use them, then people, your own address included; typing
   `example.com` offers the domain above the people at it. A typed address adds

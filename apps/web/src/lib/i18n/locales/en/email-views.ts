@@ -29,7 +29,7 @@ export default {
   // Builder
   agentHint:
     'Agents can also create Saved Views. Just tell the agent what you want, and they will set it up for you.',
-  people: 'People and companies',
+  people: 'People',
   peoplePlaceholder: 'Add people, companies, or domains',
   addEntry: 'Add “{{entry}}”',
   removeEntry: 'Remove {{entry}}',
