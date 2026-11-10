@@ -339,6 +339,20 @@ pub struct Agent {
     /// session, a chat agent replies in the thread. Chosen in the agent's
     /// settings; the persona's word, not the runtime's.
     pub is_coding: bool,
+    /// Why the agent cannot run right now, or `None` while it can.
+    #[serde(default)]
+    pub stopped_reason: Option<AgentStoppedReason>,
+}
+
+/// Why an agent cannot run right now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum AgentStoppedReason {
+    /// A resident (a bound non-coding agent) whose owner no longer has User
+    /// access to its runtime. Its binding stays, so access given back
+    /// restores it.
+    NoRuntimeAccess,
 }
 
 /// Request to create a persisted AI agent.

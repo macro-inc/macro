@@ -1332,6 +1332,13 @@ export type NotifEvent = {
      */
     content: RoutineRunFinishedMetadata;
     tag: 'routine_run_finished';
+} | {
+    /**
+     * A runtime's owner removed the user's access to it, and agents of
+     * theirs living there stopped.
+     */
+    content: RuntimeAccessRemovedMetadata;
+    tag: 'runtime_access_removed';
 };
 
 /**
@@ -1556,6 +1563,36 @@ export type RoutineRunFinishedMetadata = {
  * How a routine run ended, as its notification reports it.
  */
 export type RoutineRunOutcome = 'succeeded' | 'failed';
+
+/**
+ * A runtime's owner removed the recipient's access to it, or lowered it to
+ * Read, and agents the recipient keeps living there stopped.
+ */
+export type RuntimeAccessRemovedMetadata = {
+    /**
+     * The recipient's agents living on the runtime, which stopped. Never
+     * empty: without one there is nothing to tell them.
+     */
+    agents: Array<StoppedAgent>;
+    /**
+     * The runtime's name.
+     */
+    runtimeName: string;
+};
+
+/**
+ * One of the recipient's agents that stopped with their runtime access.
+ */
+export type StoppedAgent = {
+    /**
+     * The agent's bot id.
+     */
+    botId: string;
+    /**
+     * The agent's display name.
+     */
+    name: string;
+};
 
 /**
  * Metadata for when a user is assigned to a task

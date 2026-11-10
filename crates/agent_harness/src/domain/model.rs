@@ -562,8 +562,10 @@ pub struct DeliverAction {
 }
 
 /// What decides whether a turn may run on an agent's registered runtime.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeAccessFacts {
+    /// The runtime's name, for saying why a turn was refused.
+    pub runtime_name: String,
     /// The agent lives on the runtime, rather than being a coding agent someone
     /// directs there turn by turn.
     pub resident: bool,
@@ -578,7 +580,7 @@ impl RuntimeAccessFacts {
     /// for as long as its owner keeps access; a coding agent runs someone's
     /// instructions, so that person needs access themselves.
     #[must_use]
-    pub const fn may_run(self) -> bool {
+    pub const fn may_run(&self) -> bool {
         match (self.resident, self.actor_may_use) {
             (false, Some(actor_may_use)) => actor_may_use,
             (true, _) | (false, None) => self.agent_owner_may_use,
@@ -841,6 +843,9 @@ pub enum ReplyOutcome {
     /// The question was answered or withdrawn, or every held tool call was
     /// settled, and the turn is running again.
     Resumed,
+    /// The prompt never ran, and the harness says why: the agent may not run
+    /// on its runtime.
+    Refused(String),
 }
 
 /// A tool call held for the session owner's approval, as far as the thread

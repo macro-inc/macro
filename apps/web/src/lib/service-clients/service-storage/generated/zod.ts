@@ -391,6 +391,14 @@ export const listAgentsResponseItem = zod
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
+    stopped_reason: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['no_runtime_access'])
+          .describe('Why an agent cannot run right now.'),
+      ])
+      .optional(),
   })
   .describe('A persisted user- or team-owned AI agent.');
 export const listAgentsResponse = zod.array(listAgentsResponseItem);
@@ -692,6 +700,14 @@ export const updateAgentResponse = zod
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
+    stopped_reason: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['no_runtime_access'])
+          .describe('Why an agent cannot run right now.'),
+      ])
+      .optional(),
   })
   .describe('A persisted user- or team-owned AI agent.');
 
@@ -917,6 +933,14 @@ export const patchAgentResponse = zod
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
+    stopped_reason: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['no_runtime_access'])
+          .describe('Why an agent cannot run right now.'),
+      ])
+      .optional(),
   })
   .describe('A persisted user- or team-owned AI agent.');
 

@@ -1,8 +1,13 @@
-//! Quota admission at ingress and dispatch, and rejection of waiting commands.
-//! Session owners fund managed inference; the actor can be a collaborator.
+//! Quota and runtime-access admission at ingress and dispatch, and rejection
+//! of waiting commands. Session owners fund managed inference; the actor can be
+//! a collaborator.
 
 use super::*;
-use agent_session::domain::events::{AgentSessionLifecycleEvent, CommandRejectedMetadata};
+use crate::domain::model::RuntimeAccessFacts;
+use agent_session::domain::error::NO_RUNTIME_ACCESS_CODE;
+use agent_session::domain::events::{
+    AgentSessionLifecycleEvent, CommandFailure, CommandRejectedMetadata,
+};
 use ai_billing::AiAdmissionError;
 use ai_usage::AiFeature;
 
@@ -54,35 +59,130 @@ where
     }
 
     /// A prompt reaches a registered runtime only while it may run there.
+    /// Checked when it is accepted, and again when it dispatches: access
+    /// removed while it waited must stop it too.
     pub(super) async fn authorize_runtime(
         &self,
         session_id: AgentSessionId,
         command: &DeliverAction,
     ) -> Result<()> {
-        if !matches!(command.action, AgentAction::Prompt(_)) {
+        let Some(reason) = self
+            .runtime_refusal(session_id, &command.action, command.actor.as_ref())
+            .await?
+        else {
             return Ok(());
+        };
+        self.refuse_prompt(
+            session_id,
+            command.id,
+            command.announce.as_ref(),
+            command.actor.clone(),
+            &reason,
+        )
+        .await?;
+        Err(AgentSessionError::NoRuntimeAccess(reason).into())
+    }
+
+    /// Why a prompt may not run on the session's registered runtime, or
+    /// `None` when it may (or the session runs elsewhere).
+    pub(super) async fn runtime_refusal(
+        &self,
+        session_id: AgentSessionId,
+        action: &AgentAction,
+        actor: Option<&MacroUserIdStr<'static>>,
+    ) -> Result<Option<String>> {
+        if !matches!(action, AgentAction::Prompt(_)) {
+            return Ok(None);
         }
         let session = self.sessions.get_session(session_id).await?;
         if AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::External {
-            return Ok(());
+            return Ok(None);
         }
         let facts = self
             .runtimes
-            .access_facts(session.bot_id, command.actor.as_ref())
+            .access_facts(session.bot_id, actor)
             .await
             .map_err(|error| HarnessError::RuntimeDirectory(rootcause::report!(error).into()))?;
-        match facts {
-            Some(facts) if !facts.may_run() => {
-                tracing::warn!(
-                    agent.session.id = %session_id,
-                    bot_id = %session.bot_id,
-                    resident = facts.resident,
-                    "refused a turn: no access to the agent's runtime"
-                );
-                Err(AgentSessionError::Forbidden.into())
-            }
-            _ => Ok(()),
+        let Some(facts) = facts.filter(|facts| !facts.may_run()) else {
+            return Ok(None);
+        };
+        tracing::warn!(
+            agent.session.id = %session_id,
+            bot_id = %session.bot_id,
+            resident = facts.resident,
+            "refused a turn: no access to the agent's runtime"
+        );
+        Ok(Some(runtime_refusal_reason(&facts)))
+    }
+
+    /// Settle a prompt refused for runtime access: its conversation turn
+    /// fails, the conversation it came from is told why, and so are the
+    /// session's viewers. Telling the conversation is best effort: the
+    /// refusal stands either way.
+    pub(super) async fn refuse_prompt(
+        &self,
+        session_id: AgentSessionId,
+        action_id: AgentActionId,
+        origin: Option<&AnnounceOrigin>,
+        actor: Option<MacroUserIdStr<'static>>,
+        reason: &str,
+    ) -> Result<()> {
+        let conversation_store = self.conversation_turns.as_ref().filter(|_| {
+            origin.is_some_and(|origin| {
+                origin.reply_placement == crate::domain::model::ReplyPlacement::Timeline
+            })
+        });
+        if let Some(store) = conversation_store {
+            store.fail_queued(action_id).await?;
         }
+        if let (Some(origin), Some(triggered_by)) = (origin, actor.clone())
+            && !origin.reuse_origin_message
+        {
+            let session = self.sessions.get_session(session_id).await?;
+            let presented = self
+                .announcer
+                .present(crate::domain::model::ReplyPresentation {
+                    session_id,
+                    bot_id: session.bot_id,
+                    triggered_by,
+                    parent: origin.parent.clone(),
+                    thread_id: origin.reply_placement.thread_id(origin.thread_id),
+                    message_id: refusal_message_id(session_id, action_id),
+                    turn: agent_fold::domain::model::TurnId(0),
+                    segments: Vec::new(),
+                    link: false,
+                    pending: false,
+                    outcome: Some(ReplyOutcome::Refused(reason.to_owned())),
+                    notify: true,
+                })
+                .await;
+            if let Err(error) = presented {
+                tracing::warn!(
+                    ?error,
+                    %session_id,
+                    %action_id,
+                    "could not say in the conversation why a prompt was refused"
+                );
+            }
+        }
+        if let Some(store) = conversation_store {
+            store
+                .finalize_reply(action_id, &ReplyOutcome::Failed)
+                .await?;
+        }
+        self.publish_command_rejected(
+            session_id,
+            action_id,
+            actor,
+            None,
+            CommandFailure {
+                code: NO_RUNTIME_ACCESS_CODE.to_owned(),
+                message: reason.to_owned(),
+                retryable: false,
+            },
+        )
+        .await;
+        Ok(())
     }
 
     pub(super) async fn admit_session(&self, session: &AgentSession) -> Result<()> {
@@ -198,7 +298,7 @@ where
                 entry.action_id,
                 entry.actor,
                 entry.announced,
-                *failure,
+                (*failure).into(),
             )
             .await;
         }
@@ -211,7 +311,7 @@ where
         action_id: AgentActionId,
         actor: Option<MacroUserIdStr<'static>>,
         announcement_message_id: Option<macro_uuid::Uuid>,
-        failure: AiAdmissionError,
+        failure: CommandFailure,
     ) {
         self.publish_lifecycle(session_id, |identity| {
             AgentSessionLifecycleEvent::CommandRejected(CommandRejectedMetadata {
@@ -219,7 +319,7 @@ where
                 action_id,
                 actor,
                 announcement_message_id,
-                failure: failure.into(),
+                failure,
             })
         })
         .await;
@@ -235,6 +335,31 @@ where
             self.admission.admit(owner, AiFeature::AgentSession).await?;
         }
         Ok(())
+    }
+}
+
+/// Seeds [`refusal_message_id`], so a redelivered refusal finds its message.
+const REFUSAL_MESSAGE_NAMESPACE: macro_uuid::Uuid =
+    macro_uuid::Uuid::from_u128(0x6c0f_3a5e_9d21_4b7e_8f30_2a41_c7d5_e913);
+
+/// The message that tells a conversation why one prompt was refused.
+fn refusal_message_id(session_id: AgentSessionId, action_id: AgentActionId) -> macro_uuid::Uuid {
+    macro_uuid::Uuid::new_v5(
+        &REFUSAL_MESSAGE_NAMESPACE,
+        format!("{session_id}:{action_id}").as_bytes(),
+    )
+}
+
+/// What the person prompting is told. A resident stops when its owner loses
+/// access, whoever prompts it; a coding agent needs its prompter to have it.
+fn runtime_refusal_reason(facts: &RuntimeAccessFacts) -> String {
+    let runtime = &facts.runtime_name;
+    if facts.resident || facts.actor_may_use.is_none() {
+        format!("This agent has stopped: its owner no longer has access to {runtime}.")
+    } else {
+        format!(
+            "You don't have access to {runtime}, where this agent runs. Ask its owner for access."
+        )
     }
 }
 

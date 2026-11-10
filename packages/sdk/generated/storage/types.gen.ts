@@ -355,6 +355,7 @@ export type Agent = {
      * Which MCP servers sessions of this agent are handed.
      */
     mcp: AgentMcpServers;
+    stopped_reason?: null | AgentStoppedReason;
 };
 
 /**
@@ -576,6 +577,11 @@ export type AgentSessionSource = 'user' | 'agent' | 'routine';
  * `agent_session.visibility` column's.
  */
 export type AgentSessionVisibility = 'listed' | 'unlisted' | 'hidden';
+
+/**
+ * Why an agent cannot run right now.
+ */
+export type AgentStoppedReason = 'no_runtime_access';
 
 /**
  * An agent session typing through its bot.

@@ -686,6 +686,7 @@ where
             | EntityType::DatabaseRow
             | EntityType::ExternalChat
             | EntityType::Form
+            | EntityType::Harness
             | EntityType::ScheduledAction => {
                 let access = self
                     .get_optimized_access(entity_id, user_id, entity_type)
