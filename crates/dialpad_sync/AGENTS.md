@@ -55,8 +55,8 @@ the call from all of its events, fetches the transcript, and ingests through
   before ingesting, `holds()` re-checks the lease, so a stop or disconnect
   during the fetch skips the import while a reconnect keeps it.
 - Call failures are read from pending events, never `last_error`. A call that
-  gives up parks at `available_at = 'infinity'` until a new event for it
-  starts its attempts over.
+  gives up parks at `available_at = 'infinity'` until a new event or a
+  reconnect of the running sync wakes it.
 - Dialpad sends no event id: deliveries dedupe on (call, state, timestamp).
   Signatures are checked before reading; a signed event that does not decode
   is acknowledged and dropped, logging ids and the field path, never content.

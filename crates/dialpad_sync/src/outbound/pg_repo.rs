@@ -141,7 +141,8 @@ impl SyncRepository for PgSyncRepository {
     ) -> Result<()> {
         let id = macro_uuid::generate_uuid_v7();
         sqlx::query!(
-            r#"INSERT INTO dialpad_sync_connections (id, user_id, namespace, backfill_since)
+            r#"WITH enrolled AS (
+            INSERT INTO dialpad_sync_connections (id, user_id, namespace, backfill_since)
             VALUES ($1, $2, $1, $3)
             ON CONFLICT (user_id) DO UPDATE SET
                 enrolled_at = now(),
@@ -154,7 +155,15 @@ impl SyncRepository for PgSyncRepository {
                 backfill_failures = CASE WHEN dialpad_sync_connections.enabled
                     THEN dialpad_sync_connections.backfill_failures ELSE 0 END,
                 backfill_due_at = CASE WHEN dialpad_sync_connections.enabled
-                    THEN dialpad_sync_connections.backfill_due_at ELSE now() END"#,
+                    THEN dialpad_sync_connections.backfill_due_at ELSE now() END
+            RETURNING id, enabled
+            )
+            -- Reconnecting a running sync retries the calls that gave up
+            -- meanwhile, most often while the grant had lapsed.
+            UPDATE dialpad_sync_events e SET available_at = now(), attempts = 0
+            FROM enrolled
+            WHERE enrolled.enabled AND e.connection_id = enrolled.id
+                AND e.completed_at IS NULL AND e.available_at = 'infinity'"#,
             id,
             user.as_ref(),
             backfill_since

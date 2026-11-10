@@ -1409,3 +1409,38 @@ async fn a_missed_call_does_not_clear_a_reconnect_prompt(pool: PgPool) {
         }
     );
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("users"))
+)]
+async fn reconnecting_a_running_sync_retries_the_calls_that_gave_up(pool: PgPool) {
+    let calls = Arc::new(Calls::default());
+    let service = service(pool, GrantState::Active, calls.clone());
+    service.connect(&user(), Backfill::None).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    let id = service.repo.by_user(&user()).await.unwrap().unwrap().id;
+
+    // The grant lapses for longer than a call's retries last.
+    service.grants.set(GrantState::NeedsReauth);
+    let event = serde_json::from_value(call_event(9, "hangup", 2)).unwrap();
+    service.repo.enqueue(id, event, None).await.unwrap();
+    sqlx::query!(
+        "UPDATE dialpad_sync_events SET attempts = $2 - 1 WHERE connection_id = $1",
+        id,
+        crate::domain::service::MAX_CALL_ATTEMPTS
+    )
+    .execute(&service.repo.pool)
+    .await
+    .unwrap();
+    drain(&service).await;
+    assert!(service.repo.claim().await.unwrap().is_none(), "it gave up");
+
+    // The user reconnects: the call imports without a new event from Dialpad.
+    service.grants.set(GrantState::Active);
+    service.connect(&user(), Backfill::None).await.unwrap();
+    service.complete(&user()).await.unwrap();
+    drain(&service).await;
+    assert_eq!(calls.0.lock().unwrap().len(), 1);
+    assert_eq!(issue(service.status(&user()).await.unwrap()), None);
+}

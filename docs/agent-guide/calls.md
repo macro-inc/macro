@@ -77,8 +77,8 @@ phone number when there is no name), the transcript, and Dialpad's AI recap
 and action items as the summary. A call Dialpad has no transcript for imports
 without one; if Dialpad cannot serve the transcript right now, the import
 retries. A call that keeps failing retries for about three hours; Settings
-then shows **Some calls not imported** until Dialpad sends a new event for it.
-If importing past calls fails, Settings shows **Past calls retrying** while it backs off and tries again. If setup keeps failing for
+then shows **Some calls not imported** until Dialpad sends a new event for it
+or the user reconnects. If importing past calls fails, Settings shows **Past calls retrying** while it backs off and tries again. If setup keeps failing for
 about a day, it stops and Settings shows **Setup could not finish** until the
 user reconnects.
 Missed calls and voicemails are not imported. Webhooks need the same public

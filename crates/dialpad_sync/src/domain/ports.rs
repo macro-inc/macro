@@ -15,9 +15,9 @@ pub trait SyncRepository: Send + Sync {
     async fn by_user(&self, user: &MacroUserIdStr<'static>) -> Result<Option<Connection>>;
     /// A sync by id.
     async fn by_id(&self, id: Uuid) -> Result<Option<Connection>>;
-    /// Start or resume a user's enrollment. A running sync keeps running and
-    /// only clears its issue; anything else restarts as pending with
-    /// `backfill_since`.
+    /// Start or resume a user's enrollment. A running sync keeps running,
+    /// clears its issue and retries the calls that gave up; anything else
+    /// restarts as pending with `backfill_since`.
     async fn enroll(
         &self,
         user: &MacroUserIdStr<'static>,
