@@ -1,6 +1,7 @@
 import {
   EditorInputMsg,
   type IClipboardEntryMsg,
+  type IPasteIntentMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
 import type { Span } from '@macro-inc/observability';
 import type { EditorView } from './editor-view';
@@ -59,8 +60,10 @@ export class ClipboardAccess {
   }
   async paste(
     clipboard: DataTransfer,
-    selection: ViewSelection = readSelection(this.view)
+    selection: ViewSelection = readSelection(this.view),
+    intent: IPasteIntentMsg = { plainOnly: false }
   ): Promise<boolean> {
+    const plainOnly = intent.plainOnly;
     const view = this.view;
     const measurement = startEditorPerformance(view, 'editor.paste');
     const span = measurement.span;
@@ -140,19 +143,23 @@ export class ClipboardAccess {
       const phase = span.span('editor.paste.session_input');
       inputPhase = phase;
       try {
+        const paste = {
+          selection: selectionMessage(selection),
+          clipboard: entries,
+          hasFiles,
+          htmlNodes,
+        };
+        const input = plainOnly
+          ? EditorInputMsg.fromEditorPasteWithIntent({
+              ...paste,
+              intent: { plainOnly },
+            })
+          : EditorInputMsg.fromEditorPaste(paste);
         phase.run(() =>
-          this.port.input(
-            EditorInputMsg.fromEditorPaste({
-              selection: selectionMessage(selection),
-              clipboard: entries,
-              hasFiles,
-              htmlNodes,
-            }),
-            (handled) => {
-              outcome = handled ? 'success' : 'unhandled';
-              release();
-            }
-          )
+          this.port.input(input, (handled) => {
+            outcome = handled ? 'success' : 'unhandled';
+            release();
+          })
         );
       } finally {
         phase.end();

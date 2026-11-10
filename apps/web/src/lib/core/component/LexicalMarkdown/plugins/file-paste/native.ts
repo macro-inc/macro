@@ -21,7 +21,6 @@ export function registerNativeFilePaste(
     ): void;
   }
 ): () => void {
-  let shift = false;
   let nextRequest = 0;
   let active = true;
   const pending = new Map<
@@ -34,15 +33,6 @@ export function registerNativeFilePaste(
       generation: number | null;
     }
   >();
-  const keydown = (event: KeyboardEvent) => {
-    if (event.key === 'Shift') shift = true;
-  };
-  const keyup = (event: KeyboardEvent) => {
-    if (event.key === 'Shift') shift = false;
-  };
-  const window = view.root.ownerDocument.defaultView;
-  window?.addEventListener('keydown', keydown);
-  window?.addEventListener('keyup', keyup);
   const releaseFacts = view.clipboard.registerFacts((clipboard) => {
     const { fileEntries, directoryEntries } =
       extractFileSystemEntries(clipboard);
@@ -68,7 +58,6 @@ export function registerNativeFilePaste(
           mime: 'application/x-macro-paste-facts',
           value: JSON.stringify({
             request,
-            plainOnly: shift,
             hasFileEntries: hasFiles,
             mobileImageRecovery: mobile,
           }),
@@ -133,7 +122,5 @@ export function registerNativeFilePaste(
     pending.clear();
     releaseFacts();
     releaseEvent();
-    window?.removeEventListener('keydown', keydown);
-    window?.removeEventListener('keyup', keyup);
   };
 }

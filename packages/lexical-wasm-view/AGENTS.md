@@ -31,6 +31,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 - Keep Android timing/native deletion in events.ts and composition clearing in Rust.
 - Admit an actual first DOM range before Click listeners, route Click through Rust with KeepModel, and let Image/HR components select their nodes instead of selecting every decorator.
 - Carry ephemeral clipboard host facts through registerFacts; release them after native admission or cancellation, and deliver typed plugin host requests through onPluginEvent after Diff.
+- Capture window Shift state at paste invocation and send typed intent on additive input tag 10 only when true; preserve legacy tag 4 for ordinary paste/drop and retain MIME precedence across lazy HTML import.
 - Route application special keys with registerKeyRoute and one EditorApplication input; preserve Rust KeyDown/Key command priorities and ordinary view listener tie checks. Set preventDefault=false for layout-dependent routes that leave unhandled movement to the browser, and consume native prevention plus short-circuiting after-listeners.
 - Complete cold input callbacks after Diff/IO consumption so unhandled keys reach
   lower-priority view listeners, including queued inputs.
@@ -74,6 +75,7 @@ Keep drag source validity tied to documentRevision; selection-only commits do no
 - `history-keyboard.browser.e2e.ts` loads the same initial paragraph into both actual engines and clears their real histories before trusted typing, Ctrl-Z and both redo shortcuts; assert DOM, model JSON and model/DOM caret restoration. The three-engine input-parity configuration includes it. Native code-subtree cases repeat deletion and recreation twice and require exact durable IDs, raw JSON and caret offsets without normalization.
 - Let synthetic decorator fixtures own explicitly declared reserved dimensions; assert their component box and keep Macro media outer wrappers plain, matching the source renderer.
 - Compare paste against the app plugin configuration, including trailingParagraphPlugin, and the external Markdown export; keep raw model and DOM evidence even when text matches.
+- Verify resolved Source dependency bytes against the pinned packages and use fresh owned Vite/Vitest caches before parity runs; source-file pins alone do not prove the executable module graph is pristine.
 - Treat managed-browser paste timings as diagnostic; performance acceptance uses stock browsers, and Linux WebKit is an engine proxy.
 - Require a committed WAL write, the matching server acknowledgement and exact warm/fresh reload content before treating a large paste as persisted; visibility or a saved snapshot alone is insufficient.
 - Set LEXICAL_WASM_VIEW_TEST_PORT to reserve a private harness port on shared hosts.

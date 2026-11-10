@@ -291,6 +291,7 @@ empty quotes and selections within a quote on desktop, tablet, and phone.
 Selections across adjacent quotes stay quoted; ranges containing unquoted blocks
 retain normal paste behavior.
 Keep pasted paragraphs quoted through the shared clipboard insertion command.
+Keep native file-paste facts limited to file work; the view captures Shift for typed paste intent without changing rich MIME precedence.
 
 A frontend dev server runs against the **dev** backend, so this needs no local stack, Docker, Rust build, or `sudo`:
 
