@@ -11,12 +11,12 @@ import {
   mergeProps,
 } from 'solid-js';
 import {
-  type DecoratorHost,
+  type DecoratorHostCapabilities,
   DecoratorHostContext,
 } from '../context/DecoratorHostContext';
 
 export interface NativeDecoratorContext<
-  Host extends DecoratorHost = DecoratorHost,
+  Host extends DecoratorHostCapabilities = DecoratorHostCapabilities,
 > {
   readonly host: Host;
   readonly theme: EditorThemeClasses;
@@ -24,9 +24,9 @@ export interface NativeDecoratorContext<
 }
 
 /** Mount actual registered components over typed native props, without creating JS model nodes. */
-export function createNativeDecoratorAdapter<Host extends DecoratorHost>(
-  context: NativeDecoratorContext<Host>
-) {
+export function createNativeDecoratorAdapter<
+  Host extends DecoratorHostCapabilities,
+>(context: NativeDecoratorContext<Host>) {
   return function bind<Props extends {}>(
     klass: Klass<LexicalNode>,
     project: (node: ViewNode, context: NativeDecoratorContext<Host>) => Props

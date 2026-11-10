@@ -47,4 +47,7 @@ export type HorizontalRuleHost = Pick<
   'isSelected' | 'isEditable' | 'horizontalRule'
 >;
 
-export const DecoratorHostContext = createContext<DecoratorHost>();
+/** A decorator group supplies its actual capabilities; consumers must request an implemented host. */
+export type DecoratorHostCapabilities = Partial<DecoratorHost>;
+
+export const DecoratorHostContext = createContext<DecoratorHostCapabilities>();
