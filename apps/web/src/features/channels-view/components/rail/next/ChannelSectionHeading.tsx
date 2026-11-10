@@ -116,26 +116,31 @@ export function DraggableChannelSectionHeading(props: {
       }}
       on:click={{ capture: true, handleEvent: preventToggleAfterDrag }}
     >
-      <Button
-        variant="secondary"
-        size="sm"
-        class="sr-only focus:not-sr-only focus:absolute focus:inset-x-0 focus:top-0 focus:z-30"
-        aria-label={t('channelSections.reorderSection', { name: props.label })}
-        tooltip={t('channelSections.reorderSectionHint')}
-        onClick={(event: MouseEvent) => event.stopPropagation()}
-        onKeyDown={(event: KeyboardEvent) => {
-          if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
-            return;
-          }
+      {/* Keep Button positioning and sizing out of the heading's normal flow. */}
+      <div class="sr-only focus-within:not-sr-only focus-within:absolute focus-within:inset-x-0 focus-within:top-0 focus-within:z-30">
+        <Button
+          variant="secondary"
+          size="sm"
+          fullWidth
+          aria-label={t('channelSections.reorderSection', {
+            name: props.label,
+          })}
+          tooltip={t('channelSections.reorderSectionHint')}
+          onClick={(event: MouseEvent) => event.stopPropagation()}
+          onKeyDown={(event: KeyboardEvent) => {
+            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
+              return;
+            }
 
-          event.preventDefault();
-          event.stopPropagation();
-          event.stopImmediatePropagation();
-          props.reorder.move(props.section, event.key === 'ArrowUp' ? -1 : 1);
-        }}
-      >
-        {t('channelSections.reorderSection', { name: props.label })}
-      </Button>
+            event.preventDefault();
+            event.stopPropagation();
+            event.stopImmediatePropagation();
+            props.reorder.move(props.section, event.key === 'ArrowUp' ? -1 : 1);
+          }}
+        >
+          {t('channelSections.reorderSection', { name: props.label })}
+        </Button>
+      </div>
       {props.children}
     </div>
   );

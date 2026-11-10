@@ -1190,11 +1190,12 @@ list. Collapsed sections retain unread rows by default; **Display → Unread whe
 collapsed** turns those rows off without changing expanded membership.
 
 Drag a section heading or its name to reorder sections. There is no drag-handle
-icon. Keyboard focus reveals an icon-free **Reorder** control; use Up/Down to move
-the section. Pointer dragging starts only after more than 8px of movement, never
-from holding still. A normal heading click toggles the section; releasing a drag
-does not. Add and menu buttons never start a drag. The drag highlight covers the
-section name without shifting its text or controls.
+icon. Keyboard focus reveals an icon-free **Reorder** control over the heading
+without increasing its height; use Up/Down to move the section. Pointer dragging
+starts only after more than 8px of movement, never from holding still. A normal
+heading click toggles the section; releasing a drag does not. Add and menu buttons
+never start a drag. The drag highlight covers the section name without shifting
+its text or controls.
 An insertion line shows the destination. Section order is a personal
 preference, including for shared sections, and survives reloads. The dragged
 section appears as a card preview while its source is subdued. Other sections
