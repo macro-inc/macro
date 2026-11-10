@@ -15,7 +15,7 @@ ALTER TABLE agent_configs ADD COLUMN workspace_path TEXT;
 
 ALTER TABLE agent_configs
     ADD CONSTRAINT agent_configs_workspace_needs_harness
-    CHECK (workspace_path IS NULL OR harness_id IS NOT NULL);
+    CHECK (workspace_path IS NULL OR harness_id IS NOT NULL) NOT VALID;
 
 -- Deleting a harness unbinds its agents; their workspace goes with it, since
 -- it names a directory on that harness's machine.
