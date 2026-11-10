@@ -109,6 +109,8 @@ record; preserve its missing-component checks rather than supplying placeholders
 Run `native-horizontal-rule.test.ts` against an own-source document-session WASM
 build for selection, admitted deletion and sibling component disposal checks;
 this focused host check does not establish complete Macro registry acceptance.
+Assert the rule's selected outline and remove control after selection-only
+commits without hover, including after a sibling component is disposed.
 
 Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
 backend-free desktop/phone regression: the card reserves its height from
