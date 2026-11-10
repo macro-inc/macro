@@ -25,7 +25,7 @@ person. Served by the harness under the scheduler's gateway prefix
 ## Start here
 
 - `src/domain/service.rs`: the tools' rules (kind never changes, a dismissed
-  idea needs a `reason` to come back, 30 open and 10 new per generation).
+  idea needs a `reason` to come back, 30 open and 12 new per generation).
 - `src/outbound/pg_idea_repo.rs`: base row plus one child table per kind;
   limits are checked under a per-person advisory lock.
 

@@ -32,7 +32,7 @@ pub const IDEAS_FLAG: &str = "enable-ideas";
 /// Most open ideas a person may have.
 pub const OPEN_LIMIT: u32 = 30;
 /// Most ideas one generation may add or bring back.
-pub const NEW_PER_GENERATION: u32 = 10;
+pub const NEW_PER_GENERATION: u32 = 12;
 
 /// Ideas whose items the feed checks at once.
 const ACCESS_CHECKS_AT_ONCE: usize = 8;

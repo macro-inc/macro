@@ -447,13 +447,18 @@ async fn a_session_rewrites_and_retires_open_ideas_and_a_retired_one_comes_back(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_generation_adds_at_most_ten_and_a_person_has_at_most_thirty_open(pool: PgPool) {
+async fn a_generation_adds_at_most_its_limit_and_a_person_has_at_most_thirty_open(pool: PgPool) {
     let h = harness(pool, true).await;
+    let per_night = usize::try_from(NEW_PER_GENERATION).unwrap();
+    let open = usize::try_from(OPEN_LIMIT).unwrap();
     let mut kept = Vec::new();
+    let mut expected = Vec::new();
     for night in 0..4 {
         let session = h.session(OWNER, "ideas").await;
+        let room = open - kept.iter().sum::<usize>();
+        expected.push(per_night.min(room));
         let mut tonight = 0;
-        for n in 0..11 {
+        for n in 0..=per_night {
             let outcome = h
                 .suggest(
                     session,
@@ -463,7 +468,7 @@ async fn a_generation_adds_at_most_ten_and_a_person_has_at_most_thirty_open(pool
             if outcome.ok {
                 tonight += 1;
             } else {
-                let limit = if night < 2 && n == 10 {
+                let limit = if n == per_night && room > per_night {
                     "most for one night"
                 } else {
                     "30 open ideas"
@@ -478,7 +483,8 @@ async fn a_generation_adds_at_most_ten_and_a_person_has_at_most_thirty_open(pool
         kept.push(tonight);
         h.close(session).await;
     }
-    assert_eq!(kept, vec![10, 10, 10, 0]);
+    assert_eq!(kept, expected);
+    assert_eq!(kept.iter().sum::<usize>(), open);
     // Rewriting an open idea at the limit still works.
     let session = h.session(OWNER, "ideas").await;
     let rewrite = h
