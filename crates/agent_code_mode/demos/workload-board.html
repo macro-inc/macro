@@ -231,7 +231,7 @@
       render(data);
       const open = data.people.reduce((sum, person) => sum + person.tasks.length, 0) + data.unassigned.length;
       status.textContent = data.inTeam
-        ? `${open} open tasks across ${data.people.length} people`
+        ? `${open} open tasks across ${data.people.length} ${data.people.length === 1 ? 'person' : 'people'}`
         : `${open} open tasks. Join a team to see teammates here.`;
     } catch (error) {
       status.textContent = `Couldn't load the workload: ${String(error)}`;

@@ -259,7 +259,7 @@
     try {
       const data = await radar({ days: Number(daysSelect.value) });
       render(data);
-      status.textContent = data.inTeam
+      status.textContent = data.inTeam && data.total > 0
         ? `${data.quiet} of ${data.total} contacts have gone quiet${data.emailConnected ? '' : ' · connect an inbox to see last threads'}`
         : '';
     } catch (error) {
