@@ -88,6 +88,11 @@ the gateway `/email` prefix.
   to compare transcripts and callsite sidecars between builds.
   The full span tree is in `*.debug-spans.txt`; goldens retain production INFO+
   spans. Suites declare their output directory through `LabOptions.suite`.
+  Backfill heartbeat scenarios use the test-only paused clock with signaled I/O;
+  they do not advance Postgres or Redis clocks. Only `backfill_worker` masks the
+  write-slot span's elapsed `waited_ms`, retaining its admission result and count;
+  it also rounds only the deferral span's `retry_after` up to whole seconds and
+  sorts only the contacts-queue `users` set, as described in the parity README.
   SQL text is shared in `golden/<suite>/sql/<hash>.sql`; normal comparison runs
   reject orphan statement files after insta refreshes the `.snap` goldens; review
   with `cargo insta review` and leave no pending `.snap.new` files.

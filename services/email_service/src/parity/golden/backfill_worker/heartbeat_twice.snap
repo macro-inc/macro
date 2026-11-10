@@ -1,0 +1,141 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: held provider request
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"heartbeat\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [
+      60,
+      60
+    ],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO seed_sent_contact {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: SeedSentContactPayload { message_provider_id: \"heartbeat\" } }"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"heartbeat","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"heartbeat"}
+            INFO get_message {"message_provider_id":"heartbeat"}
+    INFO change_message_visibility {"timeout_seconds":60}
+    INFO change_message_visibility {"timeout_seconds":60}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/heartbeat",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 404
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"heartbeat\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "ChangeMessageVisibility",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>",
+        "VisibilityTimeout": 60
+      },
+      "status": 200,
+      "response": {}
+    },
+    {
+      "operation": "ChangeMessageVisibility",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>",
+        "VisibilityTimeout": 60
+      },
+      "status": 200,
+      "response": {}
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011940}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}

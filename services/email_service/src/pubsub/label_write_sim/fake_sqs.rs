@@ -45,6 +45,8 @@ pub struct SqsState {
     /// Explicit one-message receives; the caller owns redelivery and virtual time.
     pub deliveries: std::collections::BTreeMap<String, std::collections::VecDeque<Value>>,
     pub fail_delete: bool,
+    pub fail_visibility: bool,
+    visibility_observers: std::collections::VecDeque<oneshot::Sender<()>>,
     /// Optional wire Date for scenarios recording an SDK error response.
     pub fixed_date: Option<String>,
     send_attempts: u64,
@@ -97,6 +99,13 @@ impl FakeSqs {
         assert!(nth > 0, "send attempts start at one");
         let mut state = self.lock();
         state.fail_nth_send = Some(state.send_attempts + nth);
+    }
+
+    /// Signal after the next visibility response has been recorded.
+    pub fn observe_visibility(&self) -> oneshot::Receiver<()> {
+        let (send, receive) = oneshot::channel();
+        self.lock().visibility_observers.push_back(send);
+        receive
     }
 
     /// Offers one wire message to the real SDK receive path, without polling.
@@ -156,6 +165,11 @@ async fn handle(State(sqs): State<FakeSqs>, headers: HeaderMap, body: Bytes) -> 
         "operation": operation, "request": crate::parity::http_body(&body),
         "status": parts.status.as_u16(), "response": crate::parity::http_body(&response_body),
     }));
+    if operation == "ChangeMessageVisibility"
+        && let Some(observer) = sqs.lock().visibility_observers.pop_front()
+    {
+        let _ = observer.send(());
+    }
     Response::from_parts(parts, Body::from(response_body))
 }
 
@@ -264,6 +278,11 @@ async fn reply(State(sqs): State<FakeSqs>, headers: HeaderMap, body: Bytes) -> R
             json_response(json!({}))
         }
         "ChangeMessageVisibility" => {
+            if state.fail_visibility {
+                return (StatusCode::INTERNAL_SERVER_ERROR, axum::Json(json!({
+                    "__type": "com.amazonaws.sqs#InternalError", "message": "injected visibility failure"
+                }))).into_response();
+            }
             state.acks.push(Ack::Visibility {
                 receipt: text("ReceiptHandle"),
                 seconds: request

@@ -1,0 +1,108 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: backfill thread
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"backfill_thread\":{\"thread_provider_id\":\"new-thread\",\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO backfill_thread {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: BackfillThreadPayload { thread_provider_id: \"new-thread\", refresh_existing: false } }"}
+        INFO get_threads_by_link_id_and_provider_ids {"link_id":"<link:A>","provider_ids":"{\"new-thread\"}"}
+    INFO handle_retryable_error {"error":"DB check for existing thread new-thread failed: attempted to acquire a connection on a closed pool","link_id":"Some(<link:A>)"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_thread",
+        "get_threads_by_link_id_and_provider_ids"
+      ],
+      "message": null,
+      "fields": {
+        "error": "attempted to acquire a connection on a closed pool"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "handle_retryable_error"
+      ],
+      "message": "Retryable error backfilling thread",
+      "fields": {
+        "thread_id": "new-thread"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"backfill_thread\":{\"thread_provider_id\":\"new-thread\",\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

@@ -1,0 +1,174 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: backfill attachment
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"backfill_attachment\":{\"metadata\":{\"attachment_metadata\":{\"attachment_db_id\":\"<attachment>\",\"email_provider_id\":\"m1a\",\"provider_attachment_id\":\"attachment-1\",\"mime_type\":\"application/pdf\",\"filename\":\"file.pdf\",\"internal_date_ts\":\"<time:provider>\",\"message_db_id\":\"<msg:m1a>\",\"thread_db_id\":\"<thread:t1>\",\"sender_email\":\"sender@example.com\",\"subject\":\"Attachment\"},\"recipient_emails\":[\"recipient@example.com\"],\"backfill\":true,\"upload_destination\":\"Dss\"},\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "20"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO backfill_attachment {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","p":"BackfillAttachmentPayload { metadata: AttachmentUploadArgs { attachment_metadata: AttachmentUploadMetadata { attachment_db_id: <attachment>, email_provider_id: \"m1a\", provider_attachment_id: \"attachment-1\", mime_type: \"application/pdf\", filename: Some(\"file.pdf\"), internal_date_ts: <time:provider>, message_db_id: <msg:m1a>, thread_db_id: <thread:t1>, sender_email: Some(\"sender@example.com\"), subject: Some(\"Attachment\") }, recipient_emails: [\"recipient@example.com\"], backfill: true, upload_destination: Dss } }"}
+        INFO get_document_id_by_att_id_and_link {"email_attachment_id":"<attachment>","link_id":"<link:A>"}
+        INFO get_attachment {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_attachment_id":"attachment-1","provider_message_id":"m1a","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_attachment_data {"attachment_id":"attachment-1","message_id":"m1a"}
+            INFO get_attachment_data {"attachment_id":"attachment-1","message_id":"m1a"}
+    INFO handle_non_retryable_error {}
+      INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+        INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_attachment",
+        "get_attachment",
+        "get_attachment_data",
+        "get_attachment_data"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 404 Not Found: {\"error\":{\"code\":404,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_attachment",
+        "get_attachment",
+        "get_attachment_data"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 404 Not Found: {\"error\":{\"code\":404,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_attachment",
+        "get_attachment"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider resource was not found"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing message. The message will be deleted.",
+      "fields": {
+        "error": "GmailApiFailed: Failed to upload attachment",
+        "source": "Failed to upload attachment: Failed to fetch attachment data from Gmail: email provider resource was not found"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  4fa85c690878 rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a/attachments/attachment-1",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 404
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"backfill_attachment\":{\"metadata\":{\"attachment_metadata\":{\"attachment_db_id\":\"<attachment>\",\"email_provider_id\":\"m1a\",\"provider_attachment_id\":\"attachment-1\",\"mime_type\":\"application/pdf\",\"filename\":\"file.pdf\",\"internal_date_ts\":\"<time:provider>\",\"message_db_id\":\"<msg:m1a>\",\"thread_db_id\":\"<thread:t1>\",\"sender_email\":\"sender@example.com\",\"subject\":\"Attachment\"},\"recipient_emails\":[\"recipient@example.com\"],\"backfill\":true,\"upload_destination\":\"Dss\"},\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "20"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000012469}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}

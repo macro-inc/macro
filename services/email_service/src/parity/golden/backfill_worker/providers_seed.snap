@@ -1,0 +1,2191 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: provider 200 success
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/contacts",
+        "body": "{\"users\":[\"<user:A>\",\"macro|recipient@example.com\"]}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO seed_sent_contact {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: SeedSentContactPayload { message_provider_id: \"m1a\" } }"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"m1a"}
+            INFO get_message {"message_provider_id":"m1a"}
+        INFO publish_nodes {}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/contacts",
+        "MessageBody": {
+          "users": [
+            "<user:A>",
+            "macro|recipient@example.com"
+          ]
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-1"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011638}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider 400 bad request
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO seed_sent_contact {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: SeedSentContactPayload { message_provider_id: \"m1a\" } }"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"m1a"}
+            INFO get_message {"message_provider_id":"m1a"}
+    INFO handle_non_retryable_error {}
+      INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+        INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "permanent email provider failure: Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing message. The message will be deleted.",
+      "fields": {
+        "error": "GmailApiFailed: Failed to get sent message for contact seed",
+        "source": "Failed to get sent message for contact seed: permanent email provider failure: Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}"
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 400
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011638}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider 401 auth
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO seed_sent_contact {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: SeedSentContactPayload { message_provider_id: \"m1a\" } }"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":1}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"m1a"}
+            INFO get_message {"message_provider_id":"m1a"}
+          INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+              INFO fetch_gmail_access_token_no_cache {}
+                INFO fetch_token_from_auth_service {}
+                  INFO get_google_access_token {"email":"<fusion:A>@example.com","fusionauth_user_id":"<fusion:A>"}
+                INFO cache_token_in_redis {}
+          INFO get_message {"message_provider_id":"m1a"}
+            INFO get_message {"message_provider_id":"m1a"}
+    INFO handle_non_retryable_error {}
+      INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+        INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider authorization is required"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing message. The message will be deleted.",
+      "fields": {
+        "error": "AccessTokenFetchFailed: Failed to get sent message for contact seed",
+        "source": "Failed to get sent message for contact seed: email provider authorization is required"
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 401
+    },
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=<fusion:A>%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 401
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011638}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "10"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider 401 refresh success
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/contacts",
+        "body": "{\"users\":[\"<user:A>\",\"macro|recipient@example.com\"]}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO seed_sent_contact {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: SeedSentContactPayload { message_provider_id: \"m1a\" } }"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":1}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"m1a"}
+            INFO get_message {"message_provider_id":"m1a"}
+          INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+              INFO fetch_gmail_access_token_no_cache {}
+                INFO fetch_token_from_auth_service {}
+                  INFO get_google_access_token {"email":"<fusion:A>@example.com","fusionauth_user_id":"<fusion:A>"}
+                INFO cache_token_in_redis {}
+          INFO get_message {"message_provider_id":"m1a"}
+            INFO get_message {"message_provider_id":"m1a"}
+        INFO publish_nodes {}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider rejection\"}}"
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 401
+    },
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=<fusion:A>%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/contacts",
+        "MessageBody": {
+          "users": [
+            "<user:A>",
+            "macro|recipient@example.com"
+          ]
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-2"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011638}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "10"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider 403 forbidden
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO seed_sent_contact {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: SeedSentContactPayload { message_provider_id: \"m1a\" } }"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"m1a"}
+            INFO get_message {"message_provider_id":"m1a"}
+    INFO handle_non_retryable_error {}
+      INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+        INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 403 Forbidden: {\"error\":{\"code\":403,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 403 Forbidden: {\"error\":{\"code\":403,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider operation is forbidden"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing message. The message will be deleted.",
+      "fields": {
+        "error": "GmailApiFailed: Failed to get sent message for contact seed",
+        "source": "Failed to get sent message for contact seed: email provider operation is forbidden"
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 403
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011638}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider 404 missing
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO seed_sent_contact {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: SeedSentContactPayload { message_provider_id: \"m1a\" } }"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"m1a"}
+            INFO get_message {"message_provider_id":"m1a"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 404
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011638}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider 409 conflict
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO seed_sent_contact {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: SeedSentContactPayload { message_provider_id: \"m1a\" } }"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"m1a"}
+            INFO get_message {"message_provider_id":"m1a"}
+    INFO handle_non_retryable_error {}
+      INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+        INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 409 Conflict: {\"error\":{\"code\":409,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 409 Conflict: {\"error\":{\"code\":409,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider state conflict"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing message. The message will be deleted.",
+      "fields": {
+        "error": "GmailApiFailed: Failed to get sent message for contact seed",
+        "source": "Failed to get sent message for contact seed: email provider state conflict"
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 409
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011638}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider 429 quota
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\",\"message_provider_id\":\"m1a\"}}}",
+        "delay_seconds": 900
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO seed_sent_contact {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: SeedSentContactPayload { message_provider_id: \"m1a\" } }"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"m1a"}
+            INFO get_message {"message_provider_id":"m1a"}
+    INFO defer_rate_limited_operation {"link_id":"Some(<link:A>)","retry_after":"Some(3600s)"}
+      INFO defer_email_backfill_message {"deferrals":1,"delay_seconds":900}
+      INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+        INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 429 Too Many Requests: {\"error\":{\"code\":429,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 429 Too Many Requests: {\"error\":{\"code\":429,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider rate limit exceeded",
+        "origin": "Provider { concurrency: false }"
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 429
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "seed_sent_contact": {
+              "link_id": "<link:A>",
+              "job_id": "<job>",
+              "message_provider_id": "m1a"
+            }
+          }
+        },
+        "DelaySeconds": 900,
+        "MessageAttributes": {
+          "deferrals": {
+            "StringValue": "1",
+            "DataType": "Number"
+          }
+        }
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-3"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011638}:backfill_cooldown": {
+      "before": null,
+      "after": "1"
+    },
+    "gmail:{51000000-0000-0000-0000-000000011638}:cooldown": {
+      "before": null,
+      "after": "1"
+    },
+    "gmail:{51000000-0000-0000-0000-000000011638}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider 429 concurrency
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\",\"message_provider_id\":\"m1a\"}}}",
+        "delay_seconds": 900
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO seed_sent_contact {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: SeedSentContactPayload { message_provider_id: \"m1a\" } }"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"m1a"}
+            INFO get_message {"message_provider_id":"m1a"}
+    INFO defer_rate_limited_operation {"link_id":"Some(<link:A>)","retry_after":"Some(3600s)"}
+      INFO defer_email_backfill_message {"deferrals":1,"delay_seconds":900}
+      INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+        INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 429 Too Many Requests: {\"error\":{\"code\":429,\"message\":\"Too many concurrent requests for user.\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 429 Too Many Requests: {\"error\":{\"code\":429,\"message\":\"Too many concurrent requests for user.\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider rate limit exceeded",
+        "origin": "Provider { concurrency: true }"
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 429
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "seed_sent_contact": {
+              "link_id": "<link:A>",
+              "job_id": "<job>",
+              "message_provider_id": "m1a"
+            }
+          }
+        },
+        "DelaySeconds": 900,
+        "MessageAttributes": {
+          "deferrals": {
+            "StringValue": "1",
+            "DataType": "Number"
+          }
+        }
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-4"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011638}:backfill_cooldown": {
+      "before": null,
+      "after": "1"
+    },
+    "gmail:{51000000-0000-0000-0000-000000011638}:cooldown": {
+      "before": null,
+      "after": "1"
+    },
+    "gmail:{51000000-0000-0000-0000-000000011638}:limit": {
+      "before": null,
+      "after": {
+        "at": "<timestamp>",
+        "cap": "3"
+      }
+    },
+    "gmail:{51000000-0000-0000-0000-000000011638}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider 500 internal
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO seed_sent_contact {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: SeedSentContactPayload { message_provider_id: \"m1a\" } }"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"m1a"}
+            INFO get_message {"message_provider_id":"m1a"}
+    INFO handle_retryable_error {"error":"Failed to get sent message for contact seed: transient email provider failure: Gmail API returned 500 Internal Server Error: {\"error\":{\"code\":500,\"message\":\"scripted provider rejection\"}}","link_id":"Some(<link:A>)"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 500 Internal Server Error: {\"error\":{\"code\":500,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 500 Internal Server Error: {\"error\":{\"code\":500,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "transient email provider failure: Gmail API returned 500 Internal Server Error: {\"error\":{\"code\":500,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "handle_retryable_error"
+      ],
+      "message": "Retryable error seeding contact from sent message",
+      "fields": {
+        "message_id": "m1a"
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 500
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011638}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider 503 unavailable
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO seed_sent_contact {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: SeedSentContactPayload { message_provider_id: \"m1a\" } }"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"m1a"}
+            INFO get_message {"message_provider_id":"m1a"}
+    INFO handle_retryable_error {"error":"Failed to get sent message for contact seed: transient email provider failure: Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}","link_id":"Some(<link:A>)"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "transient email provider failure: Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "handle_retryable_error"
+      ],
+      "message": "Retryable error seeding contact from sent message",
+      "fields": {
+        "message_id": "m1a"
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 503
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011638}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider 0 disconnect
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO seed_sent_contact {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: SeedSentContactPayload { message_provider_id: \"m1a\" } }"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"m1a"}
+            INFO get_message {"message_provider_id":"m1a"}
+    INFO handle_retryable_error {"error":"Failed to get sent message for contact seed: transient email provider failure: Gmail API transport error: error sending request","link_id":"Some(<link:A>)"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API transport error: error sending request"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API transport error: error sending request"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "transient email provider failure: Gmail API transport error: error sending request"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "handle_retryable_error"
+      ],
+      "message": "Retryable error seeding contact from sent message",
+      "fields": {
+        "message_id": "m1a"
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": null,
+      "connection_dropped": true
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011638}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}
+
+step: provider 200 malformed
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO seed_sent_contact {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: SeedSentContactPayload { message_provider_id: \"m1a\" } }"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"m1a","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"m1a"}
+            INFO get_message {"message_provider_id":"m1a"}
+    INFO handle_non_retryable_error {}
+      INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+        INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API response decode error: error decoding response body"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API response decode error: error decoding response body"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "seed_sent_contact",
+        "get_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "permanent email provider failure: Gmail API response decode error: error decoding response body"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing message. The message will be deleted.",
+      "fields": {
+        "error": "GmailApiFailed: Failed to get sent message for contact seed",
+        "source": "Failed to get sent message for contact seed: permanent email provider failure: Gmail API response decode error: error decoding response body"
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/m1a",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"seed_sent_contact\":{\"message_provider_id\":\"m1a\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011638}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}

@@ -1,0 +1,188 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: backfill thread
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"backfill_thread\":{\"thread_provider_id\":\"new-thread\",\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "20"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"update_thread_metadata\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\",\"thread_provider_id\":\"new-thread\",\"thread_db_id\":\"<uuid:1>\"}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO backfill_thread {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","message_count":0,"scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: BackfillThreadPayload { thread_provider_id: \"new-thread\", refresh_existing: false } }"}
+        INFO get_threads_by_link_id_and_provider_ids {"link_id":"<link:A>","provider_ids":"{\"new-thread\"}"}
+        INFO get_thread {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_thread_id":"new-thread","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_thread {"thread_id":"new-thread"}
+            INFO get_thread {"thread_id":"new-thread"}
+        INFO email.backfill.write_slot {"admitted":true,"in_flight":1,"waited_ms":"<elapsed>"}
+        INFO insert_backfilled_thread {"link_id":"<link:A>","message_count":0,"thread_provider_id":"new-thread"}
+          INFO insert_thread {"link_id":"<link:A>"}
+            INFO lock_provider_thread {"link_id":"<link:A>","provider_thread_id":"new-thread"}
+            INFO map_service_thread_to_db {"link_id":"<link:A>"}
+        INFO handle_thread_attachment_upload {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","thread_db_id":"<uuid:1>"}
+          INFO thread_document_atts_for_backfill {"thread_id":"<uuid:1>"}
+          INFO thread_media_atts_for_backfill {"thread_id":"<uuid:1>"}
+        INFO enqueue_thread_metadata_update {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","thread_db_id":"<uuid:1>","thread_provider_id":"new-thread"}
+          INFO enqueue_email_backfill_message {}
+            INFO enqueue_backfill_message {}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  a8d04a7b6e88 rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  b15912e5b3b7 rows_affected=1 rows_returned=1
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  4f0c0a58d76b rows_affected=0 rows_returned=0
+  d822541cad90 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/threads/new-thread?format=full",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"backfill_thread\":{\"thread_provider_id\":\"new-thread\",\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "20"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "update_thread_metadata": {
+              "link_id": "<link:A>",
+              "job_id": "<job>",
+              "thread_provider_id": "new-thread",
+              "thread_db_id": "<uuid:1>"
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-1"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000012242}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "10"
+      }
+    }
+  }
+db:
+  {
+    "email_threads": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:1>",
+          "is_read": false,
+          "link_id": "<link:A>",
+          "is_signal": false,
+          "created_at": "<ts>",
+          "project_id": null,
+          "updated_at": "<ts>",
+          "provider_id": "new-thread",
+          "inbox_visible": false,
+          "has_received_mail": true,
+          "has_pdf_attachment": false,
+          "has_image_attachment": false,
+          "reminder_returned_at": null,
+          "has_calendar_attachment": false,
+          "has_document_attachment": false,
+          "latest_inbound_message_ts": null,
+          "latest_non_spam_message_ts": null,
+          "latest_outbound_message_ts": null
+        }
+      ],
+      "changed": []
+    }
+  }

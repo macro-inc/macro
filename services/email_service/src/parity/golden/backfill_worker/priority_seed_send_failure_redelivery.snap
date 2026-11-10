@@ -1,0 +1,302 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: list threads
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"list_threads\":{\"next_page_token\":null,\"priority_pass\":true,\"refresh_existing\":true,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "20"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"backfill_thread\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\",\"thread_provider_id\":\"t1\",\"refresh_existing\":false}}}",
+        "delay_seconds": 0
+      },
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"backfill_thread\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\",\"thread_provider_id\":\"t2\",\"refresh_existing\":false}}}",
+        "delay_seconds": 0
+      },
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"list_threads\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\",\"next_page_token\":null,\"priority_pass\":false,\"refresh_existing\":true}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO list_threads {"gate_cap":5,"gate_in_flight":1,"label_ids":"[\"CATEGORY_PERSONAL\"]","limit":100,"link_id":"<link:A>","next_page_token":"None","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO list_threads {"label_ids":"[\"CATEGORY_PERSONAL\"]","next_page_token":"None","num_threads":100}
+          INFO list_threads {"label_ids":"[\"CATEGORY_PERSONAL\"]","num_threads":100}
+      INFO enqueue_email_backfill_message {}
+        INFO enqueue_backfill_message {}
+      INFO enqueue_email_backfill_message {}
+        INFO enqueue_backfill_message {}
+      INFO list_messages {"gate_cap":5,"gate_in_flight":1,"label_ids":"[\"SENT\"]","limit":200,"link_id":"<link:A>","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO list_messages {"label_ids":"[\"SENT\"]","num_messages":200}
+          INFO list_messages {"label_ids":"[\"SENT\"]","num_messages":200}
+      INFO enqueue_email_backfill_message {}
+        INFO enqueue_backfill_message {}
+      INFO enqueue_email_backfill_message {}
+        INFO enqueue_backfill_message {}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "enqueue_email_backfill_message",
+        "enqueue_backfill_message"
+      ],
+      "message": "Connection encountered an issue and should not be re-used. Marking it for closure",
+      "fields": {
+        "see_for_more_info": "https://smithy-lang.github.io/smithy-rs/design/client/detailed_error_explanations.html"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "enqueue_email_backfill_message",
+        "enqueue_backfill_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "service error"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "enqueue_email_backfill_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "service error"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message"
+      ],
+      "message": "Failed to enqueue sent-contact seed; skipping remaining",
+      "fields": {
+        "error": "service error\n\nCaused by:\n    0: unhandled error (InternalError)\n    1: Error { code: \"InternalError\", message: \"injected outage\" }",
+        "link_id": "<link:A>",
+        "message_id": "m1a"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/threads?maxResults=100&labelIds=CATEGORY_PERSONAL",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages?maxResults=200&labelIds=SENT",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"list_threads\":{\"next_page_token\":null,\"priority_pass\":true,\"refresh_existing\":true,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "20"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "backfill_thread": {
+              "link_id": "<link:A>",
+              "job_id": "<job>",
+              "thread_provider_id": "t1",
+              "refresh_existing": false
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-1"
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "backfill_thread": {
+              "link_id": "<link:A>",
+              "job_id": "<job>",
+              "thread_provider_id": "t2",
+              "refresh_existing": false
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-2"
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "seed_sent_contact": {
+              "link_id": "<link:A>",
+              "job_id": "<job>",
+              "message_provider_id": "m1a"
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 500,
+      "response": {
+        "__type": "com.amazonaws.sqs#InternalError",
+        "message": "injected outage"
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "list_threads": {
+              "link_id": "<link:A>",
+              "job_id": "<job>",
+              "next_page_token": null,
+              "priority_pass": false,
+              "refresh_existing": true
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-4"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "bf_job_status:57000000-0000-0000-0000-000000004000": {
+      "before": {
+        "completed_threads": "0",
+        "total_threads": "100"
+      },
+      "after": {
+        "completed_threads": "0",
+        "total_threads": "102"
+      }
+    },
+    "gmail:{51000000-0000-0000-0000-000000012198}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "15"
+      }
+    }
+  }
+db:
+  {}

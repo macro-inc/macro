@@ -1,0 +1,311 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: CRM delivery
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"populate_crm_contact\":{\"contact_email\":\"client@vendor.example.com\",\"contact_name\":\"Client\",\"first_at\":\"<ts>\",\"last_at\":\"<ts>\",\"is_sent\":true,\"link_id\":\"<link:A>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "20"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO populate_crm_contact {"link_id":"<link:A>"}
+        INFO get_team_id_for_user {}
+          INFO get_team_id_for_user {}
+        INFO populate_contact {"link_id":"<link:A>","team_id":"<team>"}
+          INFO may_contribute_contact {"team_id":"<team>"}
+          INFO lookup_domain_metadata {"domain":"vendor.example.com"}
+          INFO populate_contact {"link_id":"<link:A>","skipped":false,"team_id":"<team>"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  efb1b509c381 rows_affected=1 rows_returned=1
+  9dd9283d9386 rows_affected=1 rows_returned=1
+  5025a4a64ec5 rows_affected=1 rows_returned=1
+  043e1e93929f rows_affected=1 rows_returned=1
+  d015c9ec76b7 rows_affected=1 rows_returned=1
+  e34bd0ff443a rows_affected=1 rows_returned=1
+  06a963f377d8 rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  499c63a674d1 rows_affected=1 rows_returned=1
+  d4afa45b863f rows_affected=1 rows_returned=1
+  9dd9283d9386 rows_affected=1 rows_returned=1
+  5025a4a64ec5 rows_affected=1 rows_returned=1
+  043e1e93929f rows_affected=1 rows_returned=1
+  cf47afda94ec rows_affected=0 rows_returned=0
+  1ca90f83d1af rows_affected=1 rows_returned=1
+  3b1d1829acce rows_affected=1 rows_returned=0
+  e65f3444101a rows_affected=1 rows_returned=1
+  c8d4dade6ad9 rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"populate_crm_contact\":{\"contact_email\":\"client@vendor.example.com\",\"contact_name\":\"Client\",\"first_at\":\"<ts>\",\"last_at\":\"<ts>\",\"is_sent\":true,\"link_id\":\"<link:A>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "20"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "crm_companies": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:1>",
+          "hidden": false,
+          "team_id": "<team>",
+          "created_at": "<ts>",
+          "email_sync": true,
+          "updated_at": "<ts>",
+          "custom_name": null,
+          "last_interaction": "<time:provider>",
+          "manually_created": false,
+          "first_interaction": "<time:provider>"
+        }
+      ],
+      "changed": []
+    },
+    "crm_contact_sources": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:2>",
+          "link_id": "<link:A>",
+          "contact_id": "<uuid:3>",
+          "created_at": "<ts>"
+        }
+      ],
+      "changed": []
+    },
+    "crm_contacts": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:3>",
+          "name": "Client",
+          "email": "client@vendor.example.com",
+          "hidden": false,
+          "team_id": "<team>",
+          "company_id": "<uuid:1>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "last_interaction": "<time:provider>",
+          "manually_created": false,
+          "first_interaction": "<time:provider>"
+        }
+      ],
+      "changed": []
+    },
+    "crm_domains": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:4>",
+          "domain": "vendor.example.com",
+          "team_id": "<team>",
+          "company_id": "<uuid:1>",
+          "created_at": "<ts>"
+        }
+      ],
+      "changed": []
+    }
+  }
+
+step: CRM redelivery
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-21",
+      "Body": "{\"backfillOperation\":{\"populate_crm_contact\":{\"contact_email\":\"client@vendor.example.com\",\"contact_name\":\"Client\",\"first_at\":\"<ts>\",\"last_at\":\"<ts>\",\"is_sent\":true,\"link_id\":\"<link:A>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "21"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO populate_crm_contact {"link_id":"<link:A>"}
+        INFO get_team_id_for_user {}
+          INFO get_team_id_for_user {}
+        INFO populate_contact {"link_id":"<link:A>","team_id":"<team>"}
+          INFO may_contribute_contact {"team_id":"<team>"}
+          INFO lookup_domain_metadata {"domain":"vendor.example.com"}
+          INFO populate_contact {"link_id":"<link:A>","skipped":false,"team_id":"<team>"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-21"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  f680d1b52474 rows_affected=1 rows_returned=1
+  efb1b509c381 rows_affected=1 rows_returned=1
+  9dd9283d9386 rows_affected=1 rows_returned=1
+  5025a4a64ec5 rows_affected=1 rows_returned=1
+  043e1e93929f rows_affected=1 rows_returned=1
+  d015c9ec76b7 rows_affected=1 rows_returned=1
+  e34bd0ff443a rows_affected=1 rows_returned=1
+  06a963f377d8 rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  499c63a674d1 rows_affected=1 rows_returned=1
+  d4afa45b863f rows_affected=1 rows_returned=1
+  9dd9283d9386 rows_affected=1 rows_returned=1
+  5025a4a64ec5 rows_affected=1 rows_returned=1
+  043e1e93929f rows_affected=1 rows_returned=1
+  cf47afda94ec rows_affected=1 rows_returned=1
+  1e711a81659c rows_affected=1 rows_returned=0
+  e65f3444101a rows_affected=1 rows_returned=1
+  c8d4dade6ad9 rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"populate_crm_contact\":{\"contact_email\":\"client@vendor.example.com\",\"contact_name\":\"Client\",\"first_at\":\"<ts>\",\"last_at\":\"<ts>\",\"is_sent\":true,\"link_id\":\"<link:A>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "21"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "crm_companies": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<uuid:1>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    },
+    "crm_contacts": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<uuid:3>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }

@@ -1,0 +1,1 @@
+UPDATE email_backfill_completion_outbox SET effects_lease_token = $2, effects_lease_expires_at = now() + interval '2 minutes' WHERE backfill_job_id = $1 AND completed_at IS NULL AND ( effects_lease_token IS NULL OR effects_lease_expires_at < now() ) RETURNING effects_lease_token AS "effects_lease_token!"

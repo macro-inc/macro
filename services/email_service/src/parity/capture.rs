@@ -263,9 +263,12 @@ impl<S: tracing::Subscriber + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<
             recording.sql.push(json!(fields.0));
         } else if *metadata.level() <= tracing::Level::INFO
             || (*metadata.level() == tracing::Level::DEBUG
-                && metadata
-                    .target()
-                    .starts_with("email_service::pubsub::inbox_sync::"))
+                && [
+                    "email_service::pubsub::inbox_sync::",
+                    "email_service::pubsub::backfill::",
+                ]
+                .iter()
+                .any(|prefix| metadata.target().starts_with(prefix)))
         {
             // Worker DEBUG identities prove branch coverage without recording
             // third-party messages containing timing or connection-pool noise.

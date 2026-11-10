@@ -1,0 +1,1 @@
+SELECT document_id FROM document_email de INNER JOIN "Document" d on de.document_id = d.id INNER JOIN email_attachments ea on de.email_attachment_id = ea.id INNER JOIN email_messages em on ea.message_id = em.id WHERE em.link_id = $1 AND email_attachment_id = $2 AND d."deletedAt" IS NULL

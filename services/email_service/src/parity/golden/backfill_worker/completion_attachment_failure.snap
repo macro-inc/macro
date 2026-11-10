@@ -1,0 +1,157 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: finalize
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"finalize_backfill\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO finalize_backfill {"job_id":"<job>","link_id":"<link:A>"}
+        INFO claim_completion_effects {"job_id":"<job>"}
+        INFO get_backfill_job {"job_id":"<job>"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO handle_attachment_upload {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }"}
+          INFO fetch_job_attachments_for_backfill {"link_id":"<link:A>"}
+        INFO release_completion_effects {"job_id":"<job>","lease_token":"<uuid:1>"}
+    INFO handle_retryable_error {"error":"Failed to fetch job attachment backfill metadata: attempted to acquire a connection on a closed pool","link_id":"Some(<link:A>)"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "finalize_backfill",
+        "handle_attachment_upload",
+        "fetch_job_attachments_for_backfill"
+      ],
+      "message": null,
+      "fields": {
+        "error": "attempted to acquire a connection on a closed pool"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "finalize_backfill",
+        "release_completion_effects"
+      ],
+      "message": null,
+      "fields": {
+        "error": "attempted to acquire a connection on a closed pool"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "finalize_backfill"
+      ],
+      "message": "failed to release backfill completion-effects lease",
+      "fields": {
+        "error": "attempted to acquire a connection on a closed pool",
+        "job_id": "<job>"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "handle_retryable_error"
+      ],
+      "message": "Retryable error finalizing completed backfill",
+      "fields": {
+        "job_id": "<job>"
+      }
+    }
+  ]
+sql:
+  5fa54a5effe3 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"finalize_backfill\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_completion_outbox": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "effects_lease_expires_at": {
+            "before": null,
+            "after": "<ts>"
+          },
+          "effects_lease_token": {
+            "before": null,
+            "after": "<uuid:1>"
+          },
+          "id": "<missing>"
+        }
+      ]
+    }
+  }

@@ -1,0 +1,139 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: link boundary
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"backfill_thread\":{\"thread_provider_id\":\"b1\",\"refresh_existing\":false,\"link_id\":\"<link:B>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:B>"}
+      INFO backfill_thread {"link":"Link { id: <link:B>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:B>, job_id: <job>, payload: BackfillThreadPayload { thread_provider_id: \"b1\", refresh_existing: false } }"}
+        INFO get_threads_by_link_id_and_provider_ids {"link_id":"<link:B>","provider_ids":"{\"b1\"}"}
+        INFO incr_completed_threads {"job_id":"<job>","link":"Link { id: <link:B>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }"}
+          INFO incr_completed_threads {"job_id":"<job>","link":"Link { id: <link:B>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }"}
+            INFO refresh_email {"user_id":"<user:B>"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_thread",
+        "incr_completed_threads",
+        "incr_completed_threads"
+      ],
+      "message": "Failed to refresh email",
+      "fields": {
+        "error": "missing field `receipts`"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  a8d04a7b6e88 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "POST",
+      "path": "/message/send/user/<user:B>",
+      "body": {
+        "message": {
+          "event": "backfill_progress",
+          "link_id": "<link:B>",
+          "status": "progress",
+          "completed_threads": 1,
+          "total_threads": 100
+        },
+        "message_type": "refresh_email"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"backfill_thread\":{\"thread_provider_id\":\"b1\",\"refresh_existing\":false,\"link_id\":\"<link:B>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "bf_job_status:57000000-0000-0000-0000-000000004000": {
+      "before": {
+        "completed_threads": "0",
+        "total_threads": "100"
+      },
+      "after": {
+        "completed_threads": "1",
+        "total_threads": "100"
+      }
+    }
+  }
+db:
+  {}

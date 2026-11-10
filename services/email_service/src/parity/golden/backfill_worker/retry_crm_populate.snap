@@ -1,0 +1,99 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: lookup policy
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"populate_crm_contact\":{\"contact_email\":\"client@example.org\",\"first_at\":\"<ts>\",\"last_at\":\"<ts>\",\"is_sent\":false,\"link_id\":\"<link:A>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+    INFO handle_retryable_error {"error":"attempted to acquire a connection on a closed pool","link_id":"Some(<link:A>)"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "fetch_link_by_id"
+      ],
+      "message": null,
+      "fields": {
+        "error": "attempted to acquire a connection on a closed pool"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "handle_retryable_error"
+      ],
+      "message": "Retryable error populating CRM contact",
+      "fields": {
+        "link_id": "<link:A>"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"populate_crm_contact\":{\"contact_email\":\"client@example.org\",\"first_at\":\"<ts>\",\"last_at\":\"<ts>\",\"is_sent\":false,\"link_id\":\"<link:A>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

@@ -1,0 +1,150 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: lookup policy
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"backfill_thread\":{\"thread_provider_id\":\"t1\",\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "20"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+    INFO handle_non_retryable_error {}
+      INFO handle_thread_failure {"job_id":"<job>","link_id":"<link:A>"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO incr_completed_threads {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }"}
+          INFO incr_completed_threads {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }"}
+            INFO refresh_email {"user_id":"<user:A>"}
+      INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+        INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing message. The message will be deleted.",
+      "fields": {
+        "error": "BackfillJobNotFound: Backfill job not found",
+        "source": "Backfill job not found"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "handle_non_retryable_error",
+        "handle_thread_failure",
+        "incr_completed_threads",
+        "incr_completed_threads"
+      ],
+      "message": "Failed to refresh email",
+      "fields": {
+        "error": "missing field `receipts`"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=0 rows_returned=0
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "POST",
+      "path": "/message/send/user/<user:A>",
+      "body": {
+        "message": {
+          "event": "backfill_progress",
+          "link_id": "<link:A>",
+          "status": "progress",
+          "completed_threads": 1,
+          "total_threads": 100
+        },
+        "message_type": "refresh_email"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"backfill_thread\":{\"thread_provider_id\":\"t1\",\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "20"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "bf_job_status:57000000-0000-0000-0000-000000004000": {
+      "before": {
+        "completed_threads": "0",
+        "total_threads": "100"
+      },
+      "after": {
+        "completed_threads": "1",
+        "total_threads": "100"
+      }
+    }
+  }
+db:
+  {}

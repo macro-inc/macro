@@ -1,0 +1,1 @@
+SELECT EXISTS ( SELECT 1 FROM crm_email_consent c JOIN email_links l ON l.id = c.link_id AND l.macro_id = c.user_id AND l.is_primary AND l.deleting_at IS NULL JOIN team_user tu ON tu.team_id = c.team_id AND tu.user_id = c.user_id WHERE c.team_id = $1 AND c.link_id = $2 AND c.enabled AND NOT crm_email_domain_blocked($1, c.user_id, split_part($3, '@', 2)) ) AS "consented!"

@@ -1,0 +1,220 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: refusal
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"list_threads\":{\"next_page_token\":null,\"priority_pass\":false,\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO list_threads {"gate_cap":5,"gate_in_flight":1,"label_ids":"[]","limit":100,"link_id":"<link:A>","next_page_token":"None","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO list_threads {"label_ids":"[]","next_page_token":"None","num_threads":100}
+          INFO list_threads {"label_ids":"[]","num_threads":100}
+    INFO defer_rate_limited_operation {"link_id":"Some(<link:A>)","retry_after":"Some(3600s)"}
+      INFO defer_email_backfill_message {"deferrals":1,"delay_seconds":900}
+      INFO handle_retryable_error {"error":"Failed to list provider threads: email provider rate limit exceeded","link_id":"Some(<link:A>)"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "list_threads",
+        "list_threads",
+        "list_threads"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 429 Too Many Requests: {\"error\":{\"code\":429,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "list_threads",
+        "list_threads"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 429 Too Many Requests: {\"error\":{\"code\":429,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "list_threads"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider rate limit exceeded",
+        "origin": "Provider { concurrency: false }"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "defer_rate_limited_operation",
+        "defer_email_backfill_message"
+      ],
+      "message": "Connection encountered an issue and should not be re-used. Marking it for closure",
+      "fields": {
+        "see_for_more_info": "https://smithy-lang.github.io/smithy-rs/design/client/detailed_error_explanations.html"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "defer_rate_limited_operation",
+        "defer_email_backfill_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "service error"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "defer_rate_limited_operation"
+      ],
+      "message": "Failed to defer a rate-limited backfill operation; it will be redelivered",
+      "fields": {
+        "error": "service error\n\nCaused by:\n    0: unhandled error (InternalError)\n    1: Error { code: \"InternalError\", message: \"injected outage\" }"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/threads?maxResults=100",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 429
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"list_threads\":{\"next_page_token\":null,\"priority_pass\":false,\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "list_threads": {
+              "link_id": "<link:A>",
+              "job_id": "<job>",
+              "next_page_token": null,
+              "priority_pass": false,
+              "refresh_existing": false
+            }
+          }
+        },
+        "DelaySeconds": 900,
+        "MessageAttributes": {
+          "deferrals": {
+            "StringValue": "1",
+            "DataType": "Number"
+          }
+        }
+      },
+      "status": 500,
+      "response": {
+        "__type": "com.amazonaws.sqs#InternalError",
+        "message": "injected outage"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-00000001165c}:backfill_cooldown": {
+      "before": null,
+      "after": "1"
+    },
+    "gmail:{51000000-0000-0000-0000-00000001165c}:cooldown": {
+      "before": null,
+      "after": "1"
+    },
+    "gmail:{51000000-0000-0000-0000-00000001165c}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "10"
+      }
+    }
+  }
+db:
+  {}

@@ -1,0 +1,1 @@
+UPDATE crm_companies SET updated_at = now(), first_interaction = CASE WHEN $4 THEN LEAST(first_interaction, $2) ELSE first_interaction END, last_interaction = GREATEST(last_interaction, $3) WHERE id = $1

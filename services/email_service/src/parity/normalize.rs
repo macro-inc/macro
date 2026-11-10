@@ -6,6 +6,8 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::sync::LazyLock;
 
+mod backfill_contacts;
+mod backfill_timing;
 mod test;
 
 static UUID: LazyLock<Regex> = LazyLock::new(|| {
@@ -35,6 +37,12 @@ pub(super) struct Normalizer {
     pub sort_sfs_source_sets: bool,
     pub normalize_gmail_redis_clock: bool,
     pub normalize_embedded_uuids: bool,
+    /// Backfill's admission result is pinned separately from wall-clock latency.
+    pub normalize_backfill_write_wait: bool,
+    /// ContactsNodes serializes a HashSet; only the backfill suite opts in.
+    pub normalize_backfill_contacts_users: bool,
+    /// Pin a refusal's whole-second scheduling boundary, not Redis's sub-second clock.
+    pub normalize_backfill_retry_after: bool,
     replacements: BTreeMap<String, String>,
     uuids: BTreeMap<String, String>,
 }
@@ -107,6 +115,22 @@ impl Normalizer {
                 Value::Array(values.into_iter().map(|v| self.value(section, v)).collect())
             }
             Value::Object(mut values) => {
+                if self.normalize_backfill_retry_after {
+                    backfill_timing::retry_after_ceiling(section, &mut values);
+                }
+                if self.normalize_backfill_contacts_users {
+                    backfill_contacts::users_set(section, &mut values);
+                }
+                if self.normalize_backfill_write_wait
+                    && section == "spans"
+                    && values.get("name").and_then(Value::as_str)
+                        == Some("email.backfill.write_slot")
+                    && let Some(fields) = values.get_mut("fields").and_then(Value::as_object_mut)
+                    && let Some(waited) = fields.get_mut("waited_ms")
+                    && !waited.is_null()
+                {
+                    *waited = Value::String("<elapsed>".into());
+                }
                 if self.normalize_gmail_redis_clock && section == "redis" {
                     for (key, change) in values.iter_mut() {
                         if key.starts_with("gmail:{") && key.ends_with(":window") {

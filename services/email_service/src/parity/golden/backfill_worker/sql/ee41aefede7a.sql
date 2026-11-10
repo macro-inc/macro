@@ -1,0 +1,1 @@
+UPDATE email_backfill_jobs SET init_lease_token = $2, init_lease_expires_at = now() + interval '2 minutes', updated_at = now() WHERE id = $1 AND status = 'Init' AND initialized_at IS NULL AND ( init_lease_expires_at IS NULL OR init_lease_expires_at < now() ) RETURNING init_lease_token AS "init_lease_token!"

@@ -1,0 +1,665 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: calendar backfill
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"backfill_message\":{\"thread_provider_id\":\"t1\",\"thread_db_id\":\"<thread:t1>\",\"message_provider_id\":\"calendar-backfill\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"populate_crm_contact\":{\"link_id\":\"<link:A>\",\"contact_email\":\"sender@example.com\",\"contact_name\":\"Sender\",\"first_at\":\"<time:provider>\",\"last_at\":\"<time:provider>\",\"is_sent\":false}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO backfill_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: BackfillMessagePayload { thread_provider_id: \"t1\", thread_db_id: <thread:t1>, message_provider_id: \"calendar-backfill\" } }"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"calendar-backfill","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"calendar-backfill"}
+            INFO get_message {"message_provider_id":"calendar-backfill"}
+        INFO process_message_pre_insert {"message_id":"calendar-backfill"}
+          INFO clean_message {}
+            INFO clean_message_subject_snippet {}
+            INFO remove_trailing_br_tags {}
+        INFO email.backfill.write_slot {"admitted":true,"in_flight":1,"waited_ms":"<elapsed>"}
+        INFO insert_message {"link_id":"<link:A>","resync":"None","thread_id":"<thread:t1>","update_thread_metadata":false}
+          INFO parse_and_upsert_message_contacts {"link_id":"<link:A>"}
+            INFO upsert_message_contacts {}
+              INFO fetch_contacts_by_emails {"link_id":"<link:A>"}
+              INFO insert_new_contacts {}
+          INFO lock_provider_thread {"link_id":"<link:A>","provider_thread_id":"t1"}
+          INFO insert_db_message {"from_contact_id":"Some(<uuid:1>)","thread_id":"<thread:t1>","update_thread_metadata":false}
+          INFO pending_provider_label_ids {"message_id":"<uuid:2>"}
+          INFO insert_attachments {}
+        INFO get_message_and_thread_id_by_provider_id {"link_id":"<link:A>","provider_id":"calendar-backfill"}
+        INFO get_attachment {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_attachment_id":"calendar-part","provider_message_id":"calendar-backfill","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_attachment_data {"attachment_id":"calendar-part","message_id":"calendar-backfill"}
+            INFO get_attachment_data {"attachment_id":"calendar-part","message_id":"calendar-backfill"}
+        INFO enqueue_email_backfill_message {}
+          INFO enqueue_backfill_message {}
+        INFO incr_completed_messages {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }"}
+          INFO incr_completed_messages {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","p":"BackfillMessagePayload { thread_provider_id: \"t1\", thread_db_id: <thread:t1>, message_provider_id: \"calendar-backfill\" }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_message",
+        "get_attachment",
+        "get_attachment_data",
+        "get_attachment_data"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_message",
+        "get_attachment",
+        "get_attachment_data"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_message",
+        "get_attachment"
+      ],
+      "message": null,
+      "fields": {
+        "error": "transient email provider failure: Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_message"
+      ],
+      "message": "invitation attachment unavailable",
+      "fields": {
+        "error": "\n ● Transient { message: \"Gmail API returned 503 Service Unavailable: {\\\"error\\\":{\\\"code\\\":503,\\\"message\\\":\\\"scripted provider rejection\\\"}}\" }\n ╰ /nix/store/680hxd5631x5695b5qb3mfkfp0birb1l-rust-1.94.0/lib/rustlib/src/rust/library/core/src/ops/function.rs:250\n"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_message"
+      ],
+      "message": "invitation extraction",
+      "fields": {
+        "components": 0,
+        "downloaded": 0,
+        "duration_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  6077ad41cbf5 rows_affected=0 rows_returned=0
+  ce599bbf83fe rows_affected=2 rows_returned=2
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  bd52d423712d rows_affected=1 rows_returned=1
+  312980cf5478 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  00c1122a3bd0 rows_affected=1 rows_returned=0
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  5727c56045ae rows_affected=1 rows_returned=1
+  a5366b9d91c4 rows_affected=1 rows_returned=0
+  32acf65c4e94 rows_affected=1 rows_returned=1
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  1acdbc09424a rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/calendar-backfill",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/calendar-backfill/attachments/calendar-part",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 503
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"backfill_message\":{\"thread_provider_id\":\"t1\",\"thread_db_id\":\"<thread:t1>\",\"message_provider_id\":\"calendar-backfill\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "populate_crm_contact": {
+              "link_id": "<link:A>",
+              "contact_email": "sender@example.com",
+              "contact_name": "Sender",
+              "first_at": "<time:provider>",
+              "last_at": "<time:provider>",
+              "is_sent": false
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-1"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "bf_thread_status:57000000-0000-0000-0000-000000004000:t1": {
+      "before": {
+        "completed_messages": "0",
+        "total_messages": "100"
+      },
+      "after": {
+        "completed_messages": "1",
+        "total_messages": "100"
+      }
+    },
+    "gmail:{51000000-0000-0000-0000-000000011a78}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "10"
+      }
+    }
+  }
+db:
+  {
+    "email_contacts": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:3>",
+          "name": "Recipient",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "email_address": "recipient@example.com",
+          "sfs_photo_url": null,
+          "original_photo_url": null
+        },
+        {
+          "id": "<uuid:1>",
+          "name": "Sender",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "email_address": "sender@example.com",
+          "sfs_photo_url": null,
+          "original_photo_url": null
+        }
+      ],
+      "changed": []
+    },
+    "email_message_labels": {
+      "removed": [],
+      "added": [
+        {
+          "label_id": "<label:A/INBOX>",
+          "message_id": "<uuid:2>"
+        }
+      ],
+      "changed": []
+    },
+    "email_message_recipients": {
+      "removed": [],
+      "added": [
+        {
+          "name": "Recipient",
+          "contact_id": "<uuid:3>",
+          "message_id": "<uuid:2>",
+          "recipient_type": "TO"
+        }
+      ],
+      "changed": []
+    },
+    "email_messages": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:2>",
+          "is_read": true,
+          "is_sent": false,
+          "link_id": "<link:A>",
+          "sent_at": "<time:provider>",
+          "snippet": "fixture preview",
+          "subject": "Fixture subject",
+          "is_draft": false,
+          "body_text": "body",
+          "from_name": "Sender",
+          "global_id": "<calendar-backfill@example.com>",
+          "thread_id": "<thread:t1>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": false,
+          "updated_at": "<ts>",
+          "provider_id": "calendar-backfill",
+          "headers_jsonb": [
+            {
+              "name": "From",
+              "value": "Sender <sender@example.com>"
+            },
+            {
+              "name": "To",
+              "value": "Recipient <recipient@example.com>"
+            },
+            {
+              "name": "Subject",
+              "value": "Fixture subject"
+            },
+            {
+              "name": "Message-ID",
+              "value": "<calendar-backfill@example.com>"
+            },
+            {
+              "name": "Date",
+              "value": "Mon, 21 Sep 2026 14:13:20 +0000"
+            }
+          ],
+          "mailbox_state": null,
+          "size_estimate": 20,
+          "replying_to_id": null,
+          "from_contact_id": "<uuid:1>",
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<time:provider>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t1",
+          "body_html_sanitized": null,
+          "provider_history_id": "200",
+          "remote_draft_revision": null
+        }
+      ],
+      "changed": []
+    }
+  }
+
+step: calendar duplicate
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-2",
+      "Body": "{\"backfillOperation\":{\"backfill_message\":{\"thread_provider_id\":\"t1\",\"thread_db_id\":\"<thread:t1>\",\"message_provider_id\":\"calendar-backfill\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "2"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"populate_crm_contact\":{\"link_id\":\"<link:A>\",\"contact_email\":\"sender@example.com\",\"contact_name\":\"Sender\",\"first_at\":\"<time:provider>\",\"last_at\":\"<time:provider>\",\"is_sent\":false}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO backfill_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: BackfillMessagePayload { thread_provider_id: \"t1\", thread_db_id: <thread:t1>, message_provider_id: \"calendar-backfill\" } }"}
+        INFO fetch_message_labels {"message_db_id":"<uuid:2>"}
+        INFO pending_provider_label_ids {"message_id":"<uuid:2>"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"calendar-backfill","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"calendar-backfill"}
+            INFO get_message {"message_provider_id":"calendar-backfill"}
+        INFO pending_provider_label_ids {"message_id":"<uuid:2>"}
+        INFO process_message_pre_insert {"message_id":"calendar-backfill"}
+          INFO clean_message {}
+            INFO clean_message_subject_snippet {}
+            INFO remove_trailing_br_tags {}
+        INFO email.backfill.write_slot {"admitted":true,"in_flight":1,"waited_ms":"<elapsed>"}
+        INFO insert_message {"link_id":"<link:A>","resync":"Some(ResyncSnapshot { stored_labels: [\"INBOX\"], pending_labels: [] })","thread_id":"<thread:t1>","update_thread_metadata":false}
+          INFO parse_and_upsert_message_contacts {"link_id":"<link:A>"}
+            INFO upsert_message_contacts {}
+              INFO fetch_contacts_by_emails {"link_id":"<link:A>"}
+              INFO update_missing_contact_names {}
+          INFO lock_provider_thread {"link_id":"<link:A>","provider_thread_id":"t1"}
+          INFO lock_thread_label_writes {}
+          INFO insert_db_message {"from_contact_id":"Some(<uuid:1>)","thread_id":"<thread:t1>","update_thread_metadata":false}
+          INFO pending_provider_label_ids {"message_id":"<uuid:2>"}
+          INFO insert_attachments {}
+        INFO get_message_and_thread_id_by_provider_id {"link_id":"<link:A>","provider_id":"calendar-backfill"}
+        INFO get_attachment {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_attachment_id":"calendar-part","provider_message_id":"calendar-backfill","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_attachment_data {"attachment_id":"calendar-part","message_id":"calendar-backfill"}
+            INFO get_attachment_data {"attachment_id":"calendar-part","message_id":"calendar-backfill"}
+        INFO enqueue_email_backfill_message {}
+          INFO enqueue_backfill_message {}
+        INFO incr_completed_messages {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }"}
+          INFO incr_completed_messages {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","p":"BackfillMessagePayload { thread_provider_id: \"t1\", thread_db_id: <thread:t1>, message_provider_id: \"calendar-backfill\" }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-2"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_message",
+        "get_attachment",
+        "get_attachment_data",
+        "get_attachment_data"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_message",
+        "get_attachment",
+        "get_attachment_data"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_message",
+        "get_attachment"
+      ],
+      "message": null,
+      "fields": {
+        "error": "transient email provider failure: Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_message"
+      ],
+      "message": "invitation attachment unavailable",
+      "fields": {
+        "error": "\n ● Transient { message: \"Gmail API returned 503 Service Unavailable: {\\\"error\\\":{\\\"code\\\":503,\\\"message\\\":\\\"scripted provider rejection\\\"}}\" }\n ╰ /nix/store/680hxd5631x5695b5qb3mfkfp0birb1l-rust-1.94.0/lib/rustlib/src/rust/library/core/src/ops/function.rs:250\n"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_message"
+      ],
+      "message": "invitation extraction",
+      "fields": {
+        "components": 0,
+        "downloaded": 0,
+        "duration_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  e54a0921db37 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  6077ad41cbf5 rows_affected=2 rows_returned=2
+  1825ab3c230b rows_affected=0 rows_returned=0
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  bd52d423712d rows_affected=0 rows_returned=0
+  a1012334caf3 rows_affected=1 rows_returned=1
+  00c1122a3bd0 rows_affected=0 rows_returned=0
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  346206754dbd rows_affected=1 rows_returned=1
+  5727c56045ae rows_affected=1 rows_returned=1
+  a5366b9d91c4 rows_affected=0 rows_returned=0
+  32acf65c4e94 rows_affected=1 rows_returned=1
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  1acdbc09424a rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/calendar-backfill",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/calendar-backfill/attachments/calendar-part",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 503
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"backfill_message\":{\"thread_provider_id\":\"t1\",\"thread_db_id\":\"<thread:t1>\",\"message_provider_id\":\"calendar-backfill\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "2"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "populate_crm_contact": {
+              "link_id": "<link:A>",
+              "contact_email": "sender@example.com",
+              "contact_name": "Sender",
+              "first_at": "<time:provider>",
+              "last_at": "<time:provider>",
+              "is_sent": false
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-2"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "bf_thread_status:57000000-0000-0000-0000-000000004000:t1": {
+      "before": {
+        "completed_messages": "1",
+        "total_messages": "100"
+      },
+      "after": {
+        "completed_messages": "2",
+        "total_messages": "100"
+      }
+    },
+    "gmail:{51000000-0000-0000-0000-000000011a78}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "10"
+      }
+    }
+  }
+db:
+  {}

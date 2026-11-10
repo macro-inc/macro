@@ -1,0 +1,1008 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: backfill thread
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"backfill_thread\":{\"thread_provider_id\":\"new-thread\",\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"populate_crm_contact\":{\"link_id\":\"<link:A>\",\"contact_email\":\"sender@example.com\",\"contact_name\":\"Sender\",\"first_at\":\"<time:provider>\",\"last_at\":\"<time:provider>\",\"is_sent\":false}}}",
+        "delay_seconds": 0
+      },
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"backfill_attachment\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\",\"metadata\":{\"attachment_metadata\":{\"attachment_db_id\":\"<uuid:1>\",\"email_provider_id\":\"new-message\",\"provider_attachment_id\":\"part-1\",\"mime_type\":\"application/pdf\",\"filename\":\"a.pdf\",\"internal_date_ts\":\"<time:provider>\",\"message_db_id\":\"<uuid:2>\",\"thread_db_id\":\"<uuid:3>\",\"sender_email\":\"sender@example.com\",\"subject\":\"Fixture subject\"},\"recipient_emails\":[\"recipient@example.com\"],\"backfill\":true,\"upload_destination\":\"Dss\"}}}}",
+        "delay_seconds": 0
+      },
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"backfill_attachment\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\",\"metadata\":{\"attachment_metadata\":{\"attachment_db_id\":\"<uuid:4>\",\"email_provider_id\":\"new-message\",\"provider_attachment_id\":\"part-2\",\"mime_type\":\"image/png\",\"filename\":\"b.png\",\"internal_date_ts\":\"<time:provider>\",\"message_db_id\":\"<uuid:2>\",\"thread_db_id\":\"<uuid:3>\",\"sender_email\":\"sender@example.com\",\"subject\":\"Fixture subject\"},\"recipient_emails\":[\"recipient@example.com\"],\"backfill\":true,\"upload_destination\":\"Sfs\"}}}}",
+        "delay_seconds": 0
+      },
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"backfill_attachment\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\",\"metadata\":{\"attachment_metadata\":{\"attachment_db_id\":\"<uuid:5>\",\"email_provider_id\":\"new-message\",\"provider_attachment_id\":\"part-3\",\"mime_type\":\"video/mp4\",\"filename\":\"c.mp4\",\"internal_date_ts\":\"<time:provider>\",\"message_db_id\":\"<uuid:2>\",\"thread_db_id\":\"<uuid:3>\",\"sender_email\":\"sender@example.com\",\"subject\":\"Fixture subject\"},\"recipient_emails\":[\"recipient@example.com\"],\"backfill\":true,\"upload_destination\":\"Sfs\"}}}}",
+        "delay_seconds": 0
+      },
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"update_thread_metadata\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\",\"thread_provider_id\":\"new-thread\",\"thread_db_id\":\"<uuid:3>\"}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO backfill_thread {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","message_count":1,"scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: BackfillThreadPayload { thread_provider_id: \"new-thread\", refresh_existing: false } }"}
+        INFO get_threads_by_link_id_and_provider_ids {"link_id":"<link:A>","provider_ids":"{\"new-thread\"}"}
+        INFO get_thread {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_thread_id":"new-thread","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_thread {"thread_id":"new-thread"}
+            INFO get_thread {"thread_id":"new-thread"}
+        INFO process_message_pre_insert {"message_id":"new-message"}
+          INFO clean_message {}
+            INFO clean_message_subject_snippet {}
+            INFO remove_trailing_br_tags {}
+        INFO email.backfill.write_slot {"admitted":true,"in_flight":1,"waited_ms":"<elapsed>"}
+        INFO enqueue_email_backfill_message {}
+          INFO enqueue_backfill_message {}
+        INFO insert_backfilled_thread {"link_id":"<link:A>","message_count":1,"thread_provider_id":"new-thread"}
+          INFO parse_and_upsert_message_contacts {"link_id":"<link:A>"}
+            INFO upsert_message_contacts {}
+              INFO fetch_contacts_by_emails {"link_id":"<link:A>"}
+              INFO insert_new_contacts {}
+          INFO insert_thread {"link_id":"<link:A>"}
+            INFO lock_provider_thread {"link_id":"<link:A>","provider_thread_id":"new-thread"}
+            INFO map_service_thread_to_db {"link_id":"<link:A>"}
+          INFO lock_provider_thread {"link_id":"<link:A>","provider_thread_id":"new-thread"}
+          INFO insert_db_message {"from_contact_id":"Some(<uuid:6>)","thread_id":"<uuid:3>","update_thread_metadata":false}
+          INFO pending_provider_label_ids {"message_id":"<uuid:2>"}
+          INFO insert_attachments {}
+            INFO map_service_attachments_to_db {"message_db_id":"<uuid:2>"}
+            INFO sync_thread_attachment_flags {"thread_db_id":"<uuid:3>"}
+        INFO handle_thread_attachment_upload {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","thread_db_id":"<uuid:3>"}
+          INFO thread_document_atts_for_backfill {"thread_id":"<uuid:3>"}
+          INFO thread_media_atts_for_backfill {"thread_id":"<uuid:3>"}
+          INFO send_attachment_backfill_messages {"job_id":"<job>","link_id":"<link:A>"}
+            INFO fetch_db_recipients_in_bulk {"message_ids":"[<uuid:2>, <uuid:2>, <uuid:2>]"}
+            INFO enqueue_email_backfill_message {}
+              INFO enqueue_backfill_message {}
+            INFO enqueue_email_backfill_message {}
+              INFO enqueue_backfill_message {}
+            INFO enqueue_email_backfill_message {}
+              INFO enqueue_backfill_message {}
+        INFO enqueue_thread_metadata_update {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","thread_db_id":"<uuid:3>","thread_provider_id":"new-thread"}
+          INFO enqueue_email_backfill_message {}
+            INFO enqueue_backfill_message {}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  a8d04a7b6e88 rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  6077ad41cbf5 rows_affected=0 rows_returned=0
+  ce599bbf83fe rows_affected=2 rows_returned=2
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  b15912e5b3b7 rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  bd52d423712d rows_affected=1 rows_returned=1
+  312980cf5478 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  00c1122a3bd0 rows_affected=1 rows_returned=0
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  5727c56045ae rows_affected=2 rows_returned=2
+  a5366b9d91c4 rows_affected=2 rows_returned=0
+  32acf65c4e94 rows_affected=1 rows_returned=1
+  32539674eb96 rows_affected=0 rows_returned=0
+  de24caefb0ca rows_affected=3 rows_returned=0
+  78ccc1f8259d rows_affected=1 rows_returned=1
+  5c018c9cf66b rows_affected=1 rows_returned=0
+  7679f1efec53 rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  4f0c0a58d76b rows_affected=1 rows_returned=1
+  d822541cad90 rows_affected=2 rows_returned=2
+  9e3df57cee79 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/threads/new-thread?format=full",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"backfill_thread\":{\"thread_provider_id\":\"new-thread\",\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "populate_crm_contact": {
+              "link_id": "<link:A>",
+              "contact_email": "sender@example.com",
+              "contact_name": "Sender",
+              "first_at": "<time:provider>",
+              "last_at": "<time:provider>",
+              "is_sent": false
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-1"
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "backfill_attachment": {
+              "link_id": "<link:A>",
+              "job_id": "<job>",
+              "metadata": {
+                "attachment_metadata": {
+                  "attachment_db_id": "<uuid:1>",
+                  "email_provider_id": "new-message",
+                  "provider_attachment_id": "part-1",
+                  "mime_type": "application/pdf",
+                  "filename": "a.pdf",
+                  "internal_date_ts": "<time:provider>",
+                  "message_db_id": "<uuid:2>",
+                  "thread_db_id": "<uuid:3>",
+                  "sender_email": "sender@example.com",
+                  "subject": "Fixture subject"
+                },
+                "recipient_emails": [
+                  "recipient@example.com"
+                ],
+                "backfill": true,
+                "upload_destination": "Dss"
+              }
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-2"
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "backfill_attachment": {
+              "link_id": "<link:A>",
+              "job_id": "<job>",
+              "metadata": {
+                "attachment_metadata": {
+                  "attachment_db_id": "<uuid:4>",
+                  "email_provider_id": "new-message",
+                  "provider_attachment_id": "part-2",
+                  "mime_type": "image/png",
+                  "filename": "b.png",
+                  "internal_date_ts": "<time:provider>",
+                  "message_db_id": "<uuid:2>",
+                  "thread_db_id": "<uuid:3>",
+                  "sender_email": "sender@example.com",
+                  "subject": "Fixture subject"
+                },
+                "recipient_emails": [
+                  "recipient@example.com"
+                ],
+                "backfill": true,
+                "upload_destination": "Sfs"
+              }
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-3"
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "backfill_attachment": {
+              "link_id": "<link:A>",
+              "job_id": "<job>",
+              "metadata": {
+                "attachment_metadata": {
+                  "attachment_db_id": "<uuid:5>",
+                  "email_provider_id": "new-message",
+                  "provider_attachment_id": "part-3",
+                  "mime_type": "video/mp4",
+                  "filename": "c.mp4",
+                  "internal_date_ts": "<time:provider>",
+                  "message_db_id": "<uuid:2>",
+                  "thread_db_id": "<uuid:3>",
+                  "sender_email": "sender@example.com",
+                  "subject": "Fixture subject"
+                },
+                "recipient_emails": [
+                  "recipient@example.com"
+                ],
+                "backfill": true,
+                "upload_destination": "Sfs"
+              }
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-4"
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "update_thread_metadata": {
+              "link_id": "<link:A>",
+              "job_id": "<job>",
+              "thread_provider_id": "new-thread",
+              "thread_db_id": "<uuid:3>"
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-5"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011ad0}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "10"
+      }
+    }
+  }
+db:
+  {
+    "email_attachments": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:1>",
+          "filename": "a.pdf",
+          "mime_type": "application/pdf",
+          "content_id": null,
+          "created_at": "<ts>",
+          "message_id": "<uuid:2>",
+          "size_bytes": 4,
+          "reference_url": null,
+          "upload_claimed_at": null,
+          "provider_attachment_id": "part-1"
+        },
+        {
+          "id": "<uuid:4>",
+          "filename": "b.png",
+          "mime_type": "image/png",
+          "content_id": null,
+          "created_at": "<ts>",
+          "message_id": "<uuid:2>",
+          "size_bytes": 4,
+          "reference_url": null,
+          "upload_claimed_at": null,
+          "provider_attachment_id": "part-2"
+        },
+        {
+          "id": "<uuid:5>",
+          "filename": "c.mp4",
+          "mime_type": "video/mp4",
+          "content_id": null,
+          "created_at": "<ts>",
+          "message_id": "<uuid:2>",
+          "size_bytes": 4,
+          "reference_url": null,
+          "upload_claimed_at": null,
+          "provider_attachment_id": "part-3"
+        }
+      ],
+      "changed": []
+    },
+    "email_contacts": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:7>",
+          "name": "Recipient",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "email_address": "recipient@example.com",
+          "sfs_photo_url": null,
+          "original_photo_url": null
+        },
+        {
+          "id": "<uuid:6>",
+          "name": "Sender",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "email_address": "sender@example.com",
+          "sfs_photo_url": null,
+          "original_photo_url": null
+        }
+      ],
+      "changed": []
+    },
+    "email_message_labels": {
+      "removed": [],
+      "added": [
+        {
+          "label_id": "<label:A/INBOX>",
+          "message_id": "<uuid:2>"
+        },
+        {
+          "label_id": "<label:A/UNREAD>",
+          "message_id": "<uuid:2>"
+        }
+      ],
+      "changed": []
+    },
+    "email_message_recipients": {
+      "removed": [],
+      "added": [
+        {
+          "name": "Recipient",
+          "contact_id": "<uuid:7>",
+          "message_id": "<uuid:2>",
+          "recipient_type": "TO"
+        }
+      ],
+      "changed": []
+    },
+    "email_messages": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:2>",
+          "is_read": false,
+          "is_sent": false,
+          "link_id": "<link:A>",
+          "sent_at": "<time:provider>",
+          "snippet": "fixture preview",
+          "subject": "Fixture subject",
+          "is_draft": false,
+          "body_text": "body",
+          "from_name": "Sender",
+          "global_id": "<new-message@example.com>",
+          "thread_id": "<uuid:3>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": false,
+          "updated_at": "<ts>",
+          "provider_id": "new-message",
+          "headers_jsonb": [
+            {
+              "name": "From",
+              "value": "Sender <sender@example.com>"
+            },
+            {
+              "name": "To",
+              "value": "Recipient <recipient@example.com>"
+            },
+            {
+              "name": "Subject",
+              "value": "Fixture subject"
+            },
+            {
+              "name": "Message-ID",
+              "value": "<new-message@example.com>"
+            },
+            {
+              "name": "Date",
+              "value": "Mon, 21 Sep 2026 14:13:20 +0000"
+            }
+          ],
+          "mailbox_state": null,
+          "size_estimate": 20,
+          "replying_to_id": null,
+          "from_contact_id": "<uuid:6>",
+          "has_attachments": true,
+          "draft_generation": 0,
+          "internal_date_ts": "<time:provider>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "new-thread",
+          "body_html_sanitized": null,
+          "provider_history_id": "200",
+          "remote_draft_revision": null
+        }
+      ],
+      "changed": []
+    },
+    "email_threads": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:3>",
+          "is_read": false,
+          "link_id": "<link:A>",
+          "is_signal": false,
+          "created_at": "<ts>",
+          "project_id": null,
+          "updated_at": "<ts>",
+          "provider_id": "new-thread",
+          "inbox_visible": false,
+          "has_received_mail": true,
+          "has_pdf_attachment": true,
+          "has_image_attachment": true,
+          "reminder_returned_at": null,
+          "has_calendar_attachment": false,
+          "has_document_attachment": false,
+          "latest_inbound_message_ts": null,
+          "latest_non_spam_message_ts": null,
+          "latest_outbound_message_ts": null
+        }
+      ],
+      "changed": []
+    }
+  }
+
+step: attachment from recorded send
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "msg-2",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"backfill_attachment\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\",\"metadata\":{\"attachment_metadata\":{\"attachment_db_id\":\"<uuid:1>\",\"email_provider_id\":\"new-message\",\"provider_attachment_id\":\"part-1\",\"mime_type\":\"application/pdf\",\"filename\":\"a.pdf\",\"internal_date_ts\":\"<time:provider>\",\"message_db_id\":\"<uuid:2>\",\"thread_db_id\":\"<uuid:3>\",\"sender_email\":\"sender@example.com\",\"subject\":\"Fixture subject\"},\"recipient_emails\":[\"recipient@example.com\"],\"backfill\":true,\"upload_destination\":\"Dss\"}}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO backfill_attachment {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","p":"BackfillAttachmentPayload { metadata: AttachmentUploadArgs { attachment_metadata: AttachmentUploadMetadata { attachment_db_id: <uuid:1>, email_provider_id: \"new-message\", provider_attachment_id: \"part-1\", mime_type: \"application/pdf\", filename: Some(\"a.pdf\"), internal_date_ts: <time:provider>, message_db_id: <uuid:2>, thread_db_id: <uuid:3>, sender_email: Some(\"sender@example.com\"), subject: Some(\"Fixture subject\") }, recipient_emails: [\"recipient@example.com\"], backfill: true, upload_destination: Dss } }"}
+        INFO get_document_id_by_att_id_and_link {"email_attachment_id":"<uuid:1>","link_id":"<link:A>"}
+        INFO get_attachment {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_attachment_id":"part-1","provider_message_id":"new-message","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_attachment_data {"attachment_id":"part-1","message_id":"new-message"}
+            INFO get_attachment_data {"attachment_id":"part-1","message_id":"new-message"}
+        INFO upload_document_attachment {"args":"AttachmentUploadArgs { attachment_metadata: AttachmentUploadMetadata { attachment_db_id: <uuid:1>, email_provider_id: \"new-message\", provider_attachment_id: \"part-1\", mime_type: \"application/pdf\", filename: Some(\"a.pdf\"), internal_date_ts: <time:provider>, message_db_id: <uuid:2>, thread_db_id: <uuid:3>, sender_email: Some(\"sender@example.com\"), subject: Some(\"Fixture subject\") }, recipient_emails: [\"recipient@example.com\"], backfill: true, upload_destination: Dss }"}
+          INFO create_document_internal {"req":"CreateDocumentRequest { id: None, sha: \"9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08\", document_name: \"a\", file_type: Some(\"pdf\"), mime_type: Some(\"application/pdf\"), document_family_id: None, branched_from_id: None, branched_from_version_id: None, job_id: None, project_id: None, team_id: None, email_attachment_id: Some(<uuid:1>), created_at: Some(<time:provider>), is_task: false, skip_history: true }","user_id":"<user:A>"}
+    INFO handle_non_retryable_error {}
+      INFO cleanup_message {"message_id":"msg-2","message_receipt_handle":"delivery-receipt-1"}
+        INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_attachment",
+        "upload_document_attachment",
+        "create_document_internal"
+      ],
+      "message": "external API error when creating document",
+      "fields": {
+        "body": "{\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}",
+        "document_name": "a",
+        "status": "503 Service Unavailable"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_attachment",
+        "upload_document_attachment"
+      ],
+      "message": "document attachment upload failed",
+      "fields": {
+        "error": "Failed to create document record in DSS: \n ● HTTP 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}\n ╰ crates/document_storage_service_client/src/document.rs:507\n"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing message. The message will be deleted.",
+      "fields": {
+        "error": "GmailApiFailed: Failed to upload attachment",
+        "source": "Failed to upload attachment: Failed to create document record in DSS: \n ● HTTP 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}\n ╰ crates/document_storage_service_client/src/document.rs:507\n"
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  4fa85c690878 rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/new-message/attachments/part-1",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/internal/documents",
+      "body": {
+        "id": null,
+        "sha": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+        "documentName": "a",
+        "fileType": "pdf",
+        "mimeType": "application/pdf",
+        "documentFamilyId": null,
+        "branchedFromId": null,
+        "branchedFromVersionId": null,
+        "jobId": null,
+        "projectId": null,
+        "teamId": null,
+        "emailAttachmentId": "<uuid:1>",
+        "createdAt": "<time:provider>",
+        "isTask": false,
+        "skipHistory": true
+      },
+      "status": 503
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "msg-2",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"backfill_attachment\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\",\"metadata\":{\"attachment_metadata\":{\"attachment_db_id\":\"<uuid:1>\",\"email_provider_id\":\"new-message\",\"provider_attachment_id\":\"part-1\",\"mime_type\":\"application/pdf\",\"filename\":\"a.pdf\",\"internal_date_ts\":\"<time:provider>\",\"message_db_id\":\"<uuid:2>\",\"thread_db_id\":\"<uuid:3>\",\"sender_email\":\"sender@example.com\",\"subject\":\"Fixture subject\"},\"recipient_emails\":[\"recipient@example.com\"],\"backfill\":true,\"upload_destination\":\"Dss\"}}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011ad0}:window": {
+      "before": {
+        "<total_units>": "10"
+      },
+      "after": {
+        "<total_units>": "15"
+      }
+    }
+  }
+db:
+  {}
+
+step: metadata from recorded send
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "msg-5",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"update_thread_metadata\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\",\"thread_provider_id\":\"new-thread\",\"thread_db_id\":\"<uuid:3>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO update_thread_metadata {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: UpdateMetadataPayload { thread_provider_id: \"new-thread\", thread_db_id: <uuid:3> } }"}
+        INFO update_thread_messages_replying_to {"link_id":"<link:A>","thread_db_id":"<uuid:3>"}
+          INFO get_simple_messages_for_thread {"link_id":"<link:A>","thread_id":"<uuid:3>"}
+        INFO incr_completed_threads {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }"}
+          INFO incr_completed_threads {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }"}
+            INFO refresh_email {"user_id":"<user:A>"}
+        INFO kafka.publish {"key":"<link:A>","messaging.destination.name":"macro.email","messaging.operation.name":"publish","messaging.operation.type":"send","messaging.system":"kafka","otel.kind":"producer","topic":"macro.email"}
+    INFO cleanup_message {"message_id":"msg-5","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "update_thread_metadata",
+        "incr_completed_threads",
+        "incr_completed_threads"
+      ],
+      "message": "Failed to refresh email",
+      "fields": {
+        "error": "missing field `receipts`"
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=1 rows_returned=0
+  ad640ecb32fd rows_affected=1 rows_returned=0
+  ef90aa156eea rows_affected=1 rows_returned=1
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "POST",
+      "path": "/message/send/user/<user:A>",
+      "body": {
+        "message": {
+          "event": "backfill_progress",
+          "link_id": "<link:A>",
+          "status": "progress",
+          "completed_threads": 1,
+          "total_threads": 100
+        },
+        "message_type": "refresh_email"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "msg-5",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"update_thread_metadata\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\",\"thread_provider_id\":\"new-thread\",\"thread_db_id\":\"<uuid:3>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  [
+    {
+      "topic": "macro.email",
+      "key": "<link:A>",
+      "payload": {
+        "event_id": "<uuid:8>",
+        "schema_version": 1,
+        "event_type": "email.thread_backfilled",
+        "metadata": {
+          "link_id": "<link:A>",
+          "owner": "<user:A>",
+          "thread_id": "<uuid:3>"
+        }
+      }
+    }
+  ]
+redis:
+  {
+    "bf_job_status:57000000-0000-0000-0000-000000004000": {
+      "before": {
+        "completed_threads": "0",
+        "total_threads": "100"
+      },
+      "after": {
+        "completed_threads": "1",
+        "total_threads": "100"
+      }
+    }
+  }
+db:
+  {
+    "email_threads": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<uuid:3>",
+          "inbox_visible": {
+            "before": false,
+            "after": true
+          },
+          "is_signal": {
+            "before": false,
+            "after": true
+          },
+          "latest_inbound_message_ts": {
+            "before": null,
+            "after": "<time:provider>"
+          },
+          "latest_non_spam_message_ts": {
+            "before": null,
+            "after": "<time:provider>"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: redelivery after committed write
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-2",
+      "Body": "{\"backfillOperation\":{\"backfill_thread\":{\"thread_provider_id\":\"new-thread\",\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "2"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO backfill_thread {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: BackfillThreadPayload { thread_provider_id: \"new-thread\", refresh_existing: false } }"}
+        INFO get_threads_by_link_id_and_provider_ids {"link_id":"<link:A>","provider_ids":"{\"new-thread\"}"}
+        INFO incr_completed_threads {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }"}
+          INFO incr_completed_threads {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-2"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  a8d04a7b6e88 rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"backfill_thread\":{\"thread_provider_id\":\"new-thread\",\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "2"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "bf_job_status:57000000-0000-0000-0000-000000004000": {
+      "before": {
+        "completed_threads": "1",
+        "total_threads": "100"
+      },
+      "after": {
+        "completed_threads": "2",
+        "total_threads": "100"
+      }
+    }
+  }
+db:
+  {}

@@ -1,0 +1,3417 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: People status 200
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO init_backfill {"job_id":"<job>","link_id":"<link:A>","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+        INFO init_backfill {"backfill_job":"BackfillJob { id: <job>, link_id: Some(<link:A>), fusionauth_user_id: \"<fusion:A>\", threads_requested_limit: None, total_threads: 100, status: Init, threads_retrieved_count: 0, created_at: <ts>, updated_at: <ts> }","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+          INFO claim_init_lease {"job_id":"<job>"}
+          INFO list_labels {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO fetch_user_labels {}
+              INFO fetch_user_labels {}
+          INFO sync_labels {"link_id":"<link:A>"}
+            INFO fetch_labels_by_link_id {"link_id":"<link:A>"}
+          INFO get_sync_tokens_by_link_id {"link_id":"<link:A>"}
+          INFO get_self_contact {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_self_contact {}
+              INFO get_self_connection {}
+          INFO list_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","pages":1,"retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_contacts_page {}
+              INFO get_connections_page {}
+          INFO list_other_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","pages":1,"retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_other_contacts_page {}
+              INFO get_other_contacts_page {}
+          INFO upsert_contacts {}
+          INFO insert_sync_tokens {"sync_tokens":"SyncTokens { link_id: <link:A>, contacts_sync_token: Some(\"contacts\"), other_contacts_sync_token: Some(\"other\") }"}
+          INFO ensure_colleague_dms {"link_id":"<link:A>"}
+          INFO get_thread_count {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_profile {}
+              INFO get_profile {}
+          INFO update_job_total_threads {"job_id":"<job>","num_threads":10}
+          INFO finalize_initialization {"job_id":"<job>","lease_token":"<uuid:1>"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Initializing backfill job",
+      "fields": {}
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Inserted contacts into DB",
+      "fields": {
+        "duration": "<volatile>",
+        "link_id": "<link:A>",
+        "num_contacts": 0
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  ee41aefede7a rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  81bbbe533b76 rows_affected=7 rows_returned=7
+  4276a8971e7e rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  5a2ac502c303 rows_affected=1 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  663b6e485f4f rows_affected=1 rows_returned=0
+  4d3470fb9c70 rows_affected=1 rows_returned=0
+  2bbbdbc0995f rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/labels",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me?personFields=names%2CemailAddresses%2Cphotos",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me/connections?personFields=names%2CemailAddresses%2Cphotos&requestSyncToken=true&pageSize=1000",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/otherContacts?readMask=names%2CemailAddresses%2Cphotos&sources=READ_SOURCE_TYPE_CONTACT&sources=READ_SOURCE_TYPE_PROFILE&requestSyncToken=true&pageSize=1000",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/profile",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "bf_job_status:57000000-0000-0000-0000-000000004000": {
+      "before": {
+        "completed_threads": "0",
+        "total_threads": "100"
+      },
+      "after": {
+        "completed_threads": "0",
+        "total_threads": "10"
+      }
+    },
+    "gmail:{51000000-0000-0000-0000-000000011b9b}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {
+    "email_backfill_init_outbox": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:2>",
+          "created_at": "<ts>",
+          "published_at": null,
+          "backfill_job_id": "<job>"
+        }
+      ],
+      "changed": []
+    },
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job>",
+          "initialized_at": {
+            "before": null,
+            "after": "<ts>"
+          },
+          "status": {
+            "before": "Init",
+            "after": "InProgress"
+          },
+          "total_threads": {
+            "before": 100,
+            "after": 10
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    },
+    "email_sync_tokens": {
+      "removed": [],
+      "added": [
+        {
+          "link_id": "<link:A>",
+          "contacts_sync_token": "contacts",
+          "other_contacts_sync_token": "other"
+        }
+      ],
+      "changed": []
+    }
+  }
+
+step: People status 400
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO init_backfill {"job_id":"<job>","link_id":"<link:A>","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+        INFO init_backfill {"backfill_job":"BackfillJob { id: <job>, link_id: Some(<link:A>), fusionauth_user_id: \"<fusion:A>\", threads_requested_limit: None, total_threads: 100, status: Init, threads_retrieved_count: 0, created_at: <ts>, updated_at: <ts> }","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+          INFO claim_init_lease {"job_id":"<job>"}
+          INFO list_labels {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO fetch_user_labels {}
+              INFO fetch_user_labels {}
+          INFO sync_labels {"link_id":"<link:A>"}
+            INFO fetch_labels_by_link_id {"link_id":"<link:A>"}
+          INFO get_sync_tokens_by_link_id {"link_id":"<link:A>"}
+          INFO get_self_contact {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_self_contact {}
+              INFO get_self_connection {}
+          INFO list_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_contacts_page {}
+              INFO get_connections_page {}
+          INFO list_other_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","pages":1,"retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_other_contacts_page {}
+              INFO get_other_contacts_page {}
+          INFO upsert_contacts {}
+          INFO insert_sync_tokens {"sync_tokens":"SyncTokens { link_id: <link:A>, contacts_sync_token: None, other_contacts_sync_token: Some(\"other\") }"}
+          INFO ensure_colleague_dms {"link_id":"<link:A>"}
+          INFO get_thread_count {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_profile {}
+              INFO get_profile {}
+          INFO update_job_total_threads {"job_id":"<job>","num_threads":10}
+          INFO finalize_initialization {"job_id":"<job>","lease_token":"<uuid:3>"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Initializing backfill job",
+      "fields": {}
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page",
+        "get_connections_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts"
+      ],
+      "message": null,
+      "fields": {
+        "error": "permanent email provider failure: Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Inserted contacts into DB",
+      "fields": {
+        "duration": "<volatile>",
+        "link_id": "<link:A>",
+        "num_contacts": 0
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  ee41aefede7a rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  81bbbe533b76 rows_affected=7 rows_returned=7
+  4276a8971e7e rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  5a2ac502c303 rows_affected=1 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  663b6e485f4f rows_affected=1 rows_returned=0
+  4d3470fb9c70 rows_affected=1 rows_returned=0
+  2bbbdbc0995f rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/labels",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me?personFields=names%2CemailAddresses%2Cphotos",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me/connections?personFields=names%2CemailAddresses%2Cphotos&requestSyncToken=true&syncToken=contacts",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 400
+    },
+    {
+      "method": "GET",
+      "path": "/people/otherContacts?readMask=names%2CemailAddresses%2Cphotos&sources=READ_SOURCE_TYPE_CONTACT&sources=READ_SOURCE_TYPE_PROFILE&requestSyncToken=true&syncToken=other",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/profile",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011b9b}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {
+    "email_backfill_init_outbox": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:4>",
+          "created_at": "<ts>",
+          "published_at": null,
+          "backfill_job_id": "<job>"
+        }
+      ],
+      "changed": []
+    },
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job>",
+          "initialized_at": {
+            "before": null,
+            "after": "<ts>"
+          },
+          "status": {
+            "before": "Init",
+            "after": "InProgress"
+          },
+          "total_threads": {
+            "before": 100,
+            "after": 10
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    },
+    "email_sync_tokens": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "contacts_sync_token": {
+            "before": "contacts",
+            "after": null
+          },
+          "link_id": "<link:A>"
+        }
+      ]
+    }
+  }
+
+step: People status 401
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO init_backfill {"job_id":"<job>","link_id":"<link:A>","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+        INFO init_backfill {"backfill_job":"BackfillJob { id: <job>, link_id: Some(<link:A>), fusionauth_user_id: \"<fusion:A>\", threads_requested_limit: None, total_threads: 100, status: Init, threads_retrieved_count: 0, created_at: <ts>, updated_at: <ts> }","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+          INFO claim_init_lease {"job_id":"<job>"}
+          INFO list_labels {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO fetch_user_labels {}
+              INFO fetch_user_labels {}
+          INFO sync_labels {"link_id":"<link:A>"}
+            INFO fetch_labels_by_link_id {"link_id":"<link:A>"}
+          INFO get_sync_tokens_by_link_id {"link_id":"<link:A>"}
+          INFO get_self_contact {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_self_contact {}
+              INFO get_self_connection {}
+          INFO list_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":1}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_contacts_page {}
+              INFO get_connections_page {}
+            INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Fresh","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+                INFO fetch_gmail_access_token_no_cache {}
+                  INFO fetch_token_from_auth_service {}
+                    INFO get_google_access_token {"email":"<fusion:A>@example.com","fusionauth_user_id":"<fusion:A>"}
+                  INFO cache_token_in_redis {}
+            INFO get_contacts_page {}
+              INFO get_connections_page {}
+          INFO list_other_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","pages":1,"retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_other_contacts_page {}
+              INFO get_other_contacts_page {}
+          INFO upsert_contacts {}
+          INFO insert_sync_tokens {"sync_tokens":"SyncTokens { link_id: <link:A>, contacts_sync_token: None, other_contacts_sync_token: Some(\"other\") }"}
+          INFO ensure_colleague_dms {"link_id":"<link:A>"}
+          INFO get_thread_count {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_profile {}
+              INFO get_profile {}
+          INFO update_job_total_threads {"job_id":"<job>","num_threads":10}
+          INFO finalize_initialization {"job_id":"<job>","lease_token":"<uuid:5>"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Initializing backfill job",
+      "fields": {}
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page",
+        "get_connections_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page",
+        "get_connections_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 401 Unauthorized: {\"error\":{\"code\":401,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider authorization is required"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Inserted contacts into DB",
+      "fields": {
+        "duration": "<volatile>",
+        "link_id": "<link:A>",
+        "num_contacts": 0
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  ee41aefede7a rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  81bbbe533b76 rows_affected=7 rows_returned=7
+  4276a8971e7e rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  5a2ac502c303 rows_affected=1 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  663b6e485f4f rows_affected=1 rows_returned=0
+  4d3470fb9c70 rows_affected=1 rows_returned=0
+  2bbbdbc0995f rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/labels",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me?personFields=names%2CemailAddresses%2Cphotos",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me/connections?personFields=names%2CemailAddresses%2Cphotos&requestSyncToken=true&pageSize=1000",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 401
+    },
+    {
+      "method": "GET",
+      "path": "/internal/google_access_token?fusionauth_user_id=<fusion:A>&email=<fusion:A>%40example.com",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me/connections?personFields=names%2CemailAddresses%2Cphotos&requestSyncToken=true&pageSize=1000",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 401
+    },
+    {
+      "method": "GET",
+      "path": "/people/otherContacts?readMask=names%2CemailAddresses%2Cphotos&sources=READ_SOURCE_TYPE_CONTACT&sources=READ_SOURCE_TYPE_PROFILE&requestSyncToken=true&syncToken=other",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/profile",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011b9b}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "6"
+      }
+    }
+  }
+db:
+  {
+    "email_backfill_init_outbox": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:6>",
+          "created_at": "<ts>",
+          "published_at": null,
+          "backfill_job_id": "<job>"
+        }
+      ],
+      "changed": []
+    },
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job>",
+          "initialized_at": {
+            "before": null,
+            "after": "<ts>"
+          },
+          "status": {
+            "before": "Init",
+            "after": "InProgress"
+          },
+          "total_threads": {
+            "before": 100,
+            "after": 10
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: People status 403
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO init_backfill {"job_id":"<job>","link_id":"<link:A>","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+        INFO init_backfill {"backfill_job":"BackfillJob { id: <job>, link_id: Some(<link:A>), fusionauth_user_id: \"<fusion:A>\", threads_requested_limit: None, total_threads: 100, status: Init, threads_retrieved_count: 0, created_at: <ts>, updated_at: <ts> }","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+          INFO claim_init_lease {"job_id":"<job>"}
+          INFO list_labels {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO fetch_user_labels {}
+              INFO fetch_user_labels {}
+          INFO sync_labels {"link_id":"<link:A>"}
+            INFO fetch_labels_by_link_id {"link_id":"<link:A>"}
+          INFO get_sync_tokens_by_link_id {"link_id":"<link:A>"}
+          INFO get_self_contact {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_self_contact {}
+              INFO get_self_connection {}
+          INFO list_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_contacts_page {}
+              INFO get_connections_page {}
+          INFO list_other_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","pages":1,"retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_other_contacts_page {}
+              INFO get_other_contacts_page {}
+          INFO upsert_contacts {}
+          INFO insert_sync_tokens {"sync_tokens":"SyncTokens { link_id: <link:A>, contacts_sync_token: None, other_contacts_sync_token: Some(\"other\") }"}
+          INFO ensure_colleague_dms {"link_id":"<link:A>"}
+          INFO get_thread_count {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_profile {}
+              INFO get_profile {}
+          INFO update_job_total_threads {"job_id":"<job>","num_threads":10}
+          INFO finalize_initialization {"job_id":"<job>","lease_token":"<uuid:7>"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Initializing backfill job",
+      "fields": {}
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page",
+        "get_connections_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 403 Forbidden: {\"error\":{\"code\":403,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 403 Forbidden: {\"error\":{\"code\":403,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider operation is forbidden"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Inserted contacts into DB",
+      "fields": {
+        "duration": "<volatile>",
+        "link_id": "<link:A>",
+        "num_contacts": 0
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  ee41aefede7a rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  81bbbe533b76 rows_affected=7 rows_returned=7
+  4276a8971e7e rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  5a2ac502c303 rows_affected=1 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  663b6e485f4f rows_affected=1 rows_returned=0
+  4d3470fb9c70 rows_affected=1 rows_returned=0
+  2bbbdbc0995f rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/labels",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me?personFields=names%2CemailAddresses%2Cphotos",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me/connections?personFields=names%2CemailAddresses%2Cphotos&requestSyncToken=true&pageSize=1000",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 403
+    },
+    {
+      "method": "GET",
+      "path": "/people/otherContacts?readMask=names%2CemailAddresses%2Cphotos&sources=READ_SOURCE_TYPE_CONTACT&sources=READ_SOURCE_TYPE_PROFILE&requestSyncToken=true&syncToken=other",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/profile",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011b9b}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {
+    "email_backfill_init_outbox": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:8>",
+          "created_at": "<ts>",
+          "published_at": null,
+          "backfill_job_id": "<job>"
+        }
+      ],
+      "changed": []
+    },
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job>",
+          "initialized_at": {
+            "before": null,
+            "after": "<ts>"
+          },
+          "status": {
+            "before": "Init",
+            "after": "InProgress"
+          },
+          "total_threads": {
+            "before": 100,
+            "after": 10
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: People status 404
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO init_backfill {"job_id":"<job>","link_id":"<link:A>","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+        INFO init_backfill {"backfill_job":"BackfillJob { id: <job>, link_id: Some(<link:A>), fusionauth_user_id: \"<fusion:A>\", threads_requested_limit: None, total_threads: 100, status: Init, threads_retrieved_count: 0, created_at: <ts>, updated_at: <ts> }","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+          INFO claim_init_lease {"job_id":"<job>"}
+          INFO list_labels {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO fetch_user_labels {}
+              INFO fetch_user_labels {}
+          INFO sync_labels {"link_id":"<link:A>"}
+            INFO fetch_labels_by_link_id {"link_id":"<link:A>"}
+          INFO get_sync_tokens_by_link_id {"link_id":"<link:A>"}
+          INFO get_self_contact {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_self_contact {}
+              INFO get_self_connection {}
+          INFO list_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_contacts_page {}
+              INFO get_connections_page {}
+          INFO list_other_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","pages":1,"retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_other_contacts_page {}
+              INFO get_other_contacts_page {}
+          INFO upsert_contacts {}
+          INFO insert_sync_tokens {"sync_tokens":"SyncTokens { link_id: <link:A>, contacts_sync_token: None, other_contacts_sync_token: Some(\"other\") }"}
+          INFO ensure_colleague_dms {"link_id":"<link:A>"}
+          INFO get_thread_count {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_profile {}
+              INFO get_profile {}
+          INFO update_job_total_threads {"job_id":"<job>","num_threads":10}
+          INFO finalize_initialization {"job_id":"<job>","lease_token":"<uuid:9>"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Initializing backfill job",
+      "fields": {}
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page",
+        "get_connections_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 404 Not Found: {\"error\":{\"code\":404,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 404 Not Found: {\"error\":{\"code\":404,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider resource was not found"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Inserted contacts into DB",
+      "fields": {
+        "duration": "<volatile>",
+        "link_id": "<link:A>",
+        "num_contacts": 0
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  ee41aefede7a rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  81bbbe533b76 rows_affected=7 rows_returned=7
+  4276a8971e7e rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  5a2ac502c303 rows_affected=1 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  663b6e485f4f rows_affected=1 rows_returned=0
+  4d3470fb9c70 rows_affected=1 rows_returned=0
+  2bbbdbc0995f rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/labels",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me?personFields=names%2CemailAddresses%2Cphotos",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me/connections?personFields=names%2CemailAddresses%2Cphotos&requestSyncToken=true&pageSize=1000",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 404
+    },
+    {
+      "method": "GET",
+      "path": "/people/otherContacts?readMask=names%2CemailAddresses%2Cphotos&sources=READ_SOURCE_TYPE_CONTACT&sources=READ_SOURCE_TYPE_PROFILE&requestSyncToken=true&syncToken=other",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/profile",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011b9b}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {
+    "email_backfill_init_outbox": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:10>",
+          "created_at": "<ts>",
+          "published_at": null,
+          "backfill_job_id": "<job>"
+        }
+      ],
+      "changed": []
+    },
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job>",
+          "initialized_at": {
+            "before": null,
+            "after": "<ts>"
+          },
+          "status": {
+            "before": "Init",
+            "after": "InProgress"
+          },
+          "total_threads": {
+            "before": 100,
+            "after": 10
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: People status 409
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO init_backfill {"job_id":"<job>","link_id":"<link:A>","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+        INFO init_backfill {"backfill_job":"BackfillJob { id: <job>, link_id: Some(<link:A>), fusionauth_user_id: \"<fusion:A>\", threads_requested_limit: None, total_threads: 100, status: Init, threads_retrieved_count: 0, created_at: <ts>, updated_at: <ts> }","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+          INFO claim_init_lease {"job_id":"<job>"}
+          INFO list_labels {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO fetch_user_labels {}
+              INFO fetch_user_labels {}
+          INFO sync_labels {"link_id":"<link:A>"}
+            INFO fetch_labels_by_link_id {"link_id":"<link:A>"}
+          INFO get_sync_tokens_by_link_id {"link_id":"<link:A>"}
+          INFO get_self_contact {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_self_contact {}
+              INFO get_self_connection {}
+          INFO list_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_contacts_page {}
+              INFO get_connections_page {}
+          INFO list_other_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","pages":1,"retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_other_contacts_page {}
+              INFO get_other_contacts_page {}
+          INFO upsert_contacts {}
+          INFO insert_sync_tokens {"sync_tokens":"SyncTokens { link_id: <link:A>, contacts_sync_token: None, other_contacts_sync_token: Some(\"other\") }"}
+          INFO ensure_colleague_dms {"link_id":"<link:A>"}
+          INFO get_thread_count {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_profile {}
+              INFO get_profile {}
+          INFO update_job_total_threads {"job_id":"<job>","num_threads":10}
+          INFO finalize_initialization {"job_id":"<job>","lease_token":"<uuid:11>"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Initializing backfill job",
+      "fields": {}
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page",
+        "get_connections_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 409 Conflict: {\"error\":{\"code\":409,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 409 Conflict: {\"error\":{\"code\":409,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider state conflict"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Inserted contacts into DB",
+      "fields": {
+        "duration": "<volatile>",
+        "link_id": "<link:A>",
+        "num_contacts": 0
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  ee41aefede7a rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  81bbbe533b76 rows_affected=7 rows_returned=7
+  4276a8971e7e rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  5a2ac502c303 rows_affected=1 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  663b6e485f4f rows_affected=1 rows_returned=0
+  4d3470fb9c70 rows_affected=1 rows_returned=0
+  2bbbdbc0995f rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/labels",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me?personFields=names%2CemailAddresses%2Cphotos",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me/connections?personFields=names%2CemailAddresses%2Cphotos&requestSyncToken=true&pageSize=1000",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 409
+    },
+    {
+      "method": "GET",
+      "path": "/people/otherContacts?readMask=names%2CemailAddresses%2Cphotos&sources=READ_SOURCE_TYPE_CONTACT&sources=READ_SOURCE_TYPE_PROFILE&requestSyncToken=true&syncToken=other",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/profile",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011b9b}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {
+    "email_backfill_init_outbox": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:12>",
+          "created_at": "<ts>",
+          "published_at": null,
+          "backfill_job_id": "<job>"
+        }
+      ],
+      "changed": []
+    },
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job>",
+          "initialized_at": {
+            "before": null,
+            "after": "<ts>"
+          },
+          "status": {
+            "before": "Init",
+            "after": "InProgress"
+          },
+          "total_threads": {
+            "before": 100,
+            "after": 10
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: People status 429
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+        "delay_seconds": 60
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO init_backfill {"job_id":"<job>","link_id":"<link:A>","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+        INFO init_backfill {"backfill_job":"BackfillJob { id: <job>, link_id: Some(<link:A>), fusionauth_user_id: \"<fusion:A>\", threads_requested_limit: None, total_threads: 100, status: Init, threads_retrieved_count: 0, created_at: <ts>, updated_at: <ts> }","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+          INFO claim_init_lease {"job_id":"<job>"}
+          INFO list_labels {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO fetch_user_labels {}
+              INFO fetch_user_labels {}
+          INFO sync_labels {"link_id":"<link:A>"}
+            INFO fetch_labels_by_link_id {"link_id":"<link:A>"}
+          INFO get_sync_tokens_by_link_id {"link_id":"<link:A>"}
+          INFO get_self_contact {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_self_contact {}
+              INFO get_self_connection {}
+          INFO list_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_contacts_page {}
+              INFO get_connections_page {}
+          INFO list_other_contacts {"link_id":"<link:A>","retry_count":0}
+          INFO upsert_contacts {}
+          INFO insert_sync_tokens {"sync_tokens":"SyncTokens { link_id: <link:A>, contacts_sync_token: None, other_contacts_sync_token: None }"}
+          INFO ensure_colleague_dms {"link_id":"<link:A>"}
+          INFO get_thread_count {"link_id":"<link:A>","retry_count":0}
+          INFO release_init_lease {"job_id":"<job>","lease_token":"<uuid:13>"}
+    INFO defer_rate_limited_operation {"link_id":"Some(<link:A>)","retry_after":"Some(60s)"}
+      INFO defer_email_backfill_message {"deferrals":1,"delay_seconds":60}
+      INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+        INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Initializing backfill job",
+      "fields": {}
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page",
+        "get_connections_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 429 Too Many Requests: {\"error\":{\"code\":429,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 429 Too Many Requests: {\"error\":{\"code\":429,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider rate limit exceeded"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_other_contacts"
+      ],
+      "message": null,
+      "fields": {
+        "error": "email provider rate limit exceeded"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Inserted contacts into DB",
+      "fields": {
+        "duration": "<volatile>",
+        "link_id": "<link:A>",
+        "num_contacts": 0
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Retryable error occurred"
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  ee41aefede7a rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  81bbbe533b76 rows_affected=7 rows_returned=7
+  4276a8971e7e rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  5a2ac502c303 rows_affected=1 rows_returned=0
+  b9a66fdb76ba rows_affected=1 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/labels",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me?personFields=names%2CemailAddresses%2Cphotos",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me/connections?personFields=names%2CemailAddresses%2Cphotos&requestSyncToken=true&pageSize=1000",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 429
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "init": {
+              "link_id": "<link:A>",
+              "job_id": "<job>"
+            }
+          }
+        },
+        "DelaySeconds": 60,
+        "MessageAttributes": {
+          "deferrals": {
+            "StringValue": "1",
+            "DataType": "Number"
+          }
+        }
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-1"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011b9b}:backfill_cooldown": {
+      "before": null,
+      "after": "1"
+    },
+    "gmail:{51000000-0000-0000-0000-000000011b9b}:cooldown": {
+      "before": null,
+      "after": "1"
+    },
+    "gmail:{51000000-0000-0000-0000-000000011b9b}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "3"
+      }
+    }
+  }
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    },
+    "email_sync_tokens": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "link_id": "<link:A>",
+          "other_contacts_sync_token": {
+            "before": "other",
+            "after": null
+          }
+        }
+      ]
+    }
+  }
+
+step: People status 500
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO init_backfill {"job_id":"<job>","link_id":"<link:A>","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+        INFO init_backfill {"backfill_job":"BackfillJob { id: <job>, link_id: Some(<link:A>), fusionauth_user_id: \"<fusion:A>\", threads_requested_limit: None, total_threads: 100, status: Init, threads_retrieved_count: 0, created_at: <ts>, updated_at: <ts> }","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+          INFO claim_init_lease {"job_id":"<job>"}
+          INFO list_labels {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO fetch_user_labels {}
+              INFO fetch_user_labels {}
+          INFO sync_labels {"link_id":"<link:A>"}
+            INFO fetch_labels_by_link_id {"link_id":"<link:A>"}
+          INFO get_sync_tokens_by_link_id {"link_id":"<link:A>"}
+          INFO get_self_contact {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_self_contact {}
+              INFO get_self_connection {}
+          INFO list_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_contacts_page {}
+              INFO get_connections_page {}
+          INFO list_other_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","pages":1,"retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_other_contacts_page {}
+              INFO get_other_contacts_page {}
+          INFO upsert_contacts {}
+          INFO insert_sync_tokens {"sync_tokens":"SyncTokens { link_id: <link:A>, contacts_sync_token: None, other_contacts_sync_token: Some(\"other\") }"}
+          INFO ensure_colleague_dms {"link_id":"<link:A>"}
+          INFO get_thread_count {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_profile {}
+              INFO get_profile {}
+          INFO update_job_total_threads {"job_id":"<job>","num_threads":10}
+          INFO finalize_initialization {"job_id":"<job>","lease_token":"<uuid:14>"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Initializing backfill job",
+      "fields": {}
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page",
+        "get_connections_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 500 Internal Server Error: {\"error\":{\"code\":500,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 500 Internal Server Error: {\"error\":{\"code\":500,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts"
+      ],
+      "message": null,
+      "fields": {
+        "error": "transient email provider failure: Gmail API returned 500 Internal Server Error: {\"error\":{\"code\":500,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Inserted contacts into DB",
+      "fields": {
+        "duration": "<volatile>",
+        "link_id": "<link:A>",
+        "num_contacts": 0
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  ee41aefede7a rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  81bbbe533b76 rows_affected=7 rows_returned=7
+  4276a8971e7e rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  5a2ac502c303 rows_affected=1 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  663b6e485f4f rows_affected=1 rows_returned=0
+  4d3470fb9c70 rows_affected=1 rows_returned=0
+  2bbbdbc0995f rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/labels",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me?personFields=names%2CemailAddresses%2Cphotos",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me/connections?personFields=names%2CemailAddresses%2Cphotos&requestSyncToken=true&pageSize=1000",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 500
+    },
+    {
+      "method": "GET",
+      "path": "/people/otherContacts?readMask=names%2CemailAddresses%2Cphotos&sources=READ_SOURCE_TYPE_CONTACT&sources=READ_SOURCE_TYPE_PROFILE&requestSyncToken=true&pageSize=1000",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/profile",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011b9b}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {
+    "email_backfill_init_outbox": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:15>",
+          "created_at": "<ts>",
+          "published_at": null,
+          "backfill_job_id": "<job>"
+        }
+      ],
+      "changed": []
+    },
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job>",
+          "initialized_at": {
+            "before": null,
+            "after": "<ts>"
+          },
+          "status": {
+            "before": "Init",
+            "after": "InProgress"
+          },
+          "total_threads": {
+            "before": 100,
+            "after": 10
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    },
+    "email_sync_tokens": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "link_id": "<link:A>",
+          "other_contacts_sync_token": {
+            "before": null,
+            "after": "other"
+          }
+        }
+      ]
+    }
+  }
+
+step: People status 503
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO init_backfill {"job_id":"<job>","link_id":"<link:A>","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+        INFO init_backfill {"backfill_job":"BackfillJob { id: <job>, link_id: Some(<link:A>), fusionauth_user_id: \"<fusion:A>\", threads_requested_limit: None, total_threads: 100, status: Init, threads_retrieved_count: 0, created_at: <ts>, updated_at: <ts> }","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+          INFO claim_init_lease {"job_id":"<job>"}
+          INFO list_labels {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO fetch_user_labels {}
+              INFO fetch_user_labels {}
+          INFO sync_labels {"link_id":"<link:A>"}
+            INFO fetch_labels_by_link_id {"link_id":"<link:A>"}
+          INFO get_sync_tokens_by_link_id {"link_id":"<link:A>"}
+          INFO get_self_contact {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_self_contact {}
+              INFO get_self_connection {}
+          INFO list_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_contacts_page {}
+              INFO get_connections_page {}
+          INFO list_other_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","pages":1,"retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_other_contacts_page {}
+              INFO get_other_contacts_page {}
+          INFO upsert_contacts {}
+          INFO insert_sync_tokens {"sync_tokens":"SyncTokens { link_id: <link:A>, contacts_sync_token: None, other_contacts_sync_token: Some(\"other\") }"}
+          INFO ensure_colleague_dms {"link_id":"<link:A>"}
+          INFO get_thread_count {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_profile {}
+              INFO get_profile {}
+          INFO update_job_total_threads {"job_id":"<job>","num_threads":10}
+          INFO finalize_initialization {"job_id":"<job>","lease_token":"<uuid:16>"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Initializing backfill job",
+      "fields": {}
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page",
+        "get_connections_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts"
+      ],
+      "message": null,
+      "fields": {
+        "error": "transient email provider failure: Gmail API returned 503 Service Unavailable: {\"error\":{\"code\":503,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Inserted contacts into DB",
+      "fields": {
+        "duration": "<volatile>",
+        "link_id": "<link:A>",
+        "num_contacts": 0
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  ee41aefede7a rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  81bbbe533b76 rows_affected=7 rows_returned=7
+  4276a8971e7e rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  5a2ac502c303 rows_affected=1 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  663b6e485f4f rows_affected=1 rows_returned=0
+  4d3470fb9c70 rows_affected=1 rows_returned=0
+  2bbbdbc0995f rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/labels",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me?personFields=names%2CemailAddresses%2Cphotos",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me/connections?personFields=names%2CemailAddresses%2Cphotos&requestSyncToken=true&pageSize=1000",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 503
+    },
+    {
+      "method": "GET",
+      "path": "/people/otherContacts?readMask=names%2CemailAddresses%2Cphotos&sources=READ_SOURCE_TYPE_CONTACT&sources=READ_SOURCE_TYPE_PROFILE&requestSyncToken=true&syncToken=other",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/profile",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011b9b}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {
+    "email_backfill_init_outbox": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:17>",
+          "created_at": "<ts>",
+          "published_at": null,
+          "backfill_job_id": "<job>"
+        }
+      ],
+      "changed": []
+    },
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job>",
+          "initialized_at": {
+            "before": null,
+            "after": "<ts>"
+          },
+          "status": {
+            "before": "Init",
+            "after": "InProgress"
+          },
+          "total_threads": {
+            "before": 100,
+            "after": 10
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: People status 422
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO init_backfill {"job_id":"<job>","link_id":"<link:A>","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+        INFO init_backfill {"backfill_job":"BackfillJob { id: <job>, link_id: Some(<link:A>), fusionauth_user_id: \"<fusion:A>\", threads_requested_limit: None, total_threads: 100, status: Init, threads_retrieved_count: 0, created_at: <ts>, updated_at: <ts> }","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+          INFO claim_init_lease {"job_id":"<job>"}
+          INFO list_labels {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO fetch_user_labels {}
+              INFO fetch_user_labels {}
+          INFO sync_labels {"link_id":"<link:A>"}
+            INFO fetch_labels_by_link_id {"link_id":"<link:A>"}
+          INFO get_sync_tokens_by_link_id {"link_id":"<link:A>"}
+          INFO get_self_contact {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_self_contact {}
+              INFO get_self_connection {}
+          INFO list_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_contacts_page {}
+              INFO get_connections_page {}
+          INFO list_other_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","pages":1,"retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_other_contacts_page {}
+              INFO get_other_contacts_page {}
+          INFO upsert_contacts {}
+          INFO insert_sync_tokens {"sync_tokens":"SyncTokens { link_id: <link:A>, contacts_sync_token: None, other_contacts_sync_token: Some(\"other\") }"}
+          INFO ensure_colleague_dms {"link_id":"<link:A>"}
+          INFO get_thread_count {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_profile {}
+              INFO get_profile {}
+          INFO update_job_total_threads {"job_id":"<job>","num_threads":10}
+          INFO finalize_initialization {"job_id":"<job>","lease_token":"<uuid:18>"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Initializing backfill job",
+      "fields": {}
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page",
+        "get_connections_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API response decode error: error decoding response body"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API response decode error: error decoding response body"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts"
+      ],
+      "message": null,
+      "fields": {
+        "error": "permanent email provider failure: Gmail API response decode error: error decoding response body"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Inserted contacts into DB",
+      "fields": {
+        "duration": "<volatile>",
+        "link_id": "<link:A>",
+        "num_contacts": 0
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  ee41aefede7a rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  81bbbe533b76 rows_affected=7 rows_returned=7
+  4276a8971e7e rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  5a2ac502c303 rows_affected=1 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  663b6e485f4f rows_affected=1 rows_returned=0
+  4d3470fb9c70 rows_affected=1 rows_returned=0
+  2bbbdbc0995f rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/labels",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me?personFields=names%2CemailAddresses%2Cphotos",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me/connections?personFields=names%2CemailAddresses%2Cphotos&requestSyncToken=true&pageSize=1000",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/otherContacts?readMask=names%2CemailAddresses%2Cphotos&sources=READ_SOURCE_TYPE_CONTACT&sources=READ_SOURCE_TYPE_PROFILE&requestSyncToken=true&syncToken=other",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/profile",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011b9b}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {
+    "email_backfill_init_outbox": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:19>",
+          "created_at": "<ts>",
+          "published_at": null,
+          "backfill_job_id": "<job>"
+        }
+      ],
+      "changed": []
+    },
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job>",
+          "initialized_at": {
+            "before": null,
+            "after": "<ts>"
+          },
+          "status": {
+            "before": "Init",
+            "after": "InProgress"
+          },
+          "total_threads": {
+            "before": 100,
+            "after": 10
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }
+
+step: People status 0
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO init_backfill {"job_id":"<job>","link_id":"<link:A>","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+        INFO init_backfill {"backfill_job":"BackfillJob { id: <job>, link_id: Some(<link:A>), fusionauth_user_id: \"<fusion:A>\", threads_requested_limit: None, total_threads: 100, status: Init, threads_retrieved_count: 0, created_at: <ts>, updated_at: <ts> }","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+          INFO claim_init_lease {"job_id":"<job>"}
+          INFO list_labels {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO fetch_user_labels {}
+              INFO fetch_user_labels {}
+          INFO sync_labels {"link_id":"<link:A>"}
+            INFO fetch_labels_by_link_id {"link_id":"<link:A>"}
+          INFO get_sync_tokens_by_link_id {"link_id":"<link:A>"}
+          INFO get_self_contact {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_self_contact {}
+              INFO get_self_connection {}
+          INFO list_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_contacts_page {}
+              INFO get_connections_page {}
+          INFO list_other_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","pages":1,"retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_other_contacts_page {}
+              INFO get_other_contacts_page {}
+          INFO upsert_contacts {}
+          INFO insert_sync_tokens {"sync_tokens":"SyncTokens { link_id: <link:A>, contacts_sync_token: None, other_contacts_sync_token: Some(\"other\") }"}
+          INFO ensure_colleague_dms {"link_id":"<link:A>"}
+          INFO get_thread_count {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_profile {}
+              INFO get_profile {}
+          INFO update_job_total_threads {"job_id":"<job>","num_threads":10}
+          INFO finalize_initialization {"job_id":"<job>","lease_token":"<uuid:20>"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Initializing backfill job",
+      "fields": {}
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page",
+        "get_connections_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API transport error: error sending request"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts",
+        "get_contacts_page"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API transport error: error sending request"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "list_contacts"
+      ],
+      "message": null,
+      "fields": {
+        "error": "transient email provider failure: Gmail API transport error: error sending request"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Inserted contacts into DB",
+      "fields": {
+        "duration": "<volatile>",
+        "link_id": "<link:A>",
+        "num_contacts": 0
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  ee41aefede7a rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  81bbbe533b76 rows_affected=7 rows_returned=7
+  4276a8971e7e rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  5a2ac502c303 rows_affected=1 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  663b6e485f4f rows_affected=1 rows_returned=0
+  4d3470fb9c70 rows_affected=1 rows_returned=0
+  2bbbdbc0995f rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/labels",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me?personFields=names%2CemailAddresses%2Cphotos",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me/connections?personFields=names%2CemailAddresses%2Cphotos&requestSyncToken=true&pageSize=1000",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/otherContacts?readMask=names%2CemailAddresses%2Cphotos&sources=READ_SOURCE_TYPE_CONTACT&sources=READ_SOURCE_TYPE_PROFILE&requestSyncToken=true&syncToken=other",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/profile",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011b9b}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {
+    "email_backfill_init_outbox": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:21>",
+          "created_at": "<ts>",
+          "published_at": null,
+          "backfill_job_id": "<job>"
+        }
+      ],
+      "changed": []
+    },
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job>",
+          "initialized_at": {
+            "before": null,
+            "after": "<ts>"
+          },
+          "status": {
+            "before": "Init",
+            "after": "InProgress"
+          },
+          "total_threads": {
+            "before": 100,
+            "after": 10
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }

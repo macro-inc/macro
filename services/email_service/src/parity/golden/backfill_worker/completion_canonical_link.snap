@@ -1,0 +1,276 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: finalize
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"finalize_backfill\":{\"link_id\":\"<link:B>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO finalize_backfill {"job_id":"<job>","link_id":"<link:B>"}
+        INFO claim_completion_effects {"job_id":"<job>"}
+        INFO get_backfill_job {"job_id":"<job>"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO handle_attachment_upload {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }"}
+          INFO fetch_job_attachments_for_backfill {"link_id":"<link:A>"}
+        INFO handle_contacts_sync {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }"}
+          INFO fetch_contacts_emails_by_link_id {"link_id":"<link:A>"}
+        INFO ensure_top_contact_dms {"link_id":"<link:A>"}
+        INFO refresh_email {"user_id":"<user:A>"}
+        INFO mark_completion_effects_complete {"job_id":"<job>","lease_token":"<uuid:1>"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "finalize_backfill"
+      ],
+      "message": "using the completed backfill job's canonical link",
+      "fields": {
+        "canonical_link_id": "<link:A>",
+        "message_link_id": "<link:B>"
+      }
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "finalize_backfill",
+        "handle_contacts_sync"
+      ],
+      "message": "Populating 0 contacts for macro email <user:A>",
+      "fields": {}
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "finalize_backfill",
+        "handle_contacts_sync"
+      ],
+      "message": "Successfully populated 0 contacts for macro email <user:A>",
+      "fields": {}
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "finalize_backfill"
+      ],
+      "message": "Failed to refresh email",
+      "fields": {
+        "error": "missing field `receipts`"
+      }
+    }
+  ]
+sql:
+  5fa54a5effe3 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  6a0aaa9f9721 rows_affected=0 rows_returned=0
+  561f620fcaa5 rows_affected=0 rows_returned=0
+  58a61172b81e rows_affected=1 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "POST",
+      "path": "/message/send/user/<user:A>",
+      "body": {
+        "message": {
+          "event": "backfill_progress",
+          "link_id": "<link:A>",
+          "status": "complete",
+          "completed_threads": 100,
+          "total_threads": 100
+        },
+        "message_type": "refresh_email"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"finalize_backfill\":{\"link_id\":\"<link:B>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {
+    "email_backfill_completion_outbox": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "completed_at": {
+            "before": null,
+            "after": "<ts>"
+          },
+          "effects_lease_expires_at": {
+            "before": null,
+            "after": "<ts>"
+          },
+          "effects_lease_token": {
+            "before": null,
+            "after": "<uuid:1>"
+          },
+          "id": "<missing>"
+        }
+      ]
+    }
+  }
+
+step: completion duplicate
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-2",
+      "Body": "{\"backfillOperation\":{\"finalize_backfill\":{\"link_id\":\"<link:B>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "2"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO finalize_backfill {"job_id":"<job>","link_id":"<link:B>"}
+        INFO claim_completion_effects {"job_id":"<job>"}
+        INFO completion_effects_pending {"job_id":"<job>"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-2"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  5fa54a5effe3 rows_affected=0 rows_returned=0
+  25302351755b rows_affected=1 rows_returned=1
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"finalize_backfill\":{\"link_id\":\"<link:B>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "2"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

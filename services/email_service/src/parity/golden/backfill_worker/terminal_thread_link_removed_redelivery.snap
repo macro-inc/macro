@@ -1,0 +1,678 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: link removed before error policy
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"backfill_thread\":{\"thread_provider_id\":\"terminal\",\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "20"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO backfill_thread {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: BackfillThreadPayload { thread_provider_id: \"terminal\", refresh_existing: false } }"}
+        INFO get_threads_by_link_id_and_provider_ids {"link_id":"<link:A>","provider_ids":"{\"terminal\"}"}
+        INFO get_thread {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_thread_id":"terminal","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_thread {"thread_id":"terminal"}
+            INFO get_thread {"thread_id":"terminal"}
+    INFO handle_non_retryable_error {}
+      INFO handle_thread_failure {"job_id":"<job>","link_id":"<link:A>"}
+        INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO mark_job_failed {"job_id":"<job>"}
+          INFO fail_backfill_job {"job_id":"<job>"}
+          INFO notify_job_failed {"job_id":"<job>"}
+            INFO get_backfill_job {"job_id":"<job>"}
+      INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+        INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_thread",
+        "get_thread",
+        "get_thread",
+        "get_thread"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_thread",
+        "get_thread",
+        "get_thread"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_thread",
+        "get_thread"
+      ],
+      "message": null,
+      "fields": {
+        "error": "permanent email provider failure: Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "handle_non_retryable_error"
+      ],
+      "message": "Non-retryable error processing message. The message will be deleted.",
+      "fields": {
+        "error": "GmailApiFailed: Failed to get provider thread",
+        "source": "Failed to get provider thread: permanent email provider failure: Gmail API returned 400 Bad Request: {\"error\":{\"code\":400,\"message\":\"scripted provider rejection\"}}"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "handle_non_retryable_error",
+        "handle_thread_failure"
+      ],
+      "message": "Link not found in handle_thread_failure; marking backfill job failed",
+      "fields": {
+        "job_id": "<job>",
+        "link_id": "<link:A>"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  a8d04a7b6e88 rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=0 rows_returned=0
+  a0152bf46a27 rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  14c5a75d7973 rows_affected=1 rows_returned=1
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/threads/terminal?format=full",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 400
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"backfill_thread\":{\"thread_provider_id\":\"terminal\",\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "20"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-0000000125c0}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "10"
+      }
+    }
+  }
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job>",
+          "link_id": {
+            "before": "<link:A>",
+            "after": null
+          },
+          "status": {
+            "before": "InProgress",
+            "after": "Failed"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    },
+    "email_labels": {
+      "removed": [
+        {
+          "id": "<label:A/INBOX>",
+          "name": "INBOX",
+          "type": "System",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "provider_label_id": "INBOX",
+          "label_list_visibility": "LabelShow",
+          "message_list_visibility": "Show"
+        },
+        {
+          "id": "<label:A/Label_work>",
+          "name": "Work",
+          "type": "User",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "provider_label_id": "Label_work",
+          "label_list_visibility": "LabelShow",
+          "message_list_visibility": "Show"
+        },
+        {
+          "id": "<label:A/SENT>",
+          "name": "SENT",
+          "type": "System",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "provider_label_id": "SENT",
+          "label_list_visibility": "LabelShow",
+          "message_list_visibility": "Show"
+        },
+        {
+          "id": "<label:A/SPAM>",
+          "name": "SPAM",
+          "type": "System",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "provider_label_id": "SPAM",
+          "label_list_visibility": "LabelShow",
+          "message_list_visibility": "Show"
+        },
+        {
+          "id": "<label:A/STARRED>",
+          "name": "STARRED",
+          "type": "System",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "provider_label_id": "STARRED",
+          "label_list_visibility": "LabelShow",
+          "message_list_visibility": "Show"
+        },
+        {
+          "id": "<label:A/TRASH>",
+          "name": "TRASH",
+          "type": "System",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "provider_label_id": "TRASH",
+          "label_list_visibility": "LabelShow",
+          "message_list_visibility": "Show"
+        },
+        {
+          "id": "<label:A/UNREAD>",
+          "name": "UNREAD",
+          "type": "System",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "provider_label_id": "UNREAD",
+          "label_list_visibility": "LabelShow",
+          "message_list_visibility": "Show"
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "email_links": {
+      "removed": [
+        {
+          "id": "<link:A>",
+          "grant_id": null,
+          "macro_id": "<user:A>",
+          "provider": "GMAIL",
+          "created_at": "<ts>",
+          "is_primary": false,
+          "updated_at": "<ts>",
+          "deleting_at": null,
+          "needs_reauth": false,
+          "email_address": "<fusion:A>@example.com",
+          "is_sync_active": true,
+          "sync_generation": 1,
+          "grant_generation": 0,
+          "fusionauth_user_id": "<fusion:A>",
+          "last_sync_error_at": null,
+          "provider_tenant_id": null,
+          "provider_mailbox_id": null,
+          "disconnect_requested_at": null
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "email_message_labels": {
+      "removed": [
+        {
+          "label_id": "<label:A/INBOX>",
+          "message_id": "<msg:draft>"
+        },
+        {
+          "label_id": "<label:A/INBOX>",
+          "message_id": "<msg:m1a>"
+        },
+        {
+          "label_id": "<label:A/INBOX>",
+          "message_id": "<msg:m1b>"
+        },
+        {
+          "label_id": "<label:A/INBOX>",
+          "message_id": "<msg:m1c>"
+        },
+        {
+          "label_id": "<label:A/INBOX>",
+          "message_id": "<msg:m2a>"
+        },
+        {
+          "label_id": "<label:A/INBOX>",
+          "message_id": "<msg:m2b>"
+        },
+        {
+          "label_id": "<label:A/INBOX>",
+          "message_id": "<msg:m3a>"
+        },
+        {
+          "label_id": "<label:A/Label_work>",
+          "message_id": "<msg:m3a>"
+        },
+        {
+          "label_id": "<label:A/STARRED>",
+          "message_id": "<msg:m1b>"
+        },
+        {
+          "label_id": "<label:A/UNREAD>",
+          "message_id": "<msg:m1a>"
+        },
+        {
+          "label_id": "<label:A/UNREAD>",
+          "message_id": "<msg:m2a>"
+        },
+        {
+          "label_id": "<label:A/UNREAD>",
+          "message_id": "<msg:m3a>"
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "email_messages": {
+      "removed": [
+        {
+          "id": "<msg:draft>",
+          "is_read": true,
+          "is_sent": false,
+          "link_id": "<link:A>",
+          "sent_at": null,
+          "snippet": null,
+          "subject": null,
+          "is_draft": true,
+          "body_text": null,
+          "from_name": null,
+          "global_id": null,
+          "thread_id": "<thread:t1>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": false,
+          "updated_at": "<ts>",
+          "provider_id": null,
+          "headers_jsonb": null,
+          "mailbox_state": null,
+          "size_estimate": null,
+          "replying_to_id": null,
+          "from_contact_id": null,
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<ts>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t1",
+          "body_html_sanitized": null,
+          "provider_history_id": null,
+          "remote_draft_revision": null
+        },
+        {
+          "id": "<msg:m1a>",
+          "is_read": false,
+          "is_sent": false,
+          "link_id": "<link:A>",
+          "sent_at": null,
+          "snippet": null,
+          "subject": null,
+          "is_draft": false,
+          "body_text": null,
+          "from_name": null,
+          "global_id": null,
+          "thread_id": "<thread:t1>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": false,
+          "updated_at": "<ts>",
+          "provider_id": "m1a",
+          "headers_jsonb": null,
+          "mailbox_state": null,
+          "size_estimate": null,
+          "replying_to_id": null,
+          "from_contact_id": null,
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<time:provider>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t1",
+          "body_html_sanitized": null,
+          "provider_history_id": null,
+          "remote_draft_revision": null
+        },
+        {
+          "id": "<msg:m1b>",
+          "is_read": true,
+          "is_sent": false,
+          "link_id": "<link:A>",
+          "sent_at": null,
+          "snippet": null,
+          "subject": null,
+          "is_draft": false,
+          "body_text": null,
+          "from_name": null,
+          "global_id": null,
+          "thread_id": "<thread:t1>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": true,
+          "updated_at": "<ts>",
+          "provider_id": "m1b",
+          "headers_jsonb": null,
+          "mailbox_state": null,
+          "size_estimate": null,
+          "replying_to_id": null,
+          "from_contact_id": null,
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<ts>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t1",
+          "body_html_sanitized": null,
+          "provider_history_id": null,
+          "remote_draft_revision": null
+        },
+        {
+          "id": "<msg:m1c>",
+          "is_read": true,
+          "is_sent": false,
+          "link_id": "<link:A>",
+          "sent_at": null,
+          "snippet": null,
+          "subject": null,
+          "is_draft": false,
+          "body_text": null,
+          "from_name": null,
+          "global_id": null,
+          "thread_id": "<thread:t1>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": false,
+          "updated_at": "<ts>",
+          "provider_id": "m1c",
+          "headers_jsonb": null,
+          "mailbox_state": null,
+          "size_estimate": null,
+          "replying_to_id": null,
+          "from_contact_id": null,
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<ts>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t1",
+          "body_html_sanitized": null,
+          "provider_history_id": null,
+          "remote_draft_revision": null
+        },
+        {
+          "id": "<msg:m2a>",
+          "is_read": false,
+          "is_sent": false,
+          "link_id": "<link:A>",
+          "sent_at": null,
+          "snippet": null,
+          "subject": null,
+          "is_draft": false,
+          "body_text": null,
+          "from_name": null,
+          "global_id": null,
+          "thread_id": "<thread:t2>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": false,
+          "updated_at": "<ts>",
+          "provider_id": "m2a",
+          "headers_jsonb": null,
+          "mailbox_state": null,
+          "size_estimate": null,
+          "replying_to_id": null,
+          "from_contact_id": null,
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<ts>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t2",
+          "body_html_sanitized": null,
+          "provider_history_id": null,
+          "remote_draft_revision": null
+        },
+        {
+          "id": "<msg:m2b>",
+          "is_read": true,
+          "is_sent": false,
+          "link_id": "<link:A>",
+          "sent_at": null,
+          "snippet": null,
+          "subject": null,
+          "is_draft": false,
+          "body_text": null,
+          "from_name": null,
+          "global_id": null,
+          "thread_id": "<thread:t2>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": false,
+          "updated_at": "<ts>",
+          "provider_id": "m2b",
+          "headers_jsonb": null,
+          "mailbox_state": null,
+          "size_estimate": null,
+          "replying_to_id": null,
+          "from_contact_id": null,
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<ts>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t2",
+          "body_html_sanitized": null,
+          "provider_history_id": null,
+          "remote_draft_revision": null
+        },
+        {
+          "id": "<msg:m3a>",
+          "is_read": false,
+          "is_sent": false,
+          "link_id": "<link:A>",
+          "sent_at": null,
+          "snippet": null,
+          "subject": null,
+          "is_draft": false,
+          "body_text": null,
+          "from_name": null,
+          "global_id": null,
+          "thread_id": "<thread:t3>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": false,
+          "updated_at": "<ts>",
+          "provider_id": "m3a",
+          "headers_jsonb": null,
+          "mailbox_state": null,
+          "size_estimate": null,
+          "replying_to_id": null,
+          "from_contact_id": null,
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<ts>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t3",
+          "body_html_sanitized": null,
+          "provider_history_id": null,
+          "remote_draft_revision": null
+        }
+      ],
+      "added": [],
+      "changed": []
+    },
+    "email_threads": {
+      "removed": [
+        {
+          "id": "<thread:t1>",
+          "is_read": false,
+          "link_id": "<link:A>",
+          "is_signal": true,
+          "created_at": "<ts>",
+          "project_id": null,
+          "updated_at": "<ts>",
+          "provider_id": "t1",
+          "inbox_visible": true,
+          "has_received_mail": true,
+          "has_pdf_attachment": false,
+          "has_image_attachment": false,
+          "reminder_returned_at": null,
+          "has_calendar_attachment": false,
+          "has_document_attachment": false,
+          "latest_inbound_message_ts": "<ts>",
+          "latest_non_spam_message_ts": "<ts>",
+          "latest_outbound_message_ts": null
+        },
+        {
+          "id": "<thread:t2>",
+          "is_read": false,
+          "link_id": "<link:A>",
+          "is_signal": true,
+          "created_at": "<ts>",
+          "project_id": null,
+          "updated_at": "<ts>",
+          "provider_id": "t2",
+          "inbox_visible": true,
+          "has_received_mail": true,
+          "has_pdf_attachment": false,
+          "has_image_attachment": false,
+          "reminder_returned_at": null,
+          "has_calendar_attachment": false,
+          "has_document_attachment": false,
+          "latest_inbound_message_ts": "<ts>",
+          "latest_non_spam_message_ts": "<ts>",
+          "latest_outbound_message_ts": null
+        },
+        {
+          "id": "<thread:t3>",
+          "is_read": false,
+          "link_id": "<link:A>",
+          "is_signal": true,
+          "created_at": "<ts>",
+          "project_id": null,
+          "updated_at": "<ts>",
+          "provider_id": "t3",
+          "inbox_visible": true,
+          "has_received_mail": true,
+          "has_pdf_attachment": false,
+          "has_image_attachment": false,
+          "reminder_returned_at": null,
+          "has_calendar_attachment": false,
+          "has_document_attachment": false,
+          "latest_inbound_message_ts": "<ts>",
+          "latest_non_spam_message_ts": "<ts>",
+          "latest_outbound_message_ts": null
+        }
+      ],
+      "added": [],
+      "changed": []
+    }
+  }

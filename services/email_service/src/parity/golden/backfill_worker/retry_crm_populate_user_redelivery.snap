@@ -1,0 +1,126 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: lookup policy
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"populate_crm_for_user\":{\"macro_id\":\"<user:A>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "20"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO populate_crm_for_user {}
+        INFO get_team_id_for_user {}
+          INFO get_team_id_for_user {}
+    INFO handle_retryable_error {"error":"Failed to look up team for macro_id: Storage layer error attempted to acquire a connection on a closed pool: attempted to acquire a connection on a closed pool","link_id":"None"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "populate_crm_for_user",
+        "get_team_id_for_user",
+        "get_team_id_for_user"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Storage layer error attempted to acquire a connection on a closed pool"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "populate_crm_for_user",
+        "get_team_id_for_user"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Storage layer error attempted to acquire a connection on a closed pool"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "populate_crm_for_user"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Retryable error occurred"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "handle_retryable_error"
+      ],
+      "message": "Retryable error populating CRM for user",
+      "fields": {}
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"populate_crm_for_user\":{\"macro_id\":\"<user:A>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "20"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

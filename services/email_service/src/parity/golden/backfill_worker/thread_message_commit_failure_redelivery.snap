@@ -1,0 +1,225 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: backfill thread
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"backfill_thread\":{\"thread_provider_id\":\"new-thread\",\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "20"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"populate_crm_contact\":{\"link_id\":\"<link:A>\",\"contact_email\":\"sender@example.com\",\"contact_name\":\"Sender\",\"first_at\":\"<time:provider>\",\"last_at\":\"<time:provider>\",\"is_sent\":false}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO backfill_thread {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","message_count":1,"scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: BackfillThreadPayload { thread_provider_id: \"new-thread\", refresh_existing: false } }"}
+        INFO get_threads_by_link_id_and_provider_ids {"link_id":"<link:A>","provider_ids":"{\"new-thread\"}"}
+        INFO get_thread {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_thread_id":"new-thread","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_thread {"thread_id":"new-thread"}
+            INFO get_thread {"thread_id":"new-thread"}
+        INFO process_message_pre_insert {"message_id":"new-message"}
+          INFO clean_message {}
+            INFO clean_message_subject_snippet {}
+            INFO remove_trailing_br_tags {}
+        INFO email.backfill.write_slot {"admitted":true,"in_flight":1,"waited_ms":"<elapsed>"}
+        INFO enqueue_email_backfill_message {}
+          INFO enqueue_backfill_message {}
+        INFO insert_backfilled_thread {"link_id":"<link:A>","message_count":1,"thread_provider_id":"new-thread"}
+          INFO parse_and_upsert_message_contacts {"link_id":"<link:A>"}
+            INFO upsert_message_contacts {}
+              INFO fetch_contacts_by_emails {"link_id":"<link:A>"}
+              INFO insert_new_contacts {}
+          INFO insert_thread {"link_id":"<link:A>"}
+            INFO lock_provider_thread {"link_id":"<link:A>","provider_thread_id":"new-thread"}
+            INFO map_service_thread_to_db {"link_id":"<link:A>"}
+          INFO lock_provider_thread {"link_id":"<link:A>","provider_thread_id":"new-thread"}
+          INFO insert_db_message {"from_contact_id":"Some(<uuid:1>)","thread_id":"<uuid:2>","update_thread_metadata":false}
+          INFO pending_provider_label_ids {"message_id":"<uuid:3>"}
+          INFO insert_attachments {}
+    INFO handle_retryable_error {"error":"Failed to insert thread new-thread: error returned from database: parity injected backfill failure: parity injected backfill failure","link_id":"Some(<link:A>)"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "backfill_thread",
+        "insert_backfilled_thread"
+      ],
+      "message": null,
+      "fields": {
+        "error": "error returned from database: parity injected backfill failure"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "handle_retryable_error"
+      ],
+      "message": "Retryable error backfilling thread",
+      "fields": {
+        "thread_id": "new-thread"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  a8d04a7b6e88 rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  6077ad41cbf5 rows_affected=0 rows_returned=0
+  ce599bbf83fe rows_affected=2 rows_returned=2
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  b15912e5b3b7 rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  bd52d423712d rows_affected=1 rows_returned=1
+  312980cf5478 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  00c1122a3bd0 rows_affected=1 rows_returned=0
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  5727c56045ae rows_affected=2 rows_returned=2
+  a5366b9d91c4 rows_affected=2 rows_returned=0
+  32acf65c4e94 rows_affected=1 rows_returned=1
+  7679f1efec53 rows_affected=0 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/threads/new-thread?format=full",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"backfill_thread\":{\"thread_provider_id\":\"new-thread\",\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "20"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "populate_crm_contact": {
+              "link_id": "<link:A>",
+              "contact_email": "sender@example.com",
+              "contact_name": "Sender",
+              "first_at": "<time:provider>",
+              "last_at": "<time:provider>",
+              "is_sent": false
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-1"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000012275}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "10"
+      }
+    }
+  }
+db:
+  {
+    "email_contacts": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:4>",
+          "name": "Recipient",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "email_address": "recipient@example.com",
+          "sfs_photo_url": null,
+          "original_photo_url": null
+        },
+        {
+          "id": "<uuid:1>",
+          "name": "Sender",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "email_address": "sender@example.com",
+          "sfs_photo_url": null,
+          "original_photo_url": null
+        }
+      ],
+      "changed": []
+    }
+  }

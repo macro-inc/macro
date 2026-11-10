@@ -1,0 +1,1 @@
+UPDATE email_backfill_jobs SET status = 'Complete', initialized_at = COALESCE(initialized_at, now()), init_lease_token = NULL, init_lease_expires_at = NULL, updated_at = now() WHERE id = $1 AND ( ( status = 'Init' AND $2::uuid IS NOT NULL AND init_lease_token = $2 AND init_lease_expires_at > now() ) OR ( status = 'InProgress' AND $2::uuid IS NULL ) )

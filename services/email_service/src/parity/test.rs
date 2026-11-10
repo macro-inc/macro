@@ -14,7 +14,7 @@ fn scenario_names(source: &str) -> std::collections::BTreeSet<String> {
         regex::Regex::new(r"(?s)cases!\s*\{[^;]*;(.*?)\}").expect("case blocks")
     });
     static CASE: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
-        regex::Regex::new(r"\b([a-zA-Z0-9_]+),\s*[0-9]+,\s*(?:true|false),")
+        regex::Regex::new(r"\b([a-zA-Z0-9_]+),\s*[0-9]+,\s*(?:true|false|[0-9]+),")
             .expect("case declarations")
     });
     let mut names: std::collections::BTreeSet<_> = SCENARIO_PATTERN
@@ -40,13 +40,20 @@ fn scenario_inventory_includes_explicit_worker_case_declarations() {
             retry_case, 103, true, Case::Example;
         }
         cases! { runner; inline_case, 109, true, Case::Example; }
+        cases! { runner; counted_case, 112, 20, Case::Example; }
         not_a_case, 106, false, Case::Example;
     "#;
     assert_eq!(
         scenario_names(source),
-        ["inline_case", "ordinary", "primary_case", "retry_case"]
-            .map(str::to_owned)
-            .into()
+        [
+            "counted_case",
+            "inline_case",
+            "ordinary",
+            "primary_case",
+            "retry_case"
+        ]
+        .map(str::to_owned)
+        .into()
     );
 }
 

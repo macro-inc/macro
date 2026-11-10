@@ -9,5 +9,6 @@ mod inbox_init;
 mod inbox_routes;
 pub(super) mod redis_database;
 
+mod backfill_worker;
 mod gmail_ops_worker;
 mod inbox_sync_worker;

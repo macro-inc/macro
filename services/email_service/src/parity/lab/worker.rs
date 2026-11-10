@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use tracing::Instrument;
 use tracing::instrument::WithSubscriber;
 
+pub(in crate::parity) mod clock;
 mod contexts;
 mod redis_time;
 mod test;
@@ -129,6 +130,7 @@ impl Delivery {
 
 pub(in crate::parity) struct StepOutcome {
     pub sent: Vec<Sent>,
+    pub sent_deliveries: Vec<Delivery>,
     pub deleted: bool,
     pub result: anyhow::Result<()>,
 }
@@ -232,6 +234,22 @@ impl Lab {
             )
         };
         normalize_calls(&mut calls);
+        let sent_deliveries = sent
+            .iter()
+            .map(|sent| {
+                let mut delivery = Delivery::from_sent(sent);
+                if let Some(call) = calls.iter().find(|call| {
+                    call["operation"] == "SendMessage"
+                        && call["response"]["MessageId"] == sent.message_id
+                }) {
+                    delivery.message_attributes = call["request"]
+                        .get("MessageAttributes")
+                        .cloned()
+                        .unwrap_or_else(|| json!({}));
+                }
+                delivery
+            })
+            .collect();
         let (outcome, deleted) = outcome(delivery, &sent, &acks, &result);
         self.transcript.step(
             name,
@@ -262,6 +280,7 @@ impl Lab {
         );
         StepOutcome {
             sent,
+            sent_deliveries,
             deleted,
             result,
         }

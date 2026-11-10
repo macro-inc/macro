@@ -1,0 +1,1 @@
+SELECT LOWER(c.email_address) AS "email!", c.name AS "name", MIN(m.internal_date_ts) AS "first_at!", MAX(m.internal_date_ts) AS "last_at!" FROM email_messages m JOIN email_contacts c ON c.id = m.from_contact_id WHERE m.link_id = $1 AND m.is_sent = false AND m.from_contact_id IS NOT NULL AND m.internal_date_ts IS NOT NULL GROUP BY LOWER(c.email_address), c.name

@@ -1,0 +1,99 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: lookup policy
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"backfill_attachment\":{\"metadata\":{\"attachment_metadata\":{\"attachment_db_id\":\"<missing>\",\"email_provider_id\":\"m1a\",\"provider_attachment_id\":\"att\",\"mime_type\":\"application/pdf\",\"filename\":\"file.pdf\",\"internal_date_ts\":\"<ts>\",\"message_db_id\":\"<msg:m1a>\",\"thread_db_id\":\"<thread:t1>\",\"sender_email\":null,\"subject\":null},\"recipient_emails\":[],\"backfill\":true,\"upload_destination\":\"Dss\"},\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "20"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+    INFO handle_retryable_error {"error":"Failed to fetch backfill job: attempted to acquire a connection on a closed pool","link_id":"Some(<link:A>)"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "get_backfill_job"
+      ],
+      "message": null,
+      "fields": {
+        "error": "attempted to acquire a connection on a closed pool"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "handle_retryable_error"
+      ],
+      "message": "Retryable error backfilling attachment",
+      "fields": {
+        "attachment_db_id": "<missing>"
+      }
+    }
+  ]
+sql:
+  []
+provider_http:
+  []
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"backfill_attachment\":{\"metadata\":{\"attachment_metadata\":{\"attachment_db_id\":\"<missing>\",\"email_provider_id\":\"m1a\",\"provider_attachment_id\":\"att\",\"mime_type\":\"application/pdf\",\"filename\":\"file.pdf\",\"internal_date_ts\":\"<ts>\",\"message_db_id\":\"<msg:m1a>\",\"thread_db_id\":\"<thread:t1>\",\"sender_email\":null,\"subject\":null},\"recipient_emails\":[],\"backfill\":true,\"upload_destination\":\"Dss\"},\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "20"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {}
+db:
+  {}

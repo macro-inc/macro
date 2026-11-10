@@ -1,0 +1,279 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: initialize
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "20"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO init_backfill {"job_id":"<job>","link_id":"<link:A>","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+        INFO init_backfill {"backfill_job":"BackfillJob { id: <job>, link_id: Some(<link:A>), fusionauth_user_id: \"<fusion:A>\", threads_requested_limit: None, total_threads: 100, status: Init, threads_retrieved_count: 0, created_at: <ts>, updated_at: <ts> }","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: InitPayload }"}
+          INFO claim_init_lease {"job_id":"<job>"}
+          INFO list_labels {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO fetch_user_labels {}
+              INFO fetch_user_labels {}
+          INFO sync_labels {"link_id":"<link:A>"}
+            INFO fetch_labels_by_link_id {"link_id":"<link:A>"}
+          INFO get_sync_tokens_by_link_id {"link_id":"<link:A>"}
+          INFO get_self_contact {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_self_contact {}
+              INFO get_self_connection {}
+          INFO list_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","pages":1,"retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_contacts_page {}
+              INFO get_connections_page {}
+          INFO list_other_contacts {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","pages":1,"retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_other_contacts_page {}
+              INFO get_other_contacts_page {}
+          INFO upsert_contacts {}
+          INFO insert_sync_tokens {"sync_tokens":"SyncTokens { link_id: <link:A>, contacts_sync_token: Some(\"contacts-token\"), other_contacts_sync_token: Some(\"other-token\") }"}
+          INFO ensure_colleague_dms {"link_id":"<link:A>"}
+          INFO get_thread_count {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","retry_count":0}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+                INFO fetch_link_by_id {"link_id":"<link:A>"}
+            INFO get_profile {}
+              INFO get_profile {}
+          INFO update_job_total_threads {"job_id":"<job>","num_threads":8}
+          INFO release_init_lease {"job_id":"<job>","lease_token":"<uuid:1>"}
+    INFO handle_retryable_error {"error":"Failed to update total_threads: error returned from database: parity init stage failure: parity init stage failure","link_id":"Some(<link:A>)"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Initializing backfill job",
+      "fields": {}
+    },
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill"
+      ],
+      "message": "Inserted contacts into DB",
+      "fields": {
+        "duration": "<volatile>",
+        "link_id": "<link:A>",
+        "num_contacts": 0
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill",
+        "init_backfill",
+        "update_job_total_threads"
+      ],
+      "message": null,
+      "fields": {
+        "error": "error returned from database: parity init stage failure"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "init_backfill"
+      ],
+      "message": null,
+      "fields": {
+        "error": "Retryable error occurred"
+      }
+    },
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "handle_retryable_error"
+      ],
+      "message": "Retryable error in Init",
+      "fields": {}
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  ee41aefede7a rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  81bbbe533b76 rows_affected=7 rows_returned=7
+  4276a8971e7e rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  5a2ac502c303 rows_affected=1 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  663b6e485f4f rows_affected=0 rows_returned=0
+  b9a66fdb76ba rows_affected=1 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/labels",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me?personFields=names%2CemailAddresses%2Cphotos",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/people/me/connections?personFields=names%2CemailAddresses%2Cphotos&requestSyncToken=true&pageSize=1000",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/people/otherContacts?readMask=names%2CemailAddresses%2Cphotos&sources=READ_SOURCE_TYPE_CONTACT&sources=READ_SOURCE_TYPE_PROFILE&requestSyncToken=true&pageSize=1000",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/profile",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"init\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "20"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000012395}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job>",
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    },
+    "email_sync_tokens": {
+      "removed": [],
+      "added": [
+        {
+          "link_id": "<link:A>",
+          "contacts_sync_token": "contacts-token",
+          "other_contacts_sync_token": "other-token"
+        }
+      ],
+      "changed": []
+    }
+  }

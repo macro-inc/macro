@@ -2,6 +2,123 @@ use super::Normalizer;
 use serde_json::json;
 
 #[test]
+fn backfill_retry_after_ceiling_is_opt_in_and_keeps_scheduling_boundaries() {
+    let span = |value: &str| {
+        json!({"name":"defer_rate_limited_operation","fields":{
+        "retry_after":value,"other":"Some(59.999s)"}})
+    };
+    let original = span("Some(59.999s)");
+    assert_eq!(
+        Normalizer::default().value("spans", original.clone()),
+        original
+    );
+    let mut normalizer = Normalizer {
+        normalize_backfill_retry_after: true,
+        ..Normalizer::default()
+    };
+    assert_eq!(
+        normalizer.value("spans", span("Some(59.999s)")),
+        span("Some(60s)")
+    );
+    assert_eq!(
+        normalizer.value("spans", span("Some(60s)")),
+        span("Some(60s)")
+    );
+    assert_ne!(
+        normalizer.value("spans", span("Some(58.999s)")),
+        span("Some(60s)")
+    );
+    for (input, expected) in [
+        ("Some(1ms)", "Some(1s)"),
+        ("Some(1.5µs)", "Some(1s)"),
+        ("Some(0ns)", "Some(0s)"),
+        ("None", "None"),
+    ] {
+        assert_eq!(normalizer.value("spans", span(input)), span(expected));
+    }
+    assert_eq!(normalizer.value("logs", original.clone()), original);
+    let mut other = original.clone();
+    other["name"] = json!("another_operation");
+    assert_eq!(normalizer.value("spans", other.clone()), other);
+    assert_eq!(
+        normalizer.value("outcome", json!({"delay_seconds":60})),
+        json!({"delay_seconds":60})
+    );
+}
+
+#[test]
+fn backfill_contacts_users_set_keeps_members_other_fields_and_other_queues() {
+    let outcome = |users| {
+        json!({"sent":[{"queue":"http://fake/000000000000/contacts",
+        "body":json!({"users":users,"other":[2,1]}).to_string(),"delay_seconds":7}]})
+    };
+    let sqs = |users| {
+        json!([{"operation":"SendMessage","request":{
+            "QueueUrl":"http://fake/000000000000/contacts","MessageBody":{"users":users,"other":[2,1]}}
+        }])
+    };
+    for (section, a, b) in [
+        (
+            "outcome",
+            outcome(json!(["b", "a"])),
+            outcome(json!(["a", "b"])),
+        ),
+        ("sqs", sqs(json!(["b", "a"])), sqs(json!(["a", "b"]))),
+    ] {
+        assert_ne!(Normalizer::default().value(section, a.clone()), b);
+        let mut normalizer = Normalizer {
+            normalize_backfill_contacts_users: true,
+            ..Normalizer::default()
+        };
+        assert_eq!(normalizer.value(section, a.clone()), b);
+        let mut other = a.clone();
+        if section == "outcome" {
+            other["sent"][0]["queue"] = json!("http://fake/000000000000/backfill");
+        } else {
+            other[0]["request"]["QueueUrl"] = json!("http://fake/000000000000/backfill");
+        }
+        assert_eq!(normalizer.value(section, other.clone()), other);
+    }
+    let mut normalizer = Normalizer {
+        normalize_backfill_contacts_users: true,
+        ..Normalizer::default()
+    };
+    assert_ne!(
+        normalizer.value("outcome", outcome(json!(["a", "b"]))),
+        normalizer.value("outcome", outcome(json!(["a", "b", "c"])))
+    );
+    assert_ne!(
+        normalizer.value("outcome", outcome(json!(["a", "b"]))),
+        normalizer.value("outcome", outcome(json!(["a", "a", "b"])))
+    );
+}
+
+#[test]
+fn backfill_wait_rule_is_opt_in_and_preserves_admission_and_other_spans() {
+    let original = json!({"name":"email.backfill.write_slot", "fields":{
+        "waited_ms":17,"admitted":true,"in_flight":3,"other":42
+    }});
+    assert_eq!(
+        Normalizer::default().value("spans", original.clone()),
+        original
+    );
+    let mut normalizer = Normalizer {
+        normalize_backfill_write_wait: true,
+        ..Normalizer::default()
+    };
+    let mut expected = original.clone();
+    expected["fields"]["waited_ms"] = json!("<elapsed>");
+    assert_eq!(normalizer.value("spans", original.clone()), expected);
+    assert_eq!(normalizer.value("logs", original.clone()), original);
+    let mut other = original.clone();
+    other["name"] = json!("another.write_slot");
+    assert_eq!(normalizer.value("spans", other.clone()), other);
+    let mut refused = original;
+    refused["fields"]["admitted"] = json!(false);
+    assert_ne!(normalizer.value("spans", refused), expected);
+}
+
+#[test]
 fn generated_shared_customer_id_keeps_its_prefix_and_uuid_identity() {
     if !crate::parity::process_per_test() {
         return;

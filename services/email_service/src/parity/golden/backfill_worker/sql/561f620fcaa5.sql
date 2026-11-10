@@ -1,0 +1,1 @@
+SELECT DISTINCT c.email_address as "email_address!" FROM email_messages m JOIN email_message_recipients mr ON m.id = mr.message_id JOIN email_contacts c ON mr.contact_id = c.id WHERE m.link_id = $1 AND m.is_sent = TRUE AND mr.contact_id IS NOT NULL ORDER BY c.email_address

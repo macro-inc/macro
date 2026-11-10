@@ -8,6 +8,8 @@ use axum::{
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 
+mod test;
+
 #[derive(Clone)]
 pub(super) struct Stub {
     pub url: String,
@@ -21,6 +23,7 @@ struct StateData {
     sequences: Vec<(String, String, std::collections::VecDeque<(u16, Value)>)>,
     byte_replies: Vec<(String, String, u16, Vec<u8>, String)>,
     wire_replies: Vec<WireReply>,
+    headers: Vec<(String, String, String)>,
     requests: super::HttpRecording,
 }
 
@@ -65,6 +68,15 @@ impl Stub {
             prefix.into(),
             status,
             body,
+        ));
+    }
+
+    /// Opt-in response header for a selected local provider path.
+    pub fn reply_header(&self, prefix: &str, name: &str, value: &str) {
+        self.state.lock().expect("stub mutex").headers.push((
+            prefix.into(),
+            name.into(),
+            value.into(),
         ));
     }
 
@@ -226,9 +238,18 @@ async fn handle(
         )
             .into_response();
     }
-    (
+    let mut response = (
         StatusCode::from_u16(status).expect("scripted HTTP status"),
         axum::Json(response),
     )
-        .into_response()
+        .into_response();
+    for (prefix, name, value) in &state.headers {
+        if uri.path().starts_with(prefix) {
+            response.headers_mut().insert(
+                axum::http::HeaderName::from_bytes(name.as_bytes()).expect("fixture header name"),
+                axum::http::HeaderValue::from_str(value).expect("fixture header value"),
+            );
+        }
+    }
+    response
 }

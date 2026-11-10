@@ -1,0 +1,181 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: fault policy
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"list_threads\":{\"next_page_token\":null,\"priority_pass\":false,\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO list_threads {"gate_cap":5,"gate_in_flight":1,"label_ids":"[]","limit":100,"link_id":"<link:A>","next_page_token":"None","retry_count":0}
+        INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO fetch_link_by_id {"link_id":"<link:A>"}
+        INFO list_threads {"label_ids":"[]","next_page_token":"None","num_threads":100}
+          INFO list_threads {"label_ids":"[]","num_threads":100}
+      INFO update_job_threads_retrieved_count {"job_id":"<job>","num_threads":0}
+      INFO handle_job_completed {"init_lease_token":"None","job_id":"<job>"}
+        INFO complete_backfill_job {"init_lease_token":"None","job_id":"<job>"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "INFO",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "handle_job_completed"
+      ],
+      "message": "Backfill complete for job <job>",
+      "fields": {}
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message"
+      ],
+      "message": "Failed to delete backfill job progress",
+      "fields": {
+        "error": "NoPerm: User <redis-fault-user> has no permissions to run the 'del' command\n\nCaused by:\n    NoPerm: User <redis-fault-user> has no permissions to run the 'del' command"
+      }
+    }
+  ]
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  d2fdf8dc3cd1 rows_affected=1 rows_returned=0
+  fc4999ff9b0d rows_affected=1 rows_returned=0
+  d8803c7b981b rows_affected=1 rows_returned=0
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/threads?maxResults=100",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"list_threads\":{\"next_page_token\":null,\"priority_pass\":false,\"refresh_existing\":false,\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "gmail:{51000000-0000-0000-0000-000000011a23}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "10"
+      }
+    }
+  }
+db:
+  {
+    "email_backfill_completion_outbox": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:1>",
+          "created_at": "<ts>",
+          "completed_at": null,
+          "published_at": null,
+          "backfill_job_id": "<job>",
+          "effects_lease_token": null,
+          "effects_lease_expires_at": null
+        }
+      ],
+      "changed": []
+    },
+    "email_backfill_jobs": {
+      "removed": [],
+      "added": [],
+      "changed": [
+        {
+          "id": "<job>",
+          "initialized_at": {
+            "before": null,
+            "after": "<ts>"
+          },
+          "status": {
+            "before": "InProgress",
+            "after": "Complete"
+          },
+          "updated_at": {
+            "before": "<ts>",
+            "after": "<ts:changed>"
+          }
+        }
+      ]
+    }
+  }

@@ -1,0 +1,1 @@
+SELECT l.id AS link_id, l.email_address FROM crm_email_consent c JOIN email_links l ON l.id = c.link_id AND l.macro_id = c.user_id AND l.is_primary AND l.deleting_at IS NULL JOIN team_user tu ON tu.team_id = c.team_id AND tu.user_id = c.user_id WHERE c.team_id = $1 AND c.user_id = $2 AND c.enabled

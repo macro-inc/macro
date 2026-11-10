@@ -1,0 +1,1 @@
+INSERT INTO email_sync_tokens (link_id, contacts_sync_token, other_contacts_sync_token) VALUES ($1, $2, $3) ON CONFLICT (link_id) DO UPDATE SET contacts_sync_token = $2, other_contacts_sync_token = $3

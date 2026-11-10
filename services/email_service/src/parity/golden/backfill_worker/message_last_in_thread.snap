@@ -1,0 +1,683 @@
+---
+source: services/email_service/src/parity/transcript.rs
+---
+step: legacy backfill message
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"backfill_message\":{\"thread_provider_id\":\"t1\",\"thread_db_id\":\"<thread:t1>\",\"message_provider_id\":\"legacy-new\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"populate_crm_contact\":{\"link_id\":\"<link:A>\",\"contact_email\":\"sender@example.com\",\"contact_name\":\"Sender\",\"first_at\":\"<time:provider>\",\"last_at\":\"<time:provider>\",\"is_sent\":false}}}",
+        "delay_seconds": 0
+      },
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"update_thread_metadata\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\",\"thread_provider_id\":\"t1\",\"thread_db_id\":\"<thread:t1>\"}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO backfill_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: BackfillMessagePayload { thread_provider_id: \"t1\", thread_db_id: <thread:t1>, message_provider_id: \"legacy-new\" } }"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"legacy-new","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"legacy-new"}
+            INFO get_message {"message_provider_id":"legacy-new"}
+        INFO process_message_pre_insert {"message_id":"legacy-new"}
+          INFO clean_message {}
+            INFO clean_message_subject_snippet {}
+            INFO remove_trailing_br_tags {}
+        INFO email.backfill.write_slot {"admitted":true,"in_flight":1,"waited_ms":"<elapsed>"}
+        INFO insert_message {"link_id":"<link:A>","resync":"None","thread_id":"<thread:t1>","update_thread_metadata":false}
+          INFO parse_and_upsert_message_contacts {"link_id":"<link:A>"}
+            INFO upsert_message_contacts {}
+              INFO fetch_contacts_by_emails {"link_id":"<link:A>"}
+              INFO insert_new_contacts {}
+          INFO lock_provider_thread {"link_id":"<link:A>","provider_thread_id":"t1"}
+          INFO insert_db_message {"from_contact_id":"Some(<uuid:1>)","thread_id":"<thread:t1>","update_thread_metadata":false}
+          INFO pending_provider_label_ids {"message_id":"<uuid:2>"}
+          INFO insert_attachments {}
+        INFO enqueue_email_backfill_message {}
+          INFO enqueue_backfill_message {}
+        INFO incr_completed_messages {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }"}
+          INFO incr_completed_messages {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","p":"BackfillMessagePayload { thread_provider_id: \"t1\", thread_db_id: <thread:t1>, message_provider_id: \"legacy-new\" }"}
+            INFO handle_thread_completed {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","p":"BackfillMessagePayload { thread_provider_id: \"t1\", thread_db_id: <thread:t1>, message_provider_id: \"legacy-new\" }"}
+              INFO enqueue_thread_metadata_update {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","thread_db_id":"<thread:t1>","thread_provider_id":"t1"}
+                INFO enqueue_email_backfill_message {}
+                  INFO enqueue_backfill_message {}
+              INFO handle_thread_attachment_upload {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","thread_db_id":"<thread:t1>"}
+                INFO thread_document_atts_for_backfill {"thread_id":"<thread:t1>"}
+                INFO thread_media_atts_for_backfill {"thread_id":"<thread:t1>"}
+    INFO cleanup_message {"message_id":"delivery","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=5 rows_returned=5
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  6077ad41cbf5 rows_affected=0 rows_returned=0
+  ce599bbf83fe rows_affected=2 rows_returned=2
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  bd52d423712d rows_affected=1 rows_returned=1
+  312980cf5478 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  00c1122a3bd0 rows_affected=1 rows_returned=0
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  5727c56045ae rows_affected=2 rows_returned=2
+  a5366b9d91c4 rows_affected=2 rows_returned=0
+  32acf65c4e94 rows_affected=1 rows_returned=1
+  d54dedf42be9 rows_affected=0 rows_returned=0
+  4f0c0a58d76b rows_affected=0 rows_returned=0
+  d822541cad90 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/legacy-new",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"backfill_message\":{\"thread_provider_id\":\"t1\",\"thread_db_id\":\"<thread:t1>\",\"message_provider_id\":\"legacy-new\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "populate_crm_contact": {
+              "link_id": "<link:A>",
+              "contact_email": "sender@example.com",
+              "contact_name": "Sender",
+              "first_at": "<time:provider>",
+              "last_at": "<time:provider>",
+              "is_sent": false
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-1"
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "update_thread_metadata": {
+              "link_id": "<link:A>",
+              "job_id": "<job>",
+              "thread_provider_id": "t1",
+              "thread_db_id": "<thread:t1>"
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-2"
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "bf_thread_status:57000000-0000-0000-0000-000000004000:t1": {
+      "before": {
+        "completed_messages": "0",
+        "total_messages": "1"
+      },
+      "after": null
+    },
+    "gmail:{51000000-0000-0000-0000-000000011700}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {
+    "email_contacts": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:3>",
+          "name": "Recipient",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "email_address": "recipient@example.com",
+          "sfs_photo_url": null,
+          "original_photo_url": null
+        },
+        {
+          "id": "<uuid:1>",
+          "name": "Sender",
+          "link_id": "<link:A>",
+          "created_at": "<ts>",
+          "updated_at": "<ts>",
+          "email_address": "sender@example.com",
+          "sfs_photo_url": null,
+          "original_photo_url": null
+        }
+      ],
+      "changed": []
+    },
+    "email_message_labels": {
+      "removed": [],
+      "added": [
+        {
+          "label_id": "<label:A/INBOX>",
+          "message_id": "<uuid:2>"
+        },
+        {
+          "label_id": "<label:A/UNREAD>",
+          "message_id": "<uuid:2>"
+        }
+      ],
+      "changed": []
+    },
+    "email_message_recipients": {
+      "removed": [],
+      "added": [
+        {
+          "name": "Recipient",
+          "contact_id": "<uuid:3>",
+          "message_id": "<uuid:2>",
+          "recipient_type": "TO"
+        }
+      ],
+      "changed": []
+    },
+    "email_messages": {
+      "removed": [],
+      "added": [
+        {
+          "id": "<uuid:2>",
+          "is_read": false,
+          "is_sent": false,
+          "link_id": "<link:A>",
+          "sent_at": "<time:provider>",
+          "snippet": "fixture preview",
+          "subject": "Fixture subject",
+          "is_draft": false,
+          "body_text": "body",
+          "from_name": "Sender",
+          "global_id": "<legacy-new@example.com>",
+          "thread_id": "<thread:t1>",
+          "body_macro": null,
+          "created_at": "<ts>",
+          "is_starred": false,
+          "updated_at": "<ts>",
+          "provider_id": "legacy-new",
+          "headers_jsonb": [
+            {
+              "name": "From",
+              "value": "Sender <sender@example.com>"
+            },
+            {
+              "name": "To",
+              "value": "Recipient <recipient@example.com>"
+            },
+            {
+              "name": "Subject",
+              "value": "Fixture subject"
+            },
+            {
+              "name": "Message-ID",
+              "value": "<legacy-new@example.com>"
+            },
+            {
+              "name": "Date",
+              "value": "Mon, 21 Sep 2026 14:13:20 +0000"
+            }
+          ],
+          "mailbox_state": null,
+          "size_estimate": 20,
+          "replying_to_id": null,
+          "from_contact_id": "<uuid:1>",
+          "has_attachments": false,
+          "draft_generation": 0,
+          "internal_date_ts": "<time:provider>",
+          "provider_version": null,
+          "provider_folder_id": null,
+          "provider_thread_id": "t1",
+          "body_html_sanitized": null,
+          "provider_history_id": "200",
+          "remote_draft_revision": null
+        }
+      ],
+      "changed": []
+    }
+  }
+
+step: metadata follow-up
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "msg-2",
+      "ReceiptHandle": "delivery-receipt-1",
+      "Body": "{\"backfillOperation\":{\"update_thread_metadata\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\",\"thread_provider_id\":\"t1\",\"thread_db_id\":\"<thread:t1>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "1"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": true,
+    "left_for_redelivery": false,
+    "visibility_seconds": [],
+    "sent": []
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO update_thread_metadata {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: UpdateMetadataPayload { thread_provider_id: \"t1\", thread_db_id: <thread:t1> } }"}
+        INFO update_thread_messages_replying_to {"link_id":"<link:A>","thread_db_id":"<thread:t1>"}
+          INFO get_simple_messages_for_thread {"link_id":"<link:A>","thread_id":"<thread:t1>"}
+          INFO update_db_messages_replying_to_ids {"link_id":"<link:A>","updates":"[]"}
+        INFO incr_completed_threads {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }"}
+          INFO incr_completed_threads {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }"}
+            INFO refresh_email {"user_id":"<user:A>"}
+        INFO kafka.publish {"key":"<link:A>","messaging.destination.name":"macro.email","messaging.operation.name":"publish","messaging.operation.type":"send","messaging.system":"kafka","otel.kind":"producer","topic":"macro.email"}
+    INFO cleanup_message {"message_id":"msg-2","message_receipt_handle":"delivery-receipt-1"}
+      INFO delete_message {"receipt_handle":"<volatile>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "email.backfill.process",
+        "inner_process_message",
+        "update_thread_metadata",
+        "incr_completed_threads",
+        "incr_completed_threads"
+      ],
+      "message": "Failed to refresh email",
+      "fields": {
+        "error": "missing field `receipts`"
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  ca6b0d1b5889 rows_affected=0 rows_returned=0
+  8eb20757c433 rows_affected=0 rows_returned=0
+  ad640ecb32fd rows_affected=0 rows_returned=0
+  ef90aa156eea rows_affected=5 rows_returned=5
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "POST",
+      "path": "/message/send/user/<user:A>",
+      "body": {
+        "message": {
+          "event": "backfill_progress",
+          "link_id": "<link:A>",
+          "status": "progress",
+          "completed_threads": 1,
+          "total_threads": 100
+        },
+        "message_type": "refresh_email"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "msg-2",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"update_thread_metadata\":{\"link_id\":\"<link:A>\",\"job_id\":\"<job>\",\"thread_provider_id\":\"t1\",\"thread_db_id\":\"<thread:t1>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "1"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "DeleteMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "ReceiptHandle": "<volatile>"
+      },
+      "status": 200,
+      "response": {}
+    }
+  ]
+kafka:
+  [
+    {
+      "topic": "macro.email",
+      "key": "<link:A>",
+      "payload": {
+        "event_id": "<uuid:4>",
+        "schema_version": 1,
+        "event_type": "email.thread_backfilled",
+        "metadata": {
+          "link_id": "<link:A>",
+          "owner": "<user:A>",
+          "thread_id": "<thread:t1>"
+        }
+      }
+    }
+  ]
+redis:
+  {
+    "bf_job_status:57000000-0000-0000-0000-000000004000": {
+      "before": {
+        "completed_threads": "0",
+        "total_threads": "100"
+      },
+      "after": {
+        "completed_threads": "1",
+        "total_threads": "100"
+      }
+    }
+  }
+db:
+  {}
+
+step: legacy message duplicate
+delivery:
+  {
+    "queue": "<sqs>/000000000000/backfill",
+    "message": {
+      "MessageId": "delivery",
+      "ReceiptHandle": "delivery-receipt-2",
+      "Body": "{\"backfillOperation\":{\"backfill_message\":{\"thread_provider_id\":\"t1\",\"thread_db_id\":\"<thread:t1>\",\"message_provider_id\":\"legacy-new\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+      "Attributes": {
+        "ApproximateReceiveCount": "2"
+      },
+      "MessageAttributes": {}
+    }
+  }
+outcome:
+  {
+    "result": {
+      "Ok": null
+    },
+    "deleted": false,
+    "left_for_redelivery": true,
+    "visibility_seconds": [],
+    "sent": [
+      {
+        "queue": "<sqs>/000000000000/backfill",
+        "body": "{\"backfillOperation\":{\"populate_crm_contact\":{\"link_id\":\"<link:A>\",\"contact_email\":\"sender@example.com\",\"contact_name\":\"Sender\",\"first_at\":\"<time:provider>\",\"last_at\":\"<time:provider>\",\"is_sent\":false}}}",
+        "delay_seconds": 0
+      }
+    ]
+  }
+spans:
+  INFO receive_messages {}
+    INFO receive_messages {"max_messages":1,"queue_url":"<sqs>/000000000000/backfill","wait_time_seconds":0}
+  INFO email.backfill.process {}
+    INFO extract_backfill_message {}
+    INFO inner_process_message {}
+      INFO get_backfill_job {"job_id":"<job>"}
+      INFO fetch_link_by_id {"link_id":"<link:A>"}
+      INFO backfill_message {"link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","scope":"JobScopedPayload { link_id: <link:A>, job_id: <job>, payload: BackfillMessagePayload { thread_provider_id: \"t1\", thread_db_id: <thread:t1>, message_provider_id: \"legacy-new\" } }"}
+        INFO fetch_message_labels {"message_db_id":"<uuid:2>"}
+        INFO pending_provider_label_ids {"message_id":"<uuid:2>"}
+        INFO get_message {"gate_cap":5,"gate_in_flight":1,"link_id":"<link:A>","provider_message_id":"legacy-new","retry_count":0}
+          INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+            INFO get_access_token {"freshness":"Cached","link_id":"<link:A>"}
+              INFO fetch_link_by_id {"link_id":"<link:A>"}
+          INFO get_message {"message_provider_id":"legacy-new"}
+            INFO get_message {"message_provider_id":"legacy-new"}
+        INFO pending_provider_label_ids {"message_id":"<uuid:2>"}
+        INFO process_message_pre_insert {"message_id":"legacy-new"}
+          INFO clean_message {}
+            INFO clean_message_subject_snippet {}
+            INFO remove_trailing_br_tags {}
+        INFO email.backfill.write_slot {"admitted":true,"in_flight":1,"waited_ms":"<elapsed>"}
+        INFO insert_message {"link_id":"<link:A>","resync":"Some(ResyncSnapshot { stored_labels: [\"INBOX\", \"UNREAD\"], pending_labels: [] })","thread_id":"<thread:t1>","update_thread_metadata":false}
+          INFO parse_and_upsert_message_contacts {"link_id":"<link:A>"}
+            INFO upsert_message_contacts {}
+              INFO fetch_contacts_by_emails {"link_id":"<link:A>"}
+              INFO update_missing_contact_names {}
+          INFO lock_provider_thread {"link_id":"<link:A>","provider_thread_id":"t1"}
+          INFO lock_thread_label_writes {}
+          INFO insert_db_message {"from_contact_id":"Some(<uuid:1>)","thread_id":"<thread:t1>","update_thread_metadata":false}
+          INFO pending_provider_label_ids {"message_id":"<uuid:2>"}
+          INFO set_flags_from_labels {"message_id":"<uuid:2>","read":true,"starred":false}
+          INFO insert_attachments {}
+        INFO enqueue_email_backfill_message {}
+          INFO enqueue_backfill_message {}
+        INFO incr_completed_messages {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }"}
+          INFO incr_completed_messages {"job_id":"<job>","link":"Link { id: <link:A>, provider: Gmail, is_sync_active: true, needs_reauth: false, .. }","p":"BackfillMessagePayload { thread_provider_id: \"t1\", thread_db_id: <thread:t1>, message_provider_id: \"legacy-new\" }"}
+    INFO handle_retryable_error {"error":"Handle completed message for legacy-new failed: Incompatible type - \"Response type not convertible to numeric.\" (value was nil): Incompatible type - \"Response type not convertible to numeric.\" (value was nil)","link_id":"Some(<link:A>)"}
+logs:
+  [
+    {
+      "level": "WARN",
+      "span": [
+        "email.backfill.process",
+        "handle_retryable_error"
+      ],
+      "message": "Retryable error backfilling message",
+      "fields": {
+        "message_id": "legacy-new",
+        "thread_id": "t1"
+      }
+    }
+  ]
+sql:
+  14c5a75d7973 rows_affected=1 rows_returned=1
+  f680d1b52474 rows_affected=1 rows_returned=1
+  7889ed9bcd31 rows_affected=1 rows_returned=1
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=3 rows_returned=3
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  e54a0921db37 rows_affected=2 rows_returned=2
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  f680d1b52474 rows_affected=1 rows_returned=1
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  6077ad41cbf5 rows_affected=2 rows_returned=2
+  1825ab3c230b rows_affected=0 rows_returned=0
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  b55405cbfd09 rows_affected=1 rows_returned=1
+  bd52d423712d rows_affected=0 rows_returned=0
+  a1012334caf3 rows_affected=1 rows_returned=1
+  00c1122a3bd0 rows_affected=0 rows_returned=0
+  8eb884f88b7c rows_affected=0 rows_returned=0
+  346206754dbd rows_affected=2 rows_returned=2
+  5727c56045ae rows_affected=2 rows_returned=2
+  a5366b9d91c4 rows_affected=0 rows_returned=0
+  dc99e1aa2a50 rows_affected=0 rows_returned=0
+  32acf65c4e94 rows_affected=1 rows_returned=1
+  d54dedf42be9 rows_affected=0 rows_returned=0
+provider_http:
+  [
+    {
+      "method": "GET",
+      "path": "/gmail/v1/users/me/messages/legacy-new",
+      "body": {
+        "bytes": 0,
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "status": 200
+    }
+  ]
+sqs:
+  [
+    {
+      "operation": "ReceiveMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageAttributeNames": [
+          "*"
+        ],
+        "MaxNumberOfMessages": 1,
+        "WaitTimeSeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "Messages": [
+          {
+            "MessageId": "delivery",
+            "ReceiptHandle": "<volatile>",
+            "Body": "{\"backfillOperation\":{\"backfill_message\":{\"thread_provider_id\":\"t1\",\"thread_db_id\":\"<thread:t1>\",\"message_provider_id\":\"legacy-new\",\"link_id\":\"<link:A>\",\"job_id\":\"<job>\"}}}",
+            "Attributes": {
+              "ApproximateReceiveCount": "2"
+            },
+            "MessageAttributes": {}
+          }
+        ]
+      }
+    },
+    {
+      "operation": "SendMessage",
+      "request": {
+        "QueueUrl": "<sqs>/000000000000/backfill",
+        "MessageBody": {
+          "backfillOperation": {
+            "populate_crm_contact": {
+              "link_id": "<link:A>",
+              "contact_email": "sender@example.com",
+              "contact_name": "Sender",
+              "first_at": "<time:provider>",
+              "last_at": "<time:provider>",
+              "is_sent": false
+            }
+          }
+        },
+        "DelaySeconds": 0
+      },
+      "status": 200,
+      "response": {
+        "MessageId": "msg-3"
+      }
+    }
+  ]
+kafka:
+  []
+redis:
+  {
+    "bf_thread_status:57000000-0000-0000-0000-000000004000:t1": {
+      "before": null,
+      "after": {
+        "completed_messages": "1"
+      }
+    },
+    "gmail:{51000000-0000-0000-0000-000000011700}:window": {
+      "before": null,
+      "after": {
+        "<total_units>": "5"
+      }
+    }
+  }
+db:
+  {}

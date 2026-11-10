@@ -1,0 +1,1 @@
+SELECT ea.id, ea.message_id, ea.provider_attachment_id, ea.filename, ea.mime_type, ea.size_bytes, ea.content_id, eas.sfs_id as "sfs_id?", ea.created_at, ea.reference_url FROM email_attachments ea LEFT JOIN email_attachments_sfs eas on ea.id = eas.attachment_id WHERE message_id = $1

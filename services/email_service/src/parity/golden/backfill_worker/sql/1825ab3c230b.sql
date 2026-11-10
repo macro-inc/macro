@@ -1,0 +1,1 @@
+UPDATE email_contacts SET name = data.name, updated_at = now() FROM (SELECT unnest($1::uuid[]) as id, unnest($2::text[]) as name) as data WHERE email_contacts.id = data.id AND email_contacts.name IS NULL

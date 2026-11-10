@@ -396,10 +396,10 @@ masked separately; caps and members are retained.
 Outside the step are the infinite receive loop, its batch error aggregation and
 logging, cancellation, panic/restart supervision, and the link-manager loop's
 visibility renewal wrapper. Backfill's per-message visibility heartbeat is
-inside its process function. Long-running backfill admission waits and provider
-timeouts are not characterized by this suite; their real-time waits are not
-advanced by SQS's virtual scheduling. No production retry or timing behavior is
-changed to accommodate tests.
+inside its process function. SQS virtual scheduling does not advance Tokio,
+Postgres, or Redis clocks. The backfill suite's explicitly controlled Tokio
+heartbeat scenarios are described below; production retry and timing behavior
+is unchanged.
 
 The Gmail suite covers operation forms and batch boundaries, provider responses
 and disconnections, local admission refusal, primary-to-retry sends, retained
@@ -437,3 +437,25 @@ not introduce an undefined order into the recorded span. An SDK error that
 retains response headers can opt into the fake SQS `fixed_date`; other scenarios
 retain the default wire behavior. These are fixture choices, not production
 ordering or clock guarantees.
+
+`backfill_worker` characterizes the single backfill queue, same-body redeliveries,
+and explicit follow-ups from recorded sends. The driver also retains each
+single-message send's attributes for those follow-ups, including the deferral
+counter. This adds no section to existing transcripts. Only this suite opts into
+`normalize_backfill_write_wait`, masking `waited_ms` on the exact
+`email.backfill.write_slot` span: wait duration is not pinned; `admitted`,
+`in_flight`, and every other field are retained.
+
+Backfill heartbeat scenarios run on a separate current-thread Tokio runtime.
+The test-only `PausedClock` holds a signaled blocking task to inhibit automatic
+clock advancement while real SQL and socket I/O is pending. Scenarios explicitly
+advance time only after the provider is paused, then wait for the fake SQS
+visibility response signal. PostgreSQL `now()` and Redis `TIME`/TTL remain real;
+Tokio clock advances do not imply either database's leases have expired.
+The suite also opts into `BackfillContactsUsersSet`: only the `users` array of
+contacts-queue node messages is sorted, in `outcome.sent` and recorded
+`SendMessage` bodies. Production constructs that array from a set; its order is
+not pinned. Every member, duplicate, other field and other queue remains intact.
+`BackfillRetryAfterCeiling` is also opt-in for this suite: only `retry_after` on
+`defer_rate_limited_operation` is rounded up to whole seconds. The sub-second
+remainder of a Redis cooldown is not pinned; the requested SQS queue delay is.
