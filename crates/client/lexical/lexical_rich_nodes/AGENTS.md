@@ -31,6 +31,7 @@ feature exports owned HTML; browser DOM import and layout stay in views.
 - Use selection slots in hooks; detached selections must not read the active range.
 - Keep nullable/absent list wire values in ListNode so projected setters replace the same canonical fields.
 - Import stored ListNode JSON without resolving replacements; authored list creation still applies replacements, matching upstream static-config import.
+- Construct host-converted HTML drafts through clipboard::generate_nodes_from_dom_drafts so list factories apply recursively without changing stored imports or stripping constructor context.
 - List handlers read through ListNode/ListItemNode ancestry so application subclasses inherit restructuring and intrinsic transforms.
 - Route host Enter through `list::register::handle_registered_insert_paragraph` before the rich-text fallback; it consumes registered numbering options.
 - Use `text::entity` for every text entity; `text_entity` only re-exports it.

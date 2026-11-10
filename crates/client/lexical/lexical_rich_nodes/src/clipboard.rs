@@ -2,9 +2,11 @@
 use lexical_model::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+mod dom;
 mod drop;
 mod export;
 mod import;
+pub use dom::*;
 pub use drop::*;
 pub use export::*;
 pub use import::*;
