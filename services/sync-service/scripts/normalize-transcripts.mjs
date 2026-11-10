@@ -224,7 +224,7 @@ export function normalize(lines) {
 }
 
 
-function corpus(root) {
+export function corpus(root) {
   if (root.startsWith('git:') || root.startsWith('git-activated:')) {
     const activated = root.startsWith('git-activated:');
     const revision = root.slice(root.indexOf(':') + 1);

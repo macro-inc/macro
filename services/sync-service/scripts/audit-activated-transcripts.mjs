@@ -1,12 +1,12 @@
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
 import { createHash } from "node:crypto";
-import { compare, normalize } from "./normalize-transcripts.mjs";
-import { LoroDoc, decodeImportBlobMeta } from "loro-crdt";
+import { writeFileSync } from "node:fs";
+import { decodeImportBlobMeta, LoroDoc } from "loro-crdt";
 import {
 	FromRemote,
 	InitializeFromSnapshotRequest,
 } from "../../../crates/sync_protocol/bebop/generated/schema.ts";
+import { compare, corpus } from "./normalize-transcripts.mjs";
+
 const prefix = "o/!archive-status-v1/";
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const wire = (rows) =>
@@ -453,23 +453,17 @@ export function auditFixture(oldRows, rows) {
 	};
 }
 
-function paths(root) {
-	return readdirSync(root, { recursive: true, withFileTypes: true })
-		.filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl"))
-		.map((entry) => join(entry.parentPath, entry.name).slice(root.length + 1))
-		.sort();
-}
-
-export function auditCorpora(before, after) {
-	const baseline = "c11b60c31907fa39fe9cb6d1fca5efc29c296b00";
-	if (compare("git:" + baseline, before).length)
-		throw Error("baseline is not the committed reference corpus");
-	const names = paths(before);
-	if (JSON.stringify(names) !== JSON.stringify(paths(after)))
+// Validate supplied corpus files without asserting their historical baseline.
+export function auditCorpusFiles(before, after) {
+	const left = corpus(before);
+	const right = corpus(after);
+	const names = [...left.keys()].sort();
+	if (JSON.stringify(names) !== JSON.stringify([...right.keys()].sort()))
 		throw Error("corpus paths differ");
 	const fixtures = names.map((path) => {
-		const [oldRows, rows] = [before, after].map((root) =>
-			normalize(readFileSync(join(root, path), "utf8").split("\n"))
+		const [oldRows, rows] = [left, right].map((records) =>
+			records
+				.get(path)
 				.trim()
 				.split("\n")
 				.map((line) => JSON.parse(line)),
@@ -477,11 +471,17 @@ export function auditCorpora(before, after) {
 		return { path, ...auditFixture(oldRows, rows) };
 	});
 	return {
-		baseline,
 		count: fixtures.length,
 		equal: true,
 		fixtures,
 	};
+}
+
+export function auditCorpora(before, after) {
+	const baseline = "375078f4849907343e7f7898a7e597d3b747fad1";
+	if (compare("git:" + baseline, before).length)
+		throw Error("baseline is not the committed reference corpus");
+	return { baseline, ...auditCorpusFiles(before, after) };
 }
 
 if (import.meta.main) {

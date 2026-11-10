@@ -166,7 +166,8 @@ covered by that snapshot; duplicate exports do not create per-update archives.
 Require zero-write controls for snapshot-initialized and post-GC cold duplicates.
 
 Audit activated storage fixtures with `bun scripts/audit-activated-transcripts.mjs`
-against the unchanged default corpus. Keep the generated ledger with the activated
+through the shared normalizer loader against a reachable default-corpus reference;
+keep historical case counts separate. Keep the generated ledger with the activated
 corpus; require exact wire hashes, pre-import VV proofs for removed writes and
 unchanged remaining effects. Never use storage projection to normalize wire data
 or conceal clock/alarm changes.
