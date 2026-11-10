@@ -11,6 +11,7 @@
 
 use super::deliver::DialReattach;
 use super::*;
+use crate::domain::model::DialTicket;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_session::domain::connection::ListedSession;
 use futures::StreamExt as _;
@@ -32,8 +33,10 @@ static DIAL_GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// One harness's dial in progress.
 pub(super) struct Dial {
-    generation: u64,
-    cancelled: CancellationToken,
+    pub(super) generation: u64,
+    /// Cancelled when the harness dials again or the dialing connection
+    /// closes.
+    pub(super) cancelled: CancellationToken,
 }
 
 /// What one dial did with the sessions its runtime listed.
@@ -123,7 +126,9 @@ where
     /// is already doing. Which sessions are restored now is `dial_reattach`'s
     /// call, which reads each session's `updated_at` from the listing. A
     /// failed restore is retried with jittered backoff unless retrying cannot
-    /// help. One session failing never stops the others.
+    /// help. One session failing never stops the others. `closed` is the
+    /// dialing connection's, cancelled when it ends, which abandons the dial
+    /// as a redial does.
     #[tracing::instrument(
         name = "agent.runtime.reattach",
         skip_all,
@@ -143,11 +148,12 @@ where
         &self,
         harness: harness_id::HarnessId,
         acp_sessions: Vec<ListedSession>,
+        closed: CancellationToken,
         cause: tracing::Span,
     ) -> ReattachReport {
         tracing::Span::current().follows_from(&cause);
         let generation = DIAL_GENERATION.fetch_add(1, Ordering::Relaxed);
-        let cancelled = CancellationToken::new();
+        let cancelled = closed.child_token();
         if let Some(previous) = self.inner.dials.insert(
             harness,
             Dial {
@@ -158,9 +164,11 @@ where
             previous.cancelled.cancel();
         }
 
-        let report = self
-            .reattach_listed(harness, acp_sessions, &cancelled)
-            .await;
+        let dial = DialTicket {
+            harness,
+            generation,
+        };
+        let report = self.reattach_listed(dial, acp_sessions, &cancelled).await;
         self.inner
             .dials
             .remove_if(&harness, |_, dial| dial.generation == generation);
@@ -177,7 +185,7 @@ where
 
     async fn reattach_listed(
         &self,
-        harness: harness_id::HarnessId,
+        dial: DialTicket,
         acp_sessions: Vec<ListedSession>,
         cancelled: &CancellationToken,
     ) -> ReattachReport {
@@ -189,6 +197,7 @@ where
             .into_iter()
             .filter_map(|listed| Some((listed.id, listed.updated_at?)))
             .collect();
+        let harness = dial.harness;
         let sessions = match self.inner.runtimes.sessions_on_harness(harness, &ids).await {
             Ok(sessions) => sessions,
             Err(error) => {
@@ -200,7 +209,7 @@ where
 
         let outcomes: Vec<(Outcome, u32)> = futures::stream::iter(sessions)
             .map(|session_id| {
-                self.reattach_live_session(harness, session_id, &runtime_activity, cancelled)
+                self.reattach_live_session(dial, session_id, &runtime_activity, cancelled)
             })
             .buffer_unordered(REATTACH_CONCURRENCY)
             .collect()
@@ -224,11 +233,12 @@ where
     /// it was retried.
     async fn reattach_live_session(
         &self,
-        harness: harness_id::HarnessId,
+        dial: DialTicket,
         session_id: AgentSessionId,
         runtime_activity: &HashMap<SessionId, chrono::DateTime<chrono::Utc>>,
         cancelled: &CancellationToken,
     ) -> (Outcome, u32) {
+        let harness = dial.harness;
         if cancelled.is_cancelled() || !self.inner.runtimes.is_connected(harness) {
             return (Outcome::Abandoned, 0);
         }
@@ -250,16 +260,18 @@ where
             // whatever happens to this future. Its attach permit is taken
             // there, as the worker reconnects the session, so no permit is
             // held while the Reattach waits in the worker's queue.
-            let attempt = self.restore(session_id).await;
+            let attempt = self.restore(session_id, dial).await;
             let Err(error) = attempt else {
                 return (Outcome::Restored, retries);
             };
+            // Checked first: a worker drops a stale dial's restore as
+            // disconnected, which is the dial's end, not the session's failure.
+            if cancelled.is_cancelled() || !self.inner.runtimes.is_connected(harness) {
+                return (Outcome::Abandoned, retries);
+            }
             tracing::warn!(error = ?error, %session_id, retries, "could not reattach a live session");
             if is_permanent(&error) || retries + 1 == REATTACH_ATTEMPTS {
                 return (Outcome::Failed, retries);
-            }
-            if cancelled.is_cancelled() || !self.inner.runtimes.is_connected(harness) {
-                return (Outcome::Abandoned, retries);
             }
             let jitter = delay.mul_f64(rand::random::<f64>());
             tokio::select! {
@@ -272,8 +284,9 @@ where
     }
 
     /// Attach the session on its own worker and wait for its ACP restore.
-    async fn restore(&self, session_id: AgentSessionId) -> Result<()> {
-        self.execute(session_id, HarnessCommand::Reattach).await?;
+    async fn restore(&self, session_id: AgentSessionId, dial: DialTicket) -> Result<()> {
+        self.execute(session_id, HarnessCommand::Reattach(dial))
+            .await?;
         match self.inner.sessions.wait_opened(session_id).await {
             Ok(true) => Ok(()),
             Ok(false) | Err(_) => Err(HarnessError::Handshake(

@@ -439,7 +439,7 @@ where
             | HarnessCommand::ToolApproval(_)
             | HarnessCommand::PresentTool { .. }
             | HarnessCommand::SessionStopped { .. }
-            | HarnessCommand::Reattach
+            | HarnessCommand::Reattach(_)
             | HarnessCommand::Delete => {}
             HarnessCommand::SetSandboxSize(_) => {
                 if self.sessions.get_session(session_id).await?.is_archived() {
@@ -890,11 +890,11 @@ where
                 self.apply_sandbox_size(session_id, size).await?;
                 Ok(CommandOutcome::Completed)
             }
-            HarnessCommand::Reattach => {
+            HarnessCommand::Reattach(dial) => {
                 // Prompts queued behind a turn the drop interrupted are
                 // restored with the session; only a turn end or a new prompt
                 // dispatches otherwise, and an idle session gets neither.
-                if self.reattach(session_id).await? && !self.busy.is_pending(session_id) {
+                if self.reattach(session_id, dial).await? && !self.busy.is_pending(session_id) {
                     self.dispatch_next(session_id).await?;
                 }
                 Ok(CommandOutcome::Completed)

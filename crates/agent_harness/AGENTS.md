@@ -102,8 +102,11 @@ is held while waiting in a worker queue. It is held until the session's
 a reserved share background attaches cannot take, and background attaches queue
 per harness first, so one runtime's storm cannot starve another's. Managed
 container resumes are not budgeted. The `agent.runtime.attach_permit` span
-records path, harness, wait time and a hold timeout. A harness dialing again
-stops its previous dial from starting more.
+records path, harness, wait time and a hold timeout. A harness dialing again,
+or its dialing connection closing (`LiveRuntimeSessions::closed`), stops that
+dial: `HarnessCommand::Reattach` carries a `DialTicket`, and the worker drops a
+restore whose dial is no longer current before or while it waits for a permit
+(`agent.runtime.reattach_stale`).
 Permanent errors are not retried; others are, with jittered backoff, while the
 runtime stays connected. A session whose load keeps failing stays disconnected
 with its turn unfinished, so every dial tries it again (three attempts, under a

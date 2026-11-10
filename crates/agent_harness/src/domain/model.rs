@@ -662,7 +662,18 @@ pub enum HarnessCommand {
     /// Load an external session whose agent is still running on a runtime
     /// that dialed in again, so its local activity reaches Macro without a
     /// prompt. Internal: the runtime registry asks for these on each dial.
-    Reattach,
+    Reattach(DialTicket),
+}
+
+/// Which dial asked for a [`HarnessCommand::Reattach`], so the session's
+/// worker can drop a restore whose dial was superseded or whose connection
+/// closed while it waited in the worker's queue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct DialTicket {
+    /// The harness that dialed.
+    pub harness: harness_id::HarnessId,
+    /// The dial's number on the replica that holds its connection.
+    pub generation: u64,
 }
 
 /// What executing a command did with it, beyond succeeding.

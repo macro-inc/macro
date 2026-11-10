@@ -326,6 +326,7 @@ async fn a_close_waits_for_its_own_connected_write() {
     let listed = ListedConnection {
         id: RuntimeConnectionId::generate(),
         connection: RuntimeConnection::connect(runtime.clone()),
+        closed: CancellationToken::new(),
     };
     registry
         .connections
@@ -436,4 +437,9 @@ async fn a_dial_initializes_and_reports_the_sessions_its_runtime_lists() {
             .collect::<Vec<_>>(),
         [SessionId::from("acp-1"), SessionId::from("acp-2")]
     );
+
+    assert!(!report.closed.is_cancelled());
+    runtime.disconnects();
+    // The watch `attach` spawned cancels it once the connection closes.
+    report.closed.cancelled().await;
 }

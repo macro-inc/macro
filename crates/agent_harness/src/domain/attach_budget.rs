@@ -65,6 +65,12 @@ pub struct AttachBudget {
     per_harness: DashMap<HarnessId, Arc<Semaphore>>,
     harness_share: usize,
     hold: Duration,
+    /// Acquires begun, for tests to wait on.
+    #[cfg(test)]
+    requested: tokio::sync::watch::Sender<usize>,
+    /// Permits handed out, for tests.
+    #[cfg(test)]
+    granted: std::sync::atomic::AtomicUsize,
 }
 
 impl Default for AttachBudget {
@@ -90,6 +96,10 @@ impl AttachBudget {
             per_harness: DashMap::new(),
             harness_share,
             hold,
+            #[cfg(test)]
+            requested: tokio::sync::watch::Sender::new(0),
+            #[cfg(test)]
+            granted: std::sync::atomic::AtomicUsize::new(0),
         }
     }
 
@@ -114,6 +124,8 @@ impl AttachBudget {
             agent.runtime.attach_wait_ms = tracing::field::Empty,
             agent.runtime.attach_permit_timed_out = false,
         );
+        #[cfg(test)]
+        self.requested.send_modify(|requested| *requested += 1);
         let started = tokio::time::Instant::now();
         let permits = self.take(path, harness).instrument(span.clone()).await;
         let waited = started.elapsed();
@@ -122,6 +134,9 @@ impl AttachBudget {
             u64::try_from(waited.as_millis()).unwrap_or(u64::MAX),
         );
         let (harness_permit, background, total) = permits?;
+        #[cfg(test)]
+        self.granted
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         Ok(AttachPermit {
             budget: self,
             harness,
@@ -163,6 +178,19 @@ impl AttachBudget {
     #[cfg(test)]
     pub(crate) fn available(&self) -> usize {
         self.total.available_permits()
+    }
+
+    /// Wait until `count` acquires have begun, granted or not.
+    #[cfg(test)]
+    pub(crate) async fn requested(&self, count: usize) {
+        let mut requested = self.requested.subscribe();
+        let _reached = requested.wait_for(|requested| *requested >= count).await;
+    }
+
+    /// Permits handed out so far, for tests.
+    #[cfg(test)]
+    pub(crate) fn granted(&self) -> usize {
+        self.granted.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Harnesses with a share entry, for tests.
