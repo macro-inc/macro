@@ -1,6 +1,10 @@
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
-import { ThreadList } from '../ThreadList';
+import {
+  ThreadList,
+  type ThreadListInitialPosition,
+  type ThreadListScrollSnapshot,
+} from '../ThreadList';
 
 const WORDS =
   'the agent read the channel history and opened a pull request with the fix while the team kept talking about the release'.split(
@@ -21,6 +25,8 @@ const keys = messages.map((message) => message.id);
 declare global {
   interface Window {
     setPaneWidth: (width: string) => void;
+    /** Reopens the channel from its last scroll snapshot, at the pane's width. */
+    reopenChannel: () => void;
   }
 }
 
@@ -28,6 +34,14 @@ declare global {
 function Fixture() {
   const [width, setWidth] = createSignal('100%');
   window.setPaneWidth = setWidth;
+  const [open, setOpen] = createSignal(true);
+  let snapshot: ThreadListScrollSnapshot | undefined;
+  let initialPosition: ThreadListInitialPosition = { type: 'latest' };
+  window.reopenChannel = () => {
+    setOpen(false);
+    if (snapshot) initialPosition = { type: 'restore', snapshot };
+    setOpen(true);
+  };
 
   return (
     <main style={{ height: '100vh', margin: 0, font: '16px/24px sans-serif' }}>
@@ -35,13 +49,21 @@ function Fixture() {
         data-pane
         style={{ position: 'relative', height: '100%', width: width() }}
       >
-        <ThreadList keys={() => keys}>
-          {(item) => (
-            <div data-message={item.id} style={{ padding: '8px 0' }}>
-              <strong>{item.id}</strong> {text.get(item.id)}
-            </div>
-          )}
-        </ThreadList>
+        <Show when={open()}>
+          <ThreadList
+            keys={() => keys}
+            initialPosition={initialPosition}
+            onScroll={(_state, next) => {
+              snapshot = next ?? snapshot;
+            }}
+          >
+            {(item) => (
+              <div data-message={item.id} style={{ padding: '8px 0' }}>
+                <strong>{item.id}</strong> {text.get(item.id)}
+              </div>
+            )}
+          </ThreadList>
+        </Show>
       </div>
     </main>
   );

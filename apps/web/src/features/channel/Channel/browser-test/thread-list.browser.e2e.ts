@@ -85,6 +85,21 @@ test('narrowing and widening the pane keeps the message being read in place', as
   await expectAnchorKept(page, anchor);
 });
 
+test('reopening the channel at another width keeps the message being read in place', async ({
+  page,
+}) => {
+  await readHistory(page);
+  const anchor = await readingAnchor(page);
+
+  // Restored row sizes were measured at the old width and rewrap on mount.
+  await page.evaluate(() => {
+    window.setPaneWidth('50%');
+    window.reopenChannel();
+  });
+  await settle(page);
+  await expectAnchorKept(page, anchor);
+});
+
 test('scrolling up after the pane narrows moves only by the scroll', async ({
   page,
 }) => {

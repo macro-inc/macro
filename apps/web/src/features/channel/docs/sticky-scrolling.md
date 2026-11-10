@@ -62,8 +62,9 @@ so the row spanning the top edge would push the message being read down. Rows
 remember the width they were measured at; a row measured at another width is
 compensated whenever it starts above the viewport, like a first measurement, so
 the first message starting in view keeps its position. This covers rows measured
-at the old width that remount later as the reader scrolls up.
-The backend-free browser regression narrows and widens the production list:
+at the old width that remount later as the reader scrolls up, and sizes restored
+from a scroll snapshot, whose width is unknown.
+The backend-free browser regression narrows and widens the production list and reopens it at another width:
 `bunx playwright test --config src/features/channel/Channel/browser-test/playwright.config.ts`.
 The offset observer distinguishes instant programmatic scrolls from user scrolling,
 including scroll events dispatched while our own `scrollTo` runs, so our own

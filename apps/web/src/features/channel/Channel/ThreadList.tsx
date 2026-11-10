@@ -316,8 +316,10 @@ export function ThreadList(props: ThreadListProps) {
         instance.options.getItemKey(instance.indexFromElement(element))
       );
       const previousWidth = measuredWidths.get(key);
+      // A restored size has no recorded width, so its first measurement may
+      // be a rewrap too.
       measuringRewrap =
-        previousWidth !== undefined && Math.abs(previousWidth - width) >= 1;
+        previousWidth === undefined || Math.abs(previousWidth - width) >= 1;
       measuredWidths.set(key, width);
       if (entry) return measureElement(element, entry, instance);
       return batched?.height ?? element.offsetHeight;
