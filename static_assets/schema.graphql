@@ -10001,6 +10001,10 @@ enum GraphqlSoupEntityType {
 	Row of a Macro database table.
 	"""
 	DATABASE_ROW
+	"""
+	A paired runtime, listed only by attention feeds.
+	"""
+	HARNESS
 }
 
 """
@@ -10047,6 +10051,75 @@ type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
 	Source-specific metadata.
 	"""
 	sourceMetadata: JSON!
+	"""
+	The created timestamp in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	The updated timestamp in RFC 3339 format.
+	"""
+	updatedAt: String!
+	"""
+	Properties assigned to this entity that the authenticated user may view.
+	"""
+	properties: [GraphqlProperty!]!
+	"""
+	Notifications associated with this entity for the authenticated user.
+	"""
+	notifications(filter: GraphqlNotificationFilter, limit: Int): [GraphqlNotification!]!
+	"""
+	Whether the authenticated viewer has favorited this entity.
+	"""
+	isFavorited: Boolean!
+	"""
+	The authenticated viewer's effective permission for this entity.
+	"""
+	viewerPermission: GraphqlEntityPermission
+	"""
+	The newest activity on this entity, newest first. Loaded lazily and
+	batched across entities; an activity outage degrades to an empty
+	timeline. Deeper history belongs to the viewer's activity feed.
+	"""
+	activity(limit: Int): [GraphqlActivityEvent!]!
+	"""
+	The viewer's frecency score for this entity, when loaded.
+	"""
+	frecencyScore: Float
+}
+
+"""
+A paired runtime (a macrod machine). Only attention feeds list it, for
+the access notifications filed under it; it opens in Settings → Machines.
+"""
+type GraphqlSoupHarness implements GraphqlSoupEntity {
+	"""
+	The harness identifier.
+	"""
+	id: ID!
+	"""
+	Canonical entity kind.
+	"""
+	entityType: GraphqlSoupEntityType!
+	"""
+	Server-only projection facts are unavailable for runtimes.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
+	The machine's name.
+	"""
+	displayName: String
+	"""
+	Common runtime metadata.
+	"""
+	metadata: GraphqlEntityMetadata!
+	"""
+	The machine's name.
+	"""
+	name: String!
+	"""
+	The principal identifier of the owner: a user or a team.
+	"""
+	ownerId: String!
 	"""
 	The created timestamp in RFC 3339 format.
 	"""
@@ -12602,6 +12675,10 @@ enum WorkFeedItemType {
 	Agent sessions.
 	"""
 	AGENT_SESSION
+	"""
+	Paired runtimes, through their access notifications.
+	"""
+	RUNTIME
 }
 
 """

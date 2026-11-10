@@ -736,8 +736,9 @@ the shimmer.
   field focused on open, and a default model picker that enables once the key is
   saved. Connected, the same page shows the saved date, **Disconnect**, and
   **Done**. **Manage** on a paired machine opens **Machines** (Back returns to
-  Agents): **Your machines** (shown only once a paired machine is connected;
-  it then lists every machine you own, connected ones first, each with
+  Agents): **Pending requests** (only while access requests wait),
+  **Your machines** (every machine you own, offline ones included, connected
+  ones first, each with
   **Connected** or **Offline**, **Share**, **Options** and **Remove**),
   **Teammates' machines**, **Built-in machines**, and **New machine**.
   On the desktop app, **Machines** opens with a **This computer** card that sets

@@ -91,6 +91,7 @@ export const entityResolverSchema = {
         'GraphqlSoupDocument',
         'GraphqlSoupEmailThread',
         'GraphqlSoupForeignEntity',
+        'GraphqlSoupHarness',
         'GraphqlSoupInitiative',
         'GraphqlSoupProject',
         'GraphqlSoupReminder',
@@ -117,6 +118,7 @@ export type GeneratedEntityResolverTarget =
   | 'GraphqlSoupDocument'
   | 'GraphqlSoupEmailThread'
   | 'GraphqlSoupForeignEntity'
+  | 'GraphqlSoupHarness'
   | 'GraphqlSoupInitiative'
   | 'GraphqlSoupProject'
   | 'GraphqlSoupReminder';
