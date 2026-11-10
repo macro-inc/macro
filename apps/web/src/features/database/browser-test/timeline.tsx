@@ -14,7 +14,8 @@ import { DatabaseTimelineView } from '../views/database-timeline-view';
 /**
  * The production timeline with the app's styles and a host that keeps its
  * records in memory. `?grouped` groups by stage, `?empty` starts without
- * records, `?theme=dark` uses the dark theme.
+ * records, `?fields` shows each record's notes on its bar, `?theme=dark` uses
+ * the dark theme.
  */
 const params = new URLSearchParams(location.search);
 const name: DatabaseViewColumn = {
@@ -47,6 +48,7 @@ const COLUMNS: DatabaseViewColumn[] = [
       { id: 'ship', label: 'Ship', color: '#46A758' },
     ],
   },
+  { ...name, primary: false, id: 'notes', name: 'Notes' },
 ];
 
 /** Midnight `offset` days from today, local time. */
@@ -74,14 +76,19 @@ const RECORDS: DatabaseRow[] = [
   ['Write the brief', allDay(-4, 1), 'Plan'],
   ['Kickoff meeting', timed(0, 10, 11), 'Plan'],
   ['Design review', allDay(2, 6), 'Build'],
-  ['Build the prototype', allDay(-2, 12), 'Build'],
+  [
+    'Build the prototype',
+    allDay(-2, 12),
+    'Build',
+    'Covers the editor, the sync layer and the first round of fixes',
+  ],
   ['Usability test', allDay(8, 10), 'Build'],
   ['Launch', allDay(14, 14), 'Ship'],
   ['Write the announcement', allDay(11, 15), 'Ship'],
   ['Unscheduled follow-up', null, 'Ship'],
-].map(([title, dates, stage], index) => ({
+].map(([title, dates, stage, notes = null], index) => ({
   rowId: `row-${index}`,
-  cells: { name: title, dates, stage },
+  cells: { name: title, dates, stage, notes },
 }));
 
 function Fixture() {
@@ -93,7 +100,7 @@ function Fixture() {
       range: 'dates',
       title: 'name',
       groupBy: params.has('grouped') ? 'stage' : null,
-      barFields: [],
+      barFields: params.has('fields') ? ['notes'] : [],
       colorBy: params.has('grouped') ? 'stage' : null,
     },
   });

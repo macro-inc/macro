@@ -5,6 +5,7 @@ import {
   type JSX,
   onCleanup,
   onMount,
+  type ParentProps,
   Show,
   splitProps,
 } from 'solid-js';
@@ -32,10 +33,20 @@ import {
 /** How far past a bar's end its title may run when the bar is too short for it. */
 const BESIDE_TITLE_ROOM = 328;
 
-/** Whether any of the label's text is cut off, by its own width or a truncating child's. */
+const cut = (element: Element) => element.scrollWidth > element.clientWidth + 1;
+
+/** Whether the label is cut off, or its title is; other truncated text does not count. */
 function labelCut(label: HTMLElement) {
-  return [label, ...label.querySelectorAll('*')].some(
-    (element) => element.scrollWidth > element.clientWidth + 1
+  const title = label.querySelector('[data-gantt-bar-title]');
+  return cut(label) || (!!title && cut(title));
+}
+
+/** A bar's title, cut at the bar's end; when it is cut, the bar shows it beside itself instead. */
+export function GanttBarTitle(props: ParentProps<{ class?: string }>) {
+  return (
+    <span data-gantt-bar-title="" class={cn('min-w-0 truncate', props.class)}>
+      {props.children}
+    </span>
   );
 }
 

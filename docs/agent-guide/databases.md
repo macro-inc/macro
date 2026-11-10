@@ -559,14 +559,16 @@ name, then, as room allows, its times (**9:30 AM – 4 PM** within a day,
 its bar fields separated by middots. What does not fit drops whole from the
 end (fields first, then times). A bar too short for its name, such as a one-day
 bar at month zoom or a meeting at week zoom, shows the name beside it, to its
-right, in muted text; it moves back inside once zooming in makes room.
+right, in muted text; it moves back inside once zooming in makes room. A bar
+field cut short (each shows at most about 160px) does not move the name out.
 Records with an empty range show a dashed chip with their name and **No
 dates** in their row at today (now at hours zoom), kept at the nearest visible
 edge when today is scrolled away; ungrouped, they sit under an **Undated**
 heading. Clicking a bar or chip, or Enter on it (they are focusable in row
 order), opens its record.
 The **Timeline menu** (the **⋯** after grid settings, for anyone who can change
-the view; above the message when the timeline has no time range column) chooses **Time range** (which time-range column the bars span), **Bar label**
+the view; above the message when the timeline has no time range column, or has
+no records and the viewer cannot add one) chooses **Time range** (which time-range column the bars span), **Bar label**
 (the column each record is named by, the table's first by default), **Bar
 fields** (other columns shown after the name, in the order turned on), **Group
 by** (**None**, or a single select or single person) and **Color by** (**None**,

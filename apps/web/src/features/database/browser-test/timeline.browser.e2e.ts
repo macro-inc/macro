@@ -88,6 +88,19 @@ for (const [name, viewport, touch] of [
         .toMatchObject({ shown: false });
     });
 
+    test('a truncated field keeps a fitting title inside its bar', async ({
+      page,
+    }) => {
+      await open(page, 'fields');
+      await bar(page, 'Build the prototype').scrollIntoViewIfNeeded();
+      await expect(
+        bar(page, 'Build the prototype').getByText(/^Covers the editor/)
+      ).toBeVisible();
+      expect(await titleBeside(page, 'Build the prototype')).toMatchObject({
+        shown: false,
+      });
+    });
+
     test('the view menu sits with the timeline controls', async ({ page }) => {
       await open(page);
       const controls = page.getByRole('group', { name: 'Timeline controls' });
