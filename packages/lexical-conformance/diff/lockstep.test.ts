@@ -6,8 +6,8 @@ import { $getRoot, $setSelection } from 'lexical';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { Command, Snapshot } from './commands';
 import { Comparison } from './compare';
+import { DOMInputCore } from './dom-input';
 import { generateCommand, type Step, stepArbitrary } from './generator';
-import { RustCore } from './loader';
 import { Upstream } from './upstream';
 
 beforeEach(() => {
@@ -22,14 +22,14 @@ afterEach(() => {
 });
 async function replay(commands: Command[]) {
   const u = new Upstream();
-  const r = new RustCore('upstream');
+  const r = new DOMInputCore('upstream');
   const comparison = new Comparison();
   try {
     comparison.compare(u.snapshot(), JSON.parse(r.snapshot()));
     for (const command of commands)
       comparison.compare(
         await u.apply(command),
-        JSON.parse(r.apply(JSON.stringify(command), 0))
+        JSON.parse(await r.apply(JSON.stringify(command), 0))
       );
   } finally {
     u.dispose();
@@ -73,7 +73,7 @@ for (const seed of seeds)
     let lastActual: Snapshot | null = null;
     const execute = async (steps: Step[]) => {
       const u = new Upstream();
-      const r = new RustCore('upstream');
+      const r = new DOMInputCore('upstream');
       const comparison = new Comparison();
       const commands: Command[] = [];
       const coverage = new Map<Command['kind'], number>();
@@ -93,7 +93,7 @@ for (const seed of seeds)
               const wanted = await u.apply(command);
               expected.push(wanted);
               const actual = JSON.parse(
-                r.apply(JSON.stringify(command), 0)
+                await r.apply(JSON.stringify(command), 0)
               ) as Snapshot;
               actualSnapshot = actual;
               comparison.compare(wanted, actual);
@@ -228,17 +228,17 @@ if ((await import('node:fs')).existsSync(directory))
         JSON.parse(readFileSync(path.join(directory, name), 'utf8'));
       if (fixture.policy?.outcome === 'reject-surrogate-splitting-edit') {
         const u = new Upstream();
-        const r = new RustCore('upstream');
+        const r = new DOMInputCore('upstream');
         const comparison = new Comparison();
         try {
           for (const command of fixture.commands.slice(0, -1))
             comparison.compare(
               await u.apply(command),
-              JSON.parse(r.apply(JSON.stringify(command), 0))
+              JSON.parse(await r.apply(JSON.stringify(command), 0))
             );
           const before = JSON.parse(r.snapshot());
           const actual = JSON.parse(
-            r.apply(JSON.stringify(fixture.commands.at(-1)), 0)
+            await r.apply(JSON.stringify(fixture.commands.at(-1)), 0)
           );
           expect(actual.error).toContain('splits a surrogate pair');
           expect(actual.commit).toBeNull();
