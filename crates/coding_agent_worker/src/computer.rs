@@ -157,6 +157,30 @@ impl Computer {
         })
     }
 
+    /// Start a Claude sign-in in the background while none is signed in, so
+    /// the URL is ready the moment someone opens it; their Start returns it.
+    /// Choosing Macro credits (sign-out) closes it.
+    pub fn pre_start_sign_in(self: &Arc<Self>) {
+        #[cfg(unix)]
+        if !self.claude_auth().is_signed_in() {
+            let computer = Arc::clone(self);
+            tokio::spawn(async move {
+                tokio::select! {
+                    () = computer.cancel.cancelled() => {}
+                    started = computer.start_sign_in() => match started {
+                        Ok(ComputerControlResult::SignInStarted { .. }) => {
+                            tracing::info!("Claude sign-in ready ahead of time");
+                        }
+                        Ok(_) => {}
+                        Err(error) => {
+                            tracing::warn!(error = ?error, "could not start the Claude sign-in ahead of time");
+                        }
+                    },
+                }
+            });
+        }
+    }
+
     /// Point a Claude Code session at the signed-in account or the gateway.
     /// Leaves anything but a session-starting request alone.
     pub fn prepare_session(&self, frame: &mut Value) -> rootcause::Result<()> {

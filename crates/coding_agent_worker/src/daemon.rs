@@ -115,6 +115,9 @@ impl Daemon {
         } else {
             None
         };
+        if let Some(computer) = &computer {
+            computer.pre_start_sign_in();
+        }
         let computer_for_reports = computer.clone();
         let runtime = Runtime::start(
             &config.macro_api,
