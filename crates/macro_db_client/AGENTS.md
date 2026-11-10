@@ -95,7 +95,8 @@ unreferenced replicas. These additive tables do not change agent-session claims.
   Deploy additive revision and team-share columns before service changes. Keep permanent
   `saved_view_tombstone` IDs and the deletion trigger to prevent delayed creates
   from resurrecting deleted definitions. Use a fresh disposable database when
-  checking replacement branch migrations.
+  checking replacement branch migrations. `saved_view_position` holds each
+  viewer's personal order and cascades with both the view and the user.
 
 - External chats (`external_chat*` tables: chats, people, messages, attachments, reactions, poll votes, read state) are provider-neutral; WhatsApp keeps its account, pairing, roster, chat list, membership, alias, observation, receipt and send tables (`whatsapp_*`). Domain queries live in `external_chat` (generic tables) and `whatsapp_linked` (`whatsapp_*` tables and ingest).
 

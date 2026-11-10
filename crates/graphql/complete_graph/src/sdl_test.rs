@@ -1000,6 +1000,7 @@ fn saved_view_contract_is_composed_under_authenticated_user_and_mutations() {
         "createSavedView(input: CreateSavedViewInput!): GraphqlSavedView!",
         "updateSavedView(input: UpdateSavedViewInput!): GraphqlSavedView!",
         "deleteSavedView(input: DeleteSavedViewInput!): ID!",
+        "reorderSavedViews(input: ReorderSavedViewsInput!): [GraphqlSavedView!]!",
         "expectedRevision: Int!",
         "sharing: SavedViewSharingInput",
         "sharedTeamId: ID",

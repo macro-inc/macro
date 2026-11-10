@@ -74,10 +74,10 @@ async fn delete_message_in_thread(
     }
 
     // The message's attachments cascade with the delete, which may have
-    // removed the thread's last calendar attachment. Drafts never have
-    // email_attachments rows, so they can't move the flag.
+    // removed the thread's last attachment of a kind. Drafts never have
+    // email_attachments rows, so they can't move the flags.
     if !deleted_thread && !is_draft {
-        threads::update::sync_thread_calendar_flag(&mut *tx, thread_id).await?;
+        threads::update::sync_thread_attachment_flags(&mut *tx, thread_id).await?;
     }
 
     Ok(MessageDeletion::Deleted {

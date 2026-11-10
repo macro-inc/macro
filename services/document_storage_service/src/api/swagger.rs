@@ -3,6 +3,10 @@
     reason = "Just to allow GetActivitiesResponse and UserActivitiesResponse"
 )]
 
+use crate::api::saved_views::definitions::{
+    CreateSavedViewDefinitionRequest, ReorderSavedViewDefinitionsRequest, SavedViewDefinition,
+    SavedViewDefinitionPage, SavedViewSharingRequest, UpdateSavedViewDefinitionRequest,
+};
 use crate::api::saved_views::{
     CreateViewRequest, ExcludeDefaultViewRequest, ExcludedDefaultView, View, ViewPatch,
 };
@@ -617,6 +621,12 @@ use utoipa::OpenApi;
         saved_views::delete_view_handler,
         saved_views::patch_view_handler,
         saved_views::exclude_default_view_handler,
+        saved_views::definitions::list_handler,
+        saved_views::definitions::get_handler,
+        saved_views::definitions::create_handler,
+        saved_views::definitions::update_handler,
+        saved_views::definitions::delete_handler,
+        saved_views::definitions::reorder_handler,
 
         // /github
         github::inbound::github_sync_router::install_sync_handler,
@@ -1184,6 +1194,12 @@ use utoipa::OpenApi;
 
             CreateViewRequest,
             ExcludeDefaultViewRequest,
+            SavedViewDefinition,
+            SavedViewDefinitionPage,
+            CreateSavedViewDefinitionRequest,
+            UpdateSavedViewDefinitionRequest,
+            SavedViewSharingRequest,
+            ReorderSavedViewDefinitionsRequest,
             BranchNameResponse,
             ShortIdResponse,
             documents_hex::domain::models::GithubPullRequest,

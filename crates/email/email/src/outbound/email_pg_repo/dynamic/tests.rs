@@ -647,6 +647,31 @@ fn test_build_query_single_link_fans_out_per_link() {
 }
 
 #[test]
+fn test_build_query_subject_binds_each_link_and_matches_facts_after_ordering() {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+    let expr = Expr::Literal(EmailLiteral::Subject(
+        item_filters::ast::email::SubjectQuery::try_from("fyi".to_owned()).unwrap(),
+    ));
+    let sql = super::query::debug_build_query_sql_multi_link(&view, &expr);
+
+    // Each inbox is bound, so the planner reads that inbox's statistics.
+    assert!(!sql.contains("FROM unnest("), "{sql}");
+    assert_eq!(sql.matches("UNION ALL").count(), 1, "{sql}");
+    assert_eq!(sql.matches(") AS ordered").count(), 2, "{sql}");
+
+    // The ordered step matches subjects only; mailbox facts wait for the
+    // per-thread check that runs in that order until LIMIT.
+    let inner = sql
+        .split("(SELECT ordered.* FROM (")
+        .nth(1)
+        .and_then(|branch| branch.split(") AS ordered").next())
+        .unwrap();
+    assert!(inner.contains("sm.subject ILIKE"), "{inner}");
+    assert!(!inner.contains("email_message_mailbox_facts"), "{inner}");
+    assert!(!sql.contains("COALESCE(m.subject"), "{sql}");
+}
+
+#[test]
 fn test_build_query_team_scoped_multi_link_does_not_fan_out() {
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
     let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".to_string())));

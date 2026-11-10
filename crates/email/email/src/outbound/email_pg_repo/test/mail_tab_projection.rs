@@ -73,7 +73,7 @@ async fn draft_aggregate_calendar_matches_inline_invitation_policy(
     ];
     let mut connection = pool.acquire().await?;
     for id in ids {
-        email_db_client::threads::update::sync_thread_calendar_flag(&mut connection, id).await?;
+        email_db_client::threads::update::sync_thread_attachment_flags(&mut connection, id).await?;
     }
     drop(connection);
     let repo = EmailPgRepo::new(pool.clone(), Arc::new(PgAccessRepository::new(pool)));

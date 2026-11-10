@@ -9,13 +9,27 @@ use email_types::email::service::pubsub::{DetailedError, FailureReason, Processi
 /// or Redis failing to decide, refuses the write so the operation is deferred
 /// instead of written unmetered.
 pub(super) async fn acquire(ctx: &PubSubContext) -> Result<BackfillWriteSlot, ProcessingError> {
+    admit(ctx.redis_client.acquire_backfill_write_slot().await)
+}
+
+/// Takes one of a team's CRM population slots, refusing like [`acquire`].
+pub(super) async fn acquire_crm_population(
+    ctx: &PubSubContext,
+    team_id: uuid::Uuid,
+) -> Result<BackfillWriteSlot, ProcessingError> {
+    admit(ctx.redis_client.acquire_crm_population_slot(team_id).await)
+}
+
+fn admit(
+    acquired: redis::RedisResult<Option<BackfillWriteSlot>>,
+) -> Result<BackfillWriteSlot, ProcessingError> {
     let refused = |source: anyhow::Error| {
         ProcessingError::Retryable(DetailedError {
             reason: FailureReason::BackfillWritesBusy,
             source,
         })
     };
-    match ctx.redis_client.acquire_backfill_write_slot().await {
+    match acquired {
         Ok(Some(slot)) => Ok(slot),
         Ok(None) => Err(refused(anyhow::anyhow!(
             "no backfill write slot freed up in time"
