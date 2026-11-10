@@ -78,6 +78,11 @@ export class Idea {
     return new Idea(client, record);
   }
 
+  /** The idea's record, so a program can return an idea or a write's outcome. */
+  toJSON(): IdeaRecord {
+    return this.record;
+  }
+
   /** The idea's id. */
   get id(): string {
     return this.record.id;
