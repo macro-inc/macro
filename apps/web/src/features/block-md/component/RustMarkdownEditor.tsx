@@ -1,8 +1,13 @@
 import { startEditorScrollTelemetry } from '@app/observability/editor';
 import { useFlow } from '@app/observability/flow';
+import { FloatingEquationMenu } from '@core/component/LexicalMarkdown/component/menu/FloatingEquationMenu';
+import { DecoratorHostContext } from '@core/component/LexicalMarkdown/context/DecoratorHostContext';
 import { allocateEditorNamespace } from '@core/component/LexicalMarkdown/context/editor-namespace';
+import { FloatingMenuGroup } from '@core/component/LexicalMarkdown/context/FloatingMenuContext';
 import { createNativeFastContactDecoratorViews } from '@core/component/LexicalMarkdown/decorator-host/fast-contact-views';
 import { createNativeContactContext } from '@core/component/LexicalMarkdown/decorator-host/native-contact-host';
+import { createNativeEquationContext } from '@core/component/LexicalMarkdown/decorator-host/native-equation-host';
+import { createNativeEquationViews } from '@core/component/LexicalMarkdown/decorator-host/native-equation-views';
 import { createNativeUserMentionContext } from '@core/component/LexicalMarkdown/decorator-host/native-user-mention-host';
 import { createNativeUserMentionViews } from '@core/component/LexicalMarkdown/decorator-host/native-user-mention-views';
 import { installNativeMarkdownOverlays } from '@core/component/LexicalMarkdown/editing/installNativeMarkdownOverlays';
@@ -64,6 +69,10 @@ export default function RustMarkdownEditor(props: {
   overlayLifecycle.add(() => userMentionContext.dispose());
   const contactContext = createNativeContactContext(theme);
   overlayLifecycle.add(() => contactContext.dispose());
+  const equationContext = createNativeEquationContext(theme);
+  overlayLifecycle.add(() => equationContext.dispose());
+  const [equationMenuActive, setEquationMenuActive] = createSignal(true);
+  overlayLifecycle.add(() => setEquationMenuActive(false));
   let root: HTMLDivElement | undefined;
   let rejectReady: ((error: Error) => void) | undefined;
   let releaseCommit: (() => void) | undefined;
@@ -120,6 +129,7 @@ export default function RustMarkdownEditor(props: {
                 {
                   ...createNativeUserMentionViews(userMentionContext),
                   ...createNativeFastContactDecoratorViews(contactContext),
+                  ...createNativeEquationViews(equationContext),
                 }
               ),
               installOverlays(view) {
@@ -239,6 +249,13 @@ export default function RustMarkdownEditor(props: {
       />
       <Show when={runtime()?.overlays?.Overlays}>
         {(Overlays) => <Dynamic component={Overlays()} />}
+      </Show>
+      <Show when={equationMenuActive() && runtime()}>
+        <DecoratorHostContext.Provider value={equationContext.host}>
+          <FloatingMenuGroup>
+            <FloatingEquationMenu canEdit={permissions.canEdit} />
+          </FloatingMenuGroup>
+        </DecoratorHostContext.Provider>
       </Show>
     </>
   );
