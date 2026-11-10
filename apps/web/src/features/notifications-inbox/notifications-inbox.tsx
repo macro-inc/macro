@@ -24,7 +24,11 @@ import {
   type NotificationsInboxContext,
   NotificationsInboxProvider,
 } from './context/notifications-inbox-context';
-import { inboxSearchFor, useInboxShownRowLocation } from './inbox-location';
+import {
+  inboxSearchFor,
+  useInboxLaneLocation,
+  useInboxShownRowLocation,
+} from './inbox-location';
 import { useNotificationsCalendarPreview } from './notifications-calendar-preview';
 import { openNotificationInSplit } from './open-notification-in-split';
 import { createNotificationInboxSource } from './queries/notification-inbox-source';
@@ -90,6 +94,7 @@ export function NotificationsInbox() {
   const respondToJoinRequest = useRespondToCalendarJoinRequestMutation();
   const calendarPreview = useNotificationsCalendarPreview();
   const shownRow = useInboxShownRowLocation(calendarPreview);
+  const lane = useInboxLaneLocation();
   // The Noise lane only holds what stacks capture, so it comes with them.
   const stacks = useFeatureFlag(enableNotificationStacks);
   const answerJoinRequest: NotificationsInboxContext['requests']['answerJoinRequest'] =
@@ -109,10 +114,11 @@ export function NotificationsInbox() {
             onOpenSettings={() => openSettings('Notifications')}
             lanes={() => stacks().enabled}
             shownRow={shownRow}
+            lane={lane}
             calendarPreview={{
               open: (entity, { shown, replace }) =>
                 calendarPreview.open(entity, {
-                  search: inboxSearchFor(shown),
+                  search: inboxSearchFor(shown, lane.lane()),
                   replace,
                 }),
               isOpen: calendarPreview.isOpen,

@@ -1,6 +1,6 @@
 import { createRoot } from 'solid-js';
 import { describe, expect, it } from 'vitest';
-import { createInboxFilters } from './inbox-filters';
+import { createInboxFilters, createInboxLane } from './inbox-filters';
 
 const memoryStorage = () => {
   let saved: string | null = null;
@@ -63,8 +63,14 @@ describe('createInboxFilters', () => {
 
   it('opens in the lane a linked row belongs to', () => {
     createRoot((dispose) => {
-      const filters = createInboxFilters(memoryStorage(), 'noise');
+      const lane = createInboxLane();
+      lane.setLane('noise');
+      const filters = createInboxFilters(memoryStorage(), lane);
       expect(filters.scope().lane).toBe('noise');
+
+      filters.setLane('signal');
+      expect(lane.lane()).toBe('signal');
+      expect(filters.filters().lane).toBe('signal');
       dispose();
     });
   });

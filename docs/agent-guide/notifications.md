@@ -94,14 +94,18 @@ leaves it and new activity brings one back. A row you read under Unread, or a
 stack you're going through, stays until you next switch or reload.
 With nothing unread, Unread shows **You're all caught up**.
 
-With `enable-notification-stacks` on, the tabs are the lanes instead:
+With `enable-notification-stacks` on as well (the lanes live in this view, so
+they need its flags too; on a local stack GraphQL Soup has no dev default, so
+start Vite with `VITE_ENABLE_GRAPHQL_SOUP=true`), the tabs are the lanes instead:
 **Signal** and **Noise** (`1` and `2`, or Tab), and Unread becomes an **Unread**
 toggle beside the filter that narrows whichever lane shows. Signal is the inbox
 as before. Noise lists what the reader's [stacks](settings.md#notification-stacks)
 captured: those notifications make no sound, badge, push, email or digest and
 count as unread nowhere else, but inside Noise a row is unread until seen and
 every row action, Clear and the filters work the same on that lane alone. The
-lane is not remembered: the view opens on Signal. An empty Noise lane shows
+lane is kept in the view's URL, not between visits: a fresh visit opens on
+Signal (or on Noise for a link to a Noise row), and Back from a row opened in
+Noise returns to Noise. An empty Noise lane shows
 **Nothing in Noise** with **Manage stacks**, which opens Settings →
 Notifications.
 

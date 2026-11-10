@@ -186,6 +186,17 @@ export function laneOfRowId(rowId: string): InboxLane {
   return rowId.includes('#noise#') ? 'noise' : 'signal';
 }
 
+/**
+ * The lane a visit shows: the one the reader chose there, else the lane of
+ * the row it shows, else Signal.
+ */
+export function laneOfVisit(
+  chosen: InboxLane | undefined,
+  shownRowId: string
+): InboxLane {
+  return chosen ?? laneOfRowId(shownRowId);
+}
+
 /** What is kept between visits: the read state and hidden kinds, not the lane. */
 export function serializeInboxFilters(filters: InboxFilters): string {
   return JSON.stringify({

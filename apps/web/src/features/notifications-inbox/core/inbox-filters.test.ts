@@ -5,6 +5,7 @@ import {
   clearFor,
   clearIncludes,
   laneOfRowId,
+  laneOfVisit,
   parseInboxFilters,
   rowTypesFor,
   serializeInboxFilters,
@@ -99,6 +100,19 @@ describe('laneOfRowId', () => {
     expect(laneOfRowId('channel:abc#noise#top_level')).toBe('noise');
     expect(laneOfRowId('channel:abc#top_level')).toBe('signal');
     expect(laneOfRowId('')).toBe('signal');
+  });
+});
+
+describe('laneOfVisit', () => {
+  it('opens in Signal, or in the lane of the row a link shows', () => {
+    expect(laneOfVisit(undefined, '')).toBe('signal');
+    expect(laneOfVisit(undefined, 'channel:abc#noise#top_level')).toBe('noise');
+  });
+
+  it('keeps the lane the reader chose, whatever row shows', () => {
+    // Back from a row opened in Noise: no row shows, the choice remains.
+    expect(laneOfVisit('noise', '')).toBe('noise');
+    expect(laneOfVisit('signal', 'channel:abc#noise#top_level')).toBe('signal');
   });
 });
 

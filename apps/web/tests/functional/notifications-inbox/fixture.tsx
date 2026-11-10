@@ -9,6 +9,7 @@ import {
   type NotificationsInboxContext,
   NotificationsInboxProvider,
 } from '@app/features/notifications-inbox/context/notifications-inbox-context';
+import { createInboxLane } from '@app/features/notifications-inbox/primitives/inbox-filters';
 import { NotificationsView } from '@app/features/notifications-inbox/views/notifications-view';
 import {
   createMemoryHistory,
@@ -331,6 +332,7 @@ function Inbox() {
           onOpen={() => {}}
           onOpenSettings={() => setSettingsOpens((count) => count + 1)}
           shownRow={{ shown, show: (next) => setShown(next) }}
+          lane={createInboxLane()}
           calendarPreview={{
             open: () => false,
             isOpen: () => false,

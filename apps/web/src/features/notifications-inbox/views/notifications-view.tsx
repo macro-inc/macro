@@ -61,7 +61,6 @@ import {
   Show,
   Suspense,
   Switch,
-  untrack,
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
@@ -94,7 +93,6 @@ import {
   type InboxClearChoice,
   type InboxLane,
   type InboxStatus,
-  laneOfRowId,
 } from '../core/inbox-filters';
 import type { InboxDecision } from '../core/inbox-row';
 import {
@@ -112,7 +110,10 @@ import {
   isInboxRow,
   isInboxStackItem,
 } from '../primitives/inbox-date-headers';
-import { createInboxFilters } from '../primitives/inbox-filters';
+import {
+  createInboxFilters,
+  type InboxLaneLocation,
+} from '../primitives/inbox-filters';
 import { createInboxList } from '../primitives/inbox-list';
 import {
   createInboxSelection,
@@ -147,6 +148,8 @@ export type NotificationsViewProps = {
   lanes: Accessor<boolean>;
   /** Where the shown row is kept, so opening one is a history entry. */
   shownRow: InboxShownRowLocation;
+  /** Where the lane is kept, so Back from an opened row returns to it. */
+  lane: InboxLaneLocation;
   /** Calendar events show in the content area through the view's calendar route. */
   calendarPreview: {
     /**
@@ -275,11 +278,7 @@ export function NotificationsView(props: NotificationsViewProps) {
   const panel = useSplitPanelOrThrow();
   const context = useNotificationsInboxContext();
   const { pushUndo } = useMutationUndoContext();
-  // A link to a noise row opens in the lane that lists it.
-  const filters = createInboxFilters(
-    context.filterStorage,
-    laneOfRowId(untrack(() => props.shownRow.shown().row))
-  );
+  const filters = createInboxFilters(context.filterStorage, props.lane);
   // Without lanes the reader only ever sees Signal.
   const lane = (): InboxLane =>
     props.lanes() ? filters.filters().lane : 'signal';
