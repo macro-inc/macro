@@ -8,6 +8,13 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
+mod read_memo;
+
+use read_memo::ReadMemo;
+
+type StoredValue = Arc<dyn Any + Send + Sync>;
+type KnownValues = Vec<(&'static dyn AnyStateKey, StoredValue)>;
+
 /// A state value with JavaScript-compatible equality.
 pub trait StateValue: Clone + fmt::Debug + Send + Sync + 'static {
     /// Serialize this value.
@@ -141,24 +148,15 @@ impl<ValueType: StateValue> StateKey<ValueType> {
             .map_or_else(|| a.js_equal(b), |equal| equal(a, b))
     }
     pub(crate) fn read(&'static self, state: Option<&NodeState>) -> Result<ValueType, Error> {
-        if let Some(state) = state {
-            if let Some((key, value)) = state.known.iter().find(|(key, _)| key.name() == self.name)
-            {
-                if key.identity() != self.identity() {
-                    return Err(Error::StateKeyCollision { key: self.name });
-                }
-                return value
-                    .downcast_ref::<ValueType>()
-                    .cloned()
-                    .ok_or(Error::Invariant("state value type mismatch"));
-            }
-            if let Some(value) = state
-                .unknown
-                .as_ref()
-                .and_then(|values| values.get(self.name))
-            {
-                return Ok((self.parse)(Some(value)));
-            }
+        if let Some(value) = state
+            .map(|state| state.read_value(self))
+            .transpose()?
+            .flatten()
+        {
+            return value
+                .downcast_ref::<ValueType>()
+                .cloned()
+                .ok_or(Error::Invariant("state value type mismatch"));
         }
         Ok(self.default_value().clone())
     }
@@ -297,12 +295,24 @@ pub struct StateLayout {
     pub(crate) export_order: &'static [&'static str],
 }
 /// Optional node state; known entries preserve insertion order and value identity.
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct NodeState {
-    pub(crate) known: Vec<(&'static dyn AnyStateKey, Arc<dyn Any + Send + Sync>)>,
+    pub(crate) known: KnownValues,
+    read_memo: ReadMemo,
     pub(crate) unknown: Option<IndexMap<String, Arc<Value>>>,
     #[cfg(feature = "foreign-nodes")]
     pub(crate) foreign: crate::foreign::state::ForeignBindings,
+}
+impl Clone for NodeState {
+    fn clone(&self) -> Self {
+        Self {
+            known: self.known_entries().collect(),
+            read_memo: self.read_memo.clone_configs(),
+            unknown: self.unknown.clone(),
+            #[cfg(feature = "foreign-nodes")]
+            foreign: self.foreign.clone(),
+        }
+    }
 }
 impl fmt::Debug for NodeState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -313,6 +323,56 @@ impl fmt::Debug for NodeState {
     }
 }
 impl NodeState {
+    fn read_value(&self, key: &'static dyn AnyStateKey) -> Result<Option<StoredValue>, Error> {
+        if let Some((existing, value)) = self
+            .known
+            .iter()
+            .find(|(existing, _)| existing.name() == key.name())
+        {
+            if existing.identity() != key.identity() {
+                return Err(Error::StateKeyCollision { key: key.name() });
+            }
+            return Ok(Some(value.clone()));
+        }
+        if let Some(value) = self.read_memo.get(key)? {
+            return Ok(Some(value));
+        }
+        let Some(raw) = self
+            .unknown
+            .as_ref()
+            .and_then(|values| values.get(key.name()))
+        else {
+            return Ok(None);
+        };
+        self.read_memo.read(key, raw).map(Some)
+    }
+    fn known_entries(&self) -> impl Iterator<Item = (&'static dyn AnyStateKey, StoredValue)> + '_ {
+        let mut index = 0;
+        let mut done = false;
+        std::iter::from_fn(move || {
+            if done {
+                return None;
+            }
+            let entry = if index < self.known.len() {
+                self.known.get(index).cloned()
+            } else {
+                self.read_memo.at(index - self.known.len())
+            };
+            if entry.is_some() {
+                index += 1;
+            } else {
+                done = true;
+            }
+            entry
+        })
+    }
+    #[cfg(feature = "foreign-nodes")]
+    pub(crate) fn has_native_config(&self, name: &str) -> bool {
+        self.known.iter().any(|(key, _)| key.name() == name) || self.read_memo.contains_config(name)
+    }
+    fn fold_read_memo(&mut self) {
+        self.known.extend(self.read_memo.take_values());
+    }
     pub(crate) fn clone_for_write(&self, shared: &SharedConfigMap) -> Self {
         let mut next = self.clone();
         if let Some(unknown) = &mut next.unknown {
@@ -333,13 +393,13 @@ impl NodeState {
         }
         next
     }
-    /// Unparsed imported state.
+    /// Imported raw slots; lazy reads retain their slots until a write prunes learned keys.
     pub fn unknown(&self) -> Option<&IndexMap<String, Arc<Value>>> {
         self.unknown.as_ref()
     }
     /// Known keys in insertion order.
     pub fn known_names(&self) -> impl Iterator<Item = &'static str> + '_ {
-        self.known.iter().map(|(k, _)| k.name())
+        self.known_entries().map(|(key, _)| key.name())
     }
     /// Compare states using each key's equality and unknown JSON object identity.
     /// s2: NS-15, NS-16
@@ -348,32 +408,24 @@ impl NodeState {
         let left = left.unwrap_or(&empty);
         let right = right.unwrap_or(&empty);
         let mut keys = IndexMap::default();
-        for (key, _) in left.known.iter().chain(&right.known) {
-            if let Some(previous) = keys.insert(key.name(), *key)
-                && previous.identity() != key.identity()
-            {
-                return false;
-            }
-        }
-        for key in keys.values() {
-            let value = |state: &Self| {
-                state
-                    .known
-                    .iter()
-                    .find(|(candidate, _)| candidate.identity() == key.identity())
-                    .map(|(_, value)| value.clone())
-                    .unwrap_or_else(|| {
-                        state
-                            .unknown
-                            .as_ref()
-                            .and_then(|values| values.get(key.name()))
-                            .map_or_else(|| key.default_any(), |value| key.parse_any(Some(value)))
-                    })
-            };
-            let a = value(left);
-            let b = value(right);
-            if !Arc::ptr_eq(&a, &b) && !key.equal_any(a.as_ref(), b.as_ref()) {
-                return false;
+        for (source, other) in [(left, right), (right, left)] {
+            for (key, value) in source.known_entries() {
+                if let Some(previous) = keys.insert(key.name(), key) {
+                    if previous.identity() != key.identity() {
+                        return false;
+                    }
+                    continue;
+                }
+                let other_value = match other.read_value(key) {
+                    Ok(Some(value)) => value,
+                    Ok(None) => key.default_any(),
+                    Err(_) => return false,
+                };
+                if !Arc::ptr_eq(&value, &other_value)
+                    && !key.equal_any(value.as_ref(), other_value.as_ref())
+                {
+                    return false;
+                }
             }
         }
         #[cfg(feature = "foreign-nodes")]
@@ -403,6 +455,7 @@ impl NodeState {
         key: &'static StateKey<ValueType>,
         value: ValueType,
     ) -> Result<(), Error> {
+        self.fold_read_memo();
         if let Some((existing, stored)) = self.known.iter_mut().find(|(k, _)| k.name() == key.name)
         {
             if existing.identity() != key.identity() {
@@ -417,6 +470,7 @@ impl NodeState {
         Ok(())
     }
     pub(crate) fn reset_copy(&mut self) {
+        self.fold_read_memo();
         for (key, value) in &mut self.known {
             if key.reset() {
                 *value = key.default_any();
@@ -453,12 +507,13 @@ impl NodeState {
                 unknown.insert(entry.key.name().to_owned(), Arc::new(v.clone()));
             }
         }
+        let previous_known: KnownValues =
+            previous.into_iter().flat_map(Self::known_entries).collect();
         let mut known = vec![];
         let parse = |key: &'static dyn AnyStateKey, value: Option<Arc<Value>>| {
             if preserve_unchanged
-                && let Some((_, stored)) = previous
-                    .into_iter()
-                    .flat_map(|state| &state.known)
+                && let Some((_, stored)) = previous_known
+                    .iter()
                     .find(|(existing, _)| existing.identity() == key.identity())
                 && match &value {
                     Some(value) => {
@@ -483,8 +538,8 @@ impl NodeState {
             let value = unknown.shift_remove(key.name());
             known.push((key, parse(key, value)));
         }
-        if let Some(previous) = previous {
-            for (key, _) in &previous.known {
+        {
+            for (key, _) in &previous_known {
                 if known
                     .iter()
                     .any(|(existing, _)| existing.identity() == key.identity())
@@ -510,6 +565,7 @@ impl NodeState {
         }
         Some(Self {
             known,
+            read_memo: ReadMemo::default(),
             unknown: Some(unknown),
             #[cfg(feature = "foreign-nodes")]
             foreign: previous
@@ -534,7 +590,7 @@ impl NodeState {
                 .flatten()
                 .map(|(key, value)| (key.clone(), value.as_ref().clone())),
         );
-        for (key, value) in &self.known {
+        for (key, value) in self.known_entries() {
             if key.equal_any(value.as_ref(), key.default_any().as_ref()) {
                 values.shift_remove(key.name());
             } else if let Some(v) = key.json_any(value.as_ref()) {

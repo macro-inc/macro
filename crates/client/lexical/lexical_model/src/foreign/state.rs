@@ -251,7 +251,7 @@ impl Transaction<'_> {
         }
         let state = slot.state.clone();
         if let Some(state) = &state {
-            if state.known.iter().any(|(key, _)| key.name() == name) {
+            if state.has_native_config(name) {
                 return Err(Error::StateKeyCollision { key: name });
             }
             state.foreign.bind(name, config.clone());
