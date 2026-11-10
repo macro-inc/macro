@@ -1,7 +1,10 @@
-use super::*;
-use crate::outbound::companies_repo::test::helpers::{insert_company, insert_contact, seed_team};
+use super::helpers::{insert_company, insert_contact, seed_team};
+use crate::domain::contact_phones::{ContactPhone, ContactPhonesRepository, PhoneSource};
+use crate::outbound::companies_repo::CompaniesRepositoryImpl;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
+use phone_number::PhoneNumber;
 use sqlx::PgPool;
+use uuid::Uuid;
 
 fn numbers(phones: &[ContactPhone]) -> Vec<(&str, PhoneSource)> {
     phones

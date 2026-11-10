@@ -5,6 +5,7 @@ pub(crate) mod test;
 
 mod association;
 mod contact_listing;
+mod contact_phones;
 mod contact_update;
 mod email_privacy;
 
@@ -36,7 +37,7 @@ struct DepopulateTarget {
 #[derive(Clone)]
 pub struct CompaniesRepositoryImpl {
     /// The underlying sqlx::PgPool connected to macrodb.
-    pub(super) pool: PgPool,
+    pool: PgPool,
     #[cfg(test)]
     after_depopulate_source: Option<std::sync::Arc<test::ContactWriteGate>>,
     #[cfg(test)]

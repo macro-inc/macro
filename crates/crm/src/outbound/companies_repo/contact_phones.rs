@@ -3,7 +3,7 @@
 use phone_number::PhoneNumber;
 use uuid::Uuid;
 
-use super::companies_repo::CompaniesRepositoryImpl;
+use super::CompaniesRepositoryImpl;
 use crate::domain::{
     contact_phones::{ContactPhone, ContactPhonesRepository, PhoneSource},
     model::CrmError,
@@ -14,6 +14,7 @@ fn storage(error: sqlx::Error) -> CrmError {
 }
 
 impl ContactPhonesRepository for CompaniesRepositoryImpl {
+    #[tracing::instrument(skip_all, fields(%team_id, %contact_id), err)]
     async fn contact_phones(
         &self,
         team_id: &Uuid,
@@ -56,6 +57,7 @@ impl ContactPhonesRepository for CompaniesRepositoryImpl {
             .map(Some)
     }
 
+    #[tracing::instrument(skip_all, fields(%team_id, %contact_id, count = phones.len()), err)]
     async fn set_contact_phones(
         &self,
         team_id: &Uuid,
@@ -110,6 +112,7 @@ impl ContactPhonesRepository for CompaniesRepositoryImpl {
             .await
     }
 
+    #[tracing::instrument(skip_all, fields(%team_id, count = phones.len()), err)]
     async fn add_contact_phones(
         &self,
         team_id: &Uuid,
@@ -143,6 +146,3 @@ impl ContactPhonesRepository for CompaniesRepositoryImpl {
         Ok(added)
     }
 }
-
-#[cfg(test)]
-mod test;

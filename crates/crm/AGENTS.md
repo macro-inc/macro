@@ -26,8 +26,8 @@ tools/HTTP/GraphQL surfaces over them.
   entry methods call them.
 - `src/inbound/toolset.rs` (+ `toolset/*.rs`): AI tool definitions.
 - `src/outbound/companies_repo.rs`: the Postgres adapter for companies/contacts.
-- `src/domain/contact_phones.rs` + `src/outbound/contact_phones.rs`: a
-  contact's E.164 numbers (`crm_contact_phones`) and where each came from.
+- `src/domain/contact_phones.rs` + `src/outbound/companies_repo/contact_phones.rs`:
+  a contact's E.164 numbers (`crm_contact_phones`) and where each came from.
 - `src/outbound/call_link.rs`: links archived and imported calls to the CRM
   records of the people on them (`src/inbound/call_events.rs` consumes the
   call topic).

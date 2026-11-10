@@ -4,9 +4,6 @@ pub mod call_link;
 /// Postgres implementation of the companies repository
 #[cfg(feature = "outbound")]
 pub mod companies_repo;
-/// Postgres implementation of contact phone storage
-#[cfg(feature = "outbound")]
-pub mod contact_phones;
 /// Postgres implementation of the message store's CRM parent reader
 #[cfg(feature = "lookup")]
 pub mod lookup;

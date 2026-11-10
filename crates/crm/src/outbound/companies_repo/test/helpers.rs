@@ -31,7 +31,7 @@ pub(crate) async fn seed_team(pool: &PgPool, team_id: Uuid, owner_id: &str) -> s
     Ok(())
 }
 
-pub(crate) async fn insert_company(
+pub(super) async fn insert_company(
     pool: &PgPool,
     team_id: Uuid,
     email_sync: bool,
@@ -349,7 +349,7 @@ pub(super) async fn count_companies_for_domain(
 
 /// Inserts a bare contact under `company_id` (no source row needed for the
 /// comment tests).
-pub(crate) async fn insert_contact(
+pub(super) async fn insert_contact(
     pool: &PgPool,
     company_id: Uuid,
     email: &str,
