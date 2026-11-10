@@ -17,14 +17,21 @@ struct Repository {
 }
 #[async_trait]
 impl CorrelationRepository for Repository {
-    async fn create(&self, _: Uuid, _: Uuid) -> Result<Uuid, CorrelationError> {
+    async fn create(
+        &self,
+        _: Uuid,
+        _: Uuid,
+        _: Option<crate::scope::SessionScope>,
+    ) -> Result<Uuid, CorrelationError> {
         unreachable!()
     }
     async fn find(&self, id: Uuid) -> Result<Option<Correlation>, CorrelationError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
-        Ok((id == Uuid::from_u128(1)).then_some(Correlation {
+        // 1: an unscoped session; 6: a generation session.
+        Ok([1, 6].contains(&id.as_u128()).then_some(Correlation {
             session_id: Uuid::from_u128(2),
             agent_id: Uuid::from_u128(3),
+            scope: (id == Uuid::from_u128(6)).then_some(crate::scope::SessionScope::Generation),
         }))
     }
 }
@@ -177,4 +184,79 @@ async fn propagate_scopes_the_signed_routine_beside_the_correlation() {
     // Only the correlation is looked up; the routine's signature is its authority.
     assert_eq!(repository.calls.load(Ordering::SeqCst), 1);
     assert_eq!(crate::context::current_routine(), None);
+}
+
+/// A scoped session's request outside its scope is refused before any
+/// handler runs; inside it, and any unscoped session's, goes through.
+#[tokio::test]
+async fn a_scoped_session_is_refused_outside_its_scope() {
+    use tower::ServiceExt;
+
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+    };
+    let ran = Arc::new(AtomicUsize::new(0));
+    let handler = {
+        let ran = Arc::clone(&ran);
+        move || {
+            let ran = Arc::clone(&ran);
+            async move {
+                ran.fetch_add(1, Ordering::SeqCst);
+                StatusCode::OK
+            }
+        }
+    };
+    let app = axum::Router::new()
+        .route("/email/messages", axum::routing::post(handler.clone()))
+        .route(
+            "/scheduled-action/ideas",
+            axum::routing::post(handler.clone()),
+        )
+        .route("/email/threads", axum::routing::get(handler))
+        .layer(axum::middleware::from_fn_with_state(state, propagate));
+    for (correlation, method, path, expected) in [
+        (6, "POST", "/email/messages", StatusCode::FORBIDDEN),
+        (6, "POST", "/scheduled-action/ideas", StatusCode::OK),
+        (6, "GET", "/email/threads", StatusCode::OK),
+        (1, "POST", "/email/messages", StatusCode::OK),
+    ] {
+        let bearer = token(Some(Uuid::from_u128(correlation)), Some(Uuid::from_u128(3)));
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(path)
+                    .header("authorization", format!("Bearer {bearer}"))
+                    .body(axum::body::Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected, "{correlation} {method} {path}");
+    }
+    assert_eq!(ran.load(Ordering::SeqCst), 3);
+    // The extractor refuses the same way.
+    let bearer = token(Some(Uuid::from_u128(6)), Some(Uuid::from_u128(3)));
+    let (mut parts, _) = Request::builder()
+        .method("POST")
+        .uri("/email/messages")
+        .header("authorization", format!("Bearer {bearer}"))
+        .body(())
+        .unwrap()
+        .into_parts();
+    let state = CorrelationState {
+        jwt: JwtValidationArgs::testing_macro_token("fixture", PUBLIC),
+        repository: Arc::new(Repository {
+            calls: AtomicUsize::new(0),
+        }),
+    };
+    let refused = AgentCorrelationExtractor::from_request_parts(&mut parts, &state).await;
+    assert_eq!(
+        refused.err().unwrap().into_response().status(),
+        StatusCode::FORBIDDEN
+    );
 }

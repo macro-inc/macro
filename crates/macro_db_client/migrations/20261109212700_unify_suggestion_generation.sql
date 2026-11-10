@@ -13,9 +13,14 @@
 -- people onboarded on this one and ignores `retired_at`. The migration that
 -- drops the old tables copies such late rows first.
 
--- The ALTER and the foreign key to "User" lock those tables until commit:
+-- The ALTERs and the foreign key to "User" lock those tables until commit:
 -- take them first, before the copy, and don't queue behind long transactions.
 SET LOCAL lock_timeout = '5s';
+
+-- What a code-mode invocation's session may do when narrower than its
+-- person's access (`generation`: a suggestion generation session), set
+-- where its credential is minted and enforced wherever it is accepted.
+ALTER TABLE agent_correlations ADD COLUMN scope text;
 
 -- The trace a generation runs in: its sessions' tool calls reach the API
 -- without its trace context and record this id to be joined to it.
