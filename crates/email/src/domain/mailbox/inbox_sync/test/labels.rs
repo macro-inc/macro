@@ -26,7 +26,7 @@ async fn a_missing_database_message_queues_the_exact_upsert_and_is_terminal() {
         if queue_fails {
             fake.0.lock().unwrap().failures.push(("enqueue", 1));
         }
-        let (delete, error) = failure(service.process(Ok(input(operation())), &fake).await);
+        let (delete, error) = failure(service.process(Ok(input(operation()))).await);
         assert!(delete);
         assert_eq!(
             error.reason,
@@ -61,7 +61,7 @@ async fn the_provider_read_stays_between_pending_reads_even_when_it_fails_or_ret
     for value in [Ok(None), Err(EmailApiError::Forbidden)] {
         let (service, fake) = make_service(false);
         fake.0.lock().unwrap().provider = value.clone();
-        let result = service.process(Ok(input(operation())), &fake).await;
+        let result = service.process(Ok(input(operation()))).await;
         assert_eq!(
             fake.calls(),
             vec![
@@ -166,7 +166,7 @@ async fn each_provider_error_preserves_primary_retry_routing_and_reason() {
         for (provider_error, rate_limited, reason) in &errors {
             let (service, fake) = make_service(retry);
             fake.0.lock().unwrap().provider = Err(provider_error.clone());
-            let (delete, error) = failure(service.process(Ok(input(operation())), &fake).await);
+            let (delete, error) = failure(service.process(Ok(input(operation()))).await);
             assert_eq!(
                 delete,
                 if *rate_limited {
@@ -218,7 +218,7 @@ async fn failed_retry_publication_and_pending_after_failure_override_the_provide
                 .failures
                 .push((stage, if stage == "pending" { 2 } else { 1 }));
         }
-        let (delete, error) = failure(service.process(Ok(input(operation())), &fake).await);
+        let (delete, error) = failure(service.process(Ok(input(operation()))).await);
         assert!(!delete);
         assert_eq!(
             error.reason,
@@ -254,7 +254,7 @@ async fn pending_labels_from_either_side_and_unchanged_labels_do_not_publish_or_
             }
         }
         assert!(matches!(
-            service.process(Ok(input(operation())), &fake).await,
+            service.process(Ok(input(operation()))).await,
             InboxSyncDisposition::DoneDelete
         ));
         assert_eq!(
@@ -284,7 +284,7 @@ async fn additions_commit_before_removals_and_events_preserve_fixed_order_and_la
         ));
     }
     assert!(matches!(
-        service.process(Ok(input(operation())), &fake).await,
+        service.process(Ok(input(operation()))).await,
         InboxSyncDisposition::DoneDelete
     ));
     let calls = fake.calls();
@@ -354,7 +354,7 @@ async fn removals_mark_read_and_provider_system_labels_only_refresh_without_user
             }));
         }
         assert!(matches!(
-            service.process(Ok(input(operation())), &fake).await,
+            service.process(Ok(input(operation()))).await,
             InboxSyncDisposition::DoneDelete
         ));
         let calls = fake.calls();
@@ -399,7 +399,7 @@ async fn each_read_and_transaction_failure_keeps_delivery_and_prevents_later_eff
                 state.labels = vec![label("INBOX")];
             }
         }
-        let (delete, error) = failure(service.process(Ok(input(operation())), &fake).await);
+        let (delete, error) = failure(service.process(Ok(input(operation()))).await);
         assert!(!delete, "{stage} {nth}");
         assert_eq!(
             error.reason,
@@ -443,7 +443,7 @@ async fn thread_state_overrides_message_flags_and_failed_lookup_uses_label_fallb
             }
         }
         assert!(matches!(
-            service.process(Ok(input(operation())), &fake).await,
+            service.process(Ok(input(operation()))).await,
             InboxSyncDisposition::DoneDelete
         ));
         let calls = fake.calls();
@@ -459,7 +459,7 @@ async fn broker_errors_are_best_effort_and_a_resynced_duplicate_has_no_new_effec
     let (service, fake) = make_service(false);
     fake.0.lock().unwrap().failures.push(("event", 1));
     assert!(matches!(
-        service.process(Ok(input(operation())), &fake).await,
+        service.process(Ok(input(operation()))).await,
         InboxSyncDisposition::DoneDelete
     ));
     assert_eq!(fake.calls().last(), Some(&Call::Refresh(false)));
@@ -469,7 +469,7 @@ async fn broker_errors_are_best_effort_and_a_resynced_duplicate_has_no_new_effec
         state.calls.clear();
     }
     assert!(matches!(
-        service.process(Ok(input(operation())), &fake).await,
+        service.process(Ok(input(operation()))).await,
         InboxSyncDisposition::DoneDelete
     ));
     assert!(
@@ -492,7 +492,7 @@ async fn reverse_provider_changes_publish_false_flags_and_the_removed_user_label
         state.provider = Ok(Some(vec!["INBOX".into()]));
     }
     assert!(matches!(
-        service.process(Ok(input(operation())), &fake).await,
+        service.process(Ok(input(operation()))).await,
         InboxSyncDisposition::DoneDelete
     ));
     let calls = fake.calls();

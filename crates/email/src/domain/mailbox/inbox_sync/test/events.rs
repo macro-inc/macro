@@ -55,11 +55,11 @@ async fn each_operation_success_has_its_existing_debug_event_inside_the_processi
         "Successfully processed delete message operation",
         "Successfully processed update labels operation",
     ]) {
-        let (service, fake) = make_service(false);
+        let (service, _fake) = make_service(false);
         let output = Output::default();
         assert!(matches!(
             service
-                .process(Ok(input(operation)), &fake)
+                .process(Ok(input(operation)))
                 .with_subscriber(output.subscriber())
                 .await,
             InboxSyncDisposition::DoneDelete
@@ -74,7 +74,7 @@ async fn skipped_and_missing_messages_log_their_existing_debug_fields_once() {
     fake.0.lock().unwrap().link.as_mut().unwrap().is_sync_active = false;
     let output = Output::default();
     service
-        .process(Ok(input(gmail_notification())), &fake)
+        .process(Ok(input(gmail_notification())))
         .with_subscriber(output.subscriber())
         .await;
     assert_debug(
@@ -100,7 +100,7 @@ async fn skipped_and_missing_messages_log_their_existing_debug_fields_once() {
         };
         let output = Output::default();
         service
-            .process(Ok(input(operation)), &fake)
+            .process(Ok(input(operation)))
             .with_subscriber(output.subscriber())
             .await;
         assert_debug(
@@ -127,14 +127,11 @@ async fn defensive_already_deleted_branch_keeps_its_debug_event_and_ids() {
     fake.0.lock().unwrap().deletion = MessageDeletion::AlreadyDeleted;
     let output = Output::default();
     service
-        .process(
-            Ok(input(InboxSyncOperation::DeleteMessage(
-                DeleteMessagePayload {
-                    provider_message_id: "message-1".into(),
-                },
-            ))),
-            &fake,
-        )
+        .process(Ok(input(InboxSyncOperation::DeleteMessage(
+            DeleteMessagePayload {
+                provider_message_id: "message-1".into(),
+            },
+        ))))
         .with_subscriber(output.subscriber())
         .await;
     assert_debug(
@@ -161,14 +158,11 @@ async fn retry_and_deferred_debug_logs_include_the_original_display_error_and_pa
             origin: RateLimitOrigin::Local,
         });
         let outcome = service
-            .process(
-                Ok(input(InboxSyncOperation::UpdateLabels(
-                    UpdateLabelsPayload {
-                        provider_message_id: "message-1".into(),
-                    },
-                ))),
-                &fake,
-            )
+            .process(Ok(input(InboxSyncOperation::UpdateLabels(
+                UpdateLabelsPayload {
+                    provider_message_id: "message-1".into(),
+                },
+            ))))
             .await;
         let output = Output::default();
         let (text, span) = if retry {
@@ -211,14 +205,11 @@ async fn permanent_failures_keep_the_terminal_error_event() {
     let (service, fake) = make_service(false);
     fake.0.lock().unwrap().provider = Err(EmailApiError::Forbidden);
     let InboxSyncDisposition::FailureDelete { data, error, log } = service
-        .process(
-            Ok(input(InboxSyncOperation::UpdateLabels(
-                UpdateLabelsPayload {
-                    provider_message_id: "message-1".into(),
-                },
-            ))),
-            &fake,
-        )
+        .process(Ok(input(InboxSyncOperation::UpdateLabels(
+            UpdateLabelsPayload {
+                provider_message_id: "message-1".into(),
+            },
+        ))))
         .await
     else {
         panic!("terminal disposition")
@@ -240,4 +231,84 @@ async fn permanent_failures_keep_the_terminal_error_event() {
     assert!(text.contains("error="));
     assert!(text.contains("remove_labels:"));
     assert!(text.contains("payload="));
+}
+
+#[tokio::test]
+async fn a_missing_upsert_keeps_its_debug_event_and_provider_identity() {
+    let (svc, fake) = make_service(false);
+    let output = Output::default();
+    svc.process(Ok(input(InboxSyncOperation::UpsertMessage(
+        UpsertMessagePayload {
+            provider_message_id: "message-1".into(),
+        },
+    ))))
+    .with_subscriber(output.subscriber())
+    .await;
+    assert_debug(
+        &output,
+        "Message not found in gmail when attempting to upsert",
+        "upsert_message",
+    );
+    assert!(output.text().contains("provider_message_id=message-1"));
+    assert!(output.text().contains("link_id="));
+    assert!(!fake.calls().is_empty());
+}
+#[tokio::test]
+async fn changed_catalog_keeps_its_debug_counts_under_sync_labels() {
+    let (svc, fake) = make_service(false);
+    {
+        let mut state = fake.0.lock().unwrap();
+        state.import.history = Some("1".into());
+        state.import.provider_catalog = Ok(vec![super::fakes::label("New").into()]);
+    }
+    let output = Output::default();
+    svc.process(Ok(input(gmail_notification())))
+        .with_subscriber(output.subscriber())
+        .await;
+    assert_debug(&output, "Label synchronization complete", "sync_labels");
+    assert!(output.text().contains("added=1"));
+    assert!(output.text().contains("updated=0"));
+    assert!(output.text().contains("deleted=0"));
+}
+#[tokio::test]
+async fn own_sender_filter_keeps_its_debug_event_and_thread_identity() {
+    let (mut svc, fake) = make_service(false);
+    svc.features.notifications_enabled = true;
+    {
+        let mut state = fake.0.lock().unwrap();
+        state.message = None;
+        state.import.fetched = Ok(Some(
+            email_api_client::domain::models::MessageWithCalendarParts {
+                message: super::import_fakes::received_message(
+                    super::fakes::LINK,
+                    super::fakes::THREAD,
+                ),
+                calendar_parts: vec![],
+            },
+        ));
+        let sender = Uuid::from_u128(9);
+        state.import.committed.as_mut().unwrap().from_contact_id = Some(sender);
+        state.import.senders.insert(
+            sender,
+            models_email::service::address::ContactInfo {
+                email: format!("no-reply@{}", email_utils::MACRO_NOTIFICATION_SENDER_DOMAIN),
+                name: None,
+                photo_url: None,
+            },
+        );
+    }
+    let output = Output::default();
+    svc.process(Ok(input(InboxSyncOperation::UpsertMessage(
+        UpsertMessagePayload {
+            provider_message_id: "message-1".into(),
+        },
+    ))))
+    .with_subscriber(output.subscriber())
+    .await;
+    assert_debug(
+        &output,
+        "skipping new-email notification for Macro's own notification sender",
+        "send_notifications",
+    );
+    assert!(output.text().contains("thread_id="));
 }

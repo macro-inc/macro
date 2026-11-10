@@ -34,7 +34,7 @@ impl<T> PendingAroundRead<T> {
 /// gives a future passed by value a stack slot in every frame it passes
 /// through and another where it is awaited, enough to overflow a worker
 /// thread's stack on the inbox sync path in a local build.
-pub(super) async fn read_around<R: InboxSyncRepository, T: Send>(
+pub async fn read_around<R: InboxSyncRepository, T: Send>(
     db: &R,
     message_id: Uuid,
     read: BoxFuture<'_, T>,

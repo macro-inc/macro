@@ -11,6 +11,9 @@ mod admission;
 mod deletion;
 mod events;
 mod fakes;
+mod history;
+mod import_fakes;
+mod imports;
 mod labels;
 
 fn failure(outcome: InboxSyncDisposition) -> (bool, DetailedError) {

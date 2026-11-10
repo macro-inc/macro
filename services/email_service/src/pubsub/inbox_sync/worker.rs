@@ -16,24 +16,28 @@ use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImp
 use tokio_util::sync::CancellationToken;
 
 use crate::outbound::inbox_lifecycle::inbox_sync::{
-    GmailInboxSync, InboxSync, InboxSyncEffects, InboxSyncSqs, LegacyInboxSyncOperations,
-    PgInboxSync,
+    GmailInboxSync, InboxSync, InboxSyncEffects, InboxSyncSqs, PgInboxSync,
 };
 use crate::outbound::message_labels::gmail_ops::PgGmailOps;
 use email::domain::mailbox::inbox_sync::InboxSyncService;
 
-/// Stage-A listener state; the legacy context serves only history and upsert.
+/// Thin listener state: the domain service and receive/acknowledgement handle.
 #[derive(Clone)]
 pub(crate) struct InboxSyncContext {
     pub(crate) sqs_worker: sqs_worker::SQSWorker,
     pub(crate) service: Arc<InboxSync>,
-    pub(crate) legacy: LegacyInboxSyncOperations,
 }
 
 impl InboxSyncContext {
     #[cfg(test)]
+    pub(crate) fn backfill_context(&self) -> PubSubContext {
+        self.service.effects.worker.clone()
+    }
+    #[cfg(test)]
     pub(crate) fn set_notifications_enabled(&mut self, enabled: bool) {
-        self.legacy.0.notifications_enabled = enabled;
+        let service = Arc::make_mut(&mut self.service);
+        service.features.notifications_enabled = enabled;
+        service.effects.worker.notifications_enabled = enabled;
     }
 }
 
@@ -99,7 +103,7 @@ pub(crate) fn context(
     notifications_enabled: bool,
     retry_worker: bool,
 ) -> InboxSyncContext {
-    let legacy = PubSubContext {
+    let leaves = PubSubContext {
         gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService(
             email::outbound::mailbox_pg::PgMailboxSync::new(db.clone()),
         ),
@@ -124,20 +128,21 @@ pub(crate) fn context(
         retry_worker,
     };
     let service = Arc::new(InboxSyncService {
-        links: PgGmailOps(legacy.db.clone()),
-        repository: PgInboxSync(legacy.db.clone()),
-        gmail: GmailInboxSync(legacy.email_api.clone()),
-        queue: InboxSyncSqs(legacy.sqs_client.clone()),
-        effects: InboxSyncEffects {
-            broker: legacy.macro_event_broker.clone(),
-            gateway: legacy.connection_gateway_client.clone(),
-        },
+        links: PgGmailOps(leaves.db.clone()),
+        repository: PgInboxSync(leaves.db.clone()),
+        gmail: GmailInboxSync(leaves.email_api.clone()),
+        queue: InboxSyncSqs(leaves.sqs_client.clone()),
+        effects: InboxSyncEffects { worker: leaves },
         retry_worker,
+        features: email::domain::mailbox::inbox_sync::InboxSyncFeatures {
+            attachment_upload: cfg!(feature = "attachment_upload"),
+            contacts_sync: cfg!(feature = "contacts_sync"),
+            notifications_enabled,
+        },
     });
     InboxSyncContext {
         sqs_worker: worker.clone(),
         service,
-        legacy: LegacyInboxSyncOperations(legacy),
     }
 }
 

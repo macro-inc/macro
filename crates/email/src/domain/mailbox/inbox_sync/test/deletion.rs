@@ -22,7 +22,7 @@ async fn deletion_reads_only_the_addresses_for_the_messages_direction() {
             message.is_draft = draft;
         }
         assert!(matches!(
-            service.process(Ok(input(operation())), &fake).await,
+            service.process(Ok(input(operation()))).await,
             InboxSyncDisposition::DoneDelete
         ));
         let calls = fake.calls();
@@ -77,7 +77,7 @@ async fn missing_sender_or_null_recipient_skips_cleanup_but_blank_addresses_keep
             )];
         }
         assert!(matches!(
-            service.process(Ok(input(operation())), &fake).await,
+            service.process(Ok(input(operation()))).await,
             InboxSyncDisposition::DoneDelete
         ));
         let cleanup: Vec<_> = fake
@@ -155,7 +155,7 @@ async fn missing_message_exits_after_the_locked_lookup_without_committing_or_pub
     let (service, fake) = make_service(false);
     fake.0.lock().unwrap().message = None;
     assert!(matches!(
-        service.process(Ok(input(operation())), &fake).await,
+        service.process(Ok(input(operation()))).await,
         InboxSyncDisposition::DoneDelete
     ));
     assert_eq!(
@@ -170,7 +170,7 @@ async fn deferred_and_already_deleted_results_commit_cleanup_without_events_or_r
         let (service, fake) = make_service(false);
         fake.0.lock().unwrap().deletion = deletion;
         assert!(matches!(
-            service.process(Ok(input(operation())), &fake).await,
+            service.process(Ok(input(operation()))).await,
             InboxSyncDisposition::DoneDelete
         ));
         assert_eq!(
@@ -205,7 +205,7 @@ async fn every_deletion_failure_remains_retryable_and_stops_later_effects() {
             state.message.as_mut().unwrap().is_sent = sent;
             state.failures.push((stage, 1));
         }
-        let (delete, error) = failure(service.process(Ok(input(operation())), &fake).await);
+        let (delete, error) = failure(service.process(Ok(input(operation()))).await);
         assert!(!delete, "{stage}");
         assert_eq!(error.reason, FailureReason::DatabaseQueryFailed, "{stage}");
         assert!(
@@ -235,14 +235,14 @@ async fn a_failed_rollback_is_propagated_and_broker_rejection_does_not_fail_the_
         .unwrap()
         .failures
         .extend([("delete", 1), ("rollback", 1)]);
-    let (delete, error) = failure(service.process(Ok(input(operation())), &fake).await);
+    let (delete, error) = failure(service.process(Ok(input(operation()))).await);
     assert!(!delete);
     assert_eq!(error.source.to_string(), "delete_message: rollback");
     assert_eq!(fake.calls().last(), Some(&Call::Rollback));
     let (service, fake) = make_service(false);
     fake.0.lock().unwrap().failures.push(("event", 1));
     assert!(matches!(
-        service.process(Ok(input(operation())), &fake).await,
+        service.process(Ok(input(operation()))).await,
         InboxSyncDisposition::DoneDelete
     ));
     assert_eq!(fake.calls().last(), Some(&Call::Refresh(true)));
@@ -253,7 +253,7 @@ async fn a_sender_without_an_address_does_not_enqueue_cleanup() {
     let (service, fake) = make_service(false);
     fake.0.lock().unwrap().sender = Some(contact(None));
     assert!(matches!(
-        service.process(Ok(input(operation())), &fake).await,
+        service.process(Ok(input(operation()))).await,
         InboxSyncDisposition::DoneDelete
     ));
     let calls = fake.calls();
