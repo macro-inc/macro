@@ -4,43 +4,35 @@
 
 Part of Calls: imports a user's Dialpad phone calls (details, transcript, AI
 recap; never audio) as private Macro calls. The Dialpad grant lives in Macro
-Connect, a separate service (`macro-inc/macro-connect`) this crate reaches
-through `connect_client`; this crate owns only the sync.
+Connect (`macro-inc/macro-connect`), reached through `connect_client`; this
+crate owns only the sync.
 
 ## How it works
 
-The user connects from Settings: `POST /integrations/dialpad/connection`
-enrolls them and returns a Macro Connect URL; Connect returns them to
-`/app/settings/connections`, and `.../complete` (or the next 30-second
-reconcile) reads `users/me`, registers a webhook with a secret Macro chose,
-and subscribes to that user's call states. Dialpad posts HS256 JWTs to
-`/integrations/dialpad/webhooks/{id}`; each verified event is stored with
-its `traceparent`. The worker leases a call's pending events together, so
-one import covers them: it rebuilds the call from all of its events, fetches
-the transcript, and ingests through `call::domain::imports`.
-A first-connect backfill pages `GET /call` one page per reconcile; backfills
-take turns, a failed page backs off (30 seconds, doubling to an hour), and an
-unreadable item is skipped and logged by call id and field path.
+Settings `POST /integrations/dialpad/connection` enrolls the user and returns a
+Macro Connect URL; Connect returns them to `/app/settings/connections`.
+`.../complete` (polled by the row) or the 30-second reconcile then
+reads `users/me`, registers a webhook with a secret Macro chose, and subscribes
+to that user's call states. Dialpad posts HS256 JWTs to
+`/integrations/dialpad/webhooks/{id}`; each verified event is stored with its
+`traceparent`. The worker leases a call's pending events together, rebuilds
+the call from all of its events, fetches the transcript, and ingests through
+`call::domain::imports`. Backfill pages `GET /call` one page per reconcile.
 
 ## Start here
 
 - `src/domain/service.rs`: setup, delivery intake, the worker tick.
 - `src/domain/mapping.rs`: events → one `ImportedCall` snapshot.
-- `src/outbound/pg_repo.rs`: enrollment, setup leases, delivery dedup.
+- `src/outbound/pg_repo.rs`: enrollment, setup leases, the event queue.
 
 ## Scope
 
 - Owns: Dialpad webhook lifecycle, delivery verification and dedup, call
   mapping, backfill.
-- Not here: the Dialpad OAuth grant → Macro Connect (`macro-inc/macro-connect`); call
-  storage → `crates/call`; CRM linking → `crates/crm` (consumes the
-  `call.record_imported` event).
-
-## Boundaries
-
-- Depends on: `call` import port, `connect_client`, `phone_number`,
-  `row_cipher`, `macro_tower_layers` (stored trace context).
-- Used by: `services/agent_harness_service` (composition, routes, worker).
+- Not here: the OAuth grant → Macro Connect; call storage → `crates/call`; CRM
+  linking → `crates/crm` (consumes `call.record_imported`).
+- Used by: `services/agent_harness_service` (routes, worker), only when
+  `CONNECT_CUSTOMER_KEY` is set.
 
 ## Checks
 
@@ -48,59 +40,37 @@ unreadable item is skipped and logged by call id and field path.
 
 ## Gotchas
 
-- Imports replace the stored call wholesale, so a snapshot must always be
-  built from every stored event of the call, never only the triggering one.
-  Events can be sparse: details merge field by field, newest value first.
-- Setup success and failure must both match the lease that stored the secret.
-  If activation fails, retire the newly created registration before returning.
-- Failed setup retries hourly, `MAX_SETUP_ATTEMPTS` times in a row, then stops
-  as `SetupAbandoned` (Settings: "Setup could not finish") until the user
-  reconnects. Every failure counts the same; Dialpad's errors (its
-  subscription cap among them) are not told apart.
-- Setup first removes a registration a stopped sync left behind. Dialpad's 403
-  and 404 count as removed; any other failure fails setup and keeps the old
-  ids for the hourly retry, so a sync never has two live subscriptions.
-- Backfill commits must match the enrollment and cursor read before fetching.
-- Grant checks may finish after a reconnect: stop/flag only the observed enrollment.
-- A call with an active delivery lease cannot be claimed again, including newly
-  arrived events; concurrent claims serialize briefly on the connection row.
-- Before ingesting, an import checks that sync is on and its lease still holds
-  the call's deliveries: stopping or disconnecting drops them, so that import
-  is skipped, while a reconnect of a running sync keeps them.
+- An import replaces the stored call wholesale, so build it from every stored
+  event of the call. Only a rejected token fails a transcript fetch; any other
+  error imports the call without its transcript, as 403/404 do.
+- Stopping or disconnecting drops a sync's pending events; a call's events
+  are forgotten once it has been done and quiet for 30 days.
+- Setup success and failure must match the lease that stored the secret. A
+  registration activation did not record is retired before returning; setup
+  first removes one a stopped sync left behind, and keeps its ids if that
+  fails, so a sync never has two live subscriptions.
+- Fence asynchronous grant checks and backfill commits on the observed
+  enrollment (and cursor): a reconnect may land meanwhile.
+- A call with an active lease cannot be claimed again, even for new events;
+  before ingesting, `holds()` re-checks the lease, so a stop or disconnect
+  during the fetch skips the import while a reconnect keeps it.
+- Call failures are read from pending events, never `last_error`. A call that
+  gives up parks at `available_at = 'infinity'` until a new event for it
+  starts its attempts over.
 - Dialpad sends no event id: deliveries dedupe on (call, state, timestamp).
-- The signature is checked before the event is read. A bad one is a 401; a
-  signed event that does not decode, or has no timestamp, is acknowledged and
-  dropped (refusing only makes Dialpad resend it), logging ids and the field
-  path, never content. Fields Dialpad sends in more than one shape decode in
-  `models::lenient`; events are stored in the declared shape.
-- Call failures are read from pending events, never stored in `last_error`,
-  so one call's success cannot hide another's failure. A call retries with
-  backoff `MAX_CALL_ATTEMPTS` times, then waits at `available_at = 'infinity'`
-  (Settings: "Some calls not imported") until a new event for it starts its
-  attempts over.
-- Only a rejected token (401) fails a transcript fetch; any other error
-  imports the call without its transcript, as 403/404 do.
-- `GET /call/{id}` is limited to 10/min and `ai_recap` to 12/min; live calls
-  use event payloads, and only backfill reads the recap endpoint.
-- Always pass `target_type=user`: without a target an admin's token lists or
-  subscribes to the whole company. Dialpad allows 100 call subscriptions per
-  company across all integrations.
-- An import makes the connected user the call's owner, so only events whose
-  `target.id` is that Dialpad user import. Others, and events with no target,
-  are dropped on receipt, on backfill pages, and again at import (deliveries
-  that arrive mid-setup are stored before the user is known).
-- Dialpad only delivers to public HTTPS; setup is a no-op without one
-  (local stacks need a tunnel on `/cognition/integrations/dialpad/webhooks`).
-- Disconnecting deletes Macro Connect's connection; it does not revoke the
-  grant at Dialpad. Imported calls stay, and the sync row stays (as
-  `Disconnected`) so a reconnect keeps its import namespace: never delete it,
-  or a backfill re-imports calls as duplicates.
-- Deliveries are stored only while a sync runs or is mid-setup; a stopped
-  sync's subscription may keep posting.
-- Needs `CONNECT_CUSTOMER_KEY` and a live `dialpad` app in Macro Connect
-  (`registry/apps/dialpad` in `macro-inc/macro-connect`, an `own_app` awaiting
-  Dialpad's approval).
+  Signatures are checked before reading; a signed event that does not decode
+  is acknowledged and dropped, logging ids and the field path, never content.
+- Always pass `target_type=user`, or an admin's token lists or subscribes to
+  the whole company (which allows 100 call subscriptions across all
+  integrations). Only events whose `target.id` is the connected Dialpad user
+  import, checked on receipt, on backfill pages and again at import.
+- `ai_recap` allows 12 calls a minute, so only backfill reads it; live calls
+  take their recap from events.
+- Dialpad delivers only to public HTTPS; locally, tunnel
+  `/cognition/integrations/dialpad/webhooks`.
+- Disconnecting keeps the row and its import namespace, so a reconnect never
+  duplicates calls; never delete it.
 
 ## Related
 
-- Docs: `docs/agent-guide/calls.md` (Imported calls)
+- Docs: `docs/agent-guide/calls.md` (Imported Dialpad calls)
