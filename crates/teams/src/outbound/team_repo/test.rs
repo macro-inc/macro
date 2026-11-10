@@ -1148,7 +1148,7 @@ async fn test_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Result<()> {
     fixtures(path = "../../../fixtures", scripts("teams"))
 )]
 async fn test_rollback_accept_team_invite(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let team_repo = TeamRepositoryImpl::new(pool.clone());
+    let team_repo = TeamRepositoryImpl::new(pool.clone()).with_member_vault(EmptyVault);
 
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
     let team_invite_id = macro_uuid::string_to_uuid("22222222-2222-2222-2222-222222222222")?;

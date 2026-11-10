@@ -82,7 +82,10 @@ record finished, transfers already-shared items to the current team owner with
 existing grants preserved, drops the removed member's own grants, and queues
 private erasure. Uncommitted write intents are fenced privately; their snapshots
 cannot create new sharing grants. Rollback restores membership and removes the
-reversible fence without enqueueing erasure. Private values are never transferred
+reversible fence without enqueueing erasure. Successful failed-join compensation
+is definitive revocation: auto-join and invite rollback fence, finish the outbox,
+and queue private erasure in the membership-rollback transaction, while preserving
+existing billing and seat compensation. Private values are never transferred
 to another person. The tracked worker retries private erasures independently of
 rollout or the removed member's session; each failure warns and marks its child
 span as an error. Acknowledged KV erasure retains a CAS fence; TOTP generations

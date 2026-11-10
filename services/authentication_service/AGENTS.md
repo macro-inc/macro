@@ -199,3 +199,6 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   erasure before deleting profile/account metadata; any failure stops the job.
 - Use internal DSS lifecycle endpoints for provider work. Keep runtime bootstrap
   credentials out of the service; local provisioning supplies the scoped parent JWT role.
+
+- Keep regression coverage for both failed-join compensations and late write-intent
+  publication against the real membership/vault transaction bridge.

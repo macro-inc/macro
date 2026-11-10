@@ -373,6 +373,74 @@ async fn later_saga_failure_restores_membership_with_private_values_unfenced_and
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn failed_auto_join_compensation_finishes_private_erasure_atomically(pool: PgPool) {
+    let f = Fixture::new(pool).await;
+    let repo = TeamRepositoryImpl::new(f.pool.clone()).with_member_vault(PasswordMemberVault);
+    repo.rollback_add_user_to_team(&f.team.0, &f.member)
+        .await
+        .unwrap();
+    assert!(!f.membership_exists().await);
+    let vault = PgRepository::new(f.pool.clone()).unwrap();
+    let private = vault.get(f.team, f.private).await.unwrap();
+    assert!(
+        private.deleting,
+        "definitive join compensation must enqueue erasure"
+    );
+    assert!(!private.member_removal_pending);
+    assert_eq!(vault.item_cleanup_due().await.unwrap().len(), 2);
+    assert_eq!(vault.get(f.team, f.shared).await.unwrap().user_id, f.owner);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn failed_invite_join_compensation_finishes_private_erasure_atomically(pool: PgPool) {
+    use teams::domain::model::{
+        AcceptedTeamInvite, SeatPlan, TeamInviteSnapshot, TeamMember, TeamRole,
+    };
+    let f = Fixture::new(pool).await;
+    let repo = TeamRepositoryImpl::new(f.pool.clone()).with_member_vault(PasswordMemberVault);
+    let invite_id = Uuid::now_v7();
+    let accepted = AcceptedTeamInvite {
+        member: TeamMember {
+            team_id: f.team.0,
+            user_id: f.member.clone(),
+            role: TeamRole::Member,
+            plan: SeatPlan::Premium,
+        },
+        invite: TeamInviteSnapshot {
+            id: invite_id,
+            team_id: f.team.0,
+            email: macro_user_id::email::Email::parse_from_str("member@example.test")
+                .unwrap()
+                .lowercase()
+                .into_owned(),
+            team_role: TeamRole::Member,
+            invited_by: f.owner.clone(),
+            created_at: chrono::Utc::now(),
+            last_sent_at: chrono::Utc::now(),
+            is_agent: false,
+        },
+    };
+    repo.rollback_accept_team_invite(&accepted).await.unwrap();
+    assert!(!f.membership_exists().await);
+    let vault = PgRepository::new(f.pool.clone()).unwrap();
+    let private = vault.get(f.team, f.private).await.unwrap();
+    assert!(
+        private.deleting,
+        "invite compensation must enqueue erasure before committing membership rollback"
+    );
+    assert!(!private.member_removal_pending);
+    assert_eq!(vault.item_cleanup_due().await.unwrap().len(), 2);
+    assert_eq!(vault.get(f.team, f.shared).await.unwrap().user_id, f.owner);
+    assert_eq!(
+        repo.get_team_invite_by_id(&invite_id)
+            .await
+            .unwrap()
+            .team_id,
+        f.team.0
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn revoked_member_cannot_publish_unseen_write_intent_after_the_scan(pool: PgPool) {
     let f = Fixture::new(pool).await;
     let vault = PgRepository::new(f.pool.clone()).unwrap();

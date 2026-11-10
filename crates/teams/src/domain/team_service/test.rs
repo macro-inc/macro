@@ -482,6 +482,15 @@ impl TeamRepository for MockTeamRepository {
         async move { Ok(claimed) }
     }
 
+    async fn rollback_add_user_to_team(
+        &self,
+        team: &uuid::Uuid,
+        user: &MacroUserIdStr<'_>,
+    ) -> Result<(), RemoveUserFromTeamError> {
+        self.remove_user_from_team(team, user).await?;
+        self.finish_user_removal(team, user).await
+    }
+
     async fn finish_user_removal(
         &self,
         _: &uuid::Uuid,
@@ -6957,6 +6966,7 @@ async fn test_try_join_team_by_domain_rolls_back_membership_when_roles_fail() {
     // The rollback removes the freshly added member again.
     team_repo.removed_member = Some(member);
     team_repo.team_subscription_id = Some(subscription_id.clone());
+    let finish_removal_calls = team_repo.finish_removal_calls.clone();
     let remove_user_calls = team_repo.remove_user_calls.clone();
 
     let customer_repo = MockCustomerRepository {
@@ -7004,6 +7014,11 @@ async fn test_try_join_team_by_domain_rolls_back_membership_when_roles_fail() {
         vec![(subscription_id.to_string(), 1)]
     );
     assert_eq!(*remove_user_calls.lock().unwrap(), 1);
+    assert_eq!(
+        *finish_removal_calls.lock().unwrap(),
+        1,
+        "failed auto-join compensation must finalize vault revocation"
+    );
     assert!(event_broker.events().is_empty());
 }
 

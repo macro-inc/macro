@@ -1335,7 +1335,7 @@ where
         failed_step: &str,
     ) {
         self.team_repository
-            .remove_user_from_team(team_id, user_id)
+            .rollback_add_user_to_team(team_id, user_id)
             .await
             .inspect_err(|rollback_err| {
                 tracing::error!(

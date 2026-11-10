@@ -111,3 +111,7 @@ event contract (schema, sanitization, delivery semantics).
   ownership to the current team owner; private values are erased by the durable worker.
 - Purge the vault namespace before deleting the team row. Missing provider roles
   and incomplete erasure are errors, never successful partial deletion.
+
+- Treat successful failed-join compensation as definitive revocation: auto-join
+  and invite rollback fence, finish, and enqueue private erasure in the same
+  membership-rollback transaction. Preserve billing/seat compensation.

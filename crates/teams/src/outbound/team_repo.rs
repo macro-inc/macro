@@ -61,7 +61,26 @@ impl TeamRepositoryImpl {
     }
 }
 
+#[derive(Clone, Copy)]
+enum RemovalCommit {
+    Reversible,
+    Definitive,
+}
+
 impl TeamRepositoryImpl {
+    async fn member_owner_under_vault_lease(
+        connection: &mut sqlx::PgConnection,
+        team: &uuid::Uuid,
+    ) -> Result<String, RemoveUserFromTeamError> {
+        let key = format!("passwords/{team}");
+        sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", key)
+            .execute(&mut *connection)
+            .await?;
+        sqlx::query_scalar!("SELECT owner_id FROM team WHERE id=$1 FOR UPDATE", team)
+            .fetch_optional(&mut *connection)
+            .await?
+            .ok_or(RemoveUserFromTeamError::TeamDoesNotExist)
+    }
     #[tracing::instrument(skip_all, err, name="teams.member.remove", fields(team_id=%team_id,outcome=tracing::field::Empty))]
     #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn remove_member(
@@ -69,17 +88,10 @@ impl TeamRepositoryImpl {
         team_id: &uuid::Uuid,
         user_id: &MacroUserIdStr<'_>,
         mode: MemberRemovalMode,
+        commit: RemovalCommit,
     ) -> Result<TeamMember<'static>, RemoveUserFromTeamError> {
         let mut transaction = self.pool.begin().await?;
-        let key = format!("passwords/{team_id}");
-        sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", key)
-            .execute(&mut *transaction)
-            .await?;
-        let owner_id =
-            sqlx::query_scalar!("SELECT owner_id FROM team WHERE id=$1 FOR UPDATE", team_id)
-                .fetch_optional(&mut *transaction)
-                .await?
-                .ok_or(RemoveUserFromTeamError::TeamDoesNotExist)?;
+        let owner_id = Self::member_owner_under_vault_lease(&mut transaction, team_id).await?;
         if user_id.as_ref() == owner_id {
             return Err(RemoveUserFromTeamError::CannotRemoveOwner);
         }
@@ -111,8 +123,20 @@ impl TeamRepositoryImpl {
 
         TeamRepositoryImpl::bump_seat_count(&mut transaction, team_id, -1).await?;
 
+        if matches!(commit, RemovalCommit::Definitive) {
+            self.member_vault
+                .finish(&mut transaction, *team_id, user_id.as_ref())
+                .await?;
+        }
         transaction.commit().await?;
-        tracing::Span::current().record("outcome", "membership_revoked");
+        tracing::Span::current().record(
+            "outcome",
+            if matches!(commit, RemovalCommit::Definitive) {
+                "definitive_revocation"
+            } else {
+                "membership_revoked"
+            },
+        );
         Ok(removed_member)
     }
 
@@ -712,9 +736,29 @@ impl TeamRepository for TeamRepositoryImpl {
         team: &uuid::Uuid,
         user: &MacroUserIdStr<'_>,
     ) -> Result<TeamMember<'static>, RemoveUserFromTeamError> {
-        self.remove_member(team, user, MemberRemovalMode::Administrative)
-            .await
+        self.remove_member(
+            team,
+            user,
+            MemberRemovalMode::Administrative,
+            RemovalCommit::Reversible,
+        )
+        .await
     }
+    async fn rollback_add_user_to_team(
+        &self,
+        team: &uuid::Uuid,
+        user: &MacroUserIdStr<'_>,
+    ) -> Result<(), RemoveUserFromTeamError> {
+        self.remove_member(
+            team,
+            user,
+            MemberRemovalMode::Administrative,
+            RemovalCommit::Definitive,
+        )
+        .await
+        .map(|_| ())
+    }
+
     async fn finish_user_removal(
         &self,
         team: &uuid::Uuid,
@@ -737,8 +781,13 @@ impl TeamRepository for TeamRepositoryImpl {
         team: &uuid::Uuid,
         user: &MacroUserIdStr<'_>,
     ) -> Result<TeamMember<'static>, RemoveUserFromTeamError> {
-        self.remove_member(team, user, MemberRemovalMode::Voluntary)
-            .await
+        self.remove_member(
+            team,
+            user,
+            MemberRemovalMode::Voluntary,
+            RemovalCommit::Reversible,
+        )
+        .await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -1036,13 +1085,28 @@ impl TeamRepository for TeamRepositoryImpl {
         })
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, err, name="teams.member.join_rollback", fields(team_id=%accepted_invite.member.team_id,outcome=tracing::field::Empty))]
     #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
     async fn rollback_accept_team_invite(
         &self,
         accepted_invite: &AcceptedTeamInvite<'_>,
     ) -> Result<(), TeamError> {
         let mut transaction = self.pool.begin().await?;
+        let team = accepted_invite.member.team_id;
+        let user = accepted_invite.member.user_id.as_ref();
+        let owner = Self::member_owner_under_vault_lease(&mut transaction, &team)
+            .await
+            .map_err(|_| type_err("vault failed-join lease failed"))?;
+        self.member_vault
+            .prepare(
+                &mut transaction,
+                team,
+                user,
+                &owner,
+                MemberRemovalMode::Administrative,
+            )
+            .await
+            .map_err(|_| type_err("vault failed-join fence failed"))?;
 
         let deleted = sqlx::query(
             r#"
@@ -1083,7 +1147,12 @@ impl TeamRepository for TeamRepositoryImpl {
         .execute(&mut *transaction)
         .await?;
 
+        self.member_vault
+            .finish(&mut transaction, team, user)
+            .await
+            .map_err(|_| type_err("vault failed-join finalization failed"))?;
         transaction.commit().await?;
+        tracing::Span::current().record("outcome", "definitive_revocation");
 
         Ok(())
     }
