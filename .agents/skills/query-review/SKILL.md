@@ -23,7 +23,8 @@ Never connect to a hosted dev or production database for this. Use a local one.
 ## 1. List every changed query
 
 ```sh
-base=$(git merge-base HEAD origin/main)   # the PR's base branch; not main for a stacked PR
+base_ref=origin/main                       # for a stacked PR, the branch it is based on
+base=$(git merge-base HEAD "$base_ref")
 git diff --name-status "$base" HEAD -- .sqlx                      # static queries added or removed; each file holds the SQL text
 git diff "$base" HEAD -- '*.rs' | grep -nE '^[+-].*(QueryBuilder|push_bind|\.push\(|format!\(.*(SELECT|WHERE|JOIN))'
 git diff --name-only "$base" HEAD -- '**/migrations/**' '*.sql'   # functions, views, triggers, indexes
@@ -89,10 +90,11 @@ the questions above. A changed query with no recorded plan is a `fix`.
 Then state the level of your own check for each query:
 
 - **`index`**: an equality lookup on a primary key or unique index, or on a
-  named index whose leading columns cover every predicate, so the rows scanned
-  are the rows returned and that number is bounded. Naming the index is
-  enough. An index on only some of the predicates does not qualify: the rest
-  are filtered row by row.
+  named index whose leading columns take every predicate as an equality, with
+  at most one range condition last, so the rows scanned are the rows returned
+  and that number is bounded. Naming the index is enough. An index on only
+  some of the predicates, or a column that follows a range condition, does not
+  qualify: those rows are read and filtered.
 - **`measured`**: `EXPLAIN (ANALYZE, BUFFERS)` on a local database seeded to
   the size in question 2. Required when the query reads a
   [large table](table-sizes.md) and is not a plain `index` lookup, when the SQL

@@ -29,8 +29,11 @@ The plan must show all four, judged against [table sizes](../query-review/table-
 1. **No full scan of a large table.** No `Seq Scan` on a table in the size
    tiers or on one that grows per message, event, or log line, and no index
    scan that reads a whole tenant and filters most of it away.
-2. **Every predicate that narrows is index-backed.** It appears under
-   `Index Cond`, not `Filter`, on the node that reads the large table.
+2. **The large table is reached through an index that does the narrowing.**
+   The predicates that cut the rows down are `Index Cond` on the node that
+   reads the table, or are guaranteed by a partial index's own predicate.
+   What is left under `Filter` removes few rows from a set the index already
+   bounded.
 3. **Rows touched are bounded by the request.** The actual rows read follow
    from the page size, the ids passed in, one parent's children, or an
    explicit cap written into the query. They do not grow with the tenant, the
@@ -134,8 +137,10 @@ one entity's pending requests.
   check `Rows Removed by Filter` when the planner picks another.
 - A composite index is used from its leading columns: `(link_id, created_at)`
   serves `link_id = $1 AND created_at < $2`, not `created_at < $2` alone.
-- `LIKE '%x'`, `ILIKE`, `OR` across different columns, and `<>` do not narrow
-  through a b-tree. Use the trigram index where one exists, or restructure.
+- `LIKE '%x'`, `ILIKE`, and `<>` do not narrow through a b-tree; use the
+  trigram index where one exists, or restructure. An `OR` across different
+  columns narrows only when each side has its own index (the plan shows a
+  `BitmapOr`); otherwise it is a filter.
 
 ### Bound every list
 
@@ -144,8 +149,8 @@ one entity's pending requests.
 - `LIMIT` bounds the result, not the work, when a sort, `DISTINCT ON`,
   `GROUP BY`, or window function must see every candidate first. Narrow before
   those steps, or order by an index so the limit can stop the scan.
-- Select the columns you need. `SELECT *` on a wide table reads the row and
-  its TOAST data for every candidate.
+- Select the columns you need. `SELECT *` on a wide table fetches and sends
+  large column values nobody reads.
 
 ### One query for many rows
 

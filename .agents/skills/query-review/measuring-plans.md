@@ -71,17 +71,20 @@ PREPARE q(uuid, timestamptz, int) AS
 SET plan_cache_mode = force_custom_plan;    -- planned for these parameter values
 EXPLAIN (ANALYZE, BUFFERS) EXECUTE q('…', now(), 50);
 
-SET plan_cache_mode = force_generic_plan;   -- the plan a long-lived connection ends up with
+SET plan_cache_mode = force_generic_plan;   -- planned without them, as a reused statement can be
 EXPLAIN (ANALYZE, BUFFERS) EXECUTE q('…', now(), 50);
 ```
 
-- Run each twice and keep both timings; the first shows a cold cache. Use the
+- Run each twice and keep both timings with their buffer `hit` and `read`
+  counts. The first run is not a cold cache unless you controlled the cache;
+  call the two first and repeated. Use the
   largest tenant's parameters, and for each optional filter the value that
   matches the most rows and a value that matches none: a filter that matches
   nothing makes a `LIMIT` scan read everything looking for a first row.
-- The generic plan matters: SQLx prepares statements, and Postgres switches a
-  prepared statement to a plan built without the parameter values after a few
-  executions. An optional filter written `$2 IS NULL OR col < $2` is an index
+- The generic plan matters: SQLx prepares statements, and after five
+  executions Postgres may switch a prepared statement to a plan built without
+  the parameter values, when that plan looks no more expensive. Forcing it is
+  the conservative check. An optional filter written `$2 IS NULL OR col < $2` is an index
   condition in the custom plan and a filter over every row in the generic one.
 - `EXPLAIN ANALYZE` executes the statement. Measure an `INSERT`, `UPDATE`, or
   `DELETE` inside `BEGIN; … ROLLBACK;` each time, so the second run sees the

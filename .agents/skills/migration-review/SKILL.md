@@ -21,7 +21,8 @@ Never run a migration against a hosted dev or production database for this.
 ## 1. List what changed
 
 ```sh
-base=$(git merge-base HEAD origin/main)   # the PR's base branch; not main for a stacked PR
+base_ref=origin/main                       # for a stacked PR, the branch it is based on
+base=$(git merge-base HEAD "$base_ref")
 git diff --name-status --no-renames "$base" HEAD -- '**/migrations/**'
 ```
 
@@ -98,9 +99,9 @@ schema back. With the migration applied and the old code still running:
   database the app or tests use. It must apply on the production engine
   version, not only the local one.
 - To see the locks a transactional file takes, create a scratch database that
-  stops at the last migration on the base
-  (`sqlx migrate run --target-version <version> …`), then run the new file by
-  hand and look before rolling back:
+  stops at the migration just before that file, with this PR's earlier files
+  applied (`sqlx migrate run --target-version <version> …`), then run the file
+  by hand and look before rolling back:
 
   ```sql
   BEGIN;

@@ -16,7 +16,8 @@ matches the diff, not just the first.
 ## 1. Pick the reviews
 
 ```sh
-base=$(git merge-base HEAD origin/main)   # the PR's base branch; not main for a stacked PR
+base_ref=origin/main                       # for a stacked PR, the branch it is based on
+base=$(git merge-base HEAD "$base_ref")
 git diff --name-only "$base" HEAD
 git diff "$base" HEAD -- '*.rs' '*.sql' | grep -nE '^[+-].*(sqlx::query|query_as|query_scalar|query_file|QueryBuilder|push_bind|\.push\()' | head
 ```
