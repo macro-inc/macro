@@ -7,7 +7,10 @@ publish = false
 [dependencies]
 async-graphql = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
+graphql_common = { path = "../graphql_common" }
 macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
 rootcause = { workspace = true }
 routine_program = { path = "../routine_program" }
 scheduled_action = { path = "../scheduled_action" }
@@ -16,6 +19,5 @@ tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-macro_uuid = { path = "../macro_uuid" }
 model_owner = { path = "../model_owner" }
 tokio = { workspace = true, features = ["macros", "rt"] }

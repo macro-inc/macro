@@ -463,6 +463,34 @@ type CompleteMutationRoot {
 	"""
 	inviteCalendarEventGuests(input: InviteCalendarEventGuestsInput!): GraphqlCalendarMutationPayload!
 	"""
+	Act on a proposed idea. A background prompt idea starts its run, or
+	runs again when its last run failed; any other idea is marked
+	accepted, and the client opens its prompt, draft or routine.
+	"""
+	acceptIdea(ideaId: ID!): GraphqlIdea!
+	"""
+	The user isn't interested in an open idea; generation sessions see
+	when.
+	"""
+	dismissIdea(ideaId: ID!): GraphqlIdea!
+	"""
+	The user opened the app, in IANA time zone `timezone`: they are
+	counted in for nightly generations, which run in their night. False
+	when ideas are off for them.
+	"""
+	recordIdeasSeen(timezone: String!): Boolean!
+	"""
+	The user isn't interested in a suggestion, AI's or a template: it is
+	never suggested again, on any surface.
+	"""
+	dismissRoutineSuggestion(suggestionId: ID!): GraphqlRoutineSuggestionDismissed!
+	"""
+	Start the user's onboarding generation, once their inbox is
+	connected, in IANA time zone `timezone`: their ideas and routine
+	suggestions, as each is on for them. Later calls start nothing.
+	"""
+	startSuggestionGeneration(timezone: String!): GraphqlSuggestionGenerationStarted!
+	"""
 	Mark work feed items done for the authenticated user: acknowledge the
 	notifications each entry showed and archive inbox email.
 	Notifications newer than an entry's `revision` stay active. Own work
@@ -3246,6 +3274,21 @@ enum GraphqlCallStatus {
 }
 
 """
+A catalog routine, with the knob values AI filled in. Its trigger and
+steps come from the catalog.
+"""
+type GraphqlCatalogRoutinePick {
+	"""
+	The catalog routine, e.g. `inbox`.
+	"""
+	key: String!
+	"""
+	Knob values by knob name; knobs left out keep the catalog's.
+	"""
+	knobs: JSON!
+}
+
+"""
 Metadata for someone asking to join a channel the recipient participates in.
 """
 type GraphqlChannelAccessRequestedMetadata {
@@ -4477,6 +4520,17 @@ enum GraphqlDocumentSubType {
 }
 
 """
+A routine AI drafted that passed saving's checks.
+"""
+type GraphqlDraftedRoutinePick {
+	"""
+	The routine as it would be saved, switched off: the body the
+	scheduler's create route takes.
+	"""
+	routine: JSON!
+}
+
+"""
 The two operands of a recursive `EmailFilterExpr` binary expression.
 """
 input GraphqlEmailBinaryExpr {
@@ -5062,6 +5116,21 @@ input GraphqlEntityFilterAst {
 	The properties filter to apply.
 	"""
 	propertiesFilter: GraphqlFilterPropertiesExpr
+}
+
+"""
+A note about specific items, with what to do about them.
+"""
+type GraphqlEntityIdea {
+	"""
+	What to do about the items.
+	"""
+	action: GraphqlIdeaEntityAction!
+	"""
+	A reply idea's draft, once a session wrote one: the email thread it
+	is in, with the draft as the part.
+	"""
+	draft: GraphqlIdeaTarget
 }
 
 """
@@ -6155,6 +6224,234 @@ input GraphqlGroupByInput {
 }
 
 """
+One proactive suggestion for the authenticated user.
+"""
+type GraphqlIdea {
+	"""
+	The idea's id.
+	"""
+	id: ID!
+	"""
+	What to do, in a few words.
+	"""
+	title: String!
+	"""
+	Why, in a line or two.
+	"""
+	summary: String!
+	"""
+	0 to 100, for ordering.
+	"""
+	importance: Int!
+	"""
+	The feed's filters it shows under.
+	"""
+	categories: [GraphqlIdeaCategory!]!
+	"""
+	Where it is for the user.
+	"""
+	state: GraphqlIdeaState!
+	"""
+	Why it was resolved; only on resolved ideas.
+	"""
+	stateReason: String
+	"""
+	The items it is about.
+	"""
+	about: [GraphqlIdeaTarget!]!
+	"""
+	What acting on it produced.
+	"""
+	produced: [GraphqlIdeaTarget!]!
+	"""
+	When it was first proposed.
+	"""
+	createdAt: DateTime!
+	"""
+	When it last changed.
+	"""
+	updatedAt: DateTime!
+	"""
+	When its state last changed.
+	"""
+	stateChangedAt: DateTime!
+	"""
+	A background prompt idea's latest run.
+	"""
+	run: GraphqlIdeaRun
+	"""
+	Its kind, with that kind's data. A kind never changes.
+	"""
+	kind: GraphqlIdeaKind!
+}
+
+"""
+A filter on the feed. Not kinds: an idea may have several.
+"""
+enum GraphqlIdeaCategory {
+	"""
+	Matters now.
+	"""
+	IMPORTANT
+	"""
+	Worth coming back to.
+	"""
+	REVISIT
+	"""
+	Saves money.
+	"""
+	SAVE_MONEY
+	"""
+	Makes money.
+	"""
+	MAKE_MONEY
+}
+
+"""
+What an entity idea suggests doing about its items.
+"""
+enum GraphqlIdeaEntityAction {
+	"""
+	Answer it.
+	"""
+	REPLY
+	"""
+	Look at it.
+	"""
+	REVIEW
+	"""
+	Chase it up.
+	"""
+	FOLLOW_UP
+}
+
+"""
+The authenticated user's ideas.
+"""
+type GraphqlIdeaFeed {
+	"""
+	The ideas, best first.
+	"""
+	ideas: [GraphqlIdea!]!
+}
+
+"""
+What kind of idea it is.
+"""
+union GraphqlIdeaKind = GraphqlPromptIdea | GraphqlEntityIdea | GraphqlRoutineIdea
+
+"""
+A run of a background prompt idea: a hidden agent session of the user's.
+"""
+type GraphqlIdeaRun {
+	"""
+	The agent session: open it to see the result or answer what it
+	waits for.
+	"""
+	sessionId: ID!
+	"""
+	When it started.
+	"""
+	startedAt: DateTime!
+	"""
+	How it is going, read from the session.
+	"""
+	progress: GraphqlIdeaRunProgress!
+}
+
+"""
+How a prompt idea runs.
+"""
+enum GraphqlIdeaRunMode {
+	"""
+	Opened in the composer, prefilled, for the user to send.
+	"""
+	COMPOSER
+	"""
+	Run in a hidden session; the user sees the result.
+	"""
+	BACKGROUND
+}
+
+"""
+How a run is going, as its session says.
+"""
+enum GraphqlIdeaRunProgress {
+	"""
+	Working.
+	"""
+	RUNNING
+	"""
+	Waiting for the user to approve a tool call.
+	"""
+	NEEDS_APPROVAL
+	"""
+	Waiting for the user to answer a question.
+	"""
+	NEEDS_INPUT
+	"""
+	Done; its result is in the session and the idea's `produced`.
+	"""
+	FINISHED
+	"""
+	It stopped without finishing; accepting the idea again retries.
+	"""
+	FAILED
+	"""
+	The session couldn't be read just now.
+	"""
+	UNKNOWN
+}
+
+"""
+Where an idea is for the user.
+"""
+enum GraphqlIdeaState {
+	"""
+	Shown, not acted on yet.
+	"""
+	PROPOSED
+	"""
+	The user acted on it, and it is under way.
+	"""
+	ACCEPTED
+	"""
+	Finished: what it suggested was done.
+	"""
+	DONE
+	"""
+	The user isn't interested.
+	"""
+	DISMISSED
+	"""
+	Something happened that ended it, such as the email being answered.
+	"""
+	RESOLVED
+	"""
+	A generation session found it no longer matters.
+	"""
+	RETIRED
+}
+
+"""
+An item, or a part of one such as a message in a thread.
+"""
+type GraphqlIdeaTarget {
+	"""
+	The item's type.
+	"""
+	entityType: GraphqlEntityType!
+	"""
+	The item's id.
+	"""
+	entityId: String!
+	"""
+	A part of it, such as one message in a channel.
+	"""
+	partId: String
+}
+
+"""
 Metadata for an inbox that requires reauthentication.
 """
 type GraphqlInboxReauthRequiredMetadata {
@@ -6824,6 +7121,20 @@ input GraphqlProjectLiteral @oneOf {
 }
 
 """
+A prompt for an agent: opened in the composer, or run in the background.
+"""
+type GraphqlPromptIdea {
+	"""
+	What the agent is asked to do.
+	"""
+	prompt: String!
+	"""
+	How it runs.
+	"""
+	runMode: GraphqlIdeaRunMode!
+}
+
+"""
 A property assignment and its current value.
 """
 type GraphqlProperty {
@@ -7429,6 +7740,16 @@ type GraphqlRepliedToDocumentCommentThreadMetadata {
 }
 
 """
+A routine suggestion, shown among ideas.
+"""
+type GraphqlRoutineIdea {
+	"""
+	The routine suggestion it shows, as `routineSuggestions` lists it.
+	"""
+	routineSuggestionId: ID!
+}
+
+"""
 Metadata for a finished routine run.
 """
 type GraphqlRoutineRunFinishedMetadata {
@@ -7444,6 +7765,129 @@ type GraphqlRoutineRunFinishedMetadata {
 	Whether the run succeeded.
 	"""
 	succeeded: Boolean!
+}
+
+"""
+A routine offered to the user: one AI suggested for them, or one of
+Macro's catalog routines filling a surface.
+"""
+type GraphqlRoutineSuggestion {
+	"""
+	The suggestion's id: saving a routine from it and dismissing it name
+	it. A template's id is the user's own for that catalog routine.
+	"""
+	id: ID!
+	"""
+	Who suggests it.
+	"""
+	from: GraphqlRoutineSuggestionFrom!
+	"""
+	The sidebars it shows in, first the one it belongs to most.
+	"""
+	surfaces: [GraphqlRoutineSurface!]!
+	"""
+	Why it fits the user, in a line; null on Macro's templates.
+	"""
+	reason: String
+	"""
+	AI's estimate, from 0 to 1, that the user keeps it on; null on
+	Macro's templates.
+	"""
+	keepProbability: Float
+	"""
+	Onboarding shows it switched on.
+	"""
+	onByDefault: Boolean!
+	"""
+	What is suggested.
+	"""
+	pick: GraphqlRoutineSuggestionPick!
+}
+
+"""
+A suggestion the user dismissed.
+"""
+type GraphqlRoutineSuggestionDismissed {
+	"""
+	The dismissed suggestion.
+	"""
+	suggestionId: ID!
+}
+
+"""
+Who suggests a routine.
+"""
+enum GraphqlRoutineSuggestionFrom {
+	"""
+	AI suggested it for this user, with a reason.
+	"""
+	FOR_YOU
+	"""
+	One of Macro's catalog routines, as a template.
+	"""
+	MACRO
+}
+
+"""
+What is suggested.
+"""
+union GraphqlRoutineSuggestionPick = GraphqlCatalogRoutinePick | GraphqlDraftedRoutinePick
+
+"""
+The user's routine suggestions, and whether more are on the way.
+"""
+type GraphqlRoutineSuggestions {
+	"""
+	Where the user's suggestions are in being generated.
+	"""
+	status: GraphqlSuggestionGenerationStatus!
+	"""
+	Per surface, AI's first, best first, then Macro's templates. A
+	suggestion with several surfaces appears once.
+	"""
+	suggestions: [GraphqlRoutineSuggestion!]!
+}
+
+"""
+The part of the app a routine is about, where it is offered.
+"""
+enum GraphqlRoutineSurface {
+	"""
+	Mail.
+	"""
+	EMAIL
+	"""
+	Meetings and the day ahead.
+	"""
+	CALENDAR
+	"""
+	Tasks and projects.
+	"""
+	TASKS
+	"""
+	Documents and files.
+	"""
+	FILES
+	"""
+	Companies, people and deals.
+	"""
+	CRM
+	"""
+	Channels and messages.
+	"""
+	CHAT
+	"""
+	Calls and their transcripts.
+	"""
+	CALLS
+	"""
+	Pull requests and code review.
+	"""
+	REVIEWS
+	"""
+	Agents and their sessions.
+	"""
+	AGENTS
 }
 
 """
@@ -10276,6 +10720,39 @@ type GraphqlStringPropertyValue {
 }
 
 """
+What starting a generation did.
+"""
+type GraphqlSuggestionGenerationStarted {
+	"""
+	Whether a run started; false when one ran before or is running.
+	"""
+	started: Boolean!
+}
+
+"""
+Where a user's suggestions are in being generated.
+"""
+enum GraphqlSuggestionGenerationStatus {
+	"""
+	Never generated: no inbox was connected yet. Only Macro's templates
+	show.
+	"""
+	NONE
+	"""
+	AI is suggesting; its suggestions appear as each is handed back.
+	"""
+	GENERATING
+	"""
+	Generation finished.
+	"""
+	READY
+	"""
+	Generation failed, after a retry; Macro's templates fill in.
+	"""
+	FAILED
+}
+
+"""
 Metadata for a task assignment.
 """
 type GraphqlTaskAssignedMetadata {
@@ -10442,6 +10919,18 @@ type GraphqlUser {
 	into local dates in the requested time zone.
 	"""
 	activityOverview(input: ActivityOverviewInput!): GraphqlActivityOverview!
+	"""
+	The user's ideas they can still open every item of, best first. Null
+	when ideas are off for them.
+	"""
+	ideaFeed: GraphqlIdeaFeed
+	"""
+	The routines suggested to the user, AI's first, then Macro's
+	templates, with where their generation is; only `surface`'s when
+	given. Reading never generates. Null when routine suggestions are
+	off for them.
+	"""
+	routineSuggestions(surface: GraphqlRoutineSurface): GraphqlRoutineSuggestions
 	"""
 	Every calendar visible across owned and delegated inboxes, primaries
 	and writables first.

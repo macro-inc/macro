@@ -9136,6 +9136,7 @@
       "crates/github_pull_requests",
       "crates/gmail_client",
       "crates/google_token",
+      "crates/graphql_common",
       "crates/graphql_scheduled_action",
       "crates/harness_id",
       "crates/harness_token",

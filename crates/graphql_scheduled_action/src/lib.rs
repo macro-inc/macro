@@ -4,10 +4,15 @@
 mod context;
 mod objects;
 mod query;
+mod suggestions;
 
 pub use context::ScheduledActionGraphqlContext;
 pub use objects::GraphqlScheduledAction;
 pub use query::resolve_scheduled_actions;
+pub use suggestions::{
+    GraphqlRoutineSuggestionsQuery, RoutineSuggestionsError, RoutineSuggestionsGraphql,
+    RoutineSuggestionsGraphqlContext, RoutineSuggestionsMutationRoot, SuggestionsFuture,
+};
 
 use async_graphql::ErrorExtensions;
 use rootcause::Report;

@@ -25,7 +25,6 @@ use graphql_activity::{
     resolve_form_activity,
 };
 use graphql_calendar::{CalendarMutationRoot, GraphqlCalendarQuery};
-use graphql_ideas::{GraphqlIdeasQuery, IdeasMutationRoot};
 use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
     NoOpChannelActivityMutationService,
@@ -40,6 +39,7 @@ use graphql_favorite::{
     EntityFavoriteEdgeReader, FavoriteMutationRoot, FavoriteQueryReader, FavoritesFilterInput,
     GraphqlFavorite, NoOpEntityFavoriteEdgeReader, NoOpFavoriteMutationService, resolve_favorites,
 };
+use graphql_ideas::{GraphqlIdeasQuery, IdeasMutationRoot};
 use graphql_initiative::{
     GraphqlInitiativeTasksPage, InitiativeMutationRoot, InitiativeTasksInput, resolve_initiative,
     resolve_initiative_tasks,
@@ -62,7 +62,10 @@ use graphql_properties::{
 use graphql_registered_work::{
     GraphqlRegisteredWork, RegisteredWorkSubscriptionRoot, resolve_registered_work,
 };
-use graphql_scheduled_action::{GraphqlScheduledAction, resolve_scheduled_actions};
+use graphql_scheduled_action::{
+    GraphqlRoutineSuggestionsQuery, GraphqlScheduledAction, RoutineSuggestionsMutationRoot,
+    resolve_scheduled_actions,
+};
 use graphql_soup::{
     GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity, GraphqlSoupInitiative,
     GraphqlSoupProject, GroupedSoup, GroupedSoupInput, SoupEmailThreadMutationOutput,
@@ -115,6 +118,7 @@ pub struct CompleteMutationRoot<
     InitiativeMutationRoot<E>,
     CalendarMutationRoot,
     IdeasMutationRoot,
+    RoutineSuggestionsMutationRoot,
     WorkFeedMutationRoot<E>,
     NotificationInboxMutationRoot<E>,
     SavedViewMutationRoot,
@@ -144,6 +148,7 @@ impl<
             InitiativeMutationRoot::<E>::default(),
             CalendarMutationRoot,
             IdeasMutationRoot,
+            RoutineSuggestionsMutationRoot,
             WorkFeedMutationRoot::<E>::default(),
             NotificationInboxMutationRoot::<E>::default(),
             SavedViewMutationRoot,
@@ -885,6 +890,13 @@ where
     #[graphql(flatten)]
     async fn ideas(&self) -> GraphqlIdeasQuery {
         GraphqlIdeasQuery::new(self.user_id.clone())
+    }
+
+    /// Authenticated user routine suggestion fields supplied by
+    /// `graphql_scheduled_action`.
+    #[graphql(flatten)]
+    async fn routine_suggestion_fields(&self) -> GraphqlRoutineSuggestionsQuery {
+        GraphqlRoutineSuggestionsQuery::new(self.user_id.clone())
     }
 
     /// Authenticated user calendar fields supplied by `graphql_calendar`.
