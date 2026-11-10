@@ -1,4 +1,5 @@
 import {
+  Access,
   ClipboardMsg,
   EditorInputMsg,
   FLAG_HANDLED,
@@ -251,6 +252,34 @@ export class SessionPort implements EditorPort {
           this.executor.now(),
           Date.now()
         ),
+      (flags) => after?.(Boolean(flags & FLAG_HANDLED))
+    );
+  }
+  /** Current native authority, independent of local editability and initial config. */
+  effectiveAccess(): Access {
+    const access = this.executor.session.effectiveAccess();
+    if (
+      access !== Access.Read &&
+      access !== Access.CommentOnly &&
+      access !== Access.Edit
+    )
+      throw new Error('Unknown effective session access');
+    return access;
+  }
+  /** Derived media normalization is admitted only under current authority in this queue turn. */
+  inputIfSessionEdit(
+    editor: EditorInputMsg,
+    after?: (handled: boolean) => void
+  ): void {
+    this.executor.run(
+      () => {
+        if (this.effectiveAccess() !== Access.Edit) return 0;
+        return this.executor.session.input(
+          SessionInputMsg.encode({ ...emptyInput(2), editor }),
+          this.executor.now(),
+          Date.now()
+        );
+      },
       (flags) => after?.(Boolean(flags & FLAG_HANDLED))
     );
   }
