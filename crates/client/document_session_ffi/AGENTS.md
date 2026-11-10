@@ -24,6 +24,7 @@ postcard. Remote definitions mirror native types and are checked by Rust.
 
 On Linux, iOS validation stops before linking. Android linking requires an NDK.
 Generated bindings live under this crate; Android host integration lives in apps/web/tauri/.
+Regenerate Swift and Kotlin together with `bun crates/client/document_session_ffi/scripts/generate-bindings.ts`, run it again with `--check`, and preserve the pinned `--no-format` bytes including generated whitespace.
 
 Preserve current commit tags, resolved peer cursors, forced composition end and WAL adoption expected rows at the boundary. Reattach views through ViewDiff without resetting history or synchronization.
 
@@ -33,7 +34,7 @@ Read sync_defaults when constructing host configuration; keep timeout, retry, WA
 
 Use EditorSurface.namespace for rich clipboard export and paste; keep application and portable profile defaults distinct.
 
-Generate application paste facts through clipboard_paste_facts; never mirror their MIME/JSON wire fields in native hosts.
+Generate application file-admission facts through clipboard_paste_facts; carry modifiers only in ClipboardPayload.intent and never in MIME/JSON entries.
 
 Expose element alignment through its public names: lower unknown raw model numbers to Unset, preserving source empty alignment semantics and leaving stored model bits unchanged.
 
@@ -48,3 +49,5 @@ Observe live authorization through effective_access on either session object; ne
 Project every core Diff field exhaustively; omit native decorator policies and signatures explicitly, transport only invalidation keys, and append full-u64 SetDecoratorRevision after existing UniFFI tags. A projection or mutation return does not grant consuming-view observation authority.
 
 Read decorator model text and instance layout facts in bulk through generation-aware queries; keep application display lookups outside the FFI.
+
+Forward supplied PasteIntent directly through FfiClipboardPayload; preserve rich MIME order, file flags and HTML nodes independently, and initialize ordinary native clipboard reads explicitly to false.

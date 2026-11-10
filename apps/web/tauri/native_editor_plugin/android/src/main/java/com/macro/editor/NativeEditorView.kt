@@ -364,14 +364,7 @@ class NativeEditorView(
             android.R.id.paste, android.R.id.pasteAsPlainText -> {
                 if (!canEditContent()) return false
                 val payload = clipboard.read() ?: return false
-                val data = if (id == android.R.id.pasteAsPlainText) {
-                    payload.copy(
-                        data = payload.data.filter { it.mime == "text/plain" } +
-                            clipboardPasteFacts(FfiPasteFacts(0u, true, false, false)),
-                        hasFiles = false,
-                        htmlNodes = null,
-                    )
-                } else payload
+                val data = payload.copy(intent = FfiPasteIntent(id == android.R.id.pasteAsPlainText))
                 admit(FfiInput.Paste(data, projectionLayout.selection(selectionStart, selectionEnd)))
                 return true
             }

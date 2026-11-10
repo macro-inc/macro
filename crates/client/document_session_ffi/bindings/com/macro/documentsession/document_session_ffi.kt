@@ -882,7 +882,7 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
-    if ((lib.uniffi_document_session_ffi_checksum_func_clipboard_paste_facts() and 0xFFFF) != 58742) {
+    if ((lib.uniffi_document_session_ffi_checksum_func_clipboard_paste_facts() and 0xFFFF) != 48756) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_document_session_ffi_checksum_func_sync_defaults() and 0xFFFF) != 56654) {
@@ -2607,6 +2607,11 @@ data class FfiClipboardPayload (
      * Optional host-imported HTML nodes.
      */
     var `htmlNodes`: List<SerializedNode>?
+    , 
+    /**
+     * Actual event intent; ordinary paste and drop explicitly use false.
+     */
+    var `intent`: FfiPasteIntent
     
 ){
     
@@ -2626,19 +2631,22 @@ public object FfiConverterTypeFfiClipboardPayload: FfiConverterRustBuffer<FfiCli
             FfiConverterSequenceTypeFfiClipboardEntry.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterOptionalSequenceTypeSerializedNode.read(buf),
+            FfiConverterTypeFfiPasteIntent.read(buf),
         )
     }
 
     override fun allocationSize(value: FfiClipboardPayload) = (
             FfiConverterSequenceTypeFfiClipboardEntry.allocationSize(value.`data`) +
             FfiConverterBoolean.allocationSize(value.`hasFiles`) +
-            FfiConverterOptionalSequenceTypeSerializedNode.allocationSize(value.`htmlNodes`)
+            FfiConverterOptionalSequenceTypeSerializedNode.allocationSize(value.`htmlNodes`) +
+            FfiConverterTypeFfiPasteIntent.allocationSize(value.`intent`)
     )
 
     override fun write(value: FfiClipboardPayload, buf: ByteBuffer) {
             FfiConverterSequenceTypeFfiClipboardEntry.write(value.`data`, buf)
             FfiConverterBoolean.write(value.`hasFiles`, buf)
             FfiConverterOptionalSequenceTypeSerializedNode.write(value.`htmlNodes`, buf)
+            FfiConverterTypeFfiPasteIntent.write(value.`intent`, buf)
     }
 }
 
@@ -3347,8 +3355,6 @@ public object FfiConverterTypeFfiOutput: FfiConverterRustBuffer<FfiOutput> {
 data class FfiPasteFacts (
     var `request`: kotlin.UInt
     , 
-    var `plainOnly`: kotlin.Boolean
-    , 
     var `hasFileEntries`: kotlin.Boolean
     , 
     var `mobileImageRecovery`: kotlin.Boolean
@@ -3371,22 +3377,52 @@ public object FfiConverterTypeFfiPasteFacts: FfiConverterRustBuffer<FfiPasteFact
             FfiConverterUInt.read(buf),
             FfiConverterBoolean.read(buf),
             FfiConverterBoolean.read(buf),
-            FfiConverterBoolean.read(buf),
         )
     }
 
     override fun allocationSize(value: FfiPasteFacts) = (
             FfiConverterUInt.allocationSize(value.`request`) +
-            FfiConverterBoolean.allocationSize(value.`plainOnly`) +
             FfiConverterBoolean.allocationSize(value.`hasFileEntries`) +
             FfiConverterBoolean.allocationSize(value.`mobileImageRecovery`)
     )
 
     override fun write(value: FfiPasteFacts, buf: ByteBuffer) {
             FfiConverterUInt.write(value.`request`, buf)
-            FfiConverterBoolean.write(value.`plainOnly`, buf)
             FfiConverterBoolean.write(value.`hasFileEntries`, buf)
             FfiConverterBoolean.write(value.`mobileImageRecovery`, buf)
+    }
+}
+
+
+
+data class FfiPasteIntent (
+    var `plainOnly`: kotlin.Boolean
+    
+){
+    
+
+    
+
+    
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiPasteIntent: FfiConverterRustBuffer<FfiPasteIntent> {
+    override fun read(buf: ByteBuffer): FfiPasteIntent {
+        return FfiPasteIntent(
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiPasteIntent) = (
+            FfiConverterBoolean.allocationSize(value.`plainOnly`)
+    )
+
+    override fun write(value: FfiPasteIntent, buf: ByteBuffer) {
+            FfiConverterBoolean.write(value.`plainOnly`, buf)
     }
 }
 
@@ -15982,7 +16018,7 @@ public typealias FfiConverterTypeWalSeq = FfiConverterULong
 public typealias WallDuration = kotlin.Long
 public typealias FfiConverterTypeWallDuration = FfiConverterLong
         /**
-         * Encode the shared paste facts without native mirrors of its wire format.
+         * Encode shared file-admission facts; modifier intent travels in the typed clipboard payload.
          */
     @Throws(FfiSessionException::class) fun `clipboardPasteFacts`(`facts`: FfiPasteFacts): FfiClipboardEntry {
             return FfiConverterTypeFfiClipboardEntry.lift(

@@ -59,7 +59,7 @@ internal object NativeClipboardScenario {
                 view.admit(FfiInput.SelectionFromView(ViewSelection.Range(Point.Element(paragraph, 0u), Point.Element(paragraph, 0u), false), null))
                 view.admit(FfiInput.Paste(FfiClipboardPayload(listOf(
                     FfiClipboardEntry("application/x-lexical-editor", internal),
-                    FfiClipboardEntry("text/plain", "fallback")), false, null), ViewSelection.KeepModel))
+                    FfiClipboardEntry("text/plain", "fallback")), false, null, FfiPasteIntent(false)), ViewSelection.KeepModel))
                 assertEquals("fallback", portable.textContent())
                 view.setSelection(0, view.length())
                 val exported = (portable.query(FfiQuery.Clipboard) as FfiQueryReply.Clipboard).entries

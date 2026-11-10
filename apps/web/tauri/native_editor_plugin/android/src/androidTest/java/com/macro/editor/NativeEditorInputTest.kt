@@ -7,6 +7,11 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class NativeEditorInputTest {
+    @Test fun nativePlainPasteUsesCapturedIntentWithoutChangingOrdinaryMarkdown() {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.runOnMainSync { NativeClipboardIntentScenario.run(instrumentation.targetContext) }
+    }
+
     @Test fun effectiveAccessTracksServerDowngradeAndRegrant() {
         NativeAccessScenario.run()
     }

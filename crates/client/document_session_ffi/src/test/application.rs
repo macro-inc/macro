@@ -663,6 +663,7 @@ fn native_clipboard_namespace_matches_its_application_and_portable_paste_profile
                         ],
                         has_files: false,
                         html_nodes: None,
+                        intent: PasteIntent::default(),
                     },
                     selection: ViewSelection::Range {
                         anchor: point,
