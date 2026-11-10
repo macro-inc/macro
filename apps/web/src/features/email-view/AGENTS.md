@@ -41,8 +41,8 @@ the Soup-backed thread list, and saved email views (flag
 - Keep inbox reconciliation off while a view is open; an inbox no longer
   linked matches nothing instead of widening to every inbox.
 - `beforeSavedView` restores the prior tab and inboxes on leaving, and is what
-  local persistence saves while a view is open; never persist view filters as
-  the user's own.
+  local and entry persistence save while a view is open; never persist view
+  filters as the user's own.
 - Search inside a view intersects search hits with the view's own GraphQL
   predicate, as aliases do; local working copies are left out.
 - Build participant and subject ORs as balanced trees; a flat OR exceeds the

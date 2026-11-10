@@ -122,17 +122,23 @@ function createEmailEntryStorage(options: {
         ),
       };
     },
-    select: (state): EmailEntryState => ({
-      version: 1,
-      tab: state.tab,
-      search: state.search,
-      aliasFilter: state.aliasFilter,
-      facets: normalizeFacetSelection(state.facets),
-      // An open view's conditions come back from its definition.
-      ...(state.beforeSavedView || !state.conditions
-        ? {}
-        : { conditions: state.conditions }),
-    }),
+    // An open view's filters come back from its definition, so the entry
+    // keeps the tab it was opened from, as local state does.
+    select: (state): EmailEntryState => {
+      const scope = state.beforeSavedView ?? state;
+      return {
+        version: 1,
+        tab: scope.tab,
+        search: state.search,
+        aliasFilter: scope.aliasFilter,
+        facets: state.beforeSavedView
+          ? {}
+          : normalizeFacetSelection(state.facets),
+        ...(state.beforeSavedView || !state.conditions
+          ? {}
+          : { conditions: state.conditions }),
+      };
+    },
   });
 }
 
@@ -256,8 +262,10 @@ function createInboxIdsEntryStorage(options: {
             : undefined,
       };
     },
-    select: (state): string[] | undefined =>
-      state.inboxIds === undefined ? undefined : [...state.inboxIds],
+    select: (state): string[] | undefined => {
+      const { inboxIds } = state.beforeSavedView ?? state;
+      return inboxIds === undefined ? undefined : [...inboxIds];
+    },
   });
 }
 

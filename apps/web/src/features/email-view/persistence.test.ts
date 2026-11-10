@@ -132,6 +132,50 @@ describe('createEmailViewPersistence', () => {
     expect(state.tab).toBe('focus');
   });
 
+  it('keeps the tab and inboxes from before an open view in the entry', () => {
+    const captors = new Map<string, () => unknown>();
+    const { storages } = createEmailViewPersistence({
+      handle: {
+        currentEntryState: () => ({}),
+        registerEntryStateCaptor: (key, capture) => {
+          captors.set(key, capture);
+          return () => {};
+        },
+      },
+      userId: () => undefined,
+      restoreLocalState: false,
+      restorePreferences: false,
+    });
+    const aliasFilter = {
+      inboxId: 'inbox',
+      emailAddress: 'resident@example.com',
+    };
+    const viewOpen: EmailViewState = {
+      ...current(),
+      tab: 'all',
+      inboxIds: ['view-inbox'],
+      facets: { read: ['unread'] },
+      conditions: {
+        participants: [{ type: 'domain', domain: 'example.com' }],
+        participantFields: ['from'],
+        subject: [],
+        starred: false,
+      },
+      beforeSavedView: { tab: 'important', inboxIds: ['inbox'], aliasFilter },
+    };
+    for (const storage of Array.isArray(storages) ? storages : [storages])
+      storage.write(viewOpen);
+
+    expect(captors.get('email.view')?.()).toEqual({
+      version: 1,
+      tab: 'important',
+      search: '',
+      aliasFilter,
+      facets: {},
+    });
+    expect(captors.get(INBOX_FILTER_ENTRY_KEY)?.()).toEqual(['inbox']);
+  });
+
   const restoreFrom = (stored: unknown) => {
     const handle: EntryPersistenceHandle = {
       currentEntryState: () => ({ 'email.view': stored }),
