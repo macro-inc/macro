@@ -15,6 +15,8 @@ export default {
   addFiles: 'Add files',
   photosFromDevice: 'Images from your device',
   filesFromDevice: 'Documents and other files',
+  photoLibraryUnavailable: "Couldn't open your photo library",
+  chooseFiles: 'Choose files',
   selectedModel: 'This model',
   imagesUnsupported: "{{model}} doesn't support images",
   changeStatus: 'Change status',
