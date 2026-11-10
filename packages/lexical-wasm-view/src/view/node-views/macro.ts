@@ -169,6 +169,7 @@ export function registerMacroDecoratorViews(
     registry.register(type, {
       decorator: component,
       createDecoratorHost(mount, context) {
+        if (type === 'html-render') mount.style.display = 'block';
         mount.classList.add('__decorator-mount-ref');
         return context.document.createElement('div');
       },
