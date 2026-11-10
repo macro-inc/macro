@@ -51,6 +51,8 @@ export interface ViewNode {
   readonly elementProps?: ElementProps;
   readonly propsJSON: string;
   readonly stateJSON: string;
+  /** Native view-only lifetime metadata; absent for decorators that do not opt in. */
+  readonly decoratorRevision?: bigint;
   props(): JsonObject;
 }
 export interface Point {

@@ -392,6 +392,15 @@ export class Mirror {
         props.add(key);
       } else if (op === DiffOpcode.State) {
         update(key, { stateJSON: r.string() });
+      } else if (op === DiffOpcode.SetDecoratorRevision) {
+        const node = get(key);
+        if (node.kind !== 'decorator')
+          throw new Error('Decorator revision on a non-decorator');
+        const low = r.word();
+        const high = r.word();
+        const revision = (BigInt(high) << 32n) | BigInt(low);
+        if (node.decoratorRevision !== revision)
+          update(key, { decoratorRevision: revision });
       } else throw new Error('Unknown Diff opcode: ' + op);
     }
     if (r.at !== words.length) throw new Error('Trailing Diff words');

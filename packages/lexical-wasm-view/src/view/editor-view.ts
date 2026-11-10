@@ -108,7 +108,12 @@ export class EditorView implements ViewSink {
   private readonly keys = new WeakMap<Node, NodeKey>();
   private readonly decorators = new Map<
     NodeKey,
-    { dispose: () => void; update: (node: ViewNode) => void; host: HTMLElement }
+    {
+      dispose: () => void;
+      update: (node: ViewNode) => void;
+      host: HTMLElement;
+      revision: bigint | undefined;
+    }
   >();
   private readonly commits = new Set<(info: CommitInfo) => void>();
   private readonly mutations = new Map<
@@ -740,8 +745,13 @@ export class EditorView implements ViewSink {
     if (!component) return;
     const existing = this.decorators.get(key);
     if (existing) {
-      existing.update(node);
-      return;
+      if (existing.revision === node.decoratorRevision) {
+        if (node.decoratorRevision === undefined) existing.update(node);
+        return;
+      }
+      existing.dispose();
+      existing.host.remove();
+      this.decorators.delete(key);
     }
     const dom = this.dom.get(key);
     if (!dom) throw new Error('Decorator mount DOM missing');
@@ -763,6 +773,7 @@ export class EditorView implements ViewSink {
     this.decorators.set(key, {
       dispose,
       host,
+      revision: node.decoratorRevision,
       update: (next) => set(() => next),
     });
   }
