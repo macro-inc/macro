@@ -645,6 +645,21 @@ async fn planning_rejects_roots_that_are_not_notion_pages() {
 }
 
 #[tokio::test]
+async fn planning_a_slack_import_is_a_bad_request() {
+    let (router, service) = discovery_router(Ok(true));
+    let response = send(
+        router,
+        "POST",
+        "/import/workspaces/slack/plan",
+        Some(serde_json::json!({"sharing": "personal"})),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(service.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn planning_a_tracker_import_forwards_the_exact_source() {
     for source in [ImportSource::Linear, ImportSource::Jira] {
         let (router, service) = discovery_router(Ok(true));

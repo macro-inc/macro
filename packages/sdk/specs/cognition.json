@@ -1888,7 +1888,7 @@
             }
           },
           "400": {
-            "description": "Not a workspace source, or a root that is not a Notion id"
+            "description": "Not a workspace source (Slack), a root that is not a Notion id, or roots on a Linear or Jira import"
           },
           "409": {
             "description": "Sharing must be chosen, or the source is not connected",

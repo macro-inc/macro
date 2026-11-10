@@ -3896,7 +3896,7 @@ export type PlanWorkspaceHandlerData = {
 
 export type PlanWorkspaceHandlerErrors = {
     /**
-     * Not a workspace source, or a root that is not a Notion id
+     * Not a workspace source (Slack), a root that is not a Notion id, or roots on a Linear or Jira import
      */
     400: unknown;
     /**

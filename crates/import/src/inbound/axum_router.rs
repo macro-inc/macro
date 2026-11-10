@@ -236,7 +236,7 @@ pub struct PlanWorkspaceImportRequest {
     request_body = PlanWorkspaceImportRequest,
     responses(
         (status = 200, body = NotionImportReport, description = "Where planning stands"),
-        (status = 400, description = "Not a workspace source, or a root that is not a Notion id"),
+        (status = 400, description = "Not a workspace source (Slack), a root that is not a Notion id, or roots on a Linear or Jira import"),
         (status = 409, body = ImportErrorBody, description = "Sharing must be chosen, or the source is not connected"),
         (status = 500, description = "Internal server error"),
     ),
@@ -270,7 +270,14 @@ pub async fn plan_workspace_handler<T: WorkspaceImporter, Auth: MacroAuthorizati
                 .prepare_notion_import(&user, scope, body.sharing, super::workspace_plan::PLAN_WAIT)
                 .await
         }
-        ImportSource::Linear | ImportSource::Jira | ImportSource::Slack => {
+        ImportSource::Slack => {
+            return (
+                StatusCode::BAD_REQUEST,
+                "Slack channels are discovered and imported from Settings, not planned",
+            )
+                .into_response();
+        }
+        ImportSource::Linear | ImportSource::Jira => {
             if body.roots.iter().any(|root| !root.trim().is_empty()) {
                 return (StatusCode::BAD_REQUEST, "roots narrow Notion imports only")
                     .into_response();
