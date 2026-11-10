@@ -115,15 +115,25 @@
 <script type="text/macro" id="reassign" lang="ts">
   const ASSIGNEES = '00000001-0000-0000-0000-000000000001';
 
+  /**
+   * Swap one assignee of a task: `from` is the person whose column the task
+   * was moved from (null for Unassigned), `to` the person picked (null to only
+   * remove `from`). Everyone else assigned stays, read fresh from the task.
+   */
   export default async function (
-    { taskId, userId }: { taskId: string; userId: string | null },
+    { taskId, from, to }: { taskId: string; from: string | null; to: string | null },
     { macro }: ProgramContext,
   ) {
-    await macro.tasks.byId(taskId).setProperty(macro.properties.definition(ASSIGNEES), {
+    const task = macro.tasks.byId(taskId);
+    const current = (await task.properties()).find((p) => p.definition.id === ASSIGNEES)?.value;
+    const ids = current?.type === 'EntityReference' ? current.value.map((ref) => ref.entity_id) : [];
+    const kept = ids.filter((id) => id !== from);
+    const next = to && !kept.includes(to) ? [...kept, to] : kept;
+    await task.setProperty(macro.properties.definition(ASSIGNEES), {
       type: 'multi_entity_reference',
-      references: userId ? [{ entity_id: userId, entity_type: 'USER' }] : [],
+      references: next.map((id) => ({ entity_id: id, entity_type: 'USER' })),
     });
-    return { taskId, userId };
+    return { taskId, assignees: next };
   }
 </script>
 
@@ -154,7 +164,12 @@
     const node = el('article', 'card');
     const select = el('select');
     select.setAttribute('aria-label', `Assignee of ${task.name}`);
-    const choices = [{ id: '', name: 'Unassigned' }, ...data.people.map((person) => ({ id: person.id, name: person.name }))];
+    // From a shared task's column, the empty choice takes only this person off it.
+    const shared = ownerId !== null && task.assignees.length > 1;
+    const choices = [
+      { id: '', name: shared ? 'Remove from task' : 'Unassigned' },
+      ...data.people.map((person) => ({ id: person.id, name: person.name })),
+    ];
     for (const choice of choices) {
       const option = el('option', '', choice.name);
       option.value = choice.id;
@@ -165,7 +180,7 @@
       select.disabled = true;
       status.textContent = `Reassigning “${task.name}”…`;
       try {
-        await reassign({ taskId: task.id, userId: select.value || null });
+        await reassign({ taskId: task.id, from: ownerId, to: select.value || null });
       } catch (error) {
         status.textContent = `Couldn't reassign: ${String(error)}`;
       }
