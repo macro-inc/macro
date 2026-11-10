@@ -45,6 +45,11 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 
 ## Gotchas
 
+- Thread attachment flags (`has_calendar_attachment`, `has_pdf_attachment`,
+  `has_image_attachment`, `has_document_attachment`) back the CalendarOnly and
+  Attachment email filters. Call `threads::update::sync_thread_attachment_flags`
+  wherever a message's attachments change or a message is deleted; the MIME
+  prefixes in `threads/update.rs` mirror the web client's attachment filters.
 - Undated provider drafts use creation time for All Mail eligibility; spam/junk
   and trash remain excluded, including the timestamp override for synced Macro
   drafts. Keep ingestion, recomputation, and cached projections aligned.
