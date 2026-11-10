@@ -1,3 +1,7 @@
+import {
+  createRoutineSuggestionsQuery,
+  mapRoutineSuggestions,
+} from '@app/features/routine-suggestions/queries/routine-suggestions';
 import { createEmptyDraft } from '@app/features/routines/core/routine-draft';
 import { templateChain } from '@app/features/routines/core/routine-templates';
 import { describeTrigger } from '@app/features/routines/core/routine-triggers';
@@ -17,31 +21,26 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { useUserId } from '@core/context/user';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import { throwOnErr } from '@core/util/result';
-import { queryClient } from '@queries/client';
 import { useEnsureTagSetMutation } from '@queries/properties/tags';
-import {
-  getCreateScheduledActionUrl,
-  getListRoutineSuggestionsUrl,
-  getStartSuggestionGenerationUrl,
-} from '@service-scheduled-action/generated/client';
+import { getCreateScheduledActionUrl } from '@service-scheduled-action/generated/client';
 import type {
   ActionConfiguration,
-  GenerationStarted,
   RoutineSuggestion,
-  RoutineSuggestions,
   ScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
-import { type Query, queryOptions, useQuery } from '@tanstack/solid-query';
+import {
+  RoutineSuggestionsDocument,
+  StartSuggestionGenerationDocument,
+} from '@service-storage/graphql/generated/graphql';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { RoutinesStepSource } from '../context/onboarding-context';
 import {
   type CatalogSuggestion,
   catalogSuggestionDraft,
-  SUGGESTION_POLL_MS,
   type SuggestionEdits,
   type SuggestionRow,
   suggestionByline,
 } from '../core/routine-suggestions';
-import { onboardingRoutineKeys } from './keys';
 
 const SCHEDULED_ACTION_HOST: string = SERVER_HOSTS['scheduled-action'];
 
@@ -60,43 +59,20 @@ export function useRoutineSuggestionsEnabled(): () => boolean {
 /**
  * Starts the person's onboarding generation (their ideas and routine
  * suggestions, as each is on for them); later calls change nothing on the
- * server. The suggestions read right after seed the step's list.
+ * server. The suggestions read right after reach the step's list through the
+ * cache; undefined when suggestions are off for them.
  */
 export async function generateRoutineSuggestions(timezone: string) {
-  await throwOnErr(() =>
-    fetchWithToken<GenerationStarted>(
-      `${SCHEDULED_ACTION_HOST}${getStartSuggestionGenerationUrl({ timezone })}`,
-      { method: 'POST' }
-    )
-  );
-  const answer = await fetchSuggestions();
-  queryClient.setQueryData(onboardingRoutineKeys.suggestions.queryKey, answer);
-  return answer;
-}
-
-async function fetchSuggestions() {
-  return await throwOnErr(() =>
-    fetchWithToken<RoutineSuggestions>(
-      `${SCHEDULED_ACTION_HOST}${getListRoutineSuggestionsUrl()}`,
-      { method: 'GET' }
-    )
-  );
-}
-
-/** Ask again every couple of seconds while AI is still suggesting. */
-function pollWhileGenerating(query: Query<RoutineSuggestions>) {
-  return query.state.data?.status === 'generating' ? SUGGESTION_POLL_MS : false;
-}
-
-export function routineSuggestionsQueryOptions(enabled: boolean) {
-  return queryOptions({
-    queryKey: onboardingRoutineKeys.suggestions.queryKey,
-    queryFn: fetchSuggestions,
-    enabled,
-    refetchInterval: pollWhileGenerating,
-    // Each id stays one row while the list grows.
-    reconcile: 'id',
-  });
+  const client = getGraphqlSoupClient();
+  const started = await client
+    .mutation(StartSuggestionGenerationDocument, { timezone })
+    .toPromise();
+  if (started.error) throw started.error;
+  const answer = await client
+    .query(RoutineSuggestionsDocument, {}, { requestPolicy: 'network-only' })
+    .toPromise();
+  if (answer.error) throw answer.error;
+  return answer.data && mapRoutineSuggestions(answer.data);
 }
 
 async function createFromSuggestion(
@@ -135,7 +111,7 @@ function draftedRow(suggestion: DraftedSuggestion): SuggestionRow {
 /** The scheduler's suggestions and catalog behind the last step. */
 export function createAppRoutinesStep(): RoutinesStepSource {
   const enabled = useRoutineSuggestionsEnabled();
-  const query = useQuery(() => routineSuggestionsQueryOptions(enabled()));
+  const query = createRoutineSuggestionsQuery(enabled);
   const catalog = useRoutineCatalog();
   const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
   const hasPaidAccess = useHasPaidAccess();
@@ -162,10 +138,9 @@ export function createAppRoutinesStep(): RoutinesStepSource {
   };
 
   return {
-    // FE-48: read data only once settled, and keep it through refetch errors.
-    answer: () => (query.isPending ? undefined : query.data),
-    failed: () => query.isError && query.data === undefined,
-    refresh: () => query.refetch(),
+    answer: () => query.data,
+    failed: () => query.error !== undefined && query.data === undefined,
+    refresh: () => query.refetch({ requestPolicy: 'network-only' }),
     row(suggestion) {
       if (suggestion.kind === 'routine') return draftedRow(suggestion);
       const built = catalogDraft(suggestion);

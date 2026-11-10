@@ -20,9 +20,6 @@ export type CatalogSuggestion = Extract<RoutineSuggestion, { kind: 'catalog' }>;
 /** How long the last step waits for AI's suggestions before showing the rest. */
 export const SUGGESTION_WAIT_MS = 30_000;
 
-/** How often the last step asks for suggestions while AI is still suggesting. */
-export const SUGGESTION_POLL_MS = 2_000;
-
 /** At most this many start switched on, so the first week isn't a wall of runs. */
 const MAX_ON_BY_DEFAULT = 2;
 

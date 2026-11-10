@@ -419,6 +419,7 @@ export function createAppOnboardingContext(): OnboardingContext {
       fireAndForget(
         Telemetry.span('onboarding.routines.generate', async (span) => {
           const answer = await generateRoutineSuggestions(getDefaultTimezone());
+          if (!answer) return;
           span.setAttr('routines.status', answer.status);
           span.setAttr('routines.suggestions', answer.suggestions.length);
         }),
