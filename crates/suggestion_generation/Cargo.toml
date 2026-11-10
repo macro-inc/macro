@@ -35,6 +35,8 @@ utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+http-body-util = { workspace = true }
+tower = { workspace = true }
 model_owner = { path = "../model_owner" }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
