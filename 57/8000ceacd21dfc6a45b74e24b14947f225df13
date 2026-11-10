@@ -1,0 +1,46 @@
+.github/workflows/deploy-pulumi-stack.yml
+  s_84cf0ca6488a34::t_10547633b7ce49 24-29,48,51,53-54,65,68
+  s_84cf0ca6488a34::t_07c714850bde77 1-2,10,12-13,30-47,49-50,52,55-63,66-67,71-98
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_pulumi_stack.rs
+  s_84cf0ca6488a34::t_fa770544da56ae 1-5,9-123
+  s_84cf0ca6488a34::t_07c714850bde77 6-8
+docs/development/infrastructure.md
+  s_84cf0ca6488a34::t_07e0bddcf06877 201-206
+tooling/xtask/crates/xtask_workflows/src/workflows.rs
+  s_84cf0ca6488a34::t_07c714850bde77 44,285-291
+  s_84cf0ca6488a34::t_70f0a83d38d3cb 292-294
+tooling/xtask/crates/xtask_workflows/src/workflows/steps.rs
+  s_84cf0ca6488a34::t_fa770544da56ae 504-527
+  s_84cf0ca6488a34::t_07c714850bde77 10
+tooling/xtask/crates/xtask_workflows/src/workflows/deploy_all_services.rs
+  s_84cf0ca6488a34::t_98ec499d0ae892 326
+tooling/xtask/crates/xtask_workflows/src/workflows/reusable_deploy_service.rs
+  s_84cf0ca6488a34::t_98ec499d0ae892 26,194,199-204,213
+  s_84cf0ca6488a34::t_fa770544da56ae 195-198
+.github/workflows/reusable_deploy_service.yml
+  s_84cf0ca6488a34::t_10547633b7ce49 164-179,185
+.github/actions/check-macro-db-migrations/action.yml
+  s_84cf0ca6488a34::t_79ba1942a64186 1-53
+  s_84cf0ca6488a34::t_757a364d724dc9 54-55
+tooling/xtask/crates/xtask_workflows/src/workflows/runners.rs
+  s_84cf0ca6488a34::t_98ec499d0ae892 13-16
+.github/actions/check-macro-db-migrations/check-migrations-applied.sh
+  s_84cf0ca6488a34::t_f82653dd0c225d 1-19,21-25
+  s_84cf0ca6488a34::t_98ec499d0ae892 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "578000ceacd21dfc6a45b74e24b14947f225df13",
+  "prompts": {},
+  "sessions": {
+    "s_84cf0ca6488a34": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c2af1daa-2406-4e09-9c66-310cee2f1781",
+        "model": "claude-fable-5-2"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
