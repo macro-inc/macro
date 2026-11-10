@@ -819,6 +819,15 @@ the centered composer dialog. Both layouts are views in
 `apps/web/src/features/task-composer/views` composing the shared
 `TaskComposer` parts.
 
+Task templates require `enable-task-templates` (on by default in development;
+local override `VITE_ENABLE_TASK_TEMPLATES`). With the flag disabled or loading,
+verify desktop and phone composers still create ordinary tasks and pin selected
+properties, without template controls or template requests. Saved template edits
+must remain separate from the task draft. Disable the flag during an edit or save:
+the task draft returns unchanged, and late responses must not apply template
+fields. Re-enable after readiness to recover the template edit and retry with the
+same creation identity. Create More must not reapply saved defaults while off.
+
 Desktop places the secondary template selector at the left of the header, then
 Clear Draft, expansion, and Close on the right. Without a selection the trigger
 reads No template with the menu's blank-page icon; selecting one shows its name.

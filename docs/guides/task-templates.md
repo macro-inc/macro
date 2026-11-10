@@ -2,6 +2,19 @@
 
 Task templates store a name and typed task configuration. Personal templates are private to the authenticated account. Team templates are visible to current team members, including after the creator leaves. Team admins and the creator, while still a member, can manage team templates. Ownership cannot change after creation.
 
+## Rollout
+
+The web composer uses the PostHog flag `enable-task-templates`, enabled by default
+in development. `VITE_ENABLE_TASK_TEMPLATES=true` or `false` overrides it locally;
+other builds defer to PostHog. Until the flag resolves, template controls and
+recovery stay inactive while ordinary task creation remains available. Turning
+the flag off hides desktop and touch template controls, stops template actions,
+and pauses template editing without discarding the task draft or template buffer.
+Re-enabling resumes the buffer after the description editor and definitions are
+ready. Create More does not reapply saved templates while disabled. Property
+pinning remains available. REST and SDK authorization are unchanged; the flag
+controls the web experience, not API access.
+
 ## Composer
 
 The secondary template selector opens a searchable desktop dropdown or the existing touch picker sheet. No template is the default. Search is followed by No template, saved templates grouped under Personal and the team name, and New template at the bottom. The trigger shows the selected template's name, or No template with the menu's blank-page icon when none is applied; a trailing check marks its row. Managers get a row edit action on hover or keyboard focus, always available on touch.

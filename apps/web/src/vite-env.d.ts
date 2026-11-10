@@ -16,6 +16,7 @@ interface ImportMetaEnv {
   /** `true` logs each `perfMark` as a `[perf]` console line. */
   readonly VITE_PERF_LOG?: string;
   readonly VITE_ENABLE_REMINDERS?: string;
+  readonly VITE_ENABLE_TASK_TEMPLATES?: string;
   readonly VITE_ENABLE_ROUTINE_SHARING?: string;
   readonly VITE_ENABLE_ROUTINE_STARTER_TEMPLATES?: string;
   readonly VITE_ENABLE_ROUTINE_CODE_STEPS?: string;

@@ -4,6 +4,7 @@
 
 import type {
   SavedTaskTemplate,
+  TaskTemplateEditorDraft,
   TaskTemplateSelection,
 } from '@app/features/task-composer/core/template-selection';
 import { freshTaskFromTemplate } from '@app/features/task-composer/core/template-selection';
@@ -312,7 +313,10 @@ it('restores the template baseline independently of edited draft values', () => 
 });
 
 // The injected ports keep workflow tests independent of the app shell and editor UI.
-function createTemplateSession() {
+function createTemplateSession(
+  initialEditor?: TaskTemplateEditorDraft,
+  initialEnabled = true
+) {
   return createRoot((dispose) => {
     const [selection, setSelection] = createSignal<TaskTemplateSelection>({
       kind: 'none',
@@ -329,6 +333,7 @@ function createTemplateSession() {
     );
     const [viewer, setViewer] = createSignal<string | undefined>('viewer');
     const [active, setActive] = createSignal(true);
+    const [enabled, setEnabled] = createSignal(initialEnabled);
     const create = vi.fn<TaskComposerHost['createTemplate']>(
       async (_viewer, input, values) => ({
         id: input.creationId,
@@ -362,6 +367,8 @@ function createTemplateSession() {
     const error = vi.fn();
     const workflow = createTemplateWorkflow({
       userId: viewer,
+      enabled,
+      initialEditor,
       draftOwner: 'viewer',
       canChange: () => !workflow.pending(),
       sessionActive: active,
@@ -430,6 +437,7 @@ function createTemplateSession() {
       baseline,
       setViewer,
       setActive,
+      setEnabled,
       create,
       update,
       restore,
@@ -479,6 +487,127 @@ it('keeps the task draft underneath template edits and restores it on cancel', (
   expect(session.contents().shareWithTeam).toBe(true);
   expect(session.workflow.snapshot()).toEqual(original);
   expect(session.create).not.toHaveBeenCalled();
+  session.dispose();
+});
+
+it('keeps a stored editor separate from the task while disabled', async () => {
+  const stored: TaskTemplateEditorDraft = {
+    selection: {
+      kind: 'new',
+      name: 'Reusable',
+      teamId: null,
+      creationId: '0195dbd0-7b5d-7000-8000-000000000002',
+    },
+    contents: {
+      title: 'Template title',
+      propertyIds: [],
+      propertyDefaults: {},
+      descriptionMarkdown: 'Template prose',
+    },
+  };
+  const session = createTemplateSession(stored, false);
+  const original = session.workflow.snapshot();
+  session.workflow.open(stored.selection, stored.contents);
+  session.workflow.resume();
+  await session.workflow.saveTemplate();
+  expect(session.workflow.isTemplateMode()).toBe(false);
+  expect(session.create).not.toHaveBeenCalled();
+  expect(session.workflow.snapshot()).toMatchObject({
+    title: original.title,
+    content: original.content,
+    editorState: original.editorState,
+    templateEditor: stored,
+  });
+  session.workflow.discardSuspendedEditor();
+  expect(session.workflow.snapshot().templateEditor).toBeUndefined();
+  expect(session.workflow.snapshot().content).toBe(original.content);
+  session.dispose();
+});
+
+it('recovers a suspended editor without changing the underlying task', async () => {
+  const session = createTemplateSession();
+  const original = session.workflow.snapshot();
+  session.workflow.open(
+    {
+      kind: 'new',
+      name: 'Reusable',
+      teamId: null,
+      creationId: '0195dbd0-7b5d-7000-8000-000000000002',
+    },
+    session.contents()
+  );
+  session.create.mockRejectedValueOnce(new Error('Response lost'));
+  await session.workflow.saveTemplate();
+  session.setContents({
+    ...session.contents(),
+    descriptionMarkdown: 'Template-only prose',
+  });
+  session.setEnabled(false);
+  await session.workflow.saveTemplate();
+  expect(session.create).toHaveBeenCalledTimes(1);
+  session.workflow.suspend();
+  expect(session.workflow.isTemplateMode()).toBe(false);
+  expect(session.restore).toHaveBeenCalledWith(original);
+  expect(session.contents().descriptionMarkdown).toBe(original.content);
+  const snapshot = session.workflow.snapshot();
+  expect(snapshot.title).toBe(original.title);
+  expect(snapshot.content).toBe(original.content);
+  expect(snapshot.editorState).toEqual(original.editorState);
+  expect(snapshot.templateEditor?.contents.descriptionMarkdown).toBe(
+    'Template-only prose'
+  );
+  expect(snapshot.templateEditor?.request?.creationId).toBe(
+    '0195dbd0-7b5d-7000-8000-000000000002'
+  );
+  session.workflow.resume();
+  expect(session.workflow.isTemplateMode()).toBe(false);
+  session.setEnabled(true);
+  session.workflow.resume();
+  expect(session.contents().descriptionMarkdown).toBe('Template-only prose');
+  expect(session.workflow.snapshot().templateEditor?.request).toEqual(
+    snapshot.templateEditor?.request
+  );
+  session.dispose();
+});
+
+it('ignores a save that completes after the workflow is disabled', async () => {
+  const session = createTemplateSession();
+  const pending = Promise.withResolvers<SavedTaskTemplate>();
+  session.create.mockReturnValueOnce(pending.promise);
+  session.workflow.open(
+    {
+      kind: 'new',
+      name: 'Reusable',
+      teamId: null,
+      creationId: '0195dbd0-7b5d-7000-8000-000000000002',
+    },
+    session.contents()
+  );
+  const saving = session.workflow.saveTemplate();
+  session.setEnabled(false);
+  session.workflow.suspend();
+  expect(session.workflow.pending()).toBe(true);
+  pending.resolve({
+    id: 'saved',
+    name: 'Reusable',
+    revision: 1,
+    teamId: null,
+    contents: session.contents(),
+  });
+  await saving;
+  expect(session.restore).toHaveBeenCalledTimes(1);
+  expect(session.apply).not.toHaveBeenCalled();
+  expect(session.workflow.pending()).toBe(false);
+  expect(session.workflow.snapshot().templateEditor?.request?.creationId).toBe(
+    '0195dbd0-7b5d-7000-8000-000000000002'
+  );
+  session.setEnabled(true);
+  session.workflow.resume();
+  await session.workflow.saveTemplate();
+  expect(session.create).toHaveBeenCalledTimes(2);
+  expect(session.create.mock.calls[1][1].creationId).toBe(
+    '0195dbd0-7b5d-7000-8000-000000000002'
+  );
   session.dispose();
 });
 
@@ -585,6 +714,36 @@ it('updates field defaults without copying task-specific title or description', 
   expect(session.baseline().descriptionMarkdown).toBe('Task-specific prose');
   session.dispose();
 });
+
+it.each([false, true])(
+  'ignores a disabled field update when re-enabled is %s',
+  async (reenabled) => {
+    const session = createTemplateSession();
+    const saved: SavedTaskTemplate = {
+      id: 'saved',
+      name: 'Reusable',
+      revision: 2,
+      teamId: null,
+      contents: session.contents(),
+    };
+    session.setSelection({ kind: 'saved', template: saved });
+    session.setEnabled(false);
+    await session.workflow.updateTemplateFields();
+    expect(session.update).not.toHaveBeenCalled();
+    session.setEnabled(true);
+    const pending = Promise.withResolvers<SavedTaskTemplate>();
+    session.update.mockReturnValueOnce(pending.promise);
+    const updating = session.workflow.updateTemplateFields();
+    session.setEnabled(false);
+    session.workflow.suspend();
+    session.setEnabled(reenabled);
+    pending.resolve({ ...saved, revision: 3 });
+    await updating;
+    expect(session.selection()).toEqual({ kind: 'saved', template: saved });
+    expect(session.baseline()).toEqual(session.contents());
+    session.dispose();
+  }
+);
 
 it('does not restore a template save after the acting account changes', async () => {
   const session = createTemplateSession();

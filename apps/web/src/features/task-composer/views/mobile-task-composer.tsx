@@ -57,7 +57,12 @@ export function MobileTaskComposer(props: {
           headerPinned() && 'bg-menu'
         )}
       >
-        <TaskTemplateControls composer={props.composer} compact />
+        <Show
+          when={props.composer.templatesEnabled()}
+          fallback={<div class="flex-1" />}
+        >
+          <TaskTemplateControls composer={props.composer} compact />
+        </Show>
         <TaskComposer.ContinueInSplit />
         {/* Far enough from Create Task that a tap meant for one cannot land
             on the other. */}
@@ -76,7 +81,9 @@ export function MobileTaskComposer(props: {
         onPointerDown={keepTypingFocus}
         onMouseDown={keepTypingFocus}
       >
-        <TaskTemplateNameStrip composer={props.composer} />
+        <Show when={props.composer.templatesEnabled()}>
+          <TaskTemplateNameStrip composer={props.composer} />
+        </Show>
         <TaskComposer.Title />
         <TaskComposer.Body />
         <Show when={!props.composer.isTemplateMode()}>

@@ -687,6 +687,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Prefill task Source through the originating action's composer preset under
   `enable-task-source-property`; keep the shared composer flag-agnostic and retain
   exact message IDs through property edits. See the Tasks walkthrough.
+- Gate task-template controls and workflow recovery with `enable-task-templates` on desktop and touch; inject availability from `ComposeTask` and retain paused template edits without blocking ordinary tasks or property pins.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
 - Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;

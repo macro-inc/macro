@@ -14,14 +14,21 @@ export function DesktopTaskComposer(props: {
   return (
     <TaskComposer.Root composer={props.composer}>
       <EntityComposer.Header>
-        <TaskTemplateControls composer={props.composer} />
+        <Show
+          when={props.composer.templatesEnabled()}
+          fallback={<div class="flex-1" />}
+        >
+          <TaskTemplateControls composer={props.composer} />
+        </Show>
         <TaskComposer.ClearDraft />
         <TaskComposer.ContinueInSplit />
         <TaskComposer.Close />
       </EntityComposer.Header>
       <TaskComposer.Recovery />
       <EntityComposer.Main inert={props.composer.isSavingTemplate()}>
-        <TaskTemplateNameStrip composer={props.composer} />
+        <Show when={props.composer.templatesEnabled()}>
+          <TaskTemplateNameStrip composer={props.composer} />
+        </Show>
         <TaskComposer.Title />
         <TaskComposer.Body />
         <Show when={!props.composer.isTemplateMode()}>

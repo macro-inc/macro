@@ -157,12 +157,15 @@ export function TaskTemplateControls(props: {
     viewerId,
     teamId: () => team()?.id,
     enabled: () =>
-      dropdownOpen() ||
-      picker.isOpen() ||
-      props.composer.templateSelection().kind !== 'none',
+      props.composer.templatesEnabled() &&
+      (dropdownOpen() ||
+        picker.isOpen() ||
+        props.composer.templateSelection().kind !== 'none'),
   });
   const canUse = () =>
-    viewerId() === props.composer.draftOwner && !props.composer.isCreating();
+    props.composer.templatesEnabled() &&
+    viewerId() === props.composer.draftOwner &&
+    !props.composer.isCreating();
   const isCurrent = () => canUse() && pickerScope() === scopeKey();
   createEffect(() => {
     if (dropdownOpen() && !isCurrent()) setDropdownOpen(false);
@@ -309,7 +312,9 @@ export function TaskTemplateControls(props: {
         }
       : undefined,
     items: items(),
-    onRetry: () => fireAndForget(query.refetch(), 'task-templates'),
+    onRetry: () => {
+      if (isCurrent()) fireAndForget(query.refetch(), 'task-templates');
+    },
     onSelectNone: () => {
       if (props.composer.templateSelection().kind === 'none') return;
       switchTemplate(() => {

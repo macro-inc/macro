@@ -95,6 +95,7 @@ type OpenableTask = { id: string; optimisticSnapshot?: Uint8Array };
 /** App capabilities the composer uses; `compose-task.tsx` supplies them. */
 export type TaskComposerHost = {
   userId: Accessor<string | undefined>;
+  templatesEnabled: Accessor<boolean>;
   resolveAppLink: MentionLinkResolver | undefined;
   createTemplate(
     viewerId: string,
@@ -241,13 +242,16 @@ export function createTaskComposer(
         ? recovered.draft.templateSelection
         : (initialState.templateSelection ?? { kind: 'none' })
     );
-  const isSavingTemplate = () => templateWorkflow.pending();
-  const submitKind = () => templateSubmitKind(templateSelection());
+  const isSavingTemplate = () =>
+    host.templatesEnabled() && templateWorkflow.pending();
+  const submitKind = () =>
+    host.templatesEnabled() ? templateSubmitKind(templateSelection()) : 'task';
   const canSubmit = () => {
     const selection = templateSelection();
     return (
       !isCreating() &&
-      ((selection.kind !== 'new' && selection.kind !== 'editing') ||
+      (!host.templatesEnabled() ||
+        (selection.kind !== 'new' && selection.kind !== 'editing') ||
         (definitionsReady() &&
           Boolean(selection.name.trim()) &&
           (selection.kind !== 'new' ||
@@ -373,7 +377,8 @@ export function createTaskComposer(
     !!content() ||
     isDraftLoaded() ||
     JSON.stringify(propertyValues) !== baselinePropertyValues ||
-    JSON.stringify(visiblePropertyIds()) !== baselineVisiblePropertyIds;
+    JSON.stringify(visiblePropertyIds()) !== baselineVisiblePropertyIds ||
+    templateWorkflow.hasSuspendedEditor();
 
   // History upsert mutation
   const upsertToHistoryMutation = useUpsertToHistoryMutation();
@@ -475,7 +480,7 @@ export function createTaskComposer(
     skipNextDraftSave = true;
     setTitle('');
     const selected = templateSelection();
-    if (selected.kind === 'saved') {
+    if (host.templatesEnabled() && selected.kind === 'saved') {
       const fresh = freshTaskFromTemplate(
         {
           ...originalTemplateContents,
@@ -648,6 +653,7 @@ export function createTaskComposer(
     if (templateWorkflow.isTemplateMode()) return;
     if (recovered) clearTaskSubmission(draftOwner, recovered.id);
     discardSavedDraft();
+    templateWorkflow.discardSuspendedEditor();
     skipNextDraftSave = true;
     setTitle('');
     setContent('');
@@ -728,7 +734,10 @@ export function createTaskComposer(
     });
   };
   const canChangeTemplate = () =>
-    draftSessionActive && currentUserId() === draftOwner && !isCreating();
+    host.templatesEnabled() &&
+    draftSessionActive &&
+    currentUserId() === draftOwner &&
+    !isCreating();
   const detachTemplate = () => {
     if (canChangeTemplate()) setTemplateSelection({ kind: 'none' });
   };
@@ -846,6 +855,8 @@ export function createTaskComposer(
     setTemplateBaseline(draft.templateBaseline);
   };
   const templateWorkflow = createTemplateWorkflow({
+    enabled: host.templatesEnabled,
+    initialEditor: initialState.templateEditor,
     userId: currentUserId,
     draftOwner,
     sessionActive: () => draftSessionActive,
@@ -925,18 +936,20 @@ export function createTaskComposer(
 
   setBodyEditor(editorConfig.buildHandle().lexical);
   const [bodyReady, setBodyReady] = createSignal(false);
-  let restoredTemplateEditor = initialState.templateEditor;
   createEffect(() => {
-    if (!bodyReady() || !restoredTemplateEditor || !definitionsReady()) return;
-    const editor = restoredTemplateEditor;
-    restoredTemplateEditor = undefined;
-    untrack(() => templateWorkflow.resume(editor));
+    if (!host.templatesEnabled()) {
+      untrack(() => templateWorkflow.suspend());
+      return;
+    }
+    if (!bodyReady() || !definitionsReady() || !canChangeTemplate()) return;
+    untrack(() => templateWorkflow.resume());
   });
   const portalScope = (): PortalScope => (host.isPopover() ? 'local' : 'block');
 
   return {
     props,
     draftOwner,
+    templatesEnabled: host.templatesEnabled,
     submissions,
     recovered,
     initialState,

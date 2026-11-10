@@ -16,6 +16,9 @@ Task creation also preserves the composer's selected fields as per-task pins.
 ## Scope
 
 - Store optional default task title and `shareWithTeam` separately from the template name and ownership; exclude attachments.
+- Gate desktop and touch template controls, queries, authoring, recovery, and repeated application with `enable-task-templates`.
+- Inject reactive availability from `ComposeTask`; preserve paused editor buffers and replay identities while disabled.
+- Leave ordinary task creation and property pinning available; the flag is a web rollout, not REST or SDK authorization.
 - Replace untouched template fields and task text directly; confirm before replacing edited fields, title, or description.
 - Preserve contextual Source values and explicit launch property presets across template replacement.
 - Detach a deleted selected template without resetting the current draft.
@@ -68,6 +71,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - `bun run test src/features/task-templates src/features/task-composer` from `apps/web`.
 - `bun run check` from `apps/web`, then `just check` from the repository root.
 - Check title and task-sharing capture, application, omitted sharing defaults, draft recovery, and repeated creation.
+- Check enabled, disabled, and loading flags; retain template edits across disable/re-enable and reject late saves from a disabled session.
 - Check task-sharing dots, Reset, Update, personal templates creating shared tasks, and team templates creating private tasks.
 - Check application against existing draft text, contextual Source/Project values,
   empty custom fields, deleted definitions, and Create More.

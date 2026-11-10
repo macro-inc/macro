@@ -7,9 +7,11 @@ import {
   useCreateTaskTemplate,
   useUpdateTaskTemplate,
 } from '@app/features/task-templates/queries/templates';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import { enableTaskTemplates } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { throwOnErr } from '@core/util/result';
@@ -28,6 +30,12 @@ function createSplitTaskComposerHost(): TaskComposerHost {
   const splitPanel = useSplitPanelOrThrow();
   const queryClient = useQueryClient();
   const userId = useUserId();
+  const templates = useFeatureFlag(enableTaskTemplates);
+  const templatesEnabled = () => !templates().loading && templates().enabled;
+  const requireTemplates = (viewerId: string) => {
+    if (!templatesEnabled()) throw new Error('Task templates unavailable');
+    if (userId() !== viewerId) throw new Error('Task template account changed');
+  };
   const createTemplate = useCreateTaskTemplate();
   const updateTemplate = useUpdateTaskTemplate();
   const { popoverSplit, openWithSplit } = useSplitLayout();
@@ -45,9 +53,9 @@ function createSplitTaskComposerHost(): TaskComposerHost {
   };
   return {
     userId,
+    templatesEnabled,
     createTemplate: async (viewerId, selection, contents, definitions) => {
-      if (userId() !== viewerId)
-        throw new Error('Task template account changed');
+      requireTemplates(viewerId);
       const created = await createTemplate.mutateAsync({
         viewerId,
         body: {
@@ -57,8 +65,7 @@ function createSplitTaskComposerHost(): TaskComposerHost {
           configuration: taskTemplateConfiguration(contents, definitions),
         },
       });
-      if (userId() !== viewerId)
-        throw new Error('Task template account changed');
+      requireTemplates(viewerId);
       return {
         id: created.id,
         revision: created.revision,
@@ -68,13 +75,11 @@ function createSplitTaskComposerHost(): TaskComposerHost {
       };
     },
     updateTemplate: async (viewerId, selection, contents, definitions) => {
-      if (userId() !== viewerId)
-        throw new Error('Task template account changed');
+      requireTemplates(viewerId);
       const previous = await throwOnErr(() =>
         getTaskTemplate(selection.template.id)
       );
-      if (userId() !== viewerId)
-        throw new Error('Task template account changed');
+      requireTemplates(viewerId);
       const configuration = taskTemplateConfiguration(
         contents,
         definitions,
@@ -92,13 +97,11 @@ function createSplitTaskComposerHost(): TaskComposerHost {
           )
         )
           throw new Error('Task template update conflict');
-        if (userId() !== viewerId)
-          throw new Error('Task template account changed');
+        requireTemplates(viewerId);
         await queryClient.invalidateQueries({
           queryKey: ['task-templates', viewerId],
         });
-        if (userId() !== viewerId)
-          throw new Error('Task template account changed');
+        requireTemplates(viewerId);
         return {
           id: previous.id,
           revision: previous.revision,
@@ -107,15 +110,13 @@ function createSplitTaskComposerHost(): TaskComposerHost {
           contents: taskTemplateContents(previous.configuration, definitions),
         };
       }
-      if (userId() !== viewerId)
-        throw new Error('Task template account changed');
+      requireTemplates(viewerId);
       const updated = await updateTemplate.mutateAsync({
         viewerId,
         id: selection.template.id,
         body: { name, revision: selection.template.revision, configuration },
       });
-      if (userId() !== viewerId)
-        throw new Error('Task template account changed');
+      requireTemplates(viewerId);
       return {
         id: updated.id,
         revision: updated.revision,

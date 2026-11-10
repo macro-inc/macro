@@ -560,6 +560,13 @@ export const enableTaskSourceProperty = defineFlag({
   default: onInDev,
 });
 
+/** Task-composer template selection, authoring, and saved-draft recovery. */
+export const enableTaskTemplates = defineFlag({
+  key: 'enable-task-templates',
+  env: 'ENABLE_TASK_TEMPLATES',
+  default: onInDev,
+});
+
 // Email snooze: the "Remind me" action, its 'h' shortcut, and the shared
 // time-selection command menu.
 // Every surface routes through `makeCreateReminderAction().canExecute`, so this
