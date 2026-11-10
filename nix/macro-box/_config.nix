@@ -68,10 +68,14 @@ let
     "etc/systemd/system/macrod.service" = {
       "Unit" = {
         "Description" = "Macro agent daemon";
-        "After" = "network-online.target macrod-enroll.service";
-        "Wants" = "network-online.target";
+        # Enrollment installs macrod-token-store; macrod reads the Claude
+        # token from its socket on start.
+        "After" = "network-online.target macrod-enroll.service macrod-token-store.service";
+        "Wants" = "network-online.target macrod-token-store.service";
         "Requires" = "macrod-enroll.service";
         "ConditionPathExists" = "/var/lib/macrod/enrolled";
+        # Never give up; RestartSteps backs off instead.
+        "StartLimitIntervalSec" = "0";
       };
       "Service" = {
         "User" = "macro";
@@ -81,7 +85,9 @@ let
         "ExecStart" =
           "/usr/local/bin/macrod service --ignore-stdin-eof --config /home/macro/.macrod/macrod.toml --workspace /home/macro/work";
         "Restart" = "always";
-        "RestartSec" = "5";
+        "RestartSec" = "1";
+        "RestartSteps" = "5";
+        "RestartMaxDelaySec" = "30";
       };
       "Install" = {
         "WantedBy" = "multi-user.target";

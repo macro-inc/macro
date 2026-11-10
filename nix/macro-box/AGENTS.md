@@ -49,7 +49,9 @@ and a Docker image (the dev-only DockerFleet).
   missing. Enroll must leave `macrod.toml` owned by `macro`, create persona
   users and units, then touch `/var/lib/macrod/enrolled`.
 - `macrod.service` runs `macrod service` as `macro` (Claude Code refuses
-  permission bypass as root), workspace `/home/macro/work`.
+  permission bypass as root), workspace `/home/macro/work`, after
+  `macrod-token-store.service` (installed by enrollment). It restarts after
+  1 s, backing off to 30 s, and never hits a start limit.
 - Its `--ignore-stdin-eof` keeps systemd's closed stdin from stopping the daemon.
 - Persona users get `/etc/skel`: the default skills and the chrome-devtools
   MCP entry in `~/.claude.json`. `/etc/macro/personas/` is root-only (0700).
