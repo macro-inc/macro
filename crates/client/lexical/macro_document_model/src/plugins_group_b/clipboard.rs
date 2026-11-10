@@ -9,8 +9,6 @@ pub const FACTS_MIME: &str = "application/x-macro-paste-facts";
 pub struct PasteFacts {
     /// Correlation for asynchronous file work; zero for text-only paste.
     pub request: u32,
-    /// Explicit plain paste suppresses rich Markdown transformation.
-    pub plain_only: bool,
     /// The native clipboard contains file or directory entries.
     pub has_file_entries: bool,
     /// A mobile host may recover an image outside ordinary file entries.
