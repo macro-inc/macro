@@ -19,3 +19,6 @@ loro-internal = { workspace = true, optional = true }
 rustc-hash = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 postcard = { workspace = true, optional = true }
+
+[dev-dependencies]
+flate2.workspace = true

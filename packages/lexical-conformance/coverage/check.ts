@@ -1,6 +1,8 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { gzipSync } from 'node:zlib';
+import { readFixtureText } from '../record/files';
 import { directory, replayEvidence, root } from './evidence';
 import {
   build,
@@ -92,11 +94,18 @@ for (const [name, value] of [
   ['ledger.json', ledger],
 ] as const) {
   const output = JSON.stringify(value, null, 2) + '\n';
-  const file = path.join(directory, name);
+  const file = path.join(
+    directory,
+    name === 'matrix.json' ? `${name}.gz` : name
+  );
   if (check) {
-    if (!existsSync(file) || readFileSync(file, 'utf8') !== output)
+    if (!existsSync(file) || readFixtureText(file) !== output)
       errors.push(`Stale ${name}: run just lexical-coverage`);
-  } else writeFileSync(file, output);
+  } else
+    writeFileSync(
+      file,
+      name === 'matrix.json' ? gzipSync(output, { level: 9 }) : output
+    );
 }
 let uncovered = 0;
 const gaps = new Set<string>();

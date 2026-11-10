@@ -7,6 +7,7 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 use serde_json::Value;
 use std::{
     collections::BTreeMap,
+    io::Read,
     path::{Path, PathBuf},
 };
 use sync_server_core::domain::{permissions::AuthToken, socket::WebSocketId, types::SessionKey};
@@ -143,12 +144,18 @@ impl Transcript {
     }
     /// Load a fixture from disk, retaining its supplied relative identity.
     pub fn load(path: &Path, name: impl Into<String>) -> Result<Self, ReplayError> {
-        Self::parse(
-            name,
-            std::fs::read_to_string(path)
-                .map_err(|e| ReplayError::Invalid(e.to_string()))?
-                .as_str(),
-        )
+        let text = if path.extension().is_some_and(|ext| ext == "gz") {
+            let file =
+                std::fs::File::open(path).map_err(|e| ReplayError::Invalid(e.to_string()))?;
+            let mut text = String::new();
+            flate2::read::GzDecoder::new(file)
+                .read_to_string(&mut text)
+                .map_err(|e| ReplayError::Invalid(e.to_string()))?;
+            text
+        } else {
+            std::fs::read_to_string(path).map_err(|e| ReplayError::Invalid(e.to_string()))?
+        };
+        Self::parse(name, &text)
     }
     /// Decode runtime callbacks; harness seeds remain in `records` for future route setup.
     pub fn inputs(&self) -> Result<Vec<RecordedInput>, ReplayError> {
@@ -229,7 +236,12 @@ pub fn fixtures(root: &Path) -> Result<Vec<PathBuf>, ReplayError> {
             .path();
         if path.is_dir() {
             paths.extend(fixtures(&path)?);
-        } else if path.extension().is_some_and(|ext| ext == "jsonl") {
+        } else if path.extension().is_some_and(|ext| ext == "jsonl")
+            || path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.ends_with(".jsonl.gz"))
+        {
             paths.push(path);
         }
     }

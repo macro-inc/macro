@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { readFixtureText } from '../record/files';
 import {
   type Doc,
   famOf,
@@ -517,9 +518,8 @@ export function exportStatus(sym: string): { st: string; at: string } {
 
 // ---------- test-source scans (P0 symbols no test names) ----------
 export const fixtureIndex: { id: string; apis: string[] }[] = JSON.parse(
-  readFileSync(
-    join(ROOT, 'packages/lexical-conformance/fixtures/index.json'),
-    'utf8'
+  readFixtureText(
+    join(ROOT, 'packages/lexical-conformance/fixtures/index.json')
   )
 );
 // Seed planning uses the checked-in recorder inventory, independent of local archives.

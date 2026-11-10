@@ -42,6 +42,8 @@ The upstream source is downloaded by checksum into this worktree's `target/`.
 
 ## Checks
 
+- Keep the large recorder index and coverage matrix as `.json.gz`; compare decompressed text and preserve recorder ownership when regenerating.
+
 - In this package: `bun install --frozen-lockfile`, `bunx tsc --noEmit`, `bun run test`.
 - From the repository: `just lexical-fixtures --check` twice, then `just check`.
 - Differential changes: `bunx tsc --noEmit -p diff/tsconfig.json`, `STEPS=10000 bunx vitest run --config diff/vitest.config.mts`, and `COLLAB_STEPS=2000 bunx vitest run --config diff/collab.config.mts` in this package (uses its pinned Vitest); the raw-model and collaboration suites use their own configs.

@@ -20428,6 +20428,7 @@ name = "sync_protocol"
 version = "0.1.0"
 dependencies = [
  "bebop",
+ "flate2",
  "loro 1.17.1",
  "loro-internal 1.17.1",
  "postcard",
@@ -20485,6 +20486,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "bebop",
+ "flate2",
  "futures",
  "loro 1.16.2",
  "macro_sync_service_jwt",

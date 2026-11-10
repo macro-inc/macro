@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { readFixtureText } from '../record/files';
 
 export const root = path.resolve(import.meta.dirname, '../../..');
 export const directory = path.join(
@@ -32,9 +33,8 @@ export type IndexRow = {
 };
 export function index(): IndexRow[] {
   return JSON.parse(
-    readFileSync(
-      path.join(root, 'packages/lexical-conformance/fixtures/index.json'),
-      'utf8'
+    readFixtureText(
+      path.join(root, 'packages/lexical-conformance/fixtures/index.json')
     )
   );
 }
@@ -65,7 +65,7 @@ export function inputs(): string {
     ...files(path.join(root, 'vendor')).map((file) =>
       path.relative(root, file)
     ),
-    'packages/lexical-conformance/fixtures/index.json',
+    'packages/lexical-conformance/fixtures/index.json.gz',
     ...index().flatMap((row) =>
       row.file ? ['packages/lexical-conformance/fixtures/' + row.file] : []
     ),

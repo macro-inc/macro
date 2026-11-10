@@ -42,7 +42,7 @@ refreshes preserve the byte-exact Worker comparator and migration digest checks.
 | M3 | [websocket.test/websocket_tests_should_respond_to_ping_with_pong.jsonl](websocket.test/websocket_tests_should_respond_to_ping_with_pong.jsonl) |
 | M4 | [hibernation.test/H10_discards_an_incomplete_inbound_frame_on_eviction.jsonl](hibernation.test/H10_discards_an_incomplete_inbound_frame_on_eviction.jsonl) |
 | M5 | [transcript_boundaries.test/M14_unknown_Bebop_variants_produce_no_acknowledgement.jsonl](transcript_boundaries.test/M14_unknown_Bebop_variants_produce_no_acknowledgement.jsonl) |
-| M6 | [chunking.test/large_update_batches_snapshots_and_reconnects_use_bounded_wire_frames.jsonl](chunking.test/large_update_batches_snapshots_and_reconnects_use_bounded_wire_frames.jsonl) |
+| M6 | [chunking.test/large_update_batches_snapshots_and_reconnects_use_bounded_wire_frames.jsonl](chunking.test/large_update_batches_snapshots_and_reconnects_use_bounded_wire_frames.jsonl.gz) |
 | M7 | [surface_isolation.test/pending_revoked_and_expired_sessions_fail_closed_unsupported_endpoints_stay_unavailable.jsonl](surface_isolation.test/pending_revoked_and_expired_sessions_fail_closed_unsupported_endpoints_stay_unavailable.jsonl) |
 | M8 | [user_peer.test/user_to_peer_ID_association_tests_should_store_user_id_to_peer_id_mapping.jsonl](user_peer.test/user_to_peer_ID_association_tests_should_store_user_id_to_peer_id_mapping.jsonl) |
 | M9 | [document_sync.test/document_sync_tests_changes_should_transmit_between_users.jsonl](document_sync.test/document_sync_tests_changes_should_transmit_between_users.jsonl) |
@@ -52,7 +52,7 @@ refreshes preserve the byte-exact Worker comparator and migration digest checks.
 | M13 | [hibernation.test/H10_discards_an_incomplete_inbound_frame_on_eviction.jsonl](hibernation.test/H10_discards_an_incomplete_inbound_frame_on_eviction.jsonl) |
 | M14 | [transcript_boundaries.test/M14_unknown_Bebop_variants_produce_no_acknowledgement.jsonl](transcript_boundaries.test/M14_unknown_Bebop_variants_produce_no_acknowledgement.jsonl) |
 | M15 | [document_sync.test/document_sync_tests_changes_should_transmit_between_users.jsonl](document_sync.test/document_sync_tests_changes_should_transmit_between_users.jsonl) |
-| M16 | [chunking.test/large_update_batches_snapshots_and_reconnects_use_bounded_wire_frames.jsonl](chunking.test/large_update_batches_snapshots_and_reconnects_use_bounded_wire_frames.jsonl) |
+| M16 | [chunking.test/large_update_batches_snapshots_and_reconnects_use_bounded_wire_frames.jsonl](chunking.test/large_update_batches_snapshots_and_reconnects_use_bounded_wire_frames.jsonl.gz) |
 | X1 | [surface_migration.test/freeze_drains_acknowledged_and_racing_edits_closes_writers_and_replays_pending_logs_after_restart.jsonl](surface_migration.test/freeze_drains_acknowledged_and_racing_edits_closes_writers_and_replays_pending_logs_after_restart.jsonl) |
 | X2 | [delete_endpoint.test/delete_endpoint_erases_the_document_s_session_peers_and_blame_without_touching_others.jsonl](delete_endpoint.test/delete_endpoint_erases_the_document_s_session_peers_and_blame_without_touching_others.jsonl) |
 | X3 | [awareness.test/awareness_sync_tests_should_broadcast_awareness_when_one_client_disconnects.jsonl](awareness.test/awareness_sync_tests_should_broadcast_awareness_when_one_client_disconnects.jsonl) |
