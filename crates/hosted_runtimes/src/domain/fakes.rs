@@ -520,3 +520,25 @@ impl ComputerRepo for FakeRepo {
         Ok(vec![])
     }
 }
+
+/// The deployment fixtures enroll into.
+pub fn deployment() -> crate::domain::enrollment::Deployment {
+    crate::domain::enrollment::Deployment {
+        agent_harness_url: "http://10.210.0.1:8080".parse().unwrap(),
+        document_storage_url: "http://10.210.0.1:8081".parse().unwrap(),
+        app_url: "http://10.210.0.1:3000".parse().unwrap(),
+        egress_url: "http://10.210.0.1:41027".parse().unwrap(),
+    }
+}
+
+/// Resolves [`deployment`] every time.
+pub struct FixedDeployment;
+
+impl crate::domain::enrollment::DeploymentSource for FixedDeployment {
+    fn deployment(
+        &self,
+    ) -> Result<crate::domain::enrollment::Deployment, crate::domain::enrollment::DeploymentUnavailable>
+    {
+        Ok(deployment())
+    }
+}

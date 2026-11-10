@@ -14,7 +14,7 @@ use crate::domain::ids::{ComputerId, PairingId};
 use crate::domain::lifecycle::{
     Effect, EffectWorker, Event, HostId, MACROD_GRACE, Phase, TimerKind,
 };
-use crate::domain::models::{Computer, ComputerRecord, EnrollmentDefaults};
+use crate::domain::models::{Computer, ComputerRecord};
 use crate::domain::ports::{
     ComputerRepo, DefaultAgent, Fleet, FleetEnrollment, FleetError, FleetInstance, Harnesses,
     InstanceStatus, PendingEffect,
@@ -65,7 +65,7 @@ pub struct ComputerOperator<Repo, Machines, Registry, Time> {
     fleet: Machines,
     harnesses: Registry,
     clock: Time,
-    defaults: EnrollmentDefaults,
+    deployment: std::sync::Arc<dyn crate::domain::enrollment::DeploymentSource>,
     host: tokio::sync::Mutex<HostReadiness>,
 }
 
@@ -90,14 +90,14 @@ where
         fleet: Machines,
         harnesses: Registry,
         clock: Time,
-        defaults: EnrollmentDefaults,
+        deployment: std::sync::Arc<dyn crate::domain::enrollment::DeploymentSource>,
     ) -> Result<Self, ComputerError> {
         let operator = Self {
             repo,
             fleet,
             harnesses,
             clock,
-            defaults,
+            deployment,
             host: tokio::sync::Mutex::new(HostReadiness::default()),
         };
         // Fleet connectivity is independent of the harness's other routes.
@@ -332,7 +332,7 @@ where
                 }
                 let enrollment = CreateEnrollment {
                     harnesses: &self.harnesses,
-                    defaults: &self.defaults,
+                    deployment: self.deployment.as_ref(),
                     computer: &computer,
                     generation: *generation,
                 };
@@ -787,7 +787,7 @@ fn effect_host(effect: &Effect) -> Option<HostId> {
 
 struct CreateEnrollment<'a, Registry> {
     harnesses: &'a Registry,
-    defaults: &'a EnrollmentDefaults,
+    deployment: &'a dyn crate::domain::enrollment::DeploymentSource,
     computer: &'a Computer,
     generation: EnrollmentGeneration,
 }
@@ -802,6 +802,11 @@ impl<Registry: Harnesses> FleetEnrollment for CreateEnrollment<'_, Registry> {
 
     #[tracing::instrument(name = "computer.enrollment.issue", skip_all, fields(computer_id = %self.computer.id, generation = i64::from(self.generation.get())), err)]
     async fn issue(&self) -> Result<Enrollment, EnrollmentIssueError> {
+        // Resolved per enrollment, so a guest always joins the current addresses.
+        let deployment = self
+            .deployment
+            .deployment()
+            .map_err(|_| EnrollmentIssueError)?;
         // Creating a pairing retires the earlier claim secret, so a guest from a
         // lost earlier issuance can no longer claim.
         let pairing = self
@@ -815,7 +820,7 @@ impl<Registry: Harnesses> FleetEnrollment for CreateEnrollment<'_, Registry> {
             pairing_id: pairing.pairing_id,
             device_secret: pairing.device_secret,
             name: self.computer.name.clone(),
-            service_url_overrides: self.defaults.service_url_overrides.clone(),
+            deployment,
             traceparent: super::telemetry::traceparent(),
         })
     }

@@ -224,8 +224,10 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   removing billing again. Missing stop/destroy are idempotent successes.
 - **Reprovision**: `InstanceLost` recreates the guest from the base image with a
   fresh pairing for the same harness; the guest disk is not restored.
-- **Enrollment**: `Enrollment { computer_id, generation, pairing_id, device_secret, name, service_url_overrides, traceparent }`
-  is the one-time `user.macro.enrollment` JSON or Docker file; the device secret
+- **Enrollment**: `Enrollment { computer_id, generation, pairing_id, device_secret, name, deployment, traceparent }`
+  is the one-time `user.macro.enrollment` JSON or Docker file. `deployment`
+  (agent harness, document storage, app and egress URLs) comes from the
+  injected `DeploymentSource` for each enrollment and is never stored; the device secret
   is never stored in `hosted_runtime`, outbox effects, timers, or logs, and the
   fleet copy is removed by `clear_enrollment` after macrod connects.
   `Effect::Create { host, start, generation: EnrollmentGeneration }` carries no

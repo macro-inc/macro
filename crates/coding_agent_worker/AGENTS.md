@@ -30,9 +30,8 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   run as root by the box image's `macrod-enroll.service` on a Macro computer.
   Reads the `hosted_runtimes` `Enrollment` (Incus guest API
   `/dev/incus/sock`, key `user.macro.enrollment`, or a file), writes
-  `macrod.toml` with the deployment URLs resolved from its
-  `macro_service_urls` `OVERRIDE_*` values (API, storage and app together, plus an optional
-  computer-reachable egress URL; macrod.toml stays the one URL source at runtime).
+  `macrod.toml` with the enrollment's typed deployment (API, storage, app and
+  computer-reachable egress URLs; macrod.toml stays the one URL source at runtime).
   It claims the pre-approved pairing, chowns the config to its directory's owner,
   then writes `/var/lib/macrod/enrolled`. A stored credential skips the claim, so
   retries are safe; a failed claim retries every 250 ms for up to five
@@ -200,7 +199,7 @@ external chat replies depend on it. Direct session controls still mint IDs.
   native launch forwards that list, with credentials refreshed on launch/resume.
 
 Macro computers replace the managed `/workspace` placeholder with their configured
-workspace on session start. Enrollment’s `OVERRIDE_AGENT_HARNESS_EGRESS_URL` is
+workspace on session start. The enrollment deployment's egress URL is
 stored as `[macro].egress_url`; computer sessions route first-party MCP and
 Anthropic requests through it without changing custom external MCP addresses.
 

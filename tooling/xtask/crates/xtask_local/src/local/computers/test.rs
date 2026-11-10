@@ -330,7 +330,7 @@ fn incus_overrides_use_only_direct_tailnet_service_urls() {
             .into_iter()
             .filter(|(key, _)| key.starts_with("OVERRIDE_"))
             .collect();
-        assert_eq!(overrides.len(), 12);
+        assert_eq!(overrides.len(), 11);
         assert_eq!(
             overrides["OVERRIDE_APP_SERVICE_URL"],
             base["OVERRIDE_APP_SERVICE_URL"]

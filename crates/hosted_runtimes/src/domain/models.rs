@@ -4,7 +4,6 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use harness_id::HarnessId;
 
-use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -569,14 +568,6 @@ impl ComputerRecord {
             },
         }
     }
-}
-
-/// Values every computer's enrollment carries, set per environment.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EnrollmentDefaults {
-    /// `OVERRIDE_*` service URLs for stacks the image's default environment
-    /// can't reach (local stacks); empty in dev and prod.
-    pub service_url_overrides: BTreeMap<String, String>,
 }
 
 /// A trimmed computer display name containing 1 through 64 Unicode characters.

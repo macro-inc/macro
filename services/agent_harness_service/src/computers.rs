@@ -7,7 +7,7 @@
 
 use hosted_runtimes::domain::ids::{ComputerId, PairingId};
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -24,7 +24,8 @@ use chrono::{DateTime, Utc};
 use harness_id::HarnessId;
 use harnesses::domain::models::CreateHostedPairing;
 use harnesses::domain::ports::{HarnessError, HarnessService};
-use hosted_runtimes::domain::models::{Computer, ControlPlaneId, EnrollmentDefaults};
+use hosted_runtimes::domain::enrollment::{Deployment, DeploymentSource, DeploymentUnavailable};
+use hosted_runtimes::domain::models::{Computer, ControlPlaneId};
 use hosted_runtimes::domain::operator::{ComputerOperator, SessionActivity};
 use hosted_runtimes::domain::ports::{DefaultAgent, Harnesses, HostedPairing};
 use hosted_runtimes::domain::service::SystemClock;
@@ -135,7 +136,8 @@ pub(crate) async fn operator(
         ),
     };
 
-    let service_url_overrides = service_url_overrides()?;
+    // Fail startup on unresolvable addresses rather than at the first purchase.
+    ServiceDeployment.deployment()?;
 
     let operator = ComputerOperator::start(
         PgComputerRepo::new(pool.clone()),
@@ -145,35 +147,37 @@ pub(crate) async fn operator(
             default_agents,
         },
         SystemClock,
-        EnrollmentDefaults {
-            service_url_overrides,
-        },
+        Arc::new(ServiceDeployment),
     )
     .await
     .map_err(|error| anyhow::anyhow!("computer operator failed to start: {error}"))?;
     Ok(Some(Arc::new(operator)))
 }
 
-pub(super) fn service_url_overrides() -> anyhow::Result<BTreeMap<String, String>> {
-    use macro_service_urls::{
-        AgentHarnessEgressUrl, AgentHarnessServiceUrl, AppServiceUrl, AuthServiceUrl,
-        DocumentStorageServiceUrl,
-    };
+/// The deployment a computer joins: this service's own typed addresses,
+/// which local stacks override per fleet (`OVERRIDE_*`), resolved for each
+/// enrollment.
+pub struct ServiceDeployment;
 
-    let mut service_url_overrides = BTreeMap::new();
-    for name in [
-        AgentHarnessEgressUrl::OVERRIDE_ENV_VAR_NAME,
-        AgentHarnessServiceUrl::OVERRIDE_ENV_VAR_NAME,
-        AppServiceUrl::OVERRIDE_ENV_VAR_NAME,
-        AuthServiceUrl::OVERRIDE_ENV_VAR_NAME,
-        DocumentStorageServiceUrl::OVERRIDE_ENV_VAR_NAME,
-    ] {
-        if let Some(value) = macro_service_urls::read_override_env(name)? {
-            service_url_overrides.insert(name.to_owned(), value);
-        }
+impl DeploymentSource for ServiceDeployment {
+    fn deployment(&self) -> Result<Deployment, DeploymentUnavailable> {
+        resolve_deployment().map_err(|error| {
+            tracing::error!(error = ?error, "could not resolve the computer deployment");
+            DeploymentUnavailable
+        })
     }
+}
 
-    Ok(service_url_overrides)
+fn resolve_deployment() -> anyhow::Result<Deployment> {
+    use macro_service_urls::{
+        AgentHarnessEgressUrl, AgentHarnessServiceUrl, AppServiceUrl, DocumentStorageServiceUrl,
+    };
+    Ok(Deployment {
+        agent_harness_url: AgentHarnessServiceUrl::new()?.parse_url()?,
+        document_storage_url: DocumentStorageServiceUrl::new()?.parse_url()?,
+        app_url: AppServiceUrl::new()?.parse_url()?,
+        egress_url: AgentHarnessEgressUrl::new()?.parse_url()?,
+    })
 }
 
 /// The operator's periodic passes.

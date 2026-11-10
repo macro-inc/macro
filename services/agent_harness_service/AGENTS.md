@@ -253,8 +253,9 @@ once at startup through `macro_service_urls`: `McpPublicUrl` preserves the
 `document-cognition[-dev].macro.com` integration callbacks, and `AppServiceUrl`
 supplies browser links and preview form origin. Preview control accepts the
 `PreviewGatewayUrl` host (plus app/loopback hosts locally). Use process-level
-`OVERRIDE_*` values for local instances; enrollment copies only macrod’s typed
-service overrides from that process environment. The shared gateway preserves the public
+`OVERRIDE_*` values for local instances; each computer enrollment carries a
+typed `Deployment` resolved from this process's `macro_service_urls` values
+(`computers::ServiceDeployment`) when it is issued. The shared gateway preserves the public
 hostnames and internally rewrites cognition paths. `PREVIEW_DOMAIN` and
 `PREVIEW_SSH_HOST` remain infrastructure-generated Doppler settings. Legacy
 `MCP_PUBLIC_URL`, `MCP_CLIENT_PUBLIC_URL`, `PREVIEW_APP_ORIGIN`, and

@@ -51,7 +51,7 @@ impl FleetEnrollment for TestEnrollment {
             pairing_id: PairingId::new_from_uuid(Uuid::from_u128(1)),
             device_secret: DeviceSecret::new("fixture-pairing-value".to_owned()),
             name: ComputerName::try_new("Fixture computer").unwrap(),
-            service_url_overrides: Default::default(),
+            deployment: crate::domain::fakes::deployment(),
             traceparent: None,
         })
     }

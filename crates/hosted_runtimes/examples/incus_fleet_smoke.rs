@@ -17,7 +17,6 @@
 //!
 //! Without `--image-server` the image is the host's local `--image` alias.
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Instant;
 
@@ -148,7 +147,12 @@ async fn main() -> Result<(), rootcause::Report> {
         pairing_id: PairingId::new_from_uuid(Uuid::now_v7()),
         device_secret: DeviceSecret::new("smoke-test-not-a-secret".to_owned()),
         name: computer.name.clone(),
-        service_url_overrides: BTreeMap::new(),
+        deployment: hosted_runtimes::domain::enrollment::Deployment {
+            agent_harness_url: "https://dev-gateway.macro.com/agent-harness".parse()?,
+            document_storage_url: "https://dev-gateway.macro.com/dss".parse()?,
+            app_url: "https://dev.macro.com".parse()?,
+            egress_url: "https://dev-gateway.macro.com/agent-harness-egress".parse()?,
+        },
         traceparent: None,
     };
     let id = computer.id;

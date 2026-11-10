@@ -897,14 +897,9 @@ async fn run() -> anyhow::Result<()> {
     let internal_mcp = internal_mcp::router(
         Arc::new(session_repo.clone()),
         {
-            let overrides = computers::service_url_overrides()?;
+            // The egress URL already carries any computer-facing override.
             let mut urls = vec![egress_base_url.as_str()];
             urls.extend(config.external_egress_base_url.as_deref());
-            urls.extend(
-                overrides
-                    .get(AgentHarnessEgressUrl::OVERRIDE_ENV_VAR_NAME)
-                    .map(String::as_str),
-            );
             internal_mcp::configured_hosts(&urls)?
         },
         internal_mcp::InternalTools {

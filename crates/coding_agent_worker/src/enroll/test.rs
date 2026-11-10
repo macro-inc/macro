@@ -11,11 +11,11 @@ const ENROLLMENT_JSON: &str = r#"{
     "pairing_id": "00000000-0000-0000-0000-00000000000a",
     "device_secret": "mhds_secret",
     "name": "Standard computer",
-    "service_url_overrides": {
-        "OVERRIDE_AGENT_HARNESS_SERVICE_URL": "http://10.200.0.1:41009/agent-harness/",
-        "OVERRIDE_AGENT_HARNESS_EGRESS_URL": "http://10.200.0.1:41027",
-        "OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL": "http://10.200.0.1:41009/dss",
-        "OVERRIDE_APP_SERVICE_URL": "http://10.200.0.1:41000"
+    "deployment": {
+        "agent_harness_url": "http://10.200.0.1:41009/agent-harness/",
+        "egress_url": "http://10.200.0.1:41027",
+        "document_storage_url": "http://10.200.0.1:41009/dss",
+        "app_url": "http://10.200.0.1:41000"
     }
 }"#;
 
@@ -61,43 +61,21 @@ fn enrollment_sources_parse() {
 }
 
 #[test]
-fn deployment_urls_come_from_the_three_overrides_macrod_calls() {
-    let urls = DeploymentUrls::from_overrides(&enrollment().service_url_overrides)
-        .expect("valid overrides");
+fn deployment_urls_come_from_the_typed_deployment() {
     assert_eq!(
-        urls,
-        Some(DeploymentUrls {
-            egress_url: Some("http://10.200.0.1:41027".to_owned()),
+        DeploymentUrls::from_deployment(&enrollment().deployment),
+        DeploymentUrls {
+            egress_url: "http://10.200.0.1:41027".to_owned(),
             api_url: "http://10.200.0.1:41009/agent-harness".to_owned(),
             storage_url: "http://10.200.0.1:41009/dss".to_owned(),
             web_url: "http://10.200.0.1:41000/app".to_owned(),
-        })
+        }
     );
-
-    // Overrides for services macrod never calls leave its deployment alone.
-    let unrelated = BTreeMap::from([(
-        "OVERRIDE_MCP_SERVICE_URL".to_owned(),
-        "http://10.200.0.1:41101".to_owned(),
-    )]);
-    assert_eq!(DeploymentUrls::from_overrides(&unrelated).unwrap(), None);
-
-    let partial = BTreeMap::from([(
-        "OVERRIDE_AGENT_HARNESS_SERVICE_URL".to_owned(),
-        "http://10.200.0.1:41009/agent-harness".to_owned(),
-    )]);
-    assert!(DeploymentUrls::from_overrides(&partial).is_err());
-
-    let not_an_override = BTreeMap::from([(
-        "AGENT_HARNESS_SERVICE_URL".to_owned(),
-        "http://10.200.0.1:41009".to_owned(),
-    )]);
-    assert!(DeploymentUrls::from_overrides(&not_an_override).is_err());
-
-    let not_a_url = BTreeMap::from([(
-        "OVERRIDE_APP_SERVICE_URL".to_owned(),
-        "not a url".to_owned(),
-    )]);
-    assert!(DeploymentUrls::from_overrides(&not_a_url).is_err());
+    // An enrollment from before typed deployments is refused, not guessed at.
+    assert!(
+        serde_json::from_str::<Enrollment>(&ENROLLMENT_JSON.replace("\"deployment\"", "\"service_url_overrides\""))
+            .is_err()
+    );
 }
 
 #[tokio::test]
@@ -180,9 +158,9 @@ token = "mhns_claimed"
         root: directory.path().to_owned(),
     };
     let enrollment = enrollment();
-    let urls = DeploymentUrls::from_overrides(&enrollment.service_url_overrides).unwrap();
+    let urls = DeploymentUrls::from_deployment(&enrollment.deployment);
 
-    write_config(&options, None, urls.as_ref()).unwrap();
+    write_config(&options, None, &urls).unwrap();
     ensure_credentials(&config, &enrollment).await.unwrap();
 
     let loaded = Config::load(&config).unwrap();

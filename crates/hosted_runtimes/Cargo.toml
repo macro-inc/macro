@@ -48,6 +48,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
+url = { workspace = true, features = ["serde"] }
 uuid = { workspace = true, features = ["serde", "v7"] }
 zeroize = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

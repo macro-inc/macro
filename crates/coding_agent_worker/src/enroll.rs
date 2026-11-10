@@ -6,16 +6,12 @@
 //! for the deployment it names and claims the pre-approved harness pairing.
 //! Every step is safe to re-run until the enrolled marker exists.
 
-use std::collections::BTreeMap;
 use std::os::unix::fs::{MetadataExt as _, OpenOptionsExt as _, PermissionsExt as _};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
 use hosted_runtimes::domain::enrollment::{Enrollment, INCUS_ENROLLMENT_KEY};
-use macro_service_urls::{
-    AgentHarnessEgressUrl, AgentHarnessServiceUrl, AppServiceUrl, DocumentStorageServiceUrl,
-};
 use rootcause::option_ext::OptionExt as _;
 use rootcause::prelude::ResultExt as _;
 
@@ -177,14 +173,14 @@ async fn enroll(
     enrollment: &Enrollment,
 ) -> rootcause::Result<()> {
     // Validate everything before the first side effect.
-    let urls = DeploymentUrls::from_overrides(&enrollment.service_url_overrides)?;
+    let urls = DeploymentUrls::from_deployment(&enrollment.deployment);
 
     let agent = if options.config.exists() {
         None
     } else {
         Some(crate::service::installed_agent(&options.agent)?)
     };
-    write_config(options, agent, urls.as_ref())?;
+    write_config(options, agent, &urls)?;
     ensure_credentials(&options.config, enrollment).await?;
     own_like_parent(&options.config, host)?;
 
@@ -251,50 +247,25 @@ async fn read_incus_enrollment(socket: &Path) -> rootcause::Result<zeroize::Zero
     Ok(body)
 }
 
-/// The deployment URLs `macrod.toml` stores, resolved from the enrollment's
-/// `macro_service_urls` overrides.
+/// The deployment URLs `macrod.toml` stores, from the enrollment's typed
+/// deployment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DeploymentUrls {
-    egress_url: Option<String>,
+    egress_url: String,
     api_url: String,
     storage_url: String,
     web_url: String,
 }
 
 impl DeploymentUrls {
-    /// `None` when the enrollment overrides none of the services macrod
-    /// calls, which keeps the config template's deployment. Overriding some
-    /// but not all would mix deployments, so that is an error.
-    fn from_overrides(overrides: &BTreeMap<String, String>) -> rootcause::Result<Option<Self>> {
-        for (name, value) in overrides {
-            if !lazy_regex::regex_is_match!(r"^OVERRIDE_[A-Z0-9_]+$", name) {
-                rootcause::bail!("`{name}` is not an OVERRIDE_* service URL variable");
-            }
-            let parsed = macro_service_urls::ServiceUrl::owned(value.clone()).parse_url();
-            if parsed.is_err() {
-                rootcause::bail!("{name} is not a URL: `{value}`");
-            }
-        }
-        let api = overrides.get(AgentHarnessServiceUrl::OVERRIDE_ENV_VAR_NAME);
-        let storage = overrides.get(DocumentStorageServiceUrl::OVERRIDE_ENV_VAR_NAME);
-        let app = overrides.get(AppServiceUrl::OVERRIDE_ENV_VAR_NAME);
-        match (api, storage, app) {
-            (None, None, None) => Ok(None),
-            (Some(api), Some(storage), Some(app)) => Ok(Some(Self {
-                egress_url: overrides
-                    .get(AgentHarnessEgressUrl::OVERRIDE_ENV_VAR_NAME)
-                    .cloned(),
-                api_url: api.trim_end_matches('/').to_owned(),
-                storage_url: storage.trim_end_matches('/').to_owned(),
-                // macrod links into the web app's routes, below `/app`.
-                web_url: format!("{}/app", app.trim_end_matches('/')),
-            })),
-            _ => rootcause::bail!(
-                "overriding macrod's deployment needs {}, {} and {} together",
-                AgentHarnessServiceUrl::OVERRIDE_ENV_VAR_NAME,
-                DocumentStorageServiceUrl::OVERRIDE_ENV_VAR_NAME,
-                AppServiceUrl::OVERRIDE_ENV_VAR_NAME,
-            ),
+    fn from_deployment(deployment: &hosted_runtimes::domain::enrollment::Deployment) -> Self {
+        let trim = |url: &macro_service_urls::Url| url.as_str().trim_end_matches('/').to_owned();
+        Self {
+            egress_url: trim(&deployment.egress_url),
+            api_url: trim(&deployment.agent_harness_url),
+            storage_url: trim(&deployment.document_storage_url),
+            // macrod links into the web app's routes, below `/app`.
+            web_url: format!("{}/app", trim(&deployment.app_url)),
         }
     }
 }
@@ -302,7 +273,7 @@ impl DeploymentUrls {
 fn write_config(
     options: &EnrollOptions,
     agent: Option<crate::tui::agent_catalog::DetectedAgent>,
-    urls: Option<&DeploymentUrls>,
+    urls: &DeploymentUrls,
 ) -> rootcause::Result<()> {
     crate::service::configure(
         &options.config,
@@ -314,14 +285,10 @@ fn write_config(
         },
         agent,
     )?;
-    if let Some(urls) = urls {
-        let mut form = ConfigForm::load(&options.config)?;
-        form.set_deployment_urls(&urls.api_url, &urls.storage_url, &urls.web_url);
-        if let Some(egress) = &urls.egress_url {
-            form.set_egress_url(egress);
-        }
-        form.save()?;
-    }
+    let mut form = ConfigForm::load(&options.config)?;
+    form.set_deployment_urls(&urls.api_url, &urls.storage_url, &urls.web_url);
+    form.set_egress_url(&urls.egress_url);
+    form.save()?;
     Ok(())
 }
 

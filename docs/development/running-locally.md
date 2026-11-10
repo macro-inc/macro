@@ -526,8 +526,10 @@ upgrades. Bun is still used for dependency installation and builds.
 value from the fleet you pick. An enabled fleet requires explicit configuration;
 missing values fail startup with the variable name. With no attached fleet, omit
 `COMPUTERS_FLEET` and every `COMPUTERS_*` setting. Local orchestration emits none when
-computers are off. Enrollment copies macrod’s `OVERRIDE_*` service URLs from
-the harness process environment; xtask supplies the values for the fleet.
+computers are off. Each enrollment carries a typed deployment (agent harness,
+document storage, app and egress URLs) that the harness resolves through
+`macro_service_urls` when it issues the enrollment; xtask sets the harness's
+`OVERRIDE_*` values to the addresses the fleet's guests reach.
 
 Harness config required for either fleet:
 `COMPUTERS_CONTROL_PLANE_ID`, `COMPUTERS_HOST_NAME`, `COMPUTERS_IMAGE`,
@@ -602,14 +604,10 @@ mounted into the harness at the same absolute path, because the daemon resolves
 bind sources on the host. The harness writes them as root. Starting the stack
 again removes the instance's computer containers along with its data.
 
-Brains use a separate local-only HTTP listener on the same Caddy proxy:
+Computers use a separate local-only HTTP listener on the same Caddy proxy:
 `http://proxy:<ComputerGateway port>` inside Docker. Incus guests use the devbox's
 tailnet address and the published host port; the browser keeps its HTTPS origin. This
 avoids guest host-DNS entries, importing the local TLS CA, or bypassing TLS.
-The launcher emits canonical `OVERRIDE_*` values for the computer-facing API,
-git, Anthropic egress and all seven brain service endpoints. Authentication
-resolves typed values on every enrollment and delivers them transiently, rather
-than persisting addresses on the persona or parsing a second JSON URL map.
 `OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL` uses `ws(s)`;
 `OVERRIDE_MCP_SERVICE_URL` is a service base (the consumer appends `/mcp`).
 Regenerate the instance env and Compose config after changing fleets or URL
@@ -645,12 +643,12 @@ Boxes reach the stack directly over the devbox tailnet address, resolved once
 at stack start with `tailscale ip -4`. Missing, ambiguous, or non-tailnet output
 fails startup. This address must match the runtime's
 `macro.computers.controlPlaneAddress` (`100.116.73.13` in the checked-in config).
-The runtime permits only the seven TCP host ports (agent egress, harness,
-document storage, auth, agent git, computer gateway, connection gateway) and
+The runtime permits only the control-plane TCP host ports (agent egress, harness,
+document storage, auth, computer gateway, connection gateway) and
 masquerades them to `tailscale0`; other tailnet destinations are dropped.
 Cognition and scheduled actions keep their harness route prefixes; MCP is the
 harness service base, and the connection endpoint uses `ws`. The launcher uses
-the same direct devbox address for the fresh git and API gateway URLs. Reused
+the same direct devbox address for the API gateway URL. Reused
 harness ports are emitted once in the host-port list; each of the default and
 120 standard named windows is checked against the evaluated Nix allowlist.
 Custom `--port-base` values need a matching `controlPlanePorts` option update.

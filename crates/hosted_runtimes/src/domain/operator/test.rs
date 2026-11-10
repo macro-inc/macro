@@ -2,7 +2,6 @@ use std::str::FromStr;
 mod redeploy;
 
 use macro_user_id::user_id::MacroUserIdStr;
-use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -206,9 +205,7 @@ async fn unavailable_host_does_not_abort_startup_and_registration_retries_with_b
         },
         FakeHarnesses::default(),
         TestClock(Mutex::new(now())),
-        EnrollmentDefaults {
-            service_url_overrides: BTreeMap::new(),
-        },
+        std::sync::Arc::new(crate::domain::fakes::FixedDeployment),
     )
     .await
     .unwrap();
@@ -316,12 +313,7 @@ async fn operator(
         fleet,
         FakeHarnesses::default(),
         FixedClock,
-        EnrollmentDefaults {
-            service_url_overrides: BTreeMap::from([(
-                "OVERRIDE_AGENT_HARNESS_SERVICE_URL".to_owned(),
-                "http://10.210.0.1:8080".to_owned(),
-            )]),
-        },
+        std::sync::Arc::new(crate::domain::fakes::FixedDeployment),
     )
     .await
     .unwrap()
@@ -465,10 +457,7 @@ async fn create_enrolls_the_computer_and_connection_makes_it_ready() {
                 )),
                 device_secret: DeviceSecret::new("secret".to_owned()),
                 name: ComputerName::try_new("Ada").unwrap(),
-                service_url_overrides: BTreeMap::from([(
-                    "OVERRIDE_AGENT_HARNESS_SERVICE_URL".to_owned(),
-                    "http://10.210.0.1:8080".to_owned(),
-                )]),
+                deployment: crate::domain::fakes::deployment(),
                 traceparent: None,
             },
             true,
