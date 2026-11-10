@@ -116,7 +116,7 @@ export function ComputerPurchaseStep(props: {
             <span class="sr-only">{t('computers.buying')}</span>
           </Show>
         </Button>
-        <p class="basis-full text-right text-xs text-ink-muted">
+        <p class="basis-full text-right text-xs text-ink-muted text-pretty">
           {t('computers.buyHeadsUp')}
         </p>
       </ActionDialogShell.Footer>

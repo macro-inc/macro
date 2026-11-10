@@ -164,7 +164,7 @@ export function ComputerBuyFlow(props: {
         onOpenChange={(open) => !open && close()}
         position="center"
         visibleScrim
-        class="w-[min(480px,calc(100vw-16px))]"
+        class="w-[min(600px,calc(100vw-16px))]"
       >
         <ActionDialogShell class="h-auto">
           <Show
