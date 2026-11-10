@@ -66,3 +66,7 @@ pub mod inbox_entitlement;
 /// Atomic sender changes and retirement of the original draft.
 #[cfg(feature = "mailbox")]
 pub mod draft_transfer;
+
+/// Signature preparation and settings-patch policy.
+#[cfg(feature = "mailbox")]
+pub mod signature_settings;

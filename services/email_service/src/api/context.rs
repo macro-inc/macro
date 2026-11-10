@@ -121,8 +121,30 @@ pub(crate) type RecentInboxSvc = email::domain::recent_inbox::RecentInboxService
     >,
 >;
 
+pub(crate) type CalendarDisconnectSvc =
+    email::domain::mailbox::calendar_disconnect::CalendarDisconnectService<
+        crate::outbound::inbox_catalog::PgInboxCatalog,
+        crate::outbound::calendar_disconnect::CalendarDisconnect<CalendarMutationSvc>,
+    >;
+pub(crate) type ContactListSvc = email::domain::mailbox::contacts::list::ContactListService<
+    crate::outbound::inbox_catalog::PgInboxCatalog,
+    crate::outbound::inbox_contacts::PgInboxContacts,
+>;
+pub(crate) type ScheduledDraftSvc = email::domain::scheduled::drafts::ScheduledDraftService<
+    crate::outbound::scheduled_drafts::PgScheduledDrafts,
+>;
+pub(crate) type SignatureSettingsSvc = email::domain::signature_settings::SignatureSettingsService<
+    crate::outbound::signature_settings::PgSignatureSettings,
+    crate::outbound::signature_settings::SignatureImageRehoster,
+    crate::outbound::signature_settings::GmailSignatures,
+>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub calendar_disconnect: Arc<CalendarDisconnectSvc>,
+    pub contacts: Arc<ContactListSvc>,
+    pub scheduled_drafts: Arc<ScheduledDraftSvc>,
+    pub signature_settings: Arc<SignatureSettingsSvc>,
     pub mailbox_notifications: Arc<
         email::domain::mailbox::watches::MailboxWatchNotifications<
             email::outbound::mailbox_pg::PgMailboxSync,
