@@ -1,0 +1,21 @@
+[package]
+name = "graphql_ideas"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+async-graphql = { workspace = true }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+graphql_common = { path = "../graphql_common" }
+ideas = { path = "../ideas" }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+model-entity = { path = "../model-entity" }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

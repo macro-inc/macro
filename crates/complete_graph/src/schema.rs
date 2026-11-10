@@ -25,6 +25,7 @@ use graphql_activity::{
     resolve_form_activity,
 };
 use graphql_calendar::{CalendarMutationRoot, GraphqlCalendarQuery};
+use graphql_ideas::{GraphqlIdeasQuery, IdeasMutationRoot};
 use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
     NoOpChannelActivityMutationService,
@@ -113,6 +114,7 @@ pub struct CompleteMutationRoot<
     graphql_email::GraphqlEmailSendMutation<ES, SoupEmailThreadMutationOutput<E>>,
     InitiativeMutationRoot<E>,
     CalendarMutationRoot,
+    IdeasMutationRoot,
     WorkFeedMutationRoot<E>,
     NotificationInboxMutationRoot<E>,
     SavedViewMutationRoot,
@@ -141,6 +143,7 @@ impl<
             graphql_email::GraphqlEmailSendMutation::<ES, SoupEmailThreadMutationOutput<E>>::default(),
             InitiativeMutationRoot::<E>::default(),
             CalendarMutationRoot,
+            IdeasMutationRoot,
             WorkFeedMutationRoot::<E>::default(),
             NotificationInboxMutationRoot::<E>::default(),
             SavedViewMutationRoot,
@@ -876,6 +879,12 @@ where
         input: ActivityOverviewInput,
     ) -> async_graphql::Result<GraphqlActivityOverview> {
         resolve_activity_overview::<AcR>(ctx, &self.user_id, input).await
+    }
+
+    /// Authenticated user ideas fields supplied by `graphql_ideas`.
+    #[graphql(flatten)]
+    async fn ideas(&self) -> GraphqlIdeasQuery {
+        GraphqlIdeasQuery::new(self.user_id.clone())
     }
 
     /// Authenticated user calendar fields supplied by `graphql_calendar`.

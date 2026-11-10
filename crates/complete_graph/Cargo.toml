@@ -32,6 +32,7 @@ graphql_crm = { path = "../graphql_crm" }
 graphql_email = { path = "../graphql_email" }
 graphql_entity_mutation = { path = "../graphql_entity_mutation" }
 graphql_favorite = { path = "../graphql_favorite" }
+graphql_ideas = { path = "../graphql_ideas" }
 graphql_initiative = { path = "../graphql_initiative" }
 graphql_databases = { path = "../graphql_databases" }
 graphql_notification = { path = "../graphql_notification" }

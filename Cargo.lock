@@ -4868,6 +4868,7 @@ dependencies = [
  "graphql_email",
  "graphql_entity_mutation",
  "graphql_favorite",
+ "graphql_ideas",
  "graphql_initiative",
  "graphql_notification",
  "graphql_notification_inbox",
@@ -9322,6 +9323,24 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "graphql_ideas"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "chrono",
+ "chrono-tz",
+ "graphql_common",
+ "ideas",
+ "macro_user_id",
+ "macro_uuid",
+ "model-entity",
+ "serde_json",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
