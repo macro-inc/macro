@@ -353,7 +353,7 @@ export type ComputerStatus = {
 /**
  * The coarse status the team sees.
  */
-export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'asleep' | 'waking' | 'stopping' | 'stopped' | 'failed' | 'payment_failed' | 'released';
+export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'starting' | 'stopping' | 'stopped' | 'failed' | 'payment_failed' | 'released';
 
 export type CreateAccountMergeRequest = {
     /**

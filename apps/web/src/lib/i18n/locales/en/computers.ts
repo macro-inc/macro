@@ -15,7 +15,7 @@ export default {
   loadFailed: "Could not load your team's computers. Try refreshing this page.",
   getComputer: 'Get a Macro computer',
   description:
-    "A cloud machine for your team's agents, with macrod, Claude Code, a browser, and Docker ready to go. It sleeps when idle and wakes when an agent gets a prompt. Billed on your team subscription.",
+    "A cloud machine for your team's agents, with macrod, Claude Code, a browser, and Docker ready to go. Billed on your team subscription.",
   loadingSizes: 'Loading sizes…',
   sizesFailed: 'Could not load computer sizes. Try refreshing this page.',
   continue: 'Continue',
@@ -74,9 +74,7 @@ export default {
   waitingForCapacity: 'Waiting for space on the host',
   waitingForCapacityHint:
     'Turn off or release another computer on this host to make room',
-  asleep: 'Asleep',
-  wakeHint: 'Wakes when an agent gets a prompt.',
-  waking: 'Waking',
+  starting: 'Starting',
   stopping: 'Stopping',
   stopped: 'Stopped',
   failed: 'Failed',
