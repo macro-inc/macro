@@ -30,6 +30,8 @@ pub enum DiffOpcode {
     NodeProps = 10,
     /// STATE.
     State = 11,
+    /// SET_DECORATOR_REVISION: key, low32, high32.
+    SetDecoratorRevision = 12,
 }
 /// Reusable aligned word buffer and compact UTF-8 string table.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -100,6 +102,15 @@ impl DiffBuffer {
             *count += 1;
         }
         match op {
+            DiffOp::SetDecoratorRevision { key, revision } => {
+                let bytes = revision.to_le_bytes();
+                self.words.extend([
+                    DiffOpcode::SetDecoratorRevision as u32,
+                    key.index(),
+                    u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]),
+                    u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]),
+                ]);
+            }
             DiffOp::Remove { key, subtree_root } => self.words.extend([
                 DiffOpcode::Remove as u32,
                 key.index(),

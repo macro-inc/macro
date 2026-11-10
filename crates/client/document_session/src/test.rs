@@ -2139,3 +2139,5 @@ mod ime;
 mod close;
 mod presence;
 mod seed_adoption;
+
+mod decorator_render;

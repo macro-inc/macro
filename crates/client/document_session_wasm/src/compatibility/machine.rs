@@ -117,6 +117,7 @@ impl Machine {
         Ok(Self {
             session,
             output: vec![],
+            decorator_observer: Default::default(),
             wake: None,
             wall_origin: wall - mono,
             terminal: false,

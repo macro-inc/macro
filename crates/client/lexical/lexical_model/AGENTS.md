@@ -21,7 +21,7 @@ node types, immutable snapshots, transactional tree editing, update processing, 
 - `src/commit.rs` computes mutations before cache writes and atomically publishes snapshots.
 - `src/plugin.rs`, `command.rs` and `extension.rs` own dispatch, follow-up rounds and transactional extension state.
 - `src/history.rs` owns undo/redo stacks and the standalone merge tracker.
-- `src/diff/` owns the versioned flat ABI; keep all 11 opcodes in sync with the independent TS decoder test.
+- `src/diff/` owns the versioned flat ABI; keep all 12 opcodes in sync with the independent TS decoder test. Native decorator signature sidecars are resolved by the consuming view, never serialized as state or observed by Commit.diff.
 - `src/core/` owns input policy, raw remote edits and host effects.
 - `src/caret/` implements directional positions, eager cursors, range removal and splitting.
 - `src/test/proptest.rs` checks generated scripts against independent link, cache, JSON, mutation and view-diff invariants.

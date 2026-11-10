@@ -69,6 +69,19 @@ pub(in crate::node) fn decorator<Node: DecoratorNode>() -> NodeVTable {
         transforms,
         language,
         per_instance,
+        decorator_render: |data| {
+            let node = data
+                .downcast_ref::<Node>()
+                .ok_or(Error::Invariant("decorator payload type mismatch"))?;
+            match (node.render_revision(), node.render_signature()?) {
+                (Some(_), Some(_)) => {
+                    Err(Error::Invariant("conflicting decorator render policies"))
+                }
+                (Some(revision), None) => Ok(Some(DecoratorRenderPolicy::Eager(revision))),
+                (None, Some(signature)) => Ok(Some(DecoratorRenderPolicy::Signature(signature))),
+                (None, None) => Ok(None),
+            }
+        },
         project: project_decorator::<Node>,
         project_mut: project_decorator_mut::<Node>,
         probe: || Node::flag_probe().map(|n| Arc::new(n) as Arc<dyn AnyNodeData>),

@@ -231,3 +231,12 @@ Drain actual external compatibility commits through compatTakePublications until
 Construct app document sessions with createMacroWithNamespace using the host wrapper allocator value; keep the view and core clipboard namespace identical without persisting the instance counter.
 
 Encode SetDecoratorRevision (12) as [key, low32, high32] from actual opt-in native render-lifetime metadata; preserve existing opcodes 1–11 and full u64 precision. The generated enum alone does not install emission or view consumption.
+
+Resolve signature-cached decorator policies after coalescing native Diff sidecars;
+retain only per-node signatures and revisions, never historical editor snapshots.
+Stage observations until takeOutput transfers to an attached synchronous view;
+defer pre-mount admissions and apply each packet before the next admission. Retire
+the baseline on view detach. Direct initialize is a full-remount exposure and
+requires prior queued output to be consumed, preserving its real I/O. Renderer
+failure requires remount recovery, not a successful-paint acknowledgement. Custom
+asynchronous consumers require an explicit consumption acknowledgement.

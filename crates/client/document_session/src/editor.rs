@@ -671,7 +671,7 @@ impl EditorSurface {
                 );
             }
         }
-        if !output.diff.ops.is_empty() {
+        if !output.diff.ops.is_empty() || !output.diff.decorator_renders.is_empty() {
             view.push(ViewEffect::Diff(output.diff));
         }
         view.extend(

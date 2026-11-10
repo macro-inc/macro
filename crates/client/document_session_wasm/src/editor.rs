@@ -64,7 +64,13 @@ impl EditorSession {
     /// Copy pending output; no borrowed linear-memory view escapes.
     #[wasm_bindgen(js_name=takeOutput)]
     pub fn take_output(&mut self) -> Vec<u8> {
-        std::mem::take(&mut self.machine.output)
+        self.machine.take_output()
+    }
+    /// Retire the detached synchronous view's component observation baseline.
+    /// Queued output and durable session state remain owned by the executor.
+    #[wasm_bindgen(js_name=retireViewObservation)]
+    pub fn retire_view_observation(&mut self) {
+        self.machine.decorator_observer.retire();
     }
     /// Earliest monotonic deadline, or -1.
     #[wasm_bindgen(js_name=wakeAt)]
@@ -567,28 +573,8 @@ impl EditorSession {
             .map_err(js)
     }
     /// Cold recovery patch from an empty view; does not reset sync or history.
-    pub fn initialize(&self) -> Result<Vec<u8>, JsError> {
-        let out = document_session::SessionOutput {
-            view: vec![document_session::ViewEffect::Initialize(
-                document_session::InitialView::Editor {
-                    diff: self
-                        .surface()
-                        .view_diff()
-                        .map_err(BoundaryError::from)
-                        .map_err(js)?,
-                    state: self
-                        .surface()
-                        .state()
-                        .to_json()
-                        .map_err(BoundaryError::from)
-                        .map_err(js)?,
-                },
-            )],
-            ..Default::default()
-        };
-        let mut bytes = vec![];
-        output::encode(&out, false, &mut bytes, None, None).map_err(js)?;
-        Ok(bytes)
+    pub fn initialize(&mut self) -> Result<Vec<u8>, JsError> {
+        self.machine.initialize_view().map_err(js)
     }
     /// Current complete document text in one crossing.
     #[wasm_bindgen(js_name=textContent)]

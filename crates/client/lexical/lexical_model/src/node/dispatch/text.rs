@@ -66,6 +66,7 @@ pub(in crate::node) fn text<Node: TextNode>() -> NodeVTable {
         transforms,
         language,
         per_instance,
+        decorator_render: |_| Ok(None),
         project: project_text::<Node>,
         project_mut: project_text_mut::<Node>,
         probe: || Node::flag_probe().map(|n| Arc::new(n) as Arc<dyn AnyNodeData>),

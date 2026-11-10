@@ -163,6 +163,19 @@ impl<'state> StateRef<'state> {
     pub fn has_node_type(self, name: &str) -> bool {
         self.state.registry.get(name).is_some()
     }
+    /// Read pure native component lifetime metadata without public JSON hooks.
+    pub fn decorator_render_policy(
+        self,
+        key: NodeKey,
+    ) -> Result<Option<DecoratorRenderPolicy>, Error> {
+        let slot = self.slot(key).ok_or(Error::NodeNotFound(key))?;
+        let registered = self.state.registry.vtable(slot.type_index);
+        #[cfg(feature = "foreign-nodes")]
+        if registered.foreign.is_some() {
+            return Ok(None);
+        }
+        (registered.decorator_render)(slot.data.as_any())
+    }
     /// Type index.
     pub fn type_index(self, key: impl Into<NodeKey>) -> Option<NodeTypeIndex> {
         self.slot(key.into()).map(|slot| slot.type_index)

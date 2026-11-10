@@ -417,6 +417,15 @@ impl DecoratorRenderSignature {
     }
 }
 
+/// Native component lifetime policy, separate from serialized node properties.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DecoratorRenderPolicy {
+    /// Actual setter-authored invalidation, including writes with equal properties.
+    Eager(u64),
+    /// Exact signature compared against the consuming view's last exposure.
+    Signature(DecoratorRenderSignature),
+}
+
 /// Hooks inherited by decorator node types.
 /// s2: NODE-10, NODE-11
 pub trait DecoratorNode: NodeType<Kind = DecoratorKind> {

@@ -68,6 +68,7 @@ export function decodeDiff(words: readonly number[], strings: Uint8Array) {
       case 9: ops.push({ opcode, key: word(), ...elementFields() }); break;
       case 10: ops.push({ opcode, key: word(), props: json() }); break;
       case 11: ops.push({ opcode, key: word(), state: json(true) }); break;
+      case 12: ops.push({ opcode, key: word(), revisionLo: word(), revisionHi: word() }); break;
       default: throw new Error('unknown opcode');
     }
   }

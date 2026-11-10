@@ -225,3 +225,5 @@ fn full_reconcile_property_order_is_key_sorted_and_noops_emit_nothing() {
     let (_, noop) = editor.update(|_| Ok(())).unwrap();
     assert!(noop.diff(&DiffOptions::default()).unwrap().ops.is_empty());
 }
+
+mod decorator;
