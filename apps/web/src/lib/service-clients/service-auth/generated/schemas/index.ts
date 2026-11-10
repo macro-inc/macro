@@ -70,6 +70,7 @@ export * from './creditPurchaseSnapshotMonthlyLimitCents';
 export * from './creditPurchaseStatus';
 export * from './currentSystemStatus';
 export * from './currentSystemStatusAllOf';
+export * from './currentSystemStatusAllOfId';
 export * from './currentSystemStatusAllOfUpdatedAt';
 export * from './cursorApiKeyStatus';
 export * from './cursorApiKeyStatusDefaultEffort';
