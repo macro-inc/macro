@@ -351,6 +351,11 @@ export type Agent = {
      * Which MCP servers sessions of this agent are handed.
      */
     mcp: AgentMcpServers;
+    /**
+     * The directory on the harness its new sessions use, one of the
+     * harness's reported workspaces. `None` uses the harness's workspace.
+     */
+    workspace_path?: string | null;
 };
 
 /**
@@ -4931,6 +4936,12 @@ export type CreateAgentRequest = {
      * Team owner. Omit for a private, user-owned agent.
      */
     team_id?: string | null;
+    /**
+     * The directory on `harness_id` new sessions use, one of the harness's
+     * reported workspaces. Omit to use the harness's workspace; forbidden
+     * without a harness id.
+     */
+    workspace_path?: string | null;
 };
 
 /**
@@ -12412,9 +12423,20 @@ export type Harness = {
      */
     owner: HarnessOwner;
     /**
+     * The directories the daemon last reported its sessions may use. The web
+     * picks workspaces from this list only.
+     */
+    reported_workspaces?: Array<ReportedWorkspace>;
+    /**
      * Update timestamp.
      */
     updated_at: string;
+    /**
+     * The directory new sessions use when their agent names none, one of
+     * `reported_workspaces`. `None` uses the workspace in the machine's
+     * `macrod.toml`.
+     */
+    workspace_path?: string | null;
 };
 
 /**
@@ -12433,6 +12455,11 @@ export type HarnessAgent = {
      * Display name.
      */
     name: string;
+    /**
+     * The directory this agent's new sessions use, one of the harness's
+     * reported workspaces. `None` uses the harness's workspace.
+     */
+    workspace_path?: string | null;
 };
 
 /**
@@ -15175,6 +15202,7 @@ export type PatchHarnessRequest = {
      */
     name?: string | null;
     owner?: null | RequestedHarnessOwner;
+    workspace?: null | RequestedHarnessWorkspace;
 };
 
 /**
@@ -16448,6 +16476,37 @@ export type ReplaceCrmStagesRequest = {
 };
 
 /**
+ * The directories a daemon's sessions may use, replacing its last report.
+ *
+ * The daemon serializes this, so both derives are used.
+ */
+export type ReportWorkspacesRequest = {
+    /**
+     * Allowed roots first, then the repositories under them.
+     */
+    workspaces: Array<ReportedWorkspace>;
+};
+
+/**
+ * A directory a daemon reports its sessions may work in.
+ */
+export type ReportedWorkspace = {
+    /**
+     * What the directory is.
+     */
+    kind: ReportedWorkspaceKind;
+    /**
+     * Absolute path on the daemon's machine.
+     */
+    path: string;
+};
+
+/**
+ * What a reported workspace is.
+ */
+export type ReportedWorkspaceKind = 'allowed_root' | 'repository';
+
+/**
  * Requester submission; an existing pending request requires its revision.
  */
 export type RequestAccess = {
@@ -16491,6 +16550,19 @@ export type RequestedHarnessOwner = {
      */
     team_id: string;
     type: 'team';
+};
+
+/**
+ * Which directory a harness's sessions use when their agent names none.
+ */
+export type RequestedHarnessWorkspace = {
+    type: 'local';
+} | {
+    /**
+     * The reported directory.
+     */
+    path: string;
+    type: 'path';
 };
 
 /**
@@ -21416,6 +21488,12 @@ export type UpdateAgentRequest = {
      * Team owner. Omit to make the agent private to the caller.
      */
     team_id?: string | null;
+    /**
+     * The directory on `harness_id` new sessions use, one of the harness's
+     * reported workspaces. Omit to use the harness's workspace; forbidden
+     * without a harness id.
+     */
+    workspace_path?: string | null;
 };
 
 export type UpdateChannelSharePermission = {
@@ -31226,6 +31304,28 @@ export type ListHarnessSessionsResponses = {
 };
 
 export type ListHarnessSessionsResponse = ListHarnessSessionsResponses[keyof ListHarnessSessionsResponses];
+
+export type ReportHarnessWorkspacesData = {
+    body: ReportWorkspacesRequest;
+    path?: never;
+    query?: never;
+    url: '/harnesses/me/workspaces';
+};
+
+export type ReportHarnessWorkspacesErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ReportHarnessWorkspacesError = ReportHarnessWorkspacesErrors[keyof ReportHarnessWorkspacesErrors];
+
+export type ReportHarnessWorkspacesResponses = {
+    204: void;
+};
+
+export type ReportHarnessWorkspacesResponse = ReportHarnessWorkspacesResponses[keyof ReportHarnessWorkspacesResponses];
 
 export type DeleteHarnessData = {
     body?: never;

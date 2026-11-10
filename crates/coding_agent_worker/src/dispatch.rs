@@ -1,21 +1,29 @@
 //! Executes trigger work against the live service: create, dial, prompt.
 
+use std::path::PathBuf;
+
 use agent_session::domain::model::AgentSessionId;
 use agent_session::inbound::axum_router::{CreateAgentSessionRequest, CreateSessionThread};
-
+use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::config::Workspace;
 use crate::outbound::agent_session::{ApiError, HarnessApi};
+use crate::outbound::stream::EventStreamClient;
 use crate::runtime::Runtime;
 use crate::trigger::{TriggerWork, WorkExecutor};
+use crate::workspace::{AllowedRoots, requested_workspace};
 
 /// A failure doing an event's work.
 #[derive(Debug, thiserror::Error)]
 pub enum DispatchError {
-    /// The repository or Herdr worktree could not be prepared.
+    /// The workspace was refused, or its repository or Herdr worktree could
+    /// not be prepared.
     #[error("workspace preparation failed: {0}")]
     Workspace(String),
+    /// The workspace Macro set for the runtime or agent could not be read.
+    #[error("could not read the workspace set in Macro: {0}")]
+    Settings(rootcause::Report),
     /// The service refused or could not be reached.
     #[error(transparent)]
     Api(#[from] ApiError),
@@ -27,8 +35,10 @@ pub enum DispatchError {
 /// The daemon's real executor: the API client plus the bridge registry.
 pub struct Dispatcher {
     api: HarnessApi,
+    settings: EventStreamClient,
     runtime: Runtime,
     workspace: Workspace,
+    allowed_roots: AllowedRoots,
     #[cfg(unix)]
     workspaces: Option<crate::herdr::repositories::Workspaces>,
     #[cfg(unix)]
@@ -36,12 +46,21 @@ pub struct Dispatcher {
 }
 
 impl Dispatcher {
-    /// Build the executor.
-    pub fn new(api: HarnessApi, runtime: Runtime, workspace: Workspace) -> Self {
+    /// Build the executor. `settings` reads the workspaces Macro set for the
+    /// runtime and its agents.
+    pub fn new(
+        api: HarnessApi,
+        settings: EventStreamClient,
+        runtime: Runtime,
+        workspace: Workspace,
+        allowed_roots: AllowedRoots,
+    ) -> Self {
         Self {
             api,
+            settings,
             runtime,
             workspace,
+            allowed_roots,
             #[cfg(unix)]
             workspaces: None,
             #[cfg(unix)]
@@ -68,30 +87,79 @@ impl Dispatcher {
         self
     }
 
+    /// The directory a new session for `bot` works in: the agent's workspace,
+    /// else the runtime's, else the local one, read fresh from Macro so a
+    /// change on the web applies to the next session. Refused outside
+    /// `allowed_roots`.
+    #[tracing::instrument(
+        name = "macrod.workspace.resolve",
+        skip(self),
+        fields(source = tracing::field::Empty, workspace = tracing::field::Empty),
+        err
+    )]
+    async fn resolve_workspace(
+        &self,
+        session: AgentSessionId,
+        bot: BotId,
+    ) -> Result<PathBuf, DispatchError> {
+        let (agents, harness) = self
+            .settings
+            .workspace_settings()
+            .await
+            .map_err(DispatchError::Settings)?;
+        let agent_workspace = agents
+            .into_iter()
+            .find(|agent| agent.bot_id == bot)
+            .and_then(|agent| agent.workspace_path);
+        let (requested, source) = requested_workspace(
+            agent_workspace.as_deref(),
+            harness.workspace_path.as_deref(),
+            &self.workspace.path,
+        );
+
+        let span = tracing::Span::current();
+        span.record("source", <&str>::from(source));
+        let admitted = self.allowed_roots.admit(&requested).map_err(|refusal| {
+            tracing::warn!(
+                %session,
+                %bot,
+                source = <&str>::from(source),
+                workspace = %requested.display(),
+                reason = %refusal,
+                "refused a session workspace"
+            );
+            DispatchError::Workspace(refusal.to_string())
+        })?;
+        span.record("workspace", tracing::field::display(admitted.display()));
+        Ok(admitted)
+    }
+
     async fn workspace_for(
         &self,
         session: AgentSessionId,
+        bot: BotId,
         repo_url: Option<&str>,
     ) -> Result<String, DispatchError> {
+        let workspace = self.resolve_workspace(session, bot).await?;
         #[cfg(unix)]
         if let Some(workspaces) = &self.workspaces {
             let inferred;
             let url = match repo_url.or(self.workspace.repo_url.as_deref()) {
                 Some(url) => url,
                 None => {
-                    inferred = crate::outbound::git::git(
-                        &self.workspace.path,
-                        &["remote", "get-url", "origin"],
-                    )
-                    .await
-                    .map_err(|error| {
-                        DispatchError::Workspace(format!("select a repository in Macro: {error}"))
-                    })?;
+                    inferred =
+                        crate::outbound::git::git(&workspace, &["remote", "get-url", "origin"])
+                            .await
+                            .map_err(|error| {
+                                DispatchError::Workspace(format!(
+                                    "select a repository in Macro: {error}"
+                                ))
+                            })?;
                     &inferred
                 }
             };
             return workspaces
-                .prepare(&session.to_string(), url)
+                .prepare(&workspace, &session.to_string(), url)
                 .await
                 .map(|path| path.to_string_lossy().into_owned())
                 .map_err(|error| DispatchError::Workspace(error.to_string()));
@@ -102,7 +170,7 @@ impl Dispatcher {
                     .to_owned(),
             ));
         }
-        Ok(self.workspace.path.to_string_lossy().into_owned())
+        Ok(workspace.to_string_lossy().into_owned())
     }
 
     fn created(&self, session: AgentSessionId, sender: &MacroUserIdStr<'static>) {
@@ -142,7 +210,7 @@ impl WorkExecutor for Dispatcher {
                     &bot.as_uuid(),
                     thread_id.as_bytes(),
                 ));
-                let workspace = self.workspace_for(session, None).await?;
+                let workspace = self.workspace_for(session, bot, None).await?;
                 let request = CreateAgentSessionRequest {
                     // The service mints the id: nothing here opens a surface
                     // on it before the create answers.
@@ -243,7 +311,9 @@ impl WorkExecutor for Dispatcher {
                 sender,
                 origin,
             } => {
-                let workspace = self.workspace_for(session, repo_url.as_deref()).await?;
+                let workspace = self
+                    .workspace_for(session, bot, repo_url.as_deref())
+                    .await?;
                 // Same create as a mention, minus the thread: the requester is
                 // waiting on this id, so the session is created under it. No
                 // prompt here - whoever asked sends their own through the

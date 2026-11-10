@@ -53,6 +53,40 @@ export class Harness extends MacroEntity<HarnessRecord> {
   readonly allowPermissionBypass = this.field('allow_permission_bypass');
 
   /**
+   * The directory new sessions use when their agent names none, or
+   * `undefined` for the workspace in the machine's macrod.toml.
+   */
+  readonly workspace = this.mappedField(
+    'workspace_path',
+    (path) => path ?? undefined,
+  );
+
+  /**
+   * The directories the host reported its sessions may use: its allowed
+   * roots and the repositories under them.
+   */
+  readonly reportedWorkspaces = this.mappedField(
+    'reported_workspaces',
+    (workspaces) => workspaces ?? [],
+  );
+
+  /**
+   * Set the directory new sessions use when their agent names none: one of
+   * {@link Harness.reportedWorkspaces}, or `undefined` for the workspace in
+   * the machine's macrod.toml. Running sessions keep theirs.
+   */
+  async setWorkspace(path: string | undefined): Promise<void> {
+    await this.mutate((c) =>
+      c.storage.patchHarness({
+        path: { harness_id: this.id },
+        body: {
+          workspace: path ? { type: 'path', path } : { type: 'local' },
+        },
+      }),
+    );
+  }
+
+  /**
    * Allow or forbid agents here to bypass permission prompts. Live sessions
    * pick the change up at their next turn.
    */

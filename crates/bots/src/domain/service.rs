@@ -225,12 +225,27 @@ fn validate_runtime(harness: &str, harness_id: Option<HarnessId>) -> Result<(), 
     }
 }
 
+/// A workspace is a directory on a registered harness's machine.
+fn validate_workspace(
+    harness_id: Option<HarnessId>,
+    workspace_path: Option<&str>,
+) -> Result<(), BotError> {
+    if workspace_path.is_some() && harness_id.is_none() {
+        return Err(BotError::BadRequest(
+            "a workspace applies only to a registered macrod harness".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn validate_agent_request(req: &CreateAgentRequest) -> Result<(), BotError> {
     validate_runtime(&req.harness, req.harness_id)?;
+    validate_workspace(req.harness_id, req.workspace_path.as_deref())?;
     validate_agent_fields(req.into())
 }
 
 fn validate_update_agent_request(req: &UpdateAgentRequest) -> Result<(), BotError> {
+    validate_workspace(req.harness_id, req.workspace_path.as_deref())?;
     validate_agent_fields(req.into())
 }
 
@@ -311,11 +326,15 @@ where
     /// person controls. A private agent may run on the caller's own harness
     /// or on a team harness of a team the caller belongs to. The harnesses
     /// crate's `agents_stranded_by` applies the same rule to owner changes.
+    ///
+    /// A newly chosen workspace must be one the harness's daemon reported;
+    /// `None` when the request keeps the agent's workspace or names none.
     async fn ensure_harness_usable(
         &self,
         caller: MacroUserIdStr<'static>,
         owner: &BotOwner,
         harness_id: Option<HarnessId>,
+        new_workspace: Option<&str>,
         auto_accept_permissions: Option<bool>,
     ) -> Result<Option<HarnessOwner>, BotError> {
         let Some(harness_id) = harness_id else {
@@ -359,6 +378,18 @@ where
         };
         if !usable {
             return Err(BotError::Unauthorized);
+        }
+        // After the ownership check, so a caller who cannot use this harness
+        // cannot probe which directories its machine reported.
+        if let Some(workspace) = new_workspace
+            && !harness_owner
+                .workspace_paths
+                .iter()
+                .any(|reported| reported == workspace)
+        {
+            return Err(BotError::BadRequest(
+                "this runtime has not reported that workspace; pick one it lists".to_string(),
+            ));
         }
         Ok(Some(harness_owner.owner))
     }
@@ -428,11 +459,13 @@ where
     }
 
     /// Replace a manageable agent's configuration with `req`, `current` being
-    /// the bot [`Self::ensure_manageable`] returned for it.
+    /// the bot [`Self::ensure_manageable`] returned for it and `previous` its
+    /// agent configuration.
     async fn replace_agent(
         &self,
         caller: MacroUserIdStr<'static>,
         current: &Bot,
+        previous: &Agent,
         req: UpdateAgentRequest,
     ) -> Result<Agent, BotError> {
         validate_update_agent_request(&req)?;
@@ -449,11 +482,17 @@ where
         let owner = self
             .owner_for_agent_update(caller.clone(), current, req.team_id)
             .await?;
+        // A kept workspace stays valid after its daemon stops reporting it;
+        // macrod refuses it at dispatch with the reason.
+        let workspace_kept =
+            req.harness_id == previous.harness_id && req.workspace_path == previous.workspace_path;
+        let new_workspace = req.workspace_path.as_deref().filter(|_| !workspace_kept);
         let harness_owner = self
             .ensure_harness_usable(
                 caller.clone(),
                 &owner,
                 req.harness_id,
+                new_workspace,
                 req.auto_accept_permissions,
             )
             .await?;
@@ -548,6 +587,7 @@ where
                 caller.clone(),
                 &owner,
                 req.harness_id,
+                req.workspace_path.as_deref(),
                 req.auto_accept_permissions,
             )
             .await?;
@@ -598,7 +638,7 @@ where
         validate_runtime(&req.harness, req.harness_id)?;
         validate_update_agent_request(&req)?;
         reject_unknown_mcp_apps(&self.mcp_apps, &req.mcp, existing.mcp.servers()).await?;
-        self.replace_agent(caller, &current, req).await
+        self.replace_agent(caller, &current, &existing, req).await
     }
 
     async fn manageable_agent(
@@ -633,7 +673,7 @@ where
         let update = req.apply_to(&agent);
         validate_update_agent_request(&update)?;
         reject_unknown_mcp_apps(&self.mcp_apps, &update.mcp, agent.mcp.servers()).await?;
-        self.replace_agent(caller, &current, update).await
+        self.replace_agent(caller, &current, &agent, update).await
     }
 
     async fn list_agents(&self, caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {

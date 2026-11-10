@@ -17,6 +17,8 @@ fn harness(id: HarnessId, connected: bool) -> Harness {
         updated_at: "2026-10-02T00:00:00Z".parse().unwrap(),
         connected,
         last_connected_at: None,
+        workspace_path: None,
+        reported_workspaces: Vec::new(),
     }
 }
 

@@ -18,6 +18,8 @@ fn harness(connected: bool) -> Harness {
         updated_at: Utc::now(),
         connected,
         last_connected_at: None,
+        workspace_path: None,
+        reported_workspaces: Vec::new(),
     }
 }
 

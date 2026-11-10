@@ -33,6 +33,7 @@ mod trigger;
 mod tui;
 mod turns;
 mod update;
+mod workspace;
 
 use clap::Parser;
 use std::process::ExitCode;

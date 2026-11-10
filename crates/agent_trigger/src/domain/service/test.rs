@@ -71,6 +71,7 @@ fn agent_with(bot_id: BotId, owner: BotOwner, channel_scope: AgentChannelScope) 
         mcp: AgentMcpServers::OwnerConnections,
         auto_accept_permissions: None,
         is_coding: false,
+        workspace_path: None,
     }
 }
 

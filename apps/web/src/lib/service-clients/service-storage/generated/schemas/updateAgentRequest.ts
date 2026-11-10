@@ -12,6 +12,7 @@ import type { UpdateAgentRequestAvatarUrl } from './updateAgentRequestAvatarUrl'
 import type { UpdateAgentRequestDescription } from './updateAgentRequestDescription';
 import type { UpdateAgentRequestHarnessId } from './updateAgentRequestHarnessId';
 import type { UpdateAgentRequestTeamId } from './updateAgentRequestTeamId';
+import type { UpdateAgentRequestWorkspacePath } from './updateAgentRequestWorkspacePath';
 
 /**
  * Request to replace the editable configuration of a persisted AI agent.
@@ -46,4 +47,8 @@ chip into its live session (`true`) or a reply in the thread (`false`). */
   name: string;
   /** Team owner. Omit to make the agent private to the caller. */
   team_id?: UpdateAgentRequestTeamId;
+  /** The directory on `harness_id` new sessions use, one of the harness's
+reported workspaces. Omit to use the harness's workspace; forbidden
+without a harness id. */
+  workspace_path?: UpdateAgentRequestWorkspacePath;
 }

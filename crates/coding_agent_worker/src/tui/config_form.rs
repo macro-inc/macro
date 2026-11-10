@@ -35,6 +35,8 @@ pub enum Setting {
     Agent,
     /// Directory sessions run in.
     Workspace,
+    /// Directories Macro may pick session workspaces from.
+    AllowedRoots,
     /// Native model override; empty uses the installed agent's default.
     HerdrModel,
     /// Optional arguments passed to the native agent.
@@ -51,6 +53,7 @@ impl Setting {
         match self {
             Self::Agent => "Agent",
             Self::Workspace => "Workspace",
+            Self::AllowedRoots => "Allowed roots",
             Self::HerdrModel => "Model",
             Self::HerdrArguments => "Extra args",
             Self::HerdrStorage => "Storage",
@@ -69,7 +72,7 @@ impl Setting {
 
 /// Settings in keyboard navigation order. Machine-local only: the runtime's
 /// name, ownership, and permission bypass are set on the web.
-pub const SETTINGS: &[Setting] = &[Setting::Agent, Setting::Workspace];
+pub const SETTINGS: &[Setting] = &[Setting::Agent, Setting::Workspace, Setting::AllowedRoots];
 
 /// Settings relevant to the currently selected agent.
 pub fn settings(config: &Config) -> &'static [Setting] {
@@ -82,6 +85,7 @@ pub fn settings(config: &Config) -> &'static [Setting] {
         &[
             Setting::Agent,
             Setting::Workspace,
+            Setting::AllowedRoots,
             Setting::HerdrModel,
             Setting::HerdrArguments,
             Setting::HerdrStorage,
@@ -155,6 +159,10 @@ impl ConfigForm {
                 .map(str::to_owned)
                 .unwrap_or_else(|| format!("Custom ({})", config.harness.command)),
             Setting::Workspace => config.workspace.path.display().to_string(),
+            Setting::AllowedRoots => match &config.workspace.allowed_roots {
+                Some(roots) => shell_words::join(roots.iter().map(|root| root.to_string_lossy())),
+                None => "The workspace only".to_owned(),
+            },
             Setting::HerdrModel => config
                 .herdr
                 .model
@@ -180,6 +188,15 @@ impl ConfigForm {
     pub fn edit_value(&self, setting: Setting) -> String {
         match setting {
             Setting::Workspace => self.string("workspace", "path").unwrap_or_default(),
+            Setting::AllowedRoots => shell_words::join(
+                self.doc
+                    .get("workspace")
+                    .and_then(|section| section.get("allowed_roots"))
+                    .and_then(Item::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(toml_edit::Value::as_str),
+            ),
             Setting::HerdrModel => self.string("herdr", "model").unwrap_or_default(),
             Setting::HerdrStorage => self.string("herdr", "storage_path").unwrap_or_default(),
             Setting::HerdrArguments => shell_words::join(
@@ -210,6 +227,24 @@ impl ConfigForm {
                     return Err("Workspace must be an existing directory".to_owned());
                 }
                 self.set_string("workspace", "path", input);
+            }
+            Setting::AllowedRoots => {
+                let roots = shell_words::split(input).map_err(|error| error.to_string())?;
+                if roots.is_empty() {
+                    self.remove("workspace", "allowed_roots");
+                    return Ok(());
+                }
+                let mut array = toml_edit::Array::new();
+                for root in roots {
+                    let path = Path::new(&root);
+                    if !path.is_absolute() || !path.is_dir() {
+                        return Err(format!(
+                            "Allowed roots must be existing absolute directories: {root}"
+                        ));
+                    }
+                    array.push(root.as_str());
+                }
+                self.doc["workspace"].or_insert(toml_edit::table())["allowed_roots"] = value(array);
             }
             Setting::HerdrModel | Setting::HerdrStorage => {
                 let key = if setting == Setting::HerdrModel {

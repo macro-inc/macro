@@ -391,6 +391,12 @@ export const listAgentsResponseItem = zod
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
+    workspace_path: zod
+      .string()
+      .nullish()
+      .describe(
+        "The directory on the harness its new sessions use, one of the\nharness's reported workspaces. `None` uses the harness's workspace."
+      ),
   })
   .describe('A persisted user- or team-owned AI agent.');
 export const listAgentsResponse = zod.array(listAgentsResponseItem);
@@ -480,6 +486,12 @@ export const createAgentBody = zod
       .uuid()
       .nullish()
       .describe('Team owner. Omit for a private, user-owned agent.'),
+    workspace_path: zod
+      .string()
+      .nullish()
+      .describe(
+        "The directory on `harness_id` new sessions use, one of the harness's\nreported workspaces. Omit to use the harness's workspace; forbidden\nwithout a harness id."
+      ),
   })
   .describe('Request to create a persisted AI agent.');
 
@@ -572,6 +584,12 @@ export const updateAgentBody = zod
       .uuid()
       .nullish()
       .describe('Team owner. Omit to make the agent private to the caller.'),
+    workspace_path: zod
+      .string()
+      .nullish()
+      .describe(
+        "The directory on `harness_id` new sessions use, one of the harness's\nreported workspaces. Omit to use the harness's workspace; forbidden\nwithout a harness id."
+      ),
   })
   .describe(
     'Request to replace the editable configuration of a persisted AI agent.'
@@ -691,6 +709,12 @@ export const updateAgentResponse = zod
       ])
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
+      ),
+    workspace_path: zod
+      .string()
+      .nullish()
+      .describe(
+        "The directory on the harness its new sessions use, one of the\nharness's reported workspaces. `None` uses the harness's workspace."
       ),
   })
   .describe('A persisted user- or team-owned AI agent.');
@@ -916,6 +940,12 @@ export const patchAgentResponse = zod
       ])
       .describe(
         "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
+      ),
+    workspace_path: zod
+      .string()
+      .nullish()
+      .describe(
+        "The directory on the harness its new sessions use, one of the\nharness's reported workspaces. `None` uses the harness's workspace."
       ),
   })
   .describe('A persisted user- or team-owned AI agent.');
@@ -43264,7 +43294,30 @@ export const approveHarnessPairingResponse = zod
       .describe(
         'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
       ),
+    reported_workspaces: zod
+      .array(
+        zod
+          .object({
+            kind: zod
+              .enum(['allowed_root', 'repository'])
+              .describe('What a reported workspace is.'),
+            path: zod
+              .string()
+              .describe("Absolute path on the daemon's machine."),
+          })
+          .describe('A directory a daemon reports its sessions may work in.')
+      )
+      .optional()
+      .describe(
+        'The directories the daemon last reported its sessions may use. The web\npicks workspaces from this list only.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+    workspace_path: zod
+      .string()
+      .nullish()
+      .describe(
+        "The directory new sessions use when their agent names none, one of\n`reported_workspaces`. `None` uses the workspace in the machine's\n`macrod.toml`."
+      ),
   })
   .describe(
     'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
@@ -43330,7 +43383,32 @@ export const claimHarnessPairingResponse = zod
           .describe(
             'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
           ),
+        reported_workspaces: zod
+          .array(
+            zod
+              .object({
+                kind: zod
+                  .enum(['allowed_root', 'repository'])
+                  .describe('What a reported workspace is.'),
+                path: zod
+                  .string()
+                  .describe("Absolute path on the daemon's machine."),
+              })
+              .describe(
+                'A directory a daemon reports its sessions may work in.'
+              )
+          )
+          .optional()
+          .describe(
+            'The directories the daemon last reported its sessions may use. The web\npicks workspaces from this list only.'
+          ),
         updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+        workspace_path: zod
+          .string()
+          .nullish()
+          .describe(
+            "The directory new sessions use when their agent names none, one of\n`reported_workspaces`. `None` uses the workspace in the machine's\n`macrod.toml`."
+          ),
       })
       .describe(
         'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
@@ -43384,7 +43462,30 @@ export const listHarnessesResponseItem = zod
       .describe(
         'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
       ),
+    reported_workspaces: zod
+      .array(
+        zod
+          .object({
+            kind: zod
+              .enum(['allowed_root', 'repository'])
+              .describe('What a reported workspace is.'),
+            path: zod
+              .string()
+              .describe("Absolute path on the daemon's machine."),
+          })
+          .describe('A directory a daemon reports its sessions may work in.')
+      )
+      .optional()
+      .describe(
+        'The directories the daemon last reported its sessions may use. The web\npicks workspaces from this list only.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+    workspace_path: zod
+      .string()
+      .nullish()
+      .describe(
+        "The directory new sessions use when their agent names none, one of\n`reported_workspaces`. `None` uses the workspace in the machine's\n`macrod.toml`."
+      ),
   })
   .describe(
     'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
@@ -43432,7 +43533,30 @@ export const getSelfHarnessResponse = zod
       .describe(
         'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
       ),
+    reported_workspaces: zod
+      .array(
+        zod
+          .object({
+            kind: zod
+              .enum(['allowed_root', 'repository'])
+              .describe('What a reported workspace is.'),
+            path: zod
+              .string()
+              .describe("Absolute path on the daemon's machine."),
+          })
+          .describe('A directory a daemon reports its sessions may work in.')
+      )
+      .optional()
+      .describe(
+        'The directories the daemon last reported its sessions may use. The web\npicks workspaces from this list only.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+    workspace_path: zod
+      .string()
+      .nullish()
+      .describe(
+        "The directory new sessions use when their agent names none, one of\n`reported_workspaces`. `None` uses the workspace in the machine's\n`macrod.toml`."
+      ),
   })
   .describe(
     'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'
@@ -43446,6 +43570,12 @@ export const listHarnessAgentsResponseItem = zod
     bot_id: zod.string(),
     handle: zod.string().describe('Stable `@` handle.'),
     name: zod.string().describe('Display name.'),
+    workspace_path: zod
+      .string()
+      .nullish()
+      .describe(
+        "The directory this agent's new sessions use, one of the harness's\nreported workspaces. `None` uses the harness's workspace."
+      ),
   })
   .describe('An agent bound to a harness, as listed for the daemon.');
 export const listHarnessAgentsResponse = zod.array(
@@ -43476,6 +43606,33 @@ export const listHarnessSessionsResponseItem = zod
 export const listHarnessSessionsResponse = zod.array(
   listHarnessSessionsResponseItem
 );
+
+/**
+ * The daemon reports the directories its sessions may use: its allowed
+roots and the repositories under them. The web picks workspaces from this
+list only.
+ * @summary Handler for `PUT /harnesses/me/workspaces`.
+ */
+export const reportHarnessWorkspacesBody = zod
+  .object({
+    workspaces: zod
+      .array(
+        zod
+          .object({
+            kind: zod
+              .enum(['allowed_root', 'repository'])
+              .describe('What a reported workspace is.'),
+            path: zod
+              .string()
+              .describe("Absolute path on the daemon's machine."),
+          })
+          .describe('A directory a daemon reports its sessions may work in.')
+      )
+      .describe('Allowed roots first, then the repositories under them.'),
+  })
+  .describe(
+    "The directories a daemon's sessions may use, replacing its last report.\n\nThe daemon serializes this, so both derives are used."
+  );
 
 /**
  * @summary Handler for `DELETE /harnesses/{harness_id}`.
@@ -43522,6 +43679,28 @@ export const patchHarnessBody = zod
           .describe('Who a harness should belong to after a change.'),
       ])
       .optional(),
+    workspace: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                type: zod.enum(['local']),
+              })
+              .describe("The workspace in the machine's `macrod.toml`."),
+            zod
+              .object({
+                path: zod.string().describe('The reported directory.'),
+                type: zod.enum(['path']),
+              })
+              .describe('One of the directories the daemon reported.'),
+          ])
+          .describe(
+            "Which directory a harness's sessions use when their agent names none."
+          ),
+      ])
+      .optional(),
   })
   .describe(
     'Request to change a registered harness. Omitted fields stay as they are.'
@@ -43565,7 +43744,30 @@ export const patchHarnessResponse = zod
       .describe(
         'Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses.'
       ),
+    reported_workspaces: zod
+      .array(
+        zod
+          .object({
+            kind: zod
+              .enum(['allowed_root', 'repository'])
+              .describe('What a reported workspace is.'),
+            path: zod
+              .string()
+              .describe("Absolute path on the daemon's machine."),
+          })
+          .describe('A directory a daemon reports its sessions may work in.')
+      )
+      .optional()
+      .describe(
+        'The directories the daemon last reported its sessions may use. The web\npicks workspaces from this list only.'
+      ),
     updated_at: zod.iso.datetime({}).describe('Update timestamp.'),
+    workspace_path: zod
+      .string()
+      .nullish()
+      .describe(
+        "The directory new sessions use when their agent names none, one of\n`reported_workspaces`. `None` uses the workspace in the machine's\n`macrod.toml`."
+      ),
   })
   .describe(
     'A registered user-run harness.\n\nClients deserialize this, so both derives are used.'

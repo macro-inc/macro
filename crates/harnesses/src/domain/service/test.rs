@@ -5,7 +5,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
 use crate::domain::{
-    models::PairingClaimFacts,
+    models::{PairingClaimFacts, ReportedWorkspaceKind},
     ports::{OpenPairingCounts, PairingRow},
 };
 
@@ -33,6 +33,8 @@ fn harness(owner: HarnessOwner) -> Harness {
         updated_at: Utc::now(),
         connected: false,
         last_connected_at: None,
+        workspace_path: None,
+        reported_workspaces: Vec::new(),
     }
 }
 
@@ -58,6 +60,7 @@ struct Calls {
     updated: Vec<(HarnessId, HarnessChanges)>,
     owner_checks: Vec<HarnessOwner>,
     team_lookups: Vec<(String, Uuid)>,
+    reported: Vec<(HarnessId, Vec<ReportedWorkspace>)>,
 }
 
 #[derive(Clone, Default)]
@@ -171,8 +174,26 @@ impl HarnessRepo for FakeRepo {
                 .allow_permission_bypass
                 .unwrap_or(harness.allow_permission_bypass),
             owner: changes.owner.unwrap_or(harness.owner),
+            workspace_path: match changes.workspace {
+                Some(RequestedHarnessWorkspace::Path { path }) => Some(path),
+                Some(RequestedHarnessWorkspace::Local) => None,
+                None => harness.workspace_path.clone(),
+            },
             ..harness
         }))
+    }
+
+    async fn replace_reported_workspaces(
+        &self,
+        harness_id: HarnessId,
+        workspaces: Vec<ReportedWorkspace>,
+    ) -> Result<bool, Self::Err> {
+        self.calls
+            .lock()
+            .unwrap()
+            .reported
+            .push((harness_id, workspaces));
+        Ok(self.harness.is_some())
     }
 
     async fn delete_harness(&self, harness_id: HarnessId) -> Result<bool, Self::Err> {
@@ -660,6 +681,7 @@ async fn a_manager_changes_bypass_and_name_on_the_web() {
                 name: Some("  studio  ".to_owned()),
                 allow_permission_bypass: Some(true),
                 owner: None,
+                workspace: None,
             },
         )
         .await
@@ -675,6 +697,7 @@ async fn a_manager_changes_bypass_and_name_on_the_web() {
                 name: Some("studio".to_owned()),
                 allow_permission_bypass: Some(true),
                 owner: None,
+                workspace: None,
             }
         )]
     );
@@ -717,6 +740,7 @@ async fn a_patch_rejects_a_blank_name() {
                 name: Some("   ".to_owned()),
                 allow_permission_bypass: None,
                 owner: None,
+                workspace: None,
             },
         )
         .await;
@@ -750,6 +774,7 @@ async fn only_a_harness_manager_may_patch() {
                     name: None,
                     allow_permission_bypass: Some(true),
                     owner: None,
+                    workspace: None,
                 },
             )
             .await;
@@ -773,6 +798,7 @@ async fn only_a_harness_manager_may_patch() {
                 name: None,
                 allow_permission_bypass: Some(false),
                 owner: None,
+                workspace: None,
             },
         )
         .await;
@@ -1008,5 +1034,241 @@ async fn requesting_the_current_owner_writes_nothing() {
         .await
         .unwrap();
 
+    assert!(repo.calls.lock().unwrap().updated.is_empty());
+}
+
+fn reported(path: &str, kind: ReportedWorkspaceKind) -> ReportedWorkspace {
+    ReportedWorkspace {
+        path: path.to_owned(),
+        kind,
+    }
+}
+
+fn harness_with_reported_workspaces() -> Harness {
+    Harness {
+        reported_workspaces: vec![
+            reported("/home/owner/code", ReportedWorkspaceKind::AllowedRoot),
+            reported("/home/owner/code/macro", ReportedWorkspaceKind::Repository),
+        ],
+        ..harness(HarnessOwner::User {
+            user_id: OWNER_ID.to_owned(),
+        })
+    }
+}
+
+#[tokio::test]
+async fn a_daemon_report_replaces_its_workspaces_without_duplicates() {
+    let repo = FakeRepo {
+        harness: Some(harness_with_reported_workspaces()),
+        ..FakeRepo::default()
+    };
+
+    service(repo.clone())
+        .report_workspaces(
+            HarnessId::TEST_A,
+            ReportWorkspacesRequest {
+                workspaces: vec![
+                    reported("/srv/work", ReportedWorkspaceKind::AllowedRoot),
+                    reported("/srv/work/api", ReportedWorkspaceKind::Repository),
+                    reported("/srv/work", ReportedWorkspaceKind::Repository),
+                ],
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.calls.lock().unwrap().reported,
+        [(
+            HarnessId::TEST_A,
+            vec![
+                reported("/srv/work", ReportedWorkspaceKind::AllowedRoot),
+                reported("/srv/work/api", ReportedWorkspaceKind::Repository),
+            ]
+        )]
+    );
+}
+
+#[tokio::test]
+async fn a_daemon_report_refuses_empty_paths_and_oversized_lists() {
+    let repo = FakeRepo {
+        harness: Some(harness_with_reported_workspaces()),
+        ..FakeRepo::default()
+    };
+
+    let empty_path = service(repo.clone())
+        .report_workspaces(
+            HarnessId::TEST_A,
+            ReportWorkspacesRequest {
+                workspaces: vec![reported("", ReportedWorkspaceKind::AllowedRoot)],
+            },
+        )
+        .await;
+    let too_many = service(repo.clone())
+        .report_workspaces(
+            HarnessId::TEST_A,
+            ReportWorkspacesRequest {
+                workspaces: (0..=MAX_REPORTED_WORKSPACES)
+                    .map(|index| {
+                        reported(
+                            &format!("/srv/work/{index}"),
+                            ReportedWorkspaceKind::Repository,
+                        )
+                    })
+                    .collect(),
+            },
+        )
+        .await;
+
+    assert!(matches!(empty_path, Err(HarnessError::BadRequest(_))));
+    assert!(matches!(too_many, Err(HarnessError::BadRequest(_))));
+    assert!(repo.calls.lock().unwrap().reported.is_empty());
+}
+
+#[tokio::test]
+async fn a_report_for_a_removed_harness_is_not_found() {
+    let result = service(FakeRepo::default())
+        .report_workspaces(
+            HarnessId::TEST_A,
+            ReportWorkspacesRequest {
+                workspaces: vec![reported("/srv/work", ReportedWorkspaceKind::AllowedRoot)],
+            },
+        )
+        .await;
+
+    assert!(matches!(result, Err(HarnessError::NotFound(_))));
+}
+
+#[tokio::test]
+async fn a_manager_picks_a_reported_workspace_for_the_runtime() {
+    let repo = FakeRepo {
+        harness: Some(harness_with_reported_workspaces()),
+        ..FakeRepo::default()
+    };
+
+    let updated = service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                workspace: Some(RequestedHarnessWorkspace::Path {
+                    path: "/home/owner/code/macro".to_owned(),
+                }),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        updated.workspace_path.as_deref(),
+        Some("/home/owner/code/macro")
+    );
+    assert_eq!(
+        repo.calls.lock().unwrap().updated,
+        [(
+            HarnessId::TEST_A,
+            HarnessChanges {
+                workspace: Some(RequestedHarnessWorkspace::Path {
+                    path: "/home/owner/code/macro".to_owned(),
+                }),
+                ..HarnessChanges::default()
+            }
+        )]
+    );
+}
+
+#[tokio::test]
+async fn a_runtime_workspace_must_be_one_the_daemon_reported() {
+    let repo = FakeRepo {
+        harness: Some(harness_with_reported_workspaces()),
+        ..FakeRepo::default()
+    };
+
+    for path in [
+        "/etc",
+        "/home/owner/code/../../../etc",
+        "/home/owner/code/macro/",
+    ] {
+        let result = service(repo.clone())
+            .patch_harness(
+                caller(OWNER_ID),
+                HarnessId::TEST_A,
+                PatchHarnessRequest {
+                    workspace: Some(RequestedHarnessWorkspace::Path {
+                        path: path.to_owned(),
+                    }),
+                    ..PatchHarnessRequest::default()
+                },
+            )
+            .await;
+
+        assert!(matches!(result, Err(HarnessError::BadRequest(_))), "{path}");
+    }
+    assert!(repo.calls.lock().unwrap().updated.is_empty());
+}
+
+#[tokio::test]
+async fn going_back_to_the_local_workspace_writes_only_when_one_is_set() {
+    let repo = FakeRepo {
+        harness: Some(harness_with_reported_workspaces()),
+        ..FakeRepo::default()
+    };
+    service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                workspace: Some(RequestedHarnessWorkspace::Local),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert!(repo.calls.lock().unwrap().updated.is_empty());
+
+    let repo = FakeRepo {
+        harness: Some(Harness {
+            workspace_path: Some("/home/owner/code/macro".to_owned()),
+            ..harness_with_reported_workspaces()
+        }),
+        ..FakeRepo::default()
+    };
+    let updated = service(repo.clone())
+        .patch_harness(
+            caller(OWNER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                workspace: Some(RequestedHarnessWorkspace::Local),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(updated.workspace_path, None);
+    assert_eq!(repo.calls.lock().unwrap().updated.len(), 1);
+}
+
+#[tokio::test]
+async fn only_a_manager_may_change_the_runtime_workspace() {
+    let repo = FakeRepo {
+        harness: Some(harness_with_reported_workspaces()),
+        ..FakeRepo::default()
+    };
+
+    let result = service(repo.clone())
+        .patch_harness(
+            caller(MEMBER_ID),
+            HarnessId::TEST_A,
+            PatchHarnessRequest {
+                workspace: Some(RequestedHarnessWorkspace::Path {
+                    path: "/home/owner/code".to_owned(),
+                }),
+                ..PatchHarnessRequest::default()
+            },
+        )
+        .await;
+
+    assert!(matches!(result, Err(HarnessError::Unauthorized)));
     assert!(repo.calls.lock().unwrap().updated.is_empty());
 }

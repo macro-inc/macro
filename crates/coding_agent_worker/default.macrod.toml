@@ -14,3 +14,5 @@ args = ["acp"]
 
 [workspace]
 path = "."
+# Directories Macro may pick session workspaces from; omit to allow `path` alone.
+# allowed_roots = ["/absolute/directory"]

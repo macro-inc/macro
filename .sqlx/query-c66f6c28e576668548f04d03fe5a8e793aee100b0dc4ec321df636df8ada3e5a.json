@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO agent_configs (\n                bot_id, instructions, harness, harness_id, default_model, channel_scope, mcp_scope, auto_accept_permissions, is_coding, workspace_path\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c66f6c28e576668548f04d03fe5a8e793aee100b0dc4ec321df636df8ada3e5a"
+}

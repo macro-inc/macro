@@ -20104,6 +20104,69 @@
         }
       }
     },
+    "/harnesses/me/workspaces": {
+      "put": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `PUT /harnesses/me/workspaces`.",
+        "description": "The daemon reports the directories its sessions may use: its allowed\nroots and the repositories under them. The web picks workspaces from this\nlist only.",
+        "operationId": "report_harness_workspaces",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportWorkspacesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/harnesses/{harness_id}": {
       "delete": {
         "tags": ["harnesses"],
@@ -25706,6 +25769,10 @@
           "mcp": {
             "$ref": "#/components/schemas/AgentMcpServers",
             "description": "Which MCP servers sessions of this agent are handed."
+          },
+          "workspace_path": {
+            "type": ["string", "null"],
+            "description": "The directory on the harness its new sessions use, one of the\nharness's reported workspaces. `None` uses the harness's workspace."
           }
         }
       },
@@ -32520,6 +32587,10 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Team owner. Omit for a private, user-owned agent."
+          },
+          "workspace_path": {
+            "type": ["string", "null"],
+            "description": "The directory on `harness_id` new sessions use, one of the harness's\nreported workspaces. Omit to use the harness's workspace; forbidden\nwithout a harness id."
           }
         }
       },
@@ -44534,10 +44605,21 @@
             "$ref": "#/components/schemas/HarnessOwner",
             "description": "Owner."
           },
+          "reported_workspaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportedWorkspace"
+            },
+            "description": "The directories the daemon last reported its sessions may use. The web\npicks workspaces from this list only."
+          },
           "updated_at": {
             "type": "string",
             "format": "date-time",
             "description": "Update timestamp."
+          },
+          "workspace_path": {
+            "type": ["string", "null"],
+            "description": "The directory new sessions use when their agent names none, one of\n`reported_workspaces`. `None` uses the workspace in the machine's\n`macrod.toml`."
           }
         }
       },
@@ -44557,6 +44639,10 @@
           "name": {
             "type": "string",
             "description": "Display name."
+          },
+          "workspace_path": {
+            "type": ["string", "null"],
+            "description": "The directory this agent's new sessions use, one of the harness's\nreported workspaces. `None` uses the harness's workspace."
           }
         }
       },
@@ -48766,6 +48852,17 @@
                 "description": "New owner. Refused while it would leave agents bound to this harness\nthat their owners could no longer run on it."
               }
             ]
+          },
+          "workspace": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RequestedHarnessWorkspace",
+                "description": "New workspace for sessions whose agent names none, one of the\ndaemon's reported workspaces. New sessions use it; running sessions\nkeep theirs."
+              }
+            ]
           }
         }
       },
@@ -51124,6 +51221,40 @@
           }
         }
       },
+      "ReportWorkspacesRequest": {
+        "type": "object",
+        "description": "The directories a daemon's sessions may use, replacing its last report.\n\nThe daemon serializes this, so both derives are used.",
+        "required": ["workspaces"],
+        "properties": {
+          "workspaces": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportedWorkspace"
+            },
+            "description": "Allowed roots first, then the repositories under them."
+          }
+        }
+      },
+      "ReportedWorkspace": {
+        "type": "object",
+        "description": "A directory a daemon reports its sessions may work in.",
+        "required": ["path", "kind"],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ReportedWorkspaceKind",
+            "description": "What the directory is."
+          },
+          "path": {
+            "type": "string",
+            "description": "Absolute path on the daemon's machine."
+          }
+        }
+      },
+      "ReportedWorkspaceKind": {
+        "type": "string",
+        "description": "What a reported workspace is.",
+        "enum": ["allowed_root", "repository"]
+      },
       "RequestAccess": {
         "type": "object",
         "description": "Requester submission; an existing pending request requires its revision.",
@@ -51191,6 +51322,37 @@
           }
         ],
         "description": "Who a harness should belong to after a change."
+      },
+      "RequestedHarnessWorkspace": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The workspace in the machine's `macrod.toml`.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["local"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "One of the directories the daemon reported.",
+            "required": ["path", "type"],
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "The reported directory."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["path"]
+              }
+            }
+          }
+        ],
+        "description": "Which directory a harness's sessions use when their agent names none."
       },
       "RequestedLayout": {
         "oneOf": [
@@ -58796,6 +58958,10 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Team owner. Omit to make the agent private to the caller."
+          },
+          "workspace_path": {
+            "type": ["string", "null"],
+            "description": "The directory on `harness_id` new sessions use, one of the harness's\nreported workspaces. Omit to use the harness's workspace; forbidden\nwithout a harness id."
           }
         }
       },

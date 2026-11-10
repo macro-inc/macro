@@ -31,6 +31,11 @@ args = ["acp"]
 path = "/workspace"
 # Informational: having the repo cloned at `path` is the operator's job.
 repo_url = "https://github.com/macro-inc/macro"
+# Optional: the directories sessions may work in. macrod reports these and the
+# repositories directly under them to Macro, where a runtime's workspace and
+# each agent's are picked; it refuses any other directory, `..` and symlinks
+# resolved. Omit to allow `path` alone.
+# allowed_roots = ["/workspace", "/home/me/code"]
 
 # Optional defaults for the one native Herdr configuration (also editable in the TUI).
 # [herdr]

@@ -101,7 +101,7 @@ pub(crate) fn render_quickstart(
     }
 
     frame.render_widget(
-        Paragraph::new("Name, access, and permissions are set on the web.")
+        Paragraph::new("Name, access, and workspaces are set on the web.")
             .style(Style::new().fg(DIM)),
         Rect {
             x: web_note_area.x + 16,

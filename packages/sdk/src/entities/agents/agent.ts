@@ -43,6 +43,7 @@ export type AgentOptions = Omit<
   | 'channel_ids'
   | 'team_id'
   | 'harness_id'
+  | 'workspace_path'
   | 'auto_accept_permissions'
   | 'avatar_url'
   | 'channel_scope'
@@ -55,6 +56,11 @@ export type AgentOptions = Omit<
   team?: Team;
   /** Host running the agent. */
   host?: Harness;
+  /**
+   * Directory on `host` new sessions use, one of its reported workspaces.
+   * Omit to use the host's workspace.
+   */
+  workspacePath?: string;
   /** Whether tool permissions are automatically accepted. */
   autoAcceptPermissions?: boolean;
   /** Avatar URL. */
@@ -170,6 +176,12 @@ export class Agent extends MacroEntity<AgentRecord> {
     id ? Harness.byId(this.client, id) : undefined,
   );
 
+  /** Directory on the host new sessions use; `undefined` uses the host's. */
+  readonly workspacePath = this.mappedField(
+    'workspace_path',
+    (path) => path ?? undefined,
+  );
+
   /**
    * Change only the settings in `patch`; every setting left out keeps its
    * current value. Instructions, channel and app lists are replaced whole:
@@ -261,6 +273,7 @@ export function agentBody(options: AgentOptions): CreateAgentRequest {
     channels,
     team,
     host,
+    workspacePath,
     autoAcceptPermissions,
     avatarUrl,
     channelScope,
@@ -273,6 +286,7 @@ export function agentBody(options: AgentOptions): CreateAgentRequest {
     channel_ids: channels?.map((c) => c.id),
     team_id: team?.id,
     harness_id: host?.id,
+    workspace_path: workspacePath,
     auto_accept_permissions: autoAcceptPermissions,
     avatar_url: avatarUrl,
     channel_scope: channelScope,

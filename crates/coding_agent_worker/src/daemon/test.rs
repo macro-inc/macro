@@ -61,9 +61,40 @@ async fn startup_without_agents_serves_model_probes_and_stop_closes_the_runtime(
         harness_id: harness_id::HarnessId::TEST_A,
         token: "mhns_test".to_owned(),
     };
+    let workspace = config
+        .workspace
+        .path
+        .canonicalize()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_owned();
     let storage_task = tokio::spawn(async move {
+        // The daemon reports its allowed roots before it serves.
         let (mut socket, _) = storage.accept().await.unwrap();
-        let mut request = [0; 4096];
+        let mut request = [0; 65536];
+        let mut report = String::new();
+        // Headers and body may arrive in separate reads; the body ends the JSON.
+        while !report.ends_with("]}") {
+            let read = socket.read(&mut request).await.unwrap();
+            assert!(read > 0, "the report ended early: {report}");
+            report.push_str(&String::from_utf8_lossy(&request[..read]));
+        }
+        assert!(
+            report.starts_with("PUT /harnesses/me/workspaces "),
+            "{report}"
+        );
+        assert!(
+            report.contains(&format!(r#""path":{workspace:?},"kind":"allowed_root""#)),
+            "{report}"
+        );
+        socket
+            .write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n")
+            .await
+            .unwrap();
+        drop(socket);
+
+        let (mut socket, _) = storage.accept().await.unwrap();
         let read = socket.read(&mut request).await.unwrap();
         assert!(String::from_utf8_lossy(&request[..read]).contains("/harnesses/me/agents"));
         socket.write_all(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 2\r\nConnection: close\r\n\r\n[]").await.unwrap();

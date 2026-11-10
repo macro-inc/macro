@@ -8,13 +8,14 @@ use chrono::{DateTime, Utc};
 use harness_id::HarnessId;
 use harness_token::HashedHarnessToken;
 use macro_user_id::user_id::MacroUserIdStr;
-use sqlx::PgPool;
+use sqlx::{PgPool, types::Json};
 use uuid::Uuid;
 
 use crate::domain::{
     models::{
         BoundHarnessAgent, Harness, HarnessAgent, HarnessAgentOwner, HarnessOwner, HarnessSession,
-        PairingClaimFacts, PairingDetails, PairingStatus,
+        PairingClaimFacts, PairingDetails, PairingStatus, ReportedWorkspace,
+        RequestedHarnessWorkspace,
     },
     ports::{
         BoundAgentFacts, HarnessChanges, HarnessRepo, HarnessUpdate, NewHarness, NewPairing,
@@ -50,6 +51,8 @@ struct HarnessRow {
     last_disconnected_at: Option<DateTime<Utc>>,
     has_live_connection: bool,
     has_connection_record: bool,
+    workspace_path: Option<String>,
+    reported_workspaces: Json<Vec<ReportedWorkspace>>,
 }
 
 impl HarnessRow {
@@ -95,6 +98,8 @@ impl TryFrom<HarnessRow> for Harness {
             updated_at: row.updated_at,
             connected,
             last_connected_at: row.last_connected_at,
+            workspace_path: row.workspace_path,
+            reported_workspaces: row.reported_workspaces.0,
         })
     }
 }
@@ -174,7 +179,8 @@ async fn fetch_harness(
         r#"
         SELECT
             id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
-            created_at, updated_at, last_connected_at, last_disconnected_at,
+            created_at, updated_at, last_connected_at, last_disconnected_at, workspace_path,
+            reported_workspaces AS "reported_workspaces: Json<Vec<ReportedWorkspace>>",
                 EXISTS (
                     SELECT 1 FROM harness_runtime_connection c
                     WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()
@@ -423,7 +429,8 @@ impl HarnessRepo for PgHarnessRepo {
             r#"
             SELECT
                 id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
-                created_at, updated_at, last_connected_at, last_disconnected_at,
+                created_at, updated_at, last_connected_at, last_disconnected_at, workspace_path,
+                reported_workspaces AS "reported_workspaces: Json<Vec<ReportedWorkspace>>",
                 EXISTS (
                     SELECT 1 FROM harness_runtime_connection c
                     WHERE c.harness_id = harnesses.id AND c.lease_expires_at > now()
@@ -498,6 +505,10 @@ impl HarnessRepo for PgHarnessRepo {
             }
             None => (checked_user_id, checked_team_id),
         };
+        let workspace_path = match &changes.workspace {
+            Some(RequestedHarnessWorkspace::Path { path }) => Some(path.as_str()),
+            Some(RequestedHarnessWorkspace::Local) | None => None,
+        };
 
         sqlx::query!(
             r#"
@@ -507,6 +518,7 @@ impl HarnessRepo for PgHarnessRepo {
                 allow_permission_bypass = COALESCE($3, allow_permission_bypass),
                 owner_user_id = $4,
                 team_id = $5,
+                workspace_path = CASE WHEN $6 THEN $7 ELSE workspace_path END,
                 updated_at = now()
             WHERE id = $1
             "#,
@@ -515,6 +527,8 @@ impl HarnessRepo for PgHarnessRepo {
             changes.allow_permission_bypass,
             owner_user_id,
             team_id,
+            changes.workspace.is_some(),
+            workspace_path,
         )
         .execute(&mut *tx)
         .await
@@ -525,6 +539,26 @@ impl HarnessRepo for PgHarnessRepo {
             .context("updated harness row missing")?;
         tx.commit().await.context("failed to commit")?;
         Ok(HarnessUpdate::Updated(updated))
+    }
+
+    async fn replace_reported_workspaces(
+        &self,
+        harness_id: HarnessId,
+        workspaces: Vec<ReportedWorkspace>,
+    ) -> Result<bool, Self::Err> {
+        let replaced = sqlx::query!(
+            r#"
+            UPDATE harnesses
+            SET reported_workspaces = $2
+            WHERE id = $1 AND deleted_at IS NULL
+            "#,
+            harness_id.as_uuid(),
+            Json(workspaces) as _,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to record reported workspaces")?;
+        Ok(replaced.rows_affected() == 1)
     }
 
     async fn delete_harness(&self, harness_id: HarnessId) -> Result<bool, Self::Err> {
@@ -610,7 +644,7 @@ impl HarnessRepo for PgHarnessRepo {
     ) -> Result<Vec<HarnessAgent>, Self::Err> {
         let rows = sqlx::query!(
             r#"
-            SELECT b.id, b.name, b.handle
+            SELECT b.id, b.name, b.handle, ac.workspace_path
             FROM agent_configs ac
             JOIN bots b ON b.id = ac.bot_id
             WHERE ac.harness_id = $1
@@ -630,6 +664,7 @@ impl HarnessRepo for PgHarnessRepo {
                 bot_id: bot_id::BotId::new_from_uuid(row.id),
                 name: row.name,
                 handle: row.handle,
+                workspace_path: row.workspace_path,
             })
             .collect())
     }

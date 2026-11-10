@@ -13,6 +13,7 @@ use super::{
         ApprovePairingRequest, BoundHarnessAgent, ClaimOutcome, ClaimPairingRequest,
         CreatePairingRequest, CreatedPairing, Harness, HarnessAgent, HarnessOwner, HarnessSession,
         PairingClaimFacts, PairingDetails, PairingStatus, PatchHarnessRequest,
+        ReportWorkspacesRequest, ReportedWorkspace, RequestedHarnessWorkspace,
     },
     service::ManagedHarness,
 };
@@ -43,6 +44,8 @@ pub struct HarnessChanges {
     pub allow_permission_bypass: Option<bool>,
     /// New owner, already resolved for the caller and checked for membership.
     pub owner: Option<HarnessOwner>,
+    /// New workspace, already checked against the reported workspaces.
+    pub workspace: Option<RequestedHarnessWorkspace>,
 }
 
 /// An active agent bound to a harness, as an owner change judges it.
@@ -178,6 +181,14 @@ pub trait HarnessRepo: Send + Sync + 'static {
         changes: HarnessChanges,
     ) -> impl Future<Output = Result<HarnessUpdate, Self::Err>> + Send;
 
+    /// Replace the workspaces a harness last reported. Returns `false` when
+    /// the harness no longer exists.
+    fn replace_reported_workspaces(
+        &self,
+        harness_id: HarnessId,
+        workspaces: Vec<ReportedWorkspace>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Soft-delete a harness and revoke its tokens.
     fn delete_harness(
         &self,
@@ -288,6 +299,13 @@ pub trait HarnessService: Send + Sync + 'static {
         &self,
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Vec<HarnessSession>, HarnessError>> + Send;
+
+    /// Record the workspaces the authenticated harness's sessions may use.
+    fn report_workspaces(
+        &self,
+        harness_id: HarnessId,
+        req: ReportWorkspacesRequest,
+    ) -> impl Future<Output = Result<(), HarnessError>> + Send;
 }
 
 /// Harness service error.

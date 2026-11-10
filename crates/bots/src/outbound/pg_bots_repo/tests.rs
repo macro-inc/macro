@@ -21,6 +21,7 @@ use std::sync::{Arc, Mutex};
 
 mod agent_dm;
 mod agent_enabled;
+mod agent_workspace;
 
 const USER_OWNER: &str = "macro|bot-owner@example.com";
 const USER_OTHER: &str = "macro|bot-other@example.com";
@@ -89,6 +90,7 @@ fn create_agent_req(handle: &str, channel_scope: AgentChannelScope) -> CreateAge
         mcp: AgentMcpServers::OwnerConnections,
         auto_accept_permissions: None,
         is_coding: true,
+        workspace_path: None,
     }
 }
 
@@ -108,6 +110,7 @@ fn update_agent_req(handle: &str, channel_scope: AgentChannelScope) -> UpdateAge
         mcp: AgentMcpServers::OwnerConnections,
         auto_accept_permissions: Some(false),
         is_coding: false,
+        workspace_path: None,
     }
 }
 
@@ -2209,6 +2212,14 @@ async fn deleting_a_harness_leaves_its_agents_unbound_and_patchable(
         )
         .await?;
 
+    // A workspace names a directory on the harness's machine.
+    sqlx::query!(
+        "UPDATE agent_configs SET workspace_path = '/home/member/code' WHERE bot_id = $1",
+        agent.bot.id.as_uuid(),
+    )
+    .execute(&pool)
+    .await?;
+
     // The harnesses service deletes a harness by stamping `deleted_at`.
     sqlx::query!(
         "UPDATE harnesses SET deleted_at = now() WHERE id = $1",
@@ -2223,6 +2234,7 @@ async fn deleting_a_harness_leaves_its_agents_unbound_and_patchable(
         .expect("agent outlives its harness");
     assert_eq!(unbound.harness, "macrod");
     assert_eq!(unbound.harness_id, None);
+    assert_eq!(unbound.workspace_path, None);
 
     // Settings other than the runtime stay editable while it is unbound.
     let patched = service
