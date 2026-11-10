@@ -193,7 +193,6 @@ async fn registered_routes_reject_detached_fleet_without_side_effects() {
                 "/team/computers/offers".to_owned(),
                 String::new(),
             ),
-            (Method::GET, "/team/computers".to_owned(), String::new()),
             (Method::GET, format!("/team/computers/{id}"), String::new()),
             (
                 Method::GET,
@@ -350,4 +349,54 @@ async fn registered_routes_preserve_rollout_and_internal_authentication_denials(
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
     assert_no_http_work(&service);
+}
+
+#[tokio::test]
+async fn listing_answers_with_the_teams_rows_while_the_fleet_is_detached() {
+    // A team that never bought a computer, and one with a computer.
+    let (with_computer, id) = detached_router_service(false, false).await;
+    let without = std::sync::Arc::new(
+        crate::domain::service::ComputerService::new(
+            crate::domain::fakes::FakeRepo::default(),
+            crate::domain::service::test::FakeBilling::default(),
+            crate::domain::fakes::FixedClock,
+            crate::domain::ports::StaticFleetAttachment(
+                crate::domain::models::FleetAttachment::Detached,
+            ),
+        )
+        .with_comp_policy(crate::domain::service::test::availability::RouterCompPolicy(false)),
+    );
+    for (service, expected) in [(without, vec![]), (with_computer, vec![id.to_string()])] {
+        let state = ComputerRouterState {
+            service,
+            entity_access_service: Arc::new(TeamAccess),
+            authorization_state: MacroAuthorizationState::new(Arc::new(Authorization)),
+        };
+        let router: Router = team_router(state);
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .method(Method::GET)
+                    .uri("/team/computers")
+                    .header("authorization", "Bearer test-user")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: serde_json::Value = serde_json::from_slice(
+            &axum::body::to_bytes(response.into_body(), 65536)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let ids: Vec<String> = body
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|computer| computer["id"].as_str().unwrap().to_owned())
+            .collect();
+        assert_eq!(ids, expected);
+    }
 }

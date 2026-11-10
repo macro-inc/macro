@@ -407,10 +407,11 @@ impl<
         self.status_of(&record).await
     }
 
-    /// The team's computers, oldest first.
+    /// The team's computers, oldest first. Not gated on an attached fleet:
+    /// every team member's Settings lists them, and a team without any must
+    /// see an empty list rather than an outage.
     #[tracing::instrument(skip(self), err)]
     pub async fn list(&self, team_id: Uuid) -> Result<Vec<ComputerStatus>, ComputerError> {
-        self.require_attached().await?;
         let computers = self.repo.list_for_team(team_id).await.map_err(internal)?;
         let ids: Vec<ComputerId> = computers.iter().map(ComputerRecord::id).collect();
         let counts = self.repo.agent_counts(&ids).await.map_err(internal)?;

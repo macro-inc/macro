@@ -69,12 +69,14 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   is `Attached` or `Detached` with no default; `FleetUnavailable` displays
   "computers are not available" and maps to HTTP 503 with `{message}`.
   Gate purchase, purchase_for_team (including comps), quote, quote_for_team,
-  offers, list, status, set_power, retry, cancel, undo_cancel, release_now and
+  offers, status, set_power, retry, cancel, undo_cancel, release_now and
   notify_me before reads, billing or writes; preserve existing rollout denial
   first. Internal purchase/quote/status authenticate through `InternalOnly`
   before entering the same gate. Missing rows on a detached fleet return 503.
   Do not gate catalog(), size_spec(), reconcile_billed_counts,
-  run_billing_effects or operator methods. PostgreSQL reports attached iff any
+  run_billing_effects, operator methods or `list`: every team member's
+  Settings and Billing list the team's computers, so a detached fleet still
+  answers 200 with its rows (empty for a team without computers). PostgreSQL reports attached iff any
   host heartbeat is newer than `now - HOST_HEARTBEAT_FRESHNESS` (five minutes).
   Registration refreshes the heartbeat; every reconcile pass calls
   `heartbeat_host(host, now)` without changing capacity or startup timers.
@@ -102,10 +104,9 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   `ComputerStatus` exposes `vcpus`, `memoryGib`, `diskGib`, `catalogEntry`.
   Read configured offers without billing through `ComputerService::catalog()`
   and `size_spec(size)`; omitted sizes return `ComputerError::BadRequest`.
-  Apply forward migrations over the unchanged historical files. Legacy rows
-  receive original resource snapshots and `size@legacy-2026-11` catalog IDs;
-  their NULL Stripe prices require an explicit historical backfill before billing
-  operations resume. Comped rows keep NULL prices.
+  The schema is one migration (`*_macro_computers.sql`, plus the concurrent
+  harness index); a Stripe computer always has a price and a comped one never
+  does (`hosted_runtime_price_provenance_check`).
   Purchaser deletion is RESTRICTed to retain enrollment/billing attribution until
   the computer or team is deleted; harness deletion clears its reference, and
   user deletion cascades waitlist requests.
