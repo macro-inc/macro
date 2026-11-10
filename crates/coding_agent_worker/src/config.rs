@@ -8,6 +8,10 @@
 //! web at Settings → Runtimes, not here. Pairing (press `p` in the
 //! control panel) adds the harness credential to this file. Treat it as
 //! sensitive because that credential is a bearer token.
+//!
+//! Settings older releases wrote and macrod no longer reads are ignored when
+//! loading and taken out of the file, with a backup, when a macrod starts on
+//! it ([`migrate`]).
 
 use harness_id::HarnessId;
 use serde::{Deserialize, Serialize};
@@ -207,18 +211,6 @@ pub enum ConfigError {
         #[source]
         source: std::io::Error,
     },
-    /// The file sets something that is configured on the web now.
-    #[error(
-        "{path} sets {key}, which macrod no longer reads: a runtime's name, access, and \
-         permission bypass are set in Macro at Settings → Runtimes. Delete {key} \
-         from the file."
-    )]
-    WebSetting {
-        /// The path that failed.
-        path: PathBuf,
-        /// The key to delete, e.g. `[identity]`.
-        key: &'static str,
-    },
     /// The file is not a valid daemon config.
     #[error("invalid config at {path}")]
     Parse {
@@ -231,38 +223,195 @@ pub enum ConfigError {
 }
 
 impl Config {
-    /// Load and parse the config at `path`.
+    /// Load and parse the config at `path`. Settings older releases wrote
+    /// that macrod no longer reads ([`RETIRED_SETTINGS`]) are ignored here;
+    /// [`migrate`] takes them out of the file.
     pub fn load(path: &Path) -> Result<Self, ConfigError> {
         let raw = std::fs::read_to_string(path).map_err(|source| ConfigError::Io {
             path: path.to_owned(),
             source,
         })?;
-        let parse = |source| ConfigError::Parse {
+        Self::parse(&raw).map_err(|source| ConfigError::Parse {
             path: path.to_owned(),
             source,
-        };
-        let table: toml::Table = toml::from_str(&raw).map_err(parse)?;
-        if let Some(key) = web_setting_in(&table) {
-            return Err(ConfigError::WebSetting {
-                path: path.to_owned(),
-                key,
-            });
+        })
+    }
+
+    /// Parse config text the way [`Config::load`] does, so a file that has
+    /// not been migrated yet can still be edited and saved.
+    pub fn parse(raw: &str) -> Result<Self, toml::de::Error> {
+        let mut table: toml::Table = toml::from_str(raw)?;
+        for setting in &RETIRED_SETTINGS {
+            match setting.key {
+                None => {
+                    table.remove(setting.table);
+                }
+                Some(key) => {
+                    if let Some(section) = table
+                        .get_mut(setting.table)
+                        .and_then(toml::Value::as_table_mut)
+                    {
+                        section.remove(key);
+                    }
+                }
+            }
         }
-        table.try_into().map_err(parse)
+        table.try_into()
     }
 }
 
-/// A key older releases wrote for what is now set on the web, if the file has
-/// one. Named in the error so the operator knows exactly what to delete.
-fn web_setting_in(table: &toml::Table) -> Option<&'static str> {
-    if table.contains_key("identity") {
-        return Some("[identity]");
+/// A setting a released macrod wrote that this one no longer reads.
+struct RetiredSetting {
+    /// The table it is in, or is.
+    table: &'static str,
+    /// The key inside `table`; `None` retires the whole table.
+    key: Option<&'static str>,
+    /// How the migration log names it.
+    name: &'static str,
+}
+
+/// Every retired setting. A runtime's name, access, and permission bypass
+/// (`[identity]`, the cached `scope` in `[credentials]`) are set on the web
+/// at Settings → Runtimes; they were only sent when pairing, so dropping them
+/// changes nothing for a paired runtime. `[server]` configured the webhook
+/// listener the event stream replaced.
+const RETIRED_SETTINGS: [RetiredSetting; 3] = [
+    RetiredSetting {
+        table: "identity",
+        key: None,
+        name: "[identity]",
+    },
+    RetiredSetting {
+        table: "credentials",
+        key: Some("scope"),
+        name: "`scope` in [credentials]",
+    },
+    RetiredSetting {
+        table: "server",
+        key: None,
+        name: "[server]",
+    },
+];
+
+/// What [`migrate`] took out of a config, and where the original is kept.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Migration {
+    /// The settings removed, e.g. `[identity]`.
+    pub removed: Vec<&'static str>,
+    /// The file as it was before.
+    pub backup: PathBuf,
+}
+
+/// Why a config could not be migrated.
+#[derive(Debug, thiserror::Error)]
+pub enum MigrateError {
+    /// Reading the config, or writing it or its backup, failed.
+    #[error("could not migrate {}", path.display())]
+    Io {
+        /// The file that failed.
+        path: PathBuf,
+        /// What the filesystem returned.
+        #[source]
+        source: std::io::Error,
+    },
+}
+
+/// Take the [`RETIRED_SETTINGS`] out of the config at `path`, leaving the rest
+/// of the file and its comments as they are. The original is copied to
+/// `<path>.bak` first (`.bak.2`, `.bak.3`... when that exists; a backup is
+/// never overwritten). `None` when there is no file, nothing to remove, or the
+/// file is not valid TOML (loading it reports that).
+pub fn migrate(path: &Path) -> Result<Option<Migration>, MigrateError> {
+    let failed = |source| MigrateError::Io {
+        path: path.to_owned(),
+        source,
+    };
+    let raw = match std::fs::read_to_string(path) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(failed(error)),
+    };
+    let Ok(mut document) = raw.parse::<toml_edit::DocumentMut>() else {
+        return Ok(None);
+    };
+    let mut removed = Vec::new();
+    for setting in &RETIRED_SETTINGS {
+        let removed_here = match setting.key {
+            None => document.remove(setting.table).is_some(),
+            Some(key) => document
+                .get_mut(setting.table)
+                .and_then(toml_edit::Item::as_table_like_mut)
+                .and_then(|section| section.remove(key))
+                .is_some(),
+        };
+        if removed_here {
+            removed.push(setting.name);
+        }
     }
-    table
-        .get("credentials")
-        .and_then(toml::Value::as_table)
-        .is_some_and(|credentials| credentials.contains_key("scope"))
-        .then_some("`scope` in [credentials]")
+    if removed.is_empty() {
+        return Ok(None);
+    }
+
+    let backup = write_backup(path, raw.as_bytes()).map_err(failed)?;
+    write_sensitive(path, document.to_string().as_bytes()).map_err(failed)?;
+    tracing::info!(
+        config = %path.display(),
+        backup = %backup.display(),
+        removed = ?removed,
+        "took settings macrod no longer reads out of the config; the original is in the backup"
+    );
+    Ok(Some(Migration { removed, backup }))
+}
+
+/// Copy `contents` to the first free `<path>.bak`, `<path>.bak.2`, ...,
+/// readable by its owner only: it holds the harness credential.
+fn write_backup(path: &Path, contents: &[u8]) -> std::io::Result<PathBuf> {
+    use std::io::Write as _;
+
+    let mut number = 1;
+    loop {
+        let mut name = path.as_os_str().to_owned();
+        name.push(".bak");
+        if number > 1 {
+            name.push(format!(".{number}"));
+        }
+        let backup = PathBuf::from(name);
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt as _;
+            options.mode(0o600);
+        }
+        match options.open(&backup) {
+            Ok(mut file) => {
+                file.write_all(contents)?;
+                file.sync_all()?;
+                return Ok(backup);
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => number += 1,
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+/// Write the config at `path`, readable by its owner only: it holds the
+/// harness credential.
+pub fn write_sensitive(path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    use std::io::Write as _;
+
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
+        options.mode(0o600);
+        if path.exists() {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+        }
+    }
+    let mut file = options.open(path)?;
+    file.write_all(contents)
 }
 
 /// macrod's directory, `~/.macrod` (`%USERPROFILE%\.macrod` on Windows):

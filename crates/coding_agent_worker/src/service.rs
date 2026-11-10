@@ -114,6 +114,9 @@ pub async fn run(options: ServiceOptions) -> rootcause::Result<()> {
     // Held until exit: the TUI shares this config, and one harness must not
     // be served twice.
     let _lock: ConfigLock = config::lock(&path)?;
+    if let Err(error) = config::migrate(&path) {
+        tracing::warn!(error = ?error, "could not migrate the config; serving it as it is");
+    }
     let shutdown = shutdown_requested();
     tokio::pin!(shutdown);
 

@@ -14,9 +14,12 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   (see `config.example.toml`, `default.macrod.toml`). The TUI and
   `macrod service` share `~/.macrod/macrod.toml` (`--config` overrides it),
   locked by `<config>.lock` while running. Name, ownership, and permission
-  bypass live only on the web (Settings → Runtimes); a file that still
-  has `[identity]` or a `scope` in `[credentials]` fails to load with an error
-  naming that page.
+  bypass live only on the web (Settings → Runtimes). Settings released
+  versions wrote and macrod no longer reads (`RETIRED_SETTINGS`: `[identity]`,
+  `scope` in `[credentials]`, `[server]`) are ignored by `Config::load` and
+  removed from the file by `config::migrate` when the TUI or `macrod service`
+  starts, after copying it to `<config>.bak` (never overwritten). Retire a
+  released setting by adding it there, not by rejecting it.
 - `src/profiles.rs`: which config a macrod serves. One runtime per config:
   the default one and named profiles at `~/.macrod/profiles/<name>.toml`
   (`--profile` on the TUI, `service`, and `inspect`; `macrod profiles` lists
@@ -58,10 +61,14 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   launcher layout. Both take `MACROD_UPDATE_SOURCE`.
 - `src/update.rs` (`src/update/`): self-update. The TUI polls the latest
   GitHub release hourly (or the `MACROD_UPDATE_SOURCE` mirror: `latest.json`
-  plus the archives beside it), verifies and smoke-tests the new binary, and
-  once `Daemon::is_idle` (no `session/prompt` outstanding, `src/turns.rs`)
+  plus the archives beside it), verifies and smoke-tests the new binary,
+  runs it as `<restart arguments> check-config` (hidden; it must print the
+  path of the config it would serve and exit 0 when it loads it, so keep that
+  contract) and drops it unless that is this process's config, and once
+  `Daemon::is_idle` (no `session/prompt` outstanding, `src/turns.rs`)
   swaps it in and `execve`s. Spans: `macrod.update.check`,
-  `macrod.update.download`, `macrod.update.apply`, `macrod.update.handoff`.
+  `macrod.update.download`, `macrod.update.check_config`,
+  `macrod.update.apply`, `macrod.update.handoff`.
   Off with `[update] auto = false` or `MACROD_NO_UPDATE=1`. Every check,
   download, apply and TUI startup appends a JSON line to
   `~/.macrod/logs/update.log` (`src/update/log.rs`; 0600, rotated at 1 MB to
@@ -76,8 +83,10 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   launcher for the newest `versions\<tag>\macrod-core.exe`; updates install
   as a new version for the next launch and the footer says so.
 - `e2e/`: end-to-end update and installer tests (`build_releases.sh`,
-  `update_e2e.py` (update, prompt-in-gap, output-in-gap, and the negative
-  cases), `installer_test.sh`, `windows_test.ps1` for the launcher
+  `update_e2e.py` (update, prompt-in-gap, output-in-gap, the negative
+  cases including a release that rejects or moves the config, and `upgrade`:
+  two paired folder configs on the real v2026.11.3.1, downloaded from GitHub,
+  updated twice), `installer_test.sh`, `windows_test.ps1` for the launcher
   layout, `windows_update_test.ps1` for a running macrod updating itself,
   `windows_claude_code_test.ps1` for npm-installed Claude Code served over
   ACP), run
@@ -115,10 +124,11 @@ external chat replies depend on it. Direct session controls still mint IDs.
 - `just run` (from this directory) to run the daemon with
   `--config <repo root>/macrod.toml`, keeping dev off `~/.macrod/macrod.toml`.
 - Self-update end to end (Linux/macOS): `e2e/build_releases.sh /tmp/rel
-  v2000.1.1.1 v2000.1.1.2`, then `python3 e2e/update_e2e.py --releases /tmp/rel
-  --v1 v2000.1.1.1 --v2 v2000.1.1.2`, and `e2e/installer_test.sh /tmp/rel
-  v2000.1.1.1` with zsh and fish on `PATH`. `MACROD_UPDATE_CHECK_SECONDS`
-  shortens the check interval.
+  v2099.1.1.1 v2099.1.1.2`, then `python3 e2e/update_e2e.py --releases /tmp/rel
+  --v1 v2099.1.1.1 --v2 v2099.1.1.2`, and `e2e/installer_test.sh /tmp/rel
+  v2099.1.1.1` with zsh and fish on `PATH`. The tags must be newer than every
+  real release: `upgrade` updates a downloaded one to them.
+  `MACROD_UPDATE_CHECK_SECONDS` shortens the check interval.
 - `OPENSSL_NO_VENDOR=0 just build-static` to build and smoke-test the release `macrod` the way
   the tag workflow does (needs the Nix devshell: cargo-zigbuild, zig, cmake).
   The override enables bundled OpenSSL for the musl target in the devshell.

@@ -349,7 +349,8 @@ fn choose_destination(
     Ok(ConfigSelection::profile_in(home, profile))
 }
 
-fn is_same_file(first: &Path, second: &Path) -> bool {
+/// Whether both paths name one existing file.
+pub fn is_same_file(first: &Path, second: &Path) -> bool {
     match (std::fs::canonicalize(first), std::fs::canonicalize(second)) {
         (Ok(first), Ok(second)) => first == second,
         _ => false,

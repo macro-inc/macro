@@ -16,12 +16,21 @@ keys request ids and sessions per connection, so these show macrod loses
 nothing, not that the service keeps a session across the reconnect.
 
 Negative cases run the same way and check that macrod keeps running v1:
-`bad-checksum`, `failing-smoke-test`, `opt-out` and `opt-out-config`.
+`bad-checksum`, `failing-smoke-test`, `opt-out`, `opt-out-config`, and
+`config-rejected` and `config-moved`, where the new release does not accept
+the running config or would serve another file.
+
+`upgrade` starts from the last release that read `./macrod.toml` from the
+folder it started in (PREVIOUS_RELEASE, downloaded from GitHub): two paired
+runtimes in two folders, with the settings that release wrote and this one
+no longer reads. Each updates to v1 and must keep serving its own runtime
+from its own (moved, migrated, backed-up) config, then update again to v2.
 
     python3 update_e2e.py --releases DIR --v1 TAG --v2 TAG [--case NAME]
 
 DIR holds macrod-<tag>-<os>-<arch>.tar.gz (+ .sha256) for both tags, as the
-release workflow publishes them.
+release workflow publishes them; `upgrade` downloads PREVIOUS_RELEASE into it.
+Both tags must be newer than PREVIOUS_RELEASE.
 """
 
 import argparse
@@ -46,10 +55,15 @@ import tarfile
 import tempfile
 import threading
 import time
+import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 INSTALLER = os.path.join(HERE, "..", "install", "install.sh")
 AGENT = os.path.join(HERE, "stand_in_agent.py")
+# The last release that read ./macrod.toml from the folder it started in and
+# wrote [identity] and a `scope` in [credentials].
+PREVIOUS_RELEASE = "v2026.11.3.1"
+RELEASES_URL = "https://github.com/macro-inc/macro/releases/download"
 
 
 def platform_slug():
@@ -91,9 +105,8 @@ class Mirror:
         os.replace(os.path.join(self.root, "latest.json.tmp"), os.path.join(self.root, "latest.json"))
 
 
-def broken_archive():
-    """A release archive whose macrod cannot even print its version."""
-    script = b"#!/bin/sh\nexit 1\n"
+def script_archive(script):
+    """A release archive whose macrod is the shell `script`."""
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
         info = tarfile.TarInfo("macrod")
@@ -101,6 +114,42 @@ def broken_archive():
         info.mode = 0o755
         archive.addfile(info, io.BytesIO(script))
     return buffer.getvalue()
+
+
+def broken_archive():
+    """A release archive whose macrod cannot even print its version."""
+    return script_archive(b"#!/bin/sh\nexit 1\n")
+
+
+def config_checking_archive(tag, check_config):
+    """A release archive whose macrod prints `tag` for --version and runs the
+    shell `check_config` for `check-config`."""
+    return script_archive(
+        f"""#!/bin/sh
+case "$*" in
+  --version) echo "macrod {tag}" ;;
+  *check-config*) {check_config} ;;
+  *) exit 1 ;;
+esac
+""".encode()
+    )
+
+
+def download_previous_release(releases):
+    """Put PREVIOUS_RELEASE's archive for this platform into `releases`,
+    checked against its published SHA-256."""
+    name = f"macrod-{PREVIOUS_RELEASE}-{platform_slug()}.tar.gz"
+    path = os.path.join(releases, name)
+    if os.path.exists(path):
+        return
+    base = f"{RELEASES_URL}/{PREVIOUS_RELEASE}/{name}"
+    archive = urllib.request.urlopen(base, timeout=120).read()
+    checksum = urllib.request.urlopen(base + ".sha256", timeout=60).read().decode()
+    assert checksum.split()[0] == hashlib.sha256(archive).hexdigest(), "the download matches its checksum"
+    with open(path + ".sha256", "w") as out:
+        out.write(checksum)
+    with open(path, "wb") as out:
+        out.write(archive)
 
 
 # ---------------------------------------------------------- the fake backend
@@ -126,6 +175,7 @@ class Gateway:
         self.listener.listen()
         self.port = self.listener.getsockname()[1]
         self.connections = 0
+        self.tokens = {}  # connection -> harness token
         self.ticks = []  # (connection, n, pid, child)
         self.lock = threading.Lock()
         threading.Thread(target=self.accept, daemon=True).start()
@@ -166,6 +216,7 @@ class Gateway:
             self.connections += 1
             number = self.connections
             self.opened_at[number] = time.time()
+            self.tokens[number] = headers.get("x-macro-harness-token")
         reader = conn.makefile("rb")
         buffered = io.BytesIO(rest)
 
@@ -225,6 +276,15 @@ class Gateway:
     def snapshot(self):
         with self.lock:
             return self.connections, list(self.ticks)
+
+    def connections_of(self, token):
+        """The connections a harness token opened, in order."""
+        with self.lock:
+            return sorted(number for number, sent in self.tokens.items() if sent == token)
+
+    def ticks_on(self, connection):
+        with self.lock:
+            return [t for t in self.ticks if t[0] == connection]
 
 
 def send_text(conn, message):
@@ -410,6 +470,13 @@ path = "{workspace}"
                 mirror.publish(v2, checksum="0" * 64)
             elif case == "failing-smoke-test":
                 mirror.publish(v2, archive=broken_archive())
+            elif case == "config-rejected":
+                rejecting = config_checking_archive(v2, "echo 'unknown field `harness`' >&2; exit 1")
+                mirror.publish(v2, archive=rejecting)
+            elif case == "config-moved":
+                moved = os.path.join(home, ".macrod", "moved.toml")
+                shutil.copy(os.path.join(home, ".macrod", "macrod.toml"), moved)
+                mirror.publish(v2, archive=config_checking_archive(v2, f"echo '{moved}'"))
             else:
                 mirror.publish(v2)
             # Several check intervals, each of which would have updated.
@@ -428,6 +495,12 @@ path = "{workspace}"
             elif case == "failing-smoke-test":
                 assert_in_order(events, [{"event": "download", "version": v2, "checksum_ok": True}])
                 assert "smoke test" in next(e for e in events if e["event"] == "download")["result"]
+            elif case == "config-rejected":
+                result = next(e for e in events if e["event"] == "download")["result"]
+                assert result == "the staged binary does not accept the config", result
+            elif case == "config-moved":
+                result = next(e for e in events if e["event"] == "download")["result"]
+                assert result == "the staged binary would serve a different config", result
             else:
                 assert [e["event"] for e in events] == ["startup"], f"updating is off: {events}"
             print(f"   still {v1} after publishing {v2}; {len(ticks)} frames on one connection")
@@ -453,8 +526,197 @@ path = "{workspace}"
         shutil.rmtree(work, ignore_errors=True)
 
 
+def released_config(base, name, harness_id, extra=""):
+    """A paired config as PREVIOUS_RELEASE wrote it, serving the folder it is in."""
+    return f"""# macrod configuration. Pairing adds a bearer token here; keep this file private.
+
+[macro]
+api_url = "{base}"
+storage_url = "{base}"
+web_url = "{base}"
+
+[identity]
+name = "{name}"
+scope = "private"
+# Allow agents to bypass tool permissions, subject to web confirmation.
+allow_permission_bypass = false
+{extra}
+[harness]
+command = "{sys.executable}"
+args = ["{AGENT}"]
+
+[workspace]
+path = "."
+
+[credentials]
+harness_id = "{harness_id}"
+token = "mhns_e2e_{name}"
+scope = "user"
+"""
+
+
+def run_upgrade(releases, v1, v2):
+    """Two folder configs from PREVIOUS_RELEASE update to v1, then to v2."""
+    print(f"== upgrade from {PREVIOUS_RELEASE}", flush=True)
+    download_previous_release(releases)
+    work = tempfile.mkdtemp(prefix="macrod-e2e-")
+    home = os.path.join(work, "home")
+    os.makedirs(home)
+    gateway = Gateway()
+    base = f"http://127.0.0.1:{gateway.port}"
+    # One mirror per runtime, so each updates when its mirror says so: two
+    # macrods updating the same binary at once race on its staging file.
+    runtimes = {}
+    for name, harness_id, extra in [
+        ("alpha", "00000000-0000-0000-0000-00000000a1fa", ""),
+        ("beta", "00000000-0000-0000-0000-00000000be7a", "\n[server]\nport = 8790\n"),
+    ]:
+        mirror_root = os.path.join(work, f"mirror-{name}")
+        os.makedirs(mirror_root)
+        mirror = Mirror(releases, mirror_root)
+        mirror.publish(PREVIOUS_RELEASE)
+        folder = os.path.join(work, name)
+        os.makedirs(folder)
+        original = released_config(base, name, harness_id, extra)
+        with open(os.path.join(folder, "macrod.toml"), "w") as config:
+            config.write(original)
+        runtimes[name] = {
+            "mirror": mirror,
+            "folder": folder,
+            "original": original,
+            "harness_id": harness_id,
+            "token": f"mhns_e2e_{name}",
+        }
+
+    env = {
+        "HOME": home,
+        "PATH": os.environ["PATH"],
+        "SHELL": "/bin/bash",
+        "TERM": "xterm-256color",
+        "MACROD_UPDATE_CHECK_SECONDS": "1",
+        "RUST_LOG": "info",
+    }
+    subprocess.run(["sh", INSTALLER], env={**env, "MACROD_UPDATE_SOURCE": runtimes["alpha"]["mirror"].url}, check=True)
+    binary = os.path.join(home, ".local", "bin", "macrod")
+    assert installed_version(binary) == PREVIOUS_RELEASE, "install.sh installs the previous release"
+
+    screens = {}
+    try:
+        for name, runtime in runtimes.items():
+            pid, terminal = pty.fork()
+            if pid == 0:
+                os.chdir(runtime["folder"])
+                os.execve(binary, [binary], {**env, "MACROD_UPDATE_SOURCE": runtime["mirror"].url})
+            fcntl.ioctl(terminal, termios.TIOCSWINSZ, struct.pack("HHHH", 50, 160, 0, 0))
+            screen = bytearray()
+            screens[name] = screen
+
+            def drain(terminal=terminal, screen=screen):
+                while True:
+                    try:
+                        data = os.read(terminal, 65536)
+                    except OSError:
+                        return
+                    if not data:
+                        return
+                    screen.extend(data)
+
+            threading.Thread(target=drain, daemon=True).start()
+            runtime["pid"] = pid
+
+        def serving(runtime, hop):
+            """The runtime's `hop`th connection (0-based) is up and ticking."""
+            connections = gateway.connections_of(runtime["token"])
+            return len(connections) > hop and len(gateway.ticks_on(connections[hop])) >= 100
+
+        for name, runtime in runtimes.items():
+            wait_for(f"{name} serving {PREVIOUS_RELEASE}", lambda: serving(runtime, 0), 60)
+            first = gateway.ticks_on(gateway.connections_of(runtime["token"])[0])[0]
+            runtime["agent"], runtime["child"] = first[2], first[3]
+
+        for hop, tag in [(1, v1), (2, v2)]:
+            for name, runtime in runtimes.items():
+                runtime["mirror"].publish(tag)
+                wait_for(f"{name} serving {tag}", lambda: serving(runtime, hop), 120)
+
+        assert installed_version(binary) == v2, "the installed binary is v2"
+        for name, runtime in runtimes.items():
+            assert alive(runtime["pid"]), f"{name}'s macrod is running"
+            connections = gateway.connections_of(runtime["token"])
+            assert len(connections) == 3, f"{name} reconnected once per update: {connections}"
+            ticks = [t for c in connections for t in gateway.ticks_on(c)]
+            numbers = [t[1] for t in ticks]
+            assert numbers == list(range(len(numbers))), f"{name} lost or repeated frames"
+            assert {t[2] for t in ticks} == {runtime["agent"]}, f"{name} kept one agent across both updates"
+            assert alive(runtime["agent"]) and alive(runtime["child"]), f"{name}'s agent and its child kept running"
+            assert not os.path.exists(os.path.join(runtime["folder"], "macrod.toml")), f"{name}'s folder config moved"
+
+        moved = {
+            "alpha": os.path.join(home, ".macrod", "macrod.toml"),
+            "beta": os.path.join(home, ".macrod", "profiles", "beta.toml"),
+        }
+        for name, path in moved.items():
+            runtime = runtimes[name]
+            with open(path) as config:
+                migrated = config.read()
+            assert runtime["harness_id"] in migrated and runtime["token"] in migrated, f"{path} is {name}'s runtime"
+            for retired in ("[identity]", "scope", "[server]"):
+                assert retired not in migrated, f"{path} still has {retired}"
+            with open(path + ".bak") as backup:
+                assert backup.read() == runtime["original"], f"{path}.bak is {name}'s config as it was"
+            for private in (path, path + ".bak"):
+                assert os.stat(private).st_mode & 0o777 == 0o600, f"{private} is private"
+        if platform.system() == "Linux":
+            with open(f"/proc/{runtimes['beta']['pid']}/cmdline", "rb") as cmdline:
+                arguments = cmdline.read().split(b"\0")
+            assert b"--profile" in arguments and b"beta" in arguments, f"beta restarts on its profile: {arguments}"
+
+        events = update_log(home)
+        for tag in (v1, v2):
+            starts = [e for e in events if e["event"] == "startup" and e["version"] == tag and e["from_handoff"]]
+            assert len(starts) == 2, f"both runtimes came up on {tag} with their agents: {events}"
+        staged = [e for e in events if e["event"] == "download" and e["version"] == v2 and e["result"] == "staged"]
+        assert len(staged) == 2, f"{v2} checked out against both configs: {events}"
+        print(
+            f"   alpha and beta updated {PREVIOUS_RELEASE} -> {v1} -> {v2}, each on its own runtime and agent; "
+            f"configs moved to {', '.join(moved.values())} with backups"
+        )
+    except BaseException:
+        for name, screen in screens.items():
+            text = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", " ", screen.decode(errors="replace"))
+            print(f"-- {name}'s screen:")
+            print(re.sub(r" +", " ", text)[-3000:])
+        raise
+    finally:
+        for runtime in runtimes.values():
+            pid = runtime.get("pid")
+            if pid is None:
+                continue
+            try:
+                os.kill(pid, 15)
+            except ProcessLookupError:
+                pass
+            os.waitpid(pid, 0)
+            for leftover in (runtime.get("agent"), runtime.get("child")):
+                if leftover is None:
+                    continue
+                try:
+                    os.kill(leftover, 9)
+                except ProcessLookupError:
+                    pass
+            runtime["mirror"].server.shutdown()
+        shutil.rmtree(work, ignore_errors=True)
+
+
 UPDATE_CASES = ["update", "prompt-in-gap", "output-in-gap"]
-NEGATIVE_CASES = ["bad-checksum", "failing-smoke-test", "opt-out", "opt-out-config"]
+NEGATIVE_CASES = [
+    "bad-checksum",
+    "failing-smoke-test",
+    "opt-out",
+    "opt-out-config",
+    "config-rejected",
+    "config-moved",
+]
 
 
 def main():
@@ -465,11 +727,15 @@ def main():
     parser.add_argument(
         "--case",
         action="append",
-        choices=UPDATE_CASES + NEGATIVE_CASES,
+        choices=UPDATE_CASES + NEGATIVE_CASES + ["upgrade"],
     )
     args = parser.parse_args()
-    for case in args.case or UPDATE_CASES + NEGATIVE_CASES:
-        run_case(case, os.path.abspath(args.releases), args.v1, args.v2)
+    releases = os.path.abspath(args.releases)
+    for case in args.case or UPDATE_CASES + NEGATIVE_CASES + ["upgrade"]:
+        if case == "upgrade":
+            run_upgrade(releases, args.v1, args.v2)
+        else:
+            run_case(case, releases, args.v1, args.v2)
     print("all cases passed")
 
 

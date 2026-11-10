@@ -144,6 +144,13 @@ enum Command {
     /// List this machine's runtimes: the default config and every named
     /// profile, whether each is paired, and whether a macrod is running it.
     Profiles,
+    /// Print the config `--config` or `--profile` selects (the default one
+    /// without either) and exit 0 when this binary loads it. A running macrod
+    /// asks a downloaded update this before installing it, with the arguments
+    /// it would restart with, so keep its contract: the flags, the path on
+    /// stdout, and the exit status.
+    #[command(hide = true)]
+    CheckConfig,
 }
 
 /// Why the control panel has no config to serve. Shown as one line.
@@ -316,6 +323,23 @@ async fn main() -> ExitCode {
                 }
             };
         }
+        Some(Command::CheckConfig) => {
+            let checked =
+                ConfigSelection::resolve(args.config, args.profile).and_then(|selection| {
+                    config::Config::load(&selection.path)?;
+                    Ok(selection.path)
+                });
+            return match checked {
+                Ok(path) => {
+                    println!("{}", path.display());
+                    ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    eprintln!("macrod check-config: {error}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
         Some(Command::Inspect { config, profile }) => {
             return match service::inspect_json(config, profile) {
                 Ok(inspection) => {
@@ -385,7 +409,13 @@ async fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    let relaunch_arguments = relaunch_arguments(&selection, profile_flag_given);
+    if let Err(error) = config::migrate(&selection.path) {
+        tracing::warn!(error = ?error, "could not migrate the config; serving it as it is");
+    }
+    let relaunch = update::Relaunch {
+        arguments: relaunch_arguments(&selection, profile_flag_given),
+        config: selection.path.clone(),
+    };
     // The agent the macrod this process replaced was relaying, if any.
     #[cfg(unix)]
     let mut inherited = handoff::take_inherited();
@@ -396,7 +426,7 @@ async fn main() -> ExitCode {
         from_handoff: inherited.is_some(),
     });
     loop {
-        match tui::run(&selection, logs.clone(), inherited.take()).await {
+        match tui::run(&selection, &relaunch, logs.clone(), inherited.take()).await {
             Ok(None) => return ExitCode::SUCCESS,
             #[cfg(unix)]
             Ok(Some(restart)) => {
@@ -404,7 +434,7 @@ async fn main() -> ExitCode {
                 // panel comes back up and keeps serving, with a fresh agent.
                 let error = restart
                     .installed
-                    .relaunch(&relaunch_arguments, restart.agent);
+                    .relaunch(&relaunch.arguments, restart.agent);
                 tracing::error!(error = ?error, "could not restart into the updated macrod");
             }
             #[cfg(not(unix))]

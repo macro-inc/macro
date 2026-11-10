@@ -3,9 +3,11 @@
 //!
 //! Each job builds macrod twice from the checkout, as two fake release tags,
 //! and runs `crates/coding_agent_worker/e2e/` against a local release mirror:
-//! the hot handoff and its negative cases plus the shell installer on Linux
-//! and macOS, and the launcher layout plus `install.ps1` on Windows. Nothing
-//! is published. Runs on pull requests that touch macrod, and on demand.
+//! the hot handoff and its negative cases, the upgrade from the last release
+//! that read `./macrod.toml` (downloaded from GitHub), and the shell installer
+//! on Linux and macOS; the launcher layout plus `install.ps1` on Windows.
+//! Nothing is published. Runs on pull requests that touch macrod, and on
+//! demand.
 
 use gh_workflow::{Event, Job, Level, Permissions, Run, Step, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
@@ -16,8 +18,10 @@ use crate::workflows::{runners, steps, vars};
 mod test;
 
 const E2E: &str = "crates/coding_agent_worker/e2e";
-const V1: &str = "v2000.1.1.1";
-const V2: &str = "v2000.1.1.2";
+// Newer than every real release, so the upgrade case can update a
+// downloaded one to them.
+const V1: &str = "v2099.1.1.1";
+const V2: &str = "v2099.1.1.2";
 
 /// Files whose change makes `PR CI` call this workflow.
 pub const PATHS: &[RepoGlob<'static>] = &[

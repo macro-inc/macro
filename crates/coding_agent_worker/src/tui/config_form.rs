@@ -325,9 +325,9 @@ impl ConfigForm {
     /// Validate the complete document and write it out.
     pub fn save(&self) -> rootcause::Result<()> {
         let rendered = self.doc.to_string();
-        toml::from_str::<Config>(&rendered)
+        Config::parse(&rendered)
             .context("the edited config would not load; the value was rejected before writing")?;
-        write_sensitive(&self.path, rendered.as_bytes())
+        crate::config::write_sensitive(&self.path, rendered.as_bytes())
             .context(format!("failed to write config at {}", self.path.display()))?;
         Ok(())
     }
@@ -350,21 +350,4 @@ impl ConfigForm {
             table.remove(key);
         }
     }
-}
-
-fn write_sensitive(path: &Path, contents: &[u8]) -> std::io::Result<()> {
-    use std::io::Write as _;
-
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
-        options.mode(0o600);
-        if path.exists() {
-            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
-        }
-    }
-    let mut file = options.open(path)?;
-    file.write_all(contents)
 }

@@ -70,46 +70,130 @@ fn load(contents: &str) -> Result<Config, ConfigError> {
     Config::load(&path)
 }
 
-#[test]
-fn web_settings_in_the_file_fail_naming_where_they_live_now() {
-    let identity = load(&format!(
-        "{EXAMPLE}\n[identity]\nname = \"erics-macbook\"\nscope = \"team\"\nallow_permission_bypass = true\n"
-    ))
-    .expect_err("[identity] is refused");
-    assert!(matches!(
-        identity,
-        ConfigError::WebSetting {
-            key: "[identity]",
-            ..
-        }
-    ));
-    assert!(identity.to_string().contains("Settings → Runtimes"));
+/// A config as v2026.11.3.1 and earlier wrote it: its default file, paired,
+/// with the retired webhook listener some older configs still carry.
+const RELEASED_CONFIG: &str = r#"
+# macrod configuration. Pairing adds a bearer token here; keep this file private.
 
-    let scope = load(&format!(
-        "{EXAMPLE}\n[credentials]\nharness_id = \"{}\"\ntoken = \"mhns_secret\"\nscope = \"team\"\n",
-        harness_id::HarnessId::TEST_A
-    ))
-    .expect_err("a cached scope is refused");
-    assert!(matches!(
-        scope,
-        ConfigError::WebSetting {
-            key: "`scope` in [credentials]",
-            ..
-        }
-    ));
+[macro]
+api_url = "https://gateway.macro.com/agent-harness"
+storage_url = "https://gateway.macro.com/dss"
+web_url = "https://macro.com/app"
+
+[identity]
+scope = "private"
+# Allow agents to bypass tool permissions, subject to web confirmation.
+# When enabled, agents can run commands and edit files without approval.
+# Changes apply at the next pairing.
+allow_permission_bypass = false
+
+[server]
+port = 8790
+
+[harness]
+command = "hermes"
+args = ["acp"]
+
+[workspace]
+path = "."
+
+[credentials]
+harness_id = "00000000-0000-0000-0000-0000004a125a"
+token = "mhns_secret"
+scope = "user"
+"#;
+
+#[test]
+fn a_released_config_loads_without_the_settings_macrod_no_longer_reads() {
+    let config = load(RELEASED_CONFIG).expect("a released config loads");
+
+    let credentials = config.credentials.expect("credentials");
+    assert_eq!(credentials.harness_id, harness_id::HarnessId::TEST_A);
+    assert!(credentials.is_valid());
+    assert_eq!(config.workspace.path, PathBuf::from("."));
 }
 
 #[test]
-fn the_retired_server_table_is_an_unknown_field() {
-    let error =
-        load(&format!("{EXAMPLE}\n[server]\nport = 8790\n")).expect_err("[server] is refused");
-    assert!(matches!(error, ConfigError::Parse { .. }));
+fn migrating_a_released_config_removes_the_retired_settings_and_keeps_a_backup() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let path = directory.path().join("macrod.toml");
+    std::fs::write(&path, RELEASED_CONFIG).expect("write config");
+
+    let migration = migrate(&path)
+        .expect("migrates")
+        .expect("there was something to migrate");
+
+    assert_eq!(
+        migration.removed,
+        vec!["[identity]", "`scope` in [credentials]", "[server]"]
+    );
+    assert_eq!(migration.backup, directory.path().join("macrod.toml.bak"));
+    assert_eq!(
+        std::fs::read_to_string(&migration.backup).expect("read backup"),
+        RELEASED_CONFIG
+    );
+    let migrated = std::fs::read_to_string(&path).expect("read config");
+    assert!(!migrated.contains("[identity]"));
+    assert!(!migrated.contains("allow_permission_bypass"));
+    assert!(!migrated.contains("[server]"));
+    assert!(!migrated.contains("scope"));
+    assert!(migrated.contains("# macrod configuration. Pairing adds a bearer token here"));
+    assert!(migrated.contains("token = \"mhns_secret\""));
+    // What the config form checks before it saves an edit.
+    let config: Config = toml::from_str(&migrated).expect("the migrated file parses strictly");
+    assert_eq!(
+        config.credentials.expect("credentials").harness_id,
+        harness_id::HarnessId::TEST_A
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        for file in [&path, &migration.backup] {
+            let mode = std::fs::metadata(file).expect("stat").permissions().mode();
+            assert_eq!(mode & 0o777, 0o600, "{} is private", file.display());
+        }
+    }
+}
+
+#[test]
+fn migration_runs_once_and_never_overwrites_a_backup() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let path = directory.path().join("macrod.toml");
+    std::fs::write(&path, RELEASED_CONFIG).expect("write config");
+    std::fs::write(
+        directory.path().join("macrod.toml.bak"),
+        "an operator's own copy",
+    )
+    .expect("write an earlier backup");
+
+    let first = migrate(&path).expect("migrates").expect("migrated");
+    let second = migrate(&path).expect("migrates again");
+
+    assert_eq!(first.backup, directory.path().join("macrod.toml.bak.2"));
+    assert_eq!(second, None);
+    assert_eq!(
+        std::fs::read_to_string(directory.path().join("macrod.toml.bak")).expect("read"),
+        "an operator's own copy"
+    );
+}
+
+#[test]
+fn a_current_or_missing_config_is_left_alone() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let path = directory.path().join("macrod.toml");
+
+    assert_eq!(migrate(&path).expect("no file"), None);
+    std::fs::write(&path, EXAMPLE).expect("write config");
+    assert_eq!(migrate(&path).expect("current config"), None);
+    assert_eq!(std::fs::read_to_string(&path).expect("read"), EXAMPLE);
+    assert!(!directory.path().join("macrod.toml.bak").exists());
 }
 
 #[test]
 fn unknown_fields_are_rejected() {
     let with_typo = EXAMPLE.replace("repo_url", "repo_uri");
     assert!(toml::from_str::<Config>(&with_typo).is_err());
+    assert!(Config::parse(&format!("{RELEASED_CONFIG}\n[update]\nautoo = true\n")).is_err());
 
     let macro_typo = format!("{DEFAULT}\n[macro]\napi_uri = \"http://localhost\"\n");
     assert!(toml::from_str::<Config>(&macro_typo).is_err());
