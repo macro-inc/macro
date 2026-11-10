@@ -280,3 +280,7 @@ Ordinary commits share preparation without allocating that receipt. Notify
 publication observers only after real installation and receipt acknowledgement.
 
 Collect decorator policies through the shared pure collector for committed chains and prepared main transitions; retain generated removal keys for clean descendants and advance observation revisions only at actual consuming-view exposure. Preserve Imported cache reconciliation only for builder MAIN; ordinary and prepared transactions use Writable, and sealed admission never reruns cache or pipeline work.
+Keep after-commit worklists borrowed; preserve prior commit structure across all
+hooks in a round and retain accepted prefixes on isolated failures. Run
+`cargo test -p lexical_model --test after_commit_alloc` to check hook-dispatch
+allocation against an unchanged transaction, separately from production timing.
