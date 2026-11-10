@@ -1170,8 +1170,11 @@ async fn run_turn(
     result
 }
 
-/// The code-mode tool, whose failed programs come back as results.
-const EXECUTE_CODE: &str = "ExecuteCode";
+/// The code-mode tool, whose failed programs come back as results: native, or
+/// reached through the internal MCP server under its mangled name.
+fn is_execute_code(name: &str) -> bool {
+    matches!(name, "ExecuteCode" | "mcp__macro_internal__ExecuteCode")
+}
 
 /// What a turn said, recorded on its `agent.acp.prompt` span so a turn that
 /// ended without answering is found by query, not by reading its log.
@@ -1203,14 +1206,14 @@ impl TurnOutput {
             StreamPart::ToolCallStarted(_) => self.replied = false,
             StreamPart::ToolResponse(ToolResponse::Err { name, .. }) => {
                 self.tool_failures += 1;
-                if name == EXECUTE_CODE {
+                if is_execute_code(name) {
                     self.code_executions += 1;
                     self.code_failures += 1;
                 }
             }
             // A program that failed is still a result the tool returns.
             StreamPart::ToolResponse(ToolResponse::Json { name, json, .. })
-                if name == EXECUTE_CODE =>
+                if is_execute_code(name) =>
             {
                 self.code_executions += 1;
                 let status = json

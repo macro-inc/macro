@@ -3080,3 +3080,22 @@ fn a_program_that_failed_counts_as_a_failed_tool_call() {
     assert_eq!(output.code_failures, 1);
     assert_eq!(output.tool_failures, 2);
 }
+
+#[test]
+fn a_program_run_through_the_internal_mcp_server_is_counted() {
+    let mut output = TurnOutput::default();
+    output.observe(&StreamPart::ToolResponse(ToolResponse::Json {
+        id: "call-1".to_owned(),
+        name: "mcp__macro_internal__ExecuteCode".to_owned(),
+        json: serde_json::json!({"executionId": "e1", "status": "failed", "error": "boom"}),
+    }));
+    output.observe(&StreamPart::ToolResponse(ToolResponse::Err {
+        id: "call-2".to_owned(),
+        name: "mcp__macro_internal__ExecuteCode".to_owned(),
+        description: "timed out".to_owned(),
+    }));
+
+    assert_eq!(output.code_executions, 2);
+    assert_eq!(output.code_failures, 2);
+    assert_eq!(output.tool_failures, 2);
+}
