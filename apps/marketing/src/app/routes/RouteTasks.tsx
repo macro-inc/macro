@@ -87,7 +87,7 @@ const tasksFaq = [
 
 export function RouteTasks() {
   setPageSeo({
-    title: 'Macro Tasks — Automatic task management',
+    title: 'Macro Tasks — Task management for people and agents',
     description:
       'Create tasks from messages, email, or documents without leaving your work. Assign people or agents, keep the original context linked, and let GitHub pull requests update task status.',
     path: '/tasks',
@@ -100,8 +100,8 @@ export function RouteTasks() {
           tutorialBackdrop
           cta="tasks_hero_get_started"
           product="Tasks"
-          title="Tasks create → complete themselves."
-          description="Macro Tasks plan themselves from your customer email, team chat and pull requests. Never create a task manually again."
+          title="Tasks for people and agents."
+          description="Create tasks from email and team chat. Assign people or agents, and keep task status in sync with linked pull requests."
         />
         <FeaturePageSection
           id="from-a-message"

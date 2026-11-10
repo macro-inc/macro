@@ -253,6 +253,8 @@ Before the first prerender build, install Chromium with
 Run `git lfs pull` when migrated video files have not been fetched. The build
 writes the public artifact to `apps/marketing/dist/`, verifies the standalone
 boundary, prerenders public pages, and finishes with the SEO migration gate.
+Keep the desktop homepage hero at least one viewport tall, with a centered orbit illustration, a 44–60px headline, and a 52px primary button. Preserve the mobile hero layout. Describe task automation through agent assignments and linked pull-request status updates, without claiming that users never create tasks manually.
+
 The homepage uses Solid SSR and hydration through the same App router as feature pages. Prerender it with the website entry template so its styles load before hydration; reserve the signup template for `/start`. Keep SiteHeader mounted in RootLayout when navigating to or from `/`; sidebar Home links must use client-side routing. Desktop sidebar space and visibility must be present before hydration, without waiting for the mobile menu state. `/start` retains its separate signup entry. Both Vite builds compile Tailwind so
 prerendered demos include their UI utilities before the client bundle loads.
 Build verification checks sample workspace controls, icons, avatars, and layout
