@@ -39,6 +39,7 @@ The transformer layer uses the shared lexical_markdown engine; route adapters ar
 - Inject NodeClock, NodeRandom and NodeHost through editor extension state; share these continuing services with registry-only Markdown parsers and perform no I/O.
 - Supply DocumentContext to headless helpers and assign durable ids in depth-first document order.
 - Emit preventDefault when native Enter policy consumes a key, including primitive key routing without a view adapter.
+- Escape code, highlight and strikethrough on ArrowRight at the source caret boundaries; reuse a leading adjacent space or insert one plain space while preserving other typing formats and style.
 - Stage NodeId/PeerId plugin entropy, mappings and owner state transactionally; reconcile mutations through after_commit, and count only attached owners as duplicate IDs when a subtree is recreated.
 - Keep clipboard identity invalidation before insertion and restore draft wrappers within the same update.
 - Count draft marks from each commit’s mutations and attachment-changing subtrees; rebuild only for full reconciles and leave unrelated marks untouched during typing.
