@@ -524,6 +524,11 @@ type CompleteMutationRoot {
 	Delete the expected owned revision; repeating a completed deletion returns the ID.
 	"""
 	deleteSavedView(input: DeleteSavedViewInput!): ID!
+	"""
+	Set the authenticated viewer's personal order; definitions and their
+	revisions are unchanged. Returns the views in their new order.
+	"""
+	reorderSavedViews(input: ReorderSavedViewsInput!): [GraphqlSavedView!]!
 }
 
 """
@@ -2210,6 +2215,24 @@ type GraphqlAllDayEventTime {
 	Exclusive local end date (`YYYY-MM-DD`).
 	"""
 	endDate: String!
+}
+
+"""
+GraphQL input naming a kind of email attachment.
+"""
+enum GraphqlAttachmentKind {
+	"""
+	PDF files.
+	"""
+	PDF
+	"""
+	PNG, JPEG, GIF, WebP or SVG images.
+	"""
+	IMAGE
+	"""
+	Word, Excel and PowerPoint files, plain text and CSV.
+	"""
+	DOCUMENT
 }
 
 """
@@ -4748,6 +4771,10 @@ input GraphqlEmailLiteral @oneOf {
 	"""
 	recipient: GraphqlEmailValue
 	"""
+	A message whose subject contains this text, ignoring case (1-200 characters).
+	"""
+	subject: String
+	"""
 	The thread id option.
 	"""
 	threadId: ID
@@ -4783,6 +4810,10 @@ input GraphqlEmailLiteral @oneOf {
 	The calendar only option.
 	"""
 	calendarOnly: Boolean
+	"""
+	Threads with at least one attachment of this kind.
+	"""
+	attachment: GraphqlAttachmentKind
 	"""
 	The created at option.
 	"""
@@ -7558,7 +7589,8 @@ type GraphqlSavedView {
 }
 
 """
-A page ordered by creation time and ID after effective visibility checks.
+A page in the viewer's own order, then by creation time and ID, after
+effective visibility checks.
 """
 type GraphqlSavedViewPage {
 	"""
@@ -11554,6 +11586,21 @@ input ReorderFavoritesInput {
 	Favorited entities in the desired order.
 	"""
 	favorites: [EntityRefInput!]!
+}
+
+"""
+Inputs for setting the viewer's own order of one kind of saved view.
+"""
+input ReorderSavedViewsInput {
+	"""
+	Consumer kind whose order is replaced, such as `email`.
+	"""
+	kind: String!
+	"""
+	Visible views of that kind in their new order, at most 200; views left
+	out follow them by creation time.
+	"""
+	ids: [ID!]!
 }
 
 """

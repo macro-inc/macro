@@ -7,7 +7,7 @@ Datadog. This stack **adopts** them — it does not recreate them. `import.json`
 lists every one by id. Everything else is declared here first and is created
 on deploy: the prod threshold and anomaly monitors (`monitors/macrodb.ts`,
 `redis.ts`, `queues.ts`, `regressions.ts`, `outlook-sync.ts`,
-`routine-suggestions.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, the Outlook sync and routine suggestions metrics, the Outlook retention filter, one other log-based metric, and one downtime.
+`routine-suggestions.ts`, `harness-runtimes.ts`) and their dashboards, the rollout monitors, the GoAlert webhooks and health check, the Outlook sync, routine suggestions and agent runtime metrics, the Outlook retention filter, one other log-based metric, and one downtime.
 
 ## Routing
 
@@ -50,7 +50,7 @@ its thresholds many times a day.
 ## Prod threshold monitors
 
 `monitors/macrodb.ts`, `redis.ts`, `queues.ts`, `regressions.ts`,
-`outlook-sync.ts` and `routine-suggestions.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
+`outlook-sync.ts`, `routine-suggestions.ts` and `harness-runtimes.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
 on CloudWatch metrics have hand-written copies in Grafana
 (`infra/stacks/observability/nixos/prod-alerts.nix`), and Grafana pages on-call for
 the critical ones through GoAlert. Their Datadog copies only notify (GoAlert's
@@ -116,12 +116,13 @@ The gate is that preview:
   of the channel), and the GraphQL soup volume, websocket upgrade, gateway
   connections and task count monitors their `query` and thresholds (volume
   and websocket upgrades also gain recovery thresholds).
-- **105 resources to create**: 76 monitors (32 prod threshold and anomaly, 19 GraphQL soup, 9
+- **116 resources to create**: 79 monitors (35 prod threshold and anomaly, 19 GraphQL soup, 9
   notification retention, 10 WhatsApp session, 1 native call push, 2 harness
   presence, 3 OAuth), 2 webhooks,
-  15 log-based metrics, 3 span-based metrics and 1 APM retention filter (6, 3
+  16 log-based metrics, 9 span-based metrics and 1 APM retention filter (6, 3
   and 1 of them for Outlook sync, 8 log-based metrics for routine
-  suggestions), the GoAlert synthetic test, the six prod alert dashboards, and the notification retention dashboard. If the paging
+  suggestions, 1 log-based and 6 span-based metrics for agent runtimes), the
+  GoAlert synthetic test, the seven prod alert dashboards, and the notification retention dashboard. If the paging
   webhooks and GoAlert synthetic are already deployed, expect only the 2
   Notify webhooks among the webhooks.
 - **1 downtime to create**, muting `[PROD] Notification consumer: no
@@ -329,3 +330,24 @@ plus two, fail; it does not page while suggestions are behind
 Deploy the agent-harness-service release that emits the
 `routine_suggestions.*` logs before these. Log-based metrics count from deploy
 onward. There is no baseline yet; the 10% threshold is a starting point.
+
+## Agent runtime coverage
+
+`monitors/harness-runtimes.ts` adds **three monitors, one dashboard, six
+span-based metrics and one log-based metric** for agent-harness-service
+runtimes. Its header lists every field it reads;
+[the runbook](../../../docs/runbooks/agent-harness-runtimes.md) covers each
+alert. None of them page.
+
+Per runtime, the monitors notify when one dials more than 15 times in
+15 minutes or lists more than 500 sessions to reattach; across the service,
+when it logs more than 1,000 tokio runtime starvation warnings in 15 minutes.
+Over the seven days to 2026-11-10 quiet 15 minutes stayed at or under 12
+dials, 263 sessions and 451 warnings. Every reattach storm crossed the
+sessions or dials threshold and the starvation one; the storm at 17:15Z on
+2026-11-10 was one runtime listing about 1,450 sessions in three dials.
+
+The eager, lazy and skipped metrics stay empty until the agent-harness-service
+release that records those span fields; the dials, sessions and starvation
+metrics read fields prod emits today. Span-based metrics count from deploy
+onward.
