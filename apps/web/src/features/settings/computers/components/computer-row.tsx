@@ -1,12 +1,11 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
-import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import type { ComputerStatus } from '@service-auth/computers';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
-import { HarnessIcon, StatusDot } from '../../integration-ui';
-import { IntegrationRow } from '../../primitives';
+import { MachineRow } from '../../components/connected-runtimes-section';
+import { StatusDot } from '../../integration-ui';
 import {
   computerDotState,
   computerSpecs,
@@ -77,52 +76,57 @@ function ComputerSubtitle(props: {
 
 /**
  * A Macro computer in Settings → Machines, laid out like every other machine
- * row: icon, name with its status dot, one muted line, at most one action,
- * and everything else in the ⋯ menu.
+ * row: status dot and name, one muted line, at most one action, and
+ * everything else in the ⋯ menu.
  */
 export function ComputerRow(props: {
   computer: ComputerStatus;
   claude: ComputerClaudeState;
   primary?: ComputerPrimaryAction;
+  share?: ComputerMenuItem;
   menu: readonly ComputerMenuItem[];
   /** Adds the runtime's Don't ask before acting to the menu. */
   harness?: RegisteredHarness;
 }): JSX.Element {
   return (
-    <IntegrationRow
-      icon={
-        <HarnessIcon>
-          <HardDrivesIcon />
-        </HarnessIcon>
+    <MachineRow
+      target={
+        props.computer.harnessId
+          ? `runtime-${props.computer.harnessId}`
+          : undefined
       }
-      title={props.computer.name}
-      status={
+      name={props.computer.name}
+      dot={
         <StatusDot
           state={computerDotState(props.computer)}
           label={computerStatusLabel(props.computer).label}
         />
       }
-      facts={
+      meta={
         <ComputerSubtitle computer={props.computer} claude={props.claude} />
       }
-    >
-      <Show when={props.primary}>
-        {(primary) => (
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={primary().onClick}
-          >
-            {primary().label}
-          </Button>
-        )}
-      </Show>
-      <ComputerActionsMenu
-        name={props.computer.name}
-        items={props.menu}
-        harness={props.harness}
-      />
-    </IntegrationRow>
+      actions={
+        <>
+          <Show when={props.primary}>
+            {(primary) => (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={primary().onClick}
+              >
+                {primary().label}
+              </Button>
+            )}
+          </Show>
+          <ComputerActionsMenu
+            name={props.computer.name}
+            share={props.share}
+            items={props.menu}
+            harness={props.harness}
+          />
+        </>
+      }
+    />
   );
 }

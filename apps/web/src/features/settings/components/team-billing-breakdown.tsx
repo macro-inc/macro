@@ -84,12 +84,14 @@ export function TeamBillingBreakdown(props: {
         offer.quote.interval === props.billing.interval &&
         offer.quote.amount !== line.unitAmount;
       return {
-        name: line.size
-          ? t('settingsBilling.computerName', {
-              name: line.name,
-              size: sizeLabel(line.size),
-            })
-          : line.name,
+        // The specs below already start with the size.
+        name:
+          line.size && !computer
+            ? t('settingsBilling.computerName', {
+                name: line.name,
+                size: sizeLabel(line.size),
+              })
+            : line.name,
         description: (
           <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span>

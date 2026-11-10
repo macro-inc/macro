@@ -6,6 +6,7 @@ import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import {
   useClaudeModeQuery,
   useClaudeSignOutMutation,
@@ -22,7 +23,10 @@ import type { ComputerStatus, SizeOffer } from '@service-auth/computers';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { Button, confirmDialog } from '@ui';
 import { createSignal, For, Show, Suspense } from 'solid-js';
-import { RuntimeShareDialog } from '../../components/connected-runtimes-section';
+import {
+  MachineRow,
+  RuntimeShareDialog,
+} from '../../components/connected-runtimes-section';
 import { HarnessIcon } from '../../integration-ui';
 import { IntegrationRow, SettingsCard } from '../../primitives';
 import type { ComputerMenuItem } from '../components/computer-actions-menu';
@@ -221,13 +225,6 @@ function ManagedComputerRow(props: {
     const items: ComputerMenuItem[] = [];
     const computer = props.computer;
     const paymentFailed = computer.status === 'payment_failed';
-    if (props.harness?.access === 'owner') {
-      items.push({
-        label: t('runtimeSharing.share'),
-        icon: 'share',
-        onSelect: props.onShare,
-      });
-    }
     if (props.canManage && !paymentFailed && canTogglePower(computer)) {
       items.push(
         computer.poweredOn
@@ -293,6 +290,15 @@ function ManagedComputerRow(props: {
       computer={props.computer}
       claude={claude()}
       primary={primary()}
+      share={
+        props.harness?.access === 'owner'
+          ? {
+              label: t('runtimeSharing.share'),
+              icon: 'share',
+              onSelect: props.onShare,
+            }
+          : undefined
+      }
       menu={menu()}
       harness={props.harness?.access === 'owner' ? props.harness : undefined}
     />
@@ -409,12 +415,22 @@ export function MacroComputers(props: {
               )}
             </For>
             <Show when={canPurchase() && isAdmin()}>
-              <GetComputerRow
-                title={t('computers.getComputer')}
-                description={[t('computers.getComputerLine'), fromPriceLine()]
+              <MachineRow
+                name={t('computers.getComputer')}
+                dot={<PlusIcon class="size-3 text-ink-muted" />}
+                meta={[t('computers.getComputerLine'), fromPriceLine()]
                   .filter(Boolean)
                   .join(' · ')}
-                onGet={() => setBuying(true)}
+                actions={
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setBuying(true)}
+                  >
+                    {t('computers.getComputerAction')}
+                  </Button>
+                }
               />
             </Show>
             <Show when={failed()}>
