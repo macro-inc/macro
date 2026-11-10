@@ -39,7 +39,7 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - Align identity to the centered group's left edge above both columns; let the left column and transcript scroll independently, with the card aligned to the video and filling the remaining pane height.
 - Use Layer offset={1} and bg-surface for the wide transcript card, rounded like the player with a light-only inset edge-frame ring and shadow-md; keep Details floating over it without resetting transcript state.
 
-- Animate wide transcript entry and player settling without remounting either column; disable both animations for reduced motion.
+- Animate the player from its measured narrow width and position while the fixed-width transcript enters on the same 240ms curve; cancel on another pane resize or fullscreen entry, and skip reduced motion.
 ## Checks
 
 From `apps/web`:

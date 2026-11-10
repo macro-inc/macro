@@ -244,10 +244,12 @@ for (const theme of ['light', 'dark']) {
       await page.emulateMedia({ reducedMotion });
       await page.setViewportSize({ width: 1600, height: 900 });
       await page.goto(`${fixture}?theme=${theme}&pane=1107`);
+      await expect(page.locator('video')).toHaveCSS('opacity', '1');
       const motion = await page.evaluate(async () => {
         const video = document.querySelector('video')!;
         video.dataset.mount = 'original';
         document.getElementById('fixture-pane')!.style.maxWidth = '1108px';
+        await new Promise(requestAnimationFrame);
         await new Promise(requestAnimationFrame);
         const card = document.querySelector<HTMLElement>(
           '.recording-transcript-card'

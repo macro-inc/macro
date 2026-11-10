@@ -111,6 +111,86 @@ export function CallRecordingBody(props: {
     if (direction) setScrollingDown(direction === 'down');
   });
   const [playerRef, setPlayerRef] = createSignal<HTMLElement>();
+  const [playerColumnRef, setPlayerColumnRef] = createSignal<HTMLDivElement>();
+  const [transcriptCardRef, setTranscriptCardRef] = createSignal<HTMLElement>();
+  let narrowPlayerRect: DOMRect | undefined;
+  let layoutAnimations: Animation[] = [];
+  let animationPaneWidth = 0;
+  const cancelLayoutAnimations = () => {
+    for (const animation of layoutAnimations) animation.cancel();
+    layoutAnimations = [];
+  };
+  onCleanup(cancelLayoutAnimations);
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const motionChanged = () => {
+    if (reducedMotion.matches) cancelLayoutAnimations();
+  };
+  reducedMotion.addEventListener('change', motionChanged);
+  onCleanup(() => reducedMotion.removeEventListener('change', motionChanged));
+  createEffect(() => {
+    const column = columnRef();
+    const player = playerRef();
+    if (!column) return;
+    const observer = new ResizeObserver(() => {
+      if (layoutAnimations.length && column.clientWidth !== animationPaneWidth)
+        cancelLayoutAnimations();
+      if (player && !wideTranscript() && !playback.isFullscreen())
+        narrowPlayerRect = player.getBoundingClientRect();
+    });
+    observer.observe(column);
+    if (player) observer.observe(player);
+    onCleanup(() => observer.disconnect());
+  });
+  createEffect(
+    on(wideTranscript, (wide, previous) => {
+      cancelLayoutAnimations();
+      if (
+        !wide ||
+        previous !== false ||
+        playback.isFullscreen() ||
+        reducedMotion.matches
+      )
+        return;
+      const before = narrowPlayerRect;
+      const player = playerRef();
+      const column = playerColumnRef();
+      const card = transcriptCardRef();
+      if (!column || !card) return;
+      const cardRect = card.getBoundingClientRect();
+      animationPaneWidth = columnRef()?.clientWidth ?? 0;
+      const timing = { duration: 240, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
+      const cardOffset = before ? before.right + 28 - cardRect.left : 12;
+      layoutAnimations = [
+        card.animate(
+          [
+            { opacity: 0, transform: `translateX(${cardOffset}px)` },
+            { opacity: 1, transform: 'translateX(0)' },
+          ],
+          timing
+        ),
+      ];
+      if (before && player) {
+        const after = player.getBoundingClientRect();
+        layoutAnimations.push(
+          column.animate(
+            [
+              {
+                width: `${before.width}px`,
+                transform: `translate(${before.left - after.left}px, ${before.top - after.top}px)`,
+              },
+              { width: `${after.width}px`, transform: 'translate(0, 0)' },
+            ],
+            timing
+          )
+        );
+      }
+    })
+  );
+  createEffect(
+    on(playback.isFullscreen, (active) => {
+      if (active) cancelLayoutAnimations();
+    })
+  );
   const [playerOffscreen, setPlayerOffscreen] = createSignal(false);
   const floatingPlayback = () => playerOffscreen() && !!record().recordingUrl;
   const mobilePlaybackActive = () =>
@@ -324,7 +404,10 @@ export function CallRecordingBody(props: {
                             </Button>
                           </Show>
                         </div>
-                        <div class="recording-player-column contents @[1108px]/call-column:relative @[1108px]/call-column:flex @[1108px]/call-column:min-h-0 @[1108px]/call-column:min-w-0 @[1108px]/call-column:flex-col">
+                        <div
+                          ref={setPlayerColumnRef}
+                          class="recording-player-column contents @[1108px]/call-column:relative @[1108px]/call-column:flex @[1108px]/call-column:min-h-0 @[1108px]/call-column:min-w-0 @[1108px]/call-column:flex-col"
+                        >
                           <div
                             ref={setLeftScrollRef}
                             data-recording-scroll="content"
@@ -487,6 +570,7 @@ export function CallRecordingBody(props: {
                         </div>
                         <Layer offset={transcriptPanel() ? 1 : 0}>
                           <aside
+                            ref={setTranscriptCardRef}
                             aria-label={t('calls.detailTranscript')}
                             class="recording-transcript-card min-w-0 -mt-6 mobile:order-3 @[1108px]/call-column:sticky @[1108px]/call-column:top-0 @[1108px]/call-column:mt-0 @[1108px]/call-column:flex @[1108px]/call-column:min-h-0 @[1108px]/call-column:flex-col @[1108px]/call-column:overflow-hidden @[1108px]/call-column:rounded-2xl @[1108px]/call-column:bg-surface @[1108px]/call-column:light-mode:ring-1 @[1108px]/call-column:light-mode:ring-inset @[1108px]/call-column:light-mode:ring-edge-frame @[1108px]/call-column:light-mode:shadow-md"
                             inert={

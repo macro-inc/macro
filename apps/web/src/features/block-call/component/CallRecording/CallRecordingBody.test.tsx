@@ -103,6 +103,11 @@ function callRecord(isActive: boolean): CallRecord {
 }
 
 beforeEach(() => {
+  vi.stubGlobal('matchMedia', () => ({
+    matches: false,
+    addEventListener() {},
+    removeEventListener() {},
+  }));
   vi.stubGlobal(
     'ResizeObserver',
     class {

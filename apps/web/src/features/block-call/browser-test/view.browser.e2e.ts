@@ -69,7 +69,8 @@ for (const theme of ['light', 'dark']) {
         expect(geometry.titleRight).toBe(0);
         expect(geometry.background).not.toBe(geometry.pageBackground);
         expect(geometry.border).toBe('0px');
-        expect(geometry.shadow).toBe('none');
+        if (theme === 'light') expect(geometry.shadow).not.toBe('none');
+        else expect(geometry.shadow).toBe('none');
         expect(geometry.radius).toBe(geometry.playerRadius);
         expect(geometry.bottomGap).toBe(16);
         expect(geometry.playerWidth).toBeGreaterThanOrEqual(520);
@@ -176,9 +177,11 @@ for (const theme of ['light', 'dark']) {
     await expect(transcript).toBeHidden();
     await expect(card).toBeVisible();
     await expect(card).toHaveCSS('opacity', '1');
-    expect(
-      await video.evaluate((element) => element.getBoundingClientRect().width)
-    ).toBe(520);
+    await expect
+      .poll(() =>
+        video.evaluate((element) => element.getBoundingClientRect().width)
+      )
+      .toBe(520);
     await expect(video).toHaveAttribute('data-mount', 'original');
     await expect(
       card.locator('[data-call-transcript-row]').first()

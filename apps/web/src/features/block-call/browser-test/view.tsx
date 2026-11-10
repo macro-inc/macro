@@ -26,7 +26,9 @@ const RECORD: CallRecord = {
   createdBy: 'fixture-owner',
   startedAt: '2026-01-01T00:00:00Z',
   endedAt: '2026-01-01T00:00:02Z',
-  recordingUrl: clip,
+  recordingUrl: new URLSearchParams(location.search).has('no-recording')
+    ? null
+    : clip,
   isActive: false,
   shareWithTeam: false,
   summary: [
