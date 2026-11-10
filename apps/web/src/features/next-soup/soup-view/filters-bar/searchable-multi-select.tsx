@@ -473,6 +473,8 @@ type SearchableMultiSelectInlineProps = {
   listboxClass?: string;
   /** Keep `options` in their given order instead of pinning selected first. */
   preserveOrder?: boolean;
+  /** Offers typed text as an option, such as an address no suggestion lists. */
+  createOption?: (query: string) => SearchableOption | undefined;
   footer?: JSX.Element;
 };
 
@@ -488,8 +490,6 @@ export const SearchableMultiSelectInline = (
   const selectionIntent = createMultiSelectIntent();
   const [searchQuery, setSearchQuery] = createSignal('');
   const activeOptions = useActiveOptions(props.options, props.activeIds);
-  const matches = useHasMatches(props.options, searchQuery);
-  const hasMatches = matches;
   // Inline variant is freshly mounted each time the parent submenu opens,
   // so we don't need an explicit "menu opened" trigger — the memo's first
   // run captures the current selection ordering.
@@ -501,7 +501,20 @@ export const SearchableMultiSelectInline = (
   });
   const sortedOptions = () =>
     props.preserveOrder ? props.options() : selectedFirstOptions();
-  const displayOptions = sortedOptions;
+  // Typed text that is a value but no option leads the list, ready for Enter.
+  const created = createMemo(() => {
+    const query = searchQuery().trim();
+    const option = query ? props.createOption?.(query) : undefined;
+    return option && !sortedOptions().some((other) => other.id === option.id)
+      ? option
+      : undefined;
+  });
+  const displayOptions = createMemo(() => {
+    const option = created();
+    return option ? [option, ...sortedOptions()] : sortedOptions();
+  });
+  let listbox: HTMLDivElement | undefined;
+  const hasMatches = useHasMatches(displayOptions, searchQuery);
 
   const handleChange = (selected: SearchableOption[]) => {
     const id =
@@ -537,9 +550,19 @@ export const SearchableMultiSelectInline = (
       case 'Escape':
         // Let parent close
         return;
+      case 'Enter': {
+        e.stopPropagation();
+        // Enter adds typed text unless an arrow key picked a row, as chip
+        // fields do.
+        const option = created();
+        if (!option || listbox?.querySelector('[data-highlighted]')) return;
+        e.preventDefault();
+        props.onChange([...props.activeIds(), option.id]);
+        props.onSelectionComplete?.();
+        return;
+      }
       case 'ArrowDown':
       case 'ArrowUp':
-      case 'Enter':
       case 'Home':
       case 'End':
       case 'PageUp':
@@ -584,7 +607,13 @@ export const SearchableMultiSelectInline = (
           placeholder={props.placeholder}
         />
       </div>
-      <div ref={selectionIntent.track} class="p-1">
+      <div
+        ref={(element) => {
+          listbox = element;
+          selectionIntent.track(element);
+        }}
+        class="p-1"
+      >
         <Show
           when={hasMatches()}
           fallback={
