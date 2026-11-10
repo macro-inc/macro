@@ -13,6 +13,13 @@ export const ALLOWED_ORIGINS = () => {
     // Google's sign-in pages send the browser back to FusionAuth, which reads
     // their origin and otherwise ends Google sign-in with `invalid_origin`.
     'https://accounts.google.com',
+    // Microsoft's sign-in pages do the same: work and school accounts come
+    // back from login.microsoftonline.com, personal accounts from
+    // login.live.com, or from account.live.com after its consent and security
+    // prompts, which hand back through login.live.com.
+    'https://login.microsoftonline.com',
+    'https://login.live.com',
+    'https://account.live.com',
   ];
 
   switch (stack) {

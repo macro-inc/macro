@@ -14,7 +14,8 @@ Two different values get checked during sign-in, by two different parties:
   application's authorized origins (`infra/stacks/fusionauth-instance/origins.ts`)
   and fails with `invalid_request: Invalid origin uri` when it is not listed.
   That list is for Macro's own apps that talk to FusionAuth directly, plus
-  Google's sign-in pages, which send the browser back to FusionAuth.
+  Google's and Microsoft's sign-in pages, which send the browser back to
+  FusionAuth.
 - The **redirect URI** is where the authorization code is delivered. The broker
   checks it, as described in the next two sections. FusionAuth only ever
   redirects to the broker's own `/oauth/callback`.
