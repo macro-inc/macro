@@ -290,11 +290,10 @@ const definitions: Readonly<Record<string, Conversion>> = {
     convert: (node) => {
       const template = node.querySelector('template[shadowrootmode]'),
         attribute = node.getAttribute('data-html');
+      const htmlFromAttribute = attribute ? parse(attribute) : null;
       const html = template
         ? template.innerHTML
-        : attribute
-          ? (parse(attribute) ?? node.innerHTML)
-          : node.innerHTML;
+        : (htmlFromAttribute ?? node.innerHTML);
       return draft('html-render', {
         html,
         ...(node.classList.contains('macro_html_render_adapt')
