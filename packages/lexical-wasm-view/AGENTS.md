@@ -14,6 +14,7 @@ tests are separate from Rust-backed production compatibility acceptance.
 - Capture ViewOptions.owner before asynchronous mounts so native decorator roots inherit application providers; dispose each decorator root when its keyed node is removed.
 - Install common Macro element views once; register group-owned decorators through registerMacroDecoratorViews and keep full registerMacroViews completeness checks strict.
 - Let NodeView.createDecoratorHost preserve application mount wrappers; Macro uses the Source Portal div and mount class while portable views retain their default host.
+- Keep opted-in decoratorRevision metadata outside JSON; unchanged revisions preserve captured component props, and changed revisions dispose and remount with the actual native snapshot.
 - The Diff applier owns mirror writes; renderers and view plugins read it.
 - Assemble wholly created subtrees off DOM in the existing slot-walk order; keep reused-node moves and trees with DOM-slot hooks on the ordinary path and resolve dynamic slot boundaries when attaching, before selection and commit notifications.
 - A successful flags=0 TextFromView may acknowledge exactly the submitted edit
