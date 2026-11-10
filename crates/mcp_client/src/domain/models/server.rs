@@ -3,7 +3,7 @@ use crate::domain::ports::{McpConnector, McpServerStore};
 use crate::domain::service::PersistingCredentialStore;
 use macro_user_id::user_id::MacroUserIdStr;
 use rmcp::RoleClient;
-use rmcp::model::{ClientInfo, Implementation};
+use rmcp::model::{ClientConfig, Implementation};
 use rmcp::service::{RunningService, ServiceExt};
 use rmcp::transport::StreamableHttpClientTransport;
 use rmcp::transport::auth::{AuthClient, AuthorizationManager, StoredCredentials};
@@ -12,11 +12,11 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
 /// A connected MCP server session.
-pub type McpServer = RunningService<RoleClient, ClientInfo>;
+pub type McpServer = RunningService<RoleClient, ClientConfig>;
 
 /// Build the client info sent to MCP servers during initialization.
-pub fn client_info() -> ClientInfo {
-    ClientInfo::new(
+pub fn client_info() -> ClientConfig {
+    ClientConfig::new(
         Default::default(),
         Implementation::new(MCP_CLIENT_NAME, env!("CARGO_PKG_VERSION")),
     )
