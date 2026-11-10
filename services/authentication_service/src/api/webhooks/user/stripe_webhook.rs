@@ -863,6 +863,8 @@ async fn handle_team_subscription_event<'a>(
 #[tracing::instrument(skip(ctx))]
 async fn reconcile_team_computers(ctx: &ApiContext, subscription_id: &str, team_id: &uuid::Uuid) {
     let subscription = match stripe::SubscriptionId::from_str(subscription_id) {
+        // Not the event payload: a stale item list from an out-of-order event
+        // would cancel computers the team has paid for.
         Ok(id) => stripe::Subscription::retrieve(&ctx.stripe_client, &id, &[]).await,
         Err(error) => {
             tracing::warn!(error = ?error, "invalid team subscription id; skipping computer reconcile");

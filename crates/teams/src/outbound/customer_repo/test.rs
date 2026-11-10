@@ -1,4 +1,6 @@
 use super::*;
+
+mod seat_requests;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
