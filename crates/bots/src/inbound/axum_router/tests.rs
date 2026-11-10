@@ -1262,6 +1262,84 @@ async fn bot_owner_can_create_and_patch_has_agent_via_http(pool: PgPool) -> anyh
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn patching_an_agent_changes_only_the_fields_sent(pool: PgPool) -> anyhow::Result<()> {
+    const OWNER_ID: &str = "macro|agent-owner@example.com";
+    insert_user(&pool, OWNER_ID).await?;
+    let router = real_router(pool, OWNER_ID);
+
+    let created = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/agents")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({
+                        "name": "Web maintainer",
+                        "handle": "web-maintainer",
+                        "harness": "in-memory",
+                        "instructions": "Owns acme/web.",
+                        "channel_scope": "all",
+                        "default_model": "claude-sonnet",
+                        "is_coding": true,
+                        "auto_accept_permissions": true,
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.status(), StatusCode::CREATED);
+    let created: serde_json::Value =
+        serde_json::from_slice(&axum::body::to_bytes(created.into_body(), 1 << 20).await?)?;
+    let agent_id = created["bot"]["id"].as_str().unwrap().to_string();
+
+    let patched = router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/agents/{agent_id}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({"instructions": "Ship small diffs."}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(patched.status(), StatusCode::OK);
+    let patched: serde_json::Value =
+        serde_json::from_slice(&axum::body::to_bytes(patched.into_body(), 1 << 20).await?)?;
+    assert_eq!(patched["instructions"], "Ship small diffs.");
+    assert_eq!(patched["default_model"], "claude-sonnet");
+    assert_eq!(patched["harness"], "in-memory");
+    assert_eq!(patched["is_coding"], true);
+    assert_eq!(patched["auto_accept_permissions"], true);
+    assert_eq!(patched["channel_scope"], "all");
+    assert_eq!(patched["bot"]["name"], "Web maintainer");
+
+    let flat_channels = router
+        .oneshot(
+            Request::builder()
+                .method("PATCH")
+                .uri(format!("/agents/{agent_id}"))
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(
+                    serde_json::json!({"channel_ids": [Uuid::new_v4()]}).to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(flat_channels.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_agents_owner_edits_its_memory_and_a_stale_edit_conflicts(
     pool: PgPool,
 ) -> anyhow::Result<()> {

@@ -5,9 +5,9 @@ mod tests;
 
 use crate::domain::{
     models::{
-        AddChannelBotRequest, Agent, AgentMemory, Bot, BotChannel, BotChannelListCaller, BotId,
-        BotOwnerProfile, BotToken, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-        CreateBotTokenResponse, PatchBotRequest, UpdateAgentMemoryRequest, UpdateAgentRequest,
+        AddChannelBotRequest, Agent, AgentMemory, Bot, BotChannel, BotChannelListCaller, BotId, BotOwnerProfile,
+        BotToken, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+        CreateBotTokenResponse, PatchAgentRequest, PatchBotRequest, UpdateAgentMemoryRequest, UpdateAgentRequest,
     },
     ports::{BotError, BotService},
 };
@@ -152,7 +152,7 @@ where
         .route("/agents", post(create_agent_handler::<S, Svc, Auth>))
         .route(
             "/agents/{agent_id}",
-            put(update_agent_handler::<S, Svc, Auth>),
+            put(update_agent_handler::<S, Svc, Auth>).patch(patch_agent_handler::<S, Svc, Auth>),
         )
         .route(
             "/agents/{agent_id}/memory",
@@ -297,6 +297,47 @@ pub async fn update_agent_handler<
         state
             .service
             .update_agent(
+                authorization.authorization.user.macro_user_id,
+                path.agent_id,
+                req,
+            )
+            .await?,
+    ))
+}
+
+/// Handler for `PATCH /agents/{agent_id}`: change only the settings the body
+/// names, keeping every other one, as the `ConfigureAgent` tool does.
+#[utoipa::path(
+    patch,
+    tag = "agents",
+    operation_id = "patch_agent",
+    path = "/agents/{agent_id}",
+    params(
+        ("agent_id" = BotId, Path, description = "Agent bot ID")
+    ),
+    request_body = PatchAgentRequest,
+    responses(
+        (status = 200, body = Agent),
+        (status = 400, body = ErrorResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn patch_agent_handler<
+    S: BotService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<BotsRouterState<S, Svc, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(path): Path<AgentPath>,
+    Json(req): Json<PatchAgentRequest>,
+) -> Result<Json<Agent>, BotsHandlerErr> {
+    Ok(Json(
+        state
+            .service
+            .patch_agent(
                 authorization.authorization.user.macro_user_id,
                 path.agent_id,
                 req,

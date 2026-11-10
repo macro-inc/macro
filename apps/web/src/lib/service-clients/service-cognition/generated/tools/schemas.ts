@@ -302,7 +302,17 @@ export const CalculateSpreadsheet = z.object({
           .object({
             sheetId: z.string(),
             cells: z.array(
-              z.object({ address: z.string(), value: z.string() }).strict()
+              z
+                .object({
+                  address: z.string(),
+                  value: z.union([
+                    z.boolean(),
+                    z.number(),
+                    z.string(),
+                    z.null(),
+                  ]),
+                })
+                .strict()
             ),
           })
           .strict()
@@ -5445,6 +5455,7 @@ export const CreateRoutine = z.object({
         z.null(),
       ])
       .optional(),
+    dangerouslyOperateAsUser: z.union([z.boolean(), z.null()]).optional(),
   }),
 });
 
@@ -5533,6 +5544,7 @@ export const RoutineInfo = z.object({
             z.null(),
           ])
           .optional(),
+        dangerouslyOperateAsUser: z.union([z.boolean(), z.null()]).optional(),
       }),
       z.null(),
     ])
@@ -10060,7 +10072,17 @@ export const EditSpreadsheet = z.object({
           .object({
             sheetId: z.string(),
             cells: z.array(
-              z.object({ address: z.string(), value: z.string() }).strict()
+              z
+                .object({
+                  address: z.string(),
+                  value: z.union([
+                    z.boolean(),
+                    z.number(),
+                    z.string(),
+                    z.null(),
+                  ]),
+                })
+                .strict()
             ),
             type: z.literal('set_cells'),
           })
@@ -13398,6 +13420,9 @@ export const RoutineList = z.object({
                 z.array(z.object({ appSlug: z.string(), name: z.string() })),
                 z.null(),
               ])
+              .optional(),
+            dangerouslyOperateAsUser: z
+              .union([z.boolean(), z.null()])
               .optional(),
           }),
           z.null(),
@@ -18015,6 +18040,7 @@ export const RoutineDetails = z.object({
               z.null(),
             ])
             .optional(),
+          dangerouslyOperateAsUser: z.union([z.boolean(), z.null()]).optional(),
         }),
         z.null(),
       ])
@@ -20097,6 +20123,7 @@ export const UpdateRoutine = z.object({
               z.null(),
             ])
             .optional(),
+          dangerouslyOperateAsUser: z.union([z.boolean(), z.null()]).optional(),
         }),
         type: z.literal('configuration'),
       }),

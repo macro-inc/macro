@@ -40,6 +40,8 @@ export type HistoryStart =
   | { kind: 'event'; event: string; entityId?: string }
   /** `by` is the person's user id. */
   | { kind: 'manual'; by: string };
+/** Whose name a run's code steps wrote under. */
+export type CodeActsAs = 'agent' | 'owner';
 /** When a run counts as happening, what started it, and the run before it. */
 export type HistoryRun = {
   /** The trigger's time, which code reads as the run's time. */
@@ -48,6 +50,8 @@ export type HistoryRun = {
   start: HistoryStart;
   /** When the previous finished run started; absent on the first run. */
   previousAt?: string;
+  /** Whom code steps wrote as; absent on runs recorded before the setting. */
+  codeActsAs?: CodeActsAs;
 };
 export type HistoryRecord = {
   id?: string | null;

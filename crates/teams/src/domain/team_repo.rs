@@ -478,7 +478,8 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<TeamMember<'_>, JoinTeamError>> + Send;
 
-    /// Revokes permissions for all team members (not owner)
+    /// Revokes team permissions for all team members, and the owner's personal
+    /// Pro role unless their Stripe customer still has a live subscription.
     /// This is used when a team subscription is canceled or frozen in some way.
     /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.
     fn revoke_permissions_for_team_members(
@@ -570,14 +571,9 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         Output = Result<HashSet<roles_and_permissions::domain::model::PermissionId>, TeamError>,
     > + Send;
 
-    /// Enables or disables CRM for a team. On a `false → true`
-    /// transition with `backfill`, fans out a `PopulateCrmForUser`
-    /// enqueue per current team member (best-effort, log-and-swallow);
-    /// without `backfill` the flag flips and the CRM starts empty. On
-    /// any disable call, flips the flag and purges the team's
-    /// `crm_companies` rows in a single transaction — the FK cascade
-    /// clears the rest of the CRM tables. Idempotent in both
-    /// directions.
+    /// Legacy compatibility command. Enabling is a no-op and disabling
+    /// is rejected. Records remain available; email contribution and
+    /// backfill require each member's explicit CRM consent.
     fn set_team_crm_enabled(
         &self,
         entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,

@@ -53,6 +53,7 @@ async fn session(
     agent_session::domain::ports::AgentSessionRepo::create(
         repo,
         CreateAgentSessionParams {
+            billing: Default::default(),
             origin: trigger_context::TriggerOrigin::Unknown,
             purpose: agent_session::domain::model::SessionPurpose::Standalone,
             id,
@@ -178,6 +179,7 @@ async fn managed_open_checks_quota_before_provisioning_without_an_initial_prompt
         let id = AgentSessionId::new();
         let result = service
             .open_managed_session(OpenManagedSession {
+                billing: Default::default(),
                 origin: trigger_context::TriggerOrigin::Unknown,
                 id: Some(id),
                 owner: Owner::User(sender()),

@@ -34,6 +34,11 @@ create route refuses them, and the email send and schedule routes refuse
 them unless the schedule quotes the user's approval
 (`macro_authorization::is_agent_run`).
 
+`RunEnvironment::endpoints` carries the SDK's hosts and the web app origin; the
+host fills both from `macro_service_urls`. Leaving `webAppUrl` out of
+`new Macro(...)` makes the SDK default to prod, so `webUrl()` links on dev and
+local would point at macro.com.
+
 The bootstrap bans timers before importing `main.mjs`, and the import map points
 node timer and worker modules at `timers.mjs`. The bundled SDK's only timer is
 the SSE reconnect delay, so a reconnecting event stream fails the same way.
