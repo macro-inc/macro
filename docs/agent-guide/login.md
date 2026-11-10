@@ -239,7 +239,7 @@ Verify that Continue advances without signing in. Below the color
 picker, "Already have an account? Sign in instead" opens `/app/login`. At the work-email
 step, Continue with Google creates the Macro account and links the primary
 inbox; Continue with Microsoft below it (behind the `enable-microsoft-signup`
-flag, on in dev builds) creates the account through the
+flag, on only in Vite development-mode builds) creates the account through the
 FusionAuth `microsoft` identity provider (work, school, and personal accounts),
 then the signed-in work step continues straight into Outlook consent (mail and
 calendar) when `enable-outlook` admits the user. Declining or a tenant that
@@ -266,6 +266,9 @@ Pearl and centers the remaining five swatches. A selected Pearl falls back to Mi
 when entering cream mode; Pearl stays available in dark mode. Cream slab headings use weight 330
 (15 above dark mode) with the same sizing and line breaks. Interests are visual
 preferences only. Security and Google steps have a Read more section below the fold.
+Where the work step offers Microsoft, its Read more adds Continuing with
+Microsoft: sign-in shares only name, email, and account ID, and Outlook mail and
+calendar access is a separate consent that follows.
 
 Work and personal account buttons use the existing Gmail linking flow. Skipping
 work email skips the secondary-account prompt. Verify that a Google return
