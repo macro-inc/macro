@@ -6,6 +6,7 @@ mod comments;
 mod lifecycle;
 mod presence;
 mod recovery;
+mod recovery_history;
 mod seed_adoption;
 mod stop;
 mod wal;
