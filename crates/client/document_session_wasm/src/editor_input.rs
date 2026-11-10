@@ -121,6 +121,29 @@ fn range(msg: wire::RangeSelectionMsg, generation: u32) -> Result<RangeSelection
     range.style = msg.style.into();
     Ok(range)
 }
+fn paste_payload(
+    clipboard: Vec<wire::ClipboardEntryMsg>,
+    has_files: bool,
+    html_nodes: Vec<String>,
+    intent: PasteIntent,
+) -> Result<ClipboardPayload, BoundaryError> {
+    Ok(ClipboardPayload {
+        data: clipboard.into_iter().map(|v| (v.mime, v.value)).collect(),
+        has_files,
+        html_nodes: if html_nodes.is_empty() {
+            None
+        } else {
+            Some(
+                html_nodes
+                    .into_iter()
+                    .map(|v| serde_json::from_str(&v))
+                    .collect::<Result<_, _>>()?,
+            )
+        },
+        intent,
+    })
+}
+
 pub(crate) fn input(msg: wire::EditorInputMsg, generation: u32) -> Result<Input, BoundaryError> {
     Ok(match msg {
         wire::EditorInputMsg::EditorCommand {
@@ -323,20 +346,29 @@ pub(crate) fn input(msg: wire::EditorInputMsg, generation: u32) -> Result<Input,
             has_files,
             html_nodes,
         } => Input::Command {
-            command: Command::Paste(ClipboardPayload {
-                data: clipboard.into_iter().map(|v| (v.mime, v.value)).collect(),
+            command: Command::Paste(paste_payload(
+                clipboard,
                 has_files,
-                html_nodes: if html_nodes.is_empty() {
-                    None
-                } else {
-                    Some(
-                        html_nodes
-                            .into_iter()
-                            .map(|v| serde_json::from_str(&v))
-                            .collect::<Result<_, _>>()?,
-                    )
+                html_nodes,
+                PasteIntent::default(),
+            )?),
+            selection: selection(&s, generation)?,
+        },
+        wire::EditorInputMsg::EditorPasteWithIntent {
+            selection: s,
+            clipboard,
+            has_files,
+            html_nodes,
+            intent,
+        } => Input::Command {
+            command: Command::Paste(paste_payload(
+                clipboard,
+                has_files,
+                html_nodes,
+                PasteIntent {
+                    plain_only: intent.plain_only,
                 },
-            }),
+            )?),
             selection: selection(&s, generation)?,
         },
         wire::EditorInputMsg::EditorInsertText {

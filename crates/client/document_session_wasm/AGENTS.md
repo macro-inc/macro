@@ -70,6 +70,8 @@ Preserve keystroke work counters when changing code-generation or post-processin
 
 Reserve a fresh pending publication version at compatBegin, publish that version only after admission, and burn it on discard/no-op. Observe Start/Seed/remote/undo through compatCurrentVersion; compatSnapshot(version) always reads that exact retained publication. Validate full issued references for receivers and typed arguments; raw core-field reads use their owned captures rather than the latest graph. Pure commit observers may collect receipts, never install parallel editing behavior.
 
+Decode legacy EditorPaste tag 4 with default-false PasteIntent and additive tag 10 with its exact typed intent; preserve clipboard, constructor JSON and selection semantics on both paths.
+
 ## Checks
 
 - `cargo test -p document_session_wasm -j2`

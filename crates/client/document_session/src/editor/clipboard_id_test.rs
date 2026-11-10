@@ -77,6 +77,7 @@ fn paste(surface: &mut EditorSurface, doc: &LoroDoc, nodes: &[Value], html: bool
     );
     let payload = if html {
         ClipboardPayload {
+            intent: PasteIntent::default(),
             data: [("text/html".into(), "<p><b>copied</b></p>".into())]
                 .into_iter()
                 .collect(),
@@ -90,6 +91,7 @@ fn paste(surface: &mut EditorSurface, doc: &LoroDoc, nodes: &[Value], html: bool
         }
     } else {
         ClipboardPayload {
+            intent: PasteIntent::default(),
             data: [(
                 "application/x-lexical-editor".into(),
                 json!({"namespace":"document-session", "nodes":nodes}).to_string(),
@@ -285,6 +287,7 @@ fn plain_and_markdown_text_pastes_keep_existing_ids_and_assign_fresh_nodes() {
                 &doc,
                 Input::Command {
                     command: Command::Paste(ClipboardPayload {
+                        intent: PasteIntent::default(),
                         data: [("text/plain".into(), text.into())].into_iter().collect(),
                         has_files: false,
                         html_nodes: None,
