@@ -111,6 +111,7 @@ async fn entity_updates_skip_noops_and_retries(pool: Pool<Postgres>) -> Result<(
                     id,
                     "test_service",
                     None,
+                    &Default::default(),
                 )
                 .await?;
                 sqlx::query!(

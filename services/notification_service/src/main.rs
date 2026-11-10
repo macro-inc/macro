@@ -13,6 +13,7 @@ use ::notification::outbound::kafka_realtime::KafkaRealtimeSender;
 use ::notification::outbound::mobile::MobilePushAdapter;
 use ::notification::outbound::notification_events::PgNotificationEventsReceiver;
 use ::notification::outbound::rate_limit::RedisRateLimitAdapter;
+use ::notification::outbound::signal_only_realtime::SignalOnlyRealtimeSender;
 use ::notification::outbound::websocket::{ConnectionGatewayClient, WebSocketGatewayAdapter};
 use ::rate_limit::RateLimitServiceImpl;
 use anyhow::Context;
@@ -215,13 +216,15 @@ pub async fn main() -> anyhow::Result<()> {
     let egress_repository =
         ::notification::outbound::repository::DbNotificationRepository::new(db.clone());
 
+    // Clients alert on every connection gateway `notification` message, so
+    // that path carries signal only. Noise reaches clients through Kafka.
     let realtime_adapter = FanoutRealtimeSender::new(
-        WebSocketGatewayAdapter {
+        SignalOnlyRealtimeSender::new(WebSocketGatewayAdapter {
             gateway: ConnectionGatewayClient::new(
                 config.internal_api_key.as_ref().to_string(),
                 connection_gateway_url,
             ),
-        },
+        }),
         KafkaRealtimeSender::new(realtime_event_broker),
     );
 

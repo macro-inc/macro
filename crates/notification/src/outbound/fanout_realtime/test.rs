@@ -14,7 +14,7 @@ impl RealtimeSender for RecordingSender {
     async fn send_notifications<'a, T: Serialize + Send + Sync>(
         &self,
         _recipients: &[MacroUserIdStr<'a>],
-        notification: &T,
+        notification: &RealtimeNotif<T>,
     ) -> Result<HashSet<MacroUserIdStr<'static>>, Report> {
         self.calls
             .lock()
@@ -31,6 +31,23 @@ impl RealtimeSender for RecordingSender {
 
 fn user(id: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(id.to_string()).expect("valid user ID")
+}
+
+fn notification() -> RealtimeNotif<serde_json::Value> {
+    RealtimeNotif {
+        notification_id: uuid::Uuid::nil(),
+        notification_event_type: "channel_mention".to_string(),
+        entity: model_entity::EntityType::Channel.with_entity_string("channel-id".to_string()),
+        sent: true,
+        state: crate::domain::models::NotificationState::Unseen,
+        lane: crate::domain::models::NotificationLane::Signal,
+        created_at: chrono::DateTime::UNIX_EPOCH,
+        viewed_at: None,
+        updated_at: chrono::DateTime::UNIX_EPOCH,
+        deleted_at: None,
+        notification_metadata: serde_json::json!({ "kind": "test" }),
+        sender_id: None,
+    }
 }
 
 #[tokio::test]
@@ -51,7 +68,7 @@ async fn sends_through_both_adapters_and_combines_receipts() {
             fail: false,
         },
     );
-    let notification = serde_json::json!({ "kind": "test" });
+    let notification = notification();
 
     let delivered = sender
         .send_notifications(&[first_user, second_user], &notification)
@@ -61,13 +78,14 @@ async fn sends_through_both_adapters_and_combines_receipts() {
     assert_eq!(delivered.len(), 2);
     assert!(delivered.contains(&user("macro|first@example.com")));
     assert!(delivered.contains(&user("macro|second@example.com")));
+    let sent = serde_json::to_value(&notification).expect("notification serializes");
     assert_eq!(
         first_calls.lock().expect("first calls lock").as_slice(),
-        &[notification.clone()]
+        &[sent.clone()]
     );
     assert_eq!(
         second_calls.lock().expect("second calls lock").as_slice(),
-        &[notification]
+        &[sent]
     );
 }
 
@@ -89,10 +107,7 @@ async fn attempts_both_adapters_when_one_fails() {
     );
 
     sender
-        .send_notifications(
-            &[user("macro|recipient@example.com")],
-            &serde_json::json!({ "kind": "test" }),
-        )
+        .send_notifications(&[user("macro|recipient@example.com")], &notification())
         .await
         .expect_err("one failed send fails the fanout");
 

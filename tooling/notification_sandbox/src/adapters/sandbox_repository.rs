@@ -3,6 +3,7 @@ use model_entity::Entity;
 use models_pagination::{CreatedAt, Query};
 use notification::domain::models::TaggedContent;
 use notification::domain::models::request::{NotificationListFilters, NotificationStatus};
+use notification::domain::models::routing::RecipientRoutes;
 use notification::domain::models::{
     DeviceEndpoint, NotificationIdAndCollapseKey, SendNotificationRequestBuilder,
     UserNotificationRow, device::DeviceType,
@@ -62,9 +63,16 @@ impl NotificationRepository for SandboxNotificationRepository {
         notification_id: Uuid,
         service_sender: &str,
         apns_collapse_key: Option<&str>,
+        routes: &RecipientRoutes,
     ) -> Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report> {
         self.inner
-            .create_notification(request, notification_id, service_sender, apns_collapse_key)
+            .create_notification(
+                request,
+                notification_id,
+                service_sender,
+                apns_collapse_key,
+                routes,
+            )
             .await
     }
 

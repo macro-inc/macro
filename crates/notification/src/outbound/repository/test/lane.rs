@@ -1,7 +1,9 @@
-//! Noise never leaks into a reader that did not ask for it. Nothing routes to
-//! noise yet, so each test moves a stored recipient row there directly.
+//! Noise never leaks into a reader that did not ask for it. The reader tests
+//! move a stored recipient row to noise directly; the routing tests store it
+//! through `create_notification`.
 
 use super::*;
+use crate::domain::models::routing::{RecipientRoute, RecipientRoutes};
 use crate::domain::models::{NotificationLane, entity_query::EntityNotificationQuery};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +47,7 @@ async fn lists_read_one_lane(pool: Pool<Postgres>) -> Result<(), Report> {
             id,
             "test_service",
             None,
+            &Default::default(),
         )
         .await?;
     }
@@ -117,6 +120,7 @@ async fn entity_edge_reads_one_lane(pool: Pool<Postgres>) -> Result<(), Report> 
             id,
             "test_service",
             None,
+            &Default::default(),
         )
         .await?;
     }
@@ -177,6 +181,7 @@ async fn a_noise_reply_does_not_move_a_signal_message_onto_its_thread(
         root,
         "test_service",
         None,
+        &Default::default(),
     )
     .await?;
     let reply = Uuid::now_v7();
@@ -196,6 +201,7 @@ async fn a_noise_reply_does_not_move_a_signal_message_onto_its_thread(
         reply,
         "test_service",
         None,
+        &Default::default(),
     )
     .await?;
     let channel_feed = EntityNotificationQuery {
@@ -244,6 +250,7 @@ async fn opening_an_entity_marks_its_noise_seen(pool: Pool<Postgres>) -> Result<
             id,
             "test_service",
             None,
+            &Default::default(),
         )
         .await?;
     }
@@ -300,6 +307,7 @@ async fn noise_is_never_digest_eligible(pool: Pool<Postgres>) -> Result<(), Repo
             id,
             "test_service",
             None,
+            &Default::default(),
         )
         .await?;
     }
@@ -318,12 +326,78 @@ async fn noise_is_never_digest_eligible(pool: Pool<Postgres>) -> Result<(), Repo
     Ok(())
 }
 
+fn captured_by(stack_id: Uuid) -> RecipientRoute {
+    RecipientRoute {
+        lane: NotificationLane::Noise,
+        stack_id: Some(stack_id),
+        routing: serde_json::json!({ "outcome": "captured", "stackRevision": 3 }),
+    }
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_retried_publication_keeps_each_recipients_lane(
-    pool: Pool<Postgres>,
-) -> Result<(), Report> {
+async fn a_route_is_stored_on_its_recipients_row(pool: Pool<Postgres>) -> Result<(), Report> {
+    let natural = test_user("route-natural@example.com");
+    let captured = test_user("route-captured@example.com");
+    let stack_id = Uuid::now_v7();
+    let id = Uuid::now_v7();
+    let routes: RecipientRoutes = HashMap::from([(captured.clone(), captured_by(stack_id))]);
+
+    let created = pool
+        .create_notification(
+            SendNotificationRequestBuilder {
+                notification_entity: EntityType::Channel
+                    .with_entity_string(Uuid::now_v7().to_string()),
+                secondary_notification_entity: None,
+                notification: TaggedContent::new(ChannelSend {
+                    message_id: "message".to_string(),
+                }),
+                sender_id: None,
+                recipient_ids: HashSet::from([natural.clone(), captured.clone()]),
+            },
+            id,
+            "test_service",
+            None,
+            &routes,
+        )
+        .await?
+        .unwrap();
+    let lanes: HashMap<MacroUserIdStr<'static>, NotificationLane> = created
+        .into_iter()
+        .map(|row| (row.owner_id, row.lane))
+        .collect();
+    assert_eq!(lanes[&natural], NotificationLane::Signal);
+    assert_eq!(lanes[&captured], NotificationLane::Noise);
+
+    let stored = sqlx::query!(
+        r#"SELECT user_id, lane AS "lane: NotificationLane", stack_id, routing
+        FROM user_notification WHERE notification_id = $1"#,
+        id,
+    )
+    .fetch_all(&pool)
+    .await?;
+    assert_eq!(stored.len(), 2);
+    for row in stored {
+        if row.user_id == captured.as_ref() {
+            assert_eq!(row.lane, NotificationLane::Noise);
+            assert_eq!(row.stack_id, Some(stack_id));
+            assert_eq!(
+                row.routing,
+                Some(serde_json::json!({ "outcome": "captured", "stackRevision": 3 }))
+            );
+        } else {
+            assert_eq!(row.lane, NotificationLane::Signal);
+            assert_eq!(row.stack_id, None);
+            assert_eq!(row.routing, None);
+        }
+    }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_retried_publication_keeps_its_first_routing(pool: Pool<Postgres>) -> Result<(), Report> {
     let signal_user = test_user("retry-signal@example.com");
     let noise_user = test_user("retry-noise@example.com");
+    let stack_id = Uuid::now_v7();
     let id = Uuid::now_v7();
     let request = || SendNotificationRequestBuilder {
         notification_entity: EntityType::Channel.with_entity_string(Uuid::nil().to_string()),
@@ -334,19 +408,15 @@ async fn a_retried_publication_keeps_each_recipients_lane(
         sender_id: None,
         recipient_ids: HashSet::from([signal_user.clone(), noise_user.clone()]),
     };
-    pool.create_notification(request(), id, "test_service", None)
+    let first: RecipientRoutes = HashMap::from([(noise_user.clone(), captured_by(stack_id))]);
+    pool.create_notification(request(), id, "test_service", None, &first)
         .await?;
-    sqlx::query!(
-        "UPDATE user_notification SET lane = 'noise' WHERE user_id = $1 AND notification_id = $2",
-        noise_user.as_ref(),
-        id,
-    )
-    .execute(&pool)
-    .await?;
 
-    // Publication never completed, so the retry reads the stored recipients.
+    // Publication never completed. By the retry the stack routes the other
+    // way round, and the stored routing still stands.
+    let second: RecipientRoutes = HashMap::from([(signal_user.clone(), captured_by(stack_id))]);
     let retried = pool
-        .create_notification(request(), id, "test_service", None)
+        .create_notification(request(), id, "test_service", None, &second)
         .await?
         .unwrap();
     let lanes: HashMap<MacroUserIdStr<'static>, NotificationLane> = retried
@@ -355,5 +425,14 @@ async fn a_retried_publication_keeps_each_recipients_lane(
         .collect();
     assert_eq!(lanes[&signal_user], NotificationLane::Signal);
     assert_eq!(lanes[&noise_user], NotificationLane::Noise);
+
+    let stacked: Vec<String> = sqlx::query_scalar!(
+        "SELECT user_id FROM user_notification WHERE notification_id = $1 AND stack_id = $2",
+        id,
+        stack_id,
+    )
+    .fetch_all(&pool)
+    .await?;
+    assert_eq!(stacked, vec![noise_user.to_string()]);
     Ok(())
 }

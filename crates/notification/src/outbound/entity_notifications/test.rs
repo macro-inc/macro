@@ -44,6 +44,7 @@ async fn insert<T: Notification + Serialize + Send + Sync>(
         id,
         "test",
         None,
+        &Default::default(),
     )
     .await
     .unwrap();

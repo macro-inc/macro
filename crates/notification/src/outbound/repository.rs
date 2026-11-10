@@ -7,6 +7,7 @@ use crate::domain::models::device::DeviceType;
 use crate::domain::models::request::{
     NotificationCategory, NotificationListFilters, NotificationStatus,
 };
+use crate::domain::models::routing::RecipientRoutes;
 use crate::domain::models::{
     DeviceEndpoint, DisabledNotificationType, NotificationIdAndCollapseKey,
     SendNotificationRequestBuilder, TaggedContent, UserNotificationRow,
@@ -368,6 +369,7 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         notification_id: Uuid,
         service_name: &str,
         apns_collapse_key: Option<&str>,
+        routes: &RecipientRoutes,
     ) -> impl std::future::Future<Output = Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report>> + Send;
 
     /// Whether a resolved workflow has withdrawn this notification before delivery.
@@ -630,6 +632,7 @@ impl NotificationDbOps for PgPool {
         notification_id: Uuid,
         service_name: &str,
         apns_collapse_key: Option<&str>,
+        routes: &RecipientRoutes,
     ) -> Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report> {
         let entity_type: &str = request.notification_entity.entity_type.into();
         let secondary_entity_id = request
@@ -739,11 +742,22 @@ impl NotificationDbOps for PgPool {
             return Ok(None);
         }
 
-        // Insert user notifications
-        let user_ids: Vec<String> = request
-            .recipient_ids
+        // Insert user notifications, each with its route. A recipient without
+        // one gets the natural row.
+        let recipients: Vec<&MacroUserIdStr<'a>> = request.recipient_ids.iter().collect();
+        let user_ids: Vec<String> = recipients.iter().map(|id| id.to_string()).collect();
+        let lanes: Vec<NotificationLane> = recipients
             .iter()
-            .map(|id| id.to_string())
+            .map(|id| routes.get(*id).map(|route| route.lane).unwrap_or_default())
+            .collect();
+        let lane_names: Vec<&str> = lanes.iter().map(|lane| lane.as_str()).collect();
+        let stack_ids: Vec<Option<Uuid>> = recipients
+            .iter()
+            .map(|id| routes.get(*id).and_then(|route| route.stack_id))
+            .collect();
+        let routings: Vec<Option<serde_json::Value>> = recipients
+            .iter()
+            .map(|id| routes.get(*id).map(|route| route.routing.clone()))
             .collect();
 
         let created_at = sqlx::query_scalar!(
@@ -753,17 +767,25 @@ impl NotificationDbOps for PgPool {
                 user_id,
                 event_item_type,
                 event_item_id,
-                notification_event_type
+                notification_event_type,
+                lane,
+                stack_id,
+                routing
             )
-            SELECT $1, user_id, $3, $4, $5
-            FROM UNNEST($2::text[]) as user_id
+            SELECT $1, routed.user_id, $3, $4, $5,
+                   routed.lane::notification_lane, routed.stack_id, routed.routing
+            FROM UNNEST($2::text[], $6::text[], $7::uuid[], $8::jsonb[])
+                AS routed(user_id, lane, stack_id, routing)
             RETURNING created_at::timestamptz as "created_at!"
             "#,
             notification_id,
             &user_ids,
             entity_type,
             request.notification_entity.entity_id.as_ref(),
-            typename
+            typename,
+            &lane_names as &[&str],
+            &stack_ids as &[Option<Uuid>],
+            &routings as &[Option<serde_json::Value>]
         )
         .fetch_one(&mut *tx)
         .await?;
@@ -775,17 +797,17 @@ impl NotificationDbOps for PgPool {
 
         let n = Arc::new(request.notification.content);
 
-        let rows = request
-            .recipient_ids
-            .iter()
-            .map(|recipient| UserNotificationRow {
+        let rows = recipients
+            .into_iter()
+            .zip(lanes)
+            .map(|(recipient, lane)| UserNotificationRow {
                 owner_id: recipient.clone().into_owned(),
                 notification_id,
                 notification_event_type: typename.to_string(),
                 entity: entity.clone(),
                 sent: false,
                 state: NotificationState::Unseen,
-                lane: NotificationLane::Signal,
+                lane,
                 created_at,
                 viewed_at: None,
                 updated_at: created_at,
@@ -1543,9 +1565,16 @@ impl<D: NotificationDbOps + Send + Sync> NotificationRepository for DbNotificati
         notification_id: Uuid,
         service_name: &str,
         apns_collapse_key: Option<&str>,
+        routes: &RecipientRoutes,
     ) -> Result<Option<Vec<UserNotificationRow<Arc<T>>>>, Report> {
         self.db
-            .create_notification(request, notification_id, service_name, apns_collapse_key)
+            .create_notification(
+                request,
+                notification_id,
+                service_name,
+                apns_collapse_key,
+                routes,
+            )
             .await
     }
 
