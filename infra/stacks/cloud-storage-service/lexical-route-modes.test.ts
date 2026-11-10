@@ -26,18 +26,21 @@ describe('Lambda route policy projection', () => {
     'html=HTTP',
     'html=http\n',
     'private-config-sentinel',
-  ])('rejects malformed map %j without including it in diagnostics', (modes) => {
-    const invoke = () =>
-      lexicalRouteModesFromBundle(
-        JSON.stringify({ LEXICAL_ROUTE_MODES: modes })
-      );
-    expect(invoke).toThrow('Invalid LEXICAL_ROUTE_MODES in service config');
-    try {
-      invoke();
-    } catch (error) {
-      expect(String(error)).not.toContain(modes);
+  ])(
+    'rejects malformed map %j without including it in diagnostics',
+    (modes) => {
+      const invoke = () =>
+        lexicalRouteModesFromBundle(
+          JSON.stringify({ LEXICAL_ROUTE_MODES: modes })
+        );
+      expect(invoke).toThrow('Invalid LEXICAL_ROUTE_MODES in service config');
+      try {
+        invoke();
+      } catch (error) {
+        expect(String(error)).not.toContain(modes);
+      }
     }
-  });
+  );
 
   test.each([
     'private-config-sentinel',
@@ -45,13 +48,16 @@ describe('Lambda route policy projection', () => {
     'null',
     '[]',
     '{"LEXICAL_ROUTE_MODES":true,"INTERNAL_API_KEY":"private-config-sentinel"}',
-  ])('rejects missing or corrupt config without leaking the bundle', (bundle) => {
-    const invoke = () => lexicalRouteModesFromBundle(bundle);
-    expect(invoke).toThrow('Invalid LEXICAL_ROUTE_MODES in service config');
-    try {
-      invoke();
-    } catch (error) {
-      expect(String(error)).not.toContain('private-config-sentinel');
+  ])(
+    'rejects missing or corrupt config without leaking the bundle',
+    (bundle) => {
+      const invoke = () => lexicalRouteModesFromBundle(bundle);
+      expect(invoke).toThrow('Invalid LEXICAL_ROUTE_MODES in service config');
+      try {
+        invoke();
+      } catch (error) {
+        expect(String(error)).not.toContain('private-config-sentinel');
+      }
     }
-  });
+  );
 });
