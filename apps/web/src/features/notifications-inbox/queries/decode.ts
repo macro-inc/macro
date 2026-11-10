@@ -99,7 +99,8 @@ const toGraphqlRowType = (type: InboxRowType): NotificationInboxRowType =>
 
 /**
  * Encode an inbox scope for the server. Every known type reads every row,
- * including row types a newer server adds.
+ * including row types a newer server adds. Signal is the server's default
+ * lane, so only Noise is named.
  */
 export function encodeInboxScope(
   scope: InboxScope
@@ -108,7 +109,11 @@ export function encodeInboxScope(
     scope.rowTypes.includes(type)
   );
   const rowTypes = everyType ? [] : scope.rowTypes.map(toGraphqlRowType);
-  return scope.unreadOnly ? { rowTypes, unreadOnly: true } : { rowTypes };
+  return {
+    ...(scope.lane === 'noise' ? { lane: 'NOISE' as const } : {}),
+    rowTypes,
+    ...(scope.unreadOnly ? { unreadOnly: true } : {}),
+  };
 }
 
 /**

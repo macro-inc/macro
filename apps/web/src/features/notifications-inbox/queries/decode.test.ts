@@ -305,6 +305,15 @@ describe('encodeInboxScope', () => {
       encodeInboxScope({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true })
     ).toEqual({ rowTypes: [], unreadOnly: true });
   });
+
+  it('names the lane only for Noise, so Signal stays the server default', () => {
+    expect(
+      encodeInboxScope({ lane: 'noise', rowTypes: ALL_INBOX_ROW_TYPES })
+    ).toEqual({ lane: 'NOISE', rowTypes: [] });
+    expect(
+      encodeInboxScope({ lane: 'signal', rowTypes: ALL_INBOX_ROW_TYPES })
+    ).toEqual({ rowTypes: [] });
+  });
 });
 
 describe('toInboxGroup for a runtime', () => {

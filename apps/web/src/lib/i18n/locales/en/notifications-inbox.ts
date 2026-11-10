@@ -106,6 +106,16 @@ export default {
   status: 'Status',
   statusUnread: 'Unread',
   statusAll: 'All',
+  unreadOnly: 'Unread only',
+
+  // Lanes: what reached the reader, and what their stacks captured
+  lane: 'Lane',
+  laneSignal: 'Signal',
+  laneNoise: 'Noise',
+  noiseEmptyTitle: 'Nothing in Noise',
+  noiseEmptyDescription:
+    'Notifications your stacks capture land here without a sound, a badge or a push.',
+  manageStacks: 'Manage stacks',
   type: 'Type',
   categoryMentions: 'Mentions',
   categoryReplies: 'Replies',

@@ -146,7 +146,11 @@ describe('createInboxList', () => {
     const announced = notices();
     const inbox = createInboxList(feed, announced.value);
 
-    await inbox.clear({ rowTypes: ['email'], unreadOnly: false });
+    await inbox.clear({
+      lane: 'signal',
+      rowTypes: ['email'],
+      unreadOnly: false,
+    });
 
     expect(announced.value.announceCleared).toHaveBeenCalledWith(
       12,
@@ -162,7 +166,11 @@ describe('createInboxList', () => {
     const announced = notices();
     const inbox = createInboxList(feed, announced.value);
 
-    await inbox.clear({ rowTypes: ['email'], unreadOnly: true });
+    await inbox.clear({
+      lane: 'signal',
+      rowTypes: ['email'],
+      unreadOnly: true,
+    });
 
     expect(announced.value.announceCleared).toHaveBeenCalledWith(
       0,
@@ -180,7 +188,11 @@ describe('createInboxList', () => {
     const announced = notices();
     const inbox = createInboxList(feed, announced.value);
 
-    await inbox.clear({ rowTypes: ['email'], unreadOnly: false });
+    await inbox.clear({
+      lane: 'signal',
+      rowTypes: ['email'],
+      unreadOnly: false,
+    });
 
     expect(announced.value.announceFailure).toHaveBeenCalledOnce();
     expect(announced.value.announceCleared).not.toHaveBeenCalled();

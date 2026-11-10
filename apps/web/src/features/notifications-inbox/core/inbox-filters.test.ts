@@ -4,19 +4,22 @@ import {
   activeFilterCount,
   clearFor,
   clearIncludes,
+  laneOfRowId,
   parseInboxFilters,
   rowTypesFor,
+  serializeInboxFilters,
 } from './inbox-filters';
 
 describe('rowTypesFor', () => {
   it('reads every row type until a category is hidden', () => {
-    expect(rowTypesFor({ status: 'all', hiddenCategories: [] })).toEqual(
-      ALL_INBOX_ROW_TYPES
-    );
+    expect(
+      rowTypesFor({ lane: 'signal', status: 'all', hiddenCategories: [] })
+    ).toEqual(ALL_INBOX_ROW_TYPES);
   });
 
   it('drops both channel and discussion rows of a hidden category', () => {
     const types = rowTypesFor({
+      lane: 'signal',
       status: 'all',
       hiddenCategories: ['mentions', 'calendar'],
     });
@@ -31,11 +34,19 @@ describe('rowTypesFor', () => {
 describe('saved filters', () => {
   it('counts hidden categories, not the toggle that shows its own state', () => {
     expect(
-      activeFilterCount({ status: 'unread', hiddenCategories: ['email'] })
+      activeFilterCount({
+        lane: 'signal',
+        status: 'unread',
+        hiddenCategories: ['email'],
+      })
     ).toBe(1);
-    expect(activeFilterCount({ status: 'unread', hiddenCategories: [] })).toBe(
-      0
-    );
+    expect(
+      activeFilterCount({
+        lane: 'signal',
+        status: 'unread',
+        hiddenCategories: [],
+      })
+    ).toBe(0);
   });
 
   it('keeps only what this build understands', () => {
@@ -46,16 +57,48 @@ describe('saved filters', () => {
           hiddenCategories: ['email', 'retired-kind'],
         })
       )
-    ).toEqual({ status: 'unread', hiddenCategories: ['email'] });
+    ).toEqual({
+      lane: 'signal',
+      status: 'unread',
+      hiddenCategories: ['email'],
+    });
     expect(parseInboxFilters('not json')).toEqual({
+      lane: 'signal',
       status: 'all',
       hiddenCategories: [],
     });
     // A read-only filter saved by an earlier build opens at All.
     expect(parseInboxFilters(JSON.stringify({ status: 'read' }))).toEqual({
+      lane: 'signal',
       status: 'all',
       hiddenCategories: [],
     });
+  });
+
+  it('never keeps the lane, so every visit starts in Signal', () => {
+    const saved = serializeInboxFilters({
+      lane: 'noise',
+      status: 'unread',
+      hiddenCategories: ['email'],
+    });
+
+    expect(JSON.parse(saved)).toEqual({
+      status: 'unread',
+      hiddenCategories: ['email'],
+    });
+    expect(parseInboxFilters(saved).lane).toBe('signal');
+    // A lane written by hand is ignored too.
+    expect(
+      parseInboxFilters(JSON.stringify({ lane: 'noise', status: 'all' })).lane
+    ).toBe('signal');
+  });
+});
+
+describe('laneOfRowId', () => {
+  it('reads the lane the server marked in the row id', () => {
+    expect(laneOfRowId('channel:abc#noise#top_level')).toBe('noise');
+    expect(laneOfRowId('channel:abc#top_level')).toBe('signal');
+    expect(laneOfRowId('')).toBe('signal');
   });
 });
 
@@ -65,7 +108,7 @@ describe('clearFor', () => {
   it('clears today from local midnight, every kind the filters show', () => {
     const clear = clearFor(
       { kind: 'today' },
-      { status: 'all', hiddenCategories: ['email'] },
+      { lane: 'signal', status: 'all', hiddenCategories: ['email'] },
       now
     );
     expect(clear.since).toBe(new Date(2026, 10, 5).getTime());
@@ -77,24 +120,41 @@ describe('clearFor', () => {
   it('clears only unread rows under Unread', () => {
     const clear = clearFor(
       { kind: 'all' },
-      { status: 'unread', hiddenCategories: [] },
+      { lane: 'signal', status: 'unread', hiddenCategories: [] },
       now
     );
-    expect(clear).toEqual({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true });
+    expect(clear).toEqual({
+      lane: 'signal',
+      rowTypes: ALL_INBOX_ROW_TYPES,
+      unreadOnly: true,
+    });
+  });
+
+  it('clears the lane the reader looks at', () => {
+    const clear = clearFor(
+      { kind: 'category', category: 'messages' },
+      { lane: 'noise', status: 'all', hiddenCategories: [] },
+      now
+    );
+    expect(clear).toEqual({
+      lane: 'noise',
+      rowTypes: ['channel_messages'],
+      unreadOnly: false,
+    });
   });
 
   it('clears one kind, and nothing of a kind the filters hide', () => {
     expect(
       clearFor(
         { kind: 'category', category: 'mentions' },
-        { status: 'all', hiddenCategories: [] },
+        { lane: 'signal', status: 'all', hiddenCategories: [] },
         now
       ).rowTypes
     ).toEqual(['channel_mention', 'discussion_mention']);
     expect(
       clearFor(
         { kind: 'category', category: 'mentions' },
-        { status: 'all', hiddenCategories: ['mentions'] },
+        { lane: 'signal', status: 'all', hiddenCategories: ['mentions'] },
         now
       ).rowTypes
     ).toEqual([]);
@@ -103,6 +163,7 @@ describe('clearFor', () => {
 
 describe('clearIncludes', () => {
   const clear = {
+    lane: 'signal' as const,
     rowTypes: ['email' as const],
     unreadOnly: true,
     since: 1_000,

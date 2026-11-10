@@ -1,4 +1,6 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { enableNotificationStacks } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { getDisplayNameParts, tryMacroId } from '@core/user';
@@ -88,6 +90,8 @@ export function NotificationsInbox() {
   const respondToJoinRequest = useRespondToCalendarJoinRequestMutation();
   const calendarPreview = useNotificationsCalendarPreview();
   const shownRow = useInboxShownRowLocation(calendarPreview);
+  // The Noise lane only holds what stacks capture, so it comes with them.
+  const stacks = useFeatureFlag(enableNotificationStacks);
   const answerJoinRequest: NotificationsInboxContext['requests']['answerJoinRequest'] =
     async (request, accept) => {
       await respondToJoinRequest.mutateAsync({
@@ -103,6 +107,7 @@ export function NotificationsInbox() {
         >
           <NotificationsView
             onOpenSettings={() => openSettings('Notifications')}
+            lanes={() => stacks().enabled}
             shownRow={shownRow}
             calendarPreview={{
               open: (entity, { shown, replace }) =>

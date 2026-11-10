@@ -314,6 +314,7 @@ describe('createNotificationInboxSource', () => {
     });
 
     const cleared = await feed.clear({
+      lane: 'signal',
       rowTypes: ['task'],
       unreadOnly: false,
     });
@@ -360,7 +361,7 @@ describe('createNotificationInboxSource', () => {
     const { feed, rowIds } = await loaded();
 
     await expect(
-      feed.clear({ rowTypes: ['task'], unreadOnly: false })
+      feed.clear({ lane: 'signal', rowTypes: ['task'], unreadOnly: false })
     ).rejects.toThrow();
 
     expect(rowIds()).toContain('document:doc-a#task');
@@ -579,7 +580,11 @@ describe('createNotificationInboxSource', () => {
       },
     });
 
-    await feed.clear({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true });
+    await feed.clear({
+      lane: 'signal',
+      rowTypes: ALL_INBOX_ROW_TYPES,
+      unreadOnly: true,
+    });
 
     expect(fake.mutations[0].variables).toEqual({
       input: {
@@ -587,6 +592,41 @@ describe('createNotificationInboxSource', () => {
         since: null,
         cursor: null,
       },
+    });
+  });
+
+  it('reads, follows and clears the lane its scope names', async () => {
+    vi.useFakeTimers();
+    const noise = { lane: 'NOISE', rowTypes: [] };
+    const { fake, feed } = setup(
+      {
+        ClearNotificationInbox: {
+          clearNotificationInbox: {
+            rowCount: 0,
+            undoToken: 'undo-1',
+            nextCursor: null,
+          },
+        },
+      },
+      () => ({ lane: 'noise', rowTypes: ALL_INBOX_ROW_TYPES })
+    );
+    await flush();
+
+    expect(fake.queries[0].variables).toEqual({
+      input: { scope: noise, limit: 50, cursor: null },
+    });
+    expect(fake.subscriptions[0].variables).toEqual({ scope: noise });
+
+    fake.queries[0].resolve(inboxPage([]));
+    await flush();
+    await feed.clear({
+      lane: 'noise',
+      rowTypes: ALL_INBOX_ROW_TYPES,
+      unreadOnly: false,
+    });
+
+    expect(fake.mutations[0].variables).toEqual({
+      input: { scope: noise, since: null, cursor: null },
     });
   });
 

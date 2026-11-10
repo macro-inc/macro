@@ -930,6 +930,16 @@ export const enableUnifiedNotifications = defineFlag({
   default: onInDev,
 });
 
+// Notification stacks: the Noise tab of the unified notifications view, the
+// Stacks section of Settings → Notifications, and Add to stack in channel
+// menus. The notification service reads the same key before it routes or
+// serves stacks. Override with VITE_ENABLE_NOTIFICATION_STACKS.
+export const enableNotificationStacks = defineFlag({
+  key: 'enable-notification-stacks',
+  env: 'ENABLE_NOTIFICATION_STACKS',
+  default: onInDev,
+});
+
 // Agents home: pending updates from coding agents shown as a stack under the
 // new-chat composer, and the Open PRs section in the Agents sidebar.
 // Override with VITE_ENABLE_AGENT_UPDATES.

@@ -4,22 +4,31 @@ import {
   DEFAULT_INBOX_FILTERS,
   type InboxCategory,
   type InboxFilters,
+  type InboxLane,
   type InboxStatus,
   parseInboxFilters,
   rowTypesFor,
+  serializeInboxFilters,
 } from '../core/inbox-filters';
 
-/** The reader's inbox filters, kept in `storage` between visits. */
-export function createInboxFilters(storage: {
-  read: () => string | null;
-  write: (value: string) => void;
-}) {
-  const [filters, setFilters] = createSignal<InboxFilters>(
-    parseInboxFilters(storage.read())
-  );
+/**
+ * The reader's inbox filters. The read state and hidden kinds are kept in
+ * `storage` between visits; the lane starts at `initialLane` every time.
+ */
+export function createInboxFilters(
+  storage: {
+    read: () => string | null;
+    write: (value: string) => void;
+  },
+  initialLane: InboxLane = 'signal'
+) {
+  const [filters, setFilters] = createSignal<InboxFilters>({
+    ...parseInboxFilters(storage.read()),
+    lane: initialLane,
+  });
   const save = (next: InboxFilters) => {
     setFilters(next);
-    storage.write(JSON.stringify(next));
+    storage.write(serializeInboxFilters(next));
   };
 
   return {
@@ -30,11 +39,16 @@ export function createInboxFilters(storage: {
       !filters().hiddenCategories.includes(category),
     /** Every category is hidden, so nothing can show. */
     showsNothing: () => rowTypesFor(filters()).length === 0,
-    /** The rows the feed reads: these kinds, and only unread ones under Unread. */
+    /**
+     * The rows the feed reads: this lane, these kinds, and only unread ones
+     * under Unread.
+     */
     scope: () => ({
+      lane: filters().lane,
       rowTypes: rowTypesFor(filters()),
       unreadOnly: filters().status === 'unread',
     }),
+    setLane: (lane: InboxLane) => setFilters({ ...filters(), lane }),
     setStatus: (status: InboxStatus) => save({ ...filters(), status }),
     setShown: (category: InboxCategory, shown: boolean) => {
       const hidden = filters().hiddenCategories.filter(
