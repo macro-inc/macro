@@ -107,11 +107,8 @@ export async function readEmailDraft(
       local: selected.record.isDraft ? local : undefined,
     };
   }
-  const admittedDelete =
-    local?.status === 'deleting' &&
-    !!local.queuedAttemptId &&
-    local.queuedAttemptId === local.latestAttemptId;
-  if (local && (!admittedDelete || options.attachments === false)) {
+  const discarding = local?.status === 'deleting';
+  if (local && (!discarding || options.attachments === false)) {
     return {
       draft: localDraftMessage(local),
       // Upload receipts are separate from the body save. Pending files must

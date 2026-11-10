@@ -16,6 +16,7 @@ import type {
   ClaimedMutation,
   MutationInspection,
 } from '@graphql-cache/protocol';
+import { Telemetry } from '@macro-inc/observability';
 import type { OperationResult } from '@urql/core';
 import { authKeys } from '../auth/keys';
 import type { UserInfoData } from '../auth/user-info';
@@ -459,6 +460,7 @@ export async function resumeLocalDraft(
     errorCode: undefined,
     latestAttemptId: undefined,
     queuedAttemptId: undefined,
+    deleteAttemptId: undefined,
   }));
 }
 
@@ -557,64 +559,97 @@ export async function beginDraftAttempt(
     revision: local.revision,
     operation,
   };
-  await localDraftStore.update(owner, local.key, (current) =>
-    current.generation !== local.generation ||
-    (operation === 'save' &&
-      (current.revision !== local.revision ||
-        draftSyncPaused(current) ||
-        current.status === 'deleting'))
-      ? current
-      : {
-          ...current,
-          latestAttemptId: attempt.id,
-          queuedAttemptId: undefined,
-          status: operation === 'delete' ? 'deleting' : 'dirty',
-        }
-  );
+  await localDraftStore.update(owner, local.key, (current) => {
+    if (
+      current.generation !== local.generation ||
+      current.revision !== local.revision
+    )
+      return current;
+
+    // A discard waits beside the copy: the queue is a second store, so the
+    // copy only becomes `deleting` once the queue admits the delete.
+    if (operation === 'delete')
+      return { ...current, deleteAttemptId: attempt.id };
+
+    if (draftSyncPaused(current) || current.status === 'deleting')
+      return current;
+
+    return {
+      ...current,
+      latestAttemptId: attempt.id,
+      queuedAttemptId: undefined,
+      deleteAttemptId: undefined,
+      status: 'dirty',
+    };
+  });
   return attempt;
 }
 
 /**
- * A delete that never reached the queue returns the working copy to its
- * editor. Clearing the attempt also refuses a replay of an enqueue whose
+ * A delete that never reached the queue leaves the working copy with its
+ * editor. Dropping the request also refuses a replay of an enqueue whose
  * outcome was uncertain.
  */
 export async function abandonDraftDelete(attempt: DraftAttempt): Promise<void> {
   const owner = await emailStorageSession();
   if (owner.accountId !== attempt.accountId) return;
   await localDraftStore.update(owner, attempt.draftKey, (draft) =>
-    draft.generation !== attempt.generation ||
-    draft.latestAttemptId !== attempt.id ||
-    draft.queuedAttemptId === attempt.id ||
-    draft.status !== 'deleting'
-      ? draft
-      : { ...draft, latestAttemptId: undefined, status: 'dirty' }
+    draft.generation === attempt.generation &&
+    draft.deleteAttemptId === attempt.id
+      ? { ...draft, deleteAttemptId: undefined }
+      : draft
   );
 }
 
-/** Admission is separate from intent: two stores cannot enqueue atomically. */
+/**
+ * Admission is separate from intent: two stores cannot enqueue atomically.
+ * Returns the copy as admission left it.
+ */
 export async function markDraftAttemptQueued(
   attempt: DraftAttempt
-): Promise<void> {
+): Promise<LocalDraft | undefined> {
   const owner = await emailStorageSession();
   if (owner.accountId !== attempt.accountId) return;
-  await localDraftStore.update(owner, attempt.draftKey, (draft) =>
-    draft.generation !== attempt.generation ||
-    draft.latestAttemptId !== attempt.id ||
-    draftSyncPaused(draft) ||
-    draft.status === 'synced'
-      ? draft
-      : {
-          ...draft,
-          queuedAttemptId: attempt.id,
-          status:
-            attempt.operation === 'delete'
-              ? 'deleting'
-              : draft.revision === attempt.revision
-                ? 'queued'
-                : draft.status,
-        }
-  );
+  return await localDraftStore.update(owner, attempt.draftKey, (draft) => {
+    if (draft.generation !== attempt.generation) return draft;
+
+    if (attempt.operation === 'delete') {
+      // Already admitted, by an earlier claim or by a build that marked the
+      // copy when the discard began.
+      if (draft.status === 'deleting')
+        return draft.latestAttemptId === attempt.id
+          ? { ...draft, queuedAttemptId: attempt.id }
+          : draft;
+
+      // The discard applies only to the revision the user discarded.
+      if (
+        draft.deleteAttemptId !== attempt.id ||
+        draft.revision !== attempt.revision
+      )
+        return draft;
+
+      return {
+        ...draft,
+        deleteAttemptId: undefined,
+        latestAttemptId: attempt.id,
+        queuedAttemptId: attempt.id,
+        status: 'deleting',
+      };
+    }
+
+    if (
+      draft.latestAttemptId !== attempt.id ||
+      draftSyncPaused(draft) ||
+      draft.status === 'synced'
+    )
+      return draft;
+
+    return {
+      ...draft,
+      queuedAttemptId: attempt.id,
+      status: draft.revision === attempt.revision ? 'queued' : draft.status,
+    };
+  });
 }
 
 function attemptOf(
@@ -836,27 +871,43 @@ export function localDraftQueueLifecycle(
       )
     );
     for (const draft of before) {
-      // Dirty copies can belong to another tab's live debounce. Only reconcile
-      // an unchanged intent that was actually marked as enqueued/deleting.
-      if (
-        active.has(draft.key) ||
-        draft.queuedAttemptId !== draft.latestAttemptId ||
-        !draft.queuedAttemptId ||
-        (draft.status !== 'queued' && draft.status !== 'deleting')
-      )
-        continue;
-      await localDraftStore.update(owner, draft.key, (current) =>
+      if (active.has(draft.key)) continue;
+      const unchanged = (current: LocalDraft) =>
         current.generation === draft.generation &&
         current.revision === draft.revision &&
         current.latestAttemptId === draft.latestAttemptId &&
-        current.status === draft.status
-          ? {
-              ...current,
-              status:
-                current.status === 'deleting' ? 'delete-failed' : 'unconfirmed',
-            }
-          : current
+        current.status === draft.status;
+      const admitted =
+        !!draft.queuedAttemptId &&
+        draft.queuedAttemptId === draft.latestAttemptId;
+
+      // An older build marked the copy when a discard began. One that never
+      // reached the queue returns to its editor, as an abandoned delete does.
+      if (draft.status === 'deleting' && !admitted) {
+        await localDraftStore.update(owner, draft.key, (current) =>
+          unchanged(current)
+            ? { ...current, latestAttemptId: undefined, status: 'dirty' }
+            : current
+        );
+        continue;
+      }
+
+      // Dirty copies can belong to another tab's live debounce. Only reconcile
+      // an unchanged intent that was actually marked as enqueued/deleting.
+      if (
+        !admitted ||
+        (draft.status !== 'queued' && draft.status !== 'deleting')
+      )
+        continue;
+      const status =
+        draft.status === 'deleting' ? 'delete-failed' : 'unconfirmed';
+      const marked = await localDraftStore.update(
+        owner,
+        draft.key,
+        (current) => (unchanged(current) ? { ...current, status } : current)
       );
+      if (marked?.status === status)
+        reportDraftSyncFailure(draft.key, status, 'queue-entry-missing');
     }
     const transactions = new Set(
       queue.map((mutation) => mutation.transactionId)
@@ -927,12 +978,17 @@ export function localDraftQueueLifecycle(
       if (owner.accountId !== attempt.accountId) return false;
       const local = await localDraftStore.read(owner, attempt.draftKey);
       if (!local || local.generation !== attempt.generation) return false;
-      await markDraftAttemptQueued(attempt);
-      return attempt.operation === 'delete'
-        ? local.latestAttemptId === attempt.id && local.status === 'deleting'
-        : !draftSyncPaused(local) &&
-            local.status !== 'deleting' &&
-            attempt.revision >= local.acknowledgedRevision;
+      const marked = await markDraftAttemptQueued(attempt);
+      if (attempt.operation === 'delete')
+        return (
+          marked?.status === 'deleting' && marked.latestAttemptId === attempt.id
+        );
+
+      return (
+        !draftSyncPaused(local) &&
+        local.status !== 'deleting' &&
+        attempt.revision >= local.acknowledgedRevision
+      );
     },
     async onMutationAttemptResult(mutation, result, retry) {
       if (
@@ -956,30 +1012,26 @@ async function settleDraftAttempt(
   const owner = await emailStorageSession();
   if (owner.accountId !== attempt.accountId) return;
   const code = result.error?.graphQLErrors[0]?.extensions.code;
+  const errorCode = typeof code === 'string' ? code : 'INTERNAL';
   const failed = !!result.error || result.data == null;
   const payload = result.data?.saveEmailDraft;
+  const outcome: { rejected?: 'failed' | 'delete-failed' } = {};
   await localDraftStore.update(owner, attempt.draftKey, (draft) => {
+    outcome.rejected = undefined;
     if (draft.generation !== attempt.generation) return draft;
     if (code === 'DRAFT_ALREADY_SENT') return undefined;
     const latest = draft.latestAttemptId === attempt.id;
     if (attempt.operation === 'delete') {
       if (!latest) return draft;
-      return failed
-        ? {
-            ...draft,
-            status: 'delete-failed',
-            errorCode: typeof code === 'string' ? code : 'INTERNAL',
-          }
-        : undefined;
+      if (!failed) return undefined;
+      outcome.rejected = 'delete-failed';
+      return { ...draft, status: 'delete-failed', errorCode };
     }
-    if (failed)
-      return superseded || !latest
-        ? draft
-        : {
-            ...draft,
-            status: 'failed',
-            errorCode: typeof code === 'string' ? code : 'INTERNAL',
-          };
+    if (failed) {
+      if (superseded || !latest) return draft;
+      outcome.rejected = 'failed';
+      return { ...draft, status: 'failed', errorCode };
+    }
     const acknowledgedRevision = Math.max(
       draft.acknowledgedRevision,
       attempt.revision
@@ -1000,6 +1052,31 @@ async function settleDraftAttempt(
             : 'synced'
           : draft.status,
     };
+  });
+  if (outcome.rejected)
+    reportDraftSyncFailure(
+      attempt.draftKey,
+      outcome.rejected,
+      'attempt-rejected',
+      errorCode
+    );
+}
+
+/**
+ * A working copy that now needs the user to retry. Identity and codes only,
+ * never content.
+ */
+function reportDraftSyncFailure(
+  draftKey: string,
+  status: 'failed' | 'unconfirmed' | 'delete-failed',
+  cause: 'attempt-rejected' | 'queue-entry-missing',
+  errorCode?: string
+) {
+  Telemetry.warn('email_draft.sync_failed', {
+    'email_draft.draft_id': draftKey,
+    'email_draft.status': status,
+    'email_draft.cause': cause,
+    'email_draft.error_code': errorCode,
   });
 }
 

@@ -303,6 +303,16 @@ delivery timeouts, and the optimistic delete empties a draft-only thread
 around the composer, so leaving cannot wait on either. A host that fails to
 leave is reported, and the deletion still runs.
 
+The working copy and the mutation queue are separate stores, so a discard is
+first recorded beside its copy (`deleteAttemptId`), which stays listed and
+editable. The copy becomes `deleting`, hidden and closed to edits, only when the
+queue admits the delete, and the queue admits it only for the revision it was
+requested on: an edit or a newer save drops the request, and a request that
+never reached the queue is inert. A discard on its way to the server is never
+shown as a failure. **Retry discard** follows a server rejection or a delete the
+queue lost (`delete-failed`); every copy that starts needing a retry logs
+`email_draft.sync_failed` with its status, cause and error code.
+
 The send notice follows each queued send through `EmailDelivery.watchSend`,
 which reads the device outbox. Undo stays on offer until the deadline the server
 returned with the accepted attempt. A reply whose send fails, is cancelled, or is

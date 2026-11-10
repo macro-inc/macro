@@ -910,7 +910,8 @@ and in its reply thread. Saving is silent on desktop and mobile while online: no
 saved or syncing text appears. Offline, once an edit is saved only on this
 device, the composer shows **Saved on this device; waiting to sync** above the
 recipients until the server acknowledges it. A failure shows a banner in the same
-place with **Retry** (or **Retry discard**); while the local cache waits for
+place with **Retry** (or **Retry discard**); a discard still on its way to the
+server shows none, however long the queue takes. While the local cache waits for
 another owner the banner keeps **Retry** and retries by itself, and once local
 storage needs recovery it offers **Reload** instead. Neither appears in the
 toolbar or the mobile header actions. Verify the banner on mobile
@@ -980,7 +981,8 @@ an unmigrated legacy edit can be lost if the queue held its only durable copy.
 Verify that an unrelated queued action still completes in both cases. With
 browser OTel enabled, the failure appears once per draft as
 `graphql.mutation_queue.recovery_failed` (or `graphql.mutation_queue.skipped` with a
-`mutation_queue.skip_reason`), never as a line per poll.
+`mutation_queue.skip_reason`), never as a line per poll. A working copy that
+then needs **Retry** logs `email_draft.sync_failed` with its status and cause.
 Repeat with two tabs, a save response arriving after a newer
 edit, an attachment upload completing during another local save, and Discard
 while an attachment snapshot is still being saved. A snapshot based on an older

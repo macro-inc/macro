@@ -61,6 +61,10 @@ const claimed = (
   superseded: false,
   variables: { input: { draftId: 'local' } },
 });
+const discard = (attempt: ClaimedMutation['clientMetadata']) => ({
+  ...claimed(attempt),
+  operationName: 'DeleteEmailDraft',
+});
 const success = {
   data: {
     saveEmailDraft: { draftId: 'server', thread: { id: 'server-thread' } },
@@ -475,6 +479,7 @@ describe('draft queue recovery', () => {
     await lifecycle.onMutationAttemptResult!(claimed(saving), success, false);
     const saved = (await runtime.readLocalDraft('server'))!;
     const deleting = await runtime.beginDraftAttempt(saved, 'delete');
+    await runtime.markDraftAttemptQueued(deleting);
     await lifecycle.onMutationAttemptResult!(
       claimed(deleting),
       { data: { deleteEmailDraft: { deleted: true } } } as OperationResult,
@@ -558,11 +563,11 @@ describe('draft queue recovery', () => {
   it('does not let an old save overwrite a newer discard intent', async () => {
     const draft = await runtime.saveLocalDraft(input());
     const saving = await runtime.beginDraftAttempt(draft, 'save');
-    await runtime.beginDraftAttempt(draft, 'delete');
-    await runtime.localDraftQueueLifecycle(host).onMutationAttemptResult!(
-      claimed(saving),
-      success,
-      false
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    const lifecycle = runtime.localDraftQueueLifecycle(host);
+    await lifecycle.onMutationAttemptResult!(claimed(saving), success, false);
+    expect(await lifecycle.beforeMutationAttempt!(discard(deleting))).toBe(
+      true
     );
     expect(await runtime.readLocalDraft('local')).toMatchObject({
       status: 'deleting',
@@ -570,17 +575,123 @@ describe('draft queue recovery', () => {
       acknowledgedRevision: draft.revision,
     });
   });
+  it('keeps a draft listed and editable until the queue admits its discard', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    expect(await runtime.listLocalDrafts()).toMatchObject([
+      { status: 'dirty', revision: draft.revision },
+    ]);
+    await runtime.saveLocalDraft(input('Edited while the discard waited'));
+    expect(
+      await runtime.localDraftQueueLifecycle(host).beforeMutationAttempt!(
+        discard(deleting)
+      )
+    ).toBe(false);
+    expect(await runtime.readLocalDraft('local')).toMatchObject({
+      status: 'dirty',
+      content: { subject: 'Edited while the discard waited' },
+    });
+  });
+  it('hands an admitted discard to the queue and removes the copy once it commits', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    const lifecycle = runtime.localDraftQueueLifecycle(host);
+    expect(await lifecycle.beforeMutationAttempt!(discard(deleting))).toBe(
+      true
+    );
+    expect((await runtime.readLocalDraft('local'))?.status).toBe('deleting');
+    await expect(runtime.saveLocalDraft(input('Too late'))).rejects.toThrow();
+    // A lease that expired is claimed and admitted again.
+    expect(await lifecycle.beforeMutationAttempt!(discard(deleting))).toBe(
+      true
+    );
+    await lifecycle.onMutationAttemptResult!(
+      discard(deleting),
+      { data: { deleteEmailDraft: { deleted: true } } } as OperationResult,
+      false
+    );
+    expect(await runtime.listLocalDrafts()).toEqual([]);
+  });
+  it('lets a newer save drop a discard the queue has not admitted', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    await runtime.beginDraftAttempt(draft, 'save');
+    expect(
+      await runtime.localDraftQueueLifecycle(host).beforeMutationAttempt!(
+        discard(deleting)
+      )
+    ).toBe(false);
+    expect((await runtime.readLocalDraft('local'))?.status).toBe('dirty');
+  });
+  it('returns a discard an older build never enqueued to its editor', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const owner = await runtime.localDraftStore.activate('owner');
+    await runtime.localDraftStore.update(owner, draft.key, (current) => ({
+      ...current,
+      latestAttemptId: 'interrupted-delete',
+      status: 'deleting',
+    }));
+    await runtime.localDraftQueueLifecycle(host).prepareMutationQueue!();
+    expect(await runtime.readLocalDraft('local')).toMatchObject({
+      status: 'dirty',
+      latestAttemptId: undefined,
+    });
+    await runtime.saveLocalDraft(input('Editable again'));
+  });
+  it('admits a queued discard an older build began', async () => {
+    const draft = await runtime.saveLocalDraft(input());
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    const owner = await runtime.localDraftStore.activate('owner');
+    await runtime.localDraftStore.update(owner, draft.key, (current) => ({
+      ...current,
+      deleteAttemptId: undefined,
+      latestAttemptId: deleting.id,
+      status: 'deleting',
+    }));
+    queue.push({ ...discard(deleting), optimisticData: {} });
+    const lifecycle = runtime.localDraftQueueLifecycle(host);
+    await lifecycle.prepareMutationQueue!();
+    expect((await runtime.readLocalDraft('local'))?.status).toBe('deleting');
+    expect(await lifecycle.beforeMutationAttempt!(discard(deleting))).toBe(
+      true
+    );
+  });
+  it('reports a rejected discard without draft content', async () => {
+    // The module registry is reset per test; spy on the runtime's instance.
+    const { Telemetry } = await import('@macro-inc/observability');
+    const warn = vi.spyOn(Telemetry, 'warn').mockImplementation(() => {});
+    const draft = await runtime.saveLocalDraft(input('Private subject'));
+    const deleting = await runtime.beginDraftAttempt(draft, 'delete');
+    const lifecycle = runtime.localDraftQueueLifecycle(host);
+    await lifecycle.beforeMutationAttempt!(discard(deleting));
+    await lifecycle.onMutationAttemptResult!(discard(deleting), failure, false);
+    expect((await runtime.readLocalDraft('local'))?.status).toBe(
+      'delete-failed'
+    );
+    expect(warn.mock.calls).toEqual([
+      [
+        'email_draft.sync_failed',
+        {
+          'email_draft.draft_id': 'local',
+          'email_draft.status': 'delete-failed',
+          'email_draft.cause': 'attempt-rejected',
+          'email_draft.error_code': 'INVALID',
+        },
+      ],
+    ]);
+  });
   it('keeps edits after an abandoned delete and refuses its late replay', async () => {
     const draft = await runtime.saveLocalDraft(input());
     const deleting = await runtime.beginDraftAttempt(draft, 'delete');
     await runtime.abandonDraftDelete(deleting);
+    const lifecycle = runtime.localDraftQueueLifecycle(host);
+    expect(await lifecycle.beforeMutationAttempt!(discard(deleting))).toBe(
+      false
+    );
     await runtime.saveLocalDraft(input('Kept edit'));
-    const replay = { ...claimed(deleting), operationName: 'DeleteEmailDraft' };
-    expect(
-      await runtime.localDraftQueueLifecycle(host).beforeMutationAttempt!(
-        replay
-      )
-    ).toBe(false);
+    expect(await lifecycle.beforeMutationAttempt!(discard(deleting))).toBe(
+      false
+    );
     expect(await runtime.readLocalDraft('local')).toMatchObject({
       status: 'dirty',
       content: { subject: 'Kept edit' },
