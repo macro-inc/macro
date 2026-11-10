@@ -1,11 +1,11 @@
 //! Deterministic native executor oracle; the JS host replays these same external events.
 use bebop::{Record, SliceWrapper};
 use document_session_wasm::{
-    DocSession,
     generated::{self, owned as w},
+    DocSession,
 };
 use loro::{ExportMode, LoroDoc, VersionVector};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::VecDeque;
 fn bytes<'a, T: Record<'a>>(value: &T) -> Vec<u8> {
     let mut b = vec![];
