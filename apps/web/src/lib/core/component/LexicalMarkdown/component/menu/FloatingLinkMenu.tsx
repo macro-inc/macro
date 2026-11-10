@@ -11,15 +11,8 @@ import Link from '@icon/system/regular/link.svg';
 import Trash from '@icon/system/regular/link-break.svg';
 import Pencil from '@icon/system/regular/pencil-simple.svg';
 import LinkText from '@icon/system/regular/text-t.svg';
-import { mergeRegister } from '@lexical/utils';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import { Button, Surface } from '@ui';
-import {
-  COMMAND_PRIORITY_CRITICAL,
-  COMMAND_PRIORITY_HIGH,
-  KEY_ENTER_COMMAND,
-  KEY_ESCAPE_COMMAND,
-} from 'lexical';
 import {
   createEffect,
   createMemo,
@@ -40,15 +33,12 @@ import {
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { floatWithSelection } from '../../directive/floatWithSelection';
-import {
-  type AutoLinkMatchMode,
-  type ILinkInfo,
-  INSERT_LINK_COMMAND,
-  linksPlugin,
-  UNLINK_COMMAND,
-  UPDATE_LINK_COMMAND,
-  UPDATE_LINK_URL_COMMAND,
-} from '../../plugins';
+import { createLexicalLinkMenuHost } from '../../editing/overlay-hosts/lexical-link';
+import type { LinkMenuHost } from '../../editing/overlay-hosts/link';
+import type {
+  AutoLinkMatchMode,
+  ILinkInfo,
+} from '../../plugins/links/linksPlugin';
 import { autoRegister } from '../../plugins/shared/utils';
 
 false && floatWithElement;
@@ -62,14 +52,30 @@ export function FloatingLinkMenu(props: {
   closePopup?: () => void;
   autoLinkMatchMode?: AutoLinkMatchMode;
 }) {
-  const { plugins, editor, isInteractable } =
-    useContext(LexicalWrapperContext) ?? {};
-  if (!plugins || !editor) {
+  const wrapper = useContext(LexicalWrapperContext);
+  if (!wrapper?.plugins || !wrapper.editor) {
     console.error(
       'FloatingLinkMenu requires plugins and editor from LexicalWrapperContext!'
     );
     return '';
   }
+
+  return (
+    <HostedFloatingLinkMenu
+      host={createLexicalLinkMenuHost(wrapper)}
+      closePopup={props.closePopup}
+      autoLinkMatchMode={props.autoLinkMatchMode}
+    />
+  );
+}
+
+/** Shared link controller and markup; the mounting surface supplies its model. */
+export function HostedFloatingLinkMenu(props: {
+  host: LinkMenuHost;
+  closePopup?: () => void;
+  autoLinkMatchMode?: AutoLinkMatchMode;
+}) {
+  const host = props.host;
 
   // The link info at the time the menu was triggered.
   const [linkInfo, setLinkInfo] = createSignal<ILinkInfo>();
@@ -109,7 +115,7 @@ export function FloatingLinkMenu(props: {
 
   createEffect(
     on(
-      () => isInteractable?.(),
+      () => host.isInteractable(),
       (interactable) => {
         if (interactable === false) reset();
       }
@@ -170,11 +176,11 @@ export function FloatingLinkMenu(props: {
   };
 
   const handleUnlink = () => {
-    if (!editor.isEditable()) return;
-    editor.dispatchCommand(UNLINK_COMMAND, undefined);
+    if (!host.isEditable()) return;
+    host.unlink();
     reset();
     setTimeout(() => {
-      editor.focus();
+      host.focus();
     });
   };
 
@@ -196,7 +202,7 @@ export function FloatingLinkMenu(props: {
   };
 
   const handleEditClick = () => {
-    if (!editor.isEditable()) return;
+    if (!host.isEditable()) return;
     setIsEditing(true);
     setTimeout(() => {
       if (urlInputRef) {
@@ -206,63 +212,53 @@ export function FloatingLinkMenu(props: {
   };
 
   const handleSubmit = () => {
-    if (!editor.isEditable()) return;
+    if (!host.isEditable()) return;
     const prev = linkInfo();
     const pending = pendingLinkInfo();
     if (!prev || !pending) {
       reset();
-      editor.focus();
+      host.focus();
       return;
     }
 
     if (pending.url === undefined || pending.linkText === undefined) {
       reset();
-      editor.focus();
+      host.focus();
       return;
     }
 
     // Insert new link.
     if (createMode()) {
-      editor.dispatchCommand(INSERT_LINK_COMMAND, {
-        url: pending.url,
-        linkText: pending.linkText,
-      });
+      host.insert(pending.url, pending.linkText);
       reset();
-      editor.focus();
+      host.focus();
       return;
     }
 
     // No updates, no op.
     if (pending.url === prev.url && pending.linkText === prev.linkText) {
       reset();
-      editor.focus();
+      host.focus();
       return;
     }
 
     // Only update url.
     if (pending.url !== prev.url && pending.linkText === prev.linkText) {
-      editor.dispatchCommand(UPDATE_LINK_URL_COMMAND, pending.url);
+      host.updateUrl(pending.url);
       reset();
-      editor.focus();
+      host.focus();
       return;
     }
 
     // Update the url and its child text.
-    editor.dispatchCommand(UPDATE_LINK_COMMAND, {
-      url: pending.url,
-      linkText: pending.linkText,
-    });
+    host.update(pending.url, pending.linkText);
     reset();
-    editor.focus();
+    host.focus();
   };
 
-  plugins.use(
-    linksPlugin({
-      onHoverLink,
-      onClickLink,
-      onCreateLink,
-      autoLinkMatchMode: props.autoLinkMatchMode,
-    })
+  host.registerMenu(
+    { hover: onHoverLink, click: onClickLink, create: onCreateLink },
+    props.autoLinkMatchMode
   );
 
   const keydown = (e: KeyboardEvent) => {
@@ -276,12 +272,11 @@ export function FloatingLinkMenu(props: {
         pendingLinkInfo()?.url === undefined
       ) {
         setTimeout(() => {
-          if (editor.isEditable())
-            editor.dispatchCommand(UNLINK_COMMAND, undefined);
+          if (host.isEditable()) host.unlink();
         });
       }
       reset();
-      editor.focus();
+      host.focus();
     }
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -298,33 +293,25 @@ export function FloatingLinkMenu(props: {
   });
 
   autoRegister(
-    mergeRegister(
-      editor.registerCommand(
-        KEY_ESCAPE_COMMAND,
-        () => {
-          if (menuOpen()) {
-            setMenuOpen(false);
-            editor.focus();
-            return true;
-          }
-          return false;
-        },
-        COMMAND_PRIORITY_HIGH
-      ),
-      editor.registerCommand(
-        KEY_ENTER_COMMAND,
-        () => {
-          if (menuOpen()) {
-            handleSubmit();
-            reset();
-            editor.focus();
-            return true;
-          }
-          return false;
-        },
-        COMMAND_PRIORITY_CRITICAL
-      )
-    )
+    host.registerKeys({
+      escape() {
+        if (menuOpen()) {
+          setMenuOpen(false);
+          host.focus();
+          return true;
+        }
+        return false;
+      },
+      enter() {
+        if (menuOpen()) {
+          handleSubmit();
+          reset();
+          host.focus();
+          return true;
+        }
+        return false;
+      },
+    })
   );
 
   const expanded = () => menuOpen() && (isEditing() || createMode());
@@ -362,7 +349,7 @@ export function FloatingLinkMenu(props: {
     !linkInfo()?.linkRef && linkInfo()?.selection
       ? {
           selection: linkInfo()?.selection,
-          reactiveOnContainer: editor.getRootElement(),
+          reactiveOnContainer: host.root(),
           useBlockBoundary: true,
         }
       : undefined;
