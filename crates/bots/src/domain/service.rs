@@ -351,16 +351,6 @@ where
             harness_owner.allow_permission_bypass,
             auto_accept_permissions,
         )?;
-        if let Some(workspace) = new_workspace
-            && !harness_owner
-                .workspace_paths
-                .iter()
-                .any(|reported| reported == workspace)
-        {
-            return Err(BotError::BadRequest(
-                "this runtime has not reported that workspace; pick one it lists".to_string(),
-            ));
-        }
         let usable = match (owner, &harness_owner.owner) {
             (
                 BotOwner::Team { team_id },
@@ -388,6 +378,18 @@ where
         };
         if !usable {
             return Err(BotError::Unauthorized);
+        }
+        // After the ownership check, so a caller who cannot use this harness
+        // cannot probe which directories its machine reported.
+        if let Some(workspace) = new_workspace
+            && !harness_owner
+                .workspace_paths
+                .iter()
+                .any(|reported| reported == workspace)
+        {
+            return Err(BotError::BadRequest(
+                "this runtime has not reported that workspace; pick one it lists".to_string(),
+            ));
         }
         Ok(Some(harness_owner.owner))
     }

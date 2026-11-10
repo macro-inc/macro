@@ -150,3 +150,34 @@ async fn a_kept_workspace_survives_and_moving_harness_drops_it(pool: PgPool) -> 
     assert_eq!(moved.workspace_path, None);
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn another_users_harness_does_not_reveal_its_workspaces(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_user(&pool, USER_OWNER).await?;
+    insert_user(&pool, USER_OTHER).await?;
+    let harness = insert_harness(&pool, Some(USER_OWNER), None).await?;
+    report_workspaces(&pool, harness, &["/home/owner/code/api"]).await?;
+    let service = service(&pool);
+
+    for (handle, path) in [
+        ("probe-reported", "/home/owner/code/api"),
+        ("probe-unreported", "/home/owner/code/secret"),
+    ] {
+        let probe = service
+            .create_agent(
+                user_id(USER_OTHER),
+                CreateAgentRequest {
+                    workspace_path: Some(path.to_owned()),
+                    ..macrod_agent_req(handle, Some(harness))
+                },
+            )
+            .await;
+        assert!(
+            matches!(probe, Err(BotError::Unauthorized)),
+            "{path}: {probe:?}"
+        );
+    }
+    Ok(())
+}
