@@ -251,6 +251,20 @@ fn encode_inner(
                     }
                 }
             }
+            ViewEffect::HistoryAwarenessSelection {
+                selection,
+                format,
+                style,
+                write_dom,
+            } => {
+                m.kind = 6;
+                m.code = 0;
+                m.selection = editor_input::view_selection(selection);
+                m.format = format.bits();
+                m.style = style.to_string();
+                // A focused history restore can write through the main update's skip tag.
+                m.flag = *write_dom;
+            }
             ViewEffect::Editor(e) => {
                 m.kind = 6;
                 match e {

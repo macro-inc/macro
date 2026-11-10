@@ -9,6 +9,7 @@ use std::sync::{
     Arc,
     atomic::{AtomicI64, Ordering},
 };
+mod browser_history;
 mod builder;
 pub(crate) mod reported_errors;
 pub use reported_errors::ReportedModelErrorObserver;
@@ -37,6 +38,8 @@ pub struct EditorConfig {
     pub mode: EditorMode,
     /// Platform selection policy.
     pub view_host: ViewHost,
+    /// Follow browser collaboration awareness when applying Loro history.
+    pub browser_history_awareness: bool,
     /// Collaborative history merge interval on the host-provided clocks.
     pub delay_ms: u64,
     /// Trusted application commands that change only local policy-excluded state.
@@ -54,6 +57,7 @@ impl Default for EditorConfig {
                 engine: ViewEngine::Native,
                 os: ViewOs::Other,
             },
+            browser_history_awareness: false,
             delay_ms: 400,
             local_commands: &[],
         }
@@ -131,6 +135,8 @@ impl EditorSurface {
             .opaque_unknown_types(true);
         if mode == EditorMode::Headless {
             builder.plugin(builder::RestoreModelSelection)
+        } else if config.browser_history_awareness {
+            builder.plugin(builder::RestoreHistoryAwareness)
         } else {
             builder
         }
@@ -729,9 +735,12 @@ impl EditorSurface {
         historic: bool,
     ) -> Result<bool, SessionError> {
         self.history_clock.store(now.wall.0, Ordering::Relaxed);
+        let browser_history = (historic && self.config.browser_history_awareness)
+            .then(|| browser_history::AwarenessSelection::capture(self));
         let popped = historic
             .then(|| self.history_selection.take_popped())
-            .flatten();
+            .flatten()
+            .filter(|_| browser_history.is_none());
         #[cfg(test)]
         if std::mem::take(&mut self.fail_next_remote) {
             return Err(lexical_loro::ProjectionError::Diverged {
@@ -743,7 +752,11 @@ impl EditorSurface {
             self.init(doc, now, access, view)?;
             return Ok(false);
         }
-        let cursors = self.selection_cursors();
+        let cursors = if browser_history.is_some() && self.core.state().selection().is_none() {
+            None
+        } else {
+            self.selection_cursors()
+        };
         let projection = self.projection.as_mut().ok_or(SessionError::NotReady)?;
         let changes = projection.take_remote(doc, self.core.state())?;
         let mut tags = TagSet::from_tags([
@@ -753,24 +766,33 @@ impl EditorSurface {
         if historic {
             tags.insert(UpdateTag::Historic);
         }
-        if !self.focused {
+        if browser_history.is_some() || !self.focused {
             tags.insert(UpdateTag::SkipDomSelection);
         }
         if let Some(capture) = &self.follow_up_errors {
             capture.clear();
         }
+        let apply = Input::ApplyRemote {
+            changes: changes.changes.clone(),
+            options: UpdateOptions {
+                skip_transforms: false,
+                tags,
+            },
+        };
+        let input = if browser_history.is_some() {
+            Input::Batch(vec![
+                Input::SelectionFromView {
+                    selection: ViewSelection::None,
+                    change: None,
+                },
+                apply,
+            ])
+        } else {
+            apply
+        };
         let output = self
             .core
-            .apply(
-                Input::ApplyRemote {
-                    changes: changes.changes.clone(),
-                    options: UpdateOptions {
-                        skip_transforms: false,
-                        tags,
-                    },
-                },
-                HistoryTime(now.mono.0),
-            )
+            .apply(input, HistoryTime(now.mono.0))
             .map_err(|error| SessionError::Model(error.error))?;
         let created = output
             .effects
@@ -848,6 +870,18 @@ impl EditorSurface {
                 )
             })
         };
+        if let Some(awareness) = browser_history {
+            self.publish_browser_history_selection(view, None);
+            return self
+                .restore_browser_history_selection(
+                    doc,
+                    points.and_then(|(anchor, focus)| anchor.zip(focus)),
+                    awareness,
+                    now,
+                    view,
+                )
+                .map(|()| changed);
+        }
         if let Some((Some(anchor), Some(focus))) = points {
             let input = if self.config.mode == EditorMode::Headless {
                 Input::Command {

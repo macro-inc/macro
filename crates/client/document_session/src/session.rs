@@ -89,6 +89,17 @@ pub enum ViewEffect {
     Diff(lexical_model::Diff),
     /// Host editor effect.
     Editor(lexical_model::Effect),
+    /// Selection restored from live awareness after a browser history update.
+    HistoryAwarenessSelection {
+        /// Actual selection committed by the restore.
+        selection: lexical_model::ViewSelection,
+        /// Range typing format.
+        format: lexical_model::TextFormat,
+        /// Range typing style.
+        style: std::sync::Arc<str>,
+        /// Allow a focused restore to write DOM selection after the content skip.
+        write_dom: bool,
+    },
     /// Native changes in observed generic containers.
     DocChanged(Vec<DocEvent>),
     /// Remote peer presence.

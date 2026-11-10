@@ -627,7 +627,9 @@ export class EditorView implements ViewSink {
                   ?.select(selection.anchorCell, selection.focusCell);
               else if (previousSelection.kind === 'table')
                 this.tables.get(previousSelection.table)?.clear();
-              if (!skipDomSelection)
+              // Only a focused history-awareness restore may override the
+              // content update's skip tag in this packet.
+              if (!skipDomSelection || effect.flag)
                 writeSelection(this, selection, previousSelection);
               break;
             }

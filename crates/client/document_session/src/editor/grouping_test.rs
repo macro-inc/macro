@@ -288,10 +288,15 @@ fn collaborative_interval_merges_typing_paste_format_node_and_explicit_push() {
     }
 }
 
-#[test]
-fn markdown_code_shortcut_typing_undo_removes_the_whole_code_block() {
+fn typed_code_shortcut(engine: ViewEngine) -> (EditorSurface, LoroDoc, Vec<ViewEffect>) {
     let config = crate::application::application_editor_config(
-        EditorConfig::default(),
+        EditorConfig {
+            view_host: ViewHost {
+                engine,
+                os: ViewOs::Other,
+            },
+            ..EditorConfig::default()
+        },
         Arc::new(AtomicI64::new(0)),
         macro_document_model::EditorType::MarkdownSync,
     );
@@ -405,6 +410,12 @@ fn markdown_code_shortcut_typing_undo_removes_the_whole_code_block() {
         surface.state().view().text_content(code),
         "const installCheck = \"durable\";"
     );
+    (surface, doc, view)
+}
+
+#[test]
+fn markdown_code_shortcut_typing_undo_removes_the_whole_code_block() {
+    let (mut surface, doc, mut view) = typed_code_shortcut(ViewEngine::Native);
     // Actual full-app Source: first Ctrl+Z leaves no code and empty body;
     // a second Ctrl+Z also leaves no code and empty body.
     for time in [100, 101] {
@@ -421,6 +432,208 @@ fn markdown_code_shortcut_typing_undo_removes_the_whole_code_block() {
             surface.state().to_json()
         );
         assert!(surface.state().root_text_content().is_empty());
+    }
+}
+
+#[test]
+fn browser_code_history_waits_for_an_actual_selection_after_the_cursor_disappears() {
+    for feedback in [false, true] {
+        let (mut surface, doc, mut view) = typed_code_shortcut(ViewEngine::Chromium);
+        for (input, expected, time) in [
+            (Input::Undo, "", 100),
+            (Input::Redo, "const installCheck = \"durable\";\n\n", 101),
+        ] {
+            view.clear();
+            assert!(
+                surface
+                    .apply(&doc, input, now(time), Access::Edit, &mut view)
+                    .expect("actual history")
+            );
+            assert_eq!(surface.state().root_text_content().as_ref(), expected);
+            assert_eq!(surface.state().selection(), None);
+            assert!(view.iter().any(|effect| matches!(effect,
+                ViewEffect::CommitTags(tags) if tags.iter().any(|tag| tag == "skip-dom-selection")
+            )));
+            assert!(view.iter().any(|effect| matches!(
+                effect,
+                ViewEffect::Editor(Effect::SetViewSelection {
+                    selection: ViewSelection::None,
+                    ..
+                })
+            )));
+            assert!(
+                !view
+                    .iter()
+                    .any(|effect| matches!(effect, ViewEffect::HistoryAwarenessSelection { .. }))
+            );
+            if feedback && time == 100 {
+                let paragraph = surface
+                    .state()
+                    .view()
+                    .first_child(NodeKey::ROOT)
+                    .expect("surviving paragraph");
+                let point = Point::element(paragraph, lexical_model::ChildIndex(0));
+                surface
+                    .apply(
+                        &doc,
+                        Input::SelectionFromView {
+                            selection: ViewSelection::Range {
+                                anchor: point,
+                                focus: point,
+                                resolution_dirty: false,
+                            },
+                            change: None,
+                        },
+                        now(100),
+                        Access::Edit,
+                        &mut view,
+                    )
+                    .expect("admit actual browser paragraph feedback");
+                assert!(surface.state().selection().is_some());
+            }
+        }
+    }
+}
+
+#[test]
+fn browser_history_restores_surviving_awareness_without_stealing_focus() {
+    for focused in [true, false] {
+        let config = crate::application::application_editor_config(
+            EditorConfig {
+                view_host: ViewHost {
+                    engine: ViewEngine::Chromium,
+                    os: ViewOs::Other,
+                },
+                ..EditorConfig::default()
+            },
+            Arc::new(AtomicI64::new(0)),
+            macro_document_model::EditorType::MarkdownSync,
+        );
+        let mut surface = EditorSurface::new(config, 7, now(0)).expect("actual Macro surface");
+        let doc = lexical_loro::new_doc(7).expect("actual Loro");
+        let mut view = Vec::new();
+        surface
+            .init(&doc, now(0), Access::Edit, &mut view)
+            .expect("open");
+        surface
+            .apply(
+                &doc,
+                Input::SetState {
+                    state: serde_json::from_value(json!({"root":{"type":"root","children":[
+                        {"type":"paragraph","children":[{"type":"text","text":"abc"}]}
+                    ]}}))
+                    .expect("initial model"),
+                    tags: TagSet::default(),
+                },
+                now(0),
+                Access::Edit,
+                &mut view,
+            )
+            .expect("persist initial text");
+        surface
+            .apply(
+                &doc,
+                Input::Command {
+                    command: Command::ClearHistory,
+                    selection: ViewSelection::KeepModel,
+                },
+                now(0),
+                Access::Edit,
+                &mut view,
+            )
+            .expect("clear bootstrap history");
+        let text = surface
+            .state()
+            .view()
+            .all_text_nodes(NodeKey::ROOT)
+            .next()
+            .expect("text");
+        let at = |offset| {
+            let point = Point::text(text, Utf16Offset(offset));
+            ViewSelection::Range {
+                anchor: point,
+                focus: point,
+                resolution_dirty: false,
+            }
+        };
+        surface
+            .apply(
+                &doc,
+                Input::Command {
+                    command: Command::InsertText("X".into()),
+                    selection: at(2),
+                },
+                now(500),
+                Access::Edit,
+                &mut view,
+            )
+            .expect("type inside surviving text");
+        let live = surface
+            .state()
+            .selection()
+            .expect("live selection after typing");
+        let expected = surface
+            .projection
+            .as_ref()
+            .expect("attached projection")
+            .cursor(&doc, surface.state(), live);
+        assert!(expected.is_some());
+        assert_eq!(surface.selection_cursors(), expected);
+        surface.focus_known = true;
+        surface.focused = focused;
+        for (input, expected, offset, time) in [
+            (Input::Undo, "abc", 2, 600),
+            (Input::Redo, "abXc", if focused { 3 } else { 0 }, 700),
+        ] {
+            view.clear();
+            assert!(
+                surface
+                    .apply(&doc, input, now(time), Access::Edit, &mut view)
+                    .expect("actual history")
+            );
+            assert_eq!(surface.state().root_text_content().as_ref(), expected);
+            assert_eq!(view_selection(surface.state().selection()), at(offset));
+            let main = view
+                .iter()
+                .position(|effect| {
+                    matches!(
+                        effect,
+                        ViewEffect::Editor(Effect::SetViewSelection {
+                            selection: ViewSelection::None,
+                            ..
+                        })
+                    )
+                })
+                .expect("clear selection in main output");
+            let restored = view
+                .iter()
+                .position(|effect| {
+                    matches!(effect,
+                        ViewEffect::HistoryAwarenessSelection {selection, write_dom, ..}
+                            if selection == &at(offset) && *write_dom == focused
+                    )
+                })
+                .expect("actual live-awareness presentation");
+            assert!(main < restored);
+            assert!(view[main+1..restored].iter().any(|effect| matches!(effect,
+                ViewEffect::CommitTags(tags) if tags.iter().any(|tag| tag == "collab-selection")
+                    && tags.iter().any(|tag| tag == "skip-dom-selection") != focused
+            )));
+            if !focused {
+                surface
+                    .apply(
+                        &doc,
+                        Input::SelectionFromView {
+                            selection: at(0),
+                            change: None,
+                        },
+                        now(time + 1),
+                        Access::Edit,
+                        &mut view,
+                    )
+                    .expect("accept actual browser's text-zero boundary");
+            }
+        }
     }
 }
 

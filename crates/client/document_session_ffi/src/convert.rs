@@ -74,6 +74,16 @@ pub(crate) fn output(
                         },
                     },
                 },
+                ViewEffect::HistoryAwarenessSelection {
+                    selection,
+                    format,
+                    style,
+                    ..
+                } => FfiViewEffect::SetSelection {
+                    selection: selection.clone(),
+                    format: *format,
+                    style: style.to_string(),
+                },
                 ViewEffect::Editor(effect) => match effect {
                     Effect::SetViewSelection {
                         selection,
