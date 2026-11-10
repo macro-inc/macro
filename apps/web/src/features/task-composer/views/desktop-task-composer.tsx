@@ -1,7 +1,7 @@
 import {
   TaskTemplateControls,
   TaskTemplateNameStrip,
-} from '@app/features/task-templates/task-template-controls';
+} from '@app/features/task-templates/views/task-template-controls';
 import { EntityComposer } from '@ui';
 import { Show } from 'solid-js';
 import type { TaskComposerController } from '../primitives/task-composer';

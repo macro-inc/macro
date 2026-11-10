@@ -1,5 +1,8 @@
 import { timeRangeFromInstants } from '@app/features/database/core/cell-date-range';
-import type { SavedTaskTemplate } from '@app/features/task-composer/core/template-selection';
+import type {
+  SavedTaskTemplate,
+  SelectableTaskTemplate,
+} from '@app/features/task-composer/core/template-selection';
 import { propertyValueToApi } from '@property/api/converters';
 import type {
   PropertyApiValues,
@@ -67,6 +70,24 @@ export function taskTemplateContents(
     propertyIds: [...configuration.propertyIds],
     propertyDefaults,
     descriptionMarkdown: configuration.descriptionMarkdown,
+  };
+}
+
+export function taskTemplateForComposer(
+  template: TaskTemplate,
+  definitions: readonly PropertyDefinitionDomain[]
+): SelectableTaskTemplate {
+  const available = new Set(definitions.map((definition) => definition.id));
+  return {
+    id: template.id,
+    name: template.name,
+    teamId: template.teamId ?? null,
+    revision: template.revision,
+    contents: taskTemplateContents(template.configuration, definitions),
+    canManage: template.canManage,
+    hasUnavailableProperties: template.configuration.propertyIds.some(
+      (id) => !available.has(id)
+    ),
   };
 }
 

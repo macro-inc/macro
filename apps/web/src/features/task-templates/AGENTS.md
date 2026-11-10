@@ -10,8 +10,10 @@ Task creation also preserves the composer's selected fields as per-task pins.
 
 - `core/template.ts`: fill-blank application and reusable-default capture.
 - `components/template-picker.tsx`: searchable desktop dropdown and touch picker sheet.
-- `task-template-controls.tsx`: template selection, draft-preserving template mode header, and scoped confirmation dialogs.
+- `views/task-template-controls.tsx`: composer wiring, template identity, and scoped confirmation dialogs.
+- `primitives/template-controls.ts`: selection, permission checks, deletion, and dialog lifetimes.
 - `../task-composer/primitives/template-workflow.ts`: isolated editing, durable creation identities, and field-only updates.
+- Keep composer and workflow state in typed stores; replace immutable snapshots with root patches and unwrap reads for cloning.
 - `../task-composer/property-defaults.ts`: default composer fields and creation-time pin selection.
 
 ## Scope
@@ -61,6 +63,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Apply menu padding once around choices; keep grouped labels on the shared dropdown spacing.
 - Reuse `DropdownSearchInput` for flush, divided search matching the assignee selector.
 - Match trailing selection checks to `PropertyEntitySelector` using its check icon and classes.
+- Compose picker options, commands, and edit buttons within one surface context; preserve menu roles and touch button semantics.
 - Overlay the edit action within the full-width row using the shared icon-button recipe; reveal it on hover, keyboard focus, and touch.
 - Use a secondary trigger showing No template with the menu's blank-page icon when no template is applied.
 - Retain the compact touch trigger's accessible label and the existing touch picker sheet; keep empty states brief.

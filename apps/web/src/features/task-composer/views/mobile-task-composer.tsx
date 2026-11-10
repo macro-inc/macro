@@ -1,7 +1,7 @@
 import {
   TaskTemplateControls,
   TaskTemplateNameStrip,
-} from '@app/features/task-templates/task-template-controls';
+} from '@app/features/task-templates/views/task-template-controls';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { Property } from '@property';
 import { InlineTagsSheetPill } from '@property/tags';

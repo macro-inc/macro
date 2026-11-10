@@ -12,6 +12,20 @@ export type SavedTaskTemplate = {
   contents: TaskTemplateContents;
 };
 
+/** Composer-ready template data with current management and field availability. */
+export type SelectableTaskTemplate = SavedTaskTemplate & {
+  canManage: boolean;
+  hasUnavailableProperties: boolean;
+};
+
+export type TemplatePickerItem = {
+  key: string;
+  label: string;
+  shared: boolean;
+  select(): void;
+  edit?: () => void;
+};
+
 export type TemplateCreationRequest = {
   creationId: string;
   name: string;
