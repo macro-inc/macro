@@ -213,6 +213,51 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
       id ? Routine.byId(this.client, id) : undefined,
     );
 
+  /**
+   * The routine this one follows, when one of that routine's runs created
+   * it: pausing the parent pauses it and deleting the parent deletes it.
+   * `undefined` for a top-level routine.
+   */
+  readonly parent: () => Promise<Routine | undefined> = this.mappedField(
+    'sub_routine',
+    (link): Routine | undefined =>
+      link ? Routine.byId(this.client, link.parent_id) : undefined,
+  );
+
+  /**
+   * The run that created this sub-routine, by the id its history record
+   * has once that run ends. `undefined` for a top-level routine.
+   */
+  readonly createdByRun: () => Promise<RoutineRun | undefined> =
+    this.mappedField('sub_routine', (link): RoutineRun | undefined =>
+      link ? new RoutineRun(link.created_by_run_id) : undefined,
+    );
+
+  /** The key this sub-routine was created under, if its creator gave one. */
+  readonly key: () => Promise<string | undefined> = this.mappedField(
+    'sub_routine',
+    (link) => link?.key ?? undefined,
+  );
+
+  /** This routine's sub-routines, finished one-time ones included. */
+  async children(): Promise<Routine[]> {
+    return unwrap(
+      await this.client.scheduledAction.listScheduledActions({
+        query: { include_events: true, parent: this.id },
+      }),
+    ).map((record) => Routine.from(this.client, record));
+  }
+
+  /**
+   * Keep this sub-routine as the user's own routine: it moves to their main
+   * list and no longer pauses or is deleted with its parent.
+   */
+  async keepAsOwn(): Promise<void> {
+    await this.mutate((c) =>
+      c.scheduledAction.detachScheduledAction({ path: { id: this.id } }),
+    );
+  }
+
   /** This routine's shared template, or `undefined` when it isn't shared. */
   async template(): Promise<RoutineTemplate | undefined> {
     const result = await this.client.scheduledAction.getScheduledActionTemplate(
@@ -320,7 +365,16 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
       await this.client.scheduledAction.listScheduledActionHistory({
         path: { id: this.id },
       }),
-    ).map((record) => new RoutineExecution(this, record));
+    ).map(
+      (record) =>
+        new RoutineExecution(
+          this,
+          record,
+          (record.created ?? []).map((routine) =>
+            Routine.byId(this.client, routine.id),
+          ),
+        ),
+    );
   }
 
   /** Delete the routine. */
@@ -328,6 +382,19 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     await this.mutate((c) =>
       c.scheduledAction.deleteScheduledAction({ path: { id: this.id } }),
     );
+  }
+}
+
+/** One run of a routine, by the id of its history record. */
+export class RoutineRun {
+  constructor(
+    /** The run's id, which its {@link RoutineExecution} has once it ends. */
+    readonly id: string,
+  ) {}
+
+  /** Serialize the run's identity. */
+  toJSON() {
+    return { id: this.id };
   }
 }
 
@@ -362,7 +429,9 @@ export class RoutineExecution {
     /** Parent routine. */
     readonly routine: Routine,
     /** Execution snapshot. */
-    readonly record: import('../../../generated/scheduled-action/types.gen').ActionExecutionRecord,
+    readonly record: import('../../../generated/scheduled-action/types.gen').ExecutionRecordResponse,
+    /** The sub-routines this run created that still follow the routine. */
+    readonly created: Routine[] = [],
   ) {}
 
   /** Execution identity, when assigned. */

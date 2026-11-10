@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, owner, name, kind, task, created_at, updated_at, enabled, run_visibility, template_id, suggestion_id,\n                   description,\n                   event_filters AS \"event_filters!\", event_activated_at AS \"event_activated_at!\"\n            FROM scheduled_action\n            WHERE id = $1 AND enabled AND event_filters IS NOT NULL AND configuration_revision = $2\n              AND (claimed IS NULL OR claimed < $3)\n              AND NOT EXISTS (SELECT 1 FROM scheduled_action_event_run WHERE action_id = $1 AND state = 'started')\n            ",
+  "query": "\n            SELECT id, owner, name, kind, task, created_at, updated_at, enabled, run_visibility, template_id, suggestion_id,\n                   description, parent_id, created_by_run_id, child_key, paused_by_parent,\n                   event_filters AS \"event_filters!\", event_activated_at AS \"event_activated_at!\"\n            FROM scheduled_action\n            WHERE id = $1 AND enabled AND event_filters IS NOT NULL AND configuration_revision = $2\n              AND (claimed IS NULL OR claimed < $3)\n              AND NOT EXISTS (SELECT 1 FROM scheduled_action_event_run WHERE action_id = $1 AND state = 'started')\n            ",
   "describe": {
     "columns": [
       {
@@ -65,11 +65,31 @@
       },
       {
         "ordinal": 12,
+        "name": "parent_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "created_by_run_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 14,
+        "name": "child_key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 15,
+        "name": "paused_by_parent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 16,
         "name": "event_filters!",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 13,
+        "ordinal": 17,
         "name": "event_activated_at!",
         "type_info": "Timestamptz"
       }
@@ -95,8 +115,12 @@
       true,
       false,
       true,
+      true,
+      true,
+      false,
+      true,
       true
     ]
   },
-  "hash": "cdfd5d737800b3d83ab3ef3fb03de5d3407d256c23a651de96b5ebe22ae4923e"
+  "hash": "26ee71f03f0d7e4eff75302e0e5018b05cda41d55c420cc9472772e3e7ddf9b4"
 }
