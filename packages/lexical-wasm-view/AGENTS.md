@@ -59,6 +59,9 @@ Keep table pointer selection tied to its pointer id; cancel it on pointercancel 
 
 Keep drag source validity tied to documentRevision; selection-only commits do not invalidate a drag. Lazy clipboard imports retain the broader revision guard.
 
+- Opt into ordered Enter only with the actual generated native module; preserve Source Set registration and per-priority snapshots, reject ordinary receivers before bindgen and Port queue admission during callbacks, and use issued scoped operations without querying published caches.
+- Drain exact failure-ordinal output and I/O before rethrowing the original callback value; detach immediately on callback close, retain current snapshot functions through the enclosing native return, and defer ordinary cleanup to its post-call fence.
+
 ## Checks
 
 - Preserve the previous model selection when projecting non-range selections: clear only an owned DOM range after a non-null model selection, retaining readonly, nested-editor and captured-input selections.

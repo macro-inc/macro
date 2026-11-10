@@ -4,9 +4,30 @@ import type {
   IQueryMsg,
   IQueryReplyMsg,
   ISelectionChangeMsg,
+  ISelectionMsg,
   IViewEffectMsg,
 } from '@macro-inc/collaboration/session/abi.generated';
+import type { ViewCommandPriority } from './commands';
+import type { NativeEnterScope } from './native-enter';
+import type { NativeCallbackFailure } from './native-enter-output';
 import type { NodeKey, TypeRow, ViewSelection } from './types';
+
+export interface NativeEnterPort {
+  register(
+    listener: (event: KeyboardEvent | null) => boolean,
+    priority: ViewCommandPriority,
+    identity?: object
+  ): () => void;
+  hasListeners(): boolean;
+  scope(): NativeEnterScope | undefined;
+  dispatch(): boolean;
+  dispatchScoped(input: EditorInputMsg): boolean;
+  pendingSelection(): ISelectionMsg;
+  pendingText(key: NodeKey): string;
+  pendingOwnJSON(key: NodeKey): string;
+  takeFailure(): NativeCallbackFailure | undefined;
+  dispose(): void;
+}
 
 export interface TextFromView {
   readonly key: NodeKey;
@@ -29,6 +50,7 @@ export interface ViewSink {
 }
 /** Model boundary shared by production sessions and the development shim. */
 export interface EditorPort {
+  readonly nativeEnter?: NativeEnterPort;
   types(): readonly TypeRow[];
   listeners(): ReadonlyMap<string, number>;
   textFromView(input: TextFromView): void;
@@ -54,9 +76,14 @@ export interface EditorPort {
     mods: number,
     routed: number,
     key: string,
-    selection: ViewSelection
+    selection: ViewSelection,
+    event?: KeyboardEvent
   ): boolean | undefined;
-  input(input: EditorInputMsg, after?: (handled: boolean) => void): void;
+  input(
+    input: EditorInputMsg,
+    after?: (handled: boolean) => void,
+    event?: KeyboardEvent
+  ): void;
   setState(json: string): void;
   initialize(): void;
   clipboard(kind: number): IClipboardMsg;

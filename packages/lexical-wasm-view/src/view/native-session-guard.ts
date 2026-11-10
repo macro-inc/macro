@@ -28,6 +28,19 @@ interface Change {
 }
 const installations = new WeakMap<object, Installation>();
 
+/** Reject queued receiver work using only an already installed module authority. */
+export function assertNativeSessionReceiverAdmission(session: object): void {
+  const prototype: unknown = Object.getPrototypeOf(session);
+  if (typeof prototype !== 'object' || prototype === null) return;
+  const sessionConstructor: unknown = Object.getOwnPropertyDescriptor(
+    prototype,
+    'constructor'
+  )?.value;
+  if (typeof sessionConstructor !== 'function') return;
+  if (installations.get(sessionConstructor)?.active())
+    throw new Error('Ordinary native admission during scoped callback');
+}
+
 function callable(value: unknown): value is Callable {
   return typeof value === 'function';
 }

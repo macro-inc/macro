@@ -137,6 +137,7 @@ export class EditorView implements ViewSink {
     style: '',
   };
   private disposed = false;
+  private detaching = false;
   private recovering = false;
   private prevented = false;
   private lastOps = 0;
@@ -158,7 +159,11 @@ export class EditorView implements ViewSink {
     return this.revisionValue;
   }
   get isMounted(): boolean {
-    return !this.disposed && roots.get(this.root) === this;
+    return !this.disposed && !this.detaching && roots.get(this.root) === this;
+  }
+  /** Block host actions immediately; native callback teardown finishes after return. */
+  beginTeardown(): void {
+    this.detaching = true;
   }
   private readonly cleanupTimers = new Set<ReturnType<typeof setTimeout>>();
   private constructor(
@@ -272,6 +277,7 @@ export class EditorView implements ViewSink {
       });
   }
   ownsEvent(target: EventTarget | null, allowDecorator: boolean): boolean {
+    if (!this.isMounted) return false;
     const NodeType = this.root.ownerDocument.defaultView?.Node;
     if (!NodeType || !(target instanceof NodeType)) return false;
     for (let node: Node | null = target; node; node = node.parentNode) {
@@ -907,6 +913,18 @@ export class EditorView implements ViewSink {
     listener: (payload: P, view: EditorView) => boolean,
     priority: ViewCommandPriority
   ): () => void {
+    if (command.name === 'Key(Enter)' && this.port.nativeEnter) {
+      if (!this.isMounted) throw new Error('Native editor view is closing');
+      return this.port.nativeEnter.register(
+        (payload) => {
+          if (!command.accepts(payload))
+            throw new Error('Invalid view command payload: ' + command.name);
+          return listener(payload, this);
+        },
+        priority,
+        listener
+      );
+    }
     if ((this.rustListeners.get(command.name) ?? 0) & (1 << priority))
       throw new Error(
         'View command priority ties a Rust listener: ' + command.name
@@ -1004,24 +1022,43 @@ export class EditorView implements ViewSink {
     this.root.contentEditable = String(editable);
   }
   dispose(): void {
+    if (this.disposed) return;
     this.disposed = true;
+    let failure: { error: unknown } | undefined;
+    const cleanup = (call: () => void) => {
+      try {
+        call();
+      } catch (error) {
+        if (!failure) failure = { error };
+        else {
+          try {
+            Telemetry.error(error, { surface: 'editor.dispose.cleanup' });
+          } catch {
+            /* Preserve the first disposal cause. */
+          }
+        }
+      }
+    };
     this.keyRoutes.clear();
     this.pluginEvents.clear();
-    this.clipboard.dispose();
-    if (this.paintFrame !== null)
-      this.root.ownerDocument.defaultView?.cancelAnimationFrame(
-        this.paintFrame
+    cleanup(() => this.clipboard.dispose());
+    const frame = this.paintFrame;
+    if (frame !== null)
+      cleanup(() =>
+        this.root.ownerDocument.defaultView?.cancelAnimationFrame(frame)
       );
-    this.openingSpan?.end();
+    cleanup(() => this.openingSpan?.end());
     this.openingSpan = undefined;
     this.observer.disconnect();
     for (const timer of this.cleanupTimers) clearTimeout(timer);
     this.cleanupTimers.clear();
-    this.events.dispose();
-    this.presence.dispose();
-    for (const decorator of this.decorators.values()) decorator.dispose();
+    cleanup(() => this.events.dispose());
+    cleanup(() => this.presence.dispose());
+    for (const decorator of this.decorators.values())
+      cleanup(() => decorator.dispose());
     this.decorators.clear();
-    for (const table of this.tables.values()) table.dispose();
+    cleanup(() => this.port.nativeEnter?.dispose());
+    for (const table of this.tables.values()) cleanup(() => table.dispose());
     this.tables.clear();
     roots.delete(this.root);
     this.dom.clear();
@@ -1030,5 +1067,6 @@ export class EditorView implements ViewSink {
     this.mutations.clear();
     this.histories.clear();
     this.decoratorListeners.clear();
+    if (failure) throw failure.error;
   }
 }

@@ -10,6 +10,7 @@ import type { EditorSession } from '@macro-inc/collaboration/session/wasm';
 import { Telemetry } from '@macro-inc/observability';
 import { mountSessionView } from './session-view';
 import type { ViewOptions } from './view/editor-view';
+import type { NativeEnterModule } from './view/native-enter';
 import type { NodeViewRegistry } from './view/registry';
 
 export interface LocalSessionOptions {
@@ -17,6 +18,7 @@ export interface LocalSessionOptions {
   viewOs: number;
   /** The host selects the native node/plugin preset after loading WASM. */
   create(config: Uint8Array, now: number, wall: number): EditorSession;
+  nativeCommands?: NativeEnterModule;
 }
 
 /** Independent, non-durable native editor for composers and read-only views. */
@@ -33,48 +35,54 @@ export function mountLocalSessionView(
   const telemetry = new SessionTelemetry(span);
   let mounted: Awaited<ReturnType<typeof mountSessionView>> | undefined;
   try {
-    mounted = mountSessionView(root, registry, view, {
-      doc,
-      owner,
-      user: '',
-      create: (now, wall) =>
-        options.create(
-          SessionConfigMsg.encode({
-            doc,
-            session: owner,
-            user: '',
-            peers: [...crypto.getRandomValues(new BigUint64Array(4))].map(
-              (peer) => peer & ((1n << 63n) - 1n)
-            ),
-            // Local read-only views still need to import their supplied content.
-            // Editability belongs to the view; there is no remote authority.
-            access: Access.Edit,
-            transport: Transport.None,
-            durable: false,
-            chatter: false,
-            headless: false,
-            viewEngine: options.viewEngine,
-            viewOs: options.viewOs,
-            token: '',
-            traceparent: span.traceparent() ?? '',
-            coalesce: 25,
-            snapshotInterval: 0,
-            observed: [],
-          }),
-          now,
-          wall
-        ),
-      auth: {
-        async token() {
-          throw new Error('Local editors cannot request sync authorization');
+    mounted = mountSessionView(
+      root,
+      registry,
+      view,
+      {
+        doc,
+        owner,
+        user: '',
+        create: (now, wall) =>
+          options.create(
+            SessionConfigMsg.encode({
+              doc,
+              session: owner,
+              user: '',
+              peers: [...crypto.getRandomValues(new BigUint64Array(4))].map(
+                (peer) => peer & ((1n << 63n) - 1n)
+              ),
+              // Local read-only views still need to import their supplied content.
+              // Editability belongs to the view; there is no remote authority.
+              access: Access.Edit,
+              transport: Transport.None,
+              durable: false,
+              chatter: false,
+              headless: false,
+              viewEngine: options.viewEngine,
+              viewOs: options.viewOs,
+              token: '',
+              traceparent: span.traceparent() ?? '',
+              coalesce: 25,
+              snapshotInterval: 0,
+              observed: [],
+            }),
+            now,
+            wall
+          ),
+        auth: {
+          async token() {
+            throw new Error('Local editors cannot request sync authorization');
+          },
+          subscribe: () => () => {},
         },
-        subscribe: () => () => {},
+        socketUrl() {
+          throw new Error('Local editors cannot connect to sync');
+        },
+        telemetry,
       },
-      socketUrl() {
-        throw new Error('Local editors cannot connect to sync');
-      },
-      telemetry,
-    });
+      options.nativeCommands
+    );
     const runtime = mounted;
     // mountSessionView starts the session. A new local document also needs an
     // empty optimistic seed before native editor inputs can be accepted.

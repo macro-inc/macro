@@ -1,4 +1,5 @@
 import {
+  type ExecutorFailure,
   type ExecutorOptions,
   type SessionAuthorization,
   SessionExecutor,
@@ -6,6 +7,14 @@ import {
 import type { EditorSession } from '@macro-inc/collaboration/session/wasm';
 import { Telemetry } from '@macro-inc/observability';
 import { EditorView, type ViewOptions } from './view/editor-view';
+import {
+  NativeEnterDispatcher,
+  type NativeEnterModule,
+} from './view/native-enter';
+import {
+  type NativeEnterBinding,
+  NativeEnterOutput,
+} from './view/native-enter-output';
 import type { ViewSink } from './view/port';
 import type { NodeViewRegistry } from './view/registry';
 import { SessionPort } from './view/session-port';
@@ -17,8 +26,12 @@ export function mountSessionView(
   root: HTMLElement,
   registry: NodeViewRegistry,
   options: ViewOptions,
-  session: Omit<ExecutorOptions<EditorSession>, 'view'>
+  session: Omit<ExecutorOptions<EditorSession>, 'view'>,
+  nativeCommands?: NativeEnterModule
 ) {
+  const dispatcher = nativeCommands
+    ? NativeEnterDispatcher.forModule(nativeCommands)
+    : undefined;
   let view: EditorView | undefined;
   let disposed = false;
   let closing: Promise<void> | undefined;
@@ -29,11 +42,39 @@ export function mountSessionView(
     | Parameters<SessionAuthorization['subscribe']>[0]
     | undefined;
   let unsubscribeAuthorization: (() => void) | undefined;
+  let commands: NativeEnterBinding | undefined;
+  let deferredAbort: ExecutorFailure | undefined;
+  let applyingOutput = false;
+  const finishTeardowns = (aborted?: ExecutorFailure) => {
+    const previous = deferredAbort;
+    deferredAbort ??= aborted;
+    try {
+      for (const cleanup of dispatcher?.takeTeardowns() ?? []) {
+        try {
+          cleanup();
+        } catch (error) {
+          if (!commands) throw error;
+          commands.output.recordSecondary(error);
+        }
+      }
+    } finally {
+      deferredAbort = previous;
+    }
+  };
   const sink: ViewSink = {
-    apply(...output) {
+    apply(words, strings, effects) {
+      const filtered = commands ? commands.output.filter(effects) : effects;
       if (disposed) return;
       if (!view) throw new Error('Native output before view mount');
-      view.apply(...output);
+      applyingOutput = true;
+      try {
+        view.apply(words, strings, filtered);
+      } catch (error) {
+        if (!commands) throw error;
+        commands.output.recordSecondary(error);
+      } finally {
+        applyingOutput = false;
+      }
     },
     acknowledgeText(input) {
       if (!view) throw new Error('Text input before view mount');
@@ -82,11 +123,76 @@ export function mountSessionView(
           session.onConstructionFailure?.(native);
         }
       },
+      beforeConsume(flags) {
+        commands?.output.beforeConsume(flags);
+        finishTeardowns();
+        try {
+          session.beforeConsume?.(flags);
+        } catch (error) {
+          if (!commands) throw error;
+          commands.output.recordSecondary(error);
+        }
+      },
+      afterDrain(failure) {
+        if (!commands) {
+          session.afterDrain?.(failure);
+          return;
+        }
+        let aborted = failure;
+        const inherited = deferredAbort;
+        finishTeardowns(failure);
+        try {
+          session.afterDrain?.(failure);
+        } catch (error) {
+          if (commands) commands.output.recordSecondary(error);
+          else if (!aborted) aborted = { error };
+        }
+        commands?.output.afterDrain(inherited ?? aborted);
+        if (!failure && aborted) throw aborted.error;
+      },
+      onStatus(status) {
+        try {
+          session.onStatus?.(status);
+        } catch (error) {
+          if (!commands) throw error;
+          commands.output.recordSecondary(error);
+        }
+      },
       view: sink,
     });
     executor = running;
-    const port = new SessionPort(running, sink);
-    view = EditorView.mount(root, port, registry, options);
+    if (dispatcher) {
+      const owner = dispatcher.owner(running.session);
+      commands = {
+        dispatcher,
+        owner,
+        output: new NativeEnterOutput(
+          running.session,
+          dispatcher,
+          owner,
+          options.onError
+        ),
+      };
+    }
+    const port = new SessionPort(running, sink, undefined, commands);
+    view = EditorView.mount(
+      root,
+      port,
+      registry,
+      commands
+        ? {
+            ...options,
+            onError(error) {
+              try {
+                options.onError(error);
+              } catch (failure) {
+                if (!applyingOutput) throw failure;
+                commands?.output.recordSecondary(failure);
+              }
+            },
+          }
+        : options
+    );
     unsubscribeAuthorization = session.auth.subscribe((...facts) => {
       const deliver = () => {
         if (!disposed) authorizationCallback?.(...facts);
@@ -109,17 +215,76 @@ export function mountSessionView(
         authorization.length = 0;
         const terminal = Promise.withResolvers<void>();
         closing = terminal.promise;
-        try {
-          try {
-            retire();
-          } finally {
-            mounted.dispose();
+        mounted.beginTeardown();
+        commands?.output.beginTeardown();
+        let requestFailure: ExecutorFailure | undefined;
+        const finish = () => {
+          const release = () => {
+            if (commands)
+              commands.dispatcher.releaseOwner(running.session, commands.owner);
+          };
+          let failed = requestFailure;
+          const cleanup = (call: () => void) => {
+            try {
+              call();
+            } catch (error) {
+              if (!failed) failed = { error };
+              else {
+                try {
+                  Telemetry.error(error, { surface: 'editor.close.cleanup' });
+                } catch {
+                  /* Preserve the first teardown failure. */
+                }
+              }
+            }
+          };
+          cleanup(retire);
+          cleanup(() => mounted.dispose());
+          cleanup(() =>
+            commands?.dispatcher.unregisterOwner(
+              running.session,
+              commands.owner
+            )
+          );
+          const complete = (failure?: { error: unknown }) => {
+            const primary = failed ?? failure;
+            try {
+              release();
+            } catch (error) {
+              if (!primary) {
+                terminal.reject(error);
+                return;
+              }
+              try {
+                Telemetry.error(error, { surface: 'editor.close.release' });
+              } catch {
+                /* Preserve the earlier close failure. */
+              }
+            }
+            if (primary) terminal.reject(primary.error);
+            else terminal.resolve();
+          };
+          running.close().then(
+            () => complete(),
+            (error) => complete({ error })
+          );
+        };
+        const active = commands?.dispatcher.activeScope();
+        if (commands && active) {
+          if (active.owner === commands.owner) {
+            try {
+              commands.dispatcher.requestRetirement(commands.owner);
+              attached = undefined;
+              commands.dispatcher.unregisterOwner(
+                running.session,
+                commands.owner
+              );
+            } catch (error) {
+              requestFailure = { error };
+            }
           }
-        } catch (error) {
-          running.close().then(() => terminal.reject(error), terminal.reject);
-          return closing;
-        }
-        running.close().then(terminal.resolve, terminal.reject);
+          commands.dispatcher.deferTeardown(finish);
+        } else finish();
         return closing;
       },
     };
@@ -128,7 +293,15 @@ export function mountSessionView(
     authorization.length = 0;
     const failed = view;
     view = undefined;
-    for (const cleanup of [retire, () => failed?.dispose()]) {
+    commands?.output.beginTeardown();
+    for (const cleanup of [
+      retire,
+      () => failed?.dispose(),
+      () => {
+        if (commands && executor)
+          commands.dispatcher.unregisterOwner(executor.session, commands.owner);
+      },
+    ]) {
       try {
         cleanup();
       } catch (cleanupError) {
@@ -140,11 +313,46 @@ export function mountSessionView(
       }
     }
     // A partial executor owns its own constructor cleanup; only a completed one can close.
-    executor
-      ?.close()
-      .catch((closeError) =>
-        Telemetry.error(closeError, { surface: 'editor.mount.close' })
+    const running = executor;
+    if (running) {
+      const release = () => {
+        if (commands)
+          commands.dispatcher.releaseOwner(running.session, commands.owner);
+      };
+      running.close().then(
+        () => {
+          try {
+            release();
+          } catch (cleanupError) {
+            try {
+              Telemetry.error(cleanupError, {
+                surface: 'editor.mount.release',
+              });
+            } catch {
+              /* Preserve mount cause. */
+            }
+          }
+        },
+        (closeError) => {
+          try {
+            release();
+          } catch (cleanupError) {
+            try {
+              Telemetry.error(cleanupError, {
+                surface: 'editor.mount.release',
+              });
+            } catch {
+              /* Preserve mount cause. */
+            }
+          }
+          try {
+            Telemetry.error(closeError, { surface: 'editor.mount.close' });
+          } catch {
+            /* Preserve mount cause. */
+          }
+        }
       );
+    }
     throw error;
   }
 }
