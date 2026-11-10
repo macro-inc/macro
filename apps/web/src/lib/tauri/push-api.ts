@@ -96,7 +96,7 @@ export function createPushApi(platform: 'android' | 'ios') {
         });
       else if (supportsNotificationLaunch()) {
         // Let the destination's route/loading shell draw before native removes
-        // its resume cover. In the background this waits until the next frame.
+        // its launch cover. In the background this waits until the next frame.
         await new Promise<void>((resolve) =>
           requestAnimationFrame(() => resolve())
         );
