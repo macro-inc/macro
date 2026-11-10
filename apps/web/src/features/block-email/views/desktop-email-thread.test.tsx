@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import type { ComponentProps, JSX } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { TopBar } from './TopBar';
+import type { EmailThreadHostViewProps } from '../EmailThreadHostView';
+import { DesktopEmailThread } from './desktop-email-thread';
 
 const actions = vi.hoisted(() => ({
   share: vi.fn(),
@@ -14,9 +15,9 @@ vi.mock('@ui', async () => ({
   Button: (await import('@app/components/ui/components/Button')).Button,
   ButtonGroup: (await import('@app/components/ui/components/ButtonGroup'))
     .ButtonGroup,
+  cn: (await import('@app/components/ui/utils/classname')).cn,
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
-vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@core/constant/featureFlags', () => ({ ENABLE_EMAIL_SHARING: true }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: {} }),
@@ -36,9 +37,6 @@ vi.mock('@components/app/split-layout/components/SplitLabel', () => ({
 vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
   BlockSplitFileMenu: () => <button>More email actions</button>,
 }));
-vi.mock('@components/app/ResponsiveBlockToolbar', () => ({
-  ResponsiveBlockToolbar: () => null,
-}));
 vi.mock('@core/component/TopBar/ShareButton', () => ({
   ShareTrigger: (props: { onClick: () => void }) => (
     <button onClick={props.onClick}>Share</button>
@@ -46,17 +44,39 @@ vi.mock('@core/component/TopBar/ShareButton', () => ({
 }));
 vi.mock('@components/app/side-panel', () => ({
   SidePanel: {
-    HeaderActionsOutlet: () => (
-      <button onClick={actions.task}>Create task</button>
-    ),
+    HeaderActions: (props: { children: JSX.Element }) => <>{props.children}</>,
+    HeaderActionsOutlet: () => null,
     Toggle: () => <button onClick={actions.details}>Show details</button>,
   },
 }));
-vi.mock('./useEmailThreadTools', () => ({
+vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
+  AskMacroButton: () => <button>Ask Macro</button>,
+}));
+vi.mock(
+  '@app/features/email-thread/context/email-thread-state-context',
+  () => ({
+    useEmailThreadState: () => ({ thread: () => ({ db_id: 'thread-db-1' }) }),
+  })
+);
+vi.mock('../EmailThreadHostView', () => ({
+  EmailThreadHostView: (props: EmailThreadHostViewProps) => {
+    const context = {
+      createTask: actions.task,
+      createEvent: () => false,
+      canCreateEvent: () => false,
+    };
+    return (
+      <>
+        {props.topBar?.(context)}
+        {props.actions?.(context)}
+      </>
+    );
+  },
+}));
+vi.mock('../component/useEmailThreadTools', () => ({
   useEmailThreadTools: () => ({
     isInvite: () => false,
-    tools: [],
-    menuTools: [],
+    actions: {},
     emailEntity: () => undefined,
     permissions: () => undefined,
     openShare: actions.share,
@@ -75,8 +95,16 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-it('keeps email actions, sharing, and details available in the preview header', () => {
-  render(() => <TopBar id="thread-1" title="A shared email" />);
+it('keeps email actions, sharing, and details available in the desktop header', () => {
+  const props = {
+    title: 'A shared email',
+    threadId: () => 'thread-1',
+    source: {},
+    threadTransport: {},
+    host: {},
+  } as ComponentProps<typeof DesktopEmailThread>;
+  render(() => <DesktopEmailThread {...props} />);
+
   expect(screen.getByRole('heading', { name: 'A shared email' })).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Mark as unread' }));
   fireEvent.click(screen.getByRole('button', { name: 'Mark done' }));
@@ -88,6 +116,7 @@ it('keeps email actions, sharing, and details available in the preview header', 
   expect(actions.share).toHaveBeenCalledOnce();
   expect(actions.task).toHaveBeenCalledOnce();
   expect(actions.details).toHaveBeenCalledOnce();
+  expect(screen.getByRole('button', { name: 'Ask Macro' })).toBeTruthy();
   expect(
     screen.getByRole('button', { name: 'More email actions' })
   ).toBeTruthy();

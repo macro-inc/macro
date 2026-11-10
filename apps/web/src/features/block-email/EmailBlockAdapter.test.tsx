@@ -1,5 +1,5 @@
 import type { EmailThreadHost } from '@app/features/email-thread/context/email-thread-context';
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, render, screen } from '@solidjs/testing-library';
 import type { ComponentProps } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -9,6 +9,10 @@ const state = vi.hoisted(() => ({
   search: {} as { messageId: string; seek: string },
   navigate: (_params: Record<string, unknown>) => {},
   host: undefined as EmailThreadHost | undefined,
+  touch: false,
+}));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => state.touch,
 }));
 vi.mock('@app/lib/split-router', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/lib/split-router')>()),
@@ -39,16 +43,42 @@ vi.mock('./use-email-list-navigation', () => ({
   useEmailListNavigation: () => undefined,
 }));
 vi.mock('./util/emailHotkeys', () => ({ registerEmailHotkeys: () => {} }));
-vi.mock('./component/TopBar', () => ({ TopBar: () => null }));
-vi.mock('./EmailThreadHostView', () => ({
-  EmailThreadHostView: (props: { host: EmailThreadHost }) => {
+vi.mock('./views/desktop-email-thread', () => ({
+  DesktopEmailThread: (props: { host: EmailThreadHost }) => {
     state.host = props.host;
-    return null;
+    return <p>Desktop email thread</p>;
+  },
+}));
+vi.mock('./views/mobile-email-thread', () => ({
+  MobileEmailThread: (props: { host: EmailThreadHost }) => {
+    state.host = props.host;
+    return <p>Mobile email thread</p>;
   },
 }));
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+  state.touch = false;
+});
+
+it('mounts the mobile view on touch and the desktop view otherwise', () => {
+  state.search = { messageId: '', seek: '' };
+  const props = {
+    title: 'Email',
+    threadId: () => 'thread',
+    source: {},
+    threadTransport: {},
+  } as ComponentProps<typeof EmailBlockAdapter>;
+
+  const desktop = render(() => <EmailBlockAdapter {...props} />);
+  expect(screen.getByText('Desktop email thread')).toBeTruthy();
+  expect(screen.queryByText('Mobile email thread')).toBeNull();
+  desktop.unmount();
+
+  state.touch = true;
+  render(() => <EmailBlockAdapter {...props} />);
+  expect(screen.getByText('Mobile email thread')).toBeTruthy();
+  expect(screen.queryByText('Desktop email thread')).toBeNull();
 });
 
 it('preserves a pending imperative target when Home clears route search', () => {
