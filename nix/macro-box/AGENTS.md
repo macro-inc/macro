@@ -50,9 +50,13 @@ PID 1 (for the dev-only DockerFleet).
   (`incus`, or `file:<path>`); `check-enrollment-source` fails first, with a
   reason, when the source is missing. Enroll must leave `macrod.toml` owned by
   `macro`, create persona users and units, then touch `/var/lib/macrod/enrolled`.
+- `macrod-token-store.service` (root, `macrod computer-token-store --owner
+  <macro uid>`, after enrollment, sandboxed with its state bound in from the
+  data disk) keeps the Claude token. Enrollment installs no units:
+  `/etc/systemd/system` is read-only on NixOS.
 - `macrod.service` runs `macrod service` as `macro` (Claude Code refuses
   permission bypass as root), workspace `/home/macro/work`, after
-  `macrod-token-store.service` (installed by enrollment). It restarts after
+  `macrod-token-store.service`. It restarts after
   1 s, backing off to 30 s, and never hits a start limit.
 - Its `--ignore-stdin-eof` keeps systemd's closed stdin from stopping the daemon.
 - Both units get PATH `/run/wrappers/bin:/run/current-system/sw/bin`, so agents
@@ -102,8 +106,9 @@ formatted ext4 on first boot, grown with the volume, and mounted at `/home` in
 the initrd. It holds every home (`~macro/work`, `~/.claude`, `~/.macrod`
 with `macrod.toml`, the Chromium profile) and `/home/.system/macrod`, which
 `/var/lib/macrod` links to (the enrollment marker and the Claude token
-store). The root disk, `/etc/passwd` included, comes from the image: users
-created at runtime, Docker images and `nix profile` installs do not survive.
+store), and Docker's data root `/home/.system/docker`. The root disk,
+`/etc/passwd` included, comes from the image: users created at runtime and
+`nix profile` installs do not survive. Size the volume for Docker images too.
 
 The control plane, per computer:
 
@@ -160,13 +165,13 @@ The control plane, per computer:
 - import-tree imports every `.nix` file under `nix/`; helpers start with `_`.
 - Declare everything as NixOS options; keep shell only for runtime logic
   (the enrollment probe, waiting for the X socket).
-- `/etc/systemd/system` is read-only on NixOS: units enrollment writes there
-  fail. Declare fixed units here instead.
+- `/etc/systemd/system` is read-only on NixOS: declare units here, never at
+  runtime.
 - Keep `users.mutableUsers` on: with it off, activation deletes the users
   enrollment creates.
-- Keep state that must survive an update on the data disk; a token store
-  unit with `ProtectHome=yes` cannot see `/home/.system`, so it needs
-  `BindPaths` or `ProtectHome=tmpfs` with that path.
+- Keep state that must survive an update on the data disk. Sandboxed units
+  that need it use `ProtectHome=tmpfs` with `BindPaths`, as the token store
+  does; `ProtectHome=yes` hides it.
 - The NixOS test VMs replace `fileSystems`, so `_vm-test.nix` declares the
   data disk mount again.
 - `environment.etc` entries that `useradd` copies or programs rewrite need a
