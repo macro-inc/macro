@@ -4,8 +4,18 @@ import { DEFAULT_EMAIL_TAB, EMAIL_TAB_IDS } from './constants';
 
 export const emailTabSearch = {
   namespace: 'mail',
-  schema: z.object({ tab: z.enum(EMAIL_TAB_IDS) }),
-  defaults: { tab: DEFAULT_EMAIL_TAB },
+  schema: z.object({
+    tab: z.enum(EMAIL_TAB_IDS),
+    savedView: z
+      .string()
+      .uuid()
+      .transform((id) => id.toLowerCase())
+      .optional(),
+  }),
+  defaults: {
+    tab: DEFAULT_EMAIL_TAB,
+    savedView: undefined as string | undefined,
+  },
 };
 
 export const emailTabSearchCodec = createSearchParamsCodec(emailTabSearch);

@@ -15,10 +15,14 @@ import { menuMount } from './routine-search-menu';
 
 type KnobChange = (name: string, value: Knob['value']) => void;
 
+// Positioned, so a value stays clickable on a card whose whole face is a button.
 const VALUE =
-  'inline rounded-sm px-0.5 font-medium text-accent underline decoration-2 underline-offset-4 outline-none hover:text-accent-ink focus-visible:ring-2 focus-visible:ring-edge-muted';
+  'relative inline rounded-sm px-0.5 font-medium text-accent underline decoration-2 underline-offset-4 outline-none hover:text-accent-ink focus-visible:ring-2 focus-visible:ring-edge-muted';
 const QUESTION =
-  'inline rounded-sm px-0.5 text-ink underline decoration-accent decoration-dotted decoration-2 underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-edge-muted';
+  'relative inline rounded-sm px-0.5 text-ink underline decoration-accent decoration-dotted decoration-2 underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-edge-muted';
+
+/** How large a sentence reads: the routine page's, or a card's. */
+export type SentenceSize = 'md' | 'sm' | 'xs';
 
 /**
  * What a code step does, in its owner's words, with each knob's value in
@@ -29,14 +33,34 @@ export function StepSentence(props: {
   sentence: string;
   knobs: Knob[];
   onKnob: KnobChange;
+  /** `md` on the routine page; `sm` and `xs` on cards. */
+  size?: SentenceSize;
+  /** Placement only, e.g. a fixed height on a card. */
+  class?: string;
 }) {
   const parts = () => sentenceParts(props.sentence, props.knobs);
   return (
     <Show when={parts()}>
       {(parts) => (
-        <p class="text-[15px] leading-7 text-ink-muted">
+        <p
+          class={cn(
+            'text-ink-muted',
+            props.size === 'sm'
+              ? 'text-[13px] leading-[22px]'
+              : props.size === 'xs'
+                ? 'text-xs leading-[19px]'
+                : 'text-[15px] leading-7',
+            props.class
+          )}
+        >
           <For each={parts()}>
-            {(part) => <SentencePiece part={part} onKnob={props.onKnob} />}
+            {(part) => (
+              <SentencePiece
+                part={part}
+                onKnob={props.onKnob}
+                compact={props.size === 'sm' || props.size === 'xs'}
+              />
+            )}
           </For>
         </p>
       )}
@@ -44,7 +68,11 @@ export function StepSentence(props: {
   );
 }
 
-function SentencePiece(props: { part: SentencePart; onKnob: KnobChange }) {
+function SentencePiece(props: {
+  part: SentencePart;
+  onKnob: KnobChange;
+  compact: boolean;
+}) {
   return (
     <Switch>
       <Match when={props.part.kind === 'text' && props.part}>
@@ -54,6 +82,7 @@ function SentencePiece(props: { part: SentencePart; onKnob: KnobChange }) {
         {(part) => (
           <KnobControl
             knob={part().knob}
+            compact={props.compact}
             onChange={(value) => props.onKnob(part().knob.name, value)}
           />
         )}
@@ -91,20 +120,37 @@ export function KnobSettings(props: { knobs: Knob[]; onKnob: KnobChange }) {
  */
 function KnobControl(props: {
   knob: Knob;
+  /** In a card's smaller sentence: a thinner, closer underline. */
+  compact?: boolean;
   onChange(value: Knob['value']): void;
 }) {
   return (
     <Switch
-      fallback={<KnobPopover knob={props.knob} onChange={props.onChange} />}
+      fallback={
+        <KnobPopover
+          knob={props.knob}
+          compact={props.compact}
+          onChange={props.onChange}
+        />
+      }
     >
       <Match when={props.knob.type === 'choice' && props.knob}>
-        {(knob) => <KnobChoiceMenu knob={knob()} onChange={props.onChange} />}
+        {(knob) => (
+          <KnobChoiceMenu
+            knob={knob()}
+            compact={props.compact}
+            onChange={props.onChange}
+          />
+        )}
       </Match>
       <Match when={props.knob.type === 'boolean' && props.knob}>
         {(knob) => (
           <button
             type="button"
-            class={VALUE}
+            class={cn(
+              VALUE,
+              props.compact && 'px-px decoration-[1.5px] underline-offset-3'
+            )}
             aria-pressed={knob().value}
             aria-label={`${knob().label}: ${knob().value ? 'on' : 'off'}`}
             onClick={() => props.onChange(!knob().value)}
@@ -119,6 +165,7 @@ function KnobControl(props: {
 
 function KnobChoiceMenu(props: {
   knob: Extract<Knob, { type: 'choice' }>;
+  compact?: boolean;
   onChange(value: Knob['value']): void;
 }) {
   const [open, setOpen] = createSignal(false);
@@ -133,7 +180,10 @@ function KnobChoiceMenu(props: {
       {/* The menu's own trigger, so the value stays an underlined word. */}
       <DropdownMenu.Trigger
         ref={trigger}
-        class={VALUE}
+        class={cn(
+          VALUE,
+          props.compact && 'px-px decoration-[1.5px] underline-offset-3'
+        )}
         aria-label={`${props.knob.label}: ${props.knob.value}. Change it`}
       >
         {props.knob.value}
@@ -171,6 +221,7 @@ function KnobChoiceMenu(props: {
 
 function KnobPopover(props: {
   knob: Knob;
+  compact?: boolean;
   onChange(value: Knob['value']): void;
 }) {
   const [open, setOpen] = createSignal(false);
@@ -205,7 +256,8 @@ function KnobPopover(props: {
         }}
         class={cn(
           'cursor-pointer',
-          props.knob.type === 'question' ? QUESTION : VALUE
+          props.knob.type === 'question' ? QUESTION : VALUE,
+          props.compact && 'px-px decoration-[1.5px] underline-offset-3'
         )}
         aria-label={
           props.knob.type === 'question'
