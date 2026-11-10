@@ -1,6 +1,7 @@
 import {
   ChannelInput,
   type InputHandle,
+  type InputPersistenceKey,
   type InputSnapshot,
 } from '@channel/Input';
 import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
@@ -9,6 +10,11 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { useUserId } from '@core/context/user';
 import { MessageThread, threadListItem } from '@core/messages/MessageThread';
 import { MessageReferenceNavigation } from '@core/messages/message-reference-navigation';
+import {
+  type MessageTransport,
+  MessageTransportProvider,
+  MessageViewerProvider,
+} from '@core/messages/message-transport';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   newMessageId,
@@ -25,13 +31,19 @@ import {
 import { buildCallMessageLink } from './build-call-message-link';
 import { CallChatBody } from './components/CallChatBody';
 import { useCallChat } from './queries/use-call-chat';
+import { useGuestCallThread } from './queries/use-guest-call-thread';
 
-export default function CallChat(props: {
+type CallChatProps = {
+  access:
+    | { kind: 'member' }
+    | { kind: 'guest'; session: { token: string; participantId: string } };
   callId: string;
   open: boolean;
   focusOnOpen?: boolean;
   onClose: () => void;
-}) {
+};
+
+export default function CallChat(props: CallChatProps) {
   // Queries and all shared Markdown descendants stay within the chat boundary.
   return (
     <Suspense
@@ -43,20 +55,106 @@ export default function CallChat(props: {
         </CallChatBody>
       }
     >
-      <CallChatContent {...props} />
+      <Show
+        when={props.access.kind === 'guest'}
+        fallback={<MemberCallChat {...props} />}
+      >
+        <GuestCallChatContent {...props} />
+      </Show>
     </Suspense>
   );
 }
 
-function CallChatContent(props: {
-  callId: string;
-  open: boolean;
-  focusOnOpen?: boolean;
-  onClose: () => void;
-}) {
+type ChatSource = Omit<ReturnType<typeof useCallChat>, 'refresh'> & {
+  refresh: () => Promise<unknown>;
+};
+type ChatViewProps = Omit<CallChatProps, 'access'> & {
+  chat: ChatSource & { denied?: () => boolean };
+  sendMessage: (snapshot: InputSnapshot) => Promise<void>;
+  persistenceKey?: InputPersistenceKey;
+  guest?: boolean;
+};
+
+function MemberCallChat(props: CallChatProps) {
   const chat = useCallChat(() => props.callId);
   const send = useSendMessageMutation();
   const userId = useUserId();
+
+  async function sendMessage(snapshot: InputSnapshot) {
+    const senderId = userId();
+    if (!senderId || (!chat.thread() && !chat.empty())) {
+      throw new Error('Call chat is not ready');
+    }
+    await send.mutateAsync({
+      parent: chat.parent(),
+      senderId,
+      optimisticId: newMessageId(),
+      ...buildPostMessageSendPayload({
+        snapshot,
+        threadId: chat.thread() ? props.callId : undefined,
+      }),
+    });
+    await chat.refresh();
+  }
+
+  return (
+    <CallChatView
+      {...props}
+      chat={chat}
+      sendMessage={sendMessage}
+      persistenceKey={`call-chat-${userId()}-${props.callId}-persist-v1`}
+    />
+  );
+}
+
+function GuestCallChatContent(props: CallChatProps) {
+  if (props.access.kind !== 'guest') return null;
+  const chat = useGuestCallThread(
+    () => props.callId,
+    () =>
+      props.access.kind === 'guest'
+        ? props.access.session
+        : { token: '', participantId: '' },
+    () => props.open
+  );
+  let pending: { id: string; content: string } | undefined;
+
+  async function sendMessage(snapshot: InputSnapshot) {
+    if (!chat.thread() && !chat.empty())
+      throw new Error('Call chat is not ready');
+    if (pending?.content !== snapshot.value) {
+      pending = { id: newMessageId(), content: snapshot.value };
+    }
+    await chat.send(pending);
+    pending = undefined;
+  }
+
+  const transport: MessageTransport = {
+    patch: ({ id, content }) => chat.patch(id, content),
+    remove: ({ id }) => chat.remove(id),
+    react: ({ id, emoji, add }) => chat.react(id, emoji, add),
+  };
+
+  return (
+    <MessageViewerProvider viewerId={chat.viewerId}>
+      <MessageTransportProvider value={transport}>
+        <CallChatView {...props} chat={chat} sendMessage={sendMessage} guest />
+      </MessageTransportProvider>
+    </MessageViewerProvider>
+  );
+}
+
+const guestFeatures = {
+  mentions: false,
+  createItems: false,
+  gifs: false,
+  richBlocks: false,
+  attachments: false,
+  dictation: false,
+};
+
+function CallChatView(props: ChatViewProps) {
+  const chat = props.chat;
   const [sendFailed, setSendFailed] = createSignal(false);
   const [input, setInput] = createSignal<InputHandle>();
   const [messageTarget, setMessageTarget] = createSignal<{
@@ -76,26 +174,13 @@ function CallChatContent(props: {
   );
 
   async function sendMessage(snapshot: InputSnapshot) {
-    const senderId = userId();
-    if (!senderId || (!chat.thread() && !chat.empty())) {
-      throw new Error('Call chat is not ready');
-    }
     setSendFailed(false);
     try {
-      await send.mutateAsync({
-        parent: chat.parent(),
-        senderId,
-        optimisticId: newMessageId(),
-        ...buildPostMessageSendPayload({
-          snapshot,
-          threadId: chat.thread() ? props.callId : undefined,
-        }),
-      });
+      await props.sendMessage(snapshot);
     } catch (error) {
       setSendFailed(true);
       throw error;
     }
-    await chat.refresh();
   }
 
   return (
@@ -123,7 +208,8 @@ function CallChatContent(props: {
               <ChannelInput
                 parent={chat.parent()}
                 input={{ mode: 'channel', placeholder: 'Message this call…' }}
-                persistenceKey={`call-chat-${userId()}-${props.callId}-persist-v1`}
+                persistenceKey={props.persistenceKey}
+                features={props.guest ? guestFeatures : undefined}
                 autofocus={false}
                 onReady={setInput}
                 onSend={sendMessage}
@@ -145,7 +231,9 @@ function CallChatContent(props: {
           </Show>
           <Show when={chat.failed()}>
             <p role="alert" class="text-sm text-ink-muted">
-              Could not load chat.
+              {props.guest && chat.denied?.()
+                ? 'Chat is available while you are in this call.'
+                : 'Could not load chat.'}
             </p>
             <button
               type="button"
