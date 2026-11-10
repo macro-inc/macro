@@ -17,6 +17,7 @@ import mobile from './en/mobile';
 import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
 import passwords from './en/passwords';
+import runtimeSharing from './en/runtime-sharing';
 import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
@@ -49,6 +50,7 @@ export default {
   nav,
   notificationsInbox,
   passwords,
+  runtimeSharing,
   settingsLanguage,
   settingsMobileApp,
   settingsNav,
