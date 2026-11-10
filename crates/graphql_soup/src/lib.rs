@@ -8,10 +8,10 @@
 
 /// User-scoped accessible folders query for the Drive sidebar.
 mod folders;
-/// Stream-scoped ordered id lists for ID-only Soup pages.
-mod id_list;
 /// GraphQL inputs and conversion into Soup domain requests.
 mod inputs;
+/// Stream-scoped ordered lists for the Soup lanes of a sync stream.
+mod lane_list;
 /// DataLoader-backed hydration for realtime Soup patches.
 mod loaders;
 /// Primary-backed email snapshots used only for mutation replies.
@@ -25,8 +25,8 @@ pub use folders::{
     FoldersQuery, FoldersQueryError, FoldersQueryReader, NoOpFoldersQueryReader, resolve_folders,
 };
 pub use graphql_common::{GraphqlRequestParts, GraphqlSoupEntityType};
-pub use id_list::SoupIdLists;
 pub use inputs::{GraphqlSimpleSortMethod, GroupedSoupInput, SoupChannelReads, SoupInput};
+pub use lane_list::SoupLaneLists;
 pub use loaders::{
     AgentSessionEntityLoader, EntityAccessEmailThreadReader, PrimarySoupItemLoader,
     SoupEmailThreadReader, SoupItemDataLoader, SoupItemLoader, SoupItemLoaderError,

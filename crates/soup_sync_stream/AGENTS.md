@@ -54,9 +54,10 @@ whose pages took the least time first.
   turn sends `waiting` every `WAITING_INTERVAL`; the loop drops that wait and
   asks again, which is safe because a place in line depends on the user's
   page time, not on when the stream asked.
-- ID-only lanes are cheap because of the service, not this crate: DSS puts a
-  `graphql_soup::SoupIdLists` in every page's request data, and the Soup
-  resolver pages such lanes from one ordered list per stream.
+- Soup lanes are cheap because of the service, not this crate: DSS puts a
+  `graphql_soup::SoupLaneLists` in every page's request data, and the Soup
+  resolver fetches a lane many pages per statement and serves its pages as
+  slices.
 - Telemetry records counts, bytes, lane ids and server-chosen error text only,
   never query text, variables or response content.
 - `frames` and `ndjson_stream` are fused: HTTP bodies can be polled again after

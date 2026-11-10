@@ -25,8 +25,8 @@ use soup::domain::{
 use soup_realtime::domain::{models::Patch, ports::SoupRealtimeSubscriptionService};
 
 use crate::{
-    id_list::{SoupIdLists, selects_ids_only},
     inputs::{GroupedSoupInput, SoupChannelReads, SoupInput},
+    lane_list::{ListedFields, SoupLaneLists, selects_ids_only},
     loaders::{AgentSessionEntityLoader, PrimarySoupItemLoader, SoupItemDataLoader},
     objects::{
         EmailThreadPrefetch, EntityPrefetch, GraphqlSoupAgentSession, GraphqlSoupEmailThread,
@@ -381,11 +381,24 @@ where
     let Cached(MultiEmailLinkExtractor(links, _)) =
         extract_part::<Cached<MultiEmailLinkExtractor<E, Auth>>, St>(ctx).await?;
     let link_ids: Vec<_> = links.into_iter().map(|link| link.id).collect();
-    let id_lists = ctx
-        .data_opt::<SoupIdLists>()
-        .filter(|_| selects_ids_only(ctx));
+    let include_frecency = ctx
+        .look_ahead()
+        .field("items")
+        .field("frecencyScore")
+        .exists();
+    // A sync stream's lane is served from its list. Frecency scores are not
+    // part of a list, so a page that selects them runs like any other.
+    let lane_list = ctx.data_opt::<SoupLaneLists>().and_then(|lists| {
+        if selects_ids_only(ctx) {
+            Some((lists, ListedFields::Ids))
+        } else if include_frecency {
+            None
+        } else {
+            Some((lists, ListedFields::Items))
+        }
+    });
     let continuation = input.continuation_cursor().map(str::to_owned);
-    let (request, sort_key) = match id_lists {
+    let (request, sort_key) = match lane_list {
         Some(_) => input.into_keyed_request(macro_user_id, link_ids)?,
         None => (input.into_request(macro_user_id, link_ids)?, None),
     };
@@ -403,29 +416,23 @@ where
     .await?;
     let team_receipt = team.entity_access_receipt;
 
-    // An ID-only page of a sync stream is a slice of the lane's ordered list.
-    if let Some(id_lists) = id_lists
+    // A timestamp-sorted page of a sync stream is a slice of the lane's
+    // ordered list.
+    let page = if let Some((lists, fields)) = lane_list
         && let Some(sort_key) = sort_key
     {
-        let page = id_lists
+        let page = lists
             .page(
                 service,
                 request,
                 sort_key,
+                fields,
                 continuation.as_deref(),
                 team_receipt,
             )
             .await?;
-        return Ok(SoupPage::new(page));
-    }
-
-    let include_frecency = ctx
-        .look_ahead()
-        .field("items")
-        .field("frecencyScore")
-        .exists();
-
-    let page = if include_frecency {
+        SoupPage::new_with_projection(page)
+    } else if include_frecency {
         let page = service
             .get_user_soup_with_frecency_and_projection(request, team_receipt)
             .await?;
@@ -468,7 +475,7 @@ fn prefetch_entities<'a, Edges: SoupEntityEdges>(
 
 /// Loads the page's email threads' per-thread data in one batch per loader.
 /// Boxed so its loaders' futures get no slot in the resolver's poll frame
-/// (see `SoupIdLists::page`).
+/// (see `SoupLaneLists::page`).
 fn prefetch_email_threads<'a, Edges: SoupEntityEdges>(
     ctx: &'a Context<'_>,
     thread_ids: Vec<uuid::Uuid>,

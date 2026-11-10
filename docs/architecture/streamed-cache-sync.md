@@ -74,11 +74,16 @@ Request body:
 - Each page runs through the same schema and request context as
   `POST /soup/graphql` (auth, mail cache profile, replica reads), with three
   stream-only differences:
-  - ID-only Soup lanes (`items` selects only `__typename` and `id`) page
-    through one ordered list per lane per stream: the lane's first page fetches
-    the whole list (in statements of up to 65,535 items; 500 when the email or
-    CRM-contact leg is active, as those legs cap their pages) and each later
-    page is the next slice, with the cursor a normal page would carry.
+  - A timestamp-sorted Soup lane is fetched many pages per statement, and
+    each page is the next slice of what was fetched, with the cursor a normal
+    page would carry: a statement finds which of the user's items match once,
+    not once per page. A statement fetches up to 65,535 items for an ID-only
+    lane (`items` selects only `__typename` and `id`) and 5,000 for any other
+    (500 when the email or CRM-contact leg is active, as those legs cap their
+    pages). Items with fields are served for at most 30 seconds after their
+    statement ran; past that the lane is read again from the page's cursor,
+    half as many items at once. A page that selects `frecencyScore` runs like
+    any other.
   - The email-content budget is a page's: up to 500 threads and 10,000
     requested messages per batch (one operation: 20 and 100).
   - A Soup page loads its per-entity data in one batch per page instead of as

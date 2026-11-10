@@ -37,7 +37,7 @@ const NDJSON_CONTENT_TYPE: &str = "application/x-ndjson";
 /// turns on these slots, the user whose pages took the least time first.
 const PAGE_SLOTS: usize = 8;
 /// Most sync streams one server task keeps open. A stream that waits for its
-/// turn holds its plan, its ID lists and at most one unsent page, so this
+/// turn holds its plan, its lane's list and at most one unsent page, so this
 /// bounds memory, not database load; streams past it are told to retry.
 const MAX_STREAMS_PER_TASK: usize = 128;
 /// What a client told to come back later waits, in seconds.
@@ -109,7 +109,7 @@ pub(super) async fn sync_stream_handler(
         macro_user_id: acting_user.macro_user_id.clone(),
         organization_id: acting_user.user_context.organization_id.map(i64::from),
         viewer_id: opaque_viewer_id(acting_user),
-        id_lists: graphql_soup::SoupIdLists::default(),
+        lane_lists: graphql_soup::SoupLaneLists::default(),
         turns: PAGE_TURNS.stream(acting_user.macro_user_id.clone()),
         _active: active,
         _slot: slot,
@@ -135,8 +135,8 @@ struct SchemaPageExecutor {
     macro_user_id: MacroUserIdStr<'static>,
     organization_id: Option<i64>,
     viewer_id: Option<Uuid>,
-    /// The ordered lists ID-only lanes page through, one lane at a time.
-    id_lists: graphql_soup::SoupIdLists,
+    /// The ordered lists Soup lanes page through, one lane at a time.
+    lane_lists: graphql_soup::SoupLaneLists,
     /// This stream's turns on [`PAGE_TURNS`].
     turns: StreamTurns<MacroUserIdStr<'static>>,
     _active: ActiveStreamGuard<MacroUserIdStr<'static>>,
@@ -168,7 +168,7 @@ impl PageExecutor for SchemaPageExecutor {
             self.state.graphql_soup_schema.execute(
                 request
                     .data(self.mail_profile)
-                    .data(self.id_lists.clone())
+                    .data(self.lane_lists.clone())
                     .data(GraphqlRequestParts::new(self.request_parts.clone())),
             )
         })

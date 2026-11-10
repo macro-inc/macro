@@ -41,11 +41,13 @@ soup = { path = "../soup", default-features = false, features = ["ports"] }
 soup-filter-projection = { path = "../soup_filter_projection" }
 soup_realtime = { path = "../soup_realtime", default-features = false, features = ["ports"] }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
 tracing = { workspace = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+either = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
 model_owner = { path = "../model_owner" }
 models_properties = { path = "../models_properties" }
