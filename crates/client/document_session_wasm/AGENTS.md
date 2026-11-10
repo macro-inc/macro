@@ -62,6 +62,7 @@ Sync policy, authorization, history and retries remain in document_session/doc_s
 Hosts own clocks, identities, transport, storage and telemetry. Generated artifacts ship
 with their glue in one bundle. ABI major mismatch is fatal; no fallback decoding.
 Use `createMacro` for application markdown; `create` retains the generic rich-text registry for portable clients and conformance. Keep server composers out of both constructors.
+Route `group-b.focus-end` through the actual generation-checked EditorApplication admission; keep focused-range early return and browser focus in the host.
 Carry the exact WAL adoption selection across the ABI, including delivered flags and bytes.
 The document-session-wasm profile optimizes the measured group of six paste caller crates at level 3; keep dependency tuning separate and compare fresh paired browser samples before changing the group.
 Compile release WASM tracing at INFO to match HostSubscriber; preserve emitted cold spans and native tracing.

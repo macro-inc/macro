@@ -7,6 +7,7 @@ pub use clipboard::{FACTS_MIME as PASTE_FACTS_MIME, PasteFacts};
 mod code;
 mod decorator_actions;
 mod diff;
+mod focus;
 mod keyboard;
 mod links;
 mod list_insert;
@@ -70,6 +71,7 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder =
         lexical_rich_nodes::normalize_triple_click::register_normalize_triple_click(builder);
     let builder = structure::register(builder);
+    let builder = focus::register(builder);
     let builder = movement::register(builder);
     let builder = keyboard::register(builder);
     let builder = table::register(builder);
@@ -113,6 +115,9 @@ pub fn decode_command(
     generation: u32,
     event: Option<&KeyEvent>,
 ) -> Result<Option<Command>, Error> {
+    if let Some(command) = focus::decode(name, json)? {
+        return Ok(Some(command));
+    }
     if let Some(command) = table::decode_key(name, json, generation, event)? {
         return Ok(Some(command));
     }
