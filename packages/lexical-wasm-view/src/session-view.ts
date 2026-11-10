@@ -71,7 +71,7 @@ export function mountSessionView(
         view.apply(words, strings, filtered);
       } catch (error) {
         if (!commands) throw error;
-        commands.output.recordSecondary(error);
+        commands.output.recordSecondary(error, true);
       } finally {
         applyingOutput = false;
       }
@@ -123,31 +123,31 @@ export function mountSessionView(
           session.onConstructionFailure?.(native);
         }
       },
-      beforeConsume(flags) {
-        commands?.output.beforeConsume(flags);
+      beforeConsume(flags, completion) {
+        commands?.output.beforeConsume(flags, completion);
         finishTeardowns();
         try {
-          session.beforeConsume?.(flags);
+          session.beforeConsume?.(flags, completion);
         } catch (error) {
           if (!commands) throw error;
-          commands.output.recordSecondary(error);
+          commands.output.recordSecondary(error, true);
         }
       },
-      afterDrain(failure) {
+      afterDrain(failure, drain) {
         if (!commands) {
-          session.afterDrain?.(failure);
+          session.afterDrain?.(failure, drain);
           return;
         }
         let aborted = failure;
         const inherited = deferredAbort;
         finishTeardowns(failure);
         try {
-          session.afterDrain?.(failure);
+          session.afterDrain?.(failure, drain);
         } catch (error) {
           if (commands) commands.output.recordSecondary(error);
           else if (!aborted) aborted = { error };
         }
-        commands?.output.afterDrain(inherited ?? aborted);
+        commands?.output.afterDrain(inherited ?? aborted, drain);
         if (!failure && aborted) throw aborted.error;
       },
       onStatus(status) {
@@ -155,7 +155,7 @@ export function mountSessionView(
           session.onStatus?.(status);
         } catch (error) {
           if (!commands) throw error;
-          commands.output.recordSecondary(error);
+          commands.output.recordSecondary(error, true);
         }
       },
       view: sink,

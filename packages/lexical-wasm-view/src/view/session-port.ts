@@ -21,6 +21,7 @@ import type { NativeEnterBinding } from './native-enter-output';
 import { assertNativeSessionReceiverAdmission } from './native-session-guard';
 import type {
   EditorPort,
+  InputSettlement,
   NativeEnterPort,
   TextFromView,
   ViewSink,
@@ -73,7 +74,7 @@ export class SessionPort implements EditorPort {
       SessionExecutor<EditorSession>,
       'session' | 'run' | 'now'
     > &
-      Partial<Pick<SessionExecutor<EditorSession>, 'runSync'>>,
+      Partial<Pick<SessionExecutor<EditorSession>, 'runSync' | 'runSettled'>>,
     private readonly view: ViewSink,
     private readonly debug = import.meta.env.DEV,
     private readonly commands?: NativeEnterBinding
@@ -336,30 +337,66 @@ export class SessionPort implements EditorPort {
     } else this.executor.run(call, after);
     return handled;
   }
-  input(
-    editor: EditorInputMsg,
-    after?: (handled: boolean) => void,
-    event?: KeyboardEvent
-  ): void {
-    this.assertRootAdmission();
+  private prepareInput(editor: EditorInputMsg, event?: KeyboardEvent) {
     const call = () =>
       this.executor.session.input(
         SessionInputMsg.encode({ ...emptyInput(2), editor }),
         this.executor.now(),
         Date.now()
       );
-    const complete = (flags: number) => after?.(Boolean(flags & FLAG_HANDLED));
     if (event?.key === 'Enter' && this.commands) {
+      const { dispatcher, owner } = this.commands;
+      return {
+        call: () => dispatcher.withKeyboardEvent(owner, event, call),
+        synchronous: true,
+      };
+    }
+    return { call, synchronous: false };
+  }
+  input(
+    editor: EditorInputMsg,
+    after?: (handled: boolean) => void,
+    event?: KeyboardEvent
+  ): void {
+    this.assertRootAdmission();
+    const operation = this.prepareInput(editor, event);
+    const complete = (flags: number) => after?.(Boolean(flags & FLAG_HANDLED));
+    if (operation.synchronous) {
       const run = this.executor.runSync;
       if (!run)
         throw new Error('Synchronous executor admission is unavailable');
-      const { dispatcher, owner } = this.commands;
-      run.call(
-        this.executor,
-        () => dispatcher.withKeyboardEvent(owner, event, call),
-        complete
-      );
-    } else this.executor.run(call, complete);
+      run.call(this.executor, operation.call, complete);
+    } else this.executor.run(operation.call, complete);
+  }
+  /** Root admission only; a native dispatcher callback must use its issued scope. */
+  inputSettled(
+    editor: EditorInputMsg,
+    event?: KeyboardEvent
+  ): Promise<InputSettlement> {
+    this.assertRootAdmission();
+    const run = this.executor.runSettled;
+    if (!run) throw new Error('Per-input executor settlement is unavailable');
+    const operation = this.prepareInput(editor, event);
+    let resolve!: (result: InputSettlement) => void;
+    const pending = new Promise<InputSettlement>((complete) => {
+      resolve = complete;
+    });
+    run.call(
+      this.executor,
+      operation.call,
+      (result) => {
+        resolve(
+          result.status === 'success'
+            ? {
+                status: 'success',
+                handled: Boolean(result.flags & FLAG_HANDLED),
+              }
+            : result
+        );
+      },
+      { synchronous: operation.synchronous }
+    );
+    return pending;
   }
   /** Current native authority, independent of local editability and initial config. */
   effectiveAccess(): Access {

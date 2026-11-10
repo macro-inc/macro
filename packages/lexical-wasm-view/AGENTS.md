@@ -62,6 +62,7 @@ Keep drag source validity tied to documentRevision; selection-only commits do no
 
 - Opt into ordered Enter only with the actual generated native module; preserve Source Set registration and per-priority snapshots, reject ordinary receivers before bindgen and Port queue admission during callbacks, and use issued scoped operations without querying published caches.
 - Drain exact failure-ordinal output and I/O before rethrowing the original callback value; detach immediately on callback close, retain current snapshot functions through the enclosing native return, and defer ordinary cleanup to its post-call fence.
+- Await `SessionPort.inputSettled` only outside native dispatcher callbacks; distinguish completed-unhandled, opaque error and closed cancellation, preserve synchronous admission/outer errors, and use only synchronous issued operations inside callbacks.
 
 ## Checks
 
