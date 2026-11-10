@@ -106,6 +106,14 @@ Reconcile active leases against terminal log evidence too: an observer can miss 
 completion during takeover. Previously bound quiet attempts reconcile before new
 wakes; interrupted quiet batches return to the next real prompt.
 
+Each dial costs a replica a handshake, `session/list` and a reattach, so
+`inbound/runtime_gateway.rs` gives every authenticated harness a per-replica,
+in-memory `DialBudget` (6 dials a minute, as a burst or one every 10 s) and
+refuses the rest before the upgrade with `429` and `Retry-After`. Refusals warn
+and set `agent.runtime.dial_outcome:rate_limited` on the `agent.runtime.dial`
+span. macrod treats a 429 as retryable on its own exponential backoff
+(1 s doubling to 30 s) and does not read `Retry-After`.
+
 Harness presence is per connection, because a runtime's redial can land on a
 different replica than the socket it replaced, and a stalled replica can notice
 that socket's end long after. `RuntimeRegistry` mints a `RuntimeConnectionId` per
