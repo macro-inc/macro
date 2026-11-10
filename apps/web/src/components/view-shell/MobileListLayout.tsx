@@ -10,6 +10,7 @@ import {
   Show,
   useContext,
 } from 'solid-js';
+import { ViewShellContext } from './view-shell-context';
 
 const MobileListInsetContext = createContext<Accessor<string>>();
 
@@ -19,6 +20,7 @@ export function MobileListLayout(props: {
   children: JSX.Element;
 }) {
   const parentInset = useContext(MobileListInsetContext);
+  const ws = useContext(ViewShellContext);
   const [header, setHeader] = createSignal<HTMLElement>();
   const size = createElementSize(header);
   const content = children(() => (isTouchDevice() ? props.header : undefined));
@@ -46,7 +48,13 @@ export function MobileListLayout(props: {
             ref={setHeader}
             data-mobile-list-header
             class={`pointer-events-none absolute inset-x-0 z-split-panel-chrome min-w-0 px-(--mobile-chrome-gutter) pb-3 ${parentInset ? 'pt-0' : 'pt-[calc(var(--safe-top,0px)+0.5rem)]'}`}
-            style={{ top: parentInset?.() ?? '0px' }}
+            style={{
+              top: parentInset?.() ?? '0px',
+              'padding-left':
+                !parentInset && ws?.collectionLayout()
+                  ? 'calc(2 * var(--mobile-chrome-gutter))'
+                  : undefined,
+            }}
           >
             <div class="pointer-events-auto flex min-h-10 min-w-0 flex-col">
               {content()}

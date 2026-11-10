@@ -93,7 +93,10 @@ contribution's pane as navigation collapses or resizes; editors remain mounted.
 The navigation dock and app-wide overlays keep their global placement.
 
 `MobileListLayout` owns floating touch collection controls, measures their height,
-and paints the top fade only inside that list pane. Reserve its
+and paints the top fade only inside that list pane. Outer wide-touch collection
+headers use a 24px left gutter to clear rounded screen edges, retaining the
+standard 12px right gutter; narrow and nested headers keep their usual spacing.
+Reserve its
 `--mobile-content-inset-top` within the scroller (for `ListViewport`, opt into
 `touchInset`). Nested activity controls add their height to the parent inset;
 desktop headers stay in flow. Keep workspace metadata composable on touch when
