@@ -305,7 +305,7 @@ pub struct CallEvent {
 }
 
 /// Decoders for fields Dialpad sends in more than one shape.
-mod lenient {
+pub(crate) mod lenient {
     use serde::{Deserialize, Deserializer, de::Error};
     use serde_json::Value;
 

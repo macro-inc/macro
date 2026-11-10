@@ -41,8 +41,8 @@ the call from all of its events, fetches the transcript, and ingests through
 ## Gotchas
 
 - An import replaces the stored call wholesale, so build it from every stored
-  event of the call. Only a rejected token fails a transcript fetch; any other
-  error imports the call without its transcript, as 403/404 do.
+  event of the call, and never import without a transcript Dialpad could not
+  serve: that deletes the stored one (only 403/404 mean none).
 - Stopping or disconnecting drops a sync's pending events; a call's events
   are forgotten once it has been done and quiet for 30 days.
 - Setup success and failure must match the lease that stored the secret. A

@@ -18,11 +18,11 @@ pub struct DialpadApi {
     base_url: String,
 }
 
-/// A transcript Dialpad cannot serve now (an outage, a rate limit, an
-/// unreadable reply): the call imports without it.
-fn transcript_unavailable(error: rootcause::Report) -> Option<Vec<TranscriptLine>> {
-    tracing::warn!(error = ?error, "importing a Dialpad call without its transcript");
-    None
+/// Decode a reply, naming only the field that does not fit: serde's
+/// messages quote the value, and replies carry call content.
+fn decode<T: serde::de::DeserializeOwned>(body: Value) -> Result<T> {
+    serde_path_to_error::deserialize(body)
+        .map_err(|error| rootcause::report!("unexpected Dialpad reply at {}", error.path()))
 }
 
 /// The id of a resource Dialpad returned.
@@ -106,7 +106,21 @@ impl DialpadApi {
             .request(token, Method::POST, path, &[], Some(body))
             .await?
             .ok_or_else(|| rootcause::report!("Dialpad has no {path} endpoint for this account"))?;
-        Ok(serde_json::from_value::<Id>(body)?.id)
+        Ok(decode::<Id>(body)?.id)
+    }
+
+    /// The body of something a call may not have: 404, or 403 when the
+    /// feature is off for the company, is `None`.
+    async fn optional(&self, token: &AccessToken, path: &str) -> Result<Option<Value>> {
+        let reply = self.send(token, Method::GET, path, &[], None).await?;
+        match reply.status {
+            status if status.is_success() => Ok(Some(reply.body)),
+            StatusCode::NOT_FOUND | StatusCode::FORBIDDEN => Ok(None),
+            StatusCode::UNAUTHORIZED => {
+                Err(rootcause::report!("Dialpad rejected the access token"))
+            }
+            status => Err(rootcause::report!("Dialpad API returned HTTP {status}")),
+        }
     }
 
     /// Gone already, or no longer this token's to delete (403), is success.
@@ -131,7 +145,7 @@ impl Dialpad for DialpadApi {
             .request(token, Method::GET, "/users/me", &[], None)
             .await?
             .ok_or_else(|| rootcause::report!("Dialpad did not return the connected user"))?;
-        Ok(serde_json::from_value::<Id>(body)?.id)
+        Ok(decode::<Id>(body)?.id)
     }
 
     #[tracing::instrument(name = "dialpad.create_webhook", skip_all, err(Display))]
@@ -197,43 +211,20 @@ impl Dialpad for DialpadApi {
             #[serde(default)]
             lines: Vec<TranscriptLine>,
         }
-        let reply = match self
-            .send(
-                token,
-                Method::GET,
-                &format!("/transcripts/{call}"),
-                &[],
-                None,
-            )
-            .await
-        {
-            Ok(reply) => reply,
-            Err(error) => return Ok(transcript_unavailable(error)),
+        // No transcript, or transcripts are off for the company. Any other
+        // failure retries the call: importing without a transcript deletes
+        // the one already stored.
+        let Some(body) = self
+            .optional(token, &format!("/transcripts/{call}"))
+            .await?
+        else {
+            return Ok(None);
         };
-        match reply.status {
-            StatusCode::UNAUTHORIZED => {
-                Err(rootcause::report!("Dialpad rejected the access token"))
-            }
-            // No transcript, or transcripts are off for the company (as for recaps).
-            StatusCode::NOT_FOUND | StatusCode::FORBIDDEN => Ok(None),
-            status if status.is_success() => {
-                match serde_json::from_value::<Transcript>(reply.body) {
-                    Ok(transcript) => Ok(Some(transcript.lines)),
-                    Err(error) => Ok(transcript_unavailable(error.into())),
-                }
-            }
-            status => Ok(transcript_unavailable(rootcause::report!(
-                "Dialpad API returned HTTP {status}"
-            ))),
-        }
+        Ok(Some(decode::<Transcript>(body)?.lines))
     }
 
     #[tracing::instrument(name = "dialpad.fetch_recap", skip_all, err(Display))]
     async fn recap(&self, token: &AccessToken, call: DialpadId) -> Result<Option<Recap>> {
-        #[derive(Deserialize)]
-        struct Item {
-            content: Option<String>,
-        }
         #[derive(Deserialize)]
         struct Summary {
             content: Option<String>,
@@ -243,39 +234,26 @@ impl Dialpad for DialpadApi {
         #[derive(Deserialize)]
         struct AiRecap {
             summary: Option<Summary>,
-            #[serde(default)]
-            action_items: Vec<Item>,
+            #[serde(
+                default,
+                deserialize_with = "crate::domain::models::lenient::action_items"
+            )]
+            action_items: Option<Vec<String>>,
         }
-        let reply = self
-            .send(
-                token,
-                Method::GET,
-                &format!("/call/{call}/ai_recap"),
-                &[],
-                None,
-            )
-            .await?;
         // No recap, or AI recaps are off for the company: import without one.
-        if matches!(reply.status, StatusCode::NOT_FOUND | StatusCode::FORBIDDEN) {
+        let Some(body) = self
+            .optional(token, &format!("/call/{call}/ai_recap"))
+            .await?
+        else {
             return Ok(None);
-        }
-        if !reply.status.is_success() {
-            return Err(rootcause::report!(
-                "Dialpad API returned HTTP {}",
-                reply.status
-            ));
-        }
-        let recap: AiRecap = serde_json::from_value(reply.body)?;
+        };
+        let recap: AiRecap = decode(body)?;
         Ok(Some(Recap {
             summary: recap
                 .summary
                 .filter(|summary| !summary.null_summary)
                 .and_then(|summary| summary.content),
-            action_items: recap
-                .action_items
-                .into_iter()
-                .filter_map(|item| item.content)
-                .collect(),
+            action_items: recap.action_items.unwrap_or_default(),
         }))
     }
 
@@ -306,7 +284,7 @@ impl Dialpad for DialpadApi {
             .request(token, Method::GET, "/call", &query, None)
             .await?
             .ok_or_else(|| rootcause::report!("Dialpad call listing is unavailable"))?;
-        let page: Page = serde_json::from_value(body)?;
+        let page: Page = decode(body)?;
         // One unreadable call must not hold up the rest of the page.
         let calls = page
             .items

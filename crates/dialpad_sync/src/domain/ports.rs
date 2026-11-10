@@ -128,8 +128,9 @@ pub trait Dialpad: Send + Sync {
     async fn unregister(&self, token: &AccessToken, registration: Registration) -> Result<()>;
     /// Delete a webhook. Already gone, or no longer the token's, is success.
     async fn delete_webhook(&self, token: &AccessToken, webhook: DialpadId) -> Result<()>;
-    /// `None` when the call has no transcript, transcripts are off for the
-    /// company, or Dialpad cannot serve it now. Only a rejected token fails.
+    /// `None` when the call has no transcript or transcripts are off for the
+    /// company. Anything else fails, so the call retries rather than
+    /// replacing its stored transcript with none.
     async fn transcript(
         &self,
         token: &AccessToken,

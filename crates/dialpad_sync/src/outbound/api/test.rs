@@ -35,9 +35,9 @@ async fn the_subscription_targets_only_the_connected_user() {
 }
 
 #[tokio::test]
-async fn missing_transcripts_and_unavailable_recaps_are_absent_not_errors() {
+async fn missing_transcripts_and_recaps_are_absent_and_other_failures_retry() {
     let server = MockServer::start().await;
-    for (call, status) in [(7, 404), (6, 403), (8, 429), (9, 401)] {
+    for (call, status) in [(7, 404), (6, 403), (8, 429), (9, 401), (10, 503)] {
         Mock::given(method("GET"))
             .and(path(format!("/transcripts/{call}")))
             .respond_with(ResponseTemplate::new(status))
@@ -50,9 +50,8 @@ async fn missing_transcripts_and_unavailable_recaps_are_absent_not_errors() {
         .mount(&server)
         .await;
     let api = DialpadApi::new(server.uri()).unwrap();
-    // No transcript, transcripts off for the company, or a rate limit: the
-    // call imports without one.
-    for call in [7, 6, 8] {
+    // No transcript, or transcripts off for the company: imports without one.
+    for call in [7, 6] {
         assert!(
             api.transcript(&token(), DialpadId(call))
                 .await
@@ -62,10 +61,109 @@ async fn missing_transcripts_and_unavailable_recaps_are_absent_not_errors() {
         );
     }
     assert!(api.recap(&token(), DialpadId(7)).await.unwrap().is_none());
-    assert!(
-        api.transcript(&token(), DialpadId(9)).await.is_err(),
-        "a rejected token waits for a reconnect"
-    );
+    // An import without a transcript deletes the stored one, so a rate
+    // limit, an outage or a rejected token retries instead.
+    for call in [8, 9, 10] {
+        assert!(
+            api.transcript(&token(), DialpadId(call)).await.is_err(),
+            "call {call}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn transcripts_and_recaps_decode_in_either_action_item_shape() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/transcripts/7"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"lines": [
+            {"type": "transcript", "name": "Jane Doe", "time": "2025-05-05T18:16:50.000", "content": "Hello"},
+        ]})))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/call/7/ai_recap"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "summary": {"content": "Renewal call.", "null_summary": false},
+            "action_items": [{"content": "Book a demo"}, "Send the quote"],
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/call/8/ai_recap"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "summary": {"content": "Too short to summarize.", "null_summary": true},
+        })))
+        .mount(&server)
+        .await;
+    let api = DialpadApi::new(server.uri()).unwrap();
+
+    let lines = api
+        .transcript(&token(), DialpadId(7))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0].content.as_deref(), Some("Hello"));
+    let recap = api.recap(&token(), DialpadId(7)).await.unwrap().unwrap();
+    assert_eq!(recap.summary.as_deref(), Some("Renewal call."));
+    assert_eq!(recap.action_items, ["Book a demo", "Send the quote"]);
+    let placeholder = api.recap(&token(), DialpadId(8)).await.unwrap().unwrap();
+    assert_eq!(placeholder.summary, None);
+    assert!(placeholder.action_items.is_empty());
+}
+
+#[tokio::test]
+async fn an_unreadable_reply_names_the_field_never_the_value() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/call/7/ai_recap"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"summary": "Jane wants a quote"})),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/transcripts/7"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"lines": ["Jane wants a quote"]})),
+        )
+        .mount(&server)
+        .await;
+    let api = DialpadApi::new(server.uri()).unwrap();
+
+    for error in [
+        api.recap(&token(), DialpadId(7)).await.unwrap_err(),
+        api.transcript(&token(), DialpadId(7)).await.unwrap_err(),
+    ] {
+        let error = format!("{error:?}");
+        assert!(!error.contains("Jane"), "{error}");
+    }
+}
+
+#[tokio::test]
+async fn a_webhook_is_registered_with_its_url_and_secret() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/webhooks"))
+        .and(body_json(json!({
+            "hook_url": "https://macro.test/integrations/dialpad/webhooks/1",
+            "secret": "our-secret",
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"id": 11})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let api = DialpadApi::new(server.uri()).unwrap();
+    let id = api
+        .create_webhook(
+            &token(),
+            "https://macro.test/integrations/dialpad/webhooks/1",
+            &SigningSecret("our-secret".into()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(id, DialpadId(11));
 }
 
 #[tokio::test]

@@ -74,11 +74,11 @@ answered Dialpad call the user is on becomes a private call about a minute
 after Dialpad finishes its transcript, titled `Call with <name or number>`,
 with the connected user as a Macro participant and the caller as a guest (a
 phone number when there is no name), the transcript, and Dialpad's AI recap
-and action items as the summary. If Dialpad cannot serve the transcript, the
-call imports without it. A call that keeps failing retries for about three
-hours; Settings then shows **Some calls not imported** until Dialpad sends a
-new event for it. If importing past calls fails, Settings shows **Past calls
-retrying** while it backs off and tries again. If setup keeps failing for
+and action items as the summary. A call Dialpad has no transcript for imports
+without one; if Dialpad cannot serve the transcript right now, the import
+retries. A call that keeps failing retries for about three hours; Settings
+then shows **Some calls not imported** until Dialpad sends a new event for it.
+If importing past calls fails, Settings shows **Past calls retrying** while it backs off and tries again. If setup keeps failing for
 about a day, it stops and Settings shows **Setup could not finish** until the
 user reconnects.
 Missed calls and voicemails are not imported. Webhooks need the same public
