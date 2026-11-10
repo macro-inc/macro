@@ -10,7 +10,7 @@ import type { ClaudeSignInExpiryStage } from './claudeSignInExpiryStage';
 /**
  * The Claude account a team's Macro computer is signed in to is about to
 stop working, or has. Sent to whoever signed it in and to the team's
-admins and owner, who can sign it in again from Settings → Runtimes.
+admins and owner, who can sign it in again from Settings → Machines.
  */
 export interface ClaudeSignInExpiryMetadata {
   /** The computer's name when the notice was sent. */

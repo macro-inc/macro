@@ -85,6 +85,9 @@ pub struct MailboxBacklog {
     pub queued: i64,
     /// Queued messages backed off until a later time.
     pub parked: i64,
+    /// Messages whose reconciliation stopped retrying (`MessageRetry::Abandon`)
+    /// until the provider reports a change; not part of `queued`.
+    pub abandoned: i64,
     /// Queued messages a worker holds right now.
     pub leased: i64,
     /// How long the longest-waiting claimable message has been due; 0 if none.
@@ -107,8 +110,8 @@ pub trait MailboxProgressRepository: Send + Sync + 'static {
         imports: &HashMap<Uuid, MailboxImports>,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
     /// One aggregate read: every sync-active Outlook mailbox, and inactive
-    /// ones that still have queued work. Also drops import counts older than
-    /// a day.
+    /// ones that still have queued or abandoned work. Also drops import
+    /// counts older than a day.
     fn backlogs(&self) -> impl Future<Output = Result<Vec<MailboxBacklog>, MailboxError>> + Send;
 }
 
@@ -145,6 +148,7 @@ impl<R: MailboxProgressRepository> MailboxProgressService<R> {
                 sync_generation = backlog.sync_generation,
                 queued = backlog.queued,
                 parked = backlog.parked,
+                abandoned = backlog.abandoned,
                 leased = backlog.leased,
                 oldest_waiting_seconds = backlog.oldest_waiting_seconds,
                 parked_until_max_seconds = backlog.parked_until_max_seconds,

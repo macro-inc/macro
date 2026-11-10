@@ -1,6 +1,7 @@
 import { providerIdentity } from '@app/features/external-chat/providers/identity';
 import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFlags';
 import type { Entity, NotificationType } from '@core/types';
+import { stoppedAgentsText } from '@notifications/notification-metadata';
 import type { NotificationStack } from '@notifications/notification-stacking';
 import type { UnifiedNotification } from '@notifications/types';
 import type { ItemEntity } from '@queries/preview';
@@ -247,6 +248,7 @@ export function getNotificationActionText(n: Notification): string {
     .with('initiative_discussion', () => 'commented')
     .with('entity_access_requested', () => 'requested access')
     .with('entity_access_granted', () => 'granted access')
+    .with('runtime_access_removed', () => 'removed access')
     .with('commented_on_document', 'crm_discussion', () => 'commented')
     .with('channel_invite', () => 'invited')
     .with('channel_access_requested', () => 'asked to join')
@@ -323,6 +325,9 @@ export function extractMessageContent(notification: Notification): string {
     .with(
       { tag: P.union('entity_access_requested', 'entity_access_granted') },
       (m) => `${m.content.accessLevel} access to ${m.content.entityName}`
+    )
+    .with({ tag: 'runtime_access_removed' }, (m) =>
+      stoppedAgentsText(m.content.agents, m.content.runtimeName)
     )
     .with({ tag: 'commented_on_document' }, (m) => m.content.text || '')
     .with({ tag: 'crm_discussion' }, (m) => m.content.text || '')

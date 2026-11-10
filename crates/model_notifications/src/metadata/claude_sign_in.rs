@@ -15,7 +15,7 @@ pub enum ClaudeSignInExpiryStage {
 
 /// The Claude account a team's Macro computer is signed in to is about to
 /// stop working, or has. Sent to whoever signed it in and to the team's
-/// admins and owner, who can sign it in again from Settings → Runtimes.
+/// admins and owner, who can sign it in again from Settings → Machines.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ClaudeSignInExpiryMetadata {
@@ -50,10 +50,10 @@ impl NotificationTitle for ClaudeSignInExpiryMetadata {
     fn format_body(&self, _sender_id: Option<MacroUserIdStr<'_>>) -> Result<String, Report> {
         Ok(match self.stage {
             ClaudeSignInExpiryStage::ExpiresSoon | ClaudeSignInExpiryStage::ExpiresToday => {
-                "Sign in again in Settings → Runtimes to keep the team's agents running on it."
+                "Sign in again in Settings → Machines to keep the team's agents running on it."
             }
             ClaudeSignInExpiryStage::Expired => {
-                "The team's agents can't use it until someone signs in again in Settings → Runtimes."
+                "The team's agents can't use it until someone signs in again in Settings → Machines."
             }
         }
         .to_owned())

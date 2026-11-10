@@ -77,34 +77,6 @@ pub async fn facts(
     }))
 }
 
-/// Grant the runtimes offered with a team invite to whoever accepted it. An offer
-/// counts only while its inviter still owns the runtime and it is still live.
-pub async fn grant_invited_harnesses(
-    tx: &mut Transaction<'_, Postgres>,
-    team_invite_id: &macro_uuid::Uuid,
-    invited_by: &MacroUserIdStr<'_>,
-    user: &MacroUserIdStr<'_>,
-) -> anyhow::Result<()> {
-    sqlx::query!(
-        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-        SELECT h.id, 'harness', $3, 'user', 'edit'
-        FROM team_invite_harness_grant g
-        JOIN harnesses h ON h.id = g.harness_id
-        WHERE g.team_invite_id = $1
-          AND h.deleted_at IS NULL
-          AND COALESCE(h.owner_user_id, h.created_by) = $2
-        ON CONFLICT (entity_id, entity_type, source_id, source_type)
-        WHERE granted_from_project_id IS NULL
-        DO NOTHING"#,
-        team_invite_id,
-        invited_by.as_ref(),
-        user.as_ref(),
-    )
-    .execute(tx.as_mut())
-    .await?;
-    Ok(())
-}
-
 /// List direct non-owner user grants. Inherited, channel and team grants are excluded.
 pub async fn list(
     tx: &mut Transaction<'_, Postgres>,

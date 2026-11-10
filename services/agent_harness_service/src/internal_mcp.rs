@@ -20,8 +20,8 @@ use cognition::domain::Cognition;
 use rmcp::{
     ServerHandler,
     model::{
-        CallToolRequestParams, CallToolResult, Content, ListToolsResult, PaginatedRequestParams,
-        ServerCapabilities, ServerInfo, Tool, ToolAnnotations,
+        CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ListToolsResult,
+        PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool, ToolAnnotations,
     },
     transport::streamable_http_server::{
         StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
@@ -69,7 +69,7 @@ pub(super) fn router<A: AgentSessionRepo + 'static>(
         "dev-gateway.macro.com".into(),
     ]);
     let mut config = StreamableHttpServerConfig::default().with_allowed_hosts(hosts);
-    config.stateful_mode = false;
+    config.legacy_session_mode = false;
     config.json_response = true;
     let server = StreamableHttpService::new(
         move || Ok(tools.clone()),
@@ -99,8 +99,8 @@ pub(super) struct InternalTools {
 }
 
 impl ServerHandler for InternalTools {
-    fn get_info(&self) -> ServerInfo {
-        let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
+    fn get_info(&self) -> ServerConfig {
+        let mut info = ServerConfig::new(ServerCapabilities::builder().enable_tools().build());
         info.server_info = rmcp::model::Implementation::new(
             agent_harness::domain::model::INTERNAL_MCP_NAME,
             env!("CARGO_PKG_VERSION"),
@@ -202,7 +202,7 @@ impl ServerHandler for InternalTools {
         &self,
         mut request: CallToolRequestParams,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
-    ) -> Result<CallToolResult, rmcp::ErrorData> {
+    ) -> Result<CallToolResponse, rmcp::ErrorData> {
         let AuthenticatedSession(grant) = context
             .extensions
             .get::<axum::http::request::Parts>()
@@ -224,9 +224,9 @@ impl ServerHandler for InternalTools {
             let (_, cleaned) = match ai_toolset::actor::ToolActor::take(&arguments) {
                 Ok(selection) => selection,
                 Err(error) => {
-                    return Ok(CallToolResult::error(vec![Content::text(
-                        error.to_string(),
-                    )]));
+                    return Ok(
+                        CallToolResult::error(vec![ContentBlock::text(error.to_string())]).into(),
+                    );
                 }
             };
             use agent_inmem::domain::tool_gate::NativeToolVerdict;
@@ -237,7 +237,7 @@ impl ServerHandler for InternalTools {
             {
                 NativeToolVerdict::RunAs(user) => acting_user = user,
                 NativeToolVerdict::Refuse(reason) => {
-                    return Ok(CallToolResult::error(vec![Content::text(reason)]));
+                    return Ok(CallToolResult::error(vec![ContentBlock::text(reason)]).into());
                 }
                 NativeToolVerdict::Run => {}
             }
@@ -260,10 +260,11 @@ impl ServerHandler for InternalTools {
                 )
                 .await
                 .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))?;
-            return Ok(match result {
+            let result = match result {
                 Ok(value) => CallToolResult::structured(value),
-                Err(error) => CallToolResult::error(vec![Content::text(error.description)]),
-            });
+                Err(error) => CallToolResult::error(vec![ContentBlock::text(error.description)]),
+            };
+            return Ok(result.into());
         }
         if let Some(code_mode) = &self.code_mode {
             let tools = agent_code_mode::inbound::toolset::toolset();
@@ -286,12 +287,15 @@ impl ServerHandler for InternalTools {
                     )
                     .await
                     .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))?;
-                return Ok(match result {
+                let result = match result {
                     // A failed program is a completed execution with a receipt.
                     // MCP errors discard structured content in some runtimes.
                     Ok(value) => CallToolResult::structured(value),
-                    Err(error) => CallToolResult::error(vec![Content::text(error.description)]),
-                });
+                    Err(error) => {
+                        CallToolResult::error(vec![ContentBlock::text(error.description)])
+                    }
+                };
+                return Ok(result.into());
             }
         }
         let result = toolset()
@@ -319,9 +323,10 @@ impl ServerHandler for InternalTools {
                     rmcp::ErrorData::resource_not_found(message, None)
                 }
             })?;
-        Ok(match result {
-            Ok(value) => CallToolResult::success(vec![Content::text(value.to_string())]),
-            Err(error) => CallToolResult::error(vec![Content::text(error.description)]),
-        })
+        let result = match result {
+            Ok(value) => CallToolResult::success(vec![ContentBlock::text(value.to_string())]),
+            Err(error) => CallToolResult::error(vec![ContentBlock::text(error.description)]),
+        };
+        Ok(result.into())
     }
 }

@@ -13,9 +13,9 @@ const workspaceDirectory = fileURLToPath(
 const adapters = `${directory}preview-adapters.tsx`;
 
 /**
- * The real Share menu and user-card section, their queries and service client,
- * over a scripted network. Only the signed-in viewer, their team, and how names
- * render are stand-ins.
+ * The real Share menu and Teammates' runtimes section, their queries and
+ * service client, over a scripted network. Only the signed-in viewer, their
+ * team, and how names render are stand-ins.
  */
 export default defineConfig({
   root: directory,

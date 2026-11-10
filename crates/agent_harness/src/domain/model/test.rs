@@ -212,6 +212,7 @@ fn a_silent_turn_is_told_by_how_it_stopped() {
 #[test]
 fn a_resident_answers_anyone_while_its_owner_keeps_access() {
     let resident = |agent_owner_may_use, actor_may_use| RuntimeAccessFacts {
+        runtime_name: "box".to_owned(),
         resident: true,
         agent_owner_may_use,
         actor_may_use,
@@ -225,6 +226,7 @@ fn a_resident_answers_anyone_while_its_owner_keeps_access() {
 #[test]
 fn a_coding_agent_runs_for_people_who_may_use_the_runtime_themselves() {
     let coding = |agent_owner_may_use, actor_may_use| RuntimeAccessFacts {
+        runtime_name: "box".to_owned(),
         resident: false,
         agent_owner_may_use,
         actor_may_use,

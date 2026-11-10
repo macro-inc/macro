@@ -2323,12 +2323,46 @@ export const listTypedNotificationsResponse = zod
                             ),
                         })
                         .describe(
-                          "The Claude account a team's Macro computer is signed in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Runtimes."
+                          "The Claude account a team's Macro computer is signed in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
                         ),
                       tag: zod.enum(['claude_sign_in_expiry']),
                     })
                     .describe(
                       "The Claude sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agents: zod
+                            .array(
+                              zod
+                                .object({
+                                  botId: zod
+                                    .uuid()
+                                    .describe("The agent's bot id."),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  "One of the recipient's agents that stopped with their runtime access."
+                                )
+                            )
+                            .describe(
+                              "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+                            ),
+                          runtimeName: zod
+                            .string()
+                            .describe("The runtime's name."),
+                        })
+                        .describe(
+                          "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped."
+                        ),
+                      tag: zod.enum(['runtime_access_removed']),
+                    })
+                    .describe(
+                      "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
                     ),
                 ])
                 .describe(
@@ -4501,12 +4535,46 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             ),
                         })
                         .describe(
-                          "The Claude account a team's Macro computer is signed in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Runtimes."
+                          "The Claude account a team's Macro computer is signed in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
                         ),
                       tag: zod.enum(['claude_sign_in_expiry']),
                     })
                     .describe(
                       "The Claude sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agents: zod
+                            .array(
+                              zod
+                                .object({
+                                  botId: zod
+                                    .uuid()
+                                    .describe("The agent's bot id."),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  "One of the recipient's agents that stopped with their runtime access."
+                                )
+                            )
+                            .describe(
+                              "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+                            ),
+                          runtimeName: zod
+                            .string()
+                            .describe("The runtime's name."),
+                        })
+                        .describe(
+                          "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped."
+                        ),
+                      tag: zod.enum(['runtime_access_removed']),
+                    })
+                    .describe(
+                      "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
                     ),
                 ])
                 .describe(
@@ -6629,12 +6697,46 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             ),
                         })
                         .describe(
-                          "The Claude account a team's Macro computer is signed in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Runtimes."
+                          "The Claude account a team's Macro computer is signed in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
                         ),
                       tag: zod.enum(['claude_sign_in_expiry']),
                     })
                     .describe(
                       "The Claude sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          agents: zod
+                            .array(
+                              zod
+                                .object({
+                                  botId: zod
+                                    .uuid()
+                                    .describe("The agent's bot id."),
+                                  name: zod
+                                    .string()
+                                    .describe("The agent's display name."),
+                                })
+                                .describe(
+                                  "One of the recipient's agents that stopped with their runtime access."
+                                )
+                            )
+                            .describe(
+                              "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+                            ),
+                          runtimeName: zod
+                            .string()
+                            .describe("The runtime's name."),
+                        })
+                        .describe(
+                          "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped."
+                        ),
+                      tag: zod.enum(['runtime_access_removed']),
+                    })
+                    .describe(
+                      "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
                     ),
                 ])
                 .describe(
@@ -8597,12 +8699,42 @@ export const getTypedNotificationByIdResponse = zod
                     ),
                 })
                 .describe(
-                  "The Claude account a team's Macro computer is signed in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Runtimes."
+                  "The Claude account a team's Macro computer is signed in to is about to\nstop working, or has. Sent to whoever signed it in and to the team's\nadmins and owner, who can sign it in again from Settings → Machines."
                 ),
               tag: zod.enum(['claude_sign_in_expiry']),
             })
             .describe(
               "The Claude sign-in on one of the team's Macro computers is about\nto expire, expired, or was rejected."
+            ),
+          zod
+            .object({
+              content: zod
+                .object({
+                  agents: zod
+                    .array(
+                      zod
+                        .object({
+                          botId: zod.uuid().describe("The agent's bot id."),
+                          name: zod
+                            .string()
+                            .describe("The agent's display name."),
+                        })
+                        .describe(
+                          "One of the recipient's agents that stopped with their runtime access."
+                        )
+                    )
+                    .describe(
+                      "The recipient's agents living on the runtime, which stopped. Never\nempty: without one there is nothing to tell them."
+                    ),
+                  runtimeName: zod.string().describe("The runtime's name."),
+                })
+                .describe(
+                  "A runtime's owner removed the recipient's access to it, or lowered it to\nRead, and agents the recipient keeps living there stopped."
+                ),
+              tag: zod.enum(['runtime_access_removed']),
+            })
+            .describe(
+              "A runtime's owner removed the user's access to it, and agents of\ntheirs living there stopped."
             ),
         ])
         .describe(

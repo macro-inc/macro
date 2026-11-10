@@ -17,6 +17,7 @@ import QuestionIcon from '@icon/system/regular/question.svg';
 import SmileyIcon from '@icon/system/regular/smiley.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
+import WarningIcon from '@icon/system/regular/warning.svg';
 import type { NotificationStack } from '@notifications';
 import { isEntityDiscussionEvent } from '@notifications/entity-discussion';
 import { cn } from '@ui';
@@ -57,6 +58,7 @@ export function getNotificationIcon(
     .with('new_email', () => EnvelopeIcon)
     .with('entity_access_requested', () => UserPlusIcon)
     .with('entity_access_granted', () => CheckIcon)
+    .with('runtime_access_removed', () => WarningIcon)
     .with('channel_invite', () => UserPlusIcon)
     .with('channel_access_requested', () => UserPlusIcon)
     .with('invite_to_team', () => UserPlusIcon)

@@ -56,7 +56,7 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
             lines.push(Line::raw(""));
             lines.push(Line::styled(
                 if app.serving() {
-                    "Serving from this window; the dot turns green when the runtime connects."
+                    "Serving from this window; the dot turns green when this machine connects."
                 } else {
                     "The daemon is not running; check the Logs tab for why."
                 },

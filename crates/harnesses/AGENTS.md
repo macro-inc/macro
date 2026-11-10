@@ -2,9 +2,11 @@
 
 ## What it is
 
-Belongs to agent sessions: registration for macrod, called runtimes in the
-product. Owns device-code pairing, the usable list and teammate directory,
-team access, residents, revocation, and the daemon's bound-agent feed.
+Belongs to agent sessions: registration for user-run agent harnesses
+(macrod), called machines in the product. Owns device-code pairing (create,
+approve, claim), the usable list and teammate directory the UI renders, team
+access, residents, revocation, and the bound-agent listing the daemon reconciles
+its webhook feed from.
 Hosted computers register through trusted `create_hosted_pairing`: it creates
 an approved pairing with the buying administrator as human owner and a User
 (`edit`) grant for the computer's team. Retries before
@@ -46,7 +48,7 @@ before acting"); paired machines keep it off until their owner turns it on.
   and `harness_can_run` for running agents on it; check the latter wherever
   something runs. A direct grant counts only while its holder shares a team with
   the owner.
-- Opening a runtime takes the owner's own session
+- Opening a machine takes the owner's own session
   (`MacroUserAuthentication::is_human_session`): agents can ask, never grant.
 - A resident is a bound agent with `is_coding` false. There is no move-in or
   eviction flow yet; the binding is all there is.

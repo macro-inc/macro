@@ -144,8 +144,9 @@ beside a scrolling editor whose selection runs past its visible bottom
 (`clipToVisible`), have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/directive/browser-test/playwright.config.ts`.
 
-The runtime Share menu (teammates, team access, access requests, and the warning
-before shutting down a resident) has a backend-free desktop/phone regression:
+The machine Share menu (teammates, team access, access requests, and the warning
+before shutting down a resident) and Settings → Machines' Teammates' machines
+section (Request access) have a backend-free desktop/phone regression:
 `bunx playwright test --config src/features/runtime-sharing/browser-test/playwright.config.ts`.
 It runs the real queries and service client over a scripted network. The warning
 opens under an owner from inside the sheet; one captured outside it closes the
@@ -419,7 +420,7 @@ the user's newest account for that app from the last fifteen minutes.
 Desktop Home and Agents new-conversation and active-session composers show the shared **Run agents
 on this computer** invitation until this installation is paired or the current
 user dismisses it locally. Keep the invitation tied to bundled macrod support,
-not to account-wide paired runtime count; a user can pair several computers.
+not to account-wide paired machine count; a user can pair several computers.
 
 ### General
 
@@ -643,6 +644,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep native booking exit navigation in the route shell, outside page loading boundaries, and use the router so the native hash route stays intact.
 - Diagnose native full reloads with `native_webview_started`, `native_diagnostic_recovered`, and the shared `frontend_instance_id`; use `reloadApp(reason)` for frontend reloads and keep breadcrumbs content-free. Treat `previous_document_*` checkpoints as last-observed lifecycle evidence, never a crash verdict; clear them on logout. `previous_document_last_*` comes from the native navigation breadcrumb (route and entity type, never ids). See [frontend checkpoints](docs/native-reload-diagnostics.md) and `tauri/src-tauri/README.md`.
 - Pass `$APPLOCALDATA` (Application Support on Apple platforms) as the native HTTP cookie storage directory; the plugin owns the `.cookies` filename. Never use purgeable caches. The location change intentionally requires one new sign-in, without migration. See `tauri/src-tauri/README.md#native-authentication-cookies`.
+- Store iOS OTA bundles and markers in `Application Support/<bundle-identifier>/bundle-updates`, excluded from backup; ignore legacy cache contents rather than migrating them. Other platforms keep the updater's existing cache location. See `tauri/src-tauri/README.md#ota-bundle-storage`.
 - Inline agent steps reuse the session code-execution query for live SDK operation
   names; completed step snapshots come from the shared fold of the tool receipt.
   Session `ExecuteCode` activity uses the same Calling N tools peek window as

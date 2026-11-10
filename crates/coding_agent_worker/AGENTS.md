@@ -14,7 +14,7 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   (see `config.example.toml`, `default.macrod.toml`). The TUI and
   `macrod service` share `~/.macrod/macrod.toml` (`--config` overrides it),
   locked by `<config>.lock` while running. Name, ownership, and permission
-  bypass live only on the web (Settings → Agents → Runtimes); a file that still
+  bypass live only on the web (Settings → Machines); a file that still
   has `[identity]` or a `scope` in `[credentials]` fails to load with an error
   naming that page. The event stream reads the owner from `GET /harnesses/me`
   on each connect. `[macro]` is a dev override that defaults to production.
@@ -73,8 +73,8 @@ the local ACP process (Claude Code, Codex, ...), and drives native
 - `src/daemon.rs` `watch_presence`: each minute a connection has held, asks
   `GET /harnesses/me` with `RUNTIME_CONNECTED_HEADER`. A service that reads the
   harness offline logs `harness_presence_disagreement`, macrod warns, and the TUI
-  header says "runtime connected, service reports offline" instead of "paired,
-  runtime not dialed in".
+  header says "machine connected, service reports offline" instead of "paired,
+  machine not dialed in".
 - `src/tui.rs` (`src/tui/`): the control panel itself (registration, agents,
   sessions, config form, logs).
 - `src/herdr.rs` (`src/herdr/`): native herdr integration — only compiled

@@ -39,6 +39,7 @@ let
   };
 
   claudeCode = import ./_claude-code.nix { inherit pkgs; };
+  claudeAgentAcp = import ./_claude-agent-acp.nix { inherit pkgs; };
 
   # Linked into /usr/local/bin; the closure is copied into the guest's
   # /nix/store.
@@ -54,7 +55,12 @@ let
     ];
     pathsToLink = [ "/bin" ];
   };
-  closure = pkgs.closureInfo { rootPaths = [ tools ]; };
+  closure = pkgs.closureInfo {
+    rootPaths = [
+      tools
+      claudeAgentAcp
+    ];
+  };
 
   # Fixed so fstab and grub.cfg can name the filesystems.
   rootUuid = "6d61f6b2-7b8e-4c1a-9d0e-6d6163726f30";
@@ -84,6 +90,8 @@ let
         SKILLS = ./skills;
         CLOSURE = closure;
         TOOLS = tools;
+        ADAPTER = claudeAgentAcp;
+        ADAPTER_DIRECTORY = claudeAgentAcp.adapterDirectory;
       }
       ''
         unshare --user --map-root-user --mount bash ${./rootfs.sh}
@@ -215,5 +223,6 @@ in
     docker
     tools
     claudeCode
+    claudeAgentAcp
     ;
 }

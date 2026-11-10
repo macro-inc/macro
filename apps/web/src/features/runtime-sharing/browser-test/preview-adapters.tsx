@@ -12,6 +12,7 @@ const TEAM = {
 export const useUserId = () => () => OWNER_ID;
 export const useIsAuthenticated = () => () => true;
 export const useEmail = () => () => 'owner@example.com';
+export const useLicenseStatus = () => () => true;
 
 export const useCurrentTeamQuery = () => ({ isSuccess: true, data: TEAM });
 

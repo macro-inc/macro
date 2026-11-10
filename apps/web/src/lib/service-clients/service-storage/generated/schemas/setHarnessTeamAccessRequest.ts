@@ -6,10 +6,10 @@
  */
 
 /**
- * Request to open or close a runtime to one of the owner's teams.
+ * Request to open or close a machine to one of the owner's teams.
  */
 export interface SetHarnessTeamAccessRequest {
-  /** Whether every member of the team may use the runtime. */
+  /** Whether every member of the team may use the machine. */
   enabled: boolean;
   /** The team, which the owner must belong to. */
   team_id: string;

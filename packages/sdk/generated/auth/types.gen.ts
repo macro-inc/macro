@@ -1354,11 +1354,6 @@ export type InviteEntry = {
  */
 export type InviteToTeamRequest = {
     /**
-     * Runtimes the caller owns to share with each person who accepts. Others
-     * are ignored. Honored only from the caller's own session.
-     */
-    harness_ids?: Array<string>;
-    /**
      * The invites to send, each with an email and tier
      */
     invites: Array<InviteEntry>;

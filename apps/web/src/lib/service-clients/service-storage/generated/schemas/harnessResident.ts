@@ -9,9 +9,9 @@ import type { HarnessResidentOwnerUserId } from './harnessResidentOwnerUserId';
 import type { HarnessResidentTeamId } from './harnessResidentTeamId';
 
 /**
- * An agent that lives on a runtime, as opposed to a coding agent directed
+ * An agent that lives on a machine, as opposed to a coding agent directed
 there turn by turn. Anyone who can reach it can talk to it; it stays up only
-while its own owner can use the runtime.
+while its own owner can use the machine.
  */
 export interface HarnessResident {
   /** Bot id. */

@@ -20388,7 +20388,7 @@
       "put": {
         "tags": ["harnesses"],
         "summary": "Handler for `PUT /harnesses/{harness_id}/team-access`.",
-        "description": "Requires the owner's own session: an agent can ask for access to a runtime\nbut never open one, since that grants code execution on the machine.",
+        "description": "Requires the owner's own session: an agent can ask for access to a machine\nbut never open one, since that grants code execution on it.",
         "operationId": "set_harness_team_access",
         "parameters": [
           {
@@ -25904,6 +25904,17 @@
           "mcp": {
             "$ref": "#/components/schemas/AgentMcpServers",
             "description": "Which MCP servers sessions of this agent are handed."
+          },
+          "stopped_reason": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentStoppedReason",
+                "description": "Why the agent cannot run right now, or `None` while it can."
+              }
+            ]
           }
         }
       },
@@ -26241,6 +26252,11 @@
         "type": "string",
         "description": "Where an agent session is shown. The string form is the\n`agent_session.visibility` column's.",
         "enum": ["listed", "unlisted", "hidden"]
+      },
+      "AgentStoppedReason": {
+        "type": "string",
+        "description": "Why an agent cannot run right now.",
+        "enum": ["no_runtime_access"]
       },
       "AgentTyping": {
         "type": "object",
@@ -40843,13 +40859,8 @@
       "ExternalChatReaction": {
         "type": "object",
         "description": "Grouped reactions.",
-        "required": ["emoji", "count", "mine"],
+        "required": ["emoji", "reactors", "mine"],
         "properties": {
-          "count": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Number of reacting people."
-          },
           "emoji": {
             "type": "string",
             "description": "Emoji."
@@ -40857,6 +40868,13 @@
           "mine": {
             "type": "boolean",
             "description": "Caller has this reaction."
+          },
+          "reactors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExternalChatPersonRef"
+            },
+            "description": "The people who reacted with it, earliest first."
           }
         }
       },
@@ -44796,7 +44814,7 @@
       },
       "HarnessAccess": {
         "type": "string",
-        "description": "What one caller may do with a runtime.",
+        "description": "What one caller may do with a machine.",
         "enum": ["owner", "user", "read", "none"]
       },
       "HarnessAgent": {
@@ -44848,7 +44866,7 @@
         "oneOf": [
           {
             "type": "object",
-            "description": "The person whose runtime this is.",
+            "description": "The person whose machine this is.",
             "required": ["user_id", "type"],
             "properties": {
               "type": {
@@ -44862,11 +44880,11 @@
             }
           }
         ],
-        "description": "Harness owner.\n\nAlways one person: a runtime is someone's computer. A team runtime is a\nperson's runtime with a grant to the team, never one owned by the team."
+        "description": "Harness owner.\n\nAlways one person: a machine is someone's computer. A team machine is a\nperson's machine with a grant to the team, never one owned by the team."
       },
       "HarnessResident": {
         "type": "object",
-        "description": "An agent that lives on a runtime, as opposed to a coding agent directed\nthere turn by turn. Anyone who can reach it can talk to it; it stays up only\nwhile its own owner can use the runtime.",
+        "description": "An agent that lives on a machine, as opposed to a coding agent directed\nthere turn by turn. Anyone who can reach it can talk to it; it stays up only\nwhile its own owner can use the machine.",
         "required": ["bot_id", "name"],
         "properties": {
           "bot_id": {
@@ -52628,12 +52646,12 @@
       },
       "SetHarnessTeamAccessRequest": {
         "type": "object",
-        "description": "Request to open or close a runtime to one of the owner's teams.",
+        "description": "Request to open or close a machine to one of the owner's teams.",
         "required": ["team_id", "enabled"],
         "properties": {
           "enabled": {
             "type": "boolean",
-            "description": "Whether every member of the team may use the runtime."
+            "description": "Whether every member of the team may use the machine."
           },
           "team_id": {
             "type": "string",

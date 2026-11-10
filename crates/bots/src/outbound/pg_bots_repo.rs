@@ -8,11 +8,11 @@ mod team_roster;
 
 use crate::domain::{
     models::{
-        Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
-        BotChannel, BotChannelType, BotId, BotKind, BotOwner, BotOwnerProfile, BotProfile,
-        BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-        CreateChannelScopedBotRequest, HarnessFacts, HarnessId, PatchBotRequest,
-        UpdateAgentRequest,
+        Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AgentStoppedReason,
+        AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId, BotKind, BotOwner,
+        BotOwnerProfile, BotProfile, BotToken, BotTokenCandidate, CreateAgentRequest,
+        CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest, HarnessFacts,
+        HarnessId, PatchBotRequest, UpdateAgentRequest,
     },
     ports::BotRepo,
 };
@@ -137,6 +137,7 @@ struct AgentRow {
     mcp_server_names: Vec<String>,
     auto_accept_permissions: Option<bool>,
     is_coding: bool,
+    runtime_stopped: bool,
 }
 
 impl TryFrom<AgentRow> for Agent {
@@ -188,6 +189,9 @@ impl TryFrom<AgentRow> for Agent {
             mcp,
             auto_accept_permissions: row.auto_accept_permissions,
             is_coding: row.is_coding,
+            stopped_reason: row
+                .runtime_stopped
+                .then_some(AgentStoppedReason::NoRuntimeAccess),
         })
     }
 }
@@ -429,6 +433,8 @@ impl BotRepo for PgBotsRepo {
             is_coding: req.is_coding,
             channel_ids: req.channel_ids,
             mcp: req.mcp,
+            // Creating one checks that its owner may run on its runtime.
+            stopped_reason: None,
         })
     }
 
@@ -586,6 +592,8 @@ impl BotRepo for PgBotsRepo {
             mcp: req.mcp,
             auto_accept_permissions: req.auto_accept_permissions,
             is_coding: req.is_coding,
+            // Saving one checks that its owner may run on its runtime.
+            stopped_reason: None,
         }))
     }
 
@@ -617,6 +625,11 @@ impl BotRepo for PgBotsRepo {
                 a.channel_scope,
                 a.auto_accept_permissions,
                 a.is_coding,
+                (
+                    a.harness_id IS NOT NULL
+                    AND NOT a.is_coding
+                    AND NOT agent_owner_can_run(b.id)
+                ) AS "runtime_stopped!",
                 ARRAY(
                     SELECT p.channel_id
                     FROM comms_channel_participants p
@@ -1060,6 +1073,11 @@ impl BotRepo for PgBotsRepo {
                 a.channel_scope,
                 a.auto_accept_permissions,
                 a.is_coding,
+                (
+                    a.harness_id IS NOT NULL
+                    AND NOT a.is_coding
+                    AND NOT agent_owner_can_run(b.id)
+                ) AS "runtime_stopped!",
                 ARRAY(
                     SELECT p.channel_id
                     FROM comms_channel_participants p

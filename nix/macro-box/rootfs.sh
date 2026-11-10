@@ -5,7 +5,7 @@
 # Ubuntu's fakeroot, which records the ownership the single mapped uid cannot
 # hold (FAKEROOTDONTTRYCHOWN: a real chown to an unmapped id is EINVAL,
 # which fakeroot does not swallow). Writes $out/rootfs.tar (VM) and $out/container.tar (Docker).
-# Inputs: DEBS BASE FILES CONFIG SKILLS CLOSURE TOOLS out.
+# Inputs: DEBS BASE FILES CONFIG SKILLS CLOSURE TOOLS ADAPTER ADAPTER_DIRECTORY out.
 # shellcheck disable=SC2154
 set -euo pipefail
 
@@ -43,7 +43,7 @@ in_chroot() {
     PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin \
     HOME=/root LC_ALL=C.UTF-8 FAKEROOTDONTTRYCHOWN=1 \
     DEBIAN_FRONTEND=noninteractive DEBCONF_NONINTERACTIVE_SEEN=true \
-    TOOLS="$TOOLS" \
+    TOOLS="$TOOLS" ADAPTER="$ADAPTER" ADAPTER_DIRECTORY="$ADAPTER_DIRECTORY" \
     /usr/bin/fakeroot-sysv "$@"
 }
 
@@ -93,11 +93,15 @@ in_chroot -i /.fakeroot -s /.fakeroot -- /bin/bash -euo pipefail -c '
   done
   rm -rf /.macro-box-skills
 
-  mkdir -p /home/macro/work /home/macro/.macrod /home/macro/.config/chromium \
+  mkdir -p /home/macro/work /home/macro/.config/chromium \
     /home/macro/.config/systemd/user/default.target.wants
   for unit in macro-display macro-openbox macro-chromium; do
     ln -s "/etc/systemd/user/$unit.service" "/home/macro/.config/systemd/user/default.target.wants/$unit.service"
   done
+  # The ACP adapter where macrod installs it, so macrod never runs npm.
+  adapter="/home/macro/.macrod/adapters/$ADAPTER_DIRECTORY"
+  mkdir -p "$(dirname "$adapter")"
+  ln -s "$ADAPTER" "$adapter"
   chown -R macro:macro /home/macro
   mkdir -p /var/lib/systemd/linger
   touch /var/lib/systemd/linger/macro
@@ -114,6 +118,10 @@ in_chroot -i /.fakeroot -s /.fakeroot -- /bin/bash -euo pipefail -c '
 
   rm -f /usr/sbin/policy-rc.d
   rm -rf /var/cache/apt/*.bin /var/lib/apt/lists/* /var/log/*.log /root/.cache
+
+  # Mark /etc and /var current with /usr so ConditionNeedsUpdate units
+  # (ldconfig, systemd-update-done, hwdb, journal catalog) skip first boot.
+  touch -r /usr /etc/.updated /var/.updated
 
   excludes=(--exclude=./debs --exclude=./out --exclude=./.fakeroot --exclude="./proc/*"
     --exclude="./dev/*" --exclude="./sys/*" --exclude="./tmp/*" --exclude="./run/*")

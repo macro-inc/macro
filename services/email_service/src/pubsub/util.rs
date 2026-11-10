@@ -118,7 +118,7 @@ pub fn publish_email_event<B: MacroEventBroker>(broker: &B, event: &EmailMacroEv
 }
 
 /// Send message to connection gateway to trigger email refresh if user is active on FE
-#[tracing::instrument(skip(client), level = "debug")]
+#[tracing::instrument(skip(client, macro_id), level = "debug")]
 pub async fn cg_refresh_email(
     client: &ConnectionGatewayClient,
     macro_id: &str,
@@ -129,14 +129,14 @@ pub async fn cg_refresh_email(
         let _ = client
             .refresh_email(macro_id, payload)
             .await
-            .inspect_err(|e| tracing::error!(macro_id = %macro_id, "Failed to refresh email: {e}"));
+            .inspect_err(|e| tracing::error!(error = %e, "Failed to refresh email"));
     }
 }
 
 /// Signal every viewer of a connected inbox's calendars — the link owner
 /// plus its delegated users — that the calendar projection changed. Best
 /// effort: an inactive or unreachable viewer only misses a refresh nudge.
-#[tracing::instrument(skip(client, db), level = "debug")]
+#[tracing::instrument(skip(client, db, owner_macro_id), level = "debug")]
 pub async fn cg_refresh_calendar(
     client: &ConnectionGatewayClient,
     db: &sqlx::PgPool,
@@ -173,9 +173,7 @@ pub async fn cg_refresh_calendar(
         let _ = client
             .refresh_calendar(&macro_id, payload.clone())
             .await
-            .inspect_err(
-                |e| tracing::error!(macro_id = %macro_id, "Failed to refresh calendar: {e}"),
-            );
+            .inspect_err(|e| tracing::error!(error = %e, %link_id, "Failed to refresh calendar"));
     }
 }
 

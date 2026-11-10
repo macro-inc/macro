@@ -740,6 +740,10 @@ impl HarnessRepo for PgHarnessRepo {
             WHERE ac.harness_id = $1
               AND b.deleted_at IS NULL
               AND b.has_agent
+              -- A resident runs only while its owner may run agents here, the
+              -- rule `authorize_runtime` applies per turn. A coding agent is
+              -- checked against whoever prompts it, so it always loads.
+              AND (ac.is_coding OR agent_owner_can_run(ac.bot_id))
             ORDER BY b.created_at
             "#,
             harness_id.as_uuid(),

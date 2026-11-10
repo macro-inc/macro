@@ -257,7 +257,7 @@ fn event_stream(body: ProxyBody) -> BoxStream<'static, Result<Sse, SseError>> {
     let bytes = body
         .into_data_stream()
         .map(|chunk| chunk.map_err(std::io::Error::other));
-    SseStream::from_byte_stream(bytes).boxed()
+    SseStream::from_bytes_stream(bytes).boxed()
 }
 
 async fn read_body(body: ProxyBody) -> Result<Bytes, CallError> {
@@ -370,7 +370,7 @@ where
     async fn get_stream(
         &self,
         uri: Arc<str>,
-        session_id: Arc<str>,
+        session_id: Option<Arc<str>>,
         last_event_id: Option<String>,
         auth_header: Option<String>,
         custom_headers: HashMap<HeaderName, HeaderValue>,
@@ -378,7 +378,7 @@ where
         let mut request = build_request(
             Method::GET,
             &uri,
-            Some(&session_id),
+            session_id.as_deref(),
             custom_headers,
             empty_body(),
         )?;

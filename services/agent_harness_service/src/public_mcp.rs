@@ -288,7 +288,7 @@ fn server_config(public_host: String, service_host: String) -> StreamableHttpSer
         "gateway.macro.com".into(),
         "dev-gateway.macro.com".into(),
     ]);
-    config.stateful_mode = false;
+    config.legacy_session_mode = false;
     config.json_response = true;
     config
 }

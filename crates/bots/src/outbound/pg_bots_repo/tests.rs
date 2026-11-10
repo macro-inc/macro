@@ -2471,3 +2471,75 @@ async fn persona_create_and_update_cannot_bypass_a_prompt_only_harness(
     );
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_resident_reads_stopped_once_its_owner_loses_access_to_its_runtime(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let team_id = Uuid::new_v4();
+    insert_team_user(&pool, team_id, TEAM_OWNER, "owner").await?;
+    insert_team_user(&pool, team_id, TEAM_MEMBER, "member").await?;
+    let harness = insert_harness(&pool, Some(TEAM_OWNER), None).await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'harness', $2, 'user', 'edit')
+        "#,
+        harness.as_uuid(),
+        TEAM_MEMBER,
+    )
+    .execute(&pool)
+    .await?;
+    let resident = service
+        .create_agent(
+            user_id(TEAM_MEMBER),
+            CreateAgentRequest {
+                is_coding: false,
+                ..macrod_agent_req("resident-agent", Some(harness))
+            },
+        )
+        .await?;
+    let coder = service
+        .create_agent(
+            user_id(TEAM_MEMBER),
+            macrod_agent_req("coding-agent", Some(harness)),
+        )
+        .await?;
+    let stopped = |agents: &[Agent], id: BotId| {
+        agents
+            .iter()
+            .find(|agent| agent.bot.id == id)
+            .expect("listed")
+            .stopped_reason
+    };
+    let listed = service.list_agents(user_id(TEAM_MEMBER)).await?;
+    assert_eq!(stopped(&listed, resident.bot.id), None);
+
+    // Lowered to Read: the resident stops. A coding agent is checked against
+    // whoever prompts it, so it does not.
+    sqlx::query!(
+        r#"
+        UPDATE entity_access SET access_level = 'view'
+        WHERE entity_id = $1 AND source_id = $2
+        "#,
+        harness.as_uuid(),
+        TEAM_MEMBER,
+    )
+    .execute(&pool)
+    .await?;
+    let listed = service.list_agents(user_id(TEAM_MEMBER)).await?;
+    assert_eq!(
+        stopped(&listed, resident.bot.id),
+        Some(AgentStoppedReason::NoRuntimeAccess)
+    );
+    assert_eq!(stopped(&listed, coder.bot.id), None);
+    assert_eq!(
+        PgBotsRepo::new(pool.clone())
+            .get_agent(resident.bot.id)
+            .await?
+            .and_then(|agent| agent.stopped_reason),
+        Some(AgentStoppedReason::NoRuntimeAccess)
+    );
+    Ok(())
+}

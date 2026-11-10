@@ -7,6 +7,18 @@ import type { UnifiedNotification } from './types';
 
 // Helper functions for derived notification data
 
+/** "Scout has stopped.", as the notification service words its body. */
+export function stoppedAgentsText(
+  agents: readonly { name: string }[],
+  runtimeName: string
+): string {
+  const [first, second, ...rest] = agents.map((agent) => agent.name);
+  if (!first) return `Agents on ${runtimeName} have stopped.`;
+  if (!second) return `${first} has stopped.`;
+  if (rest.length === 0) return `${first} and ${second} have stopped.`;
+  return `${first} and ${rest.length + 1} others have stopped.`;
+}
+
 export function getNotificationAction(n: UnifiedNotification): string {
   return (
     match(n.notification_metadata.tag)
@@ -30,11 +42,11 @@ export function getNotificationAction(n: UnifiedNotification): string {
         'replied_to_document_comment_thread',
         () => 'replied to a comment on'
       )
-      .with(
-        'entity_access_requested',
-        () =>
-          `requested ${n.notification_metadata.tag === 'entity_access_requested' ? n.notification_metadata.content.accessLevel : ''} access to`
-      )
+      .with('entity_access_requested', () => {
+        // A runtime has one role to ask for: being a user of it.
+        if (n.entity_type === 'harness') return 'requested to use';
+        return `requested ${n.notification_metadata.tag === 'entity_access_requested' ? n.notification_metadata.content.accessLevel : ''} access to`;
+      })
       .with(
         'entity_access_granted',
         () =>
@@ -104,6 +116,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
           .with('expired', () => 'Claude sign-in expired')
           .otherwise(() => 'Claude sign-in expires soon')
       )
+      .with('runtime_access_removed', () => 'removed your access to')
       .exhaustive(() => 'notified you about')
   );
 }
@@ -178,6 +191,7 @@ export function getNotificationTargetName(
         },
         (m) => m.content.sessionName
       )
+      .with({ tag: 'runtime_access_removed' }, (m) => m.content.runtimeName)
       .exhaustive(() => undefined)
   );
 }
@@ -265,19 +279,22 @@ export function getNotificationContent(
           .with(
             'expires_soon',
             () =>
-              'Its Claude sign-in expires soon. Sign in again in Settings → Runtimes.'
+              'Its Claude sign-in expires soon. Sign in again in Settings → Machines.'
           )
           .with(
             'expires_today',
             () =>
-              'Its Claude sign-in expires today. Sign in again in Settings → Runtimes.'
+              'Its Claude sign-in expires today. Sign in again in Settings → Machines.'
           )
           .with(
             'expired',
             () =>
-              'Its Claude sign-in expired. Sign in again in Settings → Runtimes.'
+              'Its Claude sign-in expired. Sign in again in Settings → Machines.'
           )
           .exhaustive()
+      )
+      .with({ tag: 'runtime_access_removed' }, (m) =>
+        stoppedAgentsText(m.content.agents, m.content.runtimeName)
       )
       .exhaustive(() => undefined)
   );
@@ -348,6 +365,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'inbox_reauth_required' }, () => false)
       .with({ tag: 'routine_run_finished' }, () => false)
       .with({ tag: 'claude_sign_in_expiry' }, () => false)
+      .with({ tag: 'runtime_access_removed' }, () => true)
       .with(
         {
           tag: P.union(

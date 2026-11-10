@@ -64,14 +64,3 @@ $$;
 
 -- The agent that asked on its user's behalf, shown to whoever reviews it.
 ALTER TABLE entity_access_request ADD COLUMN requested_by_agent uuid;
-
--- Runtimes an inviter offers with a team invite, granted when it is accepted.
--- Cancelling the invite or removing the runtime drops the offer with it.
-CREATE TABLE team_invite_harness_grant (
-    team_invite_id uuid NOT NULL REFERENCES team_invite (id) ON DELETE CASCADE,
-    harness_id uuid NOT NULL REFERENCES harnesses (id) ON DELETE CASCADE,
-    PRIMARY KEY (team_invite_id, harness_id)
-);
-
-CREATE INDEX team_invite_harness_grant_harness_id_idx
-    ON team_invite_harness_grant (harness_id);

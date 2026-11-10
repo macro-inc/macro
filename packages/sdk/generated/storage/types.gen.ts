@@ -355,6 +355,7 @@ export type Agent = {
      * Which MCP servers sessions of this agent are handed.
      */
     mcp: AgentMcpServers;
+    stopped_reason?: null | AgentStoppedReason;
 };
 
 /**
@@ -576,6 +577,11 @@ export type AgentSessionSource = 'user' | 'agent' | 'routine';
  * `agent_session.visibility` column's.
  */
 export type AgentSessionVisibility = 'listed' | 'unlisted' | 'hidden';
+
+/**
+ * Why an agent cannot run right now.
+ */
+export type AgentStoppedReason = 'no_runtime_access';
 
 /**
  * An agent session typing through its bot.
@@ -10149,10 +10155,6 @@ export type ExternalChatProvider = 'whatsapp';
  */
 export type ExternalChatReaction = {
     /**
-     * Number of reacting people.
-     */
-    count: number;
-    /**
      * Emoji.
      */
     emoji: string;
@@ -10160,6 +10162,10 @@ export type ExternalChatReaction = {
      * Caller has this reaction.
      */
     mine: boolean;
+    /**
+     * The people who reacted with it, earliest first.
+     */
+    reactors: Array<ExternalChatPersonRef>;
 };
 
 /**
@@ -12443,7 +12449,7 @@ export type Harness = {
 };
 
 /**
- * What one caller may do with a runtime.
+ * What one caller may do with a machine.
  */
 export type HarnessAccess = 'owner' | 'user' | 'read' | 'none';
 
@@ -12482,7 +12488,7 @@ export type HarnessCapabilities = {
 export type HarnessId = string;
 
 /**
- * The person whose runtime this is.
+ * The person whose machine this is.
  */
 export type HarnessOwner = {
     type: 'user';
@@ -12493,9 +12499,9 @@ export type HarnessOwner = {
 };
 
 /**
- * An agent that lives on a runtime, as opposed to a coding agent directed
+ * An agent that lives on a machine, as opposed to a coding agent directed
  * there turn by turn. Anyone who can reach it can talk to it; it stays up only
- * while its own owner can use the runtime.
+ * while its own owner can use the machine.
  */
 export type HarnessResident = {
     /**
@@ -17324,11 +17330,11 @@ export type SetEmailSyncRequest = {
 };
 
 /**
- * Request to open or close a runtime to one of the owner's teams.
+ * Request to open or close a machine to one of the owner's teams.
  */
 export type SetHarnessTeamAccessRequest = {
     /**
-     * Whether every member of the team may use the runtime.
+     * Whether every member of the team may use the machine.
      */
     enabled: boolean;
     /**

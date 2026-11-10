@@ -18,7 +18,11 @@ and a Docker image (the dev-only DockerFleet).
   every deb under Ubuntu's `fakeroot`, which records the ownership one mapped
   uid cannot hold. The Nix closure of `tools` (macrod, claude-code, chromium,
   Node 24, herdr, chrome-devtools-mcp) is copied into the guest's `/nix/store`
-  and linked from `/usr/local/bin`. `files/` supplies scripts and documentation;
+  and linked from `/usr/local/bin`. `_claude-agent-acp.nix` builds the Claude
+  Code ACP adapter from `claude-agent-acp/package-lock.json` (without the SDK's
+  per-platform Claude binaries); `rootfs.sh` links it where macrod installs
+  adapters, `~macro/.macrod/adapters/<package>@<version>`, so macrod never runs
+  npm. `files/` supplies scripts and documentation;
   `_config.nix` renders configuration from attrsets into the same rootfs overlay.
 - `_build.nix` packs `rootfs.tar` into `disk.qcow2` (GPT: ESP with shim →
   signed GRUB → `/boot/vmlinuz`, ext4 root via `mkfs.ext4 -d tar`) plus
@@ -31,6 +35,7 @@ and a Docker image (the dev-only DockerFleet).
 - `nix build .#macro-box-docker` → `docker load < result` → `macro-box:latest`.
 - `nix build .#macro-box-rootfs` → the two tarballs.
 - `nix build .#macro-box-claude-code` → the pinned model-compatible Claude Code.
+- `nix build .#macro-box-claude-agent-acp` → the ACP adapter npm prefix.
 - `nix build .#macro-box-config` → generated rootfs config, Incus metadata, GRUB,
   and Docker enrollment config without building the Rust/tool closure.
 
@@ -44,7 +49,9 @@ and a Docker image (the dev-only DockerFleet).
   missing. Enroll must leave `macrod.toml` owned by `macro`, create persona
   users and units, then touch `/var/lib/macrod/enrolled`.
 - `macrod.service` runs `macrod service` as `macro` (Claude Code refuses
-  permission bypass as root), workspace `/home/macro/work`.
+  permission bypass as root), workspace `/home/macro/work`, after
+  `macrod-token-store.service` (installed by enrollment). It restarts after
+  1 s, backing off to 30 s, and never hits a start limit.
 - Its `--ignore-stdin-eof` keeps systemd's closed stdin from stopping the daemon.
 - Persona users get `/etc/skel`: the default skills and the chrome-devtools
   MCP entry in `~/.claude.json`. `/etc/macro/personas/` is root-only (0700).
@@ -75,8 +82,42 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
 `incus exec t -- systemctl is-system-running` and
 `incus exec t -- curl -s --unix-socket /dev/incus/sock http://custom.socket/1.0/config`.
 
+## Boot path
+
+- `systemd-networkd-wait-online` waits for `--any` link (30 s cap), not all.
+- `/etc/.updated` and `/var/.updated` carry `/usr`'s mtime, so ldconfig,
+  `systemd-update-done` and the journal catalog rebuild skip first boot.
+- The kernel command line has `quiet`; `ttyS0` stays the recovery console.
+- `check-enrollment-source` gives the Incus socket 2 s.
+- To measure, boot the Docker image with `--network none` (no enrollment
+  mount) and read `systemd-analyze critical-chain macrod-enroll.service`.
+  Docker skips networkd and wait-online, so VM gains need an Incus host.
+
+### Direct kernel boot (not done)
+
+An Incus VM boots ~15 s slower than the Docker image; besides the serial
+console and wait-online (handled above), it pays for OVMF, shim, GRUB and a
+generic initramfs before userspace. Options, best first:
+
+- A UKI (kernel + virtio-only initrd + command line) as
+  `\EFI\BOOT\BOOTX64.EFI`: OVMF runs it directly, skipping shim and GRUB,
+  with no host coupling. Secure Boot is off, so it needs no signing. Guest
+  `apt` kernel upgrades stop taking effect; the image is rebuilt by Nix anyway.
+- `raw.qemu` `-kernel/-initrd/-append`: skips the ESP but still runs OVMF,
+  and puts per-image kernel files on every host; Incus treats `raw.qemu` as
+  unsafe configuration.
+- QEMU `microvm`: Incus only runs q35 + OVMF, so this means leaving Incus.
+
+Next step: on runtime-dev-1, time `incus start` to `macrod-enroll` for the
+current image, a UKI with `MODULES=dep`, and `raw.qemu` direct boot, then
+build the UKI with `ukify` in `_build.nix` if it wins.
+
 ## Checks
 
+- `nix build .#macro-box-claude-agent-acp` (and `nix flake check`, which runs
+  ACP `initialize` against it). Evaluation fails when its version differs
+  from macrod's pin in `crates/coding_agent_worker/src/tui/agent_catalog/claude_code.rs`;
+  run `claude-agent-acp/lock.sh` after changing the pin.
 - `nix build .#macro-box-claude-code`: keeps nixpkgs' binary patching, wrapper
   and version check. `_claude-code.nix` pins the minimum version required by
   the models computers default to. Regenerate its hash from that version's
@@ -86,7 +127,7 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
   against the previous generation (parse INI/JSON/YAML when ordering changes).
 - Inside a running guest as root, run `bash tests/enrollment-agent-detection.sh`
   (copy it from this directory); it discovers Claude using the enrollment unit's
-  environment in a fresh system service.
+  environment in a fresh system service, with no adapter left to install.
 - After `packages.txt` changes: `nix/macro-box/lock.sh`, then rebuild both outputs.
 - `nix build .#macro-box-incus .#macro-box-docker`, then the Docker smoke
   test above without the enrollment mount: `macrod-enroll` must fail with the

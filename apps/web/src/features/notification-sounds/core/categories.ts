@@ -114,6 +114,7 @@ const CATEGORY_BY_EVENT: Record<
   crm_discussion: 'other',
   entity_access_requested: 'other',
   entity_access_granted: 'other',
+  runtime_access_removed: 'other',
   invite_to_team: 'other',
   inbox_reauth_required: 'other',
   claude_sign_in_expiry: 'other',

@@ -10,6 +10,7 @@ export default {
   removeFailed: "Couldn't remove the computer. Try again.",
   releaseFailed: "Couldn't release the computer. Try again.",
   title: 'Macro computers',
+  badge: 'Macro computer',
   agents: 'Agents',
   loadFailed: "Could not load your team's computers. Try refreshing this page.",
   getComputer: 'Get a Macro computer',
@@ -25,7 +26,7 @@ export default {
   removed: '{{name}} removed',
   released: '{{name}} released',
   billingHint:
-    'Computers are billed on your team subscription. Manage them in Settings → Runtimes.',
+    'Computers are billed on your team subscription. Manage them in Settings → Machines.',
   cancels: 'Cancels {{date}}',
   claudeSignInConflict:
     'Another sign-in is in progress on this computer — try again shortly',

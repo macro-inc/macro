@@ -328,8 +328,8 @@ function RuntimeShareMenu(props: { harness: Harness; open: boolean }) {
                 <div class="flex min-w-0 flex-col gap-1">
                   <OwnerLabel ownerId={request.requesterId} />
                   <span class="text-xs text-ink-muted">
-                    {t('runtimeSharing.requestedRole', {
-                      role: roleLabel(request.requestedLevel),
+                    {t('runtimeSharing.requestedToUse', {
+                      name: props.harness.name,
                     })}
                   </span>
                   <Show when={request.requestedByAgent}>
