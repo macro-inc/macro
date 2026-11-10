@@ -187,7 +187,9 @@ pub fn handle_agent_announcement(
             let chip = MagicChipNode {
                 agent_session_id: Maybe::Value(chip.agent_session_id),
                 channel_id: chip.channel_id.map(Some),
-                prompted_message: Some(Some(chip.prompted_message)),
+                prompted_message: Some(Some(OrderedMagicChipMessage::from_typed(
+                    chip.prompted_message,
+                )?)),
                 status: Maybe::Value(chip.status),
             };
             crate::compose_agent_session_announcement(
