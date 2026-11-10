@@ -1,11 +1,8 @@
 import {
   captureTaskTemplate,
-  TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS,
   type TaskTemplateContents,
 } from '@app/features/task-templates/core/template';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { TaskTemplateSelection } from './template-selection';
-import type { ComposeTaskProps } from './types';
 
 /** Hidden sharing controls must not overwrite a saved template's default. */
 export function taskTemplateSharing(
@@ -59,38 +56,40 @@ export function isTemplateStateDirty(
 /** Description and title edits never mark reusable field defaults as changed. */
 export function areTemplateFieldsDirty(
   current: TaskTemplateContents,
-  baseline: TaskTemplateContents | undefined
+  baseline: TaskTemplateContents | undefined,
+  contextualPropertyIds: ReadonlySet<string> = new Set()
 ): boolean {
   if (!baseline) return true;
   // Compare reusable fields only; task prose and contextual links are not template edits.
   const available = new Set([...current.propertyIds, ...baseline.propertyIds]);
   return isTemplateStateDirty(
     {
-      ...captureTaskTemplate(current, available),
+      ...captureTaskTemplate(current, available, contextualPropertyIds),
       title: '',
       propertyIds: current.propertyIds.filter(
-        (id) => !TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS.has(id)
+        (id) => !contextualPropertyIds.has(id)
       ),
       descriptionMarkdown: '',
     },
     {
-      ...captureTaskTemplate(baseline, available),
+      ...captureTaskTemplate(baseline, available, contextualPropertyIds),
       title: '',
       propertyIds: baseline.propertyIds.filter(
-        (id) => !TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS.has(id)
+        (id) => !contextualPropertyIds.has(id)
       ),
       descriptionMarkdown: '',
     }
   );
 }
-/** Reset reusable fields without discarding contextual Source or task text. */
+/** Reset reusable fields without discarding contextual values or task text. */
 export function restoreTemplateFields(
   current: TaskTemplateContents,
-  baseline: TaskTemplateContents
+  baseline: TaskTemplateContents,
+  contextualPropertyIds: ReadonlySet<string> = new Set()
 ): TaskTemplateContents {
-  // Restore applied defaults without replacing the current task's origin link.
+  // Restore applied defaults, then retain values owned by the current task's context.
   const propertyDefaults = structuredClone(baseline.propertyDefaults);
-  for (const id of TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS) {
+  for (const id of contextualPropertyIds) {
     const value = current.propertyDefaults[id];
     if (value) propertyDefaults[id] = structuredClone(value);
     else delete propertyDefaults[id];
@@ -99,28 +98,9 @@ export function restoreTemplateFields(
     ...current,
     shareWithTeam: baseline.shareWithTeam ?? current.shareWithTeam,
     propertyIds: [
-      ...baseline.propertyIds.filter(
-        (id) => !TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS.has(id)
-      ),
-      ...current.propertyIds.filter((id) =>
-        TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS.has(id)
-      ),
+      ...baseline.propertyIds.filter((id) => !contextualPropertyIds.has(id)),
+      ...current.propertyIds.filter((id) => contextualPropertyIds.has(id)),
     ],
     propertyDefaults,
   };
-}
-
-/** Preserve values supplied by the launch context instead of template defaults. */
-export function templateContextualIds(
-  props: ComposeTaskProps
-): ReadonlySet<string> {
-  return new Set([
-    ...TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS,
-    ...Object.keys(props.composerContext?.initialPropertyValues ?? {}),
-    ...(props.initialAssigneeIds?.length
-      ? [SYSTEM_PROPERTY_IDS.ASSIGNEES]
-      : []),
-    ...(props.initialProjectId ? [SYSTEM_PROPERTY_IDS.PROJECT] : []),
-    ...(props.initialDueDate ? [SYSTEM_PROPERTY_IDS.DUE_DATE] : []),
-  ]);
 }

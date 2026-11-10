@@ -20,6 +20,7 @@ import {
   type TaskComposerHost,
 } from '@app/features/task-composer/primitives/task-composer';
 import { createTemplateWorkflow } from '@app/features/task-composer/primitives/template-workflow';
+import { TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS } from '@app/features/task-composer/property-defaults';
 import {
   captureTaskTemplate,
   fillTaskTemplate,
@@ -447,6 +448,7 @@ function createTemplateSession(
           updatedAt: new Date(0),
         },
       ],
+      contextualPropertyIds: TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS,
       definitionsReady: () => true,
       baseline,
       setBaseline,
@@ -920,7 +922,11 @@ it('resets edited defaults while retaining a Source field added after template a
     },
     descriptionMarkdown: 'Task-specific prose',
   };
-  const reset = restoreTemplateFields(current, baseline);
+  const reset = restoreTemplateFields(
+    current,
+    baseline,
+    TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS
+  );
   expect(reset.propertyIds).toContain(SYSTEM_PROPERTY_IDS.SOURCE);
   expect(reset.propertyDefaults[SYSTEM_PROPERTY_IDS.SOURCE]).toEqual(
     current.propertyDefaults[SYSTEM_PROPERTY_IDS.SOURCE]
@@ -929,7 +935,20 @@ it('resets edited defaults while retaining a Source field added after template a
     baseline.propertyDefaults.priority
   );
   expect(reset.descriptionMarkdown).toBe('Task-specific prose');
-  expect(areTemplateFieldsDirty(reset, baseline)).toBe(false);
+  expect(
+    areTemplateFieldsDirty(
+      reset,
+      baseline,
+      TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS
+    )
+  ).toBe(false);
+  const captured = captureTaskTemplate(
+    current,
+    new Set(current.propertyIds),
+    TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS
+  );
+  expect(captured.propertyIds).toContain(SYSTEM_PROPERTY_IDS.SOURCE);
+  expect(captured.propertyDefaults[SYSTEM_PROPERTY_IDS.SOURCE]).toBeUndefined();
 });
 
 it('captures the draft task title and applies saved text to fresh repeated tasks', () => {

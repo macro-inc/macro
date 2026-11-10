@@ -73,7 +73,6 @@ import {
   isTemplateStateDirty,
   restoreTemplateFields,
   taskTemplateSharing,
-  templateContextualIds,
   areTemplateFieldsDirty as templateFieldsDiffer,
 } from '../core/template-state';
 import type { ComposeTaskProps, ComposeTaskSuccess } from '../core/types';
@@ -81,7 +80,11 @@ import {
   CUSTOMER_CONTACT_PROPERTY_IDS,
   customerContactEnabled,
 } from '../customer-contact';
-import { initialTaskPinDefinitionIds } from '../property-defaults';
+import {
+  initialTaskPinDefinitionIds,
+  TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS,
+  templateContextualIds,
+} from '../property-defaults';
 import { showTaskCreatedToast } from './taskCreatedToast';
 import {
   applyTemplateToEditor,
@@ -892,6 +895,7 @@ export function createTaskComposer(
     canChange: canChangeTemplate,
     teamId: () => team()?.id,
     definitions: templateProperties,
+    contextualPropertyIds: TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS,
     definitionsReady,
     baseline: templateBaseline,
     setBaseline: setTemplateBaseline,
@@ -913,7 +917,11 @@ export function createTaskComposer(
   });
   const areTemplateFieldsDirty = () =>
     templateSelection().kind === 'saved' &&
-    templateFieldsDiffer(currentTemplateState(), templateBaseline());
+    templateFieldsDiffer(
+      currentTemplateState(),
+      templateBaseline(),
+      TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS
+    );
   const resetTemplateFields = () => {
     const selection = templateSelection();
     const baseline = templateBaseline();
@@ -924,7 +932,11 @@ export function createTaskComposer(
       !baseline
     )
       return;
-    const next = restoreTemplateFields(currentTemplateState(), baseline);
+    const next = restoreTemplateFields(
+      currentTemplateState(),
+      baseline,
+      TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS
+    );
     batch(() => {
       if (team() && next.shareWithTeam !== undefined)
         setShareWithTeam(next.shareWithTeam);

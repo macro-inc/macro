@@ -14,7 +14,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - `primitives/template-controls.ts`: selection, permission checks, deletion, and dialog lifetimes.
 - `../task-composer/primitives/template-workflow.ts`: isolated editing, durable creation identities, and field-only updates.
 - Keep composer and workflow state in typed stores; replace immutable snapshots with root patches and unwrap reads for cloning.
-- `../task-composer/property-defaults.ts`: default composer fields and creation-time pin selection.
+- `../task-composer/property-defaults.ts`: composer defaults, creation-time pins, and contextual field policy.
 
 ## Scope
 
@@ -28,7 +28,7 @@ Task creation also preserves the composer's selected fields as per-task pins.
 - Treat zero and false as populated values; treat empty lists and text as blank.
 - Retain blank selected fields so creation can pin them below the task title.
 - Include host-controlled fields in template defaults and pins without duplicating their controls.
-- Keep Source references contextual through `TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS`; capture the field without its value.
+- Inject `TASK_TEMPLATE_CONTEXTUAL_PROPERTY_IDS` from the composer boundary; keep pure template functions independent of system identifiers.
 - Wait for property definitions before applying, editing, or saving templates; apply only definitions available to the viewer.
 - Unwrap reactive query defaults before decoding templates into cloneable draft values.
 - Preserve settings for unavailable fields when editing a template.

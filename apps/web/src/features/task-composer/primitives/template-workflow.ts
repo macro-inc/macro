@@ -27,6 +27,7 @@ type TemplateWorkflowOptions = {
   sessionActive(): boolean;
   teamId(): string | undefined;
   definitions(): readonly PropertyDefinitionDomain[];
+  contextualPropertyIds: ReadonlySet<string>;
   definitionsReady(): boolean;
   baseline: Accessor<TaskTemplateContents | undefined>;
   setBaseline(contents: TaskTemplateContents): void;
@@ -178,7 +179,8 @@ export function createTemplateWorkflow(options: TemplateWorkflowOptions) {
     options.stripAttachments();
     const contents = captureTaskTemplate(
       options.contents(),
-      new Set(definitions.map((definition) => definition.id))
+      new Set(definitions.map((definition) => definition.id)),
+      options.contextualPropertyIds
     );
     if (selection.kind === 'new') {
       const next = {
@@ -266,7 +268,8 @@ export function createTemplateWorkflow(options: TemplateWorkflowOptions) {
         title: selection.template.contents.title,
         descriptionMarkdown: selection.template.contents.descriptionMarkdown,
       },
-      new Set(definitions.map((definition) => definition.id))
+      new Set(definitions.map((definition) => definition.id)),
+      options.contextualPropertyIds
     );
     const teamId = options.teamId();
     const version = requestVersion;
