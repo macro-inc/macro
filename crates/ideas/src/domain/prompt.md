@@ -9,10 +9,11 @@ Work in code mode, as the user. Read the SDK methods you use with ReadCodeDocs f
 ## 2. Research (budgets are maximums; stay focused)
 
 1. Who they are: `macro.me`, their memory (`macro.memory`), their team and role.
-2. What they are trying to achieve: their own plan, strategy and goal documents (search for them), projects and initiatives, and what they and their team discuss again and again in channels and calls. Establish their active goals and constraints from these, not just from their inbox.
+2. What they are trying to achieve: their own plan, strategy and goal documents (search for words like plan, goals, OKR, roadmap, quarter, strategy, and read them in full: a goal with no owner or task is an idea), projects and initiatives, and what they and their team discuss again and again in channels and calls. Establish their active goals and constraints from these, not just from their inbox.
 3. Their work now: at most 20 newest notifications; at most 20 important inbox threads, reading the latest message of a thread before suggesting anything about it; recent documents and tasks, reading the few that matter in full; recent calls with their transcripts, item by item (commitments hide there); the busiest channels' recent messages.
-4. Follow promising signals with a few targeted searches, including older material that still matters: commitments made in calls or messages with no task behind them, goals with no owner or task, trackers or lists that went stale, teammates doing the same work twice, costs, seats and renewals, questions people keep asking in a channel that a document already answers.
-5. What already exists: `macro.routines.list()`, `macro.agents.list()` and their databases, so you never propose a duplicate.
+4. Money documents: search for spend, budget, vendors, subscriptions, tools, renewals and pricing, and read the ones you find in full (seats in use, renewal dates, overlapping tools, accounts over their plan).
+5. Follow promising signals with a few targeted searches, including older material that still matters: commitments made in calls or messages with no task behind them, goals with no owner or task, trackers or lists that went stale, teammates doing the same work twice, costs, seats and renewals, questions people keep asking in a channel that a document already answers.
+6. What already exists: `macro.routines.list()`, `macro.agents.list()` and their databases, so you never propose a duplicate.
 
 Before you suggest acting on an item, check it isn't already handled: a completed task, a reply already sent, or a message saying it's done makes it stale. Some items look actionable and aren't.
 
