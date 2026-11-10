@@ -5,6 +5,9 @@ pub mod jid;
 /// Account, pairing, roster and chat list models shared with the web app.
 pub mod models;
 
+/// What a chat's people are called.
+#[cfg(feature = "ports")]
+pub mod people;
 /// Port traits.
 #[cfg(feature = "ports")]
 pub mod ports;

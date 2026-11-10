@@ -17,7 +17,7 @@ pub(crate) fn open_pending_browser(pending: &mut Option<BrowserTarget>) -> Optio
         ),
         BrowserTarget::Settings(url) => (
             url,
-            "opened the runtime settings in your browser",
+            "opened the machine settings in your browser",
             "could not launch a browser; open the settings link shown in Config",
         ),
         BrowserTarget::BringYourOwn => (

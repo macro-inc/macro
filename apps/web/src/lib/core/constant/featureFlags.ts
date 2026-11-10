@@ -607,6 +607,14 @@ export const enableInlineAiEditing = defineFlag({
   default: onInDev,
 });
 
+// Continue with Microsoft on sign-up, sign-in and the onboarding work step,
+// including the Outlook connect that follows a Microsoft sign-up.
+export const enableMicrosoftSignup = defineFlag({
+  key: 'enable-microsoft-signup',
+  env: 'ENABLE_MICROSOFT_SIGNUP',
+  default: onInDev,
+});
+
 export const enableMultiInbox = defineFlag({
   key: 'enable-multi-inbox',
   env: 'ENABLE_MULTI_INBOX',

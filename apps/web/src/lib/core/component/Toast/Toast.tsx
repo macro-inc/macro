@@ -205,9 +205,12 @@ function dismiss(toastId: number) {
 }
 
 // Tell users that an action has failed, because of us
-function failure(message: string, options?: ToastActionOptions) {
+function failure(
+  message: string,
+  options?: ToastActionOptions
+): number | undefined {
   if (!options?.stack) dismissIfRecent(message, ToastType.FAILURE);
-  createToast(message, ToastType.FAILURE, options);
+  return createToast(message, ToastType.FAILURE, options);
 }
 
 // Tell users that an action has failed, because of them
