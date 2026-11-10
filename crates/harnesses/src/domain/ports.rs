@@ -411,6 +411,13 @@ pub trait HarnessService: Send + Sync + 'static {
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<(), HarnessError>> + Send;
 
+    /// A Macro computer's live harness, if it has one. Trusted in-process
+    /// callers only, like [`Self::create_hosted_pairing`].
+    fn computer_harness(
+        &self,
+        computer_id: ComputerId,
+    ) -> impl Future<Output = Result<Option<HarnessId>, HarnessError>> + Send;
+
     /// The computer a live harness runs on, if it is a Macro computer's.
     fn harness_computer(
         &self,

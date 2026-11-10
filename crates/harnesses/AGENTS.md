@@ -12,8 +12,10 @@ an approved pairing with the buying administrator as human owner and a User
 (`edit`) grant for the computer's team. Retries before
 claim rotate the secret; retries after claim revoke old tokens and re-key the
 same harness. Both preserve owner, grants, agent bindings, and computer identity.
-Claim and re-key serialize on the harness row. `revoke_hosted_harness` and
-`harness_computer` are the other trusted control-plane entry points.
+Claim and re-key serialize on the harness row. `revoke_hosted_harness`,
+`harness_computer` and `computer_harness` are the other trusted control-plane
+entry points. The control plane deletes a computer's agents before
+`revoke_hosted_harness`, whose soft delete would otherwise only unbind them.
 `hosted_pairing_claimed(pairing_id)` reads the durable pairing claim for the
 fleet generation gate, including the interval before macrod connects. Hosted
 claims take the same `hosted-enrollment:<computer UUID>` advisory guard as

@@ -4,6 +4,7 @@ pub use crate::domain::lifecycle::InstanceStatus;
 
 use macro_user_id::user_id::MacroUserIdStr;
 
+use bot_id::BotId;
 use harness_id::HarnessId;
 
 use chrono::{DateTime, Utc};
@@ -162,6 +163,21 @@ pub trait ComputerRepo: Send + Sync + 'static {
         computer_id: ComputerId,
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Record the coding agent the computer came with.
+    fn set_default_agent(
+        &self,
+        computer_id: ComputerId,
+        agent_id: BotId,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Record that the team finished the guided setup; later calls keep the
+    /// first time. Returns the computer, or `None` when it does not exist.
+    fn complete_setup(
+        &self,
+        computer_id: ComputerId,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<ComputerRecord>, Self::Err>> + Send;
 
     /// Running computers and explicit quarantines; only healthy records enter the idle sweep.
     fn running(&self) -> impl Future<Output = Result<Vec<ComputerRecord>, Self::Err>> + Send;
@@ -457,9 +473,11 @@ pub trait Harnesses: Send + Sync + 'static {
         harness_id: HarnessId,
     ) -> impl Future<Output = Result<Option<ComputerId>, Self::Err>> + Send;
 
-    /// Delete the computer's harness and its credential; absent is fine.
-    fn revoke(&self, computer_id: ComputerId)
-    -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// Delete the computer's harness, its credential and every agent bound
+    /// to it, so no agent is left on a machine that is gone; absent is fine.
+    /// The agents go first: deleting the harness unbinds them, and a retry
+    /// after that could no longer find them.
+    fn revoke(&self, computer: &Computer) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Give the team a coding agent on the computer's harness, created by the
     /// buyer. Skips when an agent is already bound to the harness.
@@ -475,7 +493,10 @@ pub trait Harnesses: Send + Sync + 'static {
 #[strum(serialize_all = "snake_case")]
 pub enum DefaultAgent {
     /// A new team agent now runs on the harness.
-    Created,
+    Created {
+        /// The new agent's bot.
+        agent_id: BotId,
+    },
     /// The harness already had an agent; nothing was created.
     AlreadyBound,
 }

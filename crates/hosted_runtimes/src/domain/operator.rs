@@ -408,7 +408,8 @@ where
                 Ok(None)
             }
             Effect::RevokeHarness => {
-                self.harnesses.revoke(computer_id).await.map_err(internal)?;
+                let computer = self.computer(computer_id).await?;
+                self.harnesses.revoke(&computer).await.map_err(internal)?;
                 Ok(None)
             }
             Effect::PageOperator { reason } => {
@@ -694,6 +695,12 @@ where
             .create_default_agent(computer, harness_id)
             .await
             .map_err(internal)?;
+        if let DefaultAgent::Created { agent_id } = outcome {
+            self.repo
+                .set_default_agent(computer.id, agent_id)
+                .await
+                .map_err(internal)?;
+        }
         let name: &'static str = outcome.into();
         tracing::Span::current().record("outcome", name);
         Ok(outcome)

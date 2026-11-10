@@ -317,6 +317,11 @@ pub trait HostedHarnessService: Send + Sync + 'static {
         &self,
         harness_id: HarnessId,
     ) -> Pin<Box<dyn Future<Output = Result<Option<ComputerId>, HarnessError>> + Send + '_>>;
+
+    fn computer_harness(
+        &self,
+        computer_id: ComputerId,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<HarnessId>, HarnessError>> + Send + '_>>;
 }
 
 impl<Service: HarnessService + Send + Sync + 'static> HostedHarnessService for Service {
@@ -352,6 +357,13 @@ impl<Service: HarnessService + Send + Sync + 'static> HostedHarnessService for S
         harness_id: HarnessId,
     ) -> Pin<Box<dyn Future<Output = Result<Option<ComputerId>, HarnessError>> + Send + '_>> {
         Box::pin(HarnessService::harness_computer(self, harness_id))
+    }
+
+    fn computer_harness(
+        &self,
+        computer_id: ComputerId,
+    ) -> Pin<Box<dyn Future<Output = Result<Option<HarnessId>, HarnessError>> + Send + '_>> {
+        Box::pin(HarnessService::computer_harness(self, computer_id))
     }
 }
 
@@ -400,8 +412,15 @@ impl Harnesses for HostedHarnesses {
         Ok(self.service.harness_computer(harness_id).await?)
     }
 
-    async fn revoke(&self, computer_id: ComputerId) -> Result<(), Self::Err> {
-        Ok(self.service.revoke_hosted_harness(computer_id).await?)
+    async fn revoke(&self, computer: &Computer) -> Result<(), Self::Err> {
+        if let Some(harness_id) = self.service.computer_harness(computer.id).await? {
+            let deleted = self
+                .default_agents
+                .delete_bound(computer.created_by.clone(), harness_id)
+                .await?;
+            tracing::info!(computer_id = %computer.id, deleted, "deleted the computer's agents");
+        }
+        Ok(self.service.revoke_hosted_harness(computer.id).await?)
     }
 
     async fn create_default_agent(
@@ -414,7 +433,6 @@ impl Harnesses for HostedHarnesses {
             .create(DefaultAgentRequest {
                 team_id: computer.team_id,
                 buyer: computer.created_by.clone(),
-                computer_name: computer.name.as_str().to_owned(),
                 harness_id,
             })
             .await?)

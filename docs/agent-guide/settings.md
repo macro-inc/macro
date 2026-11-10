@@ -864,12 +864,15 @@ on each row:
   now with no refund; **Release now** stays disabled until the computer's
   exact name is typed.
 
-When a computer first becomes ready, the team gets **Claude Code · <name>**
-(`@claude-code-<name>`, with `-2`, `-3`… when that handle is taken): a team
-coding agent on the computer, created by the buyer, on Claude Code's default
-model, all channels and the runner's connected apps. It is created only on the
+When a computer first becomes ready, the team gets **<buyer's first name>'s Agent**
+(**Agent** when the buyer has no first name; `@grace-s-agent`, with `-2`, `-3`…
+when that handle is taken): a team coding agent on the computer, created by the
+buyer, on Claude Code's default model, all channels and the runner's connected
+apps, approving permission requests without asking (switchable to prompting).
+Agents created later on a computer default to the same. It is created only on the
 first connection, so deleting or moving it never brings it back; if creating it
-fails, setup still finishes and anyone can create one under **Agents**. Each
+fails, setup still finishes and anyone can create one under **Agents**.
+Releasing a computer, or its disk being destroyed, deletes every agent on it. Each
 computer row lists the agents bound to its runtime after **Agents**, by name and
 `@handle`. Any teammate can pick the computer under **Where it runs**
 (`<name> · Team machine`) for a private or team agent.

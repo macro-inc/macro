@@ -1,6 +1,7 @@
 //! Bot service implementation.
 
 mod agent_dm;
+mod harness_agents;
 
 use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
@@ -8,7 +9,7 @@ use super::{
         Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
         BotChannel, BotChannelListCaller, BotId, BotKind, BotOwner, BotOwnerProfile, BotToken,
         BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessId,
+        CreateChannelScopedBotRequest, CreateChannelScopedBotResponse, HarnessFacts, HarnessId,
         MAX_BOT_OWNER_PROFILE_IDS, PatchAgentRequest, PatchBotRequest, UpdateAgentRequest,
     },
     ports::{BotError, BotRepo, BotService, McpAppCatalog},
@@ -303,7 +304,8 @@ where
         })
     }
 
-    /// Ensure the resolved agent owner may run agents on a registered harness.
+    /// Ensure the resolved agent owner may run agents on a registered harness,
+    /// returning the harness's facts when one is chosen.
     ///
     /// A team agent must run on a harness open to its whole team, so a
     /// teammate's mention can never execute on a machine shared only with some
@@ -313,9 +315,9 @@ where
         owner: &BotOwner,
         harness_id: Option<HarnessId>,
         auto_accept_permissions: Option<bool>,
-    ) -> Result<(), BotError> {
+    ) -> Result<Option<HarnessFacts>, BotError> {
         let Some(harness_id) = harness_id else {
-            return Ok(());
+            return Ok(None);
         };
         let harness_owner = self
             .repo
@@ -343,7 +345,7 @@ where
         if !usable {
             return Err(BotError::Unauthorized);
         }
-        Ok(())
+        Ok(Some(harness_owner))
     }
 
     async fn owner_for_agent_update(
@@ -514,8 +516,17 @@ where
         let owner = self
             .agent_owner_for_request(caller.clone(), req.team_id)
             .await?;
-        self.ensure_harness_usable(&owner, req.harness_id, req.auto_accept_permissions)
+        let harness = self
+            .ensure_harness_usable(&owner, req.harness_id, req.auto_accept_permissions)
             .await?;
+        let mut req = req;
+        // A Macro computer is a sandbox the team bought for its agents, so an
+        // agent on one runs without asking unless the request says otherwise.
+        if req.auto_accept_permissions.is_none()
+            && harness.is_some_and(|facts| facts.on_computer && facts.allow_permission_bypass)
+        {
+            req.auto_accept_permissions = Some(true);
+        }
         let created_by_user_id = caller.clone();
         let agent = self
             .repo

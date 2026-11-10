@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by, created_at, enrolled_at, enrollment_generation\n            FROM hosted_runtime\n            WHERE host_id = $1 AND awake AND state->'phase'->>'phase' = 'frozen'\n            ORDER BY updated_at",
+  "query": "\n            SELECT id, team_id, host_id, name, size, vcpus, memory_gib, disk_gib, catalog_entry, price_id, state, harness_id, created_by,\n                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id\n            FROM hosted_runtime\n            WHERE harness_id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -82,6 +82,16 @@
         "ordinal": 15,
         "name": "enrollment_generation",
         "type_info": "Int8"
+      },
+      {
+        "ordinal": 16,
+        "name": "setup_completed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
+        "name": "default_agent_id",
+        "type_info": "Uuid"
       }
     ],
     "parameters": {
@@ -105,8 +115,10 @@
       false,
       false,
       true,
-      false
+      false,
+      true,
+      true
     ]
   },
-  "hash": "b2780f32fa360960e7891fe990a3aee2293be8a705003e90bc0b5203f3c059e1"
+  "hash": "46025ebfb95a715c8a5e2b95b8f61d50defb172757cd4e0248311837e1c761ef"
 }

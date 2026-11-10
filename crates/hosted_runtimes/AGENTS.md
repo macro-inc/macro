@@ -204,9 +204,19 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   harnesses service creates every hosted harness with `allow_permission_bypass`.
 - **Default agent**: the first macrod connection (`enrolled_at` unset) calls
   `Harnesses::create_default_agent`, which gives the team a coding agent on the
-  computer's harness unless one is already bound (`DefaultAgent::{Created, AlreadyBound}`).
+  computer's harness unless one is already bound (`DefaultAgent::{Created { agent_id }, AlreadyBound}`).
+  A created agent's bot id is stored as `hosted_runtime.default_agent_id` and
+  exposed as `ComputerStatus.defaultAgentId` (it can name a since-deleted agent).
   It never runs again, so a deleted or rebound agent stays gone; a failure is
   recorded on the `computer.default_agent` span and enrollment carries on.
+- **Agents go with the computer**: `Harnesses::revoke(&Computer)` (the
+  `RevokeHarness` effect of release and retention expiry) deletes every agent
+  bound to the harness before deleting the harness, inside the one effect, so a
+  retry still finds them; none is left offline in the composer.
+- **Guided setup**: `POST /team/computers/{computer_id}/setup-complete` →
+  `ComputerStatus`, `ComputerService::complete_setup`, records
+  `setupCompletedAt` once (idempotent). Allowed to the computer's buyer and the
+  team owner, the server rule behind the web's `canManageClaude`; others get 403.
 - **Status**: `ComputerService::status(team_id, computer_id)` / `list(team_id)` →
   `ComputerStatus` with `setup: Option<SetupProgress>` (Creating → Booting →
   Connecting → Ready, positions 1–4) until macrod first connects. Pending payment

@@ -603,6 +603,18 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn computer_harness(
+        &self,
+        computer_id: ComputerId,
+    ) -> Result<Option<HarnessId>, HarnessError> {
+        Ok(self
+            .repo
+            .computer_harness(computer_id)
+            .await
+            .map_err(Into::into)?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn harness_computer(
         &self,
         harness_id: HarnessId,

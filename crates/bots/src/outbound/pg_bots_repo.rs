@@ -1167,7 +1167,7 @@ impl BotRepo for PgBotsRepo {
     ) -> Result<Option<HarnessFacts>, Self::Err> {
         let row = sqlx::query!(
             r#"
-            SELECT allow_permission_bypass
+            SELECT allow_permission_bypass, computer_id IS NOT NULL AS "on_computer!"
             FROM harnesses
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -1179,6 +1179,7 @@ impl BotRepo for PgBotsRepo {
 
         Ok(row.map(|row| HarnessFacts {
             allow_permission_bypass: row.allow_permission_bypass,
+            on_computer: row.on_computer,
         }))
     }
 
@@ -1424,6 +1425,13 @@ impl BotRepo for PgBotsRepo {
 
         tx.commit().await?;
         Ok(result.rows_affected() > 0)
+    }
+
+    async fn delete_harness_agents(
+        &self,
+        harness: HarnessId,
+    ) -> Result<Vec<(BotId, BotOwner)>, Self::Err> {
+        self.delete_harness_agents_inner(harness).await
     }
 
     async fn add_bot_to_channel(&self, channel_id: Uuid, bot_id: BotId) -> Result<(), Self::Err> {
