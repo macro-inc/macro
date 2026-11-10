@@ -42,9 +42,10 @@ Macro into one tool a team or an agent might build for itself.
 | `follow-up-radar.html` | CRM, email, tasks | `crm.searchContacts` with last interaction, the latest email thread per contact, open "Follow up with" tasks | Create a follow-up task and comment on the contact with a task mention | `document.*`; refreshes on focus |
 | `release-notes.html` | Projects, tasks, documents, channels | A project's tasks completed in the period and those still in flight | Create the notes document, announce it in a channel, and comment on the project, each with a document mention | `document.*` |
 
-They work around what programs can't do. Email and calendar events are only
-read: a program is refused `email.send`, `EmailThread.reply` and
-`calendar.createEvent`, so nothing here sends mail or invites. Mentions are
+They work around what programs can't do. Email is only read, and no page
+creates calendar events: the SDK holds sending mail and creating events behind
+the user's confirmation (`email.sendConfirmed`, `calendar.createConfirmed`,
+or a review), so nothing here sends mail or invites. Mentions are
 built from `toMention()` parts, since programs import no SDK helpers such as
 `msg`, and a document or task must be loaded first so its mention carries a
 name. CRM, routines, notifications and email emit no live events, so those
