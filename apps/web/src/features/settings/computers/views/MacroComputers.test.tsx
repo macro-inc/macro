@@ -47,6 +47,10 @@ vi.mock('@queries/computers/computers', () => ({
   }),
 }));
 
+vi.mock('@queries/agents/agents', () => ({
+  useAgentsQuery: () => ({ isSuccess: true, data: [] }),
+}));
+
 vi.mock('@queries/computers/claude', () => ({
   useClaudeModeQuery: () => ({ isSuccess: false }),
   useClaudeSignOutMutation: () => ({ isPending: false }),

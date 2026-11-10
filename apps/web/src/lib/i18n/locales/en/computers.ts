@@ -112,6 +112,10 @@ export default {
   cancelAtEnd: 'Cancel at period end',
   undoCancel: 'Undo cancel',
   releaseNow: 'Release now',
+  releaseDeletesAgents: {
+    one: '{{count}} agent on this computer will be deleted',
+    other: '{{count}} agents on this computer will be deleted',
+  },
   options: 'Options',
   getComputerAction: 'Get a computer',
   defaultComputerName: "{{name}}'s Agent Box",

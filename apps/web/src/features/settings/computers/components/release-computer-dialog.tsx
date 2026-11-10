@@ -1,9 +1,12 @@
+import { t } from '@app/lib/i18n';
 import { DeleteDialog } from '@ui';
 import { Show } from 'solid-js';
 
 /** Destroys a computer now; enabled only once its exact name is typed. */
 export function ReleaseComputerDialog(props: {
   computerName: string;
+  /** The agents bound to the computer, which releasing deletes. */
+  agentNames: readonly string[];
   pending: boolean;
   error?: string;
   onClose: () => void;
@@ -23,9 +26,21 @@ export function ReleaseComputerDialog(props: {
       <div class="space-y-2">
         <p>
           The computer is destroyed right away and its disk is deleted, with
-          everything on it. Agents running on it stop. There is no refund for
-          the rest of this billing period.
+          everything on it. There is no refund for the rest of this billing
+          period.
         </p>
+        <Show when={props.agentNames.length > 0}>
+          <p class="font-medium text-ink">
+            {t('computers.releaseDeletesAgents', {
+              count: props.agentNames.length,
+            })}
+            <Show when={props.agentNames.length <= 3}>
+              {': '}
+              {props.agentNames.join(', ')}
+            </Show>
+            .
+          </p>
+        </Show>
         <p>
           To stop paying without losing it today, cancel at period end instead.
         </p>

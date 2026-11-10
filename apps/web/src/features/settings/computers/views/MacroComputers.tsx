@@ -7,6 +7,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
+import { useAgentsQuery } from '@queries/agents/agents';
 import {
   useClaudeModeQuery,
   useClaudeSignOutMutation,
@@ -323,6 +324,7 @@ export function MacroComputers(props: {
   const { enabled, canPurchase, computers, failed } = useTeamComputers();
   const offers = useComputerOffersQuery(() => canPurchase() && isAdmin());
   const release = useReleaseComputerMutation();
+  const agents = useAgentsQuery();
 
   const [buying, setBuying] = createSignal(false);
   const [settingUp, setSettingUp] = createSignal<string>();
@@ -375,6 +377,14 @@ export function MacroComputers(props: {
     setReleasing(undefined);
     setReleaseError(undefined);
   };
+
+  // Releasing deletes every agent bound to the computer's runtime.
+  const agentsOn = (computer: ComputerStatus) =>
+    agents.isSuccess && computer.harnessId
+      ? agents.data
+          .filter((agent) => agent.harness_id === computer.harnessId)
+          .map((agent) => agent.bot.name)
+      : [];
 
   const byId = (id: string | undefined) =>
     computers().find((computer) => computer.id === id);
@@ -481,6 +491,7 @@ export function MacroComputers(props: {
         {(computer) => (
           <ReleaseComputerDialog
             computerName={computer.name}
+            agentNames={agentsOn(computer)}
             pending={release.isPending}
             error={releaseError()}
             onClose={closeRelease}
