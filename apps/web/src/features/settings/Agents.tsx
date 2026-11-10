@@ -22,7 +22,6 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import MacroLogo from '@icon/macro-logo.svg';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
-import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
@@ -88,10 +87,9 @@ import { AgentInstructionsEditor } from './components/instructions-editor';
 import { SettingsSelect } from './components/settings-select';
 import { WhereItRunsOption } from './components/where-it-runs-option';
 import {
+  ComputerWhereItRuns,
   RunOnComputerRow,
-  useComputerOffer,
 } from './computers/views/agent-computer-entry';
-import { ComputerBuyFlow } from './computers/views/computer-buy-flow';
 import {
   type ApiKeyProvider,
   apiKeyProviderName,
@@ -850,20 +848,6 @@ function AgentEditorPage(props: {
     );
   const computerHarnesses = () =>
     props.connectedHarnesses.filter((harness) => harness.computer);
-  const computerOffer = useComputerOffer();
-  const [buyingComputer, setBuyingComputer] = createSignal(false);
-  // Back from buying one, select the new computer once its runtime registers.
-  const [boughtHarnessId, setBoughtHarnessId] = createSignal<string>();
-  createEffect(() => {
-    const bought = boughtHarnessId();
-    if (
-      bought &&
-      computerHarnesses().some((harness) => harness.id === bought)
-    ) {
-      handleHarnessChange(bought);
-      setBoughtHarnessId(undefined);
-    }
-  });
   // Back from a setup guide, land on what was just set up.
   const finishSetup = () => {
     const finished = setup();
@@ -917,7 +901,11 @@ function AgentEditorPage(props: {
               when={!query.isError}
               fallback={
                 <Show
-                  when={!selectedHarness()?.computer}
+                  when={
+                    !computerHarnesses().some(
+                      (harness) => harness.id === harnessId()
+                    )
+                  }
                   fallback={
                     <p class="settings-input text-ink-muted">
                       {t('computers.modelsWhenOn')}
@@ -1387,10 +1375,9 @@ function AgentEditorPage(props: {
                     title="On your machine"
                     description="Your own agent on your own machine. Local Claude Code, Codex, or other harness, via Macrod."
                     icon={<TerminalIcon />}
-                    checked={
-                      selectedHarness()?.kind === 'macrod' &&
-                      !selectedHarness()?.computer
-                    }
+                    checked={macrodHarnesses().some(
+                      (harness) => harness.id === harnessId()
+                    )}
                     disabled={macrodHarnesses().length === 0}
                     action={
                       <Show when={macrodHarnesses().length === 0}>
@@ -1427,90 +1414,17 @@ function AgentEditorPage(props: {
                       {modelPicker()}
                     </div>
                   </WhereItRunsOption>
-                  <Show
-                    when={computerHarnesses().length > 0}
-                    fallback={
-                      <Show when={computerOffer.canBuy()}>
-                        <WhereItRunsOption
-                          value="new-computer"
-                          title={t('computers.newComputer')}
-                          description={
-                            computerOffer.fromLine() ??
-                            t('computers.onComputerHint')
-                          }
-                          icon={<HardDrivesIcon />}
-                          checked={false}
-                          disabled
-                          action={
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              class="text-ink"
-                              disabled={busy()}
-                              onClick={() => setBuyingComputer(true)}
-                            >
-                              {t('computers.getComputerAction')}
-                            </Button>
-                          }
-                          onSelect={() => setBuyingComputer(true)}
-                        />
-                      </Show>
-                    }
-                  >
-                    <WhereItRunsOption
-                      value="computer"
-                      title={t('computers.onComputer')}
-                      description={t('computers.onComputerHint')}
-                      icon={<HardDrivesIcon />}
-                      checked={selectedHarness()?.computer === true}
-                      onSelect={() => {
-                        const first = computerHarnesses()[0];
-                        if (first) handleHarnessChange(first.id);
-                      }}
-                    >
-                      <div class="grid grid-cols-1 gap-3 @min-[440px]:grid-cols-[repeat(2,minmax(0,280px))]">
-                        <div class="flex min-w-0 flex-col gap-1.5">
-                          <span class="text-xs font-medium text-ink-muted">
-                            {t('computers.computerKind')}
-                          </span>
-                          <SettingsSelect
-                            label={t('computers.computerKind')}
-                            options={computerHarnesses()}
-                            value={harnessId()}
-                            onChange={handleHarnessChange}
-                          />
-                        </div>
-                        {modelPicker()}
-                      </div>
-                      <Show when={computerOffer.canBuy()}>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          class="mt-2 -ml-2"
-                          disabled={busy()}
-                          onClick={() => setBuyingComputer(true)}
-                        >
-                          <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
-                          {[
-                            t('computers.newComputer'),
-                            computerOffer.fromLine(),
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </Button>
-                      </Show>
-                    </WhereItRunsOption>
-                  </Show>
+                  <ComputerWhereItRuns
+                    computers={computerHarnesses()}
+                    harnessId={harnessId()}
+                    checked={computerHarnesses().some(
+                      (harness) => harness.id === harnessId()
+                    )}
+                    busy={busy()}
+                    modelPicker={modelPicker()}
+                    onSelect={handleHarnessChange}
+                  />
                 </fieldset>
-                <ComputerBuyFlow
-                  open={buyingComputer()}
-                  onClose={() => setBuyingComputer(false)}
-                  onFinished={(computer) =>
-                    setBoughtHarnessId(computer.harnessId ?? undefined)
-                  }
-                />
                 <Show when={!keyProvider() ? savedApiKey() : undefined}>
                   {(saved) => (
                     <div class="mt-3 flex items-center justify-between gap-3 text-xs text-ink-muted">

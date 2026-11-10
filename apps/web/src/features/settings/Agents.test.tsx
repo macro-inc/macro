@@ -40,15 +40,7 @@ const agentsPageProps = {
 // The real Lexical surface has its own Markdown round-trip suite.
 vi.mock('./computers/views/agent-computer-entry', () => ({
   RunOnComputerRow: () => null,
-  useComputerOffer: () => ({
-    canBuy: () => false,
-    fromLine: () => undefined,
-    hasComputers: () => false,
-  }),
-}));
-
-vi.mock('./computers/views/computer-buy-flow', () => ({
-  ComputerBuyFlow: () => null,
+  ComputerWhereItRuns: () => null,
 }));
 
 vi.mock('./components/instructions-editor', () => ({
