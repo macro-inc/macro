@@ -253,39 +253,52 @@ function Reply(props: { replyType: ReplyType }) {
   const [requestedType, setRequestedType] = createSignal<ReplyType | undefined>(
     props.replyType
   );
+  const [showReply, setShowReply] = createSignal(true);
+  const [exitedTo, setExitedTo] = createSignal('none');
   return (
-    <EmailFormContextProvider
-      context={{
-        viewerEmail: context.viewerEmail,
-        inboxes: context.accounts.inboxes,
-      }}
-      formOptions={{
-        getMessageById: () => parent,
-        getDraftForMessageReply: () => undefined,
-      }}
+    <Show
+      when={showReply()}
+      fallback={<output data-testid="reply-state">closed</output>}
     >
-      <ReplyInputView
-        context={context}
-        sourceEntityId="thread"
-        replyingTo={() => parent}
-        session={{
-          thread: () => ({
-            db_id: 'thread',
-            link_id: 'inbox',
-            inbox_visible: true,
-          }),
-          recipientOptions: scopedRecipients,
-          ownsThreadInbox: () => true,
-          isPersonalReply: () => false,
-          onDraftRemoved: () => {},
-          exitToThread: () => false,
-          replyRequest: {
-            replyType: requestedType,
-            clear: () => setRequestedType(undefined),
-          },
+      <output data-testid="thread-exit">{exitedTo()}</output>
+      <EmailFormContextProvider
+        context={{
+          viewerEmail: context.viewerEmail,
+          inboxes: context.accounts.inboxes,
         }}
-      />
-    </EmailFormContextProvider>
+        formOptions={{
+          getMessageById: () => parent,
+          getDraftForMessageReply: () => undefined,
+        }}
+      >
+        <ReplyInputView
+          context={context}
+          sourceEntityId="thread"
+          replyingTo={() => parent}
+          session={{
+            thread: () => ({
+              db_id: 'thread',
+              link_id: 'inbox',
+              inbox_visible: true,
+            }),
+            recipientOptions: scopedRecipients,
+            ownsThreadInbox: () => true,
+            isPersonalReply: () => false,
+            onDraftRemoved: () => {},
+            exitToThread: (target) => {
+              setExitedTo(target);
+              (document.activeElement as HTMLElement | null)?.blur();
+              return true;
+            },
+            replyRequest: {
+              replyType: requestedType,
+              clear: () => setRequestedType(undefined),
+            },
+          }}
+          setShowReply={setShowReply}
+        />
+      </EmailFormContextProvider>
+    </Show>
   );
 }
 

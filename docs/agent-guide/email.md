@@ -806,7 +806,11 @@ field, so typing goes there instead of to app shortcuts. `bunx playwright test
 --config src/features/email-compose/browser-test/playwright.app.config.ts` (from
 `apps/web`) checks both shortcuts and both buttons in all four composers.
 While an editable field is focused, Escape is handled by that field before the
-close-reply shortcut.
+close-reply shortcut. In the desktop reply editor, an open emoji, mention or
+format menu takes the first Escape; otherwise one Escape closes an empty reply,
+or moves a written one's focus back to its message (the draft is kept), instead
+of only blurring the editor; the thread's own Escape takes it from there.
+`reply-escape.app.e2e.ts` in the same suite checks this.
 An edited reply remains a draft when navigating away and returning. Standalone
 compose also flushes pending edits when leaving through app navigation. Switch
 views immediately after typing, before the 500 ms autosave debounce: the old
