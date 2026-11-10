@@ -459,3 +459,13 @@ access. Closing the menu does not cancel an already submitted Source tracking
 operation. Installation disposal and unavailable providers require their own
 truthful lifetime boundary. This model action does not activate the native user
 picker or supply other catalog choices.
+
+
+The user-notification/tracking action is shared through
+`handleUserMentionWithInsertion`. Its prepare factory captures Source dependencies
+inside the async action before I/O. The insertion sink receives a lazy payload
+builder, preserving Source dispatch-method lookup before user-property reads.
+Source insertion returns void and adds no await; native insertion must await an
+actual settled input result. The shared root-trigger listener retains desktop
+keydown/beforeinput deduplication and Android composition/default handling while
+leaving eligibility to the model.

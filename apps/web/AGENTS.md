@@ -1,5 +1,7 @@
 ## Development Commands
 
+- Preserve Source call-expression order at overlay host seams: capture initial dependencies inside the async action and use lazy payload builders when a callee getter must run before payload getters.
+
 - Install native body pointer capabilities through the additive `installOverlays` hook with the live canEdit accessor; verify checkbox, block-gap and long-press gestures, current Session admission and listener remount with `LexicalMarkdown/editing/browser-test`.
 
 - Keep dev response middleware single-install per response across reloads, and parse terminal inline source-map comments without a regular expression over the complete generated module.
