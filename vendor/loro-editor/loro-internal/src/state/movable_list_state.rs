@@ -460,28 +460,26 @@ mod inner {
         }
 
         pub fn get_child_index(&self, id: &ContainerID, index_type: IndexType) -> Option<usize> {
-            let ans = self.child_container_to_elem.get(id).and_then(|eid| {
-                let this = &self;
-                let elem_id = eid.to_id().compact();
-                let elem = this.elements.get(&elem_id)?;
-                if elem.value.as_container() != Some(id) {
-                    // TODO: may be better to find a way clean up these invalid elements?
-                    return None;
-                }
-                if let Some(leaf) = self.id_to_list_leaf.get(&elem.pos) {
-                    let list_item = self.list.get_elem(*leaf)?;
-                    assert_eq!(list_item.pointed_by, Some(elem_id));
-                } else {
-                    return None;
-                }
-                this.get_list_item_index(elem.pos, index_type)
-            });
-
-            ans
+            self.child_container_leaf(id)
+                .map(|leaf| self.get_index_of(leaf, index_type) as usize)
         }
 
         pub fn contains_child_container(&self, id: &ContainerID) -> bool {
-            self.get_child_index(id, IndexType::ForUser).is_some()
+            self.child_container_leaf(id).is_some()
+        }
+
+        // Membership needs the same live element checks as an index lookup,
+        // but does not need to walk the tree's preceding caches to find its rank.
+        fn child_container_leaf(&self, id: &ContainerID) -> Option<LeafIndex> {
+            let elem_id = self.child_container_to_elem.get(id)?.to_id().compact();
+            let elem = self.elements.get(&elem_id)?;
+            if elem.value.as_container() != Some(id) {
+                return None;
+            }
+            let leaf = *self.id_to_list_leaf.get(&elem.pos)?;
+            let list_item = self.list.get_elem(leaf)?;
+            assert_eq!(list_item.pointed_by, Some(elem_id));
+            Some(leaf)
         }
 
         #[inline]

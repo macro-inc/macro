@@ -42,7 +42,15 @@ impl DocState {
         parent_idx: ContainerIdx,
         child_id: &ContainerID,
     ) -> bool {
-        self.get_logical_child_index(parent_idx, child_id).is_some()
+        if let Some((parent_id, key, kind)) = child_id.parse_mergeable() {
+            return self
+                .resolve_mergeable_child_index(parent_idx, &parent_id, &key, kind)
+                .is_some();
+        }
+
+        self.store
+            .get_container_mut(parent_idx)
+            .is_some_and(|parent_state| parent_state.contains_child(child_id))
     }
 
     fn resolve_mergeable_child_index(

@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod child_membership_test;
 pub mod container_tree;
 #[cfg(test)]
 mod event_recording_test;

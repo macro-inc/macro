@@ -47,3 +47,9 @@ The 256-peer resource control bounds retained index payload by history length.
 Encoder, version pins, public APIs and wire/corpus expectations remain unchanged.
 This patch is maintained for both server1.16.2 and editor1.17.1; upstream branch
 preparation is separate and does not authorize publication.
+
+Local child-membership change: liveness queries check ordinary parent membership
+without computing a child's sequence rank or cloning its map key. Movable lists
+share the same current-value and active-leaf validation with index lookups;
+mergeable children still validate their parent marker. No liveness cache,
+reachability bypass, operation ordering or encoder change is introduced.
