@@ -691,6 +691,47 @@ impl<'raw> ::bebop::Record<'raw> for ClipboardEntryMsg<'raw> {}
 
 #[derive(Clone, Debug, PartialEq, Copy)]
 #[repr(packed)]
+pub struct PasteIntentMsg {
+    pub plain_only: bool,
+}
+
+impl ::bebop::FixedSized for PasteIntentMsg {}
+
+impl<'raw> ::bebop::SubRecord<'raw> for PasteIntentMsg {
+    const MIN_SERIALIZED_SIZE: usize = Self::SERIALIZED_SIZE;
+    const EXACT_SERIALIZED_SIZE: Option<usize> = Some(Self::SERIALIZED_SIZE);
+
+    #[inline]
+    fn serialized_size(&self) -> usize {
+        Self::SERIALIZED_SIZE
+    }
+
+    ::bebop::define_serialize_chained!(*Self => |zelf, dest| {
+        Ok(
+            ::bebop::packed_read!(zelf.plain_only)._serialize_chained(dest)?
+        )
+    });
+
+    fn _deserialize_chained(raw: &'raw [u8]) -> ::bebop::DeResult<(usize, Self)> {
+        let mut i = 0;
+        if raw.len() - i < Self::MIN_SERIALIZED_SIZE {
+            let missing = Self::MIN_SERIALIZED_SIZE - (raw.len() - i);
+            return Err(::bebop::DeserializeError::MoreDataExpected(missing));
+        }
+
+        let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+        i += read;
+
+        Ok((i, Self {
+            plain_only: v0,
+        }))
+    }
+}
+
+impl<'raw> ::bebop::Record<'raw> for PasteIntentMsg {}
+
+#[derive(Clone, Debug, PartialEq, Copy)]
+#[repr(packed)]
 pub struct ModifyTargetMsg {
     pub kind: u8,
     pub anchor: PointMsg,
@@ -1133,6 +1174,15 @@ pub enum EditorInputMsg<'raw> {
         mods: u32,
         code: u32,
     },
+
+    /// Discriminator 10
+    EditorPasteWithIntent {
+        selection: SelectionMsg<'raw>,
+        clipboard: ::std::vec::Vec<ClipboardEntryMsg<'raw>>,
+        has_files: bool,
+        html_nodes: ::std::vec::Vec<&'raw str>,
+        intent: PasteIntentMsg,
+    },
 }
 
 impl<'raw> ::bebop::SubRecord<'raw> for EditorInputMsg<'raw> {
@@ -1283,6 +1333,20 @@ impl<'raw> ::bebop::SubRecord<'raw> for EditorInputMsg<'raw> {
                 _key.serialized_size() +
                 _mods.serialized_size() +
                 _code.serialized_size()
+            }
+            Self::EditorPasteWithIntent {
+                selection: ref _selection,
+                clipboard: ref _clipboard,
+                has_files: ref _has_files,
+                html_nodes: ref _html_nodes,
+                intent: ref _intent,
+            }
+            => {
+                _selection.serialized_size() +
+                _clipboard.serialized_size() +
+                _has_files.serialized_size() +
+                _html_nodes.serialized_size() +
+                _intent.serialized_size()
             }
         }
     }
@@ -1442,6 +1506,21 @@ impl<'raw> ::bebop::SubRecord<'raw> for EditorInputMsg<'raw> {
                 _key._serialize_chained(dest)?;
                 _mods._serialize_chained(dest)?;
                 _code._serialize_chained(dest)?;
+            }
+            Self::EditorPasteWithIntent {
+                selection: ref _selection,
+                clipboard: ref _clipboard,
+                has_files: ref _has_files,
+                html_nodes: ref _html_nodes,
+                intent: ref _intent,
+            }
+            => {
+                10u8._serialize_chained(dest)?;
+                _selection._serialize_chained(dest)?;
+                _clipboard._serialize_chained(dest)?;
+                _has_files._serialize_chained(dest)?;
+                _html_nodes._serialize_chained(dest)?;
+                _intent._serialize_chained(dest)?;
             }
         }
         Ok(size)
@@ -1650,6 +1729,26 @@ impl<'raw> ::bebop::SubRecord<'raw> for EditorInputMsg<'raw> {
                     key: v5,
                     mods: v6,
                     code: v7,
+                }
+            }
+            10 => {
+                let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+                let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                i += read;
+
+                EditorInputMsg::EditorPasteWithIntent {
+                    selection: v0,
+                    clipboard: v1,
+                    has_files: v2,
+                    html_nodes: v3,
+                    intent: v4,
                 }
             }
             _ => {
@@ -3685,6 +3784,8 @@ pub mod owned {
 
     impl<'raw> ::bebop::Record<'raw> for ClipboardEntryMsg {}
 
+    pub use super::PasteIntentMsg;
+
     pub use super::ModifyTargetMsg;
 
     #[derive(Clone, Debug, PartialEq)]
@@ -4104,6 +4205,15 @@ pub mod owned {
             mods: u32,
             code: u32,
         },
+
+        /// Discriminator 10
+        EditorPasteWithIntent {
+            selection: SelectionMsg,
+            clipboard: ::std::vec::Vec<ClipboardEntryMsg>,
+            has_files: bool,
+            html_nodes: ::std::vec::Vec<String>,
+            intent: PasteIntentMsg,
+        },
     }
 
     impl<'raw> ::core::convert::From<super::EditorInputMsg<'raw>> for EditorInputMsg {
@@ -4270,6 +4380,22 @@ pub mod owned {
                         code: _code,
                     }
                 }
+                super::EditorInputMsg::EditorPasteWithIntent {
+                    selection: _selection,
+                    clipboard: _clipboard,
+                    has_files: _has_files,
+                    html_nodes: _html_nodes,
+                    intent: _intent,
+                }
+                => {
+                    Self::EditorPasteWithIntent {
+                        selection: _selection.into(),
+                        clipboard: _clipboard.into_iter().map(|value| value.into()).collect(),
+                        has_files: _has_files,
+                        html_nodes: _html_nodes.into_iter().map(|value| value.into()).collect(),
+                        intent: _intent,
+                    }
+                }
             }
         }
 
@@ -4422,6 +4548,20 @@ pub mod owned {
                     _key.serialized_size() +
                     _mods.serialized_size() +
                     _code.serialized_size()
+                }
+                Self::EditorPasteWithIntent {
+                    selection: ref _selection,
+                    clipboard: ref _clipboard,
+                    has_files: ref _has_files,
+                    html_nodes: ref _html_nodes,
+                    intent: ref _intent,
+                }
+                => {
+                    _selection.serialized_size() +
+                    _clipboard.serialized_size() +
+                    _has_files.serialized_size() +
+                    _html_nodes.serialized_size() +
+                    _intent.serialized_size()
                 }
             }
         }
@@ -4581,6 +4721,21 @@ pub mod owned {
                     _key._serialize_chained(dest)?;
                     _mods._serialize_chained(dest)?;
                     _code._serialize_chained(dest)?;
+                }
+                Self::EditorPasteWithIntent {
+                    selection: ref _selection,
+                    clipboard: ref _clipboard,
+                    has_files: ref _has_files,
+                    html_nodes: ref _html_nodes,
+                    intent: ref _intent,
+                }
+                => {
+                    10u8._serialize_chained(dest)?;
+                    _selection._serialize_chained(dest)?;
+                    _clipboard._serialize_chained(dest)?;
+                    _has_files._serialize_chained(dest)?;
+                    _html_nodes._serialize_chained(dest)?;
+                    _intent._serialize_chained(dest)?;
                 }
             }
             Ok(size)
@@ -4789,6 +4944,26 @@ pub mod owned {
                         key: v5,
                         mods: v6,
                         code: v7,
+                    }
+                }
+                10 => {
+                    let (read, v0) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v1) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v2) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v3) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+                    let (read, v4) = ::bebop::SubRecord::_deserialize_chained(&raw[i..])?;
+                    i += read;
+
+                    EditorInputMsg::EditorPasteWithIntent {
+                        selection: v0,
+                        clipboard: v1,
+                        has_files: v2,
+                        html_nodes: v3,
+                        intent: v4,
                     }
                 }
                 _ => {

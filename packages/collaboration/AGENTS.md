@@ -84,3 +84,9 @@ The browser history fixture routes real keyboard Enter/undo/redo through keyDown
 Keep complete raw editor JSON, including every durable ID, equal after code-subtree undo/redo; resolving the same caret or matching text alone is insufficient.
 
 Decode SetDecoratorRevision (12) as [key, low32, high32] with full u64 precision; preserve earlier opcodes and reject unsupported stream operations. Enum generation alone does not install decorator lifetime handling.
+
+Preserve EditorPaste tag 4 byte-for-byte at ABI major 2. Send the additive
+EditorPasteWithIntent tag 10 only for captured Shift intent on a matched reader;
+carry PasteIntentMsg.plainOnly explicitly. Legacy paste/drop maps to the real
+model default false; never infer intent from unknown branches or private MIME.
+Keep HTML/Lexical precedence and use this flag only for Markdown policy.
