@@ -62,6 +62,21 @@ export function visibleImportRuns(
 }
 
 /**
+ * When the next listed settled run leaves the tray, or null when none will.
+ * Nothing else changes while imports are idle, so the tray re-reads the
+ * clock then.
+ */
+export function nextExpiry(
+  visible: readonly ImportRun[],
+  slackChannelsImporting: number
+): number | null {
+  const expiries = visible
+    .filter((run) => !isMoving(run, slackChannelsImporting))
+    .map((run) => Date.parse(run.updated_at) + RECENT_MS);
+  return expiries.length === 0 ? null : Math.min(...expiries);
+}
+
+/**
  * The run's phase. Workspace runs read their report for planning and
  * writing progress; Slack channel imports are counted from ledger rows.
  */
