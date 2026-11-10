@@ -23,8 +23,12 @@ and owns durable notification-tap delivery across cold launches/WebView reloads.
   clear it. Expire unacknowledged intents after 24 hours.
 - Let the authenticated frontend validate the payload recipient and access.
   `configure_recipient` clears stale intents on logout/account changes.
-- A neutral view covers the WebView while inactive and during notification
-  navigation. Auth/error screens use `release_notification_cover` without
+- A neutral view covers the WebView only while a page load that boots into a
+  pending tap (cold launch, WebView reload) navigates to it. Once that load has
+  shown its frontend it is never covered again: a tap on a running app
+  navigates in place, as on Android. Never cover on lifecycle changes; the app
+  switcher and system overlays must show the app's real content.
+  Auth/error screens use `release_notification_cover` without
   consuming the intent. A hidden bootstrap must never wait for foregrounding.
   Failed tap delivery releases the cover only after frontend bootstrap; keep
   the intent available for a replacement listener.
@@ -48,6 +52,8 @@ and owns durable notification-tap delivery across cold launches/WebView reloads.
 - A full iOS simulator build validates the Swift/UIKit bridge and iOS Rust
   commands; exercise warm resume, terminated launch, WebContent eviction, rapid
   successive taps, offline/auth failures, and ordinary icon resume on a device.
+  Also open the app switcher, Control Center, and Notification Center over the
+  app: its content must stay visible.
 - A `--no-sign` simulator build gets no APNs token ("Push registration with a
   nil environment"); build without it so Xcode signs to run locally.
 

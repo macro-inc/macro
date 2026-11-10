@@ -163,11 +163,17 @@ an acknowledgment those bundles cannot send. This opt-in contract does not
 require raising the OTA native floor; the improved cold-launch handoff still
 requires shipping the new native binary.
 
+The native cover hides only a page load that boots into a pending tap. Earlier
+binaries also covered the app whenever it left the foreground and on every tap,
+which blanked it in the app switcher; they keep doing so until updated. The
+web contract is the same for both, so the change needs no floor raise.
+
 Run `swift test --package-path tauri/ios_push_plugin/store` from `apps/web`
 for persisted intent/acknowledgment regressions. A simulator build checks the
 UIKit bridge; device verification must include notification launches after
 termination/WebContent eviction and ordinary icon resume, as well as auth
-failures, account switching, and rapid successive taps.
+failures, account switching, and rapid successive taps. Confirm the app stays
+visible in the app switcher and under Control Center and Notification Center.
 
 ## What counts as native code
 
