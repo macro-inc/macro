@@ -246,6 +246,9 @@ pub enum SyncFrame {
         /// Server message.
         message: String,
     },
+    /// The server has not yet run the stream's next page: its pages take
+    /// turns with other streams'. Nothing to apply.
+    Waiting,
     /// The stream ended.
     End {
         /// Why it ended.
@@ -455,12 +458,12 @@ impl SyncRun {
     }
 
     /// The lane of the next pending frame and whether it is that lane's
-    /// `laneDone`; `None` for `end` or when nothing is pending.
+    /// `laneDone`; `None` for `waiting`, `end` or when nothing is pending.
     pub fn peek_frame(&self) -> Option<(&str, bool)> {
         match self.pending.front()? {
             SyncFrame::Page { lane, .. } | SyncFrame::LaneError { lane, .. } => Some((lane, false)),
             SyncFrame::LaneDone { lane, .. } => Some((lane, true)),
-            SyncFrame::End { .. } => None,
+            SyncFrame::Waiting | SyncFrame::End { .. } => None,
         }
     }
 

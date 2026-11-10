@@ -63,8 +63,14 @@ Request body:
 - 401 without an authenticated user; 400 for an invalid body or a non-query
   operation; at most 32 lanes.
 - 409 when the user already has a stream open on this server task; 503 with
-  `Retry-After` when the task already runs its most streams
+  `Retry-After` when the task already holds its most open streams
   (`MAX_STREAMS_PER_TASK`).
+- Open streams take turns. A task runs at most `PAGE_SLOTS` pages at once,
+  whatever the number of open streams, and a freed slot goes to the waiting
+  stream whose user's pages took the least time in the last 5 minutes (summed
+  across that user's streams). Every user gets the same share of the slots'
+  time, so a small sync, and the first pages of any sync, finish ahead of a
+  long one. A stream that waits for its turn sends `waiting` every 10 seconds.
 - Each page runs through the same schema and request context as
   `POST /soup/graphql` (auth, mail cache profile, replica reads), with three
   stream-only differences:
@@ -77,14 +83,16 @@ Request body:
     requested messages per batch (one operation: 20 and 100).
   - A Soup page loads its email threads' Mail projections and metadata in one
     batch per page.
-- A page runs for at most 45 seconds and fails its lane past that; a stream
-  starts no page after 5 minutes and ends with `deadline`.
+- A page runs for at most 45 seconds and fails its lane past that; time spent
+  waiting for a turn does not count. A stream starts no page after 5 minutes,
+  waiting included, and ends with `deadline`.
 - The next page runs only when the response body is read, so a slow reader
   slows the server and nothing buffers without bound. A closed connection stops
   the loop.
-- Traced as one `soup.sync_stream` span (lanes, pages, items, bytes, end
-  reason) with a `soup.sync_stream.page` child per page (lane, page, items,
-  outcome). No query text, variables or content in telemetry.
+- Traced as one `soup.sync_stream` span (lanes, pages, items, bytes, time
+  waited for turns, end reason) with a `soup.sync_stream.page` child per page
+  (lane, page, time waited for its turn, items, outcome). No query text,
+  variables or content in telemetry.
 
 ### Response
 
@@ -94,6 +102,7 @@ Request body:
 {"type":"page","lane":"tasks","page":0,"variables":{...},"response":{"data":{...}},"items":500,"nextVariables":{...}}
 {"type":"laneDone","lane":"tasks","pages":12,"items":5800,"reason":"complete"}
 {"type":"laneError","lane":"tasks","message":"..."}
+{"type":"waiting"}
 {"type":"end","reason":"complete"}
 ```
 
@@ -106,6 +115,8 @@ Request body:
   `laneError` (a page that could not run, or timed out, sends only
   `laneError`). The failed lane sends no `laneDone`, and the stream carries on
   with the next lane.
+- `waiting`: the stream's next page has not had its turn yet; it carries
+  nothing to apply.
 - `end.reason`: `complete` (every lane sent `laneDone` or `laneError`),
   `maxPages`, `deadline` (the stream ran for its longest time; lanes resume
   from their last page's `nextVariables`), or `error` (a frame could not be

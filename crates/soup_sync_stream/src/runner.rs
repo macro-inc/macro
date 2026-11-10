@@ -20,6 +20,9 @@ const PAGE_TIMEOUT: Duration = Duration::from_secs(45);
 /// Longest a stream runs before it ends with `deadline`. Bounds how long one
 /// stream holds a server slot; the client resumes its lanes in a later stream.
 const STREAM_DEADLINE: Duration = Duration::from_secs(5 * 60);
+/// How long a stream waits for its turn before it sends `waiting`. Well under
+/// the load balancer's 60 s idle timeout, so a queued stream stays connected.
+const WAITING_INTERVAL: Duration = Duration::from_secs(10);
 
 /// A response field the loop reads: its JSON pointer and its name in messages.
 struct ResponseField {
@@ -58,6 +61,13 @@ const INTERRUPTED: &str = "interrupted";
 pub trait PageExecutor: Send + Sync + 'static {
     /// Why a page produced no GraphQL response.
     type Error: std::error::Error + Send + Sync + 'static;
+    /// Holds the stream's turn while one page runs; dropped when the page ends.
+    type Turn: Send;
+
+    /// Waits until the stream may run its next page. The loop drops a wait
+    /// that outlasts `WAITING_INTERVAL` and asks again, so a wait must hold
+    /// no place in line that a later call would lose.
+    fn turn(&self) -> impl Future<Output = Self::Turn> + Send;
 
     /// Executes `request` and returns its GraphQL response (`data`, optional
     /// `errors`) as JSON.
@@ -136,6 +146,8 @@ struct Runner<E> {
     max_pages: Option<u32>,
     /// When the stream stops starting pages and ends with `deadline`.
     deadline: Instant,
+    /// When the stream began waiting for the turn it has yet to get.
+    waiting_since: Option<Instant>,
     finished: bool,
     telemetry: StreamTelemetry,
 }
@@ -151,6 +163,7 @@ impl<E: PageExecutor> Runner<E> {
             pages_run: 0,
             max_pages: plan.max_pages,
             deadline: Instant::now() + STREAM_DEADLINE,
+            waiting_since: None,
             finished: false,
             telemetry,
         }
@@ -183,15 +196,28 @@ impl<E: PageExecutor> Runner<E> {
         if Instant::now() >= self.deadline {
             return self.finish(EndReason::Deadline);
         }
-        self.run_page(lane).await;
+
+        let waiting_since = *self.waiting_since.get_or_insert_with(Instant::now);
+        let Ok(turn) = tokio::time::timeout(WAITING_INTERVAL, self.executor.turn()).await else {
+            self.lane = Some(lane);
+            self.pending.push_back(Frame::Waiting);
+            return;
+        };
+        self.waiting_since = None;
+        let waited = waiting_since.elapsed();
+        self.telemetry.waited = self.telemetry.waited.saturating_add(waited);
+
+        self.run_page(lane, waited).await;
+        drop(turn);
     }
 
-    async fn run_page(&mut self, mut lane: LaneRun) {
+    async fn run_page(&mut self, mut lane: LaneRun, waited: Duration) {
         let span = tracing::info_span!(
             parent: &self.telemetry.span,
             "soup.sync_stream.page",
             "sync.lane" = lane.plan.id.as_str(),
             "sync.page" = lane.pages,
+            "sync.wait_ms" = millis(waited),
             "sync.items" = Empty,
             otel.status_code = Empty,
             otel.status_description = Empty,
@@ -407,6 +433,11 @@ impl LanePaging {
     }
 }
 
+/// `duration` in whole milliseconds, as a span field.
+fn millis(duration: Duration) -> u64 {
+    u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
+}
+
 fn array_len(response: &Value, field: &ResponseField) -> Result<u32, LaneFailure> {
     response
         .pointer(field.pointer)
@@ -423,6 +454,8 @@ struct StreamTelemetry {
     pages: u32,
     items: u64,
     bytes: u64,
+    /// Time the stream's pages spent waiting for their turn.
+    waited: Duration,
     failed_lanes: u32,
     end: Option<EndReason>,
 }
@@ -436,6 +469,7 @@ impl StreamTelemetry {
             "sync.pages" = Empty,
             "sync.items" = Empty,
             "sync.bytes" = Empty,
+            "sync.wait_ms" = Empty,
             "sync.end_reason" = Empty,
             "sync.failed_lanes" = Empty,
             "sync.last_failed_lane" = Empty,
@@ -447,6 +481,7 @@ impl StreamTelemetry {
             pages: 0,
             items: 0,
             bytes: 0,
+            waited: Duration::ZERO,
             failed_lanes: 0,
             end: None,
         }
@@ -458,7 +493,7 @@ impl StreamTelemetry {
                 self.pages = self.pages.saturating_add(1);
                 self.items = self.items.saturating_add(u64::from(*items));
             }
-            Frame::LaneDone { .. } => {}
+            Frame::LaneDone { .. } | Frame::Waiting => {}
             Frame::LaneError { lane, message } => {
                 self.failed_lanes = self.failed_lanes.saturating_add(1);
                 self.span.record("sync.last_failed_lane", lane.as_str());
@@ -488,6 +523,7 @@ impl Drop for StreamTelemetry {
         self.span.record("sync.pages", self.pages);
         self.span.record("sync.items", self.items);
         self.span.record("sync.bytes", self.bytes);
+        self.span.record("sync.wait_ms", millis(self.waited));
         self.span.record("sync.failed_lanes", self.failed_lanes);
         let end_reason: &'static str = self.end.map_or(INTERRUPTED, <&'static str>::from);
         self.span.record("sync.end_reason", end_reason);

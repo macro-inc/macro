@@ -1,4 +1,5 @@
 use super::*;
+use crate::turns::{PageTurn, PageTurns, StreamTurns};
 use futures::StreamExt as _;
 use serde_json::json;
 use std::sync::{Arc, Mutex};
@@ -29,6 +30,9 @@ impl ScriptedExecutor {
 
 impl PageExecutor for ScriptedExecutor {
     type Error = FakeError;
+    type Turn = ();
+
+    async fn turn(&self) {}
 
     async fn execute(&self, mut request: Request) -> Result<Value, FakeError> {
         assert!(
@@ -646,6 +650,9 @@ struct DelayedExecutor {
 
 impl PageExecutor for DelayedExecutor {
     type Error = FakeError;
+    type Turn = ();
+
+    async fn turn(&self) {}
 
     async fn execute(&self, _request: Request) -> Result<Value, FakeError> {
         let delay = {
@@ -729,6 +736,77 @@ async fn a_stream_past_its_deadline_ends_with_the_resume_point_saved() {
             reason: EndReason::Deadline,
         }
     );
+}
+
+/// Answers every page with an empty last page, once it gets its turn.
+struct QueuedExecutor {
+    turns: StreamTurns<&'static str>,
+}
+
+impl PageExecutor for QueuedExecutor {
+    type Error = FakeError;
+    type Turn = PageTurn<&'static str>;
+
+    fn turn(&self) -> impl Future<Output = Self::Turn> + Send {
+        self.turns.next()
+    }
+
+    async fn execute(&self, _request: Request) -> Result<Value, FakeError> {
+        Ok(json!({ "data": { "user": { "soup": { "items": [], "nextCursor": null } } } }))
+    }
+}
+
+fn one_lane_plan() -> SyncPlan {
+    SyncPlan::from_json(
+        json!({
+            "lanes": [{ "id": "tasks", "query": SOUP_QUERY, "variables": { "input": { "initial": {} } }, "paging": "soup" }]
+        })
+        .to_string()
+        .as_bytes(),
+    )
+    .unwrap()
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_stream_sends_waiting_until_its_turn_and_the_wait_is_not_page_time() {
+    let turns = PageTurns::new(1);
+    let running = turns.stream("other").next().await;
+    let executor = QueuedExecutor {
+        turns: turns.stream("queued"),
+    };
+
+    let mut frames = Box::pin(frames(one_lane_plan(), executor));
+
+    // Six intervals: longer than a page may run.
+    for _ in 0..6 {
+        assert_eq!(frames.next().await, Some(Frame::Waiting));
+    }
+    drop(running);
+    assert!(matches!(
+        frames.next().await,
+        Some(Frame::Page { page: 0, .. })
+    ));
+    assert!(matches!(frames.next().await, Some(Frame::LaneDone { .. })));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_stream_still_waiting_at_its_deadline_ends_with_deadline() {
+    let turns = PageTurns::new(1);
+    let _running = turns.stream("other").next().await;
+    let executor = QueuedExecutor {
+        turns: turns.stream("queued"),
+    };
+
+    let mut frames: Vec<Frame> = frames(one_lane_plan(), executor).collect().await;
+
+    assert_eq!(
+        frames.pop(),
+        Some(Frame::End {
+            reason: EndReason::Deadline,
+        })
+    );
+    assert_eq!(frames.len(), 30);
+    assert!(frames.iter().all(|frame| *frame == Frame::Waiting));
 }
 
 #[tokio::test]

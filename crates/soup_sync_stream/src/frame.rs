@@ -52,6 +52,9 @@ pub enum Frame {
         /// What went wrong, in server-chosen text.
         message: String,
     },
+    /// The stream is waiting for its turn to run the next page. Sent at
+    /// intervals while it waits, so the connection is not taken for idle.
+    Waiting,
     /// The stream finished. A stream that closes without it was interrupted.
     End {
         /// Why the stream stopped.

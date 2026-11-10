@@ -58,6 +58,8 @@ fn run_decodes_every_frame_type_and_counts_bytes() {
         "\n",
         r#"{"type":"laneDone","lane":"tasks","pages":1,"items":0,"reason":"complete"}"#,
         "\n",
+        r#"{"type":"waiting"}"#,
+        "\n",
         r#"{"type":"laneError","lane":"tasks","message":"boom"}"#,
         "\n",
         r#"{"type":"end","reason":"maxPages"}"#,
@@ -65,7 +67,7 @@ fn run_decodes_every_frame_type_and_counts_bytes() {
     );
     let (head, tail) = stream.split_at(40);
     assert_eq!(run.push_bytes(head.as_bytes()).unwrap(), 0);
-    assert_eq!(run.push_bytes(tail.as_bytes()).unwrap(), 4);
+    assert_eq!(run.push_bytes(tail.as_bytes()).unwrap(), 5);
     let frames = run.pending.iter().cloned().collect::<Vec<_>>();
     assert!(
         matches!(&frames[0], SyncFrame::Page { lane, next_variables: None, .. } if lane == "tasks")
@@ -78,9 +80,10 @@ fn run_decodes_every_frame_type_and_counts_bytes() {
             ..
         }
     ));
-    assert!(matches!(&frames[2], SyncFrame::LaneError { message, .. } if message == "boom"));
+    assert_eq!(frames[2], SyncFrame::Waiting);
+    assert!(matches!(&frames[3], SyncFrame::LaneError { message, .. } if message == "boom"));
     assert_eq!(
-        frames[3],
+        frames[4],
         SyncFrame::End {
             reason: SyncEndReason::MaxPages
         }

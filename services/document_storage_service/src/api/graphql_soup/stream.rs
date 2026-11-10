@@ -1,8 +1,9 @@
 //! `POST /soup/graphql/stream`: the streamed cache sync. The lane loop and
 //! wire format live in `crates/soup_sync_stream`; this adapter authenticates,
 //! limits each user to one open stream and each task to
-//! [`MAX_STREAMS_PER_TASK`], and runs every page through the Soup schema with
-//! the same request context as `POST /soup/graphql`.
+//! [`MAX_STREAMS_PER_TASK`] open streams that take turns on [`PAGE_SLOTS`]
+//! pages at once, and runs every page through the Soup schema with the same
+//! request context as `POST /soup/graphql`.
 
 use super::{ContextScope, graphql_query_context_data, opaque_viewer_id, telemetry};
 use crate::api::context::{ApiContext, AuthorizationService};
@@ -19,7 +20,9 @@ use macro_authorization::{
     OptionalMacroAuthorizationExtractor, UserOrInternalService, UserOrInternalServiceAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use soup_sync_stream::{ActiveStreamGuard, ActiveStreams, PageExecutor, SyncPlan};
+use soup_sync_stream::{
+    ActiveStreamGuard, ActiveStreams, PageExecutor, PageTurn, PageTurns, StreamTurns, SyncPlan,
+};
 use std::{
     convert::Infallible,
     sync::{Arc, LazyLock},
@@ -29,19 +32,26 @@ use uuid::Uuid;
 
 const NDJSON_CONTENT_TYPE: &str = "application/x-ndjson";
 
-/// Most sync streams one server task runs at once. A stream holds tens of MiB
-/// while it runs and its pages share the replica pool with every other read,
-/// so streams past this wait for a later attempt instead.
-const MAX_STREAMS_PER_TASK: usize = 4;
+/// Pages of sync streams one server task runs at once: what the streams
+/// together ask of the database, however many are open. Open streams take
+/// turns on these slots, the user whose pages took the least time first.
+const PAGE_SLOTS: usize = 8;
+/// Most sync streams one server task keeps open. A stream that waits for its
+/// turn holds its plan, its ID lists and at most one unsent page, so this
+/// bounds memory, not database load; streams past it are told to retry.
+const MAX_STREAMS_PER_TASK: usize = 128;
 /// What a client told to come back later waits, in seconds.
 const RETRY_AFTER_SECONDS: &str = "30";
 
 /// Users with an open sync stream on this server task.
 static ACTIVE_STREAMS: LazyLock<ActiveStreams<MacroUserIdStr<'static>>> =
     LazyLock::new(ActiveStreams::default);
-/// Stream slots on this server task.
+/// Open-stream slots on this server task.
 static STREAM_SLOTS: LazyLock<Arc<Semaphore>> =
     LazyLock::new(|| Arc::new(Semaphore::new(MAX_STREAMS_PER_TASK)));
+/// Page slots on this server task.
+static PAGE_TURNS: LazyLock<PageTurns<MacroUserIdStr<'static>>> =
+    LazyLock::new(|| PageTurns::new(PAGE_SLOTS));
 
 pub(super) async fn sync_stream_handler(
     State(state): State<ApiContext>,
@@ -82,7 +92,7 @@ pub(super) async fn sync_stream_handler(
         return (
             StatusCode::SERVICE_UNAVAILABLE,
             [(header::RETRY_AFTER, RETRY_AFTER_SECONDS)],
-            "the server is running its most Soup sync streams; retry later",
+            "the server holds its most open Soup sync streams; retry later",
         )
             .into_response();
     };
@@ -100,6 +110,7 @@ pub(super) async fn sync_stream_handler(
         organization_id: acting_user.user_context.organization_id.map(i64::from),
         viewer_id: opaque_viewer_id(acting_user),
         id_lists: graphql_soup::SoupIdLists::default(),
+        turns: PAGE_TURNS.stream(acting_user.macro_user_id.clone()),
         _active: active,
         _slot: slot,
     };
@@ -114,9 +125,9 @@ pub(super) async fn sync_stream_handler(
         .into_response()
 }
 
-/// Runs one page as `POST /soup/graphql` runs a request. Owned by the
-/// response body, so the user's stream slot is released when the body ends
-/// or the client disconnects.
+/// Runs one page as `POST /soup/graphql` runs a request, when the stream's
+/// turn comes. Owned by the response body, so the user's stream slot is
+/// released when the body ends or the client disconnects.
 struct SchemaPageExecutor {
     state: ApiContext,
     request_parts: Parts,
@@ -126,6 +137,8 @@ struct SchemaPageExecutor {
     viewer_id: Option<Uuid>,
     /// The ordered lists ID-only lanes page through, one lane at a time.
     id_lists: graphql_soup::SoupIdLists,
+    /// This stream's turns on [`PAGE_TURNS`].
+    turns: StreamTurns<MacroUserIdStr<'static>>,
     _active: ActiveStreamGuard<MacroUserIdStr<'static>>,
     /// This stream's slot of [`STREAM_SLOTS`], released with the body.
     _slot: OwnedSemaphorePermit,
@@ -133,6 +146,11 @@ struct SchemaPageExecutor {
 
 impl PageExecutor for SchemaPageExecutor {
     type Error = serde_json::Error;
+    type Turn = PageTurn<MacroUserIdStr<'static>>;
+
+    fn turn(&self) -> impl Future<Output = Self::Turn> + Send {
+        self.turns.next()
+    }
 
     async fn execute(
         &self,

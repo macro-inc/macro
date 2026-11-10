@@ -32,8 +32,10 @@ threads, pins, recents, notifications, folders, activity.
 - `src/api/graphql_soup/stream.rs`: `POST /soup/graphql/stream` (streamed
   cache sync): runs paged Soup and calendar queries with the `/soup/graphql`
   request context and writes NDJSON; one open stream per user per task (409)
-  and at most `MAX_STREAMS_PER_TASK` per task (503 with `Retry-After`). Lane
-  loop and wire format: `crates/soup_sync_stream`.
+  and at most `MAX_STREAMS_PER_TASK` open per task (503 with `Retry-After`).
+  Open streams take turns on `PAGE_SLOTS` pages at once, so the number of
+  streams does not change what they ask of the database. Lane loop, turns
+  and wire format: `crates/soup_sync_stream`.
 - `src/server.rs`: composition root, including access-request routes and the
   tracked delivery dispatcher; `src/outbound/access_requests.rs` composes the
   notification/withdrawal/realtime ports. Policy lives in `crates/access_requests`.

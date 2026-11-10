@@ -196,6 +196,7 @@ where
             SyncFrame::LaneError { lane, message } => {
                 sync_lane_error::<S::Error, H::Error>(run, &lane, message)?
             }
+            SyncFrame::Waiting => SyncApplied::Recorded,
             SyncFrame::End { reason } => {
                 run.end = Some(reason);
                 if reason == SyncEndReason::Error {

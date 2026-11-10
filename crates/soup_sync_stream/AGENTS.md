@@ -16,12 +16,16 @@ file.
 operations only, a pageable `input`). `frames` / `ndjson_stream` run lanes in
 order over a `PageExecutor`, one page per poll: the next page executes only when
 the reader asks for the next line, and dropping the stream stops the loop.
+Before each page the loop waits for the executor's `turn`; DSS backs it with
+`PageTurns`, which shares a task's page slots among its open streams, the user
+whose pages took the least time first.
 
 ## Start here
 
 - `src/runner.rs`: the lane loop, paging rules, `maxItems` / `maxPages`, errors,
   and the `soup.sync_stream` span.
 - `src/frame.rs`: the NDJSON frames.
+- `src/turns.rs`: `PageTurns`, the page slots open streams take turns on.
 - `src/request.rs`: request shape and validation.
 
 ## Boundaries
@@ -43,8 +47,13 @@ the reader asks for the next line, and dropping the stream stops the loop.
   is `error` only when the stream itself fails (a frame does not encode).
 - A page runs for at most `PAGE_TIMEOUT` (45 s, under the load balancer's 60 s
   idle timeout) and fails its lane past it; a stream starts no page after
-  `STREAM_DEADLINE` (5 minutes) and ends `deadline`, so one stream cannot hold
-  a server slot for long. DSS also caps streams per task (`stream.rs`).
+  `STREAM_DEADLINE` (5 minutes) and ends `deadline`, so one connection does
+  not stay open for long. DSS also caps open streams per task (`stream.rs`).
+- A page's turn is held only while the page executes, never while the reader
+  takes the line, so a slow reader holds no slot. A stream waiting for its
+  turn sends `waiting` every `WAITING_INTERVAL`; the loop drops that wait and
+  asks again, which is safe because a place in line depends on the user's
+  page time, not on when the stream asked.
 - ID-only lanes are cheap because of the service, not this crate: DSS puts a
   `graphql_soup::SoupIdLists` in every page's request data, and the Soup
   resolver pages such lanes from one ordered list per stream.
