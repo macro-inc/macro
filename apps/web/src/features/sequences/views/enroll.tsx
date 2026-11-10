@@ -1,0 +1,218 @@
+import { t } from '@app/lib/i18n';
+import { getDefaultTimezone } from '@core/util/cron';
+import { debouncedDependent } from '@core/util/debounce';
+import { fireAndForget } from '@core/util/fireAndForget';
+import type {
+  SequenceStatus,
+  SequenceSummary,
+} from '@service-email/generated/schemas';
+import { addMinutes, format, isValid, roundToNearestMinutes } from 'date-fns';
+import { createMemo, createSignal, Match, Switch } from 'solid-js';
+import { EnrollDialog, type EnrollOutcome } from '../components/enroll-dialog';
+import { failureMessage, InlineFailure } from '../components/failure';
+import { OptionSelect } from '../components/option-select';
+import { type Person, useSequences } from '../context/sequences-context';
+import { SEQUENCE_LIMITS } from '../core/sequence';
+
+const SURFACE = 'sequences.enroll';
+
+/** The next five-minute mark, as a `datetime-local` value in local time. */
+function defaultStart() {
+  return format(
+    roundToNearestMinutes(addMinutes(new Date(), 5), {
+      nearestTo: 5,
+      roundingMethod: 'ceil',
+    }),
+    "yyyy-MM-dd'T'HH:mm"
+  );
+}
+
+function uniqueById(people: readonly Person[]) {
+  const seen = new Set<string>();
+  return people.filter((person) => !seen.has(person.id) && seen.add(person.id));
+}
+
+function SequencePicker(props: {
+  value: string | undefined;
+  onChange: (sequence: SequenceSummary) => void;
+}) {
+  const list = useSequences().createSequenceList();
+  return (
+    <Switch>
+      <Match when={list.failure()}>
+        {(failure) => (
+          <InlineFailure
+            failure={failure()}
+            onRetry={() => fireAndForget(list.refresh(), SURFACE)}
+          />
+        )}
+      </Match>
+      <Match when={!list.pending() && !list.sequences().length}>
+        <p class="text-xs text-ink-muted">{t('sequences.noSequences')}</p>
+      </Match>
+      <Match when={true}>
+        <OptionSelect
+          label={t('sequences.sequence')}
+          placeholder={t('sequences.chooseSequence')}
+          value={props.value}
+          options={list.sequences().map((sequence) => ({
+            value: sequence.id,
+            label: sequence.name || t('sequences.untitled'),
+          }))}
+          onChange={(id) => {
+            const sequence = list.sequences().find((item) => item.id === id);
+            if (sequence) props.onChange(sequence);
+          }}
+        />
+      </Match>
+    </Switch>
+  );
+}
+
+/**
+ * Add CRM people to a sequence. With no `sequence` the dialog asks for one, as
+ * "Add to sequence" on a selection does; a selected company brings its people.
+ */
+export function EnrollView(props: {
+  sequence?: { id: string; name: string; status: SequenceStatus };
+  initial?: readonly Person[];
+  companyIds?: readonly string[];
+  onClose: () => void;
+}) {
+  const context = useSequences();
+  const [search, setSearch] = createSignal('');
+  const people = context.createPeople(debouncedDependent(search, 250));
+  const companyPeople = context.createCompanyPeople(
+    () => props.companyIds ?? []
+  );
+  const enroller = context.createEnroller();
+  const [picked, setPicked] = createSignal<SequenceSummary>();
+  const target = () => props.sequence ?? picked();
+  const sequenceId = () => target()?.id;
+  const [chosen, setChosen] = createSignal<readonly Person[]>(
+    props.initial ?? []
+  );
+  // Company people stay selected until unchecked.
+  const [dropped, setDropped] = createSignal<readonly string[]>([]);
+  const candidates = createMemo(() =>
+    uniqueById([
+      ...chosen(),
+      ...companyPeople
+        .people()
+        .filter((person) => !dropped().includes(person.id)),
+    ])
+  );
+  const selected = () => candidates().slice(0, SEQUENCE_LIMITS.contacts);
+  const [start, setStart] = createSignal(defaultStart());
+  const [consent, setConsent] = createSignal(false);
+  const [error, setError] = createSignal<string>();
+  const [outcome, setOutcome] = createSignal<EnrollOutcome>();
+  const select = (person: Person, checked: boolean) => {
+    setError(undefined);
+    setChosen((current) => [
+      ...current.filter((item) => item.id !== person.id),
+      ...(checked ? [person] : []),
+    ]);
+    setDropped((current) => [
+      ...current.filter((id) => id !== person.id),
+      ...(checked ? [] : [person.id]),
+    ]);
+  };
+
+  async function enroll() {
+    const id = sequenceId();
+    const startAt = new Date(start());
+    if (!id) return;
+    if (!isValid(startAt)) {
+      setError(t('sequences.invalidStart'));
+      return;
+    }
+    const batch = selected();
+    const result = await enroller.enroll(id, {
+      crmContactIds: batch.map((person) => person.id),
+      start: startAt.toISOString(),
+      timezone: getDefaultTimezone(),
+    });
+    if (result.isErr()) {
+      setError(failureMessage(result.error));
+      return;
+    }
+    const byId = new Map(batch.map((person) => [person.id, person]));
+    const enrolled = result.value.filter((item) => item.enrollmentId).length;
+    const skipped = result.value.flatMap((item) =>
+      item.skipped
+        ? [
+            {
+              person: byId.get(item.crmContactId) ?? {
+                id: item.crmContactId,
+                name: '',
+                email: '',
+              },
+              skip: item.skipped,
+            },
+          ]
+        : []
+    );
+    if (enrolled)
+      context.feedback.success(
+        t('sequences.enrolledCount', { count: enrolled })
+      );
+    if (skipped.length) setOutcome({ enrolled, skipped });
+    else props.onClose();
+  }
+
+  return (
+    <EnrollDialog
+      sequence={
+        props.sequence ? (
+          <p class="truncate text-xs text-ink-muted">
+            {t('sequences.enrollInto', {
+              name: props.sequence.name || t('sequences.untitled'),
+            })}
+          </p>
+        ) : (
+          <SequencePicker
+            value={picked()?.id}
+            onChange={(sequence) => {
+              setError(undefined);
+              setPicked(sequence);
+            }}
+          />
+        )
+      }
+      search={search()}
+      onSearch={setSearch}
+      people={people.people()}
+      peoplePending={people.pending() || companyPeople.pending()}
+      peopleFailed={people.failed() || companyPeople.failed()}
+      selected={selected()}
+      notice={
+        [
+          candidates().length > SEQUENCE_LIMITS.contacts &&
+            t('sequences.firstPeopleOnly', {
+              count: SEQUENCE_LIMITS.contacts,
+            }),
+          target() &&
+            target()?.status !== 'active' &&
+            t('sequences.sendsOnceActive'),
+        ]
+          .filter(Boolean)
+          .join(' ') || undefined
+      }
+      onSelect={select}
+      start={start()}
+      onStart={(value) => {
+        setError(undefined);
+        setStart(value);
+      }}
+      consent={consent()}
+      onConsent={setConsent}
+      canEnroll={!!sequenceId()}
+      busy={enroller.pending()}
+      error={error()}
+      outcome={outcome()}
+      onEnroll={() => fireAndForget(enroll(), SURFACE)}
+      onClose={props.onClose}
+    />
+  );
+}

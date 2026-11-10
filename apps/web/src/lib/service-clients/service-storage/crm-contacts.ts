@@ -8,17 +8,31 @@ import { getGraphqlSoupCacheHost, getGraphqlSoupClient } from './graphql-soup';
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 
+/** Contacts at any of `companyIds`. */
+function anyCompany(
+  companyIds: readonly string[]
+): GraphqlCrmContactExpr | undefined {
+  return companyIds
+    .map((id): GraphqlCrmContactExpr => ({ literal: { companyId: id } }))
+    .reduce<GraphqlCrmContactExpr | undefined>(
+      (left, right) => (left ? { or: { left, right } } : right),
+      undefined
+    );
+}
+
 /** Lists deduplicated contacts from every CRM-enabled team the viewer can access. */
 export async function fetchCrmContacts(options: {
   cursor?: string | null;
   search?: string;
+  /** Only contacts at these companies. */
+  companyIds?: readonly string[];
   limit: number;
   signal?: AbortSignal;
 }) {
   const filter: GraphqlCrmContactExpr = {
     and: {
       left: { literal: { hidden: false } },
-      right: {
+      right: anyCompany(options.companyIds ?? []) ?? {
         literal: options.search?.trim()
           ? { search: options.search.trim() }
           : { include: true },

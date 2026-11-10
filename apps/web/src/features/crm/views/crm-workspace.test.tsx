@@ -249,7 +249,7 @@ vi.mock('../context/crm-context', () => ({
 vi.mock('./use-crm', () => ({
   useCurrentTeamQuery: () => ({
     isSuccess: true,
-    data: { team: { id: 'team', crm_enabled: false } },
+    data: { team: { id: 'team', crm_enabled: true } },
   }),
   useCrmLists: () => ({
     lists: () => [
@@ -375,6 +375,7 @@ it('omits pipelines and lists when those features are disabled', () => {
     'Sales Email',
     'Sales Notes',
     'Sales Calls',
+    'Sequences',
   ]);
 });
 

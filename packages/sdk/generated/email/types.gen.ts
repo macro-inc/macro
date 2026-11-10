@@ -341,6 +341,7 @@ export type ApiMessage = {
     provider_id?: string | null;
     provider_thread_id?: string | null;
     replying_to_id?: string | null;
+    scheduled_send_source?: null | ScheduledSendSource;
     scheduled_send_status?: null | ScheduledSendStatus;
     scheduled_send_time?: string | null;
     sent_at?: string | null;
@@ -987,6 +988,51 @@ export type Contact = {
     sfs_photo_url?: string | null;
 };
 
+/**
+ * A contact's enrollment as any teammate sees it: never step content.
+ */
+export type ContactEnrollment = {
+    /**
+     * When the last step was sent.
+     */
+    lastSentAt?: string | null;
+    /**
+     * When the next step is scheduled or due.
+     */
+    nextSendAt?: string | null;
+    /**
+     * Macro user id of the sequence's owner.
+     */
+    ownerId: string;
+    reason?: null | EnrollmentReason;
+    /**
+     * Sequence id.
+     */
+    sequenceId: string;
+    /**
+     * Sequence name.
+     */
+    sequenceName: string;
+    /**
+     * Whether the sequence isn't sending: a draft or paused.
+     */
+    sequencePaused: boolean;
+    /**
+     * Enrollment status.
+     */
+    status: EnrollmentStatus;
+};
+
+/**
+ * A CRM person's enrollments across the team.
+ */
+export type ContactEnrollmentsResponse = {
+    /**
+     * Newest first.
+     */
+    enrollments: Array<ContactEnrollment>;
+};
+
 export type ContactInfo = {
     email: string;
     name?: string | null;
@@ -1060,6 +1106,148 @@ export type EmlFile = Blob | File;
  */
 export type EmptyResponse = {
     [key: string]: unknown;
+};
+
+/**
+ * Contacts to enroll.
+ */
+export type EnrollRequest = {
+    /**
+     * CRM people.
+     */
+    crmContactIds: Array<string>;
+    /**
+     * When the first step should go; also fixes the local send time.
+     */
+    start: string;
+    /**
+     * IANA time zone the send time is in.
+     */
+    timezone: string;
+};
+
+/**
+ * What enrolling each contact did.
+ */
+export type EnrollResponse = {
+    /**
+     * One result per requested contact.
+     */
+    results: Array<EnrollResult>;
+};
+
+/**
+ * What enrolling one contact did.
+ */
+export type EnrollResult = {
+    /**
+     * The CRM person.
+     */
+    crmContactId: string;
+    /**
+     * The new enrollment.
+     */
+    enrollmentId?: string | null;
+    skipped?: null | EnrollSkip;
+};
+
+/**
+ * Why a contact wasn't enrolled.
+ */
+export type EnrollSkip = 'not_found' | 'no_email' | 'unsubscribed' | 'already_enrolled';
+
+/**
+ * What an owner can do to an enrollment.
+ */
+export type EnrollmentAction = 'pause' | 'resume' | 'stop' | 'unsubscribe';
+
+/**
+ * An owner action on an enrollment.
+ */
+export type EnrollmentActionRequest = {
+    /**
+     * What to do.
+     */
+    action: EnrollmentAction;
+};
+
+/**
+ * Enrollment counts by status.
+ */
+export type EnrollmentCounts = {
+    /**
+     * Sending as steps come due.
+     */
+    active: number;
+    /**
+     * Finished.
+     */
+    completed: number;
+    /**
+     * An email didn't go out.
+     */
+    needsAttention: number;
+    /**
+     * Paused by the owner.
+     */
+    paused: number;
+    /**
+     * Ended early.
+     */
+    stopped: number;
+};
+
+/**
+ * Why an enrollment stopped.
+ */
+export type EnrollmentReason = 'manual' | 'replied' | 'bounced' | 'unsubscribed' | 'contact_removed';
+
+/**
+ * Where one contact is in a sequence.
+ */
+export type EnrollmentStatus = 'active' | 'paused' | 'needs_attention' | 'stopped' | 'completed';
+
+/**
+ * One contact's progress through a sequence.
+ */
+export type EnrollmentSummary = {
+    /**
+     * The CRM name its last email used.
+     */
+    contactName?: string | null;
+    /**
+     * When it was enrolled.
+     */
+    createdAt: string;
+    /**
+     * The CRM person enrolled; gone if the contact was deleted.
+     */
+    crmContactId?: string | null;
+    /**
+     * Address the steps go to.
+     */
+    email: string;
+    /**
+     * Enrollment id.
+     */
+    id: string;
+    /**
+     * When the last step was sent.
+     */
+    lastSentAt?: string | null;
+    /**
+     * When the next step is scheduled or due.
+     */
+    nextSendAt?: string | null;
+    reason?: null | EnrollmentReason;
+    /**
+     * Status.
+     */
+    status: EnrollmentStatus;
+    /**
+     * Emails sent, or skipped because they may have gone out.
+     */
+    stepsSent: number;
 };
 
 /**
@@ -1536,6 +1724,16 @@ export type ListLinksResponse = {
 };
 
 /**
+ * The owner's sequences.
+ */
+export type ListSequencesResponse = {
+    /**
+     * Most recently changed first.
+     */
+    sequences: Array<SequenceSummary>;
+};
+
+/**
  * Desired organization state. Categories never stand in for folders or flags.
  */
 export type MailboxAction = {
@@ -1715,6 +1913,11 @@ export type PreviewView = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'spa
 export type PreviewViewStandardLabel = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'spam' | 'trash' | 'important' | 'other';
 
 /**
+ * What is wrong with a sequence.
+ */
+export type Problem = 'name_required' | 'steps_required' | 'subject_required' | 'body_required' | 'over_limit' | 'unknown_token' | 'sender_unavailable';
+
+/**
  * Payload for the `refresh_email` connection gateway event: identifies the
  * inbox that changed and the kind of change.
  */
@@ -1775,6 +1978,14 @@ export type ResyncResponse = {
 };
 
 /**
+ * What created a scheduled send, when it was not the user's own composer.
+ *
+ * A pending send from a source stays out of the user's mail lists (Drafts,
+ * Scheduled, Inbox) until it is sent or its delivery fails.
+ */
+export type ScheduledSendSource = 'sequence';
+
+/**
  * The user-visible delivery state of an unsent scheduled message.
  */
 export type ScheduledSendStatus = 'pending' | 'sending' | 'failed' | 'unconfirmed';
@@ -1797,6 +2008,143 @@ export type SendMessageResponse = {
      * The created message.
      */
     message: ApiDraftOutput;
+};
+
+/**
+ * A sequence as its owner edits it.
+ */
+export type Sequence = {
+    /**
+     * When it was created.
+     */
+    createdAt: string;
+    /**
+     * Line added above the unsubscribe link in every email.
+     */
+    footer: string;
+    /**
+     * Sequence id.
+     */
+    id: string;
+    /**
+     * The owner's Gmail inbox it sends from.
+     */
+    linkId?: string | null;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Lifecycle status.
+     */
+    status: SequenceStatus;
+    /**
+     * Its emails, in order.
+     */
+    steps: Array<Step>;
+    /**
+     * When it last changed.
+     */
+    updatedAt: string;
+};
+
+/**
+ * A sequence with its enrollments.
+ */
+export type SequenceDetailResponse = {
+    /**
+     * Its enrollments, newest first.
+     */
+    enrollments: Array<EnrollmentSummary>;
+    /**
+     * The sequence.
+     */
+    sequence: Sequence;
+};
+
+/**
+ * What went wrong, for the client to show.
+ */
+export type SequenceErrorCode = 'not_found' | 'invalid_sequence' | 'invalid_request' | 'action_unavailable' | 'crm_unavailable' | 'internal';
+
+/**
+ * An error response.
+ */
+export type SequenceErrorResponse = {
+    /**
+     * Machine-readable code.
+     */
+    code: SequenceErrorCode;
+    /**
+     * Developer-facing message.
+     */
+    message: string;
+    /**
+     * For `invalid_sequence`: the 1-based step.
+     */
+    position?: number | null;
+    problem?: null | Problem;
+    /**
+     * For `unknown_token`: the tokens.
+     */
+    tokens: Array<string>;
+};
+
+/**
+ * A new sequence.
+ */
+export type SequenceInput = {
+    /**
+     * Footer line.
+     */
+    footer?: string;
+    /**
+     * Sending inbox.
+     */
+    linkId?: string | null;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Its emails.
+     */
+    steps?: Array<Step>;
+};
+
+/**
+ * Where a sequence is in its lifecycle.
+ */
+export type SequenceStatus = 'draft' | 'active' | 'paused';
+
+/**
+ * A sequence in the owner's list.
+ */
+export type SequenceSummary = {
+    /**
+     * Enrollments by status.
+     */
+    counts: EnrollmentCounts;
+    /**
+     * Sequence id.
+     */
+    id: string;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Lifecycle status.
+     */
+    status: SequenceStatus;
+    /**
+     * Number of steps.
+     */
+    stepCount: number;
+    /**
+     * When it last changed.
+     */
+    updatedAt: string;
 };
 
 export type Settings = {
@@ -1831,6 +2179,33 @@ export type SharedInboxConflictResponse = {
      * The email of the macro user who first connected the mailbox.
      */
     existing_owner_email: string;
+};
+
+/**
+ * One email of a sequence, rendered for each person when it is created.
+ */
+export type Step = {
+    /**
+     * Send as a reply in the previous email's thread.
+     */
+    asReply?: boolean;
+    /**
+     * Plain-text body.
+     */
+    body: string;
+    /**
+     * Calendar days after the previous step, at the enrollment's send time.
+     */
+    delayDays: number;
+    /**
+     * Stable across edits; step history is keyed by it. New steps bring a
+     * fresh UUIDv7.
+     */
+    id: string;
+    /**
+     * Subject line; a reply step uses its thread's instead.
+     */
+    subject: string;
 };
 
 /**
@@ -1956,6 +2331,29 @@ export type UpdateLabelBatchResponse = {
     failed_ids: Array<string>;
     missing_ids: Array<string>;
     successful_ids: Array<string>;
+};
+
+/**
+ * Changes to a sequence; `None` leaves a field as it is.
+ */
+export type UpdateSequenceRequest = {
+    /**
+     * New footer.
+     */
+    footer?: string | null;
+    /**
+     * New sending inbox.
+     */
+    linkId?: string | null;
+    /**
+     * New name.
+     */
+    name?: string | null;
+    status?: null | SequenceStatus;
+    /**
+     * New steps.
+     */
+    steps?: Array<Step> | null;
 };
 
 /**
@@ -3184,6 +3582,176 @@ export type GetMessageEmlResponses = {
 };
 
 export type GetMessageEmlResponse = GetMessageEmlResponses[keyof GetMessageEmlResponses];
+
+export type ListSequencesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/email/sequences';
+};
+
+export type ListSequencesErrors = {
+    403: SequenceErrorResponse;
+};
+
+export type ListSequencesError = ListSequencesErrors[keyof ListSequencesErrors];
+
+export type ListSequencesResponses = {
+    200: ListSequencesResponse;
+};
+
+export type ListSequencesResponse2 = ListSequencesResponses[keyof ListSequencesResponses];
+
+export type CreateSequenceData = {
+    body: SequenceInput;
+    path?: never;
+    query?: never;
+    url: '/email/sequences';
+};
+
+export type CreateSequenceErrors = {
+    400: SequenceErrorResponse;
+    403: SequenceErrorResponse;
+};
+
+export type CreateSequenceError = CreateSequenceErrors[keyof CreateSequenceErrors];
+
+export type CreateSequenceResponses = {
+    200: Sequence;
+};
+
+export type CreateSequenceResponse = CreateSequenceResponses[keyof CreateSequenceResponses];
+
+export type ContactEnrollmentsData = {
+    body?: never;
+    path: {
+        crm_contact_id: string;
+    };
+    query?: never;
+    url: '/email/sequences/contacts/{crm_contact_id}';
+};
+
+export type ContactEnrollmentsErrors = {
+    404: SequenceErrorResponse;
+};
+
+export type ContactEnrollmentsError = ContactEnrollmentsErrors[keyof ContactEnrollmentsErrors];
+
+export type ContactEnrollmentsResponses = {
+    200: ContactEnrollmentsResponse;
+};
+
+export type ContactEnrollmentsResponse2 = ContactEnrollmentsResponses[keyof ContactEnrollmentsResponses];
+
+export type UpdateEnrollmentData = {
+    body: EnrollmentActionRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/email/sequences/enrollments/{id}';
+};
+
+export type UpdateEnrollmentErrors = {
+    404: SequenceErrorResponse;
+    409: SequenceErrorResponse;
+};
+
+export type UpdateEnrollmentError = UpdateEnrollmentErrors[keyof UpdateEnrollmentErrors];
+
+export type UpdateEnrollmentResponses = {
+    200: EnrollmentSummary;
+};
+
+export type UpdateEnrollmentResponse = UpdateEnrollmentResponses[keyof UpdateEnrollmentResponses];
+
+export type DeleteSequenceData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/email/sequences/{id}';
+};
+
+export type DeleteSequenceErrors = {
+    404: SequenceErrorResponse;
+};
+
+export type DeleteSequenceError = DeleteSequenceErrors[keyof DeleteSequenceErrors];
+
+export type DeleteSequenceResponses = {
+    204: void;
+};
+
+export type DeleteSequenceResponse = DeleteSequenceResponses[keyof DeleteSequenceResponses];
+
+export type GetSequenceData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/email/sequences/{id}';
+};
+
+export type GetSequenceErrors = {
+    404: SequenceErrorResponse;
+};
+
+export type GetSequenceError = GetSequenceErrors[keyof GetSequenceErrors];
+
+export type GetSequenceResponses = {
+    200: SequenceDetailResponse;
+};
+
+export type GetSequenceResponse = GetSequenceResponses[keyof GetSequenceResponses];
+
+export type UpdateSequenceData = {
+    body: UpdateSequenceRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/email/sequences/{id}';
+};
+
+export type UpdateSequenceErrors = {
+    400: SequenceErrorResponse;
+    404: SequenceErrorResponse;
+    409: SequenceErrorResponse;
+};
+
+export type UpdateSequenceError = UpdateSequenceErrors[keyof UpdateSequenceErrors];
+
+export type UpdateSequenceResponses = {
+    200: Sequence;
+};
+
+export type UpdateSequenceResponse = UpdateSequenceResponses[keyof UpdateSequenceResponses];
+
+export type EnrollContactsData = {
+    body: EnrollRequest;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/email/sequences/{id}/enrollments';
+};
+
+export type EnrollContactsErrors = {
+    400: SequenceErrorResponse;
+    404: SequenceErrorResponse;
+    409: SequenceErrorResponse;
+};
+
+export type EnrollContactsError = EnrollContactsErrors[keyof EnrollContactsErrors];
+
+export type EnrollContactsResponses = {
+    200: EnrollResponse;
+};
+
+export type EnrollContactsResponse = EnrollContactsResponses[keyof EnrollContactsResponses];
 
 export type PatchSettingsData = {
     body: PatchSettingsRequest;

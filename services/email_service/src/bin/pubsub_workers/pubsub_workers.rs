@@ -401,6 +401,16 @@ async fn main() -> anyhow::Result<()> {
         worker_cancellation_token.clone(),
     ));
 
+    let sequences = Arc::new(email_service::pubsub::context::sequences(
+        db.clone(),
+        crm_service.clone(),
+        macro_service_urls::EmailServiceUrl::new_for_environment(env)?.as_str(),
+    ));
+    worker_tracker.spawn(email_sequences::inbound::sweep_worker::run(
+        sequences.clone(),
+        worker_cancellation_token.clone(),
+    ));
+
     // Backfill workers run against a dedicated pool to keep their writes
     // off the primary worker pool. CRM writes are part of the backfill
     // flow, so route them through `db_backfill` too.
@@ -528,6 +538,7 @@ async fn main() -> anyhow::Result<()> {
         let dss_client_inbox_sync = dss_client.clone();
         let system_properties_service_inbox_sync = system_properties_service.clone();
         let crm_service_inbox_sync = crm_service.clone();
+        let sequences_inbox_sync = sequences.clone();
         let macro_event_broker_inbox_sync = macro_event_broker.clone();
         let cancellation_token = worker_cancellation_token.clone();
         worker_tracker.spawn(async move {
@@ -544,6 +555,7 @@ async fn main() -> anyhow::Result<()> {
                 dss_client_inbox_sync,
                 system_properties_service_inbox_sync,
                 crm_service_inbox_sync,
+                sequences_inbox_sync,
                 macro_event_broker_inbox_sync,
                 config.notifications_enabled,
                 false,
@@ -570,6 +582,7 @@ async fn main() -> anyhow::Result<()> {
         let dss_client_inbox_sync = dss_client.clone();
         let system_properties_service_inbox_sync = system_properties_service.clone();
         let crm_service_inbox_sync = crm_service.clone();
+        let sequences_inbox_sync = sequences.clone();
         let macro_event_broker_inbox_sync = macro_event_broker.clone();
         let cancellation_token = worker_cancellation_token.clone();
         worker_tracker.spawn(async move {
@@ -586,6 +599,7 @@ async fn main() -> anyhow::Result<()> {
                 dss_client_inbox_sync,
                 system_properties_service_inbox_sync,
                 crm_service_inbox_sync,
+                sequences_inbox_sync,
                 macro_event_broker_inbox_sync,
                 config.notifications_enabled,
                 true,
@@ -658,6 +672,7 @@ async fn main() -> anyhow::Result<()> {
         let dss_client_backfill = dss_client.clone();
         let system_properties_service_backfill = system_properties_service.clone();
         let crm_service_backfill = crm_service_backfill.clone();
+        let sequences_backfill = sequences.clone();
         let macro_event_broker_backfill = macro_event_broker.clone();
         let cancellation_token = worker_cancellation_token.clone();
         worker_tracker.spawn(async move {
@@ -674,6 +689,7 @@ async fn main() -> anyhow::Result<()> {
                 dss_client_backfill,
                 system_properties_service_backfill,
                 crm_service_backfill,
+                sequences_backfill,
                 macro_event_broker_backfill,
                 config.notifications_enabled,
                 cancellation_token,

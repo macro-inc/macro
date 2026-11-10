@@ -1,0 +1,61 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT e.id, e.due_at AS \"due_at!\", COALESCE(e.link_id, s.link_id) AS \"link_id!\",\n                      s.user_id AS owner_id, e.team_id, e.crm_contact_id, e.email\n               FROM email_sequence_enrollments e\n               JOIN email_sequences s ON s.id = e.sequence_id AND s.status = 'active'\n               WHERE e.status = 'active' AND e.due_at <= now()\n                 AND ($1::timestamptz IS NULL OR (e.due_at, e.id) > ($1, $2))\n                 AND NOT EXISTS (SELECT 1 FROM email_sequence_steps h\n                                 WHERE h.enrollment_id = e.id AND h.status = 'scheduled')\n                 -- No inbox at all: it waits until the sequence gets one.\n                 AND COALESCE(e.link_id, s.link_id) IS NOT NULL\n                 AND COALESCE(e.link_id, s.link_id) <> ALL($4)\n               ORDER BY e.due_at, e.id\n               LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "due_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "crm_contact_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "email",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Uuid",
+        "Int8",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "8822fddf3b9a21a3232ae1471de8d236e87ac31f384729e23c4be65f974c85de"
+}

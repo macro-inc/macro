@@ -135,6 +135,7 @@ members = [
   "crates/prompt",
   "crates/properties_service",
   "crates/reminders",
+  "crates/email_sequences",
   "crates/search_service",
   "crates/subsequence_match",
   "crates/skills",

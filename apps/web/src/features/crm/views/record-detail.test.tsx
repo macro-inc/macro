@@ -49,6 +49,9 @@ vi.mock('../context/crm-context', () => ({
   }),
 }));
 
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false, loading: false }),
+}));
 vi.mock('@ui', async () => ({
   ...(await import('../../../components/ui/utils/classname')),
   Tooltip: (props: ParentProps) => <>{props.children}</>,

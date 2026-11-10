@@ -25,7 +25,10 @@ import { t } from '@app/lib/i18n';
 import { usePreference } from '@app/preferences/use-preference';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SplitPanel } from '@components/app/split-panel';
-import { enableCrmActivity } from '@core/constant/featureFlags';
+import {
+  enableCrmActivity,
+  enableSequences,
+} from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -64,8 +67,12 @@ import {
   CRM_ACTIVITY_TABS,
   CRM_RECORDS,
   isCrmActivityTab,
+  isSequencesTab,
   pipelineIdOfTab,
   pipelineTab,
+  SEQUENCES_TAB,
+  sequenceIdOfTab,
+  sequenceTab,
 } from '../core/navigation';
 import type { CrmRecordRef } from '../core/record';
 import { createCrmExportLoader } from '../primitives/export-source';
@@ -255,12 +262,15 @@ export function CrmWorkspaceView(props: {
   }) => JSX.Element;
 }) {
   const activityFlag = useFeatureFlag(enableCrmActivity);
+  const sequencesFlag = useFeatureFlag(enableSequences);
   const {
     openCreateCompany: openCreateCompanyModal,
     openCreateContact: openCreateContactModal,
     exportCompanies: fetchCrmExportCompanies,
     PipelineEditor,
     copyPipelineLink,
+    SequencesNav,
+    Sequences,
   } = useCrmContext();
   const view = useCrmWorkspace();
   const [peopleSearch, setPeopleSearch] = createSignal(
@@ -323,9 +333,12 @@ export function CrmWorkspaceView(props: {
     { default: false }
   );
   const teamQuery = useCurrentTeamQuery();
-  const teamId = () =>
-    teamQuery.isSuccess ? teamQuery.data?.team.id : undefined;
+  // Gated on pending, not success: a failed refetch keeps the team it loaded,
+  // so an open sequence or pipeline stays mounted (FE-48).
+  const team = () => (teamQuery.isPending ? undefined : teamQuery.data?.team);
+  const teamId = () => team()?.id;
   const pipelinesEnabled = useCrmContext().pipelinesEnabled();
+  const crmEnabled = () => team()?.crm_enabled === true;
   const canCreatePipeline = () =>
     pipelinesEnabled() && teamQuery.isSuccess && !!teamQuery.data;
   const pipelines = useCrmContext().createPipelines(() =>
@@ -358,6 +371,12 @@ export function CrmWorkspaceView(props: {
   };
   const activityPending = () =>
     isCrmActivityTab(active()) && activityFlag().loading;
+  // Sequences need the flag and a team with CRM on.
+  const sequencesEnabled = () => sequencesFlag().enabled && crmEnabled();
+  const sequencesLoading = () =>
+    sequencesFlag().loading || (sequencesFlag().enabled && teamQuery.isPending);
+  const sequencesShown = () => sequencesEnabled() && isSequencesTab(active());
+  const sequencesPending = () => sequencesLoading() && isSequencesTab(active());
   const [exporting, setExporting] = createSignal(false);
   const activeList = () =>
     lists.lists().find((list) => `list:${list.id}` === active());
@@ -395,24 +414,33 @@ export function CrmWorkspaceView(props: {
   const activeRecord = () => {
     const id = pipelineId();
     if (id) return pipelineTab(id);
+    if (sequencesShown()) return SEQUENCES_TAB;
     return active().startsWith('list:') || peopleActive() || activityTab()
       ? active()
       : 'active';
   };
   const title = () =>
-    activeList()?.name ??
-    [...CRM_RECORDS, ...CRM_ACTIVITY_TABS].find(
-      (record) => record.id === activeRecord()
-    )?.label ??
-    'Companies';
+    sequencesShown()
+      ? t('sequences.title')
+      : (activeList()?.name ??
+        [...CRM_RECORDS, ...CRM_ACTIVITY_TABS].find(
+          (record) => record.id === activeRecord()
+        )?.label ??
+        'Companies');
   const navigate = (id: string) => {
     settings.close();
     if (!listsEnabled() && id.startsWith('list:')) id = 'active';
     if (!activityFlag().enabled && isCrmActivityTab(id)) id = 'active';
-    if (id !== 'people' && !id.startsWith('list:') && !isCrmActivityTab(id))
+    if (!sequencesEnabled() && isSequencesTab(id)) id = 'active';
+    if (
+      id !== 'people' &&
+      !id.startsWith('list:') &&
+      !isCrmActivityTab(id) &&
+      !isSequencesTab(id)
+    )
       id = 'active';
     if (id === active()) view.host.record.close();
-    if (isCrmActivityTab(id)) {
+    if (isCrmActivityTab(id) || isSequencesTab(id)) {
       view.setActiveTab(id);
       return;
     }
@@ -476,6 +504,21 @@ export function CrmWorkspaceView(props: {
       }
     )
   );
+  // Sequence links wait for PostHog and the team; unavailable falls back to Companies.
+  createEffect(
+    on(
+      () => [sequencesLoading(), sequencesEnabled(), active()] as const,
+      ([loading, enabled, tab]) => {
+        if (!loading && !enabled && isSequencesTab(tab)) navigate('active');
+      }
+    )
+  );
+  // Desktop keeps the sequence beside the contact; phones open it in place.
+  const openSequenceContact = (id: string) =>
+    openWithSplit(
+      { type: 'contact', id },
+      { activate: true, preferNewSplit: !isTouchDevice() }
+    );
   const sidebar = (onCollapse?: () => void) => (
     <CrmSidebar
       searchLabel={peopleActive() ? 'Search people' : 'Search companies'}
@@ -514,6 +557,16 @@ export function CrmWorkspaceView(props: {
             onSelect={selectPipeline}
             onRetry={() => fireAndForget(pipelines.refresh(), 'crm')}
           />
+        </Show>
+      }
+      sequences={
+        <Show when={sequencesEnabled()}>
+          <Suspense>
+            <SequencesNav
+              active={!settings.isOpen() && sequencesShown()}
+              onSelect={() => navigate(SEQUENCES_TAB)}
+            />
+          </Suspense>
         </Show>
       }
       active={settings.isOpen() ? 'settings' : activeRecord()}
@@ -591,6 +644,7 @@ export function CrmWorkspaceView(props: {
                 active={activeRecord()}
                 pipelines={pipelinesEnabled() ? pipelines.pipelines() : []}
                 lists={listsEnabled() ? lists.lists() : []}
+                crmEnabled={crmEnabled()}
                 onNavigate={(id) => {
                   const pipeline = pipelineIdOfTab(id);
                   if (pipeline) selectPipeline(pipeline);
@@ -598,7 +652,12 @@ export function CrmWorkspaceView(props: {
                 }}
                 leading={
                   <Show
-                    when={!peopleActive() && !pipelineId() && !activityTab()}
+                    when={
+                      !peopleActive() &&
+                      !pipelineId() &&
+                      !activityTab() &&
+                      !isSequencesTab(active())
+                    }
                   >
                     <Suspense>
                       <MobileFilterDrawer />
@@ -607,7 +666,14 @@ export function CrmWorkspaceView(props: {
                 }
               />
             </ViewShell.Header>
-            <Show when={!peopleActive() && !pipelineId() && !activityTab()}>
+            <Show
+              when={
+                !peopleActive() &&
+                !pipelineId() &&
+                !activityTab() &&
+                !isSequencesTab(active())
+              }
+            >
               <Suspense>
                 <SoupFiltersBar />
               </Suspense>
@@ -725,13 +791,35 @@ export function CrmWorkspaceView(props: {
               </Suspense>
             )}
           </Show>
+          <Show when={!recordOpen() && sequencesPending()}>
+            <CrmListSkeleton label={t('sequences.loading')} />
+          </Show>
+          <Show when={!recordOpen() && sequencesShown()}>
+            <Suspense
+              fallback={<CrmListSkeleton label={t('sequences.loading')} />}
+            >
+              <Sequences
+                sequenceId={sequenceIdOfTab(active())}
+                navigation={
+                  <NavigationToggle onExpand={() => setCollapsed(false)}>
+                    <Suspense>{sidebar()}</Suspense>
+                  </NavigationToggle>
+                }
+                onOpen={(id) => view.setActiveTab(sequenceTab(id))}
+                onBack={() => view.setActiveTab(SEQUENCES_TAB)}
+                onOpenContact={openSequenceContact}
+              />
+            </Suspense>
+          </Show>
           <Show
             when={
               !recordOpen() &&
               !itemOpen() &&
               !pipelineId() &&
               !activityTab() &&
-              !activityPending()
+              !activityPending() &&
+              !sequencesShown() &&
+              !sequencesPending()
             }
           >
             <Show

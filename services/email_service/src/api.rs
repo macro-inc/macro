@@ -7,7 +7,7 @@ use context::ApiContext;
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use std::time::Duration;
 use tower::ServiceBuilder;
-use tower_http::compression::CompressionLayer;
+use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
@@ -28,17 +28,23 @@ pub(crate) mod swagger;
 mod test;
 
 const GATEWAY_PATH_PREFIX: &str = "/email";
+/// A request slower than this logs a warning.
+const SLOW_REQUEST: Duration = Duration::from_millis(200);
 
 pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let env = state.config.environment;
     let correlation =
         agent_correlation::inbound::CorrelationState::new(state.db.clone(), state.jwt_args.clone());
     let port = state.config.port;
+    let unsubscribe = traced_without_path(
+        email_sequences::inbound::public_unsubscribe::unsubscribe_router(state.sequences.clone()),
+    );
     let traced_api = traced(api_router(state.clone()).with_state(state).layer(
         axum::middleware::from_fn_with_state(correlation, agent_correlation::inbound::propagate),
     ));
     let health = health::router();
-    let app = mount_at_root_and_prefix(traced_api.merge(health)).merge(swagger_ui());
+    let app =
+        mount_at_root_and_prefix(traced_api.merge(unsubscribe).merge(health)).merge(swagger_ui());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
@@ -61,9 +67,41 @@ pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 fn traced(api: Router) -> Router {
     api.layer(
         ServiceBuilder::new()
-            .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
+            .layer(MacroRequestIdAndTracingLayer::new(SLOW_REQUEST).into_inner())
             .layer(macro_cors::cors_layer())
             .layer(CompressionLayer::new().gzip(true)),
+    )
+}
+
+/// [`traced`]'s server span without `url.path`, for routes whose path holds a
+/// secret: the public unsubscribe page's token. It records the matched route.
+/// Mail clients call the page, so there is no `traceparent` to adopt.
+fn traced_without_path(page: Router) -> Router {
+    use axum::extract::MatchedPath;
+    use macro_tower_layers::{CustomOnFailure, CustomOnResponse};
+    use tracing::field::Empty;
+
+    page.layer(
+        TraceLayer::new_for_http()
+            .make_span_with(|request: &axum::http::Request<_>| {
+                let span = tracing::info_span!(
+                    "http.request",
+                    otel.kind = "server",
+                    "http.request.method" = %request.method(),
+                    "http.route" = Empty,
+                    "http.response.status_code" = Empty,
+                    latency_ms = Empty,
+                    otel.status_code = Empty,
+                    otel.status_description = Empty,
+                );
+                if let Some(route) = request.extensions().get::<MatchedPath>() {
+                    span.record("http.route", route.as_str());
+                }
+                span
+            })
+            .on_request(())
+            .on_response(CustomOnResponse::new_with_threshold(SLOW_REQUEST))
+            .on_failure(CustomOnFailure),
     )
 }
 

@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, macro_id, email_address, provider AS \"provider: String\",\n                      (deleting_at IS NULL AND disconnect_requested_at IS NULL\n                       AND is_sync_active AND NOT needs_reauth) AS \"healthy!\"\n               FROM email_links WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "macro_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "email_address",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "provider: String",
+        "type_info": {
+          "Custom": {
+            "name": "email_user_provider_enum",
+            "kind": {
+              "Enum": [
+                "GMAIL",
+                "OUTLOOK"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "healthy!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "0577fca0b0a9c31da41bb917da571b604808a983b84bc570e12cdf96615bc464"
+}

@@ -66,6 +66,7 @@ async fn builds_posts_and_returns_provider_ids() {
         },
         parent_message_id: Some("parent@example.com".to_string()),
         references: Some(vec!["root@example.com".to_string()]),
+        list_unsubscribe: None,
     };
 
     let sent = repository(&server)

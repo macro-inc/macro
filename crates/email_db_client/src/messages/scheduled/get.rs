@@ -93,7 +93,8 @@ pub async fn get_scheduled_message_no_auth(
     Ok(record)
 }
 
-/// Fetches unsent scheduled messages for a link with pagination
+/// Fetches the user's unsent scheduled messages for a link with pagination.
+/// Pending sequence steps are left out; failed ones are listed.
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_scheduled_messages_by_link_id(
     pool: &PgPool,
@@ -184,6 +185,8 @@ pub async fn get_scheduled_db_messages_by_link_id(
           AND m.is_draft = true
           AND m.is_sent = false
           AND sm.sent = false
+          -- A pending sequence step is not the user's scheduled send; a failed one is listed so the user can fix it.
+          AND (sm.source IS NULL OR sm.delivery_status = 'failed')
         ORDER BY m.created_at DESC
         LIMIT $2 OFFSET $3
         "#,

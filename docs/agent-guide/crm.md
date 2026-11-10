@@ -8,7 +8,7 @@ only when pipelines are enabled). The new-pipeline dialog's type menu
 (**Companies**, **Contacts**, **Generic**) shows the same icon, title and
 one-line description rows, with a check on the selected type. The
 **Records** section lists **Companies**, **People**, **Sales Tasks**, **Sales Email**,
-**Sales Notes**, and **Sales Calls**, in that order; Pipelines and
+**Sales Notes**, and **Sales Calls**, in that order; Pipelines, Sequences and
 Lists follow. Record-detail tabs keep their unprefixed names.
 There are no built-in company views or Board/List layout. Companies and People
 are plain soup lists with the shared pagination. Existing personal/team saved
@@ -645,3 +645,51 @@ sections and reopen a record: each restarts the `crm.company` / `crm.contact`
 flow, and disabled sources must not leave it waiting once metadata is ready.
 Traces hold opaque record ids and section categories, never names or addresses.
 Metadata errors may cancel the detail flow when the outer error panel replaces it.
+
+## Sequences
+
+Sequences are multi-step emails the server sends from your own connected Gmail
+inbox (not a delegated inbox or Outlook) to CRM People. They need a team with
+Customers on and PostHog `enable-sequences` (on in dev; local override
+`VITE_ENABLE_SEQUENCES`). Off, the sidebar item, mobile tab, contact card and
+**Add to sequence** disappear, the sequence views never load, no sequence
+requests run, and sequence links return to Companies after flags load. Without
+CRM on for the team, the section and its links behave the same way.
+
+- **Where:** the **Sequences** item after Pipelines in the Customers sidebar (its
+  number counts enrollments that need attention) or the mobile view strip; the
+  list is `sN.crm.tab=sequences` and one sequence opens at
+  `/app/companies/sequence/<uuid>`. Only its owner sees it.
+- **Create and activate:** **New** creates an Untitled sequence and opens it with
+  the title focused; rename it in the header. Set **From**, the emails (the
+  first sends at the start; each later one waits days after the previous and
+  can reply in the same thread; **Insert** adds `{{firstName}}`, `{{name}}` or
+  `{{email}}` at the caret) and the footer; the server adds an unsubscribe
+  link. Edits save on their own (**Saving…** shows beside the status), and
+  **Activate** starts it; Delete is in the ⋯ menu. A sequence can be edited
+  while active; edits reach every email not yet created (each is rendered
+  about a minute before it sends). A save that would leave an active sequence
+  incomplete (an emptied subject, say) is refused: the message shows above the
+  editor and the local edits stay. Pending emails stay out of Mail; a failed one
+  shows there like any failed send.
+- **Add people:** **Add people** searches CRM People (up to 50 at a time) and
+  takes a start time in your time zone. People can be added before activating;
+  nothing sends until the sequence is active. Selected People or
+  Companies rows also offer **Add to sequence** in their right-click and
+  selection command menus; a company brings all its people, so filter or group
+  Companies by Stage to add a pipeline stage. Past 50 people, only the first
+  50 are selected. Skipped people (no email, unsubscribed, already added) are
+  listed with why.
+- **Statuses:** a sequence is Draft, Active or Paused. A person is Active, Paused
+  (also while the sequence is a draft or paused), Needs attention (an email
+  didn't go out: check it in Mail, then resume or stop; sending it from Mail
+  moves them on), Stopped (by you, replied, bounced, unsubscribed, or no
+  longer in Customers) or Completed. Rows show progress, last and next send,
+  and offer Pause, Resume (also after a stop for a reply, bounce or a person
+  no longer in Customers), Stop and Unsubscribe (team-wide, confirmed first);
+  the name opens the person, whose record holds the sent emails. An inbox
+  that can't send holds emails back instead of failing them; an active
+  sequence's detail says so until you reconnect it or choose another.
+- **Contact card:** a contact's Overview lists its sequences for every teammate:
+  sequence, owner, status, last and next send. The owner's sequence name
+  opens it.

@@ -1,0 +1,118 @@
+import type {
+  EnrollmentAction,
+  EnrollmentReason,
+  EnrollmentStatus,
+  Sequence,
+  SequenceStatus,
+} from '@service-email/generated/schemas';
+import { describe, expect, it } from 'vitest';
+import {
+  draftChanges,
+  enrollmentActions,
+  insertToken,
+  shownStatus,
+  toDraft,
+} from './sequence';
+
+describe('enrollmentActions', () => {
+  it.each<
+    [
+      EnrollmentStatus,
+      EnrollmentReason | null,
+      SequenceStatus,
+      EnrollmentAction[],
+      string | null,
+    ]
+  >([
+    ['active', null, 'active', ['pause', 'stop', 'unsubscribe'], 'person'],
+    ['paused', null, 'active', ['resume', 'stop', 'unsubscribe'], 'person'],
+    [
+      'needs_attention',
+      null,
+      'active',
+      ['resume', 'pause', 'stop', 'unsubscribe'],
+      'person',
+    ],
+    ['stopped', 'replied', 'active', ['resume', 'unsubscribe'], 'person'],
+    ['stopped', 'bounced', 'active', ['resume', 'unsubscribe'], 'person'],
+    [
+      'stopped',
+      'contact_removed',
+      'active',
+      ['resume', 'unsubscribe'],
+      'person',
+    ],
+    ['stopped', 'contact_removed', 'active', ['unsubscribe'], null],
+    ['stopped', 'manual', 'active', ['unsubscribe'], 'person'],
+    ['stopped', 'unsubscribed', 'active', [], 'person'],
+    ['completed', null, 'active', ['unsubscribe'], 'person'],
+    ['active', null, 'paused', ['stop', 'unsubscribe'], 'person'],
+    ['needs_attention', null, 'paused', ['stop', 'unsubscribe'], 'person'],
+    ['paused', null, 'draft', ['stop', 'unsubscribe'], 'person'],
+    ['stopped', 'replied', 'paused', ['unsubscribe'], 'person'],
+  ])(
+    '%s (%s) in a %s sequence offers %j (CRM person %s)',
+    (status, reason, sequence, expected, crmContactId) => {
+      expect(
+        enrollmentActions({ status, reason, crmContactId }, sequence)
+      ).toEqual(expected);
+    }
+  );
+});
+
+describe('shownStatus', () => {
+  it.each<[EnrollmentStatus, boolean, EnrollmentStatus]>([
+    ['active', true, 'paused'],
+    ['active', false, 'active'],
+    ['needs_attention', true, 'needs_attention'],
+  ])('%s with the sequence held=%s shows %s', (status, held, expected) => {
+    expect(shownStatus({ status }, held)).toBe(expected);
+  });
+});
+
+describe('draftChanges', () => {
+  const sequence: Sequence = {
+    id: 'sequence',
+    name: 'Intro',
+    linkId: 'link',
+    footer: '',
+    status: 'draft',
+    steps: [
+      { id: 'a', delayDays: 0, subject: 'Hello', body: 'Hi', asReply: false },
+      { id: 'b', delayDays: 2, subject: '', body: 'Again', asReply: true },
+    ],
+    createdAt: '',
+    updatedAt: '',
+  };
+  const draft = toDraft(sequence);
+  const [first, second] = draft.steps;
+
+  it('sends only what changed', () => {
+    expect(draftChanges(sequence, draft)).toBeUndefined();
+    expect(draftChanges(sequence, { ...draft, name: 'Welcome' })).toEqual({
+      name: 'Welcome',
+    });
+  });
+
+  it('sends the first email with no wait and not as a reply', () => {
+    expect(
+      draftChanges(sequence, {
+        ...draft,
+        steps: [{ ...first, delayDays: 5 }, second],
+      })
+    ).toBeUndefined();
+    expect(
+      draftChanges(sequence, { ...draft, steps: [second, first] })?.steps
+    ).toEqual([
+      { ...second, delayDays: 0, asReply: false },
+      { ...first, asReply: false },
+    ]);
+  });
+});
+
+it('inserts a token over the selection and puts the caret after it', () => {
+  expect(insertToken('Hi there,', 3, 8, '{{firstName}}')).toEqual({
+    value: 'Hi {{firstName}},',
+    caret: 16,
+  });
+});

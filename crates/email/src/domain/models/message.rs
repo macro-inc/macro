@@ -20,6 +20,30 @@ pub enum ScheduledSendStatus {
     Unconfirmed,
 }
 
+/// What created a scheduled send, when it was not the user's own composer.
+///
+/// A pending send from a source stays out of the user's mail lists (Drafts,
+/// Scheduled, Inbox) until it is sent or its delivery fails.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::IntoStaticStr,
+    strum::EnumString,
+)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum ScheduledSendSource {
+    /// A step of an email sequence.
+    Sequence,
+}
+
 /// Persisted schedule and its delivery state, independent of the client journal.
 #[derive(Debug, Clone)]
 pub struct ScheduledSend {
@@ -27,6 +51,8 @@ pub struct ScheduledSend {
     pub send_time: DateTime<Utc>,
     /// Whether delivery is waiting, in progress, failed, or uncertain.
     pub status: ScheduledSendStatus,
+    /// What created the schedule, when it was not the user's own composer.
+    pub source: Option<ScheduledSendSource>,
 }
 
 /// A raw message record without assembled sub-types.
@@ -182,6 +208,8 @@ pub struct Message {
     pub scheduled_send_time: Option<DateTime<Utc>>,
     /// Delivery recovery state for an unsent scheduled message.
     pub scheduled_send_status: Option<ScheduledSendStatus>,
+    /// What created the unsent schedule, such as a sequence step.
+    pub scheduled_send_source: Option<ScheduledSendSource>,
     /// Sender contact info.
     pub from: Option<ContactInfo>,
     /// To recipients.

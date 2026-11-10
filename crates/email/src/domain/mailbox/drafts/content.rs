@@ -216,6 +216,7 @@ where
             },
             parent_message_id,
             references: (!references.is_empty()).then_some(references),
+            list_unsubscribe: None,
         };
         if lease.delete_requested {
             return Ok(PreparedDraft {

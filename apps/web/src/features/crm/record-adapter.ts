@@ -16,6 +16,7 @@ import { createContactDiscovery } from './primitives/contact-discovery';
 import { useSetCompanyHiddenMutation as createHiddenMutation } from './queries/companies';
 import {
   useQuickAccessCrmContactsQuery as createContactSuggestions,
+  useCrmCompanyContactsQuery,
   useCrmContactsQuery,
 } from './queries/contact-suggestions';
 import { useCrmContactByEmailQuery as createContactByEmailQuery } from './queries/contacts';
@@ -80,6 +81,46 @@ export function useCrmContactMentionSource(
     loadMore: async () => {
       await query.fetchNextPage();
     },
+  };
+}
+
+/** People matching `search` across the viewer's CRM-enabled teams, recently updated first when it is empty. */
+export function useCrmPeopleSearch(search: Accessor<string>, limit: number) {
+  const query = useCrmContactsQuery(
+    { client: useQueryClient() },
+    () => true,
+    search,
+    limit
+  );
+  return {
+    people: createMemo(() =>
+      queryReadyGate(query)
+        ? query.data.pages.flatMap((page) =>
+            page.contacts.map(toCrmContactEntity)
+          )
+        : []
+    ),
+    pending: () => query.isPending,
+    failed: () => query.isError && !queryReadyGate(query),
+  };
+}
+
+/** People at any of the companies, up to `limit`. */
+export function useCrmCompanyPeople(
+  companyIds: Accessor<readonly string[]>,
+  limit: number
+) {
+  const query = useCrmCompanyContactsQuery(
+    { client: useQueryClient() },
+    companyIds,
+    limit
+  );
+  return {
+    people: createMemo(() =>
+      queryReadyGate(query) ? query.data.map(toCrmContactEntity) : []
+    ),
+    pending: () => companyIds().length > 0 && query.isPending,
+    failed: () => query.isError && !queryReadyGate(query),
   };
 }
 

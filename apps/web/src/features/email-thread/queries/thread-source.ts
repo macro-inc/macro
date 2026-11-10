@@ -92,6 +92,7 @@ export function toEmailThread(thread: ApiThread): EmailThread {
       replying_to_id: message.replying_to_id,
       scheduled_send_time: message.scheduled_send_time,
       scheduled_send_status: message.scheduled_send_status,
+      scheduled_send_source: message.scheduled_send_source,
       sent_at: message.sent_at,
       snippet: message.snippet,
       subject: message.subject,

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_sequence_recipients (team_id, email, token, unsubscribed_at, source)\n               VALUES ($1, $2, $3, now(), 'manual')\n               ON CONFLICT (team_id, email) DO UPDATE\n               SET unsubscribed_at = COALESCE(email_sequence_recipients.unsubscribed_at, now()),\n                   source = COALESCE(email_sequence_recipients.source, 'manual')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7bc31ae4fccb974ef8ca643c2029dcea80787f76d732ca4701bb96fc99e5c727"
+}

@@ -109,11 +109,14 @@ async fn openapi_is_served_at_root_and_gateway_prefix() {
     }
 }
 
-/// Prod exports spans at INFO and above, so the API's request span must be
-/// an INFO server span carrying the matched route.
-#[tokio::test]
-async fn api_requests_export_an_info_server_span_with_the_route() {
-    use opentelemetry::trace::{SpanKind, TracerProvider as _};
+/// Sends `request` through `app` twice and returns the span the second one
+/// exported at INFO. The first request registers the span's callsite: another
+/// test thread may have cached a "never" interest for it, so it is recomputed.
+async fn exported_span(
+    app: Router,
+    request: impl Fn() -> Request<Body>,
+) -> opentelemetry_sdk::trace::SpanData {
+    use opentelemetry::trace::TracerProvider as _;
     use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
     use tracing_subscriber::{Layer as _, filter::LevelFilter, layer::SubscriberExt as _};
 
@@ -127,19 +130,6 @@ async fn api_requests_export_an_info_server_span_with_the_route() {
             .with_filter(LevelFilter::INFO),
     );
     let _guard = tracing::subscriber::set_default(subscriber);
-    let app = mount_at_root_and_prefix(super::traced(
-        Router::new().route("/outlook/webhook/{attempt}", axum::routing::post(ok)),
-    ));
-    let request = || {
-        Request::builder()
-            .uri("/email/outlook/webhook/0195f0a6-8a0e-7cc2-8f39-6f0b5d6a2e10")
-            .method("POST")
-            .body(Body::empty())
-            .unwrap()
-    };
-    // The first request registers the span's callsite. Another test thread
-    // may have cached a "never" interest for it, so recompute it and measure
-    // the second request.
     app.clone().oneshot(request()).await.unwrap();
     tracing::callsite::rebuild_interest_cache();
     exporter.reset();
@@ -148,15 +138,71 @@ async fn api_requests_export_an_info_server_span_with_the_route() {
     let status = app.oneshot(request()).await.unwrap().status();
     assert_eq!(status, StatusCode::OK);
 
-    let spans = exporter.get_finished_spans().unwrap();
-    let [span] = spans.as_slice() else {
-        panic!("expected one exported span, got {spans:?}");
-    };
-    assert_eq!(span.span_kind, SpanKind::Server);
-    let route = span
-        .attributes
+    let mut spans = exporter.get_finished_spans().unwrap();
+    assert_eq!(spans.len(), 1, "expected one exported span, got {spans:?}");
+    spans.remove(0)
+}
+
+fn attribute(span: &opentelemetry_sdk::trace::SpanData, key: &str) -> Option<String> {
+    span.attributes
         .iter()
-        .find(|attribute| attribute.key.as_str() == "http.route")
-        .map(|attribute| attribute.value.to_string());
-    assert_eq!(route.as_deref(), Some("/email/outlook/webhook/{attempt}"));
+        .find(|attribute| attribute.key.as_str() == key)
+        .map(|attribute| attribute.value.to_string())
+}
+
+fn post(path: &'static str) -> impl Fn() -> Request<Body> {
+    move || {
+        Request::builder()
+            .uri(path)
+            .method("POST")
+            .body(Body::empty())
+            .unwrap()
+    }
+}
+
+/// Prod exports spans at INFO and above, so the API's request span must be
+/// an INFO server span carrying the matched route.
+#[tokio::test]
+async fn api_requests_export_an_info_server_span_with_the_route() {
+    let app = mount_at_root_and_prefix(super::traced(
+        Router::new().route("/outlook/webhook/{attempt}", axum::routing::post(ok)),
+    ));
+    let span = exported_span(
+        app,
+        post("/email/outlook/webhook/0195f0a6-8a0e-7cc2-8f39-6f0b5d6a2e10"),
+    )
+    .await;
+    assert_eq!(span.span_kind, opentelemetry::trace::SpanKind::Server);
+    assert_eq!(
+        attribute(&span, "http.route").as_deref(),
+        Some("/email/outlook/webhook/{attempt}")
+    );
+}
+
+/// The unsubscribe page's span carries its route but never the token in its
+/// path.
+#[tokio::test]
+async fn the_unsubscribe_token_stays_out_of_the_server_span() {
+    use email_sequences::inbound::public_unsubscribe::UNSUBSCRIBE_PATH;
+
+    let app = mount_at_root_and_prefix(super::traced_without_path(
+        Router::new().route(UNSUBSCRIBE_PATH, axum::routing::post(ok)),
+    ));
+    let span = exported_span(
+        app,
+        post("/email/public/sequences/unsubscribe/secret-token"),
+    )
+    .await;
+    assert_eq!(span.span_kind, opentelemetry::trace::SpanKind::Server);
+    assert_eq!(
+        attribute(&span, "http.route"),
+        Some(format!("/email{UNSUBSCRIBE_PATH}"))
+    );
+    assert!(
+        span.attributes
+            .iter()
+            .all(|attribute| !attribute.value.to_string().contains("secret-token")),
+        "{:?}",
+        span.attributes
+    );
 }

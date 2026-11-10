@@ -1,5 +1,7 @@
 use mail_builder::MessageBuilder;
 use mail_builder::headers::address::Address;
+use mail_builder::headers::raw::Raw;
+use mail_builder::headers::url::URL;
 use mail_builder::mime::{BodyPart, MimePart};
 use models_email::email::service::address::ContactInfo;
 use models_email::email::service::attachment::AttachmentToSend;
@@ -25,6 +27,11 @@ pub struct SendRequest {
     pub parent_message_id: Option<String>,
     /// Global message identifiers that describe the reply chain.
     pub references: Option<Vec<String>>,
+    /// One-click unsubscribe URL (RFC 8058), sent as `List-Unsubscribe` with
+    /// `List-Unsubscribe-Post`. Defaulted so checkpoints written before the
+    /// field existed still decode.
+    #[serde(default)]
+    pub list_unsubscribe: Option<String>,
 }
 
 impl SendRequest {
@@ -47,6 +54,14 @@ impl SendRequest {
         }
         if let Some(references) = &self.references {
             builder = builder.references(references.clone());
+        }
+        if let Some(url) = &self.list_unsubscribe {
+            builder = builder
+                .header("List-Unsubscribe", URL::new(url.as_str()))
+                .header(
+                    "List-Unsubscribe-Post",
+                    Raw::new("List-Unsubscribe=One-Click"),
+                );
         }
         if let Some(text_body) = &self.message.body_text {
             builder = builder.text_body(text_body);

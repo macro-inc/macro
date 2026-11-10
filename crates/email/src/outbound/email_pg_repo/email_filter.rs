@@ -153,6 +153,9 @@ pub async fn resync_signal_flags_for_sender(
                     JOIN email_message_mailbox_facts facts ON facts.id = m.id
                     WHERE m.thread_id = a.thread_id AND facts.is_present
                       AND NOT facts.in_trash
+                      -- A pending sequence step is not mail yet (see recompute_signal).
+                      AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id
+                          AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
                       AND NOT EXISTS (
                           SELECT 1 FROM email_contacts sender_c
                           WHERE sender_c.id = m.from_contact_id

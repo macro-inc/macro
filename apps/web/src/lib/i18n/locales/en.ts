@@ -19,6 +19,7 @@ import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
 import routineSuggestions from './en/routine-suggestions';
 import runtimeSharing from './en/runtime-sharing';
+import sequences from './en/sequences';
 import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
@@ -53,6 +54,7 @@ export default {
   notificationsInbox,
   routineSuggestions,
   runtimeSharing,
+  sequences,
   settingsLanguage,
   settingsMobileApp,
   settingsNav,

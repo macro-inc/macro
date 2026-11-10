@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT e.id, e.sequence_id, s.user_id AS owner_id, e.team_id, e.link_id, e.email,\n                          e.crm_contact_id, e.contact_name, e.status, e.reason, e.due_at,\n                          e.timezone, e.send_time, e.replies_after\n                   FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id\n                   WHERE e.id = $1\n                   FOR UPDATE OF e SKIP LOCKED",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sequence_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "crm_contact_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "contact_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "reason",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "due_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "timezone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "send_time",
+        "type_info": "Time"
+      },
+      {
+        "ordinal": 13,
+        "name": "replies_after",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "d8d657c4b91117902220939274d4bdbec120c457bdf42a392e8d383cb14ef270"
+}

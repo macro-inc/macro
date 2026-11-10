@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_scheduled_messages SET processing = true,\n           delivery_status = CASE WHEN $4 THEN 'unconfirmed' ELSE 'failed' END,\n           delivery_lease_expires_at = NOW() + make_interval(secs => $5), updated_at = NOW()\n           WHERE message_id = $1 AND link_id = $2 AND delivery_claim_id = $3 AND NOT sent\n           RETURNING source IS NOT NULL AS \"sourced!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sourced!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Bool",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ed9aae4e05a8b4bf6c9f2ef5c227aa79662a6c8edf10f7473b5bc7fa8bbb86fd"
+}

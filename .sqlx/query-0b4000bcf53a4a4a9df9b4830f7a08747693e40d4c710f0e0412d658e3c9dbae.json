@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT max(send_time) FROM email_scheduled_messages\n               WHERE link_id = $1 AND source IS NOT NULL AND NOT sent AND send_time <= $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "max",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0b4000bcf53a4a4a9df9b4830f7a08747693e40d4c710f0e0412d658e3c9dbae"
+}

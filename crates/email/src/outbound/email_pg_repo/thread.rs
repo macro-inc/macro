@@ -139,7 +139,10 @@ pub(super) async fn thread_mail_projections_by_ids(
                     COALESCE(bool_or(NOT f.is_important) FILTER (WHERE LOWER(f.email_domain) = LOWER(SPLIT_PART(c.email_address, '@', 2))), false) AS domain_false
                 FROM email_filters f WHERE f.link_id = m.link_id
             ) rules
+            -- A pending sequence step is not mail yet; recompute_thread_metadata
+            -- leaves it out of the thread's projection the same way.
             WHERE m.thread_id = ANY($1) AND facts.is_present
+              AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
         ), draft_states AS (
             SELECT thread_id, jsonb_build_object(
                 'baseline', jsonb_build_object(
@@ -190,12 +193,12 @@ pub(super) async fn thread_mail_projections_by_ids(
         LEFT JOIN draft_states ds ON ds.thread_id = t.id
         LEFT JOIN LATERAL (
             SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id, m.from_name
-            FROM email_messages m WHERE m.thread_id = t.id AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash AND NOT mf.in_junk) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1
+            FROM email_messages m WHERE m.thread_id = t.id AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash AND NOT mf.in_junk) AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed') ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1
         ) am ON TRUE
         LEFT JOIN email_contacts ac ON ac.id = am.from_contact_id
         LEFT JOIN LATERAL (
             SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id, m.from_name
-            FROM email_messages m WHERE m.thread_id = t.id AND m.is_draft AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1
+            FROM email_messages m WHERE m.thread_id = t.id AND m.is_draft AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash) AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m.id AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed') ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1
         ) dm ON TRUE
         LEFT JOIN email_contacts dc ON dc.id = dm.from_contact_id
         LEFT JOIN LATERAL (

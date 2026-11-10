@@ -540,7 +540,8 @@ fn build_address_message_predicate(
     })
 }
 
-/// Exclude absent messages, and trash outside its explicit folder.
+/// Exclude absent messages, trash outside its explicit folder, and pending
+/// sequence steps.
 fn build_trash_check(resolved: &ResolvedFilters) -> SqlFragment {
     build_mailbox_facts_check(resolved, None)
 }
@@ -558,8 +559,15 @@ fn build_mailbox_facts_check(resolved: &ResolvedFilters, view_fact: Option<&str>
         predicate.push_str(" AND ");
         predicate.push_str(fact);
     }
+    // A pending sequence step (a draft whose schedule has a source and is
+    // neither sent nor failed) stays out of every mail list until it is sent or
+    // fails. Every candidate-stage probe and the preview lateral come through
+    // here, so a thread is a candidate only when the lateral can show one of
+    // its messages. The static preview views and `recompute_thread_metadata`
+    // restate this predicate.
     SqlFragment::raw(format!(
-        "EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND {predicate})"
+        "EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND {predicate}) \
+         AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages sm_seq WHERE sm_seq.message_id = m.id AND sm_seq.source IS NOT NULL AND NOT sm_seq.sent AND sm_seq.delivery_status <> 'failed')"
     ))
 }
 
@@ -587,7 +595,11 @@ pub(super) fn build_thread_address_filter(ast: &Expr<EmailLiteral>) -> SqlFragme
 /// per-message filter the address CTE doesn't model — a non-empty
 /// view-level message filter (Starred / Drafts / Important / …). Without
 /// this, the candidate `LIMIT` counts threads that the lateral later
-/// drops, so the page under-fills while still emitting a cursor.
+/// drops, so the page under-fills while still emitting a cursor. The EXISTS
+/// uses the lateral's predicate, so a thread holding only pending sequence
+/// steps can't take a slot either. Inbox needs no check:
+/// `inbox_visible` comes from the thread projection, which already leaves
+/// those steps out.
 pub(super) fn wants_message_exists_pushdown(view: &PreviewView) -> bool {
     view_mailbox_fact(view).is_some() || !build_view_message_filter(view).is_empty()
 }
