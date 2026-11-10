@@ -34,6 +34,7 @@ import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import { Button } from '@ui';
 import {
   type Accessor,
+  type ComponentProps,
   createMemo,
   type JSX,
   Match,
@@ -83,6 +84,22 @@ function CallDetailMoreMenu(props: { data: CallDetailData }) {
     ),
     owner: props.data.record.createdBy,
   }));
+  const operations = (): ComponentProps<typeof SplitFileMenu>['ops'] => {
+    const rename = { op: 'rename' as const };
+    const remove = { op: 'delete' as const };
+    if (!props.data.record.recordingUrl) return [rename, remove];
+    return [
+      rename,
+      {
+        group: 'file',
+        label: t('entityActions.download'),
+        icon: DownloadIcon,
+        action: () =>
+          fireAndForget(download.start(), 'call-recording-download'),
+      },
+      remove,
+    ];
+  };
   return (
     <div class="shrink-0">
       <SplitFileMenu
@@ -101,21 +118,7 @@ function CallDetailMoreMenu(props: { data: CallDetailData }) {
           isActive: props.data.record.isActive,
           status: props.data.record.status ?? undefined,
         })}
-        ops={[
-          { op: 'rename' },
-          ...(props.data.record.recordingUrl
-            ? [
-                {
-                  group: 'file' as const,
-                  label: t('entityActions.download'),
-                  icon: DownloadIcon,
-                  action: () =>
-                    fireAndForget(download.start(), 'call-recording-download'),
-                },
-              ]
-            : []),
-          { op: 'delete' },
-        ]}
+        ops={operations()}
         tools={[
           {
             get label() {

@@ -12,8 +12,8 @@ import MutedVolumeIcon from '@icon/system/regular/speaker-slash.svg';
 import TranscriptIcon from '@icon/system/regular/text-align-left.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Button, Dropdown, Slider } from '@ui';
-import { For, Show } from 'solid-js';
-import { createRecordingControlMenus } from '../../primitives/recording-control-menus';
+import { For, onCleanup, onMount, Show } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import type { RecordingControlsVisibility } from '../../primitives/recording-controls';
 import {
   RECORDING_PLAYBACK_RATES,
@@ -21,8 +21,11 @@ import {
 } from '../../primitives/recording-playback';
 import { createRecordingVolume } from '../../primitives/recording-volume';
 
-const CONTROL_MOTION =
-  'transition-[transform,opacity] duration-[240ms] ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transform-none';
+type DesktopControlsState = {
+  speedOpen: boolean;
+  volumeOpen: boolean;
+  mount: HTMLElement | undefined;
+};
 
 type TranscriptControl = { visible: boolean; onToggle: () => void };
 
@@ -32,12 +35,40 @@ function DesktopRecordingControls(props: {
   transcript?: TranscriptControl;
 }) {
   const state = () => props.playback;
-  const menus = createRecordingControlMenus(() => props.visibility);
+  const [menus, setMenus] = createStore<DesktopControlsState>({
+    speedOpen: false,
+    volumeOpen: false,
+    mount: undefined,
+  });
+  let controls: HTMLDivElement | undefined;
+  let fullscreenButton: HTMLButtonElement | undefined;
+  const setMenuOpen = (menu: 'speedOpen' | 'volumeOpen', open: boolean) => {
+    setMenus(menu, open);
+    props.visibility.setMenuOpen(menus.speedOpen || menus.volumeOpen);
+  };
+  onCleanup(() => props.visibility.setMenuOpen(false));
+  onMount(() => {
+    // Fullscreen only paints descendants of its element. Move both portals there
+    // while fullscreen is active, without clipping them inside the video frame.
+    const updateMount = () => {
+      const fullscreen = document.fullscreenElement;
+      const ownsControls =
+        fullscreen instanceof HTMLElement &&
+        controls &&
+        fullscreen.contains(controls);
+      setMenus('mount', ownsControls ? fullscreen : undefined);
+    };
+    updateMount();
+    document.addEventListener('fullscreenchange', updateMount);
+    onCleanup(() =>
+      document.removeEventListener('fullscreenchange', updateMount)
+    );
+  });
   return (
     <div
-      ref={menus.setControlsRef}
+      ref={controls}
       data-recording-controls
-      class={`${CONTROL_MOTION} absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-surface/95 px-3 pb-2 pt-1`}
+      class="transition-[transform,opacity] duration-[240ms] ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transform-none absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-surface/95 px-3 pb-2 pt-1"
       classList={{
         'opacity-0 pointer-events-none transform-[translateY(100%)]':
           !props.visibility.visible(),
@@ -86,7 +117,10 @@ function DesktopRecordingControls(props: {
             / {formatVideoTimestamp(state().duration())}
           </span>
         </span>
-        <Dropdown placement="top-end" onOpenChange={menus.setSpeedOpen}>
+        <Dropdown
+          placement="top-end"
+          onOpenChange={(open) => setMenuOpen('speedOpen', open)}
+        >
           <Dropdown.Trigger
             variant="ghost"
             size="sm"
@@ -95,7 +129,7 @@ function DesktopRecordingControls(props: {
           >
             {state().rate()}×
           </Dropdown.Trigger>
-          <Dropdown.Content mount={menus.mount()} class="min-w-40">
+          <Dropdown.Content mount={menus.mount} class="min-w-40">
             <Dropdown.Group>
               <Dropdown.RadioGroup
                 value={String(state().rate())}
@@ -131,13 +165,13 @@ function DesktopRecordingControls(props: {
         </Show>
         <RecordingVolume
           playback={props.playback}
-          mount={menus.mount()}
-          open={menus.volumeOpen()}
-          onTabForward={menus.focusFullscreen}
-          onOpenChange={menus.setVolumeOpen}
+          mount={menus.mount}
+          open={menus.volumeOpen}
+          onTabForward={() => fullscreenButton?.focus()}
+          onOpenChange={(open) => setMenuOpen('volumeOpen', open)}
         />
         <Button
-          ref={menus.setFullscreenRef}
+          ref={fullscreenButton}
           variant="ghost"
           size="icon-sm"
           aria-label={t('calls.detailFullscreen')}
@@ -269,7 +303,7 @@ function MobileRecordingControls(props: {
     <>
       <div class="pointer-events-none absolute inset-0 flex items-center justify-center pb-12">
         <div
-          class={CONTROL_MOTION}
+          class="transition-[transform,opacity] duration-[240ms] ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transform-none"
           classList={{
             'opacity-0 pointer-events-none transform-[translateY(100%)]':
               !props.visibility.visible(),
@@ -298,7 +332,7 @@ function MobileRecordingControls(props: {
       </div>
       <div
         data-recording-controls
-        class={`${CONTROL_MOTION} absolute inset-x-0 bottom-0 bg-surface/95 px-3 pb-2`}
+        class="transition-[transform,opacity] duration-[240ms] ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transform-none absolute inset-x-0 bottom-0 bg-surface/95 px-3 pb-2"
         classList={{
           'opacity-0 pointer-events-none transform-[translateY(100%)]':
             !props.visibility.visible(),

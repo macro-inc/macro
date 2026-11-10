@@ -6,9 +6,11 @@ import { formatVideoTimestamp } from '@core/util/duration';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlayIcon from '@icon/system/regular/play.svg';
 import { Button } from '@ui';
-import { For, Show } from 'solid-js';
-import { messageVideoSeconds } from '../../core/recording-chat';
-import { createRecordingChat } from '../../primitives/recording-chat';
+import { createEffect, createMemo, For, on, onCleanup, Show } from 'solid-js';
+import {
+  messageVideoSeconds,
+  recordingChatMessages,
+} from '../../core/recording-chat';
 
 export function CallRecordingChat(props: {
   source: CallDiscussionSource;
@@ -20,7 +22,27 @@ export function CallRecordingChat(props: {
   onClearTarget?: () => void;
   hideHeading?: boolean;
 }) {
-  const { messages, registerRow } = createRecordingChat(props);
+  const messages = createMemo(() =>
+    recordingChatMessages(props.source.thread())
+  );
+  const rows = new Map<string, HTMLDivElement>();
+  const registerRow = (id: string, element: HTMLDivElement) => {
+    rows.set(id, element);
+    onCleanup(() => rows.delete(id));
+  };
+  createEffect(
+    on(
+      () => [props.targetId, props.requestKey, messages()] as const,
+      ([id]) => {
+        if (!id) return;
+        rows.get(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    )
+  );
+  const empty = () => {
+    if (props.source.loading() || props.source.failed()) return false;
+    return messages().length === 0;
+  };
   return (
     <section
       class="flex min-w-0 flex-col gap-5"
@@ -28,20 +50,14 @@ export function CallRecordingChat(props: {
     >
       <Show when={!props.hideHeading}>
         <h3 class="flex items-center gap-2 text-base font-semibold">
-          Call chat{' '}
+          {t('calls.detailCallChat')}{' '}
           <span class="font-normal text-ink-muted">{messages().length}</span>
         </h3>
       </Show>
       <Show when={props.source.loading()}>
         <p class="text-sm text-ink-muted">{t('calls.detailLoadingChat')}</p>
       </Show>
-      <Show
-        when={
-          !props.source.loading() &&
-          !props.source.failed() &&
-          messages().length === 0
-        }
-      >
+      <Show when={empty()}>
         <p class="text-sm text-ink-muted">{t('calls.detailEmptyChat')}</p>
       </Show>
       <Show when={props.source.failed()}>
@@ -73,9 +89,9 @@ export function CallRecordingChat(props: {
                   message={message}
                   ref={(el) => registerRow(message.id, el)}
                   targeted={props.targetId === message.id}
-                  onClick={() =>
-                    props.targetId === message.id && props.onClearTarget?.()
-                  }
+                  onClick={() => {
+                    if (props.targetId === message.id) props.onClearTarget?.();
+                  }}
                 >
                   <div class="grid grid-cols-[28px_minmax(0,1fr)] gap-x-3 gap-y-1">
                     <div class="row-span-3">

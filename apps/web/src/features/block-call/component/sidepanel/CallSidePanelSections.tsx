@@ -174,16 +174,21 @@ function SharingSectionContent(props: { record: CallRecord }) {
 
   const handleChange = async (checked: boolean) => {
     const current = record();
-    if (!canEdit() || isPending() || !current.channelId) return;
+    if (!canEdit() || isPending()) return;
+    if (!current.channelId) return;
     try {
-      const newValue = current.isActive
-        ? await toggleLiveShare.mutateAsync(current.callId)
-        : (
-            await setTeamShare.mutateAsync({
-              callId: current.callId,
-              shared: checked,
-            })
-          ).shared;
+      // Active rooms toggle their live state; archived records persist the
+      // requested share value. Both return the authoritative state for the room.
+      let newValue: boolean;
+      if (current.isActive) {
+        newValue = await toggleLiveShare.mutateAsync(current.callId);
+      } else {
+        const result = await setTeamShare.mutateAsync({
+          callId: current.callId,
+          shared: checked,
+        });
+        newValue = result.shared;
+      }
 
       if (callCtx?.activeCallId() === current.callId) {
         callCtx.setSharedWithTeam(newValue);
@@ -199,9 +204,9 @@ function SharingSectionContent(props: { record: CallRecord }) {
       : t('calls.detailOwnerSharing');
   const readOnlyReason = () => {
     const name = getDisplayNameParts(tryMacroId(record().createdBy));
-    return name.firstName || name.lastName
-      ? t('calls.detailSharingStarterNamed', { name: name.fullName })
-      : t('calls.detailSharingStarter');
+    const hasResolvedName = name.firstName || name.lastName;
+    if (!hasResolvedName) return t('calls.detailSharingStarter');
+    return t('calls.detailSharingStarterNamed', { name: name.fullName });
   };
 
   return (

@@ -64,7 +64,16 @@ vi.mock('@ui', () => ({
 vi.mock('./CallRecordingParticipants', () => ({
   CallRecordingAvatars: () => null,
 }));
-vi.mock('../CallTranscript', () => ({ CallTranscript: () => null }));
+vi.mock('../CallTranscript', () => ({
+  CallTranscript: {
+    Root: () => null,
+    ScrollArea: () => null,
+    Header: () => null,
+    Content: () => null,
+    Scrollbar: () => null,
+    Sync: () => null,
+  },
+}));
 vi.mock('./CallRecordingSummary', () => ({
   CallRecordingSummarySection: () => <p>Summary content</p>,
 }));

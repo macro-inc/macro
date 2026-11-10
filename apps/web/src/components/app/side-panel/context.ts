@@ -10,7 +10,7 @@ export type SidePanelSectionEntry = {
    * order render after ordered ones, in their registration order.
    */
   order?: number;
-  component: (floating: boolean, dividers?: boolean) => JSX.Element;
+  component: (floating: boolean) => JSX.Element;
 };
 
 export type SidePanelContextType = {

@@ -5,12 +5,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import {
-  createContext,
-  createSignal,
-  type JSX,
-  type ParentProps,
-} from 'solid-js';
+import { createContext, createSignal, type ParentProps } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { SidePanel } from './SidePanel';
 
@@ -75,24 +70,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup(props?: {
-  floating?: boolean;
-  defaultOpen?: boolean;
-  narrowThreshold?: number;
-  panel?: (sections: JSX.Element) => JSX.Element;
-}) {
+function setup() {
   render(() => (
-    <SidePanel.Root
-      floating={props?.floating ?? true}
-      defaultOpen={props?.defaultOpen ?? false}
-    >
+    <SidePanel.Root floating defaultOpen={false}>
       <SidePanel.Toggle />
-      <SidePanel.Layout
-        floating={props?.floating ?? true}
-        headerToggle={false}
-        narrowThreshold={props?.narrowThreshold}
-        panel={props?.panel}
-      >
+      <SidePanel.Layout floating headerToggle={false}>
         <p>Document content</p>
         <SidePanel.Section id="properties" title="Properties" defaultOpen>
           <button>Edit property</button>
@@ -124,84 +106,4 @@ it('opens touch details in the standard drawer and dismisses with Escape', async
       .getByRole('button', { name: 'Show details' })
       .getAttribute('aria-expanded')
   ).toBe('false');
-});
-
-it('composes custom content around the sections in a wide panel', () => {
-  setup({
-    floating: false,
-    defaultOpen: true,
-    panel: (sections) => (
-      <div data-testid="custom-panel">
-        <p>Extra details</p>
-        {sections}
-      </div>
-    ),
-  });
-
-  const panel = screen.getByTestId('custom-panel');
-  expect(panel.textContent).toContain('Extra details');
-  expect(
-    panel.contains(screen.getByRole('button', { name: 'Edit property' }))
-  ).toBe(true);
-  expect(screen.queryByText('Back to content')).toBeNull();
-});
-
-it('uses the supplied threshold to show the overlay and keeps its back control', () => {
-  setup({
-    floating: false,
-    narrowThreshold: 1500,
-    panel: (sections) => (
-      <div data-testid="custom-panel">
-        <p>Extra details</p>
-        {sections}
-      </div>
-    ),
-  });
-
-  fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
-  expect(screen.getByTestId('custom-panel').textContent).toContain(
-    'Edit property'
-  );
-  fireEvent.click(screen.getByRole('button', { name: 'Back to content' }));
-  expect(screen.queryByTestId('custom-panel')).toBeNull();
-  expect(screen.getByText('Document content')).toBeTruthy();
-});
-
-it('keeps custom content and standard sections inside the touch scroll body', () => {
-  mocks.touch = true;
-  setup({
-    panel: (sections) => (
-      <div data-testid="custom-panel">
-        <p>Extra details</p>
-        {sections}
-      </div>
-    ),
-  });
-
-  fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
-  const scrollBody = screen
-    .getByRole('dialog')
-    .querySelector('[data-drawer-scroll-body]');
-  expect(scrollBody?.contains(screen.getByTestId('custom-panel'))).toBe(true);
-  expect(scrollBody?.textContent).toContain('Extra details');
-  expect(scrollBody?.textContent).toContain('Edit property');
-});
-
-it('composes custom content around floating sections', () => {
-  setup({
-    panel: (sections) => (
-      <div data-testid="custom-panel">
-        <p>Extra details</p>
-        {sections}
-      </div>
-    ),
-  });
-
-  fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
-  expect(
-    screen.getByRole('complementary', { name: 'Block details' }).textContent
-  ).toContain('Extra details');
-  expect(screen.getByTestId('custom-panel').textContent).toContain(
-    'Edit property'
-  );
 });

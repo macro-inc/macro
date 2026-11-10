@@ -114,10 +114,27 @@ export function CallRecordingBody(props: {
     () => props.callId,
     () => record().channelId
   );
-  const canJoin = () =>
-    record().isActive &&
-    canCallAgain() &&
-    callCtx?.activeCallId() !== props.callId;
+  const canJoin = () => {
+    if (!record().isActive || !canCallAgain()) return false;
+    return callCtx?.activeCallId() !== props.callId;
+  };
+  const showCallAgain = () => {
+    if (isMobile() || record().isActive) return false;
+    return canCallAgain();
+  };
+  const transcriptActive = () => {
+    if (playback.isFullscreen()) return fullscreenTranscript();
+    return wideTranscript() || selectedTab() === 'transcript';
+  };
+  const transcriptHidden = () =>
+    !transcriptPanel() && selectedTab() !== 'transcript';
+  const fullscreenControls = () => {
+    if (!playback.isFullscreen()) return undefined;
+    return {
+      visible: fullscreenTranscript(),
+      onToggle: toggleFullscreenTranscript,
+    };
+  };
 
   return (
     <CallDiscussionHistory
@@ -130,6 +147,29 @@ export function CallRecordingBody(props: {
         );
         const seekRecording = () =>
           record().recordingUrl ? seekToSeconds : undefined;
+        const readingTabs = () => {
+          const tabs = [
+            {
+              value: 'summary' as const,
+              label: t('calls.detailSummary'),
+              icon: SparkleIcon,
+              tooltip: t('calls.detailAttribution'),
+            },
+            {
+              value: 'transcript' as const,
+              label: t('calls.detailTranscript'),
+            },
+          ];
+          if (!isMobile()) return tabs;
+          return [
+            ...tabs,
+            {
+              value: 'chat' as const,
+              label: t('calls.detailChat'),
+              count: messages().length,
+            },
+          ];
+        };
         return (
           <div class="flex size-full min-h-0 min-w-0 flex-col">
             {props.header?.()}
@@ -145,11 +185,7 @@ export function CallRecordingBody(props: {
                 >
                   <SidePanel.HeaderActions>
                     <HeaderActionGroup label={t('calls.detailActions')}>
-                      <Show
-                        when={
-                          !isMobile() && !record().isActive && canCallAgain()
-                        }
-                      >
+                      <Show when={showCallAgain()}>
                         <HeaderActionButton
                           grouped
                           onClick={callAgain}
@@ -219,15 +255,7 @@ export function CallRecordingBody(props: {
                                       }
                                       onTimeUpdate={handleTimeUpdate}
                                       setVideoRef={setVideoRef}
-                                      transcriptControls={
-                                        playback.isFullscreen()
-                                          ? {
-                                              visible: fullscreenTranscript(),
-                                              onToggle:
-                                                toggleFullscreenTranscript,
-                                            }
-                                          : undefined
-                                      }
+                                      transcriptControls={fullscreenControls()}
                                     />
                                   </div>
                                 </section>
@@ -240,27 +268,7 @@ export function CallRecordingBody(props: {
                                   aria-label={t('calls.detailContent')}
                                   size="md"
                                   fullWidth={isMobile()}
-                                  options={[
-                                    {
-                                      value: 'summary',
-                                      label: t('calls.detailSummary'),
-                                      icon: SparkleIcon,
-                                      tooltip: t('calls.detailAttribution'),
-                                    },
-                                    {
-                                      value: 'transcript',
-                                      label: t('calls.detailTranscript'),
-                                    },
-                                    ...(isMobile()
-                                      ? [
-                                          {
-                                            value: 'chat' as const,
-                                            label: t('calls.detailChat'),
-                                            count: messages().length,
-                                          },
-                                        ]
-                                      : []),
-                                  ]}
+                                  options={readingTabs()}
                                   value={selectedTab()}
                                   onChange={selectTab}
                                 />
@@ -344,14 +352,11 @@ export function CallRecordingBody(props: {
                               playback.isFullscreen() && !fullscreenTranscript()
                             }
                             classList={{
-                              hidden:
-                                !transcriptPanel() &&
-                                selectedTab() !== 'transcript',
+                              hidden: transcriptHidden(),
                             }}
                           >
-                            <CallTranscript
+                            <CallTranscript.Root
                               transcript={record().transcript}
-                              channelId={record().channelId}
                               record={record()}
                               timelineStartMs={timelineStartMs()}
                               durationSeconds={recordingDuration()}
@@ -360,24 +365,28 @@ export function CallRecordingBody(props: {
                               videoSeekGeneration={videoSeekGeneration()}
                               onSeekToSeconds={seekToSeconds}
                               messages={messages()}
-                              active={
-                                playback.isFullscreen()
-                                  ? fullscreenTranscript()
-                                  : wideTranscript() ||
-                                    selectedTab() === 'transcript'
-                              }
+                              active={transcriptActive()}
                               scrollElement={
                                 transcriptPanel() ? undefined : scrollRef()
                               }
                               follow={transcriptFollow}
-                              syncTarget={
-                                transcriptPanel() ? undefined : syncTarget()
-                              }
-                              hideHeader={!transcriptPanel()}
-                              syncSurface={
-                                transcriptPanel() ? 'inset' : 'surface'
-                              }
-                            />
+                            >
+                              <CallTranscript.ScrollArea>
+                                <Show when={transcriptPanel()}>
+                                  <CallTranscript.Header />
+                                </Show>
+                                <CallTranscript.Content />
+                              </CallTranscript.ScrollArea>
+                              <CallTranscript.Scrollbar />
+                              <CallTranscript.Sync
+                                mount={
+                                  transcriptPanel() ? undefined : syncTarget()
+                                }
+                                surface={
+                                  transcriptPanel() ? 'inset' : 'surface'
+                                }
+                              />
+                            </CallTranscript.Root>
                           </aside>
                         </Layer>
                       </div>

@@ -1,6 +1,6 @@
 import { useUserId } from '@core/context/user';
 import type { Accessor } from 'solid-js';
-import { type CallState, useCallContextOptional } from './CallContext';
+import { type CallState, useCallContextOptional } from '../CallContext';
 
 export type SpeakingCall = { callId?: string; channelId?: string };
 
@@ -8,7 +8,9 @@ function matchesCall(
   call: CallState | undefined,
   target: SpeakingCall
 ): call is CallState {
-  if (!call?.isInCall() || (!target.callId && !target.channelId)) return false;
+  if (!call?.isInCall()) return false;
+  const hasTarget = !!target.callId || !!target.channelId;
+  if (!hasTarget) return false;
   if (target.callId && target.callId !== call.activeCallId()) return false;
   if (target.channelId && target.channelId !== call.activeChannelId())
     return false;

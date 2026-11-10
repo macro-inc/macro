@@ -118,9 +118,7 @@ function Root(
   const isOpen = () => (isOverlayMode() ? isOverlayOpen() : isWideOpen());
   const setIsOpen = (next: boolean | ((prev: boolean) => boolean)) => {
     const setter = isOverlayMode() ? setIsOverlayOpen : setIsWideOpen;
-    const open = typeof next === 'function' ? next(isOpen()) : next;
-    if (open === isOpen()) return;
-    setter(open);
+    setter(typeof next === 'function' ? next : () => next);
   };
   const toggle = () => setIsOpen((prev) => !prev);
 
@@ -200,13 +198,6 @@ function Layout(
     headerToggle?: boolean;
     /** Render the panel over the block instead of reserving horizontal space. */
     floating?: boolean;
-    /** Compose content around the standard sections in every panel mode. */
-    panel?: (sections: JSX.Element) => JSX.Element;
-    narrowThreshold?: number;
-    /** Render unframed section rows with spacing instead of dividers. */
-    plainSections?: boolean;
-    /** Optional pinned chrome below the touch drawer handle. */
-    drawerHeader?: JSX.Element;
   }>
 ) {
   const parentContext = useContext(SidePanelContext);
@@ -231,10 +222,6 @@ function Layout(
             setIsOpen={ctx.setIsOpen}
             setIsOverlayMode={ctx.setIsOverlayMode}
             floating={props.floating ?? ctx.isFloating()}
-            panel={props.panel}
-            narrowThreshold={props.narrowThreshold}
-            plainSections={props.plainSections}
-            drawerHeader={props.drawerHeader}
           >
             {props.children}
           </SidePanelLayoutInner>
@@ -270,10 +257,6 @@ function SidePanelLayoutInner(
     setIsOpen: (next: boolean | ((prev: boolean) => boolean)) => void;
     setIsOverlayMode: Setter<boolean>;
     floating: boolean;
-    panel?: (sections: JSX.Element) => JSX.Element;
-    narrowThreshold?: number;
-    plainSections?: boolean;
-    drawerHeader?: JSX.Element;
   }>
 ) {
   const resolved = children(() => props.children);
@@ -284,9 +267,7 @@ function SidePanelLayoutInner(
   }
 
   const isNarrow = createMemo(
-    () =>
-      isMobile() ||
-      zoneCtx.size() < (props.narrowThreshold ?? NARROW_THRESHOLD_PX)
+    () => isMobile() || zoneCtx.size() < NARROW_THRESHOLD_PX
   );
   const hasSections = createMemo(() => props.sections().length > 0);
 
@@ -314,9 +295,6 @@ function SidePanelLayoutInner(
     () => !isTouchDevice() && props.floating && hasSections() && props.isOpen()
   );
 
-  const renderPanel = (sections: JSX.Element) =>
-    props.panel ? props.panel(sections) : sections;
-
   return (
     <>
       <Resize.Panel id="side-panel-main" minSize={MAIN_MIN_PX} index={0}>
@@ -330,14 +308,11 @@ function SidePanelLayoutInner(
           index={1}
         >
           <div class="relative flex size-full min-h-0 flex-col z-split-panel-chrome">
-            {renderPanel(
-              <SidePanelOutlet
-                sections={props.sections}
-                plainSections={props.plainSections}
-                openIds={props.openIds}
-                setOpenIds={props.setOpenIds}
-              />
-            )}
+            <SidePanelOutlet
+              sections={props.sections}
+              openIds={props.openIds}
+              setOpenIds={props.setOpenIds}
+            />
           </div>
         </Resize.Panel>
       </Show>
@@ -347,13 +322,10 @@ function SidePanelLayoutInner(
             'absolute inset-0 flex flex-col bg-surface z-split-panel-chrome'
           )}
         >
-          <Scroll contentProps={props.panel ? { class: 'h-full' } : undefined}>
+          <Scroll>
             {/* Full-frame mobile: the overlay spans the whole panel, so the
                 content must clear the floating header islands + status bar. */}
-            <div
-              class="w-full max-w-2xl mx-auto min-w-0 touch:pt-(--mobile-content-inset-top)"
-              classList={{ 'flex h-full min-h-0 flex-col': !!props.panel }}
-            >
+            <div class="w-full max-w-2xl mx-auto min-w-0 touch:pt-(--mobile-content-inset-top)">
               <div class="px-2 pt-2">
                 <Button
                   variant="ghost"
@@ -365,16 +337,11 @@ function SidePanelLayoutInner(
                   Back to content
                 </Button>
               </div>
-              <div classList={{ 'min-h-0 flex-1': !!props.panel }}>
-                {renderPanel(
-                  <SidePanelOutlet
-                    sections={props.sections}
-                    plainSections={props.plainSections}
-                    openIds={props.openIds}
-                    setOpenIds={props.setOpenIds}
-                  />
-                )}
-              </div>
+              <SidePanelOutlet
+                sections={props.sections}
+                openIds={props.openIds}
+                setOpenIds={props.setOpenIds}
+              />
             </div>
           </Scroll>
         </div>
@@ -391,18 +358,14 @@ function SidePanelLayoutInner(
             <MobileDrawer.Overlay />
             <MobileDrawer.Content aria-label="Item details">
               <MobileDrawer.Handle />
-              {props.drawerHeader}
               <MobileDrawer.ScrollBody>
-                {renderPanel(
-                  <SidePanelOutlet
-                    floating
-                    plainSections={props.plainSections}
-                    scrollable={false}
-                    sections={props.sections}
-                    openIds={props.openIds}
-                    setOpenIds={props.setOpenIds}
-                  />
-                )}
+                <SidePanelOutlet
+                  floating
+                  scrollable={false}
+                  sections={props.sections}
+                  openIds={props.openIds}
+                  setOpenIds={props.setOpenIds}
+                />
               </MobileDrawer.ScrollBody>
             </MobileDrawer.Content>
           </MobileDrawer.Portal>
@@ -438,15 +401,12 @@ function SidePanelLayoutInner(
                 }}
                 onClick={(event) => event.stopPropagation()}
               >
-                {renderPanel(
-                  <SidePanelOutlet
-                    floating
-                    plainSections={props.plainSections}
-                    sections={props.sections}
-                    openIds={props.openIds}
-                    setOpenIds={props.setOpenIds}
-                  />
-                )}
+                <SidePanelOutlet
+                  floating
+                  sections={props.sections}
+                  openIds={props.openIds}
+                  setOpenIds={props.setOpenIds}
+                />
               </aside>
             </Show>
           </Transition>
@@ -574,7 +534,6 @@ function SidePanelHeaderToggle() {
 
 function SidePanelOutlet(props: {
   floating?: boolean;
-  plainSections?: boolean;
   scrollable?: boolean;
   sections: Accessor<SidePanelSectionEntry[]>;
   openIds: Accessor<string[]>;
@@ -590,7 +549,6 @@ function SidePanelOutlet(props: {
     })
   );
 
-  const plainSections = () => props.floating || props.plainSections || false;
   const Sections = () => (
     <Accordion
       multiple
@@ -599,15 +557,11 @@ function SidePanelOutlet(props: {
       onChange={(value) => props.setOpenIds(value as string[])}
       class={cn(
         'flex flex-col min-h-0',
-        props.plainSections
-          ? 'p-0 gap-3'
-          : plainSections()
-            ? 'p-0 gap-0'
-            : 'p-2 gap-2'
+        props.floating ? 'p-0 gap-0' : 'p-2 gap-2'
       )}
     >
       <For each={sortedSections().filter((section) => !section.footer)}>
-        {(section) => section.component(plainSections(), !props.plainSections)}
+        {(section) => section.component(props.floating ?? false)}
       </For>
     </Accordion>
   );
@@ -637,9 +591,7 @@ function SidePanelOutlet(props: {
   function Metadata() {
     return (
       <For each={sortedSections().filter((section) => section.footer)}>
-        {(section) =>
-          section.component(props.floating ?? false, !props.plainSections)
-        }
+        {(section) => section.component(props.floating ?? false)}
       </For>
     );
   }
@@ -656,13 +608,10 @@ function Footer(props: ParentProps) {
       title: 'Metadata',
       defaultOpen: false,
       footer: true,
-      component: (_floating, dividers = true) => (
+      component: () => (
         <section
           aria-label="Details"
-          class={cn(
-            'p-3 text-xs leading-relaxed text-ink-muted',
-            dividers && 'border-b border-edge-muted'
-          )}
+          class="border-b border-edge-muted p-3 text-xs leading-relaxed text-ink-muted"
         >
           <Suspense fallback={<Loading />}>{props.children}</Suspense>
         </section>
@@ -715,12 +664,12 @@ function Section(
       title: props.title,
       defaultOpen: props.defaultOpen ?? false,
       order: props.order,
-      component: (floating, dividers = true) => (
+      component: (floating) => (
         <Accordion.Item
           value={props.id}
           class={cn(
             'group/sidebar-section',
-            floating && dividers && 'border-b border-edge-muted last:border-b-0'
+            floating && 'border-b border-edge-muted last:border-b-0'
           )}
         >
           <Show
@@ -925,6 +874,5 @@ export const SidePanel = {
   CountTitle,
   Card,
   FLOATING_CLEARANCE_PX,
-  FLOATING_INSET_PX,
 };
 export { useSidePanel };

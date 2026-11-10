@@ -71,9 +71,11 @@ export function createRecordingLayout(options: {
   const [playerRef, setPlayerRef] = createSignal<HTMLElement>();
   const [playerColumnRef, setPlayerColumnRef] = createSignal<HTMLDivElement>();
   const [transcriptCardRef, setTranscriptCardRef] = createSignal<HTMLElement>();
+  // Capture the narrow player's position before the grid moves it into the wide pane.
   let narrowPlayerRect: DOMRect | undefined;
   let layoutAnimations: Animation[] = [];
   let animationPaneWidth = 0;
+  // Resize and reduced-motion changes invalidate the starting geometry of an animation.
   const cancelLayoutAnimations = () => {
     for (const animation of layoutAnimations) animation.cancel();
     layoutAnimations = [];
@@ -92,10 +94,12 @@ export function createRecordingLayout(options: {
         if (
           layoutAnimations.length &&
           column.clientWidth !== animationPaneWidth
-        )
+        ) {
           cancelLayoutAnimations();
-        if (player && !wideTranscript() && !playback.isFullscreen())
+        }
+        if (player && !wideTranscript() && !playback.isFullscreen()) {
           narrowPlayerRect = player.getBoundingClientRect();
+        }
       });
       observer.observe(column);
       if (player) observer.observe(player);
@@ -105,13 +109,14 @@ export function createRecordingLayout(options: {
   createEffect(
     on(wideTranscript, (wide, previous) => {
       cancelLayoutAnimations();
+      const enteringWideLayout = wide && previous === false;
       if (
-        !wide ||
-        previous !== false ||
+        !enteringWideLayout ||
         playback.isFullscreen() ||
         reducedMotion.matches
-      )
+      ) {
         return;
+      }
       const before = narrowPlayerRect;
       const player = playerRef();
       const column = playerColumnRef();
@@ -120,6 +125,7 @@ export function createRecordingLayout(options: {
       const cardRect = card.getBoundingClientRect();
       animationPaneWidth = columnRef()?.clientWidth ?? 0;
       const timing = { duration: 240, easing: 'cubic-bezier(0.2, 0, 0, 1)' };
+      // Animate from the captured narrow position; a missing snapshot only animates the card.
       const cardOffset = before ? before.right + 28 - cardRect.left : 12;
       layoutAnimations = [
         card.animate(

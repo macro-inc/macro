@@ -39,6 +39,8 @@ export function createRecordingTimeline(
     const ms = new Date(anchor).getTime();
     return Number.isFinite(ms) ? ms : null;
   });
+  // A programmatic seek and its seeked event share one generation within 45ms.
+  // Only seeks bump the generation used to restart transcript following.
   const bumpVideoSeekGeneration = (seconds: number) => {
     if (!Number.isFinite(seconds)) return;
     const key = seekDedupeKey(seconds);
@@ -80,9 +82,10 @@ export function createRecordingTimeline(
   const seekToSeconds = (seconds: number) => {
     if (!Number.isFinite(seconds)) return;
     const video = videoRef();
-    const maxTime = Number.isFinite(video?.duration ?? Number.NaN)
-      ? video!.duration
-      : seconds;
+    let maxTime = seconds;
+    if (video && Number.isFinite(video.duration)) {
+      maxTime = video.duration;
+    }
     const targetSeconds = Math.max(0, Math.min(seconds, maxTime));
 
     setState({ playbackSeconds: targetSeconds, allowFutureLead: false });

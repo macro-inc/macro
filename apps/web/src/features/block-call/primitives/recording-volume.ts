@@ -12,11 +12,9 @@ export function createRecordingVolume(options: {
   let thumb: HTMLSpanElement | undefined;
   let restoringFocus = false;
   const close = debounce(() => {
-    if (
-      trigger !== document.activeElement &&
-      !content?.contains(document.activeElement)
-    )
-      options.onOpenChange(false);
+    const focusOnTrigger = trigger === document.activeElement;
+    const focusInContent = content?.contains(document.activeElement);
+    if (!focusOnTrigger && !focusInContent) options.onOpenChange(false);
   }, 150);
   const open = () => {
     close.clear();
@@ -35,6 +33,7 @@ export function createRecordingVolume(options: {
     setThumb: (element: HTMLSpanElement) => {
       thumb = element;
     },
+    // Escape restores focus to the trigger without reopening the volume popover.
     onFocus: () => {
       if (!restoringFocus) open();
     },
@@ -42,6 +41,7 @@ export function createRecordingVolume(options: {
       options.toggleMute();
       open();
     },
+    // Arrow keys and forward Tab move focus into the slider, not through the popover.
     onTriggerKeyDown: (event: KeyboardEvent) => {
       if (
         event.key === 'ArrowUp' ||
@@ -69,11 +69,12 @@ export function createRecordingVolume(options: {
     onSliderKeyDown: (event: KeyboardEvent) => {
       if (event.key !== 'Tab') return;
       event.preventDefault();
-      if (event.shiftKey) trigger?.focus({ preventScroll: true });
-      else {
-        options.onTabForward();
-        options.onOpenChange(false);
+      if (event.shiftKey) {
+        trigger?.focus({ preventScroll: true });
+        return;
       }
+      options.onTabForward();
+      options.onOpenChange(false);
     },
   };
 }

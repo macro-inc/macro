@@ -10,7 +10,7 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - `views/CallDetailView.tsx`: native route hosts, query, header and loading states.
 - `component/CallRecording/CallRecordingBody.tsx`: playback, transcript and responsive composition wiring.
 - `component/CallRecording/CallRecordingRoot.tsx`: independent details state for both recording hosts.
-- `component/CallTranscript.tsx`: transcript and inline chat presentation.
+- `component/CallTranscript.tsx`: composed Root, ScrollArea, Header, Content, Scrollbar and Sync parts sharing transcript state.
 - `component/sidepanel/CallSidePanelSections.tsx`: existing metadata, sharing and entity sections.
 - `primitives/recording-*.ts`: media playback, controls, layout, identity and recording timeline state/actions.
 - `primitives/transcript-*.ts`: mixed transcript timeline and follow/scroll behavior.
@@ -35,7 +35,7 @@ The live call UI belongs to `features/channel/Call`, not this feature.
 - Use FloatRegion ownership for phone playback instead of changing global dock state.
 - Use the standard SidePanel drawer for phone details, with the same content as desktop.
 - Keep one mounted transcript and video across the responsive threshold; retain the reading-tab selection, playback position and transcript follow state.
-- Reuse CallWaveform from the live call feature for the active transcript; drive speaking from playback and preserve its pause, touch and reduced-motion behavior.
+- Reuse `features/channel/Call/components/CallWaveform` for the active transcript; drive speaking from playback and preserve its pause, touch and reduced-motion behavior.
 - Keep transcript names truncated with full-name tooltips; put the active waveform before the flush-right timestamp without reserving waveform space on inactive rows.
 - Align identity to the centered group's left edge above both columns; let the left column and transcript scroll independently, with the card aligned to the video and filling the remaining pane height.
 - Use Layer offset={1} and bg-surface for the wide transcript card, rounded like the player with a light-only inset edge-frame ring and shadow-md; keep Details floating over it without resetting transcript state.

@@ -31,6 +31,7 @@ export function createRecordingPlayback(
     fullscreenSession: 0,
   });
   const target = () => fullscreenTarget?.() ?? video()?.parentElement;
+  // Only this target counts as our fullscreen session; other fullscreen elements do not.
   createEffect(
     on(target, (element) => {
       const update = () => {
@@ -44,6 +45,7 @@ export function createRecordingPlayback(
       };
       update();
       document.addEventListener('fullscreenchange', update);
+      // Release fullscreen only if this owner still holds it when the target changes.
       onCleanup(() => {
         document.removeEventListener('fullscreenchange', update);
         if (element && document.fullscreenElement === element)
@@ -142,8 +144,11 @@ export function createRecordingPlayback(
       if (!element) return;
       if (document.fullscreenElement) {
         fireAndForget(document.exitFullscreen(), 'call-recording');
-      } else if (target()?.requestFullscreen) {
-        fireAndForget(target()!.requestFullscreen(), 'call-recording');
+        return;
+      }
+      const fullscreenElement = target();
+      if (fullscreenElement?.requestFullscreen) {
+        fireAndForget(fullscreenElement.requestFullscreen(), 'call-recording');
       } else if (
         'webkitEnterFullscreen' in element &&
         typeof element.webkitEnterFullscreen === 'function'

@@ -39,6 +39,7 @@ export function createRecordingVideo(options: RecordingVideoOptions) {
     ),
     0
   );
+  // Tag each poster fetch so a previous URL cannot display after the URL changes.
   const posterRevision = createMemo<number>(
     on(
       () => options.posterUrl,
@@ -64,6 +65,7 @@ export function createRecordingVideo(options: RecordingVideoOptions) {
         if (!url) return;
         const revision = posterRevision();
         const controller = new AbortController();
+        // Abort and revoke the old poster when the URL changes or the video unmounts.
         let objectUrl: string | undefined;
         onCleanup(() => {
           controller.abort();
@@ -102,10 +104,11 @@ export function createRecordingVideo(options: RecordingVideoOptions) {
     stopTicking();
     const tick = () => {
       options.onTimeUpdate?.(element.currentTime, 'playback');
-      rafId =
-        !element.paused && !element.ended
-          ? requestAnimationFrame(tick)
-          : undefined;
+      if (!element.paused && !element.ended) {
+        rafId = requestAnimationFrame(tick);
+      } else {
+        rafId = undefined;
+      }
     };
     rafId = requestAnimationFrame(tick);
   };
@@ -125,11 +128,11 @@ export function createRecordingVideo(options: RecordingVideoOptions) {
     },
     surfaceEvents: {
       onPointerMove: (event: PointerEvent) => {
-        controls.setHovered(
+        const overControls =
           event.pointerType !== 'touch' &&
-            event.target instanceof Element &&
-            event.target.closest('[data-recording-controls]') !== null
-        );
+          event.target instanceof Element &&
+          event.target.closest('[data-recording-controls]') !== null;
+        controls.setHovered(overControls);
         controls.show();
       },
       onPointerLeave: () => controls.setHovered(false),

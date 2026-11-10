@@ -29,7 +29,10 @@ export function createRecordingNavigation(options: RecordingNavigationOptions) {
         _previousRequest,
         previousTab: RecordingTab | undefined
       ): RecordingTab => {
-        if (message) return isMobile() ? 'chat' : 'summary';
+        if (message) {
+          if (isMobile()) return 'chat';
+          return 'summary';
+        }
         if (target) return 'transcript';
         return previousTab ?? 'summary';
       }
@@ -46,8 +49,11 @@ export function createRecordingNavigation(options: RecordingNavigationOptions) {
   );
 
   return {
-    selectedTab: () =>
-      !isMobile() && contentTab() === 'chat' ? 'summary' : contentTab(),
+    selectedTab: () => {
+      const tab = contentTab();
+      if (!isMobile() && tab === 'chat') return 'summary';
+      return tab;
+    },
     selectTab: (tab: RecordingTab) => {
       const interaction = beginInteraction('call.detail.tab', {
         attributes: { 'call.id': options.callId, 'call.tab': tab },

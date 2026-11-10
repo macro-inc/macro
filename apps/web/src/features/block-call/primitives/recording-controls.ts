@@ -17,6 +17,7 @@ export function createRecordingControlsVisibility(paused: Accessor<boolean>) {
     focused: false,
     menuOpen: false,
   });
+  // Hover, focus and open menus hold controls visible even after the idle timer expires.
   const held = () => state.hovered || state.focused || state.menuOpen;
   const dismiss = debounce(() => setState('idle', true), 2500);
   const show = () => {
@@ -25,7 +26,7 @@ export function createRecordingControlsVisibility(paused: Accessor<boolean>) {
     if (!paused() && !held()) dismiss();
   };
 
-  // Playback and interaction changes restart the external idle timer.
+  // Reset the timer when playback or interaction changes, not on every time update.
   createEffect(on([paused, held], show));
   onCleanup(() => dismiss.clear());
 

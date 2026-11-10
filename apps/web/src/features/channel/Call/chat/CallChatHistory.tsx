@@ -114,17 +114,15 @@ export function CallDiscussionHistory(
   const channelThread = () =>
     props.discussion.kind === 'channel_thread' ? props.discussion : undefined;
 
+  // Record refetches replace the discussion object. Track presence, not object
+  // identity, so the recording rendered through this source keeps its media state.
   return (
-    <Show
-      when={channelThread()}
-      keyed
-      fallback={<CallChatHistory {...props} />}
-    >
+    <Show when={channelThread()} fallback={<CallChatHistory {...props} />}>
       {(thread) => (
         <Suspense>
           <ChannelThreadHistory
-            channelId={thread.channel_id}
-            rootId={thread.root_id}
+            channelId={thread().channel_id}
+            rootId={thread().root_id}
             targetId={props.targetId}
             targetRequestKey={props.targetRequestKey}
             onClearTarget={props.onClearTarget}
