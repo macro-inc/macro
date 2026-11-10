@@ -34,11 +34,7 @@ async fn hydrates_only_runtimes_the_viewer_can_see(
     .await?;
     items.sort_by_key(|item| item.id());
 
-    let [
-        SoupItem::Harness(runtime_1),
-        SoupItem::Harness(runtime_2),
-    ] = items.as_slice()
-    else {
+    let [SoupItem::Harness(runtime_1), SoupItem::Harness(runtime_2)] = items.as_slice() else {
         panic!("expected runtime-1 and runtime-2, got {items:?}");
     };
     assert_eq!(runtime_1.name, "runtime-1");
