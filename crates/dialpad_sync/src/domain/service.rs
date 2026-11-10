@@ -392,8 +392,7 @@ impl<R: SyncRepository, G: Grants, D: Dialpad, V: DeliveryVerifier> SyncService
     #[tracing::instrument(
         name = "dialpad.receive_delivery",
         skip_all,
-        fields(provider = "dialpad", connection_id = %id, call_id, state),
-        err(Display)
+        fields(provider = "dialpad", connection_id = %id, call_id, state)
     )]
     async fn receive(&self, id: Uuid, body: &[u8]) -> std::result::Result<(), SyncError> {
         let connection = self
