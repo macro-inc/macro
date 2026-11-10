@@ -138,6 +138,11 @@ export class EditorSession {
      */
     debugViewChecksum(): number;
     /**
+     * Observe current authorization using the generated Access enum values.
+     * This neither consumes output nor authorizes a later mutation.
+     */
+    effectiveAccess(): number;
+    /**
      * Lifecycle notification with fresh wall-clock origin.
      */
     host(signal: number, now: number, wall: number): number;
@@ -170,6 +175,11 @@ export class EditorSession {
      * Bulk typed read queries; no per-node JavaScript callbacks.
      */
     query(msg: Uint8Array): Uint8Array;
+    /**
+     * Retire the detached synchronous view's component observation baseline.
+     * Queued output and durable session state remain owned by the executor.
+     */
+    retireViewObservation(): void;
     /**
      * Download-safe Macro JSON with regenerated search text and transient nodes removed.
      */
@@ -348,6 +358,7 @@ export interface InitOutput {
     readonly editorsession_debugInsertion: (a: number, b: number, c: number, d: number, e: number, f: number, g: any, h: number) => [number, number, number];
     readonly editorsession_debugShouldPreventDefault: (a: number, b: number, c: number, d: any) => [number, number, number];
     readonly editorsession_debugViewChecksum: (a: number) => [number, number, number];
+    readonly editorsession_effectiveAccess: (a: number) => number;
     readonly editorsession_host: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly editorsession_initialize: (a: number) => [number, number, number, number];
     readonly editorsession_input: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
@@ -356,6 +367,7 @@ export interface InitOutput {
     readonly editorsession_markdown: (a: number, b: number) => [number, number, number, number];
     readonly editorsession_nodeText: (a: number, b: number) => [number, number];
     readonly editorsession_query: (a: number, b: number, c: number) => [number, number, number, number];
+    readonly editorsession_retireViewObservation: (a: number) => void;
     readonly editorsession_savedState: (a: number) => [number, number, number, number];
     readonly editorsession_selectionFromView: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
     readonly editorsession_serializedState: (a: number) => [number, number, number, number];
@@ -366,6 +378,7 @@ export interface InitOutput {
     readonly editorsession_storageAdopted: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly editorsession_storageDone: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly editorsession_storageLoaded: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
+    readonly editorsession_takeOutput: (a: number) => [number, number];
     readonly editorsession_textContent: (a: number) => [number, number];
     readonly editorsession_textFromView: (a: number, b: number, c: any, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
     readonly editorsession_tick: (a: number, b: number, c: number) => [number, number, number];
@@ -386,7 +399,6 @@ export interface InitOutput {
     readonly syncrouter_tick: (a: number, b: number, c: number) => [number, number, number];
     readonly syncrouter_tokenFetched: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number];
     readonly syncrouter_wakeAt: (a: number) => number;
-    readonly editorsession_takeOutput: (a: number) => [number, number];
     readonly editorsession_wakeAt: (a: number) => number;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
