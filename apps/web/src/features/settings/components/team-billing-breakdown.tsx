@@ -21,18 +21,16 @@ function sizeLabel(size: ComputerSize): string {
 }
 
 function computerStatus(status: string | null | undefined): string {
-  return (
-    match(status)
-      .with('running', 'ready', () => t('settingsBilling.alive'))
-      .with('starting', () => t('settingsBilling.starting'))
-      .with('provisioning', 'setting_up', () => t('settingsBilling.settingUp'))
-      .with('failed', 'payment_failed', () => t('settingsBilling.failed'))
-      .with('unhealthy', () => t('settingsBilling.dead'))
-      .with('stopping', () => t('settingsBilling.stopping'))
-      .with('stopped', () => t('settingsBilling.stopped'))
-      .with('released', () => t('settingsBilling.released'))
-      .otherwise(() => t('settingsBilling.statusUnavailable'))
-  );
+  return match(status)
+    .with('running', 'ready', () => t('settingsBilling.alive'))
+    .with('starting', () => t('settingsBilling.starting'))
+    .with('provisioning', 'setting_up', () => t('settingsBilling.settingUp'))
+    .with('failed', 'payment_failed', () => t('settingsBilling.failed'))
+    .with('unhealthy', () => t('settingsBilling.dead'))
+    .with('stopping', () => t('settingsBilling.stopping'))
+    .with('stopped', () => t('settingsBilling.stopped'))
+    .with('released', () => t('settingsBilling.released'))
+    .otherwise(() => t('settingsBilling.statusUnavailable'));
 }
 
 /** Current subscription amounts, never an estimate from catalog prices. */
