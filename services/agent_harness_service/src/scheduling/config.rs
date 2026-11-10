@@ -8,8 +8,8 @@
 use anyhow::Context;
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
-use macro_env_var::{env_vars, maybe_env_vars};
-use secretsmanager_client::OptionalLocalOrRemoteSecret;
+use macro_env_var::env_vars;
+use secretsmanager_client::LocalOrRemoteSecret;
 
 #[cfg(test)]
 #[path = "config/test.rs"]
@@ -18,12 +18,7 @@ mod test;
 env_vars! {
     /// Comma-separated Kafka bootstrap servers for the macro event broker.
     pub struct KafkaBrokers;
-}
-
-maybe_env_vars! {
-    /// The authentication service's own internal key, which settlement
-    /// requests for counted usage present. Required while
-    /// `ENABLE_AI_USAGE_BILLING` is true; otherwise unused.
+    /// Required authentication service key for settlement requests.
     pub struct AuthenticationServiceSecretKey;
 }
 
@@ -39,9 +34,8 @@ pub struct Config {
     /// service's own policy decides whether it does.
     #[macro_config_default(ai_billing::AiUsageBilling::Disabled)]
     pub enable_ai_usage_billing: ai_billing::AiUsageBilling,
-    /// Authentication service key or deployed Secrets Manager name.
-    pub authentication_service_secret_key:
-        OptionalLocalOrRemoteSecret<AuthenticationServiceSecretKey>,
+    /// Required authentication service key or deployed Secrets Manager name.
+    pub authentication_service_secret_key: LocalOrRemoteSecret<AuthenticationServiceSecretKey>,
     /// The free plan's hard monthly AI cap, in cents at provider cost.
     /// Mandatory; set in Doppler.
     pub ai_usage_free_included_allowance_cents: ai_billing::IncludedAllowanceCents,
@@ -89,25 +83,15 @@ impl Config {
     }
 
     /// Where this host's settlement requests go: the authentication service
-    /// while `ENABLE_AI_USAGE_BILLING` is true, which then requires
-    /// `AUTHENTICATION_SERVICE_SECRET_KEY`; nowhere otherwise.
+    /// while `ENABLE_AI_USAGE_BILLING` is true; nowhere otherwise.
     pub fn settlement_route(&self) -> anyhow::Result<ai_billing::composition::SettlementRoute> {
-        let client = self
-            .authentication_service_secret_key
-            .as_str()
-            .filter(|key| !key.trim().is_empty())
-            .map(|key| {
-                anyhow::Ok(std::sync::Arc::new(
-                    authentication_service_client::AuthServiceClient::new(
-                        key.to_owned(),
-                        macro_service_urls::AuthServiceUrl::new()?.to_string(),
-                    ),
-                ))
-            })
-            .transpose()?;
+        let client = std::sync::Arc::new(authentication_service_client::AuthServiceClient::new(
+            self.authentication_service_secret_key.as_ref().to_owned(),
+            macro_service_urls::AuthServiceUrl::new()?.to_string(),
+        ));
         Ok(ai_billing::composition::SettlementRoute::from_policy(
             self.enable_ai_usage_billing,
-            client,
+            Some(client),
         )?)
     }
 

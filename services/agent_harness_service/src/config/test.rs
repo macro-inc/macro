@@ -18,9 +18,8 @@ impl secretsmanager_client::SecretManager for TestSecretManager {
     }
 }
 
-#[tokio::test]
-async fn authentication_key_resolves_before_linked_github_client_is_built() {
-    let config: Config = serde_json::from_value(serde_json::json!({
+fn config_values() -> serde_json::Value {
+    serde_json::json!({
         "ENVIRONMENT": "dev",
         "FUSIONAUTH_BASE_URL": "https://example.com",
         "FUSIONAUTH_CLIENT_ID": "client-id",
@@ -51,16 +50,37 @@ async fn authentication_key_resolves_before_linked_github_client_is_built() {
         "GITHUB_PULL_REQUEST_PATCH_BUCKET": "test-bucket",
         "GITHUB_SYNC_APP_CLIENT_ID": "github-client-id",
         "GITHUB_SYNC_APP_PEM_SECRET_KEY": "github-secret-name"
-    }))
-    .unwrap();
+    })
+}
 
+#[test]
+fn authentication_key_is_required_with_billing_disabled_or_enabled() {
+    for billing in [false, true] {
+        let mut values = config_values();
+        values["ENABLE_AI_USAGE_BILLING"] = serde_json::json!(billing);
+        values
+            .as_object_mut()
+            .unwrap()
+            .remove("AUTHENTICATION_SERVICE_SECRET_KEY");
+        let error = serde_json::from_value::<Config>(values).err().unwrap();
+        assert!(
+            error
+                .to_string()
+                .contains("AUTHENTICATION_SERVICE_SECRET_KEY")
+        );
+    }
+}
+
+#[tokio::test]
+async fn authentication_key_resolves_before_linked_github_client_is_built() {
+    let config: Config = serde_json::from_value(config_values()).unwrap();
     let config = config
         .resolve_remote_secrets(Environment::Develop, &TestSecretManager)
         .await
         .unwrap();
     assert_eq!(
-        config.authentication_service_secret_key.as_str(),
-        Some("resolved-auth-key")
+        config.authentication_service_secret_key.as_ref(),
+        "resolved-auth-key"
     );
-    assert!(config.auth_service_client().unwrap().is_some());
+    config.linked_github_tokens().unwrap();
 }
