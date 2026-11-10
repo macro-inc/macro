@@ -54626,6 +54626,36 @@
           }
         }
       },
+      "SoupHarness": {
+        "type": "object",
+        "description": "A paired runtime (a macrod machine), listed only by attention feeds: its\naccess requests and removals are notifications filed under it, and it has\nno page of its own, so Settings → Machines opens it.",
+        "required": ["id", "name", "ownerId", "createdAt", "updatedAt"],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the machine was paired."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The harness uuid."
+          },
+          "name": {
+            "type": "string",
+            "description": "The machine's display name."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "The person or team that owns the machine."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the machine was last changed."
+          }
+        }
+      },
       "SoupInitiative_SoupPropertiesField": {
         "allOf": [
           {
@@ -54888,6 +54918,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["databaseRow"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Paired runtime, listed only by attention feeds.",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupHarness",
+                "description": "Paired runtime, listed only by attention feeds."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["harness"]
               }
             }
           }
