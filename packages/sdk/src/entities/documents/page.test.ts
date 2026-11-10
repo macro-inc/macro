@@ -12,8 +12,11 @@ interface Requests {
   builds: string[];
 }
 
+/** A build answer: a body, or a bare HTTP status. */
+type BuildAnswer = DocumentBuildResponse | { status: number };
+
 /** A client whose builds answer, in order, with `builds`. */
-function clientBuilding(builds: DocumentBuildResponse[]): {
+function clientBuilding(builds: BuildAnswer[]): {
   client: MacroClient;
   requests: Requests;
 } {
@@ -48,7 +51,13 @@ function clientBuilding(builds: DocumentBuildResponse[]): {
     agentHarness: {
       getDocumentBuild: async (request: { path: { document_id: string } }) => {
         requests.builds.push(request.path.document_id);
-        return { data: builds.shift(), response: { status: 200 } };
+        const answer = builds.shift();
+        if (answer && typeof answer.status === 'number')
+          return {
+            error: { message: 'refused' },
+            response: { status: answer.status },
+          };
+        return { data: answer, response: { status: 200 } };
       },
     },
   } as unknown as MacroClient;
@@ -87,6 +96,7 @@ describe('documents.publishPage', () => {
       { fileName: 'Launch tasks.html', text: PAGE },
     ]);
     expect(published.document.id).toBe('page');
+    expect(published.build).toBe('failed');
     expect(published.problems).toEqual([
       {
         block: 'client script',
@@ -103,6 +113,27 @@ describe('documents.publishPage', () => {
     expect(requests.uploads).toHaveLength(1);
     expect(requests.builds).toEqual(['page', 'page']);
     expect(republished.document).toBe(published.document);
+    expect(republished.build).toBe('built');
     expect(republished.problems).toEqual([]);
+  });
+
+  test('returns the saved page when the build is unavailable or busy, so it is not published twice', async () => {
+    const { client, requests } = clientBuilding([
+      { status: 404 },
+      { status: 503 },
+    ]);
+
+    const outside = await new DocumentNamespace(client).publishPage({
+      name: 'Launch tasks',
+      html: PAGE,
+    });
+    expect(outside.document.id).toBe('page');
+    expect(outside.build).toBe('unavailable');
+    expect(outside.problems).toEqual([]);
+
+    const busy = await outside.document.republishPage(PAGE);
+    expect(busy.build).toBe('busy');
+    expect(requests.uploads).toHaveLength(1);
+    expect(requests.saves).toHaveLength(1);
   });
 });

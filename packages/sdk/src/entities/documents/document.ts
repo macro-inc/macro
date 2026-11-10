@@ -195,8 +195,9 @@ export class Document
    * Fix a page from `documents.publishPage` with `republishPage(html)`, passing the whole corrected page, until `problems` is empty.
    *
    * Saves `html` as a new version of this HTML document, under the same id and
-   * link, then builds it and returns its problems by block; empty means it
-   * built. The page contract (program and client blocks, no imports, no
+   * link, then builds it and returns its `build` status and problems by block;
+   * `build: 'built'` means it built, and `busy` means try the same page again
+   * later. The page contract (program and client blocks, no imports, no
    * timers in programs, no form submits, `textContent` for data) is on
    * `documents.publishPage`. Throws when this document isn't an HTML file.
    *

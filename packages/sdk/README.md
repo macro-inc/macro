@@ -729,11 +729,19 @@ throws `DocumentEditRefusedError` with the writer's reason when it can't do it.
 ### Document lifecycle and other resources
 
 `documents.createUpload(options)` reserves a binary document and returns upload
-instructions. `document.prepareSave(parts)`, `save(options)` and `simpleSave()` expose
+instructions. `document.prepareSave(parts)`, `save(options)` and `simpleSave(content)` expose
 the existing content lifecycle; upload bytes before committing. Version handles
 come from `document.version(number)`. PDF highlights and comment anchors are scoped
 handles from `anchors()` / `createHighlight(options)`, with kind-checked edits and
 deletion. `documents.byTeamSlug('ENG-42')` resolves a task reference.
+
+`documents.publishPage({ name, html, project })` saves a live HTML page whose
+`text/macro` programs run as its viewer, builds it, and returns `{ document,
+build, problems }`; `document.republishPage(html)` saves a fix as a new version
+and builds again. Neither throws once the page is saved: `build` is `built`,
+`failed` (see `problems`), `busy` (republish later) or `unavailable` (live
+pages aren't available to the account). The page contract is in
+`publishPage`'s TSDoc.
 `sharePermissions`, `permissionsToken` and `documents.validatePermissionsToken`
 expose document access contracts.
 

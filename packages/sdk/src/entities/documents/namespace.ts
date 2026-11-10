@@ -147,10 +147,14 @@ export class DocumentNamespace {
    * Use it for a page that shows or changes Macro data when someone opens it,
    * such as a dashboard or a tracker. It saves `html` as a new HTML document
    * named `name` (`.html` is added when missing) in `project`, builds it, and
-   * returns the document with the build's problems by block. The document is
-   * saved even when it doesn't build. Each problem is a type error or a broken
+   * returns the document with its `build` status and the build's problems by
+   * block. The document is saved even when it doesn't build, and the call
+   * never throws once it is saved. Each problem is a type error or a broken
    * rule below: fix it and call `document.republishPage(html)` with the whole
    * corrected page, which saves it as a new version of the same document.
+   * `build: 'busy'` means the build didn't finish in time: republish the same
+   * page later. `build: 'unavailable'` means live pages aren't available to
+   * this account: the page is saved and opens as plain HTML.
    *
    * A page has two kinds of block, in TypeScript:
    *
@@ -158,7 +162,9 @@ export class DocumentNamespace {
    *   each `id` a JavaScript identifier. The default export is
    *   `export default async function (args: { query: string }, { macro }: ProgramContext)`
    *   and returns plain JSON (strings, numbers, arrays, objects; handles
-   *   serialize to ids, so return the fields you show). A program runs on the
+   *   serialize to their `toJSON()`, such as `{ id }`, and dates to strings, so
+   *   return the fields you show), at most 1000 KB of it. The first parameter,
+   *   if any, is an object type. A program runs on the
    *   server as the person viewing the page, with `macro` this SDK signed in as
    *   them, for at most 30 seconds. Programs have no `setTimeout`: they can't
    *   wait or poll; the page can.
@@ -207,7 +213,7 @@ export class DocumentNamespace {
    *   await load();
    * </script>`;
    * const { document, problems } = await macro.documents.publishPage({ name: 'Launch tasks', html });
-   * // Non-empty problems: fix the named blocks, then
+   * // build 'failed': fix the named blocks, then
    * // await document.republishPage(fixedHtml), and repeat until problems is empty.
    * return { data: { page: document, problems } };
    * ```
