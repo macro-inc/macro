@@ -750,20 +750,21 @@ export class EditorView implements ViewSink {
         return;
       }
       existing.dispose();
-      existing.host.remove();
       this.decorators.delete(key);
     }
     const dom = this.dom.get(key);
     if (!dom) throw new Error('Decorator mount DOM missing');
     const [value, set] = createSignal(node);
     let host: HTMLElement;
-    if (renderer.createDecoratorHost) {
+    if (existing) {
+      host = existing.host;
+    } else if (renderer.createDecoratorHost) {
       host = renderer.createDecoratorHost(dom, this.context);
     } else {
       host = this.root.ownerDocument.createElement('span');
       host.style.display = 'contents';
     }
-    dom.appendChild(host);
+    if (!existing) dom.appendChild(host);
     const dispose = render(
       () => createComponent(component, { node: value, view: this }),
       host,
