@@ -160,7 +160,9 @@ use macro_service_urls::{
 use mcp_client::domain::models::AesKey;
 use mcp_client::outbound::NativeServerStore;
 use mcp_client::outbound::pg_server_repo::PgServerRepo;
-use model_providers::{CursorModels, InMemoryModels, MacrodModels, VisibleHarnessAccess};
+use model_providers::{
+    CursorModels, InMemoryModels, MacrodModels, PgKnownModels, VisibleHarnessAccess,
+};
 use permission_policy::PgPermissionPolicySource;
 use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
 use pipedream_mcp::outbound::dispatch::ConnectorBackends;
@@ -1667,6 +1669,7 @@ async fn run() -> anyhow::Result<()> {
         ),
         CursorModels::new(cursor_keys, cursor_api_base_url()),
         macrod_models,
+        PgKnownModels::new(pool.clone()),
         model_probe_timeout,
     ));
     let model_state = AgentModelsRouterState::new(
