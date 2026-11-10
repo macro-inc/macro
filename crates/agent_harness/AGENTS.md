@@ -96,10 +96,13 @@ durable queue, or activity in the last hour (`modified_at`, or the listing's
 permits, each held until the session's `session/load` or `session/resume`
 finishes; a harness dialing again stops its previous dial from starting more.
 Permanent errors are not retried; others are, with jittered backoff, while the
-runtime stays connected. The `agent.runtime.reattach` span counts eager, lazy,
+runtime stays connected. A session whose load keeps failing stays disconnected
+with its turn unfinished, so every dial tries it again (three attempts, under a
+permit). The `agent.runtime.reattach` span counts eager, lazy,
 skipped, failed and abandoned sessions and retries. macrod's herdr-acp lists
-native sessions whose Herdr agent still runs, without `updatedAt` yet, so work
-typed into a Herdr pane reaches Macro only once its session is restored.
+native sessions whose Herdr agent still runs, each with `updatedAt` from its
+transcript's last write, so a session worked on in its Herdr pane within the
+hour is restored at dial time.
 
 Durable system events use the `agent_session` outbox, distinct from the user
 push notifications planned in `domain/notifications.rs`. The serialized session

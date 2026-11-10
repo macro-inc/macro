@@ -11,15 +11,17 @@ const IDLE_SESSION_AFTER: chrono::TimeDelta = chrono::TimeDelta::hours(1);
 /// [`IDLE_SESSION_AFTER`]. `modified_at` moves when a turn starts, runs, is
 /// stopped or blocks, never when it ends, so an unfinished turn is read from
 /// the turn projection instead. `runtime_activity` is the runtime's own
-/// `updatedAt` for it, when its listing carries one.
+/// `updatedAt` for it, when its listing carries one; a runtime clock ahead of
+/// ours counts as now, never as the future.
 fn is_idle(
     session: &AgentSession,
     runtime_activity: Option<chrono::DateTime<chrono::Utc>>,
 ) -> bool {
+    let now = chrono::Utc::now();
     let last_activity = runtime_activity.map_or(session.modified_at, |runtime| {
-        runtime.max(session.modified_at)
+        runtime.min(now).max(session.modified_at)
     });
-    chrono::Utc::now() - last_activity >= IDLE_SESSION_AFTER
+    now - last_activity >= IDLE_SESSION_AFTER
 }
 
 /// What a runtime's dial does with a session it listed.
