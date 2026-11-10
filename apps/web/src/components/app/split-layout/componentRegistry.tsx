@@ -36,6 +36,10 @@ import {
 } from './split-router/app-route-shell';
 
 // Views load as their own chunks the first time a split opens them.
+const ForYouRouteView = lazyNamed(
+  () => import('@app/features/ideas/route-views'),
+  'ForYouRouteView'
+);
 const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
   'ActivityRouteView'
@@ -325,6 +329,7 @@ registerComponent(
 );
 registerComponent(NOT_FOUND_ROUTE_ID, () => <NotFound />);
 registerComponent('recent', () => <RecentRouteView />);
+registerComponent('for-you', () => <ForYouRouteView />);
 registerComponent('activity', () => <ActivityRouteView />);
 registerComponent(
   'notifications',

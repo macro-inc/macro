@@ -17,6 +17,7 @@ const defaultPrefs = (overrides: Partial<SidebarPrefs> = {}): SidebarPrefs => ({
 
 const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
   showNotifications: true,
+  showForYou: false,
   showCalendar: true,
   showScheduling: true,
   showCustomers: true,
@@ -189,11 +190,30 @@ describe('orderNavItems', () => {
       'documents',
     ]);
 
-    expect(ordered.map((item) => item.id).slice(0, 4)).toEqual([
+    expect(ordered.map((item) => item.id).slice(0, 5)).toEqual([
       'home',
+      'for-you',
       'tasks',
       'mail',
       'documents',
     ]);
   });
+
+  it('keeps For you where the person put it', () => {
+    const ordered = orderNavItems(SIDEBAR_NEXT_NAV_ITEMS, ['tasks', 'for-you']);
+
+    expect(ordered.map((item) => item.id).slice(0, 3)).toEqual([
+      'home',
+      'tasks',
+      'for-you',
+    ]);
+  });
+});
+
+it('lists For you only when ideas are on', () => {
+  const hidden = visibleNavItems(defaultGates());
+  const shown = visibleNavItems(defaultGates({ showForYou: true }));
+
+  expect(hidden.some((item) => item.id === 'for-you')).toBe(false);
+  expect(shown.map((item) => item.id).slice(0, 2)).toEqual(['home', 'for-you']);
 });

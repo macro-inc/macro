@@ -29,6 +29,11 @@ async function draftErrorResponseHandler(
   return aiUsageErrorResponseHandler(response);
 }
 
+import {
+  getAcceptIdeaUrl,
+  getDismissIdeaUrl,
+  getListIdeasUrl,
+} from './generated/client';
 import type {
   ActionConfiguration,
   ActionConfigurationUpdate,
@@ -37,6 +42,7 @@ import type {
   CodeUpgrade,
   Draft,
   DraftRoutineRequest,
+  Ideas,
   InProgressExecution,
   RoutineSuggestions,
   RoutineTemplate,
@@ -199,4 +205,19 @@ export const scheduledActionClient = {
       `/scheduled-actions/${args.templateId}/template/activate`,
       { method: 'POST', body: JSON.stringify(args.body) }
     ),
+
+  /** The caller's feed of ideas. `timezone` is the IANA zone they are in. */
+  listIdeas: (args: { timezone: string }) =>
+    scheduledActionFetch<Ideas>(getListIdeasUrl(args), { method: 'GET' }),
+
+  /** Take an idea up; a background prompt idea starts running. */
+  acceptIdea: (args: { ideaId: string }) =>
+    scheduledActionFetch(getAcceptIdeaUrl(args.ideaId), { method: 'POST' }),
+
+  /** `keepalive` lets the call outlive a page that is closing. */
+  dismissIdea: (args: { ideaId: string; keepalive?: boolean }) =>
+    scheduledActionFetch(getDismissIdeaUrl(args.ideaId), {
+      method: 'POST',
+      keepalive: args.keepalive,
+    }),
 };

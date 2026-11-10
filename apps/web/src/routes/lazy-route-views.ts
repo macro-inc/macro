@@ -6,6 +6,10 @@ import { lazy } from 'solid-js';
  * split router warms a route's chunks while it navigates, and `AppShell`
  * fetches the likely-next ones once the first screen settles.
  */
+export const ForYouRouteView = lazyNamed(
+  () => import('@app/features/ideas/route-views'),
+  'ForYouRouteView'
+);
 export const ActivityRouteView = lazyNamed(
   () => import('@app/features/activity/route-views'),
   'ActivityRouteView'

@@ -7,6 +7,7 @@ import type {
 import type { ScheduleDraft } from '../../routines/core/draft';
 import {
   type Knob,
+  knobText,
   sentenceParts,
   sentenceText,
   withKnobValue,
@@ -350,6 +351,27 @@ export function discoverItems(
     ...suggestions.filter((item) => item.from !== 'for_you'),
     ...templates.filter((item) => !offered.has(item.catalogKey)),
   ];
+}
+
+/** A run of a suggestion's sentence; `picked` marks a value AI chose. */
+export type SuggestionSentencePart = { text: string; picked: boolean };
+
+/**
+ * A suggestion's sentence as runs of text with the knob values marked, or
+ * its summary as one plain run when it has no sentence.
+ */
+export function suggestionSentenceRuns(
+  item: SuggestionItem
+): SuggestionSentencePart[] {
+  const step = sentenceStep(item.draft);
+  const parts = step && sentenceParts(step.sentence, step.knobs);
+  if (!parts) return [{ text: item.summary, picked: false }];
+
+  return parts.map((part) =>
+    part.kind === 'text'
+      ? { text: part.text, picked: false }
+      : { text: knobText(part.knob), picked: true }
+  );
 }
 
 /** The suggestions a surface's sidebar shows, in the server's order. */

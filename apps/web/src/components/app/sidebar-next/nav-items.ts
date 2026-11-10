@@ -11,6 +11,7 @@ import EnvelopeFillIcon from '@icon/system/fill/envelope-fill.svg';
 import FolderSimpleFillIcon from '@icon/system/fill/folder-simple-fill.svg';
 import GitPullRequestFillIcon from '@icon/system/fill/git-pull-request-fill.svg';
 import HouseFillIcon from '@icon/system/fill/house-fill.svg';
+import LightbulbFillIcon from '@icon/system/fill/lightbulb-fill.svg';
 import ListChecksFillIcon from '@icon/system/fill/list-checks-fill.svg';
 import PhoneCallFillIcon from '@icon/system/fill/phone-call-fill.svg';
 import PlugFillIcon from '@icon/system/fill/plug-fill.svg';
@@ -24,6 +25,7 @@ import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import HouseIcon from '@icon/system/regular/house.svg';
+import LightbulbIcon from '@icon/system/regular/lightbulb.svg';
 import ListChecksIcon from '@icon/system/regular/list-checks.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
@@ -73,6 +75,15 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: HouseFillIcon,
     hotkey: 'h',
     hotkeyToken: TOKENS.sidebar.goTo.home,
+  },
+  {
+    id: 'for-you',
+    get label() {
+      return t('nav.forYou');
+    },
+    href: '/for-you',
+    icon: LightbulbIcon,
+    iconActive: LightbulbFillIcon,
   },
   {
     id: 'notifications',
@@ -218,6 +229,7 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
 /** Feature flag gates for sidebar destinations. */
 export type NavItemGates = {
   showNotifications: boolean;
+  showForYou: boolean;
   showCalendar: boolean;
   showScheduling: boolean;
   showCustomers: boolean;
@@ -235,6 +247,7 @@ export const isNavItemAvailable = (
   gates: NavItemGates
 ): boolean => {
   if (item.id === 'notifications') return gates.showNotifications;
+  if (item.id === 'for-you') return gates.showForYou;
   if (item.id === 'calendar') return gates.showCalendar;
   if (item.id === 'booking-links') return gates.showScheduling;
   if (item.id === 'companies') return gates.showCustomers;
@@ -263,6 +276,13 @@ export const orderNavItems = (
   if (home) {
     result.push(home);
     used.add('home');
+  }
+
+  // For you sits under Home until the person gives it a place of its own.
+  const forYou = byId.get('for-you');
+  if (forYou && !order.includes('for-you')) {
+    result.push(forYou);
+    used.add('for-you');
   }
 
   for (const id of order) {

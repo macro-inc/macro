@@ -52,7 +52,9 @@ function withFeed(
 function shownIds(feed: IdeasFeed) {
   const view = feed.view();
 
-  return view.kind === 'ideas' ? view.entries.map((entry) => entry.idea.id) : [];
+  return view.kind === 'ideas'
+    ? view.entries.map((entry) => entry.idea.id)
+    : [];
 }
 
 describe('ideas feed', () => {
@@ -140,24 +142,21 @@ describe('ideas feed', () => {
   });
 
   it('opens a reply idea’s draft when it has one, else the item', async () => {
-    await withFeed(
-      [draftedReplyIdea, replyIdea],
-      async (feed, { actions }) => {
-        await feed.accept(draftedReplyIdea);
-        expect(actions.openDraft).toHaveBeenCalledWith({
-          entityType: 'email_thread',
-          entityId: 'thread-1',
-          partId: 'draft-1',
-        });
-        expect(actions.openItem).not.toHaveBeenCalled();
+    await withFeed([draftedReplyIdea, replyIdea], async (feed, { actions }) => {
+      await feed.accept(draftedReplyIdea);
+      expect(actions.openDraft).toHaveBeenCalledWith({
+        entityType: 'email_thread',
+        entityId: 'thread-1',
+        partId: 'draft-1',
+      });
+      expect(actions.openItem).not.toHaveBeenCalled();
 
-        await feed.accept(replyIdea);
-        expect(actions.openItem).toHaveBeenCalledWith({
-          entityType: 'email_thread',
-          entityId: 'thread-1',
-        });
-      }
-    );
+      await feed.accept(replyIdea);
+      expect(actions.openItem).toHaveBeenCalledWith({
+        entityType: 'email_thread',
+        entityId: 'thread-1',
+      });
+    });
   });
 
   it('turns a routine idea on by saving its suggestion, not by accepting', async () => {

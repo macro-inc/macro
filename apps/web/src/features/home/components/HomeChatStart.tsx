@@ -3,16 +3,26 @@ import {
   ViewShell,
   ViewSidebar,
 } from '@app/components/view-shell';
+import { useIdeasFlag } from '@app/features/ideas/use-ideas-flag';
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { ChatInputProvider } from '@core/component/AI/context';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { Show } from 'solid-js';
 import { HomeAgentComposer } from '../home-agent-composer';
+import { HomeSectionBoundary } from '../home-section-boundary';
 import { HomeRecommendedActions } from './home-recommended-actions';
+
+// Loaded only for people with ideas on.
+const HomeIdeas = lazyNamed(
+  () => import('@app/features/ideas/home-ideas'),
+  'HomeIdeas'
+);
 
 /** Desktop Home's idle pane: the agent composer and suggested actions. */
 export function HomeChatStart() {
   const shell = useViewShell();
+  const ideas = useIdeasFlag();
   const showHomeTopBar = () =>
     shell.aside.isCollapsed() || shell.aside.isOverlay();
   return (
@@ -50,7 +60,12 @@ export function HomeChatStart() {
               </DebugSuspense>
             </div>
             <div class="min-h-0 min-w-0 pb-8">
-              <HomeRecommendedActions />
+              {/* With ideas on, today and the top priorities take this place. */}
+              <Show when={ideas()} fallback={<HomeRecommendedActions />}>
+                <HomeSectionBoundary title="priorities" fallback={null}>
+                  <HomeIdeas />
+                </HomeSectionBoundary>
+              </Show>
             </div>
           </div>
         </div>

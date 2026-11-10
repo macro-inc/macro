@@ -45,8 +45,10 @@ import {
   discoverItems,
   type SuggestionContext,
   type SuggestionItem,
+  type SuggestionSentencePart,
   stackLooks,
   suggestionItem,
+  suggestionSentenceRuns,
   suggestionsFor,
   templateItem,
 } from './core/suggestions';
@@ -390,6 +392,52 @@ function useDiscoverItems(list: ReturnType<typeof useSuggestionList>) {
     if (!items || !templates) return undefined;
     return discoverItems(list.actions.visible(items), templates);
   });
+}
+
+/** How a routine idea's card words its suggestion. */
+export type RoutineIdeaText = {
+  title: string;
+  sentence: SuggestionSentencePart[];
+  /** What starts it, e.g. "Fridays at 9:00 AM". */
+  when: string;
+};
+
+/**
+ * The suggestions behind routine ideas: each one's wording, opening it for
+ * review, and saving it as a routine. Enabling one twice saves one routine.
+ */
+export function useRoutineIdeaSuggestions() {
+  const list = useSuggestionList(
+    () => ({ kind: 'ideas' }),
+    () => {}
+  );
+  const find = (suggestionId: string) =>
+    list.items()?.find((item) => item.id === suggestionId);
+
+  return {
+    text(suggestionId: string): RoutineIdeaText | undefined {
+      const item = find(suggestionId);
+      if (!item) return undefined;
+
+      return {
+        title: item.title,
+        sentence: suggestionSentenceRuns(item),
+        when: item.chain.trigger,
+      };
+    },
+    review(suggestionId: string) {
+      const item = find(suggestionId);
+      if (item) list.actions.customize(item);
+    },
+    async turnOn(suggestionId: string) {
+      const item = find(suggestionId);
+      if (!item) throw new Error('Routine suggestion is not loaded');
+
+      await list.actions.enable(item);
+      const status = list.actions.statusFor(item);
+      if (status.kind === 'failed') throw new Error(status.message);
+    },
+  };
 }
 
 /** The one row of suggestions above the routines list. */

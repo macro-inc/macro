@@ -13,6 +13,7 @@ import create from './en/create';
 import crm from './en/crm';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
+import ideas from './en/ideas';
 import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
@@ -47,6 +48,7 @@ export default {
   crm,
   emailViews,
   entityActions,
+  ideas,
   localRuntime,
   mobile,
   nav,

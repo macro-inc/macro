@@ -77,7 +77,8 @@ export function createIdeasFeed(
 
   const view = createMemo((): FeedView => {
     const ideas = ordered();
-    if (!ideas) return source.failed() ? { kind: 'error' } : { kind: 'loading' };
+    if (!ideas)
+      return source.failed() ? { kind: 'error' } : { kind: 'loading' };
 
     const lastSeenAt = options.lastSeenAt?.();
     const entries = ideas

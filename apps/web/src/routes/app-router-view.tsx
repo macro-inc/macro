@@ -55,6 +55,7 @@ import {
   EmailDetailRouteView,
   FoldersRouteView,
   FormRespondRoutePage,
+  ForYouRouteView,
   HomeEntityDetailRouteView,
   MailRouteView,
   MeetingRouter,
@@ -136,6 +137,7 @@ import {
   externalRoute,
   foldersRoute,
   formRespondRoute,
+  forYouRoute,
   homeCalendarRoute,
   homeChannelRoute,
   homeDocumentRoute,
@@ -397,6 +399,7 @@ export function AppRouterView() {
           />
         </Route>
         <Route definition={recentRoute} component={RecentRouteView} />
+        <Route definition={forYouRoute} component={ForYouRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />
         <Route
           definition={notificationsRoute}

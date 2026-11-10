@@ -39,6 +39,7 @@ import {
   homeBaseBlockType,
   homePreviewRouteParams,
 } from '@app/features/home/home-route-schema';
+import { forYouSearch } from '@app/features/ideas/for-you-search';
 import { parseProjectRoute } from '@app/features/projects/core/route';
 import { reviewsTabSearch } from '@app/features/reviews-view/reviews-tab-search';
 import {
@@ -499,6 +500,13 @@ export const recentRoute = defineRoute({
   path: 'recent',
   search: '*' as const,
   claim: () => ({ namespace: 'component', id: 'recent' }),
+});
+
+export const forYouRoute = defineRoute({
+  id: 'view-for-you',
+  path: 'for-you',
+  search: [forYouSearch.namespace],
+  claim: () => ({ namespace: 'component', id: 'for-you' }),
 });
 
 export const activityRoute = defineRoute({
