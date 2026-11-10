@@ -1,12 +1,22 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { decodePane } from '@app/lib/split-router';
+import { debugRoutes } from '@app/routes/routes';
 import { describe, expect, it } from 'vitest';
 import { appRoutesManifest } from '../tests/app-routes';
 import { agentRouteTable, isNavigableByAgent } from './navigable-routes';
 
 /** Rewrite the server's copy instead of comparing: `UPDATE_AGENT_ROUTE_TABLE=1`. */
 const UPDATE = process.env.UPDATE_AGENT_ROUTE_TABLE === '1';
+
+/**
+ * Debug views are closed to agents and registered only in some builds
+ * (`LOCAL_ONLY`, `DEV`, `DEV_MODE_ENV`), so the table leaves them out and
+ * stays the same in every test environment. The server still refuses their
+ * paths: `debug/<id>` and `component/<id>` fall to the closed `:type/:id`
+ * branch.
+ */
+const DEBUG_ROUTES = new Set(debugRoutes.map(({ route }) => route.id));
 
 const SERVER_TABLE = resolve(
   __dirname,
@@ -25,7 +35,9 @@ function navigable(path: string): boolean {
 
 describe('agent route table', () => {
   it('matches the copy the server checks paths against', () => {
-    const { branches } = agentRouteTable(appManifest());
+    const branches = agentRouteTable(appManifest()).branches.filter(
+      (branch) => !DEBUG_ROUTES.has(branch.route)
+    );
     // One branch a line, so a route change reads as a small diff.
     const generated = [
       '{',

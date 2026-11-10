@@ -61,8 +61,12 @@ stacks. Process isolation belongs to
   mentions answer `no_client`. The path must match `navigable_routes.json`,
   generated from the web route table by
   `apps/web/src/features/agent-navigation/core/navigable-routes.test.tsx`
-  (`UPDATE_AGENT_ROUTE_TABLE=1` rewrites it; never edit it by hand). Budgets
-  (5 commands and 3 panes a turn, 30 a person a minute) live in Redis; the
+  (`UPDATE_AGENT_ROUTE_TABLE=1` rewrites it; never edit it by hand). The
+  table leaves out debug views, which only some builds register; their paths
+  fall to the closed `:type/:id` branch. A sent path keeps only the pane's own
+  `s0.` search: unprefixed hand-off keys such as `whatsappPairing` are
+  dropped, so a command never starts what a link from outside the app does.
+  Budgets (5 commands and 3 panes a turn, 30 a person a minute) live in Redis; the
   harness adapters (`agent_harness_service/src/code_mode/ui_commands.rs`) send a
   `ui_command` frame to `user/{prompter}` through the connection gateway behind
   the `enable-agent-navigation` flag. No acknowledgement yet: `sent` is the
