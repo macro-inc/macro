@@ -270,7 +270,7 @@ impl PgComputerRepo {
                     INSERT INTO hosted_runtime_timer (computer_id, kind, fire_at)
                     SELECT id, 'capacity_changed', $2 FROM hosted_runtime
                     WHERE host_id = $1 AND id <> $3
-                        AND state->>'power' = 'on' AND state->>'wake_requested' = 'true'
+                        AND state->>'power' = 'on' AND state->>'power_on_requested' = 'true'
                         AND state->'phase'->>'phase' IN ('stopped', 'provisioning')
                     ON CONFLICT (computer_id, kind) DO UPDATE SET fire_at = LEAST(hosted_runtime_timer.fire_at, EXCLUDED.fire_at)
                     "#,

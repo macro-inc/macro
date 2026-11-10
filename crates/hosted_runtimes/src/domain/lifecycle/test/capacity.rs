@@ -9,14 +9,14 @@ fn capacity_retry_backs_off_and_a_repeated_power_on_keeps_the_deadline() {
     };
     for (event, seconds, retry_seconds) in [
         (Event::PowerOn, 0, Some(20)),
-        (Event::WakeRetry, 1, None),
-        (Event::WakeRetry, 20, Some(40)),
+        (Event::PowerOnRetry, 1, None),
+        (Event::PowerOnRetry, 20, Some(40)),
         (Event::PowerOn, 21, None),
-        (Event::WakeRetry, 60, Some(80)),
-        (Event::WakeRetry, 140, Some(160)),
-        (Event::WakeRetry, 300, Some(320)),
-        (Event::WakeRetry, 620, Some(600)),
-        (Event::WakeRetry, 1220, Some(600)),
+        (Event::PowerOnRetry, 60, Some(80)),
+        (Event::PowerOnRetry, 140, Some(160)),
+        (Event::PowerOnRetry, 300, Some(320)),
+        (Event::PowerOnRetry, 620, Some(600)),
+        (Event::PowerOnRetry, 1220, Some(600)),
     ] {
         let at = now() + Duration::seconds(seconds);
         let (next, effects) = transition(
@@ -31,7 +31,7 @@ fn capacity_retry_backs_off_and_a_repeated_power_on_keeps_the_deadline() {
         assert_eq!(
             effects.iter().find_map(|effect| match effect {
                 Effect::ScheduleTimer {
-                    kind: TimerKind::WakeRetry,
+                    kind: TimerKind::PowerOnRetry,
                     at: retry,
                 } => Some((*retry - at).num_seconds()),
                 _ => None,
@@ -92,13 +92,13 @@ proptest! {
         for (event, seconds) in events {
             at += Duration::seconds(seconds);
             let event = match event {
-                0 => Event::PowerOn, 1 => Event::WakeRetry, _ => Event::CapacityChanged,
+                0 => Event::PowerOn, 1 => Event::PowerOnRetry, _ => Event::CapacityChanged,
             };
             let (next, effects) = transition(&state, &event, Context {
                 now: at, host_has_room: false, enrollment_generation: EnrollmentGeneration::new(0),
             });
             for effect in effects {
-                if let Effect::ScheduleTimer { kind: TimerKind::WakeRetry, at: retry_at } = effect {
+                if let Effect::ScheduleTimer { kind: TimerKind::PowerOnRetry, at: retry_at } = effect {
                     prop_assert!((Duration::seconds(20)..=Duration::seconds(600)).contains(&(retry_at-at)));
                 }
             }

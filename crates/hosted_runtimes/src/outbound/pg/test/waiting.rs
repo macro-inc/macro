@@ -35,7 +35,7 @@ async fn releasing_awake_units_notifies_waiters_in_the_same_transaction(pool: Pg
             .await
             .unwrap();
         let blocked = repo
-            .apply(waiting, Event::WakeRetry, now() + Duration::seconds(20))
+            .apply(waiting, Event::PowerOnRetry, now() + Duration::seconds(20))
             .await
             .unwrap()
             .unwrap();
@@ -62,7 +62,7 @@ async fn releasing_awake_units_notifies_waiters_in_the_same_transaction(pool: Pg
                 host: awake.state.host().unwrap()
             }
         );
-        assert!(!awake.state.wake_requested);
+        assert!(!awake.state.power_on_requested);
         repo.apply(waiting, Event::ReleaseNow, now() + Duration::seconds(22))
             .await
             .unwrap();

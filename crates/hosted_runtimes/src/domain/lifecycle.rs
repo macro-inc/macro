@@ -13,7 +13,7 @@ use crate::domain::models::SubscriptionItem;
 
 mod capacity;
 pub use capacity::CapacityWait;
-use capacity::{wait_for_room, wake};
+use capacity::{power_on, wait_for_room};
 
 #[cfg(test)]
 mod test;
@@ -30,10 +30,10 @@ pub const CRASH_WINDOW: Duration = Duration::minutes(15);
 pub const MAX_CRASHES: usize = 3;
 /// A canceled computer's disk is kept this long before it is destroyed.
 pub const RETENTION: Duration = Duration::days(14);
-/// How soon a wake blocked by full host capacity is retried.
-pub const WAKE_RETRY: Duration = Duration::seconds(20);
+/// How soon a power-on blocked by full host capacity is retried.
+pub const POWER_ON_RETRY: Duration = Duration::seconds(20);
 /// Maximum interval between capacity checks for a waiting computer.
-pub const MAX_WAKE_RETRY: Duration = Duration::minutes(10);
+pub const MAX_POWER_ON_RETRY: Duration = Duration::minutes(10);
 /// First restart backoff after a crash; doubles per recent crash.
 pub const RESTART_BACKOFF: Duration = Duration::seconds(30);
 
@@ -51,7 +51,7 @@ pub enum Phase {
     /// Payment was definitely refused; no capacity or billing item is held.
     PaymentFailed,
     /// Purchase confirmed; the instance is created on `host`, started when `start`
-    /// (a full host creates it stopped and wakes it later).
+    /// (a full host creates it stopped and starts it later).
     Provisioning {
         /// Host holding the computer.
         host: HostId,
@@ -163,7 +163,7 @@ pub struct ComputerState {
     /// Crash times inside the current [`CRASH_WINDOW`].
     pub recent_crashes: Vec<DateTime<Utc>>,
     /// A power-on is waiting for the computer to start.
-    pub wake_requested: bool,
+    pub power_on_requested: bool,
     /// Absent until a start first waits for room.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capacity_wait: Option<CapacityWait>,
@@ -183,7 +183,7 @@ impl ComputerState {
             macrod_connected: false,
             macrod_misses: 0,
             recent_crashes: Vec::new(),
-            wake_requested: false,
+            power_on_requested: false,
             capacity_wait: None,
         }
     }
@@ -215,7 +215,7 @@ impl ComputerState {
     /// Whether an on request is waiting for host capacity rather than setup.
     pub fn waiting_for_capacity(&self) -> bool {
         self.power == Power::On
-            && self.wake_requested
+            && self.power_on_requested
             && matches!(
                 self.phase,
                 Phase::Provisioning { start: false, .. } | Phase::Stopped { .. }
@@ -279,7 +279,7 @@ pub enum Event {
     /// Request power off.
     PowerOff,
     /// Timer: retry a start that found the host full.
-    WakeRetry,
+    PowerOnRetry,
     /// Another computer on the host released awake units.
     CapacityChanged,
     /// Schedule cancellation at the billing period end.
@@ -327,7 +327,7 @@ pub enum TimerKind {
     /// Retry after the crash backoff.
     RestartDue,
     /// Retry a start blocked by host capacity.
-    WakeRetry,
+    PowerOnRetry,
     /// Another computer on the host released awake units.
     CapacityChanged,
     /// Apply the scheduled billing cancellation.
@@ -342,7 +342,7 @@ impl TimerKind {
         match self {
             Self::MacrodMissing => Event::MacrodMissing { instance_status },
             Self::RestartDue => Event::RestartDue,
-            Self::WakeRetry => Event::WakeRetry,
+            Self::PowerOnRetry => Event::PowerOnRetry,
             Self::CapacityChanged => Event::CapacityChanged,
             Self::PeriodEnded => Event::PeriodEnded,
             Self::RetentionExpired => Event::RetentionExpired,
@@ -494,7 +494,7 @@ pub fn transition(
                 }
                 let start = state.power == Power::On && context.host_has_room;
                 next.phase = Phase::Provisioning { host, start };
-                next.wake_requested = state.power == Power::On && !start;
+                next.power_on_requested = state.power == Power::On && !start;
                 schedule_create(
                     &mut next,
                     &mut effects,
@@ -519,12 +519,12 @@ pub fn transition(
             next.macrod_connected = false;
             if matches!(state.billing, Billing::Canceled { .. }) {
                 next.phase = Phase::Destroyed;
-                next.wake_requested = false;
+                next.power_on_requested = false;
                 effects.push(Effect::RevokeHarness);
             } else {
                 let start = state.power == Power::On && context.host_has_room;
                 next.phase = Phase::Provisioning { host, start };
-                next.wake_requested = state.power == Power::On && !start;
+                next.power_on_requested = state.power == Power::On && !start;
                 schedule_create(
                     &mut next,
                     &mut effects,
@@ -540,7 +540,7 @@ pub fn transition(
                 if state.power == Power::On {
                     if state.macrod_connected {
                         next.phase = Phase::Running { host };
-                        next.wake_requested = false;
+                        next.power_on_requested = false;
                     } else {
                         boot(&mut next, &mut effects, host, now, None);
                     }
@@ -557,10 +557,10 @@ pub fn transition(
             ) {
                 next.phase = Phase::Stopped { host };
                 next.macrod_connected = false;
-                if state.power == Power::On && state.wake_requested {
+                if state.power == Power::On && state.power_on_requested {
                     effects.push(Effect::ScheduleTimer {
-                        kind: TimerKind::WakeRetry,
-                        at: now + WAKE_RETRY,
+                        kind: TimerKind::PowerOnRetry,
+                        at: now + POWER_ON_RETRY,
                     });
                 }
             }
@@ -572,7 +572,7 @@ pub fn transition(
             if let Phase::Booting { .. } = state.phase {
                 if state.power == Power::On {
                     next.phase = Phase::Running { host };
-                    next.wake_requested = false;
+                    next.power_on_requested = false;
                 } else {
                     stop(&mut next, &mut effects, host);
                 }
@@ -638,27 +638,27 @@ pub fn transition(
             }
         }
 
-        Event::WakeRetry => {
+        Event::PowerOnRetry => {
             let due = state
                 .capacity_wait
                 .as_ref()
                 .is_none_or(|wait| now >= wait.retry_at);
-            if state.power == Power::On && state.wake_requested && due {
-                wake(&mut next, &mut effects, host, context);
+            if state.power == Power::On && state.power_on_requested && due {
+                power_on(&mut next, &mut effects, host, context);
             }
         }
 
         Event::CapacityChanged => {
             if state.waiting_for_capacity() {
                 next.capacity_wait = None;
-                wake(&mut next, &mut effects, host, context);
+                power_on(&mut next, &mut effects, host, context);
             }
         }
 
         Event::PowerOn => {
             if !matches!(state.billing, Billing::Canceled { .. }) {
                 next.power = Power::On;
-                wake(&mut next, &mut effects, host, context);
+                power_on(&mut next, &mut effects, host, context);
             }
         }
 
@@ -681,7 +681,7 @@ pub fn transition(
                         );
                     } else {
                         next.phase = Phase::Stopped { host };
-                        next.wake_requested = true;
+                        next.power_on_requested = true;
                         wait_for_room(&mut next, &mut effects, now);
                     }
                 } else {
@@ -774,7 +774,7 @@ fn boot(
     next.phase = Phase::Booting { host };
     next.capacity_wait = None;
     next.macrod_misses = 0;
-    next.wake_requested = false;
+    next.power_on_requested = false;
     next.macrod_connected = false;
     effects.extend(start);
     effects.push(Effect::ScheduleTimer {
@@ -813,7 +813,7 @@ fn crash(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId, now:
 
 fn fail(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId, reason: String) {
     next.phase = Phase::Failed { host };
-    next.wake_requested = false;
+    next.power_on_requested = false;
     next.macrod_connected = false;
     effects.push(Effect::PageOperator { reason });
 }
@@ -825,7 +825,7 @@ fn stop(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId) {
 
 /// Bring the computer to rest after the team turned it off.
 fn power_down(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId) {
-    next.wake_requested = false;
+    next.power_on_requested = false;
     match next.phase {
         Phase::Booting { .. } | Phase::Running { .. } | Phase::Restarting { .. } => {
             stop(next, effects, host)
@@ -858,7 +858,7 @@ fn cancel(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId, now
 
 fn destroy(next: &mut ComputerState, effects: &mut Vec<Effect>, host: HostId) {
     next.phase = Phase::Destroyed;
-    next.wake_requested = false;
+    next.power_on_requested = false;
     next.macrod_connected = false;
     effects.push(Effect::Destroy { host });
     effects.push(Effect::RevokeHarness);

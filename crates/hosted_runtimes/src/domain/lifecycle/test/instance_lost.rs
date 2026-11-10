@@ -29,7 +29,7 @@ fn loss_recreates_every_paid_phase_according_to_power_and_capacity() {
                         billing,
                         macrod_connected: true,
                         macrod_misses: 0,
-                        wake_requested: true,
+                        power_on_requested: true,
                         ..ComputerState::reserved(HOST, now())
                     };
                     let (next, effects) = transition(
@@ -44,7 +44,10 @@ fn loss_recreates_every_paid_phase_according_to_power_and_capacity() {
                     );
                     let start = power == Power::On && host_has_room;
                     assert_eq!(next.phase, Phase::Provisioning { host: HOST, start });
-                    assert_eq!(next.wake_requested, power == Power::On && !host_has_room);
+                    assert_eq!(
+                        next.power_on_requested,
+                        power == Power::On && !host_has_room
+                    );
                     assert!(!next.macrod_connected);
                     assert_eq!(
                         effects,
@@ -79,7 +82,7 @@ fn loss_recreates_every_paid_phase_according_to_power_and_capacity() {
         assert_eq!(next.phase, Phase::Destroyed);
         assert_eq!(effects, vec![Effect::RevokeHarness]);
         assert!(!next.macrod_connected);
-        assert!(!next.wake_requested);
+        assert!(!next.power_on_requested);
     }
 }
 

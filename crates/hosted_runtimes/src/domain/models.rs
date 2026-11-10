@@ -494,7 +494,7 @@ impl Computer {
             _ if setup_step.is_some() => ComputerStatusKind::SettingUp,
             Phase::Running { .. } => ComputerStatusKind::Ready,
             Phase::Booting { .. } | Phase::Restarting { .. } => ComputerStatusKind::Starting,
-            Phase::Stopped { .. } if self.state.wake_requested => ComputerStatusKind::Starting,
+            Phase::Stopped { .. } if self.state.power_on_requested => ComputerStatusKind::Starting,
             Phase::Stopping { .. } => ComputerStatusKind::Stopping,
             Phase::Stopped { .. } => ComputerStatusKind::Stopped,
             Phase::Failed { .. } => ComputerStatusKind::Failed,

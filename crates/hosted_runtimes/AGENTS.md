@@ -188,7 +188,7 @@ Reject invalid stored numeric capacity and retry counts rather than substituting
   price id, currency and interval. Without a subscription the quote returns
   `NoSubscription`; billing errors propagate.
 - **Waiting for capacity**: Preserve stopped fleet state and project
-  `wake_requested` with power On as `ComputerStatusKind::WaitingForCapacity`
+  `power_on_requested` with power On as `ComputerStatusKind::WaitingForCapacity`
   (also provisioning with `start: false`). Suppress setup progress while waiting.
   Persist `CapacityWait` on the first blocked start: check room after 20, 40,
   80, 160, 320, then 600 seconds, capped thereafter. A repeated power-on or a
