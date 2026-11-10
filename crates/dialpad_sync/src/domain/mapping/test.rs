@@ -259,6 +259,30 @@ fn a_caller_known_only_by_number_is_titled_by_it() {
 }
 
 #[test]
+fn a_blank_or_national_contact_phone_falls_back_to_the_call_s_numbers() {
+    for (contact_phone, target_phone) in [("", ""), ("604 311", "601 012")] {
+        let events = vec![event(
+            "hangup",
+            1_746_469_071_000,
+            json!({
+                "contact": {"name": "Jane Doe", "phone": contact_phone},
+                "target": {"id": 5908860123456789_i64, "name": "Sam Rep", "phone": target_phone},
+            }),
+        )];
+        let call = imported_call(&connection(), &events, None, None).unwrap();
+        let [rep, caller] = call.participants.as_slice() else {
+            panic!("expected the rep and the caller");
+        };
+        assert_eq!(
+            caller.phone.as_deref(),
+            Some("+1604311"),
+            "{contact_phone:?}"
+        );
+        assert_eq!(rep.phone.as_deref(), Some("+1601012"), "{target_phone:?}");
+    }
+}
+
+#[test]
 fn past_calls_fetch_their_transcript_and_recap() {
     let events = vec![event("backfill", 1_746_469_070_000, json!({}))];
     assert_eq!(

@@ -100,6 +100,16 @@ fn latest_with<'a, T>(
         .and_then(field)
 }
 
+/// A side's number: its contact's when that is E.164, else the call's own
+/// number for that side. Dialpad may send the contact's blank or without a
+/// country code.
+fn first_number(contact: &Option<String>, call: &Option<String>) -> Option<PhoneNumber> {
+    [contact, call]
+        .into_iter()
+        .flatten()
+        .find_map(|number| PhoneNumber::parse(number))
+}
+
 fn non_empty(text: Option<&str>) -> Option<String> {
     text.map(str::trim)
         .filter(|text| !text.is_empty())
@@ -132,20 +142,11 @@ pub fn imported_call(
         user_id: Some(connection.user_id.clone()),
         display_name: non_empty(target.name.as_deref()),
         email: non_empty(target.email.as_deref()),
-        phone: target
-            .phone
-            .as_deref()
-            .or(details.internal_number.as_deref())
-            .and_then(PhoneNumber::parse)
-            .map(String::from),
+        phone: first_number(&target.phone, &details.internal_number).map(String::from),
         external_id: None,
         attendance: vec![],
     };
-    let caller_phone = contact
-        .phone
-        .as_deref()
-        .or(details.external_number.as_deref())
-        .and_then(PhoneNumber::parse);
+    let caller_phone = first_number(&contact.phone, &details.external_number);
     // Dialpad names unknown callers by their number; that is not a name.
     let caller_name = non_empty(contact.name.as_deref()).filter(|name| {
         PhoneNumber::parse(name).is_none_or(|number| Some(&number) != caller_phone.as_ref())
