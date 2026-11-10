@@ -37,6 +37,7 @@ export function StackRow(props: {
       </div>
       <ToggleSwitch
         size="md"
+        class="touch:min-h-11 touch:min-w-11 touch:justify-center"
         label={t('notificationStacks.enabledLabel', { name: props.name })}
         labelClass="sr-only"
         checked={props.enabled}

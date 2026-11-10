@@ -161,11 +161,12 @@ export function StackEditorForm(props: {
           </For>
         </div>
         {props.picker}
-        <label class="flex flex-col gap-1.5 text-xs text-ink-muted">
+        <div class="flex flex-col gap-1.5 text-xs text-ink-muted">
           <span>{t('notificationStacks.nameContains')}</span>
           <span class="flex items-center gap-2">
             <Input
               class="min-w-0 flex-1"
+              aria-label={t('notificationStacks.nameContains')}
               placeholder={t('notificationStacks.nameContainsPlaceholder')}
               readOnly={props.disabled}
               maxLength={100}
@@ -189,7 +190,7 @@ export function StackEditorForm(props: {
             </Button>
           </span>
           <span>{t('notificationStacks.nameContainsHint')}</span>
-        </label>
+        </div>
       </Field>
 
       <Field
