@@ -14,7 +14,7 @@ use super::{
     proxy::ProxyError,
 };
 use crate::{
-    domain::{LogoDomain, LogoService},
+    domain::{LogoDomain, LogoError, LogoService},
     outbound::FaviconProvider,
 };
 
@@ -32,7 +32,10 @@ pub(crate) async fn logo_handler(
 ) -> Result<Response, ProxyError> {
     let domain = LogoDomain::parse(&params.domain)
         .ok_or_else(|| ProxyError::InvalidUrl("expected public DNS domain".into()))?;
-    let logo = service.get(domain).await?;
+    let logo = service.get(domain).await.map_err(|error| match error {
+        LogoError::Busy => ProxyError::Busy,
+        LogoError::Provider(error) => error,
+    })?;
     Ok((
         [
             ("content-type", logo.content_type.as_str()),

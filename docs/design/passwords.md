@@ -105,9 +105,11 @@ failed audit write must not silently produce an unaudited disclosure.
 ## Logos
 
 Browsers fetch authenticated Macro image-proxy `/logos?domain=…` responses.
-The server requests only HTTPS `/favicon.ico`, limits time, redirects and body
-size, rejects non-raster media, and checks public IPs both before requests and
-at DNS resolution. A bounded in-memory cache stores public logo bytes only.
+The initial request uses HTTPS `/favicon.ico`; bounded redirects may use HTTP
+or HTTPS and other paths. Every hop checks public IPs before requests and at
+DNS resolution. Fetches bound time and body size and reject non-raster media.
+A bounded in-memory cache stores public logo bytes only; eight shared semaphore
+permits cap concurrent cache-miss fetches while cached reads need no permit.
 Unavailable or refused logos display the item's letter tile. No browser calls
 an external icon service.
 

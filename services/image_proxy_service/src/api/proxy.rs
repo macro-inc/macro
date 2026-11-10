@@ -18,6 +18,7 @@ pub(crate) use crate::outbound::remote_image::*;
 impl IntoResponse for ProxyError {
     fn into_response(self) -> Response {
         let status = match &self {
+            Self::Busy => StatusCode::SERVICE_UNAVAILABLE,
             Self::InvalidUrl(_)
             | Self::InvalidScheme
             | Self::MissingHost

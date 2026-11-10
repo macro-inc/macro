@@ -31,6 +31,8 @@ remote image URLs through an authenticated, SSRF-guarded fetch.
 
 ## Gotchas
 
+- Keep cache-miss favicon fetches behind the shared semaphore; cache hits bypass
+  admission and saturated misses return 503 without an unbounded waiter queue.
 - Never bypass or weaken `src/outbound/resolver.rs`'s `PrivateIpFilteringResolver` — it is the only thing
   stopping this service from being an SSRF vector into internal infra.
 

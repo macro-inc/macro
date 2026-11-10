@@ -5,7 +5,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use bytes::Bytes;
+use tokio::sync::Semaphore;
 
+const MAX_CONCURRENT_FETCHES: usize = 8;
 const CACHE_CAPACITY: usize = 256;
 const CACHE_LIFETIME: Duration = Duration::from_secs(86_400);
 
@@ -49,10 +51,27 @@ pub trait LogoProvider: Clone + Send + Sync {
     fn fetch(&self, domain: &LogoDomain) -> impl Future<Output = Result<Logo, Self::Error>> + Send;
 }
 
+/// Upstream overload and failures remain distinct from cached hits.
+#[derive(Debug)]
+pub enum LogoError<E: std::error::Error + 'static> {
+    Busy,
+    Provider(E),
+}
+impl<E: std::error::Error + 'static> std::fmt::Display for LogoError<E> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Busy => formatter.write_str("logo fetch capacity exhausted"),
+            Self::Provider(error) => std::fmt::Display::fmt(error, formatter),
+        }
+    }
+}
+impl<E: std::error::Error + 'static> std::error::Error for LogoError<E> {}
+
 /// A bounded cache of public images; credentials and item data never enter it.
 #[derive(Clone)]
 pub struct LogoService<P> {
     provider: P,
+    admission: Arc<Semaphore>,
     cache: Arc<Mutex<HashMap<LogoDomain, (Instant, Logo)>>>,
 }
 
@@ -60,12 +79,13 @@ impl<P: LogoProvider> LogoService<P> {
     pub fn new(provider: P) -> Self {
         Self {
             provider,
+            admission: Arc::new(Semaphore::new(MAX_CONCURRENT_FETCHES)),
             cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
     #[tracing::instrument(skip_all, err)]
-    pub async fn get(&self, domain: LogoDomain) -> Result<Logo, P::Error> {
+    pub async fn get(&self, domain: LogoDomain) -> Result<Logo, LogoError<P::Error>> {
         if let Ok(cache) = self.cache.lock()
             && let Some((created_at, logo)) = cache.get(&domain)
             && created_at.elapsed() < CACHE_LIFETIME
@@ -73,7 +93,12 @@ impl<P: LogoProvider> LogoService<P> {
             return Ok(logo.clone());
         }
 
-        let logo = self.provider.fetch(&domain).await?;
+        let _permit = self.admission.try_acquire().map_err(|_| LogoError::Busy)?;
+        let logo = self
+            .provider
+            .fetch(&domain)
+            .await
+            .map_err(LogoError::Provider)?;
         if let Ok(mut cache) = self.cache.lock() {
             cache.retain(|_, (created_at, _)| created_at.elapsed() < CACHE_LIFETIME);
             if cache.len() >= CACHE_CAPACITY

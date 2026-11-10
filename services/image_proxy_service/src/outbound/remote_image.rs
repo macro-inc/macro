@@ -54,6 +54,7 @@ pub(crate) fn build_http_client() -> anyhow::Result<reqwest::Client> {
 
 #[derive(Debug)]
 pub enum ProxyError {
+    Busy,
     InvalidUrl(String),
     InvalidScheme,
     MissingHost,
@@ -84,6 +85,7 @@ impl ProxyError {
 impl fmt::Display for ProxyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Busy => write!(f, "upstream fetch capacity exhausted"),
             Self::InvalidUrl(e) => write!(f, "invalid URL: {e}"),
             Self::InvalidScheme => write!(f, "only http/https URLs are allowed"),
             Self::MissingHost => write!(f, "missing host"),
@@ -359,3 +361,6 @@ fn build_error_chain(err: &reqwest::Error) -> String {
     }
     chain
 }
+
+#[cfg(test)]
+mod test;
