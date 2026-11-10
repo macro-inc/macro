@@ -4,10 +4,31 @@ use lexical_loro::SyncPolicy;
 use lexical_model::*;
 mod draft_count;
 /// Synced Macro content excludes ephemeral completion and draft wrappers.
-pub struct MacroSyncPolicy;
+pub struct MacroSyncPolicy {
+    root_search_text: bool,
+}
 /// Shared projection policy for all collaborative Macro documents.
-pub static MACRO_SYNC_POLICY: MacroSyncPolicy = MacroSyncPolicy;
+pub static MACRO_SYNC_POLICY: MacroSyncPolicy = MacroSyncPolicy {
+    root_search_text: false,
+};
+/// Macro writer with the configured root search index enabled.
+pub static MACRO_SEARCH_TEXT_SYNC_POLICY: MacroSyncPolicy = MacroSyncPolicy {
+    root_search_text: true,
+};
 impl SyncPolicy for MacroSyncPolicy {
+    fn writes_root_search_text(&self) -> bool {
+        self.root_search_text
+    }
+    fn root_search_text_id(
+        &self,
+        view: StateRef<'_>,
+        key: NodeKey,
+    ) -> std::result::Result<Option<String>, lexical_loro::ProjectionError> {
+        Ok(view
+            .get_state(key, &crate::node_ids::ID_STATE)?
+            .filter(|id| !id.is_empty()))
+    }
+
     fn canonicalize_node_json(&self, node: &mut SerializedNode) {
         // These specific optional fields use null/unset aliases across source and
         // native exports. Code getters omit unset values; table imports may

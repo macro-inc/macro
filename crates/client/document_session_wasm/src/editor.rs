@@ -48,10 +48,16 @@ impl EditorSession {
         wall: f64,
         namespace: &str,
         hostname: Option<String>,
+        write_root_search_text: Option<bool>,
     ) -> Result<Self, JsError> {
         Ok(Self {
             machine: machine::Machine::create_macro_with_namespace(
-                abi_major, config, now, wall, namespace,
+                abi_major,
+                config,
+                now,
+                wall,
+                namespace,
+                write_root_search_text.unwrap_or(false),
             )
             .map_err(js)?,
             hostname,

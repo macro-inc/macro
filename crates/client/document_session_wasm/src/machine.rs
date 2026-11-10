@@ -83,8 +83,17 @@ impl Machine {
         mono: f64,
         wall: f64,
         namespace: &str,
+        write_root_search_text: bool,
     ) -> Result<Self, BoundaryError> {
-        Self::create_with(abi, config, mono, wall, true, true, Some(namespace))
+        Self::create_with(
+            abi,
+            config,
+            mono,
+            wall,
+            true,
+            true,
+            Some((namespace, write_root_search_text)),
+        )
     }
     fn create_with(
         abi: u32,
@@ -93,7 +102,7 @@ impl Machine {
         wall: f64,
         editor: bool,
         application: bool,
-        namespace: Option<&str>,
+        namespace: Option<(&str, bool)>,
     ) -> Result<Self, BoundaryError> {
         if abi != generated::ABI_MAJOR {
             return Err(BoundaryError::AbiMismatch);
@@ -116,8 +125,12 @@ impl Machine {
             if let Some(clock) = &constructor_clock {
                 editor_config = crate::macro_editor::config(editor_config, clock.clone());
             }
-            if let Some(namespace) = namespace {
+            if let Some((namespace, write_root_search_text)) = namespace {
                 editor_config.namespace = namespace.into();
+                if write_root_search_text {
+                    editor_config.policy =
+                        &macro_document_model::sync::MACRO_SEARCH_TEXT_SYNC_POLICY;
+                }
             }
             config.surface = SurfaceConfig::Editor(editor_config);
             Session::Editor(Box::new(DocumentSession::new(config, now)?))

@@ -30,6 +30,8 @@ pub struct RemoteChanges {
     /// Ordered core model edits.
     pub changes: Vec<NodeChange>,
     pending: Vec<(LocalNode, LoroMap)>,
+    search_text_updates: Vec<(NodeKey, ContainerID)>,
+    observed_remote: bool,
     /// Incremental work performed.
     pub stats: ProjectionStats,
 }
@@ -219,6 +221,7 @@ impl LoroProjection {
             text_after.insert(key, current);
         }
         let mut updates = Vec::new();
+        let mut search_text_updates = Vec::new();
         for key in ordered_fields {
             if !state.view().is_attached(key) {
                 continue;
@@ -231,6 +234,12 @@ impl LoroProjection {
             let mut incoming = schema::own_map(&map, self.policy)?;
             mask_local(&mut incoming, self.policy);
             let mut current = comparison::model_own(state.view(), key, self.policy)?;
+            // Compare against the locally authored storage value until an actual
+            // incoming own update imports it. This also detects a history
+            // deletion when the ordinary editor slot was already absent.
+            if let Some(search) = &self.search_text {
+                search.apply_expected(key, &self.index, &mut current);
+            }
             if let Some(text) = text_after.get(&key) {
                 current.insert("text".into(), Value::String(text.clone()));
             }
@@ -322,6 +331,9 @@ impl LoroProjection {
                         retain: retained,
                     }
                 };
+                if self.search_text.is_some() {
+                    search_text_updates.push((key, map.id()));
+                }
                 updates.push(change);
             }
             self.index.bind(key, &map, self.policy)?;
@@ -358,6 +370,8 @@ impl LoroProjection {
         Ok(RemoteChanges {
             changes,
             pending: building.pending,
+            search_text_updates,
+            observed_remote: count > 0,
             stats: building.stats,
         })
     }
@@ -494,6 +508,13 @@ impl LoroProjection {
         }
         for (key, map) in pairs {
             self.index.bind(key, &map, self.policy)?;
+        }
+        if let Some(search_text) = &mut self.search_text {
+            search_text.accept_remote(
+                changes.search_text_updates,
+                &self.index,
+                changes.observed_remote,
+            );
         }
         Ok(())
     }

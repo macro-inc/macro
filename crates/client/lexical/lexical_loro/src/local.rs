@@ -187,6 +187,37 @@ impl LoroProjection {
                 }
             }
         }
+        let mut search_text = if origin == LOCAL_ORIGIN && !candidates.is_empty() {
+            self.search_text
+                .as_ref()
+                .map(|search| {
+                    let source_roots = candidates.keys().copied().flat_map(|key| {
+                        [prev, next].into_iter().filter_map(move |view| {
+                            if !view.contains(key) {
+                                return None;
+                            }
+                            std::iter::once(key)
+                                .chain(view.ancestors(key))
+                                .find(|&owner| view.parent(owner) == Some(NodeKey::ROOT))
+                        })
+                    });
+                    search.prepare(
+                        next,
+                        self.policy,
+                        source_roots,
+                        structure.contains(&NodeKey::ROOT),
+                    )
+                })
+                .transpose()?
+        } else {
+            None
+        };
+        if let Some(draft) = &search_text {
+            for key in draft.keys().filter(|key| next.is_attached(*key)) {
+                dirty.entry(key).or_insert(Mutation::Updated);
+            }
+        }
+        let structures_changed = !structure.is_empty();
         let before_vv = doc.oplog_vv();
         let mut stats = ProjectionStats::default();
         let mut handled = OrderedSet::default();
@@ -272,7 +303,7 @@ impl LoroProjection {
                         let map = list.insert_container(position, LoroMap::new())?;
                         schema::initialize_map(
                             &map,
-                            &storage_node(next, child, self.policy)?,
+                            &self.new_storage_node(next, child, search_text.as_mut())?,
                             schema::MapSchema::Node,
                         )?;
                         self.index.bind_tree(next, child, &map, self.policy)?;
@@ -327,7 +358,7 @@ impl LoroProjection {
                         &b,
                         &previous_owners,
                         &mut handled,
-                        &mut stats,
+                        (&mut stats, search_text.as_mut()),
                     )?
                 {
                     written.insert(key);
@@ -368,6 +399,16 @@ impl LoroProjection {
                 self.policy,
                 std::mem::take(&mut exports.1),
             )?;
+            if let Some(search) = &self.search_text {
+                search.apply_expected(key, &self.index, exports.0.json_mut());
+                let applied = match &mut search_text {
+                    Some(draft) => draft.apply(key, exports.1.json_mut())?,
+                    None => false,
+                };
+                if !applied {
+                    search.apply_expected(key, &self.index, exports.1.json_mut());
+                }
+            }
             let before = exports.0.json();
             let new = exports.1.json();
             if origin == FIXUP_ORIGIN {
@@ -446,6 +487,16 @@ impl LoroProjection {
         };
         doc.commit_with(loro::CommitOptions::new().origin(origin).timestamp(now));
         drop(recording);
+        if let Some(search) = &mut self.search_text {
+            if let Some(draft) = search_text {
+                search.seal(draft, &self.index);
+            } else if origin == FIXUP_ORIGIN && !candidates.is_empty() {
+                search.invalidate_roots();
+            }
+            if structures_changed {
+                search.retire_unbound(&self.index);
+            }
+        }
         self.indexed_state = last.next.clone();
         let after_vv = doc.oplog_vv();
         let changed = before_vv != after_vv;
@@ -463,6 +514,19 @@ impl LoroProjection {
             stats,
         })
     }
+    fn new_storage_node(
+        &self,
+        view: StateRef<'_>,
+        key: NodeKey,
+        search_text: Option<&mut crate::search_text::Draft>,
+    ) -> Result<SerializedNode> {
+        let mut json = storage_node(view, key, self.policy)?;
+        if let Some(draft) = search_text {
+            draft.apply(key, &mut json)?;
+        }
+        Ok(json)
+    }
+
     fn diff_children(
         &mut self,
         view: StateRef<'_>,
@@ -470,7 +534,7 @@ impl LoroProjection {
         new: &[NodeKey],
         previous_owners: &FxHashMap<ContainerID, NodeKey>,
         handled: &mut OrderedSet<NodeKey>,
-        stats: &mut ProjectionStats,
+        (stats, mut search_text): (&mut ProjectionStats, Option<&mut crate::search_text::Draft>),
     ) -> Result<bool> {
         let mut normalized = false;
         for i in (0..list.len()).rev() {
@@ -570,7 +634,7 @@ impl LoroProjection {
                 continue;
             }
             let map = list.insert_container(i, loro::LoroMap::new())?;
-            let json = storage_node(view, *key, self.policy)?;
+            let json = self.new_storage_node(view, *key, search_text.as_deref_mut())?;
             schema::initialize_map(&map, &json, schema::MapSchema::Node)?;
             self.index.bind_tree(view, *key, &map, self.policy)?;
             handled.insert(*key);
