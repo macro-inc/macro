@@ -94,5 +94,22 @@ class PersistenceIntegration(unittest.TestCase):
                     "PASSWORDS_TEST_OPENBAO_CONTAINER": run("ps", "-q", "openbao").decode().strip(),
                 }, capture_output=True)
                 self.assertEqual(provider.returncode, 0, provider.stderr.decode())
+                rust_binary = os.environ.get("PASSWORDS_TEST_OPENBAO_RUST_BIN")
+                if rust_binary:
+                    public_key_path = Path(directory) / "jwt-public.pem"
+                    public_key_path.write_text(public_key)
+                    rust = subprocess.run([
+                        rust_binary, "--ignored", "--exact",
+                        "outbound::openbao::test::local_provider_versions_totp_isolation_and_deletion_fence",
+                        "--nocapture",
+                    ], cwd=source.parents[2] / "crates/passwords", env={
+                        **os.environ,
+                        "BAO_TOKEN": json.loads(credentials)["root_token"],
+                        "PASSWORDS_TEST_OPENBAO_ADDRESS": "http://127.0.0.1:" + port,
+                        "PASSWORDS_TEST_OPENBAO_SIGNING_KEY": str(private_key),
+                        "PASSWORDS_TEST_OPENBAO_PUBLIC_KEY": str(public_key_path),
+                    }, capture_output=True)
+                    self.assertEqual(rust.returncode, 0, (rust.stdout + rust.stderr).decode())
+
             finally:
                 run("down", "--volumes")

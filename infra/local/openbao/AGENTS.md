@@ -47,3 +47,13 @@ stack generator owns the container, instance volumes, and generated credentials.
 
 - [Passwords design](../../../docs/design/passwords.md)
 - [Running locally](../../../docs/development/running-locally.md)
+
+- Provision parent JWT mount `macro-lifecycle` locally, with one `team-<team-id>`
+  role bound to the lifecycle subject/audience and that exact team claim. Grant
+  only read/delete on the exact namespace path, no default policy, and 60-second
+  maximum token TTL. Runtime services never receive the local bootstrap token.
+- Provider cleanup tests delete their own synthetic namespaces and verify
+  cross-team deletion denial, missing-role failure, and asynchronous completion.
+
+- Retry only a newly mounted KV backend's temporary configuration failure within
+  a bound; existing backend and authorization failures must remain visible.

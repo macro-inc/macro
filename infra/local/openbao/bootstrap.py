@@ -6,10 +6,18 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
 from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 from uuid import UUID
+
+
+class OpenBaoRequestError(RuntimeError):
+    """Sanitized provider failure, with status available for readiness checks."""
+    def __init__(self, method, path, status):
+        self.status = status
+        super().__init__(f"OpenBao {method} {path}: HTTP {status}")
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -52,7 +60,20 @@ class LocalOpenBao:
             if missing and error.code == 404:
                 return None
             # Never print request/response bodies, tokens, JWTs, or secret values.
-            raise RuntimeError(f"OpenBao {method} {path}: HTTP {error.code}") from None
+            raise OpenBaoRequestError(method, path, error.code) from None
+
+
+def configure_kv(client, namespace, newly_mounted):
+    # The KV v2 plugin may still be initializing after sys/mounts acknowledges it.
+    # Retry only a newly mounted backend's temporary 400, never an existing config.
+    for attempt in range(8):
+        try:
+            client.request("POST", "passwords/config", {"max_versions": 100, "cas_required": True}, namespace)
+            return
+        except OpenBaoRequestError as error:
+            if not newly_mounted or error.status != 400 or attempt == 7:
+                raise
+            time.sleep(min(0.05 * 2 ** attempt, 0.5))
 
 
 def bootstrap(client, team_id, public_key, issuer):
@@ -78,7 +99,7 @@ def bootstrap(client, team_id, public_key, issuer):
         else:
             client.request("POST", f"sys/mounts/{path}", {"type": kind, "options": options}, namespace)
 
-    client.request("POST", "passwords/config", {"max_versions": 100, "cas_required": True}, namespace)
+    configure_kv(client, namespace, "passwords/" not in mounts)
     authentication = client.request("GET", "sys/auth", namespace=namespace)["data"]
     existing = authentication.get("macro/")
     if existing and existing["type"] != "jwt":
@@ -115,6 +136,36 @@ def bootstrap(client, team_id, public_key, issuer):
         "token_max_ttl": "60s",
         "token_explicit_max_ttl": "60s",
     }, namespace)
+    # Parent-scoped lifecycle JWTs may delete exactly one bound team namespace.
+    root_auth = client.request("GET", "sys/auth")["data"]
+    lifecycle_mount = root_auth.get("macro-lifecycle/")
+    if lifecycle_mount and lifecycle_mount["type"] != "jwt":
+        raise ValueError("incompatible local lifecycle authentication mount")
+    if not lifecycle_mount:
+        client.request("POST", "sys/auth/macro-lifecycle", {"type": "jwt"})
+    client.request("POST", "auth/macro-lifecycle/config", {
+        "jwt_validation_pubkeys": [public_key],
+        "bound_issuer": issuer,
+        "jwt_supported_algs": ["RS256"],
+    })
+    lifecycle_policy = f"passwords-lifecycle-{team_id}"
+    client.request("PUT", f"sys/policies/acl/{lifecycle_policy}", {
+        "policy": f'path "sys/namespaces/{namespace}" {{ capabilities = ["read", "delete"] }}',
+    })
+    client.request("POST", f"auth/macro-lifecycle/role/{namespace}", {
+        "role_type": "jwt",
+        "user_claim": "sub",
+        "bound_subject": "macro-passwords-lifecycle",
+        "bound_audiences": ["macro-passwords-lifecycle"],
+        "bound_claims": {"team_id": str(team_id)},
+        "claim_mappings": {"audit_id": "audit_id"},
+        "clock_skew_leeway": -1,
+        "expiration_leeway": -1,
+        "not_before_leeway": -1,
+        "token_policies": [lifecycle_policy],
+        "token_no_default_policy": True,
+        "token_ttl": "60s", "token_max_ttl": "60s", "token_explicit_max_ttl": "60s",
+    })
     print(f"Provisioned local Passwords namespace {namespace}")
 
 

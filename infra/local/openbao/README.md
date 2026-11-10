@@ -99,7 +99,7 @@ PASSWORDS_TEST_OPENBAO_CONTAINER=<instance-openbao-container> \
 The check creates synthetic team namespaces and verifies JWT login, CAS/version
 history, TOTP, repeatable bootstrap, cross-team denials, and audit correlation/redaction.
 Audit-log inspection requires the explicit container name. The check does not reset the
-vault or delete namespaces. Never point it at a shared or hosted environment.
+vault. It deletes only synthetic namespaces it created. Never point it at a shared or hosted environment.
 
 Run the disposable Docker lifecycle regression independently:
 
@@ -118,3 +118,18 @@ Upstream references: [namespaces](https://openbao.org/docs/concepts/namespaces/)
 [JWT API](https://openbao.org/docs/api/auth/jwt/),
 [server](https://openbao.org/docs/commands/server/),
 [static seal](https://openbao.org/docs/configuration/seal/static/).
+
+The local bootstrap also provisions JWT auth at `macro-lifecycle` in the parent
+namespace. Role `team-<team-id>` binds lifecycle subject/audience and that team
+claim, with read/delete limited to `sys/namespaces/team-<team-id>` and a 60-second
+maximum TTL. It has no default policy. Services sign short-lived JWTs; the local
+bootstrap token remains local and is never used at runtime. Hosted environments
+require equivalent role provisioning before enabling namespace cleanup.
+
+Set `PASSWORDS_TEST_OPENBAO_RUST_BIN` to a compiled passwords unit-test executable
+when running the disposable lifecycle regression to exercise the Rust adapter's
+namespace deletion acknowledgement against the same provider.
+
+On first provisioning, bootstrap waits with bounded retries for a newly mounted
+KV v2 backend to accept configuration. Existing configuration failures are not
+retried or hidden.

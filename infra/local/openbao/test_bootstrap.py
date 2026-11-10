@@ -10,7 +10,7 @@ import time
 import unittest
 from uuid import uuid4
 
-from bootstrap import LocalOpenBao, bootstrap
+from bootstrap import OpenBaoRequestError, configure_kv, LocalOpenBao, bootstrap
 
 
 def encoded(value):
@@ -104,6 +104,37 @@ class BootstrapIntegration(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "HTTP 403"):
                 service.request("GET", "sys/mounts", namespace=first_namespace)
 
+            lifecycle_claims = encoded(json.dumps({
+                "iss": "local-integration", "sub": "macro-passwords-lifecycle",
+                "aud": "macro-passwords-lifecycle", "team_id": str(first_team),
+                "iat": int(time.time()), "exp": int(time.time()) + 60, "audit_id": audit_id,
+            }).encode())
+            lifecycle_input = header + b"." + lifecycle_claims
+            lifecycle_signature = subprocess.run([
+                "openssl", "dgst", "-sha256", "-sign", str(private_key),
+            ], input=lifecycle_input, stdout=subprocess.PIPE, check=True).stdout
+            lifecycle_jwt = (lifecycle_input + b"." + encoded(lifecycle_signature)).decode()
+            lifecycle_login = root.request("POST", "auth/macro-lifecycle/login", {
+                "role": first_namespace, "jwt": lifecycle_jwt,
+            })
+            lifecycle = LocalOpenBao(address, lifecycle_login["auth"]["client_token"])
+            with self.assertRaisesRegex(RuntimeError, "HTTP 403"):
+                lifecycle.request("DELETE", f"sys/namespaces/{second_namespace}")
+            with self.assertRaisesRegex(RuntimeError, "HTTP (400|403)"):
+                root.request("POST", "auth/macro-lifecycle/login", {
+                    "role": second_namespace, "jwt": lifecycle_jwt,
+                })
+            lifecycle.request("DELETE", f"sys/namespaces/{first_namespace}")
+            pending = lifecycle.request("GET", f"sys/namespaces/{first_namespace}", missing=True)
+            if pending is not None:
+                self.assertTrue(pending["data"]["tainted"], "DELETE must begin namespace erasure")
+            self.assertIsNotNone(root.request("GET", f"sys/namespaces/{second_namespace}"))
+            root.request("DELETE", f"auth/macro-lifecycle/role/{first_namespace}")
+            with self.assertRaisesRegex(RuntimeError, "HTTP (400|403)"):
+                root.request("POST", "auth/macro-lifecycle/login", {
+                    "role": first_namespace, "jwt": lifecycle_jwt,
+                })
+
     @unittest.skipUnless(
         os.environ.get("PASSWORDS_TEST_OPENBAO_ADDRESS") and os.environ.get("PASSWORDS_TEST_OPENBAO_CONTAINER"),
         "local OpenBao address and container required for audit-log inspection",
@@ -142,3 +173,22 @@ class LocalOriginGuard(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class MountReadiness(unittest.TestCase):
+    def test_new_backend_config_retries_temporary_failure_only(self):
+        class PendingMount:
+            calls = 0
+            def request(self, method, path, data, namespace):
+                self.calls += 1
+                if self.calls == 1:
+                    raise OpenBaoRequestError(method, path, 400)
+        pending = PendingMount()
+        from unittest.mock import patch
+        with patch("bootstrap.time.sleep"):
+            configure_kv(pending, "synthetic", True)
+        self.assertEqual(pending.calls, 2)
+        existing = PendingMount()
+        with self.assertRaises(OpenBaoRequestError):
+            configure_kv(existing, "synthetic", False)
+        self.assertEqual(existing.calls, 1)
