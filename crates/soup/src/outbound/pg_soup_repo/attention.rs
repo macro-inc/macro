@@ -77,17 +77,15 @@ fn requested_types<'a>(req: &AttentionCandidateRequest<'a>) -> Vec<&'static str>
 }
 
 /// The `crm_companies` row aliased `alias` is visible to the viewer: its
-/// team has CRM enabled, the viewer belongs to that team, and the company is
-/// not hidden (hidden records are listed only on explicit admin requests).
+/// viewer belongs to its team and the company is not hidden. Mailbox
+/// contribution consent does not control record visibility.
 fn visible_crm_record(alias: &str) -> String {
     format!(
         r#"NOT {alias}.hidden
             AND EXISTS (
                 SELECT 1 FROM team_user tu
-                JOIN team_crm_settings tcs ON tcs.team_id = tu.team_id
                 WHERE tu.team_id = {alias}.team_id
                 AND tu.user_id = $1
-                AND tcs.crm_enabled
             )"#
     )
 }

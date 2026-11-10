@@ -61,6 +61,11 @@ deliberately stable and widely depended on.
   list that may be empty. Gemini rejects a whole request whose tool schemas
   hold a `$ref` loop of required fields, so schema generation rejects one too
   (`schema/validate/ref_loop.rs`).
+- Gemini also rejects, with a bare 400 INVALID_ARGUMENT, a tool schema nested
+  more than `GEMINI_MAX_SCHEMA_DEPTH` (30) levels of non-empty JSON objects and
+  arrays. Inlining makes a deep input type count in full; schema generation
+  lifts optional unions out of their `anyOf` wrapper and rejects what is still
+  too deep (`schema/validate/depth.rs`).
 
 ## Related
 

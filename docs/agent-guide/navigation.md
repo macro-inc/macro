@@ -195,7 +195,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/welcome` | Login page (when unauthenticated) |
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
-| `/app/internal/status` | Macro staff only (`@macro.com`): set the system status (Operational, Degraded, Major outage + message), see its history and the `POST /auth/system-status` API. A non-operational status shows a banner across the top of the app for every user; open apps update over the connection gateway |
+| `/app/internal/status` | Macro staff only (`@macro.com`): set the system status (Operational, Degraded, Major outage + message), see its history and the `POST /auth/system-status` API. A non-operational status shows a banner across the top of the app for every user; open apps update over the connection gateway. Its close button hides it until the page reloads (nothing is saved), and a changed level or message shows it again |
 | `/app/home` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
 | `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
 | `/app/mail` | Email client |
@@ -1133,11 +1133,23 @@ count) on the left and **New** and search on the right; **Cmd/Ctrl+F** focuses
 search, which matches name, Trigger and Steps. When
 `enable-routine-starter-templates` is on (on in development; PostHog decides in
 deployed environments), **Templates** above the rows shows
-four template cards (icon, name, one line and its trigger → first step, such as
+the catalog's first four available template cards (icon, name, one line and its trigger → first step, such as
 **New email → Label with AI**) with **All templates** at the right, which opens
 New routine's start screen. A card opens New routine already filled in from that
 template. The strip hides while searching and on **On**; on phones the cards
-scroll sideways. Columns are **Name**, **Trigger**, **Steps** and **Last run**.
+scroll sideways. With `enable-routine-suggestions` and
+`enable-routine-code-steps` on (not on touch devices), suggestions take the
+strip's place: **Suggested for you** above the rows on **All** shows one row
+of Discover's cards, at Discover's size (as many as fit, three at most desktop
+widths), and in the last column **N more · In Discover**, which opens a third tab, **Discover**. Discover
+replaces the list with every suggestion (AI's first, then Macro's) followed by
+the templates no suggestion already offers, four cards to a row (the knob
+sentence in two lines, the chain and the action; **On** once turned on), with
+**All** and one tab per area that has any (`Suggestion area`) and the hint
+**picked for you, then Macro's templates**. The list's search narrows Discover
+too. Discover's tab carries a violet dot while it has AI picks this browser
+hasn't shown there; opening or leaving it marks them seen. The cards behave as
+in [setup cards](setup-cards.md#suggested-routines). Columns are **Name**, **Trigger**, **Steps** and **Last run**.
 Rows are grouped under **When something happens** and **On a schedule**, each a
 band like the tasks list's group headers, with a count. Each row has an icon for
 its trigger's kind, the name with its description below it when it has one,
@@ -1170,14 +1182,21 @@ routine: it doesn't start the agent or notify anyone.
 routine** in the same popover host as task and project creation. It never edits
 a routine itself: a **Describe your routine** box with **Draft it** (AI fills in
 the name, triggers and steps from a sentence such as "When an invoice arrives,
-label it Finance and make a task to pay it", using the workspace's label, tag,
-channel, folder, people and agent names), **Templates** (with
-`enable-routine-starter-templates` on; Macro's cards: **Sort
-my inbox**, **Triage new tasks**, **Morning brief**, **Chase stuck tasks**, and
-**Share updates** only where AI decisions are enabled, for its trigger
-condition; each shows its icon, what it does and its trigger → first step.
-**Sort my inbox**, **Triage new tasks** and **Share updates** start with the
-scheduler's starter code, or an Ask AI step where code can't be saved), and
+label it Finance and make a task to pay it", finding the labels, tags,
+channels, folders, people and agents it names with the user's access; one it
+can't find, or that matches several, is left for the user to pick, and
+anything it had to create for the routine, such as a new database, is listed
+on the review), **Templates** (with
+`enable-routine-starter-templates` on; the scheduler's routine catalog,
+`GET /scheduled-actions/catalog`, in its order: **Sort my inbox**, **Triage new
+tasks**, **Morning brief**, **Share updates** only where AI decisions are
+enabled, for its trigger condition, then **Chase stuck tasks**, **Tag new
+email**, **Tag new documents**, **Tasks from my calls**, **Weekly pipeline
+review**, **Catch up on mentions**, **Sum up new pull requests** and **Weekly
+agent digest**; each shows its icon, what it does and its trigger → first
+step. Routines with code start with it when `enable-routine-code-steps` is on
+and the scheduler can save code, otherwise with an Ask AI step; schedules are
+in the browser's zone), and
 **Start fresh** beside the
 close button. Each choice closes it and opens the new routine's page at
 `/app/routines/new`, as do the list's template cards directly. That page is
@@ -1277,7 +1296,8 @@ GitHub sends, such as `workflow_run` and `completed`; empty means any), checks
 Macro's app can't retrigger itself). Deliveries only reach owners whose
 currently linked GitHub account installed the delivering installation, or whose
 team did. While GitHub is disconnected the panel shows **Connect GitHub**
-instead, and an enabled GitHub routine can't be saved. The panel also has
+instead, as does the triggers section above the list whenever a GitHub
+trigger is present, and an enabled GitHub routine can't be saved. The panel also has
 **Only when the payload…** rows: a dotted field (`*` checks every list item, e.g.
 `pull_request.labels.*.name`), a comparison (**is**, **is one of**, **is not one
 of**, **matches** glob, **is set**, **is not set**) and a value. Every row must
@@ -1532,6 +1552,12 @@ does not invite or notify that email address. Assignee and other user-only
 pickers continue to list Macro users only. Mobile keeps a single list, with
 only Macro users and groups pinned ahead of ranked entity results.
 
+The PostHog `disable-crm-contact-search` kill switch hides CRM contact results
+and disables their searches in `@` menus, Cmd+K, and mobile name search.
+Companies and Macro users remain searchable; existing contact mentions and
+record pages are unaffected. Override locally with
+`VITE_DISABLE_CRM_CONTACT_SEARCH=true`.
+
 Typed Cmd+K **People** and **All** queries find known Macro users, including
 teammates supplied by the contacts service, before their first DM and without a
 CRM record or the CRM feature. Search by name or email. Selecting a person opens
@@ -1663,7 +1689,7 @@ restart rules still apply.
 - In any text surface: `@` mentions (bidirectional links), `#` tags, `/` block commands,
   `:` emoji. Clicking a rendered tag opens a Search split filtered to that tag.
 
-Settings → Agents, its Cursor guide, and Runtimes render while their requests are pending.
+Settings → Agents, its Cursor guide, and Machines render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
 Settings → Agents → Agents ends with **Coding sessions**: a **Default repository**
@@ -1791,7 +1817,7 @@ The Move to folder picker is a command menu, like Snooze, over the same folder l
 
 On desktop, a split showing a folder (Drive's folder route or a folder split) accepts rows dragged from another split and moves them with the same mutation as the picker. Dragging a selected row carries the whole selection, the drag card counts it, and a successful move clears that selection; a failed one keeps it for a retry. Dragging an unselected row carries only that row. The pane shows **Move N items to this folder** only when the drop would work: every row passes Move to folder's owner and type rules, at least one row isn't already there, no folder would land inside itself, the row didn't start in that split, and Alt isn't held, since that marks the drag as a copy. The header still offers **Open in this split**. Other drop targets (composers, documents, canvases) still take only the grabbed row.
 
-Folders in Drive's sidebar take the same drops, outlined while hovered, including rows from the list beside them in the same split. So do folder rows in Drive's lists and in a folder's own list; a row takes the drop ahead of the pane around it, so a drop lands in the row's folder, not the one the pane shows. Held at the sidebar's edge, a drag scrolls a long folder tree. The drag card sits beside the pointer so a narrow target stays visible. Drive's root row is not a drop target.
+Folders in Drive's sidebar take the same drops, outlined while hovered, including rows from the list beside them in the same split. So do folder rows in Drive's lists and in a folder's own list; a row takes the drop ahead of the pane around it, so a drop lands in the row's folder, not the one the pane shows. Held at the sidebar's edge, a drag scrolls a long folder tree. The drag card sits beside the pointer so a narrow target stays visible. Drive's root row takes rows that sit in a folder and moves them back to the root, with **Remove from folder**'s toasts.
 
 Every move, from the picker or a drop, ends in a **Moved to folder** or **Moved N items** toast with primary **Open** and, on desktop with room for another split, secondary **Open split** to its left. Desktop shows a close icon instead of Dismiss. Either navigation action dismisses the toast and shows the folder on Drive's route; if a split already lists that folder, it focuses that split instead of opening a second copy. A split with an item open inside the folder doesn't count, because the folder's list isn't visible there. Touch devices have no splits, so they show only **Open** and retain swipe dismissal.
 

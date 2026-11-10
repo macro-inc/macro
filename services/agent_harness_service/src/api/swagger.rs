@@ -26,6 +26,7 @@ use agent_session::domain::model::{ArchiveCause, SandboxSize, SessionBot};
 use agent_session::domain::pull_request_links::{
     PullRequestLinkSource, PullRequestLinkedSession, PullRequestSessions, SessionPullRequestLink,
 };
+use agent_session::domain::updates::{AgentUpdate, AgentUpdateKind, AgentUpdates};
 use agent_session::inbound::axum_router::auto_archive::{
     AutoArchiveOverridesBody, AutoArchivePreferencesBody, SessionAutoArchiveResponse,
 };
@@ -33,6 +34,7 @@ use agent_session::inbound::axum_router::pull_requests::{
     PullRequestSessionsResponse, PullRequestUrl, PullRequestUrls, PullRequestsSessionsResponse,
     SessionPullRequestsResponse,
 };
+use agent_session::inbound::axum_router::task::{LinkTaskRequest, LinkedTaskResponse};
 use agent_session::inbound::axum_router::work_registration::WorkRegistrationResponse;
 use agent_session::inbound::axum_router::{
     self, AgentSessionFoldedLogResponse, AgentSessionLogEntryDto, AgentSessionLogResponse,
@@ -95,6 +97,8 @@ impl Modify for SecurityAddon {
         axum_router::pull_requests::unlink_session_pull_request,
         axum_router::pull_requests::sessions_for_pull_request,
         axum_router::pull_requests::sessions_for_pull_requests,
+        axum_router::task::link_agent_session_task,
+        axum_router::updates::list_agent_session_updates,
         axum_router::get_agent_session_log_handler,
         axum_router::get_agent_session_folded_log_handler,
         axum_router::control_agent_session_handler,
@@ -158,6 +162,11 @@ impl Modify for SecurityAddon {
         PullRequestSessionsResponse,
         PullRequestUrls,
         PullRequestsSessionsResponse,
+        LinkTaskRequest,
+        LinkedTaskResponse,
+        AgentUpdates,
+        AgentUpdate,
+        AgentUpdateKind,
         PullRequestSessions,
         PullRequestLinkedSession,
         SessionPullRequestLink,

@@ -5,6 +5,8 @@
  * OpenAPI spec version: 1.0.0
  */
 import type {
+  ActivityErrorBody,
+  ActivityReports,
   AddServerRequest,
   BrowsePipedreamMcpCatalogParams,
   CallToolRequest,
@@ -28,6 +30,7 @@ import type {
   DocumentTextPart,
   ErrorBody,
   ErrorResponse,
+  ExplicitMemory,
   GenerateImageErrorBody,
   GenerateImageRequest,
   GenerateImageResponse,
@@ -37,6 +40,7 @@ import type {
   GetChatPermissionsResponse,
   GetChatResponse,
   GetChatsForAttachmentResponse,
+  GetUserActivityParams,
   HttpSendChatMessageRequest,
   ImportSource,
   ListSkillsParams,
@@ -56,6 +60,8 @@ import type {
   PipedreamTokenResponse,
   PipedreamUpdateRequest,
   ProjectionStateResponse,
+  ReadActivityResponse,
+  ReadMyActivityParams,
   RejectToolCallRequest,
   RunImportOutcome,
   RunImportRequest,
@@ -76,6 +82,7 @@ import type {
   StructuredCompletionError,
   StructuredCompletionRequest,
   StructuredCompletionResponse,
+  UpdateExplicitMemoryRequest,
   UpdateServerRequest,
   UpdateToolCallRequest,
   UpdateToolResponseRequest,
@@ -88,6 +95,75 @@ import type {
   WebSearch,
   WebSearchResponse,
 } from './schemas';
+
+/**
+ * Includes actions agents performed on the user's behalf. Returns at most
+100 events; `truncated` reports that more matched, so narrow the range.
+ * @summary Read the acting user's own activity in a time range, newest first.
+ */
+export type readMyActivityResponse200 = {
+  data: ReadActivityResponse;
+  status: 200;
+};
+
+export type readMyActivityResponse400 = {
+  data: ActivityErrorBody;
+  status: 400;
+};
+
+export type readMyActivityResponse500 = {
+  data: ActivityErrorBody;
+  status: 500;
+};
+
+export type readMyActivityResponseSuccess = readMyActivityResponse200 & {
+  headers: Headers;
+};
+export type readMyActivityResponseError = (
+  | readMyActivityResponse400
+  | readMyActivityResponse500
+) & {
+  headers: Headers;
+};
+
+export type readMyActivityResponse =
+  | readMyActivityResponseSuccess
+  | readMyActivityResponseError;
+
+export const getReadMyActivityUrl = (params: ReadMyActivityParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/activity?${stringifiedParams}`
+    : `/activity`;
+};
+
+export const readMyActivity = async (
+  params: ReadMyActivityParams,
+  options?: RequestInit
+): Promise<readMyActivityResponse> => {
+  const res = await fetch(getReadMyActivityUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: readMyActivityResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as readMyActivityResponse;
+};
 
 /**
  * @summary Set the pricing for a model and recompute its recorded rows. Admin only.
@@ -2446,6 +2522,201 @@ export const getMemoryHandler = async (
 };
 
 /**
+ * Reports use UTC calendar days, Monday-start weeks and calendar months.
+An empty list means no stored activity, not no work.
+ * @summary Read privacy-reviewed professional activity of the caller or a current teammate.
+ */
+export type getUserActivityResponse200 = {
+  data: ActivityReports;
+  status: 200;
+};
+
+export type getUserActivityResponse400 = {
+  data: MemoryErrorBody;
+  status: 400;
+};
+
+export type getUserActivityResponse403 = {
+  data: MemoryErrorBody;
+  status: 403;
+};
+
+export type getUserActivityResponse500 = {
+  data: MemoryErrorBody;
+  status: 500;
+};
+
+export type getUserActivityResponseSuccess = getUserActivityResponse200 & {
+  headers: Headers;
+};
+export type getUserActivityResponseError = (
+  | getUserActivityResponse400
+  | getUserActivityResponse403
+  | getUserActivityResponse500
+) & {
+  headers: Headers;
+};
+
+export type getUserActivityResponse =
+  | getUserActivityResponseSuccess
+  | getUserActivityResponseError;
+
+export const getGetUserActivityUrl = (params: GetUserActivityParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/memory/activity?${stringifiedParams}`
+    : `/memory/activity`;
+};
+
+export const getUserActivity = async (
+  params: GetUserActivityParams,
+  options?: RequestInit
+): Promise<getUserActivityResponse> => {
+  const res = await fetch(getGetUserActivityUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getUserActivityResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getUserActivityResponse;
+};
+
+/**
+ * Content is newline-separated; edits address one-based lines.
+ * @summary Read the caller's private explicit memory and its revision.
+ */
+export type readExplicitMemoryResponse200 = {
+  data: ExplicitMemory;
+  status: 200;
+};
+
+export type readExplicitMemoryResponse500 = {
+  data: MemoryErrorBody;
+  status: 500;
+};
+
+export type readExplicitMemoryResponseSuccess =
+  readExplicitMemoryResponse200 & {
+    headers: Headers;
+  };
+export type readExplicitMemoryResponseError = readExplicitMemoryResponse500 & {
+  headers: Headers;
+};
+
+export type readExplicitMemoryResponse =
+  | readExplicitMemoryResponseSuccess
+  | readExplicitMemoryResponseError;
+
+export const getReadExplicitMemoryUrl = () => {
+  return `/memory/explicit`;
+};
+
+export const readExplicitMemory = async (
+  options?: RequestInit
+): Promise<readExplicitMemoryResponse> => {
+  const res = await fetch(getReadExplicitMemoryUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: readExplicitMemoryResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as readExplicitMemoryResponse;
+};
+
+/**
+ * A stale revision changes nothing and answers 409; reread before retrying.
+Additions that fail privacy review answer 422.
+ * @summary Apply one edit to the caller's private explicit memory.
+ */
+export type editExplicitMemoryResponse200 = {
+  data: ExplicitMemory;
+  status: 200;
+};
+
+export type editExplicitMemoryResponse400 = {
+  data: MemoryErrorBody;
+  status: 400;
+};
+
+export type editExplicitMemoryResponse409 = {
+  data: MemoryErrorBody;
+  status: 409;
+};
+
+export type editExplicitMemoryResponse422 = {
+  data: MemoryErrorBody;
+  status: 422;
+};
+
+export type editExplicitMemoryResponse500 = {
+  data: MemoryErrorBody;
+  status: 500;
+};
+
+export type editExplicitMemoryResponseSuccess =
+  editExplicitMemoryResponse200 & {
+    headers: Headers;
+  };
+export type editExplicitMemoryResponseError = (
+  | editExplicitMemoryResponse400
+  | editExplicitMemoryResponse409
+  | editExplicitMemoryResponse422
+  | editExplicitMemoryResponse500
+) & {
+  headers: Headers;
+};
+
+export type editExplicitMemoryResponse =
+  | editExplicitMemoryResponseSuccess
+  | editExplicitMemoryResponseError;
+
+export const getEditExplicitMemoryUrl = () => {
+  return `/memory/explicit`;
+};
+
+export const editExplicitMemory = async (
+  updateExplicitMemoryRequest: UpdateExplicitMemoryRequest,
+  options?: RequestInit
+): Promise<editExplicitMemoryResponse> => {
+  const res = await fetch(getEditExplicitMemoryUrl(), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateExplicitMemoryRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: editExplicitMemoryResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as editExplicitMemoryResponse;
+};
+
+/**
  * @summary Complete (or skip) onboarding. Unreserved leftover onboarding-staged
 import candidates are deleted.
  */
@@ -3686,6 +3957,11 @@ export type fetchWebPageResponse402 = {
   status: 402;
 };
 
+export type fetchWebPageResponse404 = {
+  data: WebErrorBody;
+  status: 404;
+};
+
 export type fetchWebPageResponse422 = {
   data: WebErrorBody;
   status: 422;
@@ -3713,6 +3989,7 @@ export type fetchWebPageResponseError = (
   | fetchWebPageResponse400
   | fetchWebPageResponse401
   | fetchWebPageResponse402
+  | fetchWebPageResponse404
   | fetchWebPageResponse422
   | fetchWebPageResponse429
   | fetchWebPageResponse502
@@ -3773,6 +4050,11 @@ export type searchWebResponse402 = {
   status: 402;
 };
 
+export type searchWebResponse404 = {
+  data: WebErrorBody;
+  status: 404;
+};
+
 export type searchWebResponse429 = {
   data: void;
   status: 429;
@@ -3795,6 +4077,7 @@ export type searchWebResponseError = (
   | searchWebResponse400
   | searchWebResponse401
   | searchWebResponse402
+  | searchWebResponse404
   | searchWebResponse429
   | searchWebResponse502
   | searchWebResponse503

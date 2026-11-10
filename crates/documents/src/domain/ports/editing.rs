@@ -71,6 +71,16 @@ pub enum CommentMarkPlacement {
     Refused(String),
 }
 
+/// What became of a revision-checked markdown body write.
+#[cfg(feature = "ai_tools")]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MarkdownWrite {
+    /// The body now reads as written, or already did.
+    Written(crate::domain::markdown_body::DocumentMarkdownWritten),
+    /// The document changed since the expected revision; nothing was written.
+    Conflict,
+}
+
 /// Port for applying AI-driven edits to a document via the editing worker.
 #[cfg_attr(test, mockall::automock)]
 pub trait EditingWorkerService: Send + Sync + 'static {
@@ -83,7 +93,9 @@ pub trait EditingWorkerService: Send + Sync + 'static {
         document_token: &DocumentPermissionToken,
         request: &crate::domain::canvas::CanvasRequest,
         artifacts: bool,
-    ) -> impl Future<Output = anyhow::Result<crate::domain::canvas::CanvasResult>> + Send;
+    ) -> impl Future<
+        Output = Result<crate::domain::canvas::CanvasResult, crate::domain::canvas::CanvasError>,
+    > + Send;
 
     /// Run a deterministic spreadsheet operation with a scoped document token.
     #[cfg(feature = "ai_tools")]
@@ -123,6 +135,25 @@ pub trait EditingWorkerService: Send + Sync + 'static {
         document_token: &DocumentPermissionToken,
         request: &crate::domain::word_document::WordDocumentRequest,
     ) -> impl Future<Output = anyhow::Result<crate::domain::word_document::WordDocumentResponse>> + Send;
+
+    /// Read a markdown document's body with the revision it was read at.
+    #[cfg(feature = "ai_tools")]
+    fn read_markdown(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+    ) -> impl Future<Output = anyhow::Result<crate::domain::markdown_body::DocumentMarkdown>> + Send;
+
+    /// Replace a markdown document's body, only if the document is still at
+    /// `expected_revision`.
+    #[cfg(feature = "ai_tools")]
+    fn write_markdown(
+        &self,
+        document_id: &str,
+        document_token: &DocumentPermissionToken,
+        expected_revision: &str,
+        markdown: &str,
+    ) -> impl Future<Output = anyhow::Result<MarkdownWrite>> + Send;
 
     /// Wrap the `occurrence`th (1-based) appearance of `text` in `document_id`
     /// in comment mark `mark_id`, merged into the live collaborative document.

@@ -11,7 +11,7 @@
     "format": "biome check --write .",
     "check": "tsc --noEmit && tsc --noEmit --skipLibCheck --project stacks/web-app/tsconfig.json && bun run test:web-delivery && bun run test:observability",
     "test:web-delivery": "bun test stacks/web-app/publication.test.ts && bun test stacks/web-app/app-route.test.ts && bun test stacks/website/app-cache.test.ts",
-    "test:observability": "bun test stacks/observability/scripts/ci-report.test.ts"
+    "test:observability": "bun test stacks/observability/scripts/ci-report.test.ts stacks/observability/deploy"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",

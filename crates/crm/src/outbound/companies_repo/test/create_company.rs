@@ -16,7 +16,7 @@ async fn create_company_inserts_company_and_domain(pool: PgPool) -> anyhow::Resu
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let now = Utc::now();
     let record = repo
-        .create_company_for_team(&team_id, Some("Acme.COM"), "Acme", now)
+        .create_company_for_team(&team_id, Some("Acme.example.com"), "Acme", now)
         .await?;
 
     assert_eq!(record.name.as_deref(), Some("Acme"));
@@ -26,7 +26,7 @@ async fn create_company_inserts_company_and_domain(pool: PgPool) -> anyhow::Resu
     assert!(record.contacts.is_empty());
     // Domain is stored lowercased.
     assert_eq!(record.company.domains.len(), 1);
-    assert_eq!(record.company.domains[0].domain, "acme.com");
+    assert_eq!(record.company.domains[0].domain, "acme.example.com");
     // Interaction endpoints are both seeded from `now` (compare at
     // microsecond precision — Postgres truncates nanoseconds).
     assert_eq!(
@@ -39,7 +39,7 @@ async fn create_company_inserts_company_and_domain(pool: PgPool) -> anyhow::Resu
     );
 
     assert_eq!(
-        count_companies_for_domain(&pool, team_id, "acme.com").await?,
+        count_companies_for_domain(&pool, team_id, "acme.example.com").await?,
         1
     );
     Ok(())
@@ -76,7 +76,7 @@ async fn create_company_name_overrides_directory_name(pool: PgPool) -> anyhow::R
         r#"INSERT INTO crm_domain_directory (domain, name, description)
            VALUES ($1, $2, $3)"#,
     )
-    .bind("acme.com")
+    .bind("acme.example.com")
     .bind("Acme Inc. (directory)")
     .bind("Maker of rocket-powered roller skates.")
     .execute(&pool)
@@ -84,7 +84,12 @@ async fn create_company_name_overrides_directory_name(pool: PgPool) -> anyhow::R
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let record = repo
-        .create_company_for_team(&team_id, Some("acme.com"), "Acme (ours)", Utc::now())
+        .create_company_for_team(
+            &team_id,
+            Some("acme.example.com"),
+            "Acme (ours)",
+            Utc::now(),
+        )
         .await?;
 
     assert_eq!(record.name.as_deref(), Some("Acme (ours)"));
@@ -101,18 +106,18 @@ async fn create_company_rejects_duplicate_domain(pool: PgPool) -> anyhow::Result
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, "macro|owner@example.com").await?;
     enable_crm_for_team(&pool, team_id).await?;
-    insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    insert_company(&pool, team_id, true, &["acme.example.com"]).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
-    // Case-insensitive: "ACME.com" collides with "acme.com".
+    // Case-insensitive: "ACME.example.com" collides with "acme.example.com".
     let err = repo
-        .create_company_for_team(&team_id, Some("ACME.com"), "Acme", Utc::now())
+        .create_company_for_team(&team_id, Some("ACME.example.com"), "Acme", Utc::now())
         .await
         .unwrap_err();
     assert!(matches!(err, CrmError::CompanyAlreadyExistsForTeam));
 
     assert_eq!(
-        count_companies_for_domain(&pool, team_id, "acme.com").await?,
+        count_companies_for_domain(&pool, team_id, "acme.example.com").await?,
         1
     );
     Ok(())
@@ -126,32 +131,31 @@ async fn create_company_allows_same_domain_on_another_team(pool: PgPool) -> anyh
     seed_team(&pool, team_b, "macro|owner-b@example.com").await?;
     enable_crm_for_team(&pool, team_a).await?;
     enable_crm_for_team(&pool, team_b).await?;
-    insert_company(&pool, team_a, true, &["acme.com"]).await?;
+    insert_company(&pool, team_a, true, &["acme.example.com"]).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let record = repo
-        .create_company_for_team(&team_b, Some("acme.com"), "Acme", Utc::now())
+        .create_company_for_team(&team_b, Some("acme.example.com"), "Acme", Utc::now())
         .await?;
     assert_eq!(record.company.team_id, team_b);
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn create_company_requires_crm_enabled(pool: PgPool) -> anyhow::Result<()> {
+async fn create_company_is_available_without_email_consent(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, "macro|owner@example.com").await?;
-    // No team_crm_settings row: killswitch defaults to off.
+    // CRM records are available without a legacy settings row or email consent.
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
-    let err = repo
-        .create_company_for_team(&team_id, Some("acme.com"), "Acme", Utc::now())
-        .await
-        .unwrap_err();
-    assert!(matches!(err, CrmError::CrmDisabledForTeam));
+    let company = repo
+        .create_company_for_team(&team_id, Some("acme.example.com"), "Acme", Utc::now())
+        .await?;
+    assert_eq!(company.company.team_id, team_id);
 
     assert_eq!(
-        count_companies_for_domain(&pool, team_id, "acme.com").await?,
-        0
+        count_companies_for_domain(&pool, team_id, "acme.example.com").await?,
+        1
     );
     Ok(())
 }
@@ -166,17 +170,19 @@ async fn populate_reuses_manually_created_company(pool: PgPool) -> anyhow::Resul
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let created = repo
-        .create_company_for_team(&team_id, Some("acme.com"), "Acme", Utc::now())
+        .create_company_for_team(&team_id, Some("acme.example.com"), "Acme", Utc::now())
         .await?;
 
     // A later populate for the same domain attaches its contact to the
     // manually created company instead of inserting a second one.
     let now = Utc::now();
+    consent_to_mailbox(&pool, team_id, link_id).await?;
+    insert_interaction(&pool, link_id, "jane@acme.example.com", now, true).await?;
     repo.populate_contact(
         &team_id,
         &link_id,
-        "acme.com",
-        "jane@acme.com",
+        "acme.example.com",
+        "jane@acme.example.com",
         Some("Jane"),
         now,
         now,
@@ -185,7 +191,7 @@ async fn populate_reuses_manually_created_company(pool: PgPool) -> anyhow::Resul
     .await?;
 
     assert_eq!(
-        count_companies_for_domain(&pool, team_id, "acme.com").await?,
+        count_companies_for_domain(&pool, team_id, "acme.example.com").await?,
         1
     );
     assert_eq!(count_contacts(&pool, created.company.id).await?, 1);
@@ -206,14 +212,19 @@ async fn soup_listing_uses_name_override(pool: PgPool) -> anyhow::Result<()> {
     enable_crm_for_team(&pool, team_id).await?;
 
     sqlx::query(r#"INSERT INTO crm_domain_directory (domain, name) VALUES ($1, $2)"#)
-        .bind("acme.com")
+        .bind("acme.example.com")
         .bind("Acme Inc. (directory)")
         .execute(&pool)
         .await?;
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let created = repo
-        .create_company_for_team(&team_id, Some("acme.com"), "Acme (ours)", Utc::now())
+        .create_company_for_team(
+            &team_id,
+            Some("acme.example.com"),
+            "Acme (ours)",
+            Utc::now(),
+        )
         .await?;
 
     let listed = repo
@@ -289,20 +300,14 @@ async fn name_only_company_accepts_personal_email_without_inference(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn name_only_company_requires_crm_enabled(pool: PgPool) -> anyhow::Result<()> {
+async fn name_only_company_does_not_require_contribution(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, "macro|owner@example.com").await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
-    let error = repo
+    let company = repo
         .create_company_for_team(&team_id, None, "Acme", Utc::now())
-        .await
-        .unwrap_err();
-    assert!(matches!(error, CrmError::CrmDisabledForTeam));
-    assert_eq!(
-        sqlx::query_scalar!("SELECT COUNT(*) FROM crm_companies")
-            .fetch_one(&pool)
-            .await?,
-        Some(0)
-    );
+        .await?;
+    assert_eq!(company.company.team_id, team_id);
+    assert!(company.company.domains.is_empty());
     Ok(())
 }
