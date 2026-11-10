@@ -22,9 +22,9 @@ pub(crate) struct Machine {
     view_commands: Option<Arc<crate::view_command_scope::Registry>>,
 }
 impl Machine {
-    pub(crate) fn take_output(&mut self) -> Vec<u8> {
-        self.decorator_observer.expose();
-        std::mem::take(&mut self.output)
+    pub(crate) fn take_output(&mut self) -> Result<Vec<u8>, BoundaryError> {
+        self.decorator_observer.expose()?;
+        Ok(std::mem::take(&mut self.output))
     }
     pub(crate) fn initialize_view(&mut self) -> Result<Vec<u8>, BoundaryError> {
         if !self.output.is_empty() {
@@ -51,7 +51,7 @@ impl Machine {
             None,
             &mut self.decorator_observer,
         )?;
-        self.decorator_observer.expose();
+        self.decorator_observer.expose()?;
         Ok(bytes)
     }
     pub(crate) fn effective_access(&self) -> wire::Access {

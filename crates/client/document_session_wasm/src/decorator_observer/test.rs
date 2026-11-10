@@ -1,7 +1,10 @@
 use super::*;
 use crate::{output, BoundaryError};
 use document_session::{SessionOutput, ViewEffect};
-use lexical_model::{DecoratorRenderChange, DecoratorRenderSignature, KeyParts};
+use lexical_model::{
+    DecoratorRenderChange, DecoratorRenderPolicy, DecoratorRenderSignature, DiffOp, KeyParts,
+    NodeKey,
+};
 
 fn patch(policy: Option<DecoratorRenderPolicy>) -> Diff {
     Diff {
@@ -44,7 +47,7 @@ fn coalesced_and_untransferred_signatures_compare_only_last_exposed_value() {
         encode(&mut observer, vec![patch(signature("A"))])[5..],
         [12, 3, 0, 0]
     );
-    observer.expose();
+    observer.expose().unwrap();
     assert_eq!(
         encode(
             &mut observer,
@@ -52,19 +55,19 @@ fn coalesced_and_untransferred_signatures_compare_only_last_exposed_value() {
         )[4],
         0
     );
-    observer.expose();
+    observer.expose().unwrap();
     assert_eq!(
         encode(&mut observer, vec![patch(signature("B"))])[5..],
         [12, 3, 1, 0]
     );
     // Replacing an untransferred B packet cannot observe B.
     assert_eq!(encode(&mut observer, vec![patch(signature("A"))])[4], 0);
-    observer.expose();
+    observer.expose().unwrap();
     assert_eq!(
         encode(&mut observer, vec![patch(signature("B"))])[5..],
         [12, 3, 1, 0]
     );
-    observer.expose();
+    observer.expose().unwrap();
     assert_eq!(
         encode(&mut observer, vec![patch(signature("A"))])[5..],
         [12, 3, 2, 0]
@@ -81,7 +84,7 @@ fn eager_precision_removal_generation_and_remount_have_distinct_lifetimes() {
         )[5..],
         [12, 3, 9, 2097152]
     );
-    observer.expose();
+    observer.expose().unwrap();
     assert_eq!(
         encode(
             &mut observer,
@@ -89,12 +92,17 @@ fn eager_precision_removal_generation_and_remount_have_distinct_lifetimes() {
         )[4],
         0
     );
-    observer.expose();
+    observer.expose().unwrap();
     encode(&mut observer, vec![patch(None)]);
-    observer.expose();
-    assert!(observer.exposed.is_empty());
+    observer.expose().unwrap();
+    assert_eq!(
+        observer
+            .view
+            .exposed_revision(patch(None).decorator_renders[0].key),
+        None
+    );
     encode(&mut observer, vec![patch(signature("A"))]);
-    observer.expose();
+    observer.expose().unwrap();
     let mut changed = patch(signature("B"));
     let observation = observer.prepare(&mut changed, true).unwrap();
     assert!(matches!(
@@ -102,7 +110,7 @@ fn eager_precision_removal_generation_and_remount_have_distinct_lifetimes() {
         Some(DiffOp::SetDecoratorRevision { revision: 0, .. })
     ));
     observer.stage(Some(observation));
-    observer.expose();
+    observer.expose().unwrap();
     let mut next = patch(signature("C"));
     next.generation = 8;
     next.decorator_renders[0].key = NodeKey::from_parts(KeyParts {
@@ -111,27 +119,35 @@ fn eager_precision_removal_generation_and_remount_have_distinct_lifetimes() {
     });
     let observation = observer.prepare(&mut next, false).unwrap();
     observer.stage(Some(observation));
-    observer.expose();
-    assert_eq!(observer.exposed.len(), 1);
-    assert_eq!(observer.generation, Some(8));
+    observer.expose().unwrap();
+    assert_eq!(
+        observer
+            .view
+            .exposed_revision(patch(None).decorator_renders[0].key),
+        None
+    );
+    assert_eq!(
+        observer
+            .view
+            .exposed_revision(next.decorator_renders[0].key),
+        Some(0)
+    );
 }
 #[test]
 fn failure_preserves_exposed_signature_and_checked_revision() {
     let mut observer = DecoratorObserver::default();
     encode(&mut observer, vec![patch(signature("A"))]);
-    observer.expose();
+    observer.expose().unwrap();
     let key = patch(None).decorator_renders[0].key;
-    observer.exposed.get_mut(&key).unwrap().revision = u64::MAX;
-    let mut changed = patch(signature("B"));
+    let mut changed = patch(Some(DecoratorRenderPolicy::Eager(1)));
     assert!(matches!(
         observer.prepare(&mut changed, false),
-        Err(BoundaryError::Invalid(
-            "decorator observation revision exhausted"
-        ))
+        Err(BoundaryError::Model(lexical_model::Error::Invariant(
+            "decorator render policy changed"
+        )))
     ));
     assert!(changed.ops.is_empty());
-    assert_eq!(observer.exposed[&key].policy, signature("A").unwrap());
-    assert_eq!(observer.exposed[&key].revision, u64::MAX);
+    assert_eq!(observer.view.exposed_revision(key), Some(0));
 }
 
 #[test]
@@ -176,25 +192,48 @@ fn real_machine_transfer_initialize_and_detach_own_distinct_observation_boundari
         &mut machine.decorator_observer,
     )
     .unwrap();
-    assert!(machine.decorator_observer.exposed.is_empty());
+    assert!(machine
+        .decorator_observer
+        .view
+        .exposed_revision(patch(None).decorator_renders[0].key)
+        .is_none());
     assert!(matches!(
         machine.initialize_view(),
         Err(BoundaryError::Invalid(
             "initialize before pending output transfer"
         ))
     ));
-    assert!(!machine.take_output().is_empty());
-    assert_eq!(machine.decorator_observer.exposed.len(), 1);
+    assert!(!machine.take_output().unwrap().is_empty());
+    assert_eq!(
+        machine
+            .decorator_observer
+            .view
+            .exposed_revision(patch(None).decorator_renders[0].key),
+        Some(0)
+    );
     assert!(!machine.initialize_view().unwrap().is_empty());
-    assert!(machine.decorator_observer.exposed.is_empty());
+    assert!(machine
+        .decorator_observer
+        .view
+        .exposed_revision(patch(None).decorator_renders[0].key)
+        .is_none());
     assert!(machine.decorator_observer.pending.is_none());
     encode(&mut machine.decorator_observer, vec![patch(signature("B"))]);
-    machine.decorator_observer.expose();
-    assert_eq!(machine.decorator_observer.exposed.len(), 1);
+    machine.decorator_observer.expose().unwrap();
+    assert_eq!(
+        machine
+            .decorator_observer
+            .view
+            .exposed_revision(patch(None).decorator_renders[0].key),
+        Some(0)
+    );
     machine.decorator_observer.retire();
-    assert!(machine.decorator_observer.exposed.is_empty());
+    assert!(machine
+        .decorator_observer
+        .view
+        .exposed_revision(patch(None).decorator_renders[0].key)
+        .is_none());
     assert!(machine.decorator_observer.pending.is_none());
-    assert!(machine.decorator_observer.generation.is_none());
 }
 
 #[test]
@@ -203,7 +242,7 @@ fn relative_full_comparison_preserves_prior_removal_but_initialize_replaces_it()
     use lexical_model::{Editor, EditorMode};
     let mut observer = DecoratorObserver::default();
     encode(&mut observer, vec![patch(signature("A"))]);
-    observer.expose();
+    observer.expose().unwrap();
     let mut removal = patch(None);
     let key = removal.decorator_renders[0].key;
     removal.ops.push(DiffOp::Remove {
@@ -219,10 +258,15 @@ fn relative_full_comparison_preserves_prior_removal_but_initialize_replaces_it()
         &[1, 3, 1],
         "relative full comparison must keep earlier removal"
     );
-    observer.expose();
-    assert!(observer.exposed.is_empty());
+    observer.expose().unwrap();
+    assert_eq!(
+        observer
+            .view
+            .exposed_revision(patch(None).decorator_renders[0].key),
+        None
+    );
     encode(&mut observer, vec![patch(signature("A"))]);
-    observer.expose();
+    observer.expose().unwrap();
     let editor = Editor::builder(EditorMode::Headless)
         .node::<macro_document_model::nodes::EquationNode>()
         .build()
@@ -257,7 +301,6 @@ fn relative_full_comparison_preserves_prior_removal_but_initialize_replaces_it()
         &words[11..20],
         &[4, 3, u32::from(type_index.get()), 0, 0, 12, 3, 0, 0]
     );
-    observer.expose();
-    assert_eq!(observer.exposed[&key].policy, signature("B").unwrap());
-    assert_eq!(observer.exposed[&key].revision, 0);
+    observer.expose().unwrap();
+    assert_eq!(observer.view.exposed_revision(key), Some(0));
 }
