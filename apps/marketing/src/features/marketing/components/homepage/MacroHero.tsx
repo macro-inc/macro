@@ -7,9 +7,9 @@ export function MacroHero() {
     <div class="macro-text-hero">
       <div class="macro-text-hero-copy">
         <h1 id="macro-home-title" data-welcome-heading>
-          Your team and agents.
+          The unified workspace
           <br />
-          One workspace.
+          for your company.
         </h1>
         <p>
           Your email, chat, tasks, docs, agents and CRM in one tab with team

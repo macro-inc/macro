@@ -102,7 +102,7 @@ html[data-homepage][data-theme-light='true'] .site-nav-demo::after {
   .macro-tile-links a { min-height: 44px; }
   .macro-home-bottom { width: calc(100% - 48px); margin-top: 64px; }
 }
-@media (max-width: 699px) { .macro-home-hero h1 { font-size: clamp(24px, 6vw, 40px); line-height: 1.1; letter-spacing: -.035em; } }
+@media (max-width: 699px) { .macro-home-hero h1 { font-size: clamp(34px, 8vw, 40px); line-height: 1.1; letter-spacing: -.035em; } }
 @media (prefers-reduced-motion: reduce) {
   .macro-motion-toggle { display: none; }
 }
@@ -152,7 +152,7 @@ html[data-homepage][data-theme-light='true'] .site-nav-demo::after {
 .macro-home-intro p { margin: 0 auto; max-width: 600px; color: var(--color-ink-muted); font: 370 14px/1.7 'Inter Variable', Inter, sans-serif; text-wrap: balance; }
 .macro-homepage .homepage-sections { background: transparent; }
 @media (max-width: 699px) {
-  .macro-home-hero { padding: 114px 18px 44px; }
+  .macro-home-hero { min-height: 100svh; justify-content: center; padding: 96px 24px; }
   .macro-home-intro { padding: 32px 24px 48px; }
   .macro-home-intro p br { display: none; }
 }

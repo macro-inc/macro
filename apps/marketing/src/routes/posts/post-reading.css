@@ -186,7 +186,7 @@
 
 @media (max-width: 699px) {
   .posts-article .posts-title {
-    font-size: clamp(24px, 6vw, 40px);
+    font-size: clamp(34px, 8vw, 40px);
     letter-spacing: -0.035em;
     line-height: 1.1;
   }

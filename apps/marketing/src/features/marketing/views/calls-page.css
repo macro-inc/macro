@@ -51,7 +51,7 @@
 
 @media (max-width: 699px) {
   .calls-page .email-page-hero { padding-inline: 0; }
-  .calls-page .email-page-hero h1 { width: 100%; font-size: clamp(24px, 7.4vw, 50px); text-wrap: wrap; }
+  .calls-page .email-page-hero h1 { width: 100%; text-wrap: wrap; }
 
 
 }

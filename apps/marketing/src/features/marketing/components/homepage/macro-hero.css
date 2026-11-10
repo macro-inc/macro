@@ -8,3 +8,21 @@
 @media (min-width: 768px) {
   .macro-home-hero > [data-context-scene] { --welcome-scale: 1.25; }
 }
+
+@media (max-width: 699px) {
+  .macro-home-hero > [data-context-scene] { margin-bottom: 43px; }
+  .macro-home-hero .ob-orbit-tile { transform: translate(-50%, -50%); }
+  .macro-home-hero .macro-text-hero { padding-bottom: 8px; }
+  .macro-home-hero .macro-text-hero h1 { line-height: 1.12; }
+  .macro-text-hero-copy p { width: min(288px, 100%); margin-top: 16px; font-size: 13px; line-height: 1.8; }
+  .macro-text-hero-copy .homepage-hero-cta { width: 144px; height: 48px; margin-top: 40px; }
+}
+@media (max-width: 699px) and (max-height: 800px) {
+  .macro-home-hero > [data-context-scene] { height: clamp(160px, calc(100svh - 540px), 256px); }
+}
+
+@media (max-width: 699px) and (max-height: 700px) {
+  .macro-homepage .macro-home-hero { padding: 72px 24px 20px; }
+  .macro-home-hero > [data-context-scene] { margin-bottom: 32px; }
+  .macro-text-hero-copy .homepage-hero-cta { margin-top: 24px; }
+}

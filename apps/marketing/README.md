@@ -40,7 +40,7 @@ Lazy-load the lower `HomepageSections` chunk inside its own Suspense boundary so
 
 Keep legal pages (`/terms`, `/privacy`, `/dpa`, `/partners/terms`, and `/delete-account`) on the shared `RouteLegal.css` layout: centered slab titles and dates, a 640px reading column, Inter body copy, and spaced section rules. Preserve legal wording, clause numbering, and DPA table navigation when changing presentation.
 
-`MacroHero` renders the centered heading, supporting copy, and signup link.
+`MacroHero` uses the production headline “The unified workspace for your company,” supporting copy, and signup link. On phones, center the hero vertically in the viewport with 24px side gutters, keep the orbit icons centered on their points, and match production’s compact 13px supporting copy and 48px CTA. Reduce the orbit height on short screens so the signup action stays visible.
 The hero never intercepts scrolling. `HomepageSections` reuses the deployed
 Email and chat, Documents and tasks, Coding agents, Sheets and databases, and
 CRM chapters. Preserve their original copy and demonstrations instead of
@@ -341,10 +341,11 @@ adding feature-card guides or explanatory drawers.
 
 Feature-page hero labels pair the matching app icon with “MACRO [PRODUCT]”
 (e.g. “MACRO CRM”), without a slash or the Macro logo. The label links home.
-Feature-page hero titles are short, single-line strings. Keep them brief enough
-to fit a 320px phone at the shared responsive type size; do not force line breaks
-or add a muted second line. The homepage title uses the shared 40px desktop slab style and responsive sizing on phones. Feature-page desktop hero titles are 40px at weight 320 in
-dark mode; phones retain the responsive size needed to fit one line.
+Feature-page hero titles are short strings. Let them wrap naturally and balance
+across up to three lines on phones; do not shrink them to force one line or add a
+muted second line. Feature-page desktop hero titles are 40px at weight 320 in
+dark mode. Feature, homepage, and blog hero titles use a 34–40px
+responsive scale on phones, keeping the title visibly larger than body copy.
 
 Feature chapters use the homepage's single-column layout on every screen: a
 640px reading column above an 800px demo. Match production typography through
@@ -504,7 +505,7 @@ with product pages: 640px reading columns inside an 800px visual column, with
 container-sized graphics instead of viewport breakouts; use the feature-page 32px
 mobile outer gutter and 8px prose inset. Use 40px Roboto Slab Variable titles and
 section headings at weight 320 (plus the cream adjustment), and 17.5px regular
-Inter copy in `#a8a8a8` in dark mode. Article heroes omit the All posts breadcrumb and use the feature hero’s 40px/1.06 slab title and 17.5px/1.65 balanced subtitle. On phones, titles use the feature hero’s responsive 24–40px scale; section headings use 28px.
+Inter copy in `#a8a8a8` in dark mode. Article heroes omit the All posts breadcrumb and use the feature hero’s 40px/1.06 slab title and 17.5px/1.65 balanced subtitle. On phones, titles use the feature hero’s responsive 34–40px scale; section headings use 28px.
 Comparison posts put their lead YouTube video below the title and subtitle, using `postMeta.heroVideo` in a responsive 16:9 frame up to 1000px wide. Move that video and its caption out of the article body; retain other distinct videos. Posts without a lead video keep their cover graphic.
 Keep code blocks and tables within the reading column, with horizontal scrolling
 when necessary. Comparison FAQs use `PostFaqItem` with native
