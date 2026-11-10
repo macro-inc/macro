@@ -217,6 +217,9 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
             enqueuer: sqs_client.as_ref().clone(),
             broker: macro_event_broker.clone(),
         }),
+        message_reads: Arc::new(email::domain::message_reads::MessageReadService {
+            repository: crate::outbound::message_reads::PgMessageReads(db.clone()),
+        }),
         draft_transfers: Arc::new(email::domain::draft_transfer::DraftTransferService {
             repository: EmailPgRepo::new(db.clone()),
             bytes: transfer_bytes,

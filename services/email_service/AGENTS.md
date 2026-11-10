@@ -11,6 +11,8 @@ the gateway `/email` prefix.
 - `src/main.rs` / `src/lib.rs`: entrypoint and `run()`.
 - `src/api.rs` + `src/api/context.rs`: HTTP surface and `ApiContext`.
 - `src/composition/api.rs`: production API dependencies and service wiring.
+- `src/outbound/message_reads.rs`: query adapter for the email domain's synced
+  read service; handlers retain only extraction and HTTP/error rendering.
 - `src/parity/`: HTTP characterization lab and its golden suites (message labels,
   message and thread reads, internal reads); see its
   README for recording, normalization, and the providers it cannot isolate.
