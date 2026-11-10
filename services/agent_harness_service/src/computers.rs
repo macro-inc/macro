@@ -38,6 +38,7 @@ pub(crate) mod claude_expiry;
 pub(crate) mod control;
 pub(crate) mod default_agent;
 mod presence;
+pub mod sign_in_ahead;
 
 use default_agent::{DefaultAgentRequest, DefaultAgents};
 
@@ -425,10 +426,24 @@ pub struct ComputerPresence<Inner> {
     inner: Arc<Inner>,
     presence_pool: PgPool,
     operator: Option<Arc<Operator>>,
+    /// Set once the command bus exists, which needs the runtime registry
+    /// this presence is part of.
+    sign_in_ahead: Arc<std::sync::OnceLock<SignInAheadHandle>>,
+    tasks: TaskTracker,
 }
 
+/// [`sign_in_ahead::SignInAhead`] over the harness table.
+pub type SignInAheadHandle =
+    Arc<sign_in_ahead::SignInAhead<harnesses::outbound::pg_harness_repo::PgHarnessRepo>>;
+
 impl<Inner> ComputerPresence<Inner> {
-    pub fn new(inner: Arc<Inner>, operator: Option<Arc<Operator>>, pool: PgPool) -> Self {
+    pub fn new(
+        inner: Arc<Inner>,
+        operator: Option<Arc<Operator>>,
+        pool: PgPool,
+        sign_in_ahead: Arc<std::sync::OnceLock<SignInAheadHandle>>,
+        tasks: TaskTracker,
+    ) -> Self {
         let presence_pool = PgPoolOptions::new()
             .max_connections(1)
             .connect_lazy_with(pool.connect_options().as_ref().clone());
@@ -436,6 +451,8 @@ impl<Inner> ComputerPresence<Inner> {
             inner,
             presence_pool,
             operator,
+            sign_in_ahead,
+            tasks,
         }
     }
 }
@@ -469,6 +486,13 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
                     .await
                     .inspect_err(|error| tracing::error!(%harness, error = ?error, "computer connect event failed"))
                     .ok();
+            }
+            drop(guard);
+            // After the presence lock: the command round-trips through macrod.
+            if let Some(ahead) = self.sign_in_ahead.get() {
+                let ahead = Arc::clone(ahead);
+                self.tasks
+                    .spawn(async move { ahead.on_connected(harness).await });
             }
         })
     }

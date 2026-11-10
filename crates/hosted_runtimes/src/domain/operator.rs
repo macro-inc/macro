@@ -546,6 +546,23 @@ where
             .map_err(internal)
     }
 
+    /// Whether the team finished the guided setup of the computer `harness_id`
+    /// runs on; `None` when it is not a computer's.
+    pub async fn setup_completed(
+        &self,
+        harness_id: HarnessId,
+    ) -> Result<Option<bool>, ComputerError> {
+        let Some(computer_id) = self.computer_of(harness_id).await? else {
+            return Ok(None);
+        };
+        Ok(Some(
+            self.computer(computer_id)
+                .await?
+                .setup_completed_at
+                .is_some(),
+        ))
+    }
+
     /// macrod connected on `harness_id`. Returns whether it is a computer's.
     #[tracing::instrument(skip(self), err)]
     pub async fn macrod_connected(&self, harness_id: HarnessId) -> Result<bool, ComputerError> {

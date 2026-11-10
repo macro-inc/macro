@@ -1329,15 +1329,18 @@ async fn run() -> anyhow::Result<()> {
         anthropic_gateway::ANTHROPIC_API_URL,
         &config.anthropic_api_key,
     )?);
+    let computer_tasks = tokio_util::task::TaskTracker::new();
+    let sign_in_ahead = Arc::new(std::sync::OnceLock::new());
     let runtimes = RuntimeRegistry::with_presence(
         Arc::new(computers::ComputerPresence::new(
             Arc::new(PgHarnessPresence::new(pool.clone(), replica)),
             computer_operator.clone(),
             pool.clone(),
+            Arc::clone(&sign_in_ahead),
+            computer_tasks.clone(),
         )),
         live_sessions,
     );
-    let computer_tasks = tokio_util::task::TaskTracker::new();
     if let Some(operator) = &computer_operator {
         computers::spawn_loops(
             Arc::clone(operator),
@@ -1751,6 +1754,14 @@ async fn run() -> anyhow::Result<()> {
         &computer_tasks,
         service_shutdown.clone(),
     );
+    if let Some(operator) = &computer_operator {
+        // Only fails if set twice, which this one startup never does.
+        let _ = sign_in_ahead.set(Arc::new(computers::sign_in_ahead::SignInAhead {
+            control: computer_control.clone(),
+            harnesses: PgHarnessRepo::new(pool.clone()),
+            operator: Arc::clone(operator),
+        }));
+    }
     let computer_claude = computers::claude::router(
         computer_control,
         redis.clone(),
