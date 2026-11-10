@@ -136,3 +136,27 @@ for (const html of [
       importHTML(html, document, registry).map((json) => JSON.parse(json))
     ).toEqual(JSON.parse(JSON.stringify(actual)));
   });
+
+test('HTML render validates serialized attributes before choosing template content', () => {
+  const html =
+    '<div data-html-render data-html="invalid"><template shadowrootmode="open"><b>template</b></template></div>';
+  const editor = createHeadlessEditor({
+    namespace: 'macro-html-error-oracle',
+    nodes: [HtmlRenderNode],
+    onError(error) {
+      throw error;
+    },
+  });
+  expect(() =>
+    editor.update(
+      () => {
+        $generateNodesFromDOM(
+          editor,
+          new DOMParser().parseFromString(html, 'text/html')
+        );
+      },
+      { discrete: true }
+    )
+  ).toThrow(SyntaxError);
+  expect(() => importHTML(html, document, registry)).toThrow(SyntaxError);
+});
