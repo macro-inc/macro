@@ -73,7 +73,10 @@ function paneRoute(routes: SplitRoutesManifest, path: string) {
  * What this tab does with a frame: ignore one meant for another tab or
  * person, refuse a path agents may not open, or open a location in a new
  * pane. The path is checked as sent (a legacy `type/id` link opens only for
- * item types) and again as the router upgrades it.
+ * item types) and again as the router upgrades it. Only the pane's own `s0.`
+ * search reaches the location: `decodePanes` drops unprefixed hand-off keys
+ * that a view acts on when a link from outside the app arrives
+ * (`whatsappPairing`, `createAgent`), so an agent never acts through them.
  */
 export function decideUiCommand(
   routes: SplitRoutesManifest,

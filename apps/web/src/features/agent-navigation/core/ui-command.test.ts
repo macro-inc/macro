@@ -54,6 +54,23 @@ describe('decideUiCommand', () => {
     expect(JSON.stringify(decision.location.search)).toContain('m1');
   });
 
+  it('opens a view without the hand-off keys a link from outside the app carries', () => {
+    for (const [path, route] of [
+      [
+        '/external?whatsappPairing=0198a4cc-e138-7670-a308-a6b7666027d1',
+        'view-external',
+      ],
+      ['/agents?createAgent=true', 'view-agents'],
+    ] as const) {
+      const decision = decideUiCommand(routes, ME, frame({ path }));
+
+      expect(decision.kind, path).toBe('open');
+      if (decision.kind !== 'open') return;
+      expect(decision.route).toBe(route);
+      expect(decision.location.search, path).toBeUndefined();
+    }
+  });
+
   it('ignores a frame for another tab or another person', () => {
     for (const other of [
       frame({ clientId: '0198a4cc-e138-7670-a308-a6b7666027c2' }),
