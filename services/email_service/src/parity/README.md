@@ -86,6 +86,10 @@ does not change transcripts. Only `DATABASE_URL`, `REDIS_URI`, `INSTA_UPDATE`, a
 `PARITY_OUT` configure a run; `NEXTEST` is the required runner marker. The label requests have no Origin header, so the
 production CORS origin predicate does not consult ambient allowed origins.
 
+Each scenario holds a test database and two Postgres connections while it runs, so
+`.config/nextest.toml` puts the suite in the `email-parity` test group (at most
+eight scenarios at once) whatever the runner's thread count.
+
 ## Cannot observe / not isolated
 
 - Not characterized: DEBUG/TRACE spans. Production's default exporter retains

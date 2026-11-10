@@ -1,0 +1,12 @@
+# Nextest configuration for the Rust workspace.
+
+[test-groups]
+# Each email_service parity scenario holds its own test database plus two
+# Postgres connections for its whole run. Unbounded, a run with many test
+# threads starts enough of them at once to exhaust the server's connection
+# limit for every other database test.
+email-parity = { max-threads = 8 }
+
+[[profile.default.overrides]]
+filter = 'package(email_service) & test(/^parity::/)'
+test-group = 'email-parity'
