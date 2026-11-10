@@ -1185,3 +1185,41 @@ async fn participant_grants_reject_channel_calls_nonparticipants_and_departed_us
     );
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("upsert_test_data"))
+)]
+async fn a_move_that_started_first_never_moves_a_folder_back_in_time(pool: Pool<Postgres>) {
+    let folder = ROOT_PROJECT_ID.to_string();
+    let mut started_first = pool.begin().await.unwrap();
+    sqlx::query("SELECT pg_sleep(0.02)")
+        .execute(started_first.as_mut())
+        .await
+        .unwrap();
+
+    let mut finished_first = pool.begin().await.unwrap();
+    project_modified::bump_projects_modified(&mut finished_first, &[&folder])
+        .await
+        .unwrap();
+    finished_first.commit().await.unwrap();
+    let later: DateTime<Utc> =
+        sqlx::query_scalar(r#"SELECT "updatedAt"::timestamptz FROM "Project" WHERE id = $1"#)
+            .bind(&folder)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+    project_modified::bump_projects_modified(&mut started_first, &[&folder])
+        .await
+        .unwrap();
+    started_first.commit().await.unwrap();
+    let after: DateTime<Utc> =
+        sqlx::query_scalar(r#"SELECT "updatedAt"::timestamptz FROM "Project" WHERE id = $1"#)
+            .bind(&folder)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+
+    assert!(after >= later, "{after} went back from {later}");
+}
