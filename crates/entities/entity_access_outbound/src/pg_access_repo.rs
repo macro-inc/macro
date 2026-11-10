@@ -424,6 +424,27 @@ impl AccessRepository for PgAccessRepository {
     }
 
     /// Resolve ordinary shares on an external chat.
+    async fn get_harness_access(
+        &self,
+        harness_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let harness_uuid = harness_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid harness ID format"))?;
+        let Some(user_id) = user_id else {
+            return Ok(None);
+        };
+        sqlx::query_scalar!(
+            r#"SELECT harness_access_level($1, $2) AS "access_level?: AccessLevel""#,
+            harness_uuid,
+            user_id.as_ref(),
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(access_error)
+    }
+
     async fn get_external_chat_access(
         &self,
         group_id: &str,
@@ -640,8 +661,9 @@ impl AccessRepository for PgAccessRepository {
             | EntityType::CrmContact
             | EntityType::Skill
             // Reminders and scheduled actions are user-owned, never reachable
-            // through a team scope.
+            // through a team scope. A runtime is used by people, not team bots.
             | EntityType::Reminder
+            | EntityType::Harness
             | EntityType::ScheduledAction => {
                 return Err(AccessError::BadRequest(
                     "Unsupported entity type for team item access",

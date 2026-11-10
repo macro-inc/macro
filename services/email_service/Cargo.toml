@@ -130,6 +130,7 @@ macro_authorization = { workspace = true, default-features = true, features = [
   "postgres",
 ] }
 macro_cors = { workspace = true }
+macro_tower_layers = { workspace = true }
 macro_config = { workspace = true }
 macro_db_client = { workspace = true, default-features = true }
 macro_entrypoint = { workspace = true }

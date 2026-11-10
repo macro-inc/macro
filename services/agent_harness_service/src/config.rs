@@ -11,7 +11,10 @@ use entity_registry::NonUserOwners;
 pub use macro_env::Environment;
 use macro_uuid::Uuid;
 
-use secretsmanager_client::LocalOrRemoteSecret;
+use secretsmanager_client::{LocalOrRemoteSecret, OptionalLocalOrRemoteSecret};
+
+#[cfg(test)]
+mod test;
 
 macro_env_var::env_vars!(
     /// Local static file bucket, read only when using local AWS.
@@ -59,9 +62,8 @@ macro_env_var::maybe_env_vars!(
     pub struct CodexOauthKmsKeyId;
     /// Rollout gate for sessions owned by a bot.
     pub struct EnableNonUserOwners;
-    /// The authentication service's own internal key, which settlement
-    /// requests for counted usage present. Required while
-    /// `ENABLE_AI_USAGE_BILLING` is true; otherwise unused.
+    /// The authentication service's internal key for billing settlement and
+    /// linked GitHub token lookups.
     pub struct AuthenticationServiceSecretKey;
 );
 
@@ -129,8 +131,9 @@ pub struct Config {
     /// service's own policy decides whether it does.
     #[macro_config_default(ai_billing::AiUsageBilling::Disabled)]
     pub enable_ai_usage_billing: ai_billing::AiUsageBilling,
-    /// Key settlement requests present to the authentication service.
-    pub authentication_service_secret_key: AuthenticationServiceSecretKey,
+    /// Authentication service key or deployed Secrets Manager name.
+    pub authentication_service_secret_key:
+        OptionalLocalOrRemoteSecret<AuthenticationServiceSecretKey>,
     /// The free plan's hard monthly AI cap, in cents at provider cost.
     /// Mandatory; set in Doppler.
     pub ai_usage_free_included_allowance_cents: ai_billing::IncludedAllowanceCents,
@@ -325,7 +328,7 @@ impl Config {
         &self,
     ) -> anyhow::Result<Option<authentication_service_client::AuthServiceClient>> {
         self.authentication_service_secret_key
-            .value()
+            .as_str()
             .filter(|key| !key.trim().is_empty())
             .map(|key| {
                 anyhow::Ok(authentication_service_client::AuthServiceClient::new(

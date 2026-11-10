@@ -7,3 +7,4 @@ pub mod outbound;
 pub mod soup;
 #[cfg(test)]
 pub(crate) mod telemetry_capture;
+pub mod trace_context;

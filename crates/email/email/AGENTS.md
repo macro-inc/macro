@@ -184,6 +184,18 @@ tools — hexagonal, heavily feature-gated.
   through `record_done`/`record_deferred`/`record_abandoned`/`record_failed`.
   The mailbox loops log their own deferrals with `link_id` (gate refusals at
   DEBUG), so the worker must not log them again. Add a new defer reason in `defer_reason`.
+  Notification lag rides the same rows: a Graph change notification stamps
+  the folder streams' `notified_at` and `notified_traceparent`. Every claim
+  of the stream carries `notified_at` onto the reconciliation rows its pages
+  queue (newest notification wins) until a checkpoint that started reading
+  after the notification clears it; enumerate and reconcile spans record
+  `outlook.notification_wait_ms` and `outlook.notification_lag_ms`. The first
+  claim of a stream or row takes the traceparent (clearing it) and adopts the
+  webhook's trace (`crate::trace_context`), so webhook to import is one
+  trace, while retries get traces of their own and a long deferral can't grow
+  it. Subscription upkeep and webhook deliveries open
+  `outlook.subscription.maintain` and `outlook.subscription.notify`; each
+  lifecycle event logs "outlook subscription lifecycle event".
 - Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
   for `email_db_client` calls) so the SQLSTATE reaches the log; keep
   `MailboxError::Persistence` for stored data that cannot be decoded.

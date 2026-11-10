@@ -60,7 +60,8 @@ pub async fn process_message(
     }
 }
 
-#[tracing::instrument(skip(ctx))]
+// The operation is skipped: a candidate carries a contact's address.
+#[tracing::instrument(skip(ctx, data))]
 async fn inner_process_message(
     ctx: &CrmCleanupContext,
     data: &CrmCleanupPubsubMessage,

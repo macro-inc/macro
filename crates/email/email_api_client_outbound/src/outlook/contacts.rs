@@ -1,6 +1,5 @@
 use std::collections::{HashSet, VecDeque};
 
-use reqwest::Method;
 use serde::Deserialize;
 
 use super::{OutlookApiClientRepository, transport::invalid_response, wire};
@@ -187,9 +186,9 @@ impl MailboxAddressBookReader for OutlookApiClientRepository {
             ])?,
             None => self.endpoint(&["me", "photo", "$value"])?,
         };
-        let mut response = match self.request(token, Method::GET, url, None).await {
-            Err(EmailApiError::NotFound) => return Ok(None),
-            response => response?,
+        // Most contacts have no photo, which Graph answers with a 404.
+        let Some(mut response) = self.optional_request(token, url).await? else {
+            return Ok(None);
         };
         let content_type = response
             .headers()

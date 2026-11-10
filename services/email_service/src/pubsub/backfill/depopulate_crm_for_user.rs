@@ -18,7 +18,7 @@ use email_types::email::service::pubsub::{DetailedError, FailureReason, Processi
 /// No-ops (acks the message) when the user has no email link.
 /// Team-deletion does NOT go through this path; the
 /// `crm_companies.team_id` FK cascade handles it in macrodb.
-#[tracing::instrument(skip(ctx), err, fields(macro_id = %payload.macro_id, team_id = %payload.team_id))]
+#[tracing::instrument(skip(ctx, payload), err, fields(team_id = %payload.team_id))]
 pub async fn depopulate_crm_for_user(
     ctx: &PubSubContext,
     payload: &DepopulateCrmForUserPayload,

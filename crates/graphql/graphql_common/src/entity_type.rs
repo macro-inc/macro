@@ -92,6 +92,8 @@ pub enum GraphqlEntityType {
         deprecation = "Use EXTERNAL_CHAT. Never returned; rejected as input. Remove after 2026-11-30."
     )]
     WhatsappGroup,
+    /// A registered runtime.
+    Harness,
 }
 
 impl GraphqlSoupEntityType {
@@ -129,6 +131,7 @@ impl GraphqlSoupEntityType {
             | EntityType::CrmPipeline
             | EntityType::Database
             | EntityType::ExternalChat
+            | EntityType::Harness
             | EntityType::Form => return None,
         })
     }
@@ -182,6 +185,7 @@ impl GraphqlEntityType {
             EntityType::DatabaseRow => Self::DatabaseRow,
             EntityType::Form => Self::Form,
             EntityType::ExternalChat => Self::ExternalChat,
+            EntityType::Harness => Self::Harness,
         }
     }
 
@@ -218,6 +222,7 @@ impl GraphqlEntityType {
             Self::DatabaseRow => EntityType::DatabaseRow,
             Self::Form => EntityType::Form,
             Self::ExternalChat => EntityType::ExternalChat,
+            Self::Harness => EntityType::Harness,
             Self::WhatsappGroup => {
                 return Err(async_graphql::Error::new(
                     "WHATSAPP_GROUP is no longer an entity type; use EXTERNAL_CHAT",

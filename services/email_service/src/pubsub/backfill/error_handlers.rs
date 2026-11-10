@@ -218,7 +218,7 @@ pub async fn handle_retryable_error(
         }
         BackfillOperation::DepopulateCrmContact(scope) => {
             tracing::warn!(
-                contact_email = %scope.payload.contact_email,
+                link_id = %scope.link_id,
                 "Retryable error depopulating CRM contact"
             )
         }
@@ -227,7 +227,7 @@ pub async fn handle_retryable_error(
         }
         BackfillOperation::DepopulateCrmForUser(payload) => {
             tracing::warn!(
-                macro_id = %payload.macro_id,
+                team_id = %payload.team_id,
                 "Retryable error depopulating CRM for user"
             )
         }

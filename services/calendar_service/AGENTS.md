@@ -44,6 +44,10 @@ gateway `/calendar` prefix.
 
 ## Gotchas
 
+- The API's server spans come from `macro_tower_layers` (`api::traced`).
+  tower-http's default `TraceLayer` span is DEBUG, below the exporter's INFO
+  filter, so an API wrapped in it sends no server spans.
+
 - The router is mounted at both `/` and `/calendar` (`GATEWAY_PATH_PREFIX` in
   `src/api.rs`) because the gateway forwards the path unchanged.
 - Reauth-required notifications ride the shared `LinkManagerQueue`, consumed by

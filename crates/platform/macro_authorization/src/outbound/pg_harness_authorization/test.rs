@@ -191,7 +191,7 @@ async fn a_token_row_another_request_is_updating_does_not_block_the_request(pool
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn team_owned_harness_reports_its_team(pool: PgPool) {
+async fn row_naming_only_a_team_belongs_to_its_registrant(pool: PgPool) {
     insert_user(&pool).await;
     let team_id = Uuid::new_v4();
     sqlx::query!(
@@ -210,7 +210,12 @@ async fn team_owned_harness_reports_its_team(pool: PgPool) {
         .await
         .unwrap()
         .expect("valid token");
-    assert_eq!(token.owner, HarnessAuthorizationOwner::Team { team_id });
+    assert_eq!(
+        token.owner,
+        HarnessAuthorizationOwner::User {
+            user_id: USER_ID.to_string()
+        }
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -266,7 +271,7 @@ async fn resolves_users_by_macro_identifier(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn checks_current_team_membership(pool: PgPool) {
+async fn may_use_harness_follows_its_team_grant(pool: PgPool) {
     insert_user(&pool).await;
     let team_id = Uuid::new_v4();
     sqlx::query!(
@@ -288,8 +293,38 @@ async fn checks_current_team_membership(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
+    let (harness_id, _) =
+        insert_harness_token(&pool, Some("macro|owner@example.com"), None, false).await;
+    let harness = HarnessId::new_from_uuid(harness_id);
+    let repo = PgHarnessAuthorizationRepo::new(pool.clone());
+    assert!(
+        !repo
+            .user_may_use_harness(harness, FUSION_USER_ID)
+            .await
+            .unwrap()
+    );
 
-    let repo = PgHarnessAuthorizationRepo::new(pool);
-    assert!(repo.user_has_team(FUSION_USER_ID, team_id).await.unwrap());
-    assert!(!repo.user_has_team("someone-else", team_id).await.unwrap());
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'harness', $2, 'team', 'edit')
+        "#,
+        harness_id,
+        team_id.to_string(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert!(
+        repo.user_may_use_harness(harness, FUSION_USER_ID)
+            .await
+            .unwrap()
+    );
+    assert!(
+        !repo
+            .user_may_use_harness(harness, "macro|someone-else@example.com")
+            .await
+            .unwrap()
+    );
 }

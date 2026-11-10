@@ -19,7 +19,7 @@ use uuid::Uuid;
 /// The gate runs outside the CRM crate's advisory lock, so a brand-new sent
 /// message landing between the check and the cascade could see a transient
 /// deleted state; the populate path on that new message re-creates the rows.
-#[tracing::instrument(skip(ctx), err, fields(link_id = %link_id, contact_email = %contact_email))]
+#[tracing::instrument(skip(ctx, contact_email), err, fields(link_id = %link_id))]
 pub async fn process_candidate(
     ctx: &CrmCleanupContext,
     link_id: Uuid,

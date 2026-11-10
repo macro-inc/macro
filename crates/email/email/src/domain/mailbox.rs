@@ -149,6 +149,20 @@ pub struct StreamLease {
     pub initial_complete: bool,
     pub lease_id: Uuid,
     pub fence: i64,
+    /// The stream's pending notification: the newest one that no delta
+    /// checkpoint has read past yet, so a deferred or multi-page read keeps
+    /// carrying it.
+    pub notification: Option<Notification>,
+}
+
+/// A Graph change notification that made sync work due.
+#[derive(Debug, Clone)]
+pub struct Notification {
+    /// When the webhook delivery was accepted.
+    pub received_at: chrono::DateTime<chrono::Utc>,
+    /// The webhook request's W3C trace context, on the first claim only;
+    /// that attempt joins the webhook's trace.
+    pub traceparent: Option<String>,
 }
 
 #[derive(Debug)]
@@ -159,6 +173,8 @@ pub struct MessageLease {
     pub lease_id: Uuid,
     pub is_import: bool,
     pub attempts: i32,
+    /// The newest change notification that queued this message.
+    pub notification: Option<Notification>,
 }
 
 #[derive(Debug)]
@@ -401,11 +417,16 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             outlook.delta_advanced = false,
             outlook.folder_initial_complete = lease.initial_complete,
             outlook.cursor_reset = false,
+            outlook.notification_wait_ms = lease
+                .notification
+                .as_ref()
+                .map(|notification| telemetry::since_ms(notification.received_at)),
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
             outlook.defer_seconds = tracing::field::Empty,
             otel.status_description = tracing::field::Empty,
         );
+        adopt_notification_trace(&span, lease.notification.as_ref());
         self.enumerate(&lease).instrument(span).await
     }
 
@@ -490,11 +511,13 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             outlook.attachments = tracing::field::Empty,
             outlook.calendar_parts_unavailable = tracing::field::Empty,
             outlook.db_write_ms = tracing::field::Empty,
+            outlook.notification_lag_ms = tracing::field::Empty,
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
             outlook.defer_seconds = tracing::field::Empty,
             otel.status_description = tracing::field::Empty,
         );
+        adopt_notification_trace(&span, lease.notification.as_ref());
         self.reconcile(&lease).instrument(span).await
     }
 
@@ -543,6 +566,12 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let error = match result {
             Ok((outcome, import_completed)) => {
                 record_done(&span, outcome);
+                if let Some(notification) = &lease.notification {
+                    span.record(
+                        "outlook.notification_lag_ms",
+                        telemetry::since_ms(notification.received_at),
+                    );
+                }
                 if outcome == "imported" {
                     self.imports
                         .record(lease.mailbox.link_id, chrono::Utc::now());
@@ -579,6 +608,12 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
         let graph_calls = self.provider.admitted_requests(completed.mailbox).await;
         progress::log_import_completed(completed, graph_calls);
     }
+}
+
+/// Work a notification made due continues the webhook request's trace.
+fn adopt_notification_trace(span: &Span, notification: Option<&Notification>) {
+    let traceparent = notification.and_then(|notification| notification.traceparent.as_deref());
+    crate::trace_context::adopt(span, traceparent);
 }
 
 /// Keep long catalogue scans and uploads fenced without imposing an arbitrary

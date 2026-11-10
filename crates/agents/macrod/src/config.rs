@@ -209,9 +209,9 @@ pub enum ConfigError {
     },
     /// The file sets something that is configured on the web now.
     #[error(
-        "{path} sets {key}, which macrod no longer reads: a runtime's name, access, and \
-         permission bypass are set in Macro at Settings → Agents → Runtimes. Delete {key} \
-         from the file."
+        "{path} sets {key}, which macrod no longer reads: a machine's name, access, and \
+         permission bypass are set in Macro at Settings → Machines. Delete {key} from \
+         the file."
     )]
     WebSetting {
         /// The path that failed.

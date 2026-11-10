@@ -43,6 +43,7 @@ macro_authorization = { workspace = true, default-features = true, features = [
 macro_aws_config = { workspace = true }
 macro_config = { workspace = true }
 macro_cors = { workspace = true }
+macro_tower_layers = { workspace = true }
 macro_entrypoint = { workspace = true }
 macro_env = { workspace = true }
 macro_env_var = { workspace = true }
@@ -74,3 +75,9 @@ connection_gateway_url = { workspace = true }
 document_storage_service_url = { workspace = true }
 email_api_client_core = { workspace = true, features = ["ports"] }
 email_api_client_outbound = { workspace = true, features = ["outbound-outlook", "microsoft-gate"] }
+
+[dev-dependencies]
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["trace", "testing"] }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }

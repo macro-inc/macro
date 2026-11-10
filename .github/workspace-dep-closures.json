@@ -8865,6 +8865,7 @@
     ],
     "harnesses": [
       "crates/agents/harnesses",
+      "crates/entities/entity_access_db_utils",
       "crates/platform/macro_auth",
       "crates/platform/macro_authorization",
       "crates/platform/macro_env",
@@ -8873,10 +8874,16 @@
       "crates/types/bearer_token",
       "crates/types/bot_id",
       "crates/types/cowlike",
+      "crates/types/entity_access_management_types",
+      "crates/types/entity_kind",
       "crates/types/harness_id",
       "crates/types/macro_user_id",
+      "crates/types/macro_uuid",
       "crates/types/model_error_response",
+      "crates/types/model_file_type",
+      "crates/types/model_owner",
       "crates/types/model_user",
+      "crates/types/permissions_types",
       "crates/workspace-hack"
     ],
     "id_newtype": [
