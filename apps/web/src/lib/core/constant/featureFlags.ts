@@ -933,11 +933,15 @@ export const enableUnifiedNotifications = defineFlag({
 // Notification stacks: the Noise tab of the unified notifications view, the
 // Stacks section of Settings → Notifications, and Add to stack in channel
 // menus. The notification service reads the same key before it routes or
-// serves stacks. Override with VITE_ENABLE_NOTIFICATION_STACKS.
+// serves stacks, and answers 404 to a person it is off for. So this follows
+// the service rather than dev mode: PostHog decides wherever the service asks
+// PostHog, dev included, and it is on against a local stack, where the
+// service serves stacks to everyone. Override with
+// VITE_ENABLE_NOTIFICATION_STACKS.
 export const enableNotificationStacks = defineFlag({
   key: 'enable-notification-stacks',
   env: 'ENABLE_NOTIFICATION_STACKS',
-  default: onInDev,
+  default: import.meta.env.VITE_LOCAL_STACK === 'true' || undefined,
 });
 
 // Agents home: pending updates from coding agents shown as a stack under the

@@ -94,9 +94,12 @@ leaves it and new activity brings one back. A row you read under Unread, or a
 stack you're going through, stays until you next switch or reload.
 With nothing unread, Unread shows **You're all caught up**.
 
-With `enable-notification-stacks` on as well (the lanes live in this view, so
+With `enable-notification-stacks` on as well, the tabs are the lanes instead. That
+flag follows the notification service, which reads the same key: PostHog decides
+in every deployment, dev included, and it is on against a local stack
+(`VITE_ENABLE_NOTIFICATION_STACKS` overrides it). The lanes live in this view, so
 they need its flags too; on a local stack GraphQL Soup has no dev default, so
-start Vite with `VITE_ENABLE_GRAPHQL_SOUP=true`), the tabs are the lanes instead:
+start Vite with `VITE_ENABLE_GRAPHQL_SOUP=true`. The lanes are
 **Signal** and **Noise** (`1` and `2`, or Tab), and Unread becomes an **Unread**
 toggle beside the filter that narrows whichever lane shows. Signal is the inbox
 as before. Noise lists what the reader's [stacks](settings.md#notification-stacks)
