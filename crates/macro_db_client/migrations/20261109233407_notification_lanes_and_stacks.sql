@@ -1,6 +1,14 @@
 -- Notification stacks: a person's own rules that route a notification, per
 -- recipient and before delivery, into a lane. Signal is delivered as before.
 -- Noise is stored but never pushed, digested or counted as unread.
+
+-- Fail fast instead of queueing other sessions behind this migration. It
+-- takes two table locks: on "User", for the new table's foreign key, and on
+-- user_notification, for the new columns. Set first, so neither wait is
+-- unbounded and no lock is held while the other is waited for longer than
+-- this.
+SET LOCAL lock_timeout = '5s';
+
 CREATE TYPE notification_lane AS ENUM ('signal', 'noise');
 
 -- One stack: capture rules decide which notifications it takes, release rules
@@ -22,10 +30,6 @@ CREATE TABLE notification_stack (
 );
 
 CREATE INDEX idx_notification_stack_user ON notification_stack (user_id, position);
-
--- Fail fast instead of queueing every notification read behind a long
--- transaction while waiting for the table lock.
-SET LOCAL lock_timeout = '5s';
 
 -- The lane is decided once, at ingress, and lives on the recipient's row like
 -- the copied entity columns: every reader filters on it. The constant default
