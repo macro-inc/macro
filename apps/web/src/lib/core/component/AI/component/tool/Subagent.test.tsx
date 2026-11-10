@@ -4,6 +4,7 @@ import type { Component, JSX, ParentProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { afterEach, expect, it, vi } from 'vitest';
 import { subagentHandler } from './Subagent';
+import { ToolErrorContext } from './ToolRenderer';
 
 vi.mock('@core/component/AI/component/message/ChatMessageMarkdown', () => ({
   ChatMessageMarkdown: (props: { text: string }) => <p>{props.text}</p>,
@@ -62,5 +63,24 @@ it('parses calls with and without a description, so saved calls still render', (
     const parsed = deserializeToolCall({ id: 'call', name: 'Subagent', json });
     expect(parsed.isOk()).toBe(true);
     expect(parsed._unsafeUnwrap().data).toEqual(json);
+  }
+});
+
+it('names the disclosure of a failed call, so assistive technology can open its instructions', () => {
+  render(() => (
+    <ToolErrorContext.Provider value={() => ({ kind: 'failed' })}>
+      <Dynamic
+        component={subagentHandler.render as Component<Record<string, unknown>>}
+        tool={{ name: 'Subagent', data: { task } }}
+        renderContext={{
+          isStreaming: false,
+          grouped: false,
+          followedBy: () => false,
+        }}
+      />
+    </ToolErrorContext.Provider>
+  ));
+  for (const button of screen.getAllByRole('button')) {
+    expect(button.textContent?.trim()).not.toBe('');
   }
 });

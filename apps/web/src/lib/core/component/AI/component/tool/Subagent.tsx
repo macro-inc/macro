@@ -35,7 +35,8 @@ const handler = createToolRenderer({
     const result = () => ctx.response?.data.result;
     const statusText = () => {
       if (isLoading()) return 'Running';
-      if (error) return undefined;
+      // The row already says Failed; this toggle still opens the brief.
+      if (error) return 'Instructions';
       return result() ? 'Done' : 'No result';
     };
     const Icon = (props: JSX.SvgSVGAttributes<SVGSVGElement>) => (
