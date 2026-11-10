@@ -141,9 +141,7 @@ function openManualNotificationLink(
     .with('project', () => 'project' as const)
     .with('email_thread', () => 'email' as const)
     .with('agent_session', () => 'agent' as const)
-    .with('database', () => 'database' as const)
-    .with('form', () => 'form' as const)
-    .with('document', 'scheduled_action', () => undefined)
+    .with('document', () => undefined)
     .otherwise(() => null);
   if (block === null) return null;
 
@@ -151,11 +149,6 @@ function openManualNotificationLink(
     const options = { newSplit, sourceHandle, onApplied };
     if (block) {
       openSplitIfNotOpen(lm, block, id, options);
-      return;
-    }
-
-    if (notification.entity_type === 'scheduled_action') {
-      openContent(lm, routineContent(id), options);
       return;
     }
 

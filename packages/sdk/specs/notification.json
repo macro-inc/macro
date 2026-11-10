@@ -2705,7 +2705,7 @@
           },
           "entityType": {
             "$ref": "#/components/schemas/EntityType",
-            "description": "One of document, chat, channel, project, email_thread, agent_session,\nscheduled_action, database or form."
+            "description": "One of document, chat, channel, project, email_thread or agent_session:\nthe kinds the inbox and Home list. An agent session must be listed;\nan email thread shows only while it is Signal-important and not shared."
           }
         }
       },

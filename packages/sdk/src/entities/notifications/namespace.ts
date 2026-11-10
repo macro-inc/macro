@@ -8,12 +8,9 @@ import type { MacroClient } from '../../utils/client';
 import { AgentSession } from '../agent-sessions/agent-session';
 import { Channel } from '../channels/channel';
 import { Chat } from '../chats/chat';
-import { Database } from '../databases/database';
 import { Document } from '../documents/document';
 import { EmailThread } from '../email/thread';
-import { Form } from '../forms/form';
 import { Project } from '../projects/project';
-import { Routine } from '../routines/routine';
 import type { User } from '../users/user';
 import { Notification } from './notification';
 
@@ -22,17 +19,19 @@ export type NotificationType = NotifEvent['tag'];
 
 type NotificationTypePreferences = GetNotificationTypePreferencesResponses[200];
 
-/** What a sent notification opens. Tasks are documents. */
+/**
+ * What a sent notification opens: the kinds the inbox and Home list. Tasks
+ * are documents. An agent session must be listed (a routine's runs are not,
+ * unless the routine lists them); an email thread shows only while it is
+ * Signal-important and not shared.
+ */
 export type NotificationLink =
   | Document
   | Channel
   | Chat
   | Project
   | EmailThread
-  | AgentSession
-  | Routine
-  | Database
-  | Form;
+  | AgentSession;
 
 /** A notification to send with {@link NotificationNamespace.send}. */
 export interface SendNotificationOptions {
@@ -60,10 +59,9 @@ function linkEntityType(
   if (link instanceof Project) return 'project';
   if (link instanceof EmailThread) return 'email_thread';
   if (link instanceof AgentSession) return 'agent_session';
-  if (link instanceof Routine) return 'scheduled_action';
-  if (link instanceof Database) return 'database';
-  if (link instanceof Form) return 'form';
-  throw new TypeError('notifications.send: unsupported link entity');
+  throw new TypeError(
+    'notifications.send: link must be a document, task, channel, chat, project, email thread or agent session',
+  );
 }
 
 /**
@@ -85,7 +83,10 @@ export class NotificationNamespace {
   /**
    * Notify yourself, or someone who can already see `link`, that work finished or needs attention; post a message instead when a reply is expected.
    *
-   * Routines should use this to report back. It is delivered like any other
+   * Routines should use this to report back, linking the document or listed
+   * session the run produced; links to routines, databases and forms, and to
+   * unlisted or hidden sessions, are refused because the inbox would never
+   * show them. It is delivered like any other
    * notification (in-app, desktop and phone push) and respects the
    * recipient's notification preferences, so it may not reach them. Sends are
    * rate limited per sender.

@@ -97,17 +97,20 @@ test('a link to an entity notifications cannot open is rejected before sending',
   expect(requests).toHaveLength(0);
 });
 
-test('a form link names its entity type', async () => {
+test('links the inbox never lists are rejected before sending', async () => {
   const requests = serve(() => new Response(null, { status: 204 }));
   const sdk = macro();
 
-  await sdk.notifications.send({
-    title: 'New response',
-    link: sdk.forms.byId('form-1'),
-  });
-
-  expect(await requests[0].json()).toEqual({
-    title: 'New response',
-    link: { entityType: 'form', entityId: 'form-1' },
-  });
+  for (const link of [
+    sdk.routines.byId('routine-1'),
+    sdk.databases.byId('database-1'),
+    sdk.forms.byId('form-1'),
+  ]) {
+    const sending = sdk.notifications.send({
+      title: 'New response',
+      link: link as never,
+    });
+    await expect(sending).rejects.toBeInstanceOf(TypeError);
+  }
+  expect(requests).toHaveLength(0);
 });
