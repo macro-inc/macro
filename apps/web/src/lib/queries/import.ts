@@ -52,11 +52,13 @@ const IMPORT_UPDATED_MESSAGE_TYPE = 'import_updated';
  */
 const PENDING_IMPORT_STATE: ImportState = { runs: [], entities: [] };
 
-function anythingInFlight(state: ImportState | undefined): boolean {
+/** Whether a run or ledger row is still moving, so polling should stay tight. */
+export function anythingInFlight(state: ImportState | undefined): boolean {
   if (!state) return false;
   return (
-    state.runs.some((run) => run.status === 'running') ||
-    state.entities.some((entity) => entity.status === 'importing')
+    state.runs.some(
+      (run) => run.status === 'running' || run.status === 'importing'
+    ) || state.entities.some((entity) => entity.status === 'importing')
   );
 }
 
