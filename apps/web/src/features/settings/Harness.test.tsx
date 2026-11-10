@@ -39,6 +39,9 @@ vi.mock('./codex/views/CodexHarness', () => ({
   CodexHarness: () => <div data-testid="codex-harness" />,
 }));
 
+vi.mock('./components/pending-requests-section', () => ({
+  PendingRequestsSection: () => null,
+}));
 vi.mock('./components/teammate-runtimes-section', () => ({
   TeammateRuntimesSection: () => null,
 }));
