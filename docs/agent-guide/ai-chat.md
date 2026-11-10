@@ -938,7 +938,8 @@ composer is replaced by a notice headed **Macro Chats are now Agents.**, the
 text **This chat is read-only. Continue it in Agents to keep going.**, and a
 **Continue in Agents** button that opens
 the new-conversation composer (or, without `enable-chat-v3-agents`, a new
-agent session) with the chat mentioned as an unsent draft. A response that was
+agent session) with the unsent draft **Continue this chat:** followed by a
+mention of the chat; no history is copied into it. A response that was
 already streaming when the chat opened shows **Stop** beside it; Ctrl+C also
 stops it. Pending email drafts render read-only with **Email not sent**, and
 pending calendar events as a **Not created** card, with no send, create, or

@@ -115,8 +115,13 @@ async function createAndOpenAgent(seed: {
   return true;
 }
 
+/** Prefixes a read-only chat's mention so the agent knows to read that chat and carry on. */
+const CONTINUE_CHAT_PREFIX = 'Continue this chat: ';
+
 export async function openChatWithAgent(entity: ChatWithAgentEntity) {
-  const input = `${chatAttachmentMentionToMarkdown(buildMention(entity))} `;
+  const mention = `${chatAttachmentMentionToMarkdown(buildMention(entity))} `;
+  const input =
+    entity.type === 'chat' ? `${CONTINUE_CHAT_PREFIX}${mention}` : mention;
   return createAndOpenAgent({ input });
 }
 
