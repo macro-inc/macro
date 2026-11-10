@@ -13,7 +13,7 @@ use std::sync::Mutex;
 use futures::{FutureExt, StreamExt, stream};
 use import_notion::domain::inventory::{all_rows, full_markdown};
 use import_notion::domain::macro_cells::{PeopleMap, capped_name, derived_id};
-use import_notion::domain::model::NotionId;
+use import_notion::domain::model::{NotionId, NotionPage};
 use import_notion::domain::ports::NotionApi;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -350,6 +350,19 @@ pub(super) async fn folder_once<Writer: WorkspaceWriter, Store: WrittenObjects>(
     Ok(folder)
 }
 
+/// Every row of a data source. Fails when Notion stops listing them at its
+/// result cap, so an import never records a partial list as imported.
+pub(super) async fn every_row<Api: NotionApi>(
+    api: &Api,
+    data_source: &NotionId,
+) -> anyhow::Result<Vec<NotionPage>> {
+    let drained = all_rows(api, data_source).await?;
+    if !drained.complete {
+        anyhow::bail!("Notion stopped listing this data source's rows at its result cap");
+    }
+    Ok(drained.rows)
+}
+
 /// Write a task list: a folder of Macro tasks, one per row, shared with the
 /// team with `share`. Returns the folder id. Rows an earlier attempt already
 /// wrote are skipped.
@@ -369,7 +382,7 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
 ) -> anyhow::Result<Uuid> {
-    let rows = all_rows(api, &item.notion_id).await?.rows;
+    let rows = every_row(api, &item.notion_id).await?;
     let tasks_folder = folder_once(
         writer,
         user,

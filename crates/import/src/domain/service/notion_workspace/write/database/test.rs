@@ -89,6 +89,8 @@ impl WrittenObjects for FakeStore {
 struct FakeNotion {
     source: NotionDataSource,
     rows: Vec<NotionPage>,
+    /// Whether the query stops at Notion's result cap after `rows`.
+    truncated: bool,
     bodies: HashMap<NotionId, String>,
     /// How many page bodies were read.
     fetched: Mutex<usize>,
@@ -136,7 +138,11 @@ impl NotionApi for FakeNotion {
     ) -> std::result::Result<RowsPage, NotionError> {
         Ok(RowsPage {
             rows: self.rows.clone(),
-            next: RowsNext::End,
+            next: if self.truncated {
+                RowsNext::Truncated
+            } else {
+                RowsNext::End
+            },
         })
     }
 
@@ -353,6 +359,7 @@ fn notion_row(hex: char, title: &str, properties: Vec<(&str, NotionValue)>) -> N
 #[tokio::test]
 async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pending_relations() {
     let notion = FakeNotion {
+        truncated: false,
         fetched: Mutex::new(0),
         source: NotionDataSource {
             id: id('e'),
@@ -577,6 +584,7 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
 #[tokio::test]
 async fn a_shared_database_is_shared_with_its_row_bodies_folder() {
     let notion = FakeNotion {
+        truncated: false,
         fetched: Mutex::new(0),
         source: NotionDataSource {
             id: id('e'),
@@ -631,6 +639,7 @@ async fn a_shared_database_is_shared_with_its_row_bodies_folder() {
 #[tokio::test]
 async fn a_cancelled_import_stops_before_writing_rows() {
     let notion = FakeNotion {
+        truncated: false,
         fetched: Mutex::new(0),
         source: NotionDataSource {
             id: id('e'),
@@ -675,6 +684,56 @@ async fn a_cancelled_import_stops_before_writing_rows() {
     );
 }
 
+#[tokio::test]
+async fn a_database_whose_rows_notion_truncates_fails_before_writing_rows() {
+    let notion = FakeNotion {
+        truncated: true,
+        fetched: Mutex::new(0),
+        source: NotionDataSource {
+            id: id('e'),
+            database_id: id('f'),
+            title: "Bugs".to_string(),
+            database_parent: NotionParent::Workspace,
+            in_trash: false,
+            properties: Vec::new(),
+        },
+        rows: vec![notion_row('1', "Login fails", vec![])],
+        bodies: HashMap::new(),
+    };
+    let writer = FakeWriter::default();
+    let source_item = source_item("Bugs");
+    let store = FakeStore::default();
+    let user = user();
+    let progress = Progress::new(&store, &user, source_item.import_id, &[]);
+
+    let outcome = write_database(
+        &notion,
+        &writer,
+        &user,
+        &source_item,
+        Uuid::from_u128(42),
+        false,
+        &PeopleMap::new(),
+        &NotionLinks::default(),
+        &progress,
+        &Cancel::default(),
+    )
+    .await;
+
+    assert_eq!(
+        outcome.unwrap_err().to_string(),
+        "Notion stopped listing this data source's rows at its result cap"
+    );
+    let batches = writer.batches.lock().unwrap();
+    assert!(
+        !batches
+            .iter()
+            .flatten()
+            .any(|op| matches!(op, DatabaseOp::Rows { .. })),
+        "no rows were written"
+    );
+}
+
 #[test]
 fn the_page_column_never_takes_a_name_the_data_source_already_uses() {
     let property = |name: &str| NotionPropertySchema {
@@ -693,6 +752,7 @@ fn the_page_column_never_takes_a_name_the_data_source_already_uses() {
 #[tokio::test]
 async fn a_database_whose_rows_have_no_content_gets_no_page_column() {
     let notion = FakeNotion {
+        truncated: false,
         fetched: Mutex::new(0),
         source: NotionDataSource {
             id: id('e'),
@@ -766,6 +826,7 @@ fn inserted(batches: &[Vec<DatabaseOp>]) -> usize {
 async fn a_database_stopped_part_way_through_its_rows_resumes_without_duplicates() {
     // 600 rows: two insert batches, the second lost with its process.
     let notion = FakeNotion {
+        truncated: false,
         fetched: Mutex::new(0),
         source: NotionDataSource {
             id: id('e'),
@@ -845,6 +906,7 @@ async fn a_database_stopped_part_way_through_its_rows_resumes_without_duplicates
 #[tokio::test]
 async fn resumed_row_bodies_are_neither_read_nor_created_again() {
     let notion = FakeNotion {
+        truncated: false,
         fetched: Mutex::new(0),
         source: NotionDataSource {
             id: id('e'),
