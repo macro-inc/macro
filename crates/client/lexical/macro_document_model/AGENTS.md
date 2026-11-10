@@ -77,7 +77,7 @@ nested array nulls, unknown nulls and every nonnull value; never erase the under
 Loro fields. Admit literal null own text only for Await through SyncPolicy;
 keep the value in both editor JSON and Loro, and reject malformed text everywhere else.
 
-- Keep decorator host actions in shared model policy: equation updates change only the expression, and user display names preserve ID keys, attached traversal and source history/selection/scroll tags. Route decorator deletion through the shared sibling/parent selection-restoration helper.
+- Keep decorator host actions in shared model policy: equation updates change only the expression, and user display names preserve ID keys, attached traversal and source history/selection/scroll tags. Route decorator deletion through the shared sibling/parent selection-restoration helper. Require the actual Snapshot type for group-b.snapshot-delete; keep generic deletion semantics separate.
 - Keep media render_revision nonserialized across clone/reparent; actual true setters increment with checked u64 arithmetic even for equal values, while false setters preserve it. Use media-upgrade-url for the Source type-only Historic URL update and retain native media upload freshness checks separately.
 
 Keep source paragraph export rules comparison-only after projected children;

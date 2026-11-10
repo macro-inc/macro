@@ -86,7 +86,8 @@ pub fn register(builder: EditorBuilder, ty: crate::EditorType) -> EditorBuilder 
     let builder = links::register(builder, ty);
     let builder = diff::register(builder);
     let builder = metadata::register(builder);
-    decorator_actions::register(builder)
+    let builder = decorator_actions::register(builder);
+    decorator_content_actions::register(builder)
 }
 
 #[cfg(test)]
@@ -147,6 +148,9 @@ pub fn decode_command(
         return Ok(Some(command));
     }
     if let Some(command) = decorator_actions::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
+    if let Some(command) = decorator_content_actions::decode(name, json, generation)? {
         return Ok(Some(command));
     }
     if let Some(command) = diff::decode(name, json, generation)? {

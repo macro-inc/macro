@@ -68,6 +68,8 @@ fn snapshot_delete_yields_for_other_types_missing_and_stale_keys() -> Result<(),
         tx.append(NodeKey::ROOT, &[parent.key()])?;
         Ok((text.key(), snapshot.key()))
     })?;
+    let before = editor.state().to_json()?;
+    let selection = editor.state().selection().cloned();
     for (index, generation) in [
         (text.index(), text.generation()),
         (u32::MAX, snapshot.generation()),
@@ -84,6 +86,8 @@ fn snapshot_delete_yields_for_other_types_missing_and_stale_keys() -> Result<(),
         assert_eq!(handled, Handled::No);
         assert!(editor.state().view().is_attached(text));
         assert!(editor.state().view().is_attached(snapshot));
+        assert_eq!(editor.state().to_json()?, before);
+        assert_eq!(editor.state().selection(), selection.as_ref());
     }
     Ok(())
 }
