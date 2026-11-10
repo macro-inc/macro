@@ -2,7 +2,10 @@ use axum::{
     Json,
     extract::{Path, State},
 };
-use entity_access::domain::{models::ViewAccessLevel, ports::EntityAccessService};
+use entity_access::domain::{
+    models::{EditAccessLevel, ViewAccessLevel},
+    ports::EntityAccessService,
+};
 use macro_authorization::MacroAuthorizationService;
 use model_error_response::ErrorResponse;
 use serde::{Deserialize, Serialize};
@@ -64,8 +67,8 @@ pub async fn get_handler<
     Ok(Json(ContactPhonesResponse { phones }))
 }
 
-/// Replace the contact's phone numbers. Any team member who can see the
-/// contact may, as with renaming it.
+/// Replace the contact's phone numbers. Access is enforced by
+/// [`CrmContactAccessLevelExtractor`], like adding the contact's email.
 #[utoipa::path(
     put,
     path = "/crm/contacts/{contact_id}/phones",
@@ -78,6 +81,7 @@ pub async fn get_handler<
         (status = 200, body = ContactPhonesResponse),
         (status = 400, body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     ),
@@ -89,7 +93,7 @@ pub async fn set_handler<
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
-    access: CrmContactAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
+    access: CrmContactAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
     State(state): State<CrmRouterState<C, St, Eas, Auth>>,
     Path(contact_id): Path<Uuid>,
     Json(req): Json<SetContactPhonesRequest>,
