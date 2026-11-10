@@ -21,6 +21,7 @@ const editorMocks = vi.hoisted(() => ({
   cursorEnabled: false,
   clear: vi.fn(),
   focus: vi.fn(),
+  blur: vi.fn(),
   mentionUsers: undefined as (() => IUser[]) | undefined,
   emitChange: undefined as ((markdown: string) => void) | undefined,
   onEnter: undefined as (() => boolean) | undefined,
@@ -263,6 +264,7 @@ vi.mock(
       };
       const lexical = {
         focus: vi.fn(),
+        blur: editorMocks.blur,
         dispatchCommand: vi.fn(),
         getElementByKey: vi.fn(),
         getRootElement: vi.fn(),
@@ -412,6 +414,7 @@ describe('Input slots', () => {
     editorMocks.cursorEnabled = false;
     editorMocks.clear.mockClear();
     editorMocks.focus.mockClear();
+    editorMocks.blur.mockClear();
     editorMocks.emitChange = undefined;
     editorMocks.onEnter = undefined;
     editorMocks.inlineMenuOpen = false;
@@ -466,10 +469,13 @@ describe('Input slots', () => {
     editorMocks.inlineMenuOpen = true;
     expect(editorMocks.onEscape?.()).toBe(true);
     expect(closeHost).not.toHaveBeenCalled();
+    expect(editorMocks.blur).not.toHaveBeenCalled();
 
     editorMocks.inlineMenuOpen = false;
     expect(editorMocks.onEscape?.()).toBe(true);
     expect(closeHost).toHaveBeenCalledOnce();
+    // The editor lets go of its selection, so it cannot pull focus back.
+    expect(editorMocks.blur).toHaveBeenCalledOnce();
   });
 
   it('lets Escape continue when there is no menu, dictation, or host handler', () => {

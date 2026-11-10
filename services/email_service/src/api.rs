@@ -4,6 +4,8 @@ pub(crate) mod read_receipts;
 use anyhow::Context;
 use axum::Router;
 use context::ApiContext;
+use macro_tower_layers::MacroRequestIdAndTracingLayer;
+use std::time::Duration;
 use tower::ServiceBuilder;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 use utoipa::OpenApi;
@@ -26,26 +28,23 @@ pub(crate) mod swagger;
 mod test;
 
 const GATEWAY_PATH_PREFIX: &str = "/email";
+/// A request slower than this logs a warning.
+const SLOW_REQUEST: Duration = Duration::from_millis(200);
 
 pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let env = state.config.environment;
     let correlation =
         agent_correlation::inbound::CorrelationState::new(state.db.clone(), state.jwt_args.clone());
     let port = state.config.port;
-    let traced_api = api_router(state.clone())
-        .with_state(state)
-        .layer(axum::middleware::from_fn_with_state(
-            correlation,
-            agent_correlation::inbound::propagate,
-        ))
-        .layer(
-            ServiceBuilder::new()
-                .layer(TraceLayer::new_for_http().make_span_with(request_span))
-                .layer(macro_cors::cors_layer())
-                .layer(CompressionLayer::new().gzip(true)),
-        );
+    let unsubscribe = traced_without_path(
+        email_sequences::inbound::public_unsubscribe::unsubscribe_router(state.sequences.clone()),
+    );
+    let traced_api = traced(api_router(state.clone()).with_state(state).layer(
+        axum::middleware::from_fn_with_state(correlation, agent_correlation::inbound::propagate),
+    ));
     let health = health::router();
-    let app = mount_at_root_and_prefix(traced_api.merge(health)).merge(swagger_ui());
+    let app =
+        mount_at_root_and_prefix(traced_api.merge(unsubscribe).merge(health)).merge(swagger_ui());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
@@ -61,22 +60,49 @@ pub(crate) async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         .context("error starting service")
 }
 
-/// The default request span, with an unsubscribe token kept out of the path.
-fn request_span<B>(request: &axum::http::Request<B>) -> tracing::Span {
-    tracing::debug_span!(
-        "request",
-        method = %request.method(),
-        uri = %redacted_uri(request.uri()),
-        version = ?request.version(),
+/// Wraps the API in the request id, server span, CORS and compression layers.
+/// The server span is the shared INFO-level `http.request` span that adopts an
+/// incoming `traceparent`; tower-http's default span is DEBUG, below the
+/// exporter's filter, so the API would send no server spans.
+fn traced(api: Router) -> Router {
+    api.layer(
+        ServiceBuilder::new()
+            .layer(MacroRequestIdAndTracingLayer::new(SLOW_REQUEST).into_inner())
+            .layer(macro_cors::cors_layer())
+            .layer(CompressionLayer::new().gzip(true)),
     )
 }
 
-fn redacted_uri(uri: &axum::http::Uri) -> String {
-    const UNSUBSCRIBE: &str = "/public/sequences/unsubscribe/";
-    match uri.path().find(UNSUBSCRIBE) {
-        Some(at) => format!("{}{{token}}", &uri.path()[..at + UNSUBSCRIBE.len()]),
-        None => uri.to_string(),
-    }
+/// [`traced`]'s server span without `url.path`, for routes whose path holds a
+/// secret: the public unsubscribe page's token. It records the matched route.
+/// Mail clients call the page, so there is no `traceparent` to adopt.
+fn traced_without_path(page: Router) -> Router {
+    use axum::extract::MatchedPath;
+    use macro_tower_layers::{CustomOnFailure, CustomOnResponse};
+    use tracing::field::Empty;
+
+    page.layer(
+        TraceLayer::new_for_http()
+            .make_span_with(|request: &axum::http::Request<_>| {
+                let span = tracing::info_span!(
+                    "http.request",
+                    otel.kind = "server",
+                    "http.request.method" = %request.method(),
+                    "http.route" = Empty,
+                    "http.response.status_code" = Empty,
+                    latency_ms = Empty,
+                    otel.status_code = Empty,
+                    otel.status_description = Empty,
+                );
+                if let Some(route) = request.extensions().get::<MatchedPath>() {
+                    span.record("http.route", route.as_str());
+                }
+                span
+            })
+            .on_request(())
+            .on_response(CustomOnResponse::new_with_threshold(SLOW_REQUEST))
+            .on_failure(CustomOnFailure),
+    )
 }
 
 fn mount_at_root_and_prefix(inner: Router) -> Router {
@@ -114,11 +140,6 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         )
         // Fetched by recipients' mail clients, so it takes no credentials.
         .route("/opens/{token}", axum::routing::get(read_receipts::pixel))
-        .merge(
-            email_sequences::inbound::public_unsubscribe::unsubscribe_router(
-                state.sequences.clone(),
-            ),
-        )
         .nest("/email", email::router(state))
         .nest("/gmail", gmail::router())
         .nest("/outlook", outlook::router())

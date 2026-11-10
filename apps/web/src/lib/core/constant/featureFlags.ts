@@ -524,6 +524,14 @@ export const enableCrm = defineFlag({
   default: onInDev,
 });
 
+// Emergency stop for CRM contact results in @ mentions and Command K/mobile
+// name searches. Companies and Macro users remain searchable. Off until
+// PostHog enables it; override with VITE_DISABLE_CRM_CONTACT_SEARCH.
+export const disableCrmContactSearch = defineFlag({
+  key: 'disable-crm-contact-search',
+  env: 'DISABLE_CRM_CONTACT_SEARCH',
+});
+
 /** CRM activity tabs and context-aware task composition. Off until opted in. */
 export const enableCrmActivity = defineFlag({
   key: 'enable-crm-activity',
@@ -605,6 +613,14 @@ export const enableGitBlame = defineFlag({
 export const enableInlineAiEditing = defineFlag({
   key: 'inline-ai-editing',
   env: 'INLINE_AI_EDITING',
+  default: onInDev,
+});
+
+// Continue with Microsoft on sign-up, sign-in and the onboarding work step,
+// including the Outlook connect that follows a Microsoft sign-up.
+export const enableMicrosoftSignup = defineFlag({
+  key: 'enable-microsoft-signup',
+  env: 'ENABLE_MICROSOFT_SIGNUP',
   default: onInDev,
 });
 

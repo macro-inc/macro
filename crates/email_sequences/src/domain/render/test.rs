@@ -82,6 +82,14 @@ fn a_step_renders_with_its_thread_subject_footer_and_unsubscribe_link() {
     assert_eq!(reply_subject("RE: Hello"), "RE: Hello");
 }
 
+/// A case: label, sequence name, steps, and the expected problem with its step.
+type Case = (
+    &'static str,
+    &'static str,
+    Vec<Step>,
+    Option<(Problem, Option<usize>)>,
+);
+
 #[test]
 fn validation_table() {
     let ok = || vec![step("Hi", "Body", false), step("", "Again", true)];
@@ -90,7 +98,7 @@ fn validation_table() {
         edit(&mut steps);
         steps
     };
-    let cases: Vec<(&str, &str, Vec<Step>, Option<(Problem, Option<usize>)>)> = vec![
+    let cases: Vec<Case> = vec![
         ("valid", "Name", ok(), None),
         ("blank name", " ", ok(), Some((Problem::NameRequired, None))),
         (

@@ -21,7 +21,6 @@ outbound = [
   "dep:entity_access",
   "dep:filter_ast",
   "dep:item_filters",
-  "dep:macro_uuid",
   "dep:sqlx",
 ]
 
@@ -38,7 +37,7 @@ item_filters = { path = "../item_filters", optional = true, default-features = f
 lazy-regex = { workspace = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
-macro_uuid = { path = "../macro_uuid", optional = true }
+macro_uuid = { path = "../macro_uuid" }
 rand = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }

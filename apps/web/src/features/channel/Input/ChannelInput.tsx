@@ -765,6 +765,9 @@ export function ChannelInput(props: ChannelInputProps) {
       // Block upstream escape handlers when ESC should close inline menus.
       if (markdownEditor.controls.isInlineMenuOpen()) return true;
       if (!props.onEscape) return false;
+      // Lexical's blur, as its own Esc does: it also drops the DOM selection,
+      // which would otherwise pull focus back when the selection next syncs.
+      markdownEditor.lexical.blur();
       props.onEscape();
       return true;
     },

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT requested.contact AS \"contact!\"\nFROM unnest($2::text[]) WITH ORDINALITY AS requested(contact, ordinal)\n-- Keep membership as at most one point-read result per requested ID, rather\n-- than a hashed subplan materializing a high-degree viewer's entire directory.\n-- Pages parse supported ASCII case aliases into canonical IDs. Match those\n-- aliases through the scoped expression indexes, not a scan of the viewer's\n-- neighbors. Preserve raw viewer equality and reject invalid marker casing;\n-- C folding must not turn an invalid Unicode identity into an ASCII member.\nLEFT JOIN LATERAL (\n    SELECT TRUE AS present FROM contacts_connections\n    WHERE user1 = $1\n      AND lower(user2 COLLATE \"C\") = requested.contact\n      AND user2 COLLATE \"C\" LIKE 'macro|%'\n    UNION ALL\n    SELECT TRUE AS present FROM contacts_connections\n    WHERE user2 = $1\n      AND lower(user1 COLLATE \"C\") = requested.contact\n      AND user1 COLLATE \"C\" LIKE 'macro|%'\n    LIMIT 1\n) AS membership ON TRUE\nWHERE requested.contact = $1 OR membership.present IS TRUE\nORDER BY requested.ordinal\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "contact!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a57e5860daf4bc1f5fb22879ca0cc767a5fabc2dbee51764ec58e45978055704"
+}
