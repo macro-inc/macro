@@ -8,7 +8,6 @@ import {
   SubTrigger,
 } from '@core/component/ContextMenu';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
-import BellIcon from '@icon/system/regular/bell.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -86,7 +85,6 @@ export function NotificationMuteMenu(props: NotificationMuteMenuProps) {
       when={!props.muted}
       fallback={
         <MenuItem
-          icon={BellIcon}
           text={props.unmuteLabel}
           disabled={props.disabled}
           onClick={() => {

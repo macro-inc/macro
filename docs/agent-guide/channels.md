@@ -1301,7 +1301,7 @@ offer **Unmute all channels**. These actions affect only the viewer's current
 complete membership, including unloaded and filtered rows, never later additions.
 Built-in lists include joined channels only; Favorites targets channel favorites.
 Bulk writes retain successful chunks on partial failures. Channel row menus use
-the same durations under **Mute notifications**, without a leading mute icon. Preset
+the same durations under **Mute notifications**, without leading mute or unmute icons. Preset
 end dates and times align with the menu's right content edge.
 
 **Add to section** lists eligible sections with checked membership, then New

@@ -4,7 +4,6 @@ import { longPressActivated } from '@core/directive/touchHandler';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isMutedItem } from '@entity/utils/notification';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
-import BellSlashIcon from '@icon/system/regular/bell-slash.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import FunnelIcon from '@icon/system/regular/funnel.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
@@ -147,7 +146,6 @@ export function MobileSectionOptions(props: {
                     else setPage('mute');
                   }}
                 >
-                  <BellSlashIcon class="size-5" />
                   {t(
                     allMuted()
                       ? 'channelSections.unmuteAllChannels'
