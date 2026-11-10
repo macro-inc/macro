@@ -1,7 +1,6 @@
 import clickOutside from '@core/directive/clickOutside';
 import { useCanEdit } from '@core/signal/permissions';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
-import { INSERT_TABLE_COMMAND } from '@lexical/table';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
 import {
@@ -19,7 +18,8 @@ import {
 } from '../../context/FloatingMenuContext';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithSelection } from '../../directive/floatWithSelection';
-import { tablePickerPlugin } from '../../plugins';
+import { createLexicalTablePickerHost } from '../../editing/overlay-hosts/lexical-table-picker';
+import type { TablePickerHost } from '../../editing/overlay-hosts/table-picker';
 import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 
 false && floatWithSelection;
@@ -43,6 +43,18 @@ export function FloatingTableMenu(props: { canEdit?: Accessor<boolean> } = {}) {
   const plugins = () => lexicalWrapper?.plugins;
   const editor = () => lexicalWrapper?.editor;
 
+  return (
+    <HostedFloatingTableMenu
+      canEdit={canEdit}
+      host={createLexicalTablePickerHost(editor, plugins)}
+    />
+  );
+}
+
+export function HostedFloatingTableMenu(props: {
+  canEdit: Accessor<boolean>;
+  host: TablePickerHost;
+}) {
   const [menuOpen, setMenuOpen] = createMenuOpenSignal(
     'table-picker-menu',
     MenuPriority.Low,
@@ -72,22 +84,12 @@ export function FloatingTableMenu(props: { canEdit?: Accessor<boolean> } = {}) {
   });
 
   const insertTable = (rows: number, cols: number) => {
-    editor()?.dispatchCommand(INSERT_TABLE_COMMAND, {
-      columns: `${cols}`,
-      rows: `${rows}`,
-      includeHeaders: false,
-    });
+    props.host.insert(rows, cols);
     resetMenu();
   };
 
   createEffect(() => {
-    const currentPlugins = plugins();
-    if (!currentPlugins) return;
-
-    currentPlugins.useReactive(canEdit, () => {
-      if (!canEdit()) return;
-      return tablePickerPlugin({ onCreateTable: handleCreateTable });
-    });
+    props.host.registerPicker(props.canEdit, handleCreateTable);
   });
 
   const visibleRows = () =>
@@ -104,7 +106,7 @@ export function FloatingTableMenu(props: { canEdit?: Accessor<boolean> } = {}) {
     onSelect: () => insertTable(rows(), cols()),
     onClose: () => {
       resetMenu();
-      editor()?.focus();
+      props.host.focus();
     },
     onOtherKey: (e) => {
       // Typing dismisses the picker and the key goes to the editor.
@@ -128,7 +130,7 @@ export function FloatingTableMenu(props: { canEdit?: Accessor<boolean> } = {}) {
           class="menu-surface p-2 fixed top-0 left-0 z-action-menu cursor-default select-none"
           use:floatWithSelection={{
             selection: untrack(() => window.getSelection()),
-            reactiveOnContainer: editor()?.getRootElement(),
+            reactiveOnContainer: props.host.root(),
           }}
           use:clickOutside={() => resetMenu()}
           on:mousedown={(e) => e.preventDefault()}
