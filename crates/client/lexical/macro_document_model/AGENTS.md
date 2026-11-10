@@ -102,3 +102,5 @@ Stage table key layout facts only around the nested native Key dispatch; restore
 
 
 Run cargo test -p macro_document_model --test sync_styled_cache for the stock Chromium import/attach/update oracle and real Loro peer propagation.
+
+Emit existing ROOT state keys id then documentMetadata after unknown keys only in live profiles installing document metadata; preserve nested unknown values and keep initialization policy separate from export ordering.

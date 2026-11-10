@@ -294,6 +294,7 @@ impl RequiredState {
 #[derive(Clone, Default)]
 pub struct StateLayout {
     pub(crate) entries: Vec<RequiredState>,
+    pub(crate) export_order: &'static [&'static str],
 }
 /// Optional node state; known entries preserve insertion order and value identity.
 #[derive(Clone, Default)]
@@ -547,6 +548,13 @@ impl NodeState {
                 && let Some(value) = values.shift_remove(entry.key.name())
             {
                 json.insert(entry.key.name().to_owned(), value);
+            }
+        }
+        // Order only the completed export, after every native/foreign callback
+        // and flat-field extraction. Unlisted fields keep their relative order.
+        for name in layout.export_order {
+            if let Some((name, value)) = values.shift_remove_entry(*name) {
+                values.insert(name, value);
             }
         }
         if !values.is_empty() {

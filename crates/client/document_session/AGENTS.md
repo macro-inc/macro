@@ -123,3 +123,5 @@ chain and ordinary history grouping. Recheck the host's durable-state generation
 separately before admission: the model publication epoch cannot detect canonical
 Loro advancement. These APIs do not activate asynchronous paste or grant a scope
 that may survive an await.
+
+Pin application ROOT nested-state order against literal Source exports through both direct and fast JSON paths; keep raw fixtures intact and leave unknown-key and non-application defaults unchanged.

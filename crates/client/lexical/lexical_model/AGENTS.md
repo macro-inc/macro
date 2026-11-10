@@ -287,3 +287,5 @@ Keep after-commit worklists borrowed; preserve prior commit structure across all
 hooks in a round and retain accepted prefixes on isolated failures. Run
 `cargo test -p lexical_model --test after_commit_alloc` to check hook-dispatch
 allocation against an unchanged transaction, separately from production timing.
+
+Apply configured nested-state export order only after all known serializers, fresh foreign bindings and flat extraction; retain unlisted order and existing values. Never use export order to register or parse state keys, reorder callbacks or mutate stored state.
