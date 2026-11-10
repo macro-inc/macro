@@ -588,45 +588,98 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
   }
   close(): Promise<void> {
     if (this.closing) return this.closing;
-    this.closing = (async () => {
+    let resolveClose!: () => void;
+    let rejectClose!: (error: unknown) => void;
+    const closing = new Promise<void>((resolve, reject) => {
+      resolveClose = resolve;
+      rejectClose = reject;
+    });
+    this.closing = closing;
+    const finish = async () => {
+      let failure: ExecutorFailure | undefined;
+      const remember = (error: unknown) => {
+        if (!failure) failure = { error };
+        else {
+          try {
+            Telemetry.error(error, { surface: 'session.close.cleanup' });
+          } catch {
+            /* Preserve the original close failure. */
+          }
+        }
+      };
+      const cleanup = (call: () => void) => {
+        try {
+          call();
+        } catch (error) {
+          remember(error);
+        }
+      };
       const terminal = new Promise<void>((resolve) => {
         this.stopped = resolve;
       });
       const input = { ...emptyInput(5), request: 0xffffffff };
-      this.run(() =>
-        this.session.input(
-          SessionInputMsg.encode(input),
-          this.now(),
-          this.clock.wall()
-        )
-      );
       try {
+        this.run(() =>
+          this.session.input(
+            SessionInputMsg.encode(input),
+            this.now(),
+            this.clock.wall()
+          )
+        );
         await terminal;
-        await this.storageQueue;
-        await this.storage.drain();
+      } catch (error) {
+        remember(error);
+      }
+      // Even an aborted Stop/drain cannot release ownership over admitted writes.
+      for (;;) {
+        const queued = this.storageQueue;
+        try {
+          await queued;
+        } catch (error) {
+          remember(error);
+        }
+        try {
+          await this.storage.drain();
+        } catch (error) {
+          remember(error);
+        }
+        if (this.storageQueue === queued) break;
+      }
+      // Required durability completions have settled; do not admit new work
+      // while asynchronous lock release hands ownership to another session.
+      this.closed = true;
+      try {
         await this.lease.release();
+      } catch (error) {
+        remember(error);
+      }
+      cleanup(() =>
         this.channel.postMessage({
           type: 'closing',
           session: this.options.owner,
-        });
-      } finally {
-        this.closed = true;
-        this.channel.close();
-        clearTimeout(this.timer);
-        this.detachRoute?.();
-        this.detachRoute = undefined;
-        this.unsubscribe();
-        globalThis.removeEventListener?.('online', this.online);
-        globalThis.removeEventListener?.('pagehide', this.pagehide);
+        })
+      );
+      cleanup(() => this.channel.close());
+      clearTimeout(this.timer);
+      cleanup(() => this.detachRoute?.());
+      this.detachRoute = undefined;
+      cleanup(() => this.unsubscribe());
+      cleanup(() => globalThis.removeEventListener?.('online', this.online));
+      cleanup(() =>
+        globalThis.removeEventListener?.('pagehide', this.pagehide)
+      );
+      cleanup(() =>
         globalThis.document?.removeEventListener(
           'visibilitychange',
           this.visibility
-        );
-        this.options.telemetry.close();
-        this.session.free();
-      }
-    })();
-    return this.closing;
+        )
+      );
+      cleanup(() => this.options.telemetry.close());
+      cleanup(() => this.session.free());
+      if (failure) throw failure.error;
+    };
+    finish().then(resolveClose, rejectClose);
+    return closing;
   }
 }
 function emptyViewError(): IViewEffectMsg {
