@@ -415,6 +415,35 @@ export type ChannelReplyMetadata = CommonChannelMetadata & {
 export type ChannelType = 'public' | 'private' | 'directMessage' | 'team';
 
 /**
+ * The Claude account a team's Macro computer is signed in to is about to
+ * stop working, or has. Sent to whoever signed it in and to the team's
+ * admins and owner, who can sign it in again from Settings → Runtimes.
+ */
+export type ClaudeSignInExpiryMetadata = {
+    /**
+     * The computer's name when the notice was sent.
+     */
+    computerName: string;
+    /**
+     * When the sign-in expires or expired; absent when Claude rejected it.
+     */
+    expiresAt?: string | null;
+    /**
+     * The computer's harness, whose runtime row holds the sign-in.
+     */
+    harnessId: string;
+    /**
+     * How close the sign-in is to no longer working.
+     */
+    stage: ClaudeSignInExpiryStage;
+};
+
+/**
+ * How close a computer's Claude sign-in is to no longer working.
+ */
+export type ClaudeSignInExpiryStage = 'expires_soon' | 'expires_today' | 'expired';
+
+/**
  * Identity of a document comment or its thread. Comments written before the
  * shared message store carry the legacy numeric ids; comments in the shared
  * store carry the message and root UUIDs.
@@ -1332,6 +1361,13 @@ export type NotifEvent = {
      */
     content: RoutineRunFinishedMetadata;
     tag: 'routine_run_finished';
+} | {
+    /**
+     * The Claude sign-in on one of the team's Macro computers is about
+     * to expire, expired, or was rejected.
+     */
+    content: ClaudeSignInExpiryMetadata;
+    tag: 'claude_sign_in_expiry';
 };
 
 /**
