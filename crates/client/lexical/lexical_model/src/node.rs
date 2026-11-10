@@ -401,6 +401,22 @@ impl sealed::Sealed for DecoratorKind {}
 impl NodeKindMarker for DecoratorKind {
     const KIND: NodeKind = NodeKind::Decorator;
 }
+/// Exact ordered component signature, observed by a consuming view at exposure.
+/// This value is not serialized node state or an eager invalidation counter.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DecoratorRenderSignature(std::sync::Arc<str>);
+impl DecoratorRenderSignature {
+    /// Retain the exact source-ordered signature without normalization or hashing.
+    pub fn new(signature: String) -> Self {
+        Self(signature.into())
+    }
+
+    /// Borrow the exact signature for comparison at the view exposure boundary.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Hooks inherited by decorator node types.
 /// s2: NODE-10, NODE-11
 pub trait DecoratorNode: NodeType<Kind = DecoratorKind> {
@@ -416,6 +432,13 @@ pub trait DecoratorNode: NodeType<Kind = DecoratorKind> {
     /// Clones retain this value; only the node's actual invalidating setter changes it.
     fn render_revision(&self) -> Option<u64> {
         self.as_parent().render_revision()
+    }
+
+    /// Pure source-ordered component signature, independent of individual writes.
+    /// A consuming view compares against its last exposed signature. Nodes using
+    /// this policy must not also return an eager `render_revision`.
+    fn render_signature(&self) -> Result<Option<DecoratorRenderSignature>, Error> {
+        self.as_parent().render_signature()
     }
 
     /// Inherited `is_inline` hook.

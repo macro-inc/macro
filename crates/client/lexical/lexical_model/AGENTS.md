@@ -256,3 +256,6 @@ or invoking public export hooks. Live render lookup must still reject those keys
 
 Keep DecoratorNode::render_revision optional, inherited and nonserialized; preserve
 it through clones and advance it only at actual component-invalidating setters.
+Keep render_signature pure and source-ordered for signature-cached decorators;
+compare it only at consuming-view exposure, never increment a counter per write
+or advertise both signature and eager revision policies for one node.

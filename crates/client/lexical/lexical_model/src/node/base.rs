@@ -331,6 +331,9 @@ impl DecoratorNode for DecoratorBase {
     fn render_revision(&self) -> Option<u64> {
         None
     }
+    fn render_signature(&self) -> Result<Option<DecoratorRenderSignature>, Error> {
+        Ok(None)
+    }
     type Parent = Self;
     fn as_parent(&self) -> &Self {
         self
