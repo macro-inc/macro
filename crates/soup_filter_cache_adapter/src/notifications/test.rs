@@ -11,6 +11,7 @@ use predicate_index::{
 use serde_json::{Value, json};
 use soup_filter_projection::{SoupCacheProjectionSupplement, encode_cache_projection_supplement};
 
+mod lane;
 mod large;
 mod target_type;
 
