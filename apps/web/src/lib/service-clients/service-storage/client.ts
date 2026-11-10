@@ -3074,9 +3074,13 @@ export const storageServiceClient = {
     contactId,
     ...body
   }: { contactId: string } & SetContactPhonesRequest) {
-    return await dssFetch<ContactPhonesResponse>(
-      `/crm/contacts/${contactId}/phones`,
-      { method: 'PUT', body: JSON.stringify(body) }
+    return await fetchWithToken<ContactPhonesResponse, 'BAD_REQUEST'>(
+      `${dssHost}/crm/contacts/${contactId}/phones`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(body),
+        errorResponseHandler: contactEditErrorHandler,
+      }
     );
   },
   async setContactHidden({
