@@ -6,6 +6,8 @@ mod input;
 mod output;
 mod prepared;
 mod remote;
+mod reported_error;
+pub use reported_error::FollowUpErrorObserver;
 mod staging;
 mod text;
 pub use input::*;
@@ -17,6 +19,7 @@ pub struct EditorCore {
     composition: Composition,
     config: CoreConfig,
     initial: Option<Output>,
+    reported_errors: Option<Arc<dyn FollowUpErrorObserver>>,
 }
 impl EditorCore {
     /// Take initial hook commits from the editor. History begins after initialization.
@@ -34,6 +37,7 @@ impl EditorCore {
             composition,
             config,
             initial: None,
+            reported_errors: None,
         };
         if !initial.is_empty() {
             let mut iter = initial.into_iter();
@@ -78,6 +82,10 @@ impl EditorCore {
     /// Check whether an exact listener survived a core replacement.
     pub fn has_command_listener(&self, id: &CommandListenerId) -> bool {
         self.editor.has_command_listener(id)
+    }
+    /// Observe typed follow-up error metadata without changing Output or wire records.
+    pub fn observe_follow_up_errors(&mut self, observer: Arc<dyn FollowUpErrorObserver>) {
+        self.reported_errors = Some(observer);
     }
     /// Current composition ownership.
     pub fn composition(&self) -> Composition {
@@ -401,6 +409,9 @@ impl EditorCore {
             }
             effects.extend(entry.events.iter().cloned().map(Effect::PluginEvent));
             if let Some(failure) = &entry.follow_up_error {
+                if let Some(observer) = &self.reported_errors {
+                    observer.reported(&failure.error, effects.len());
+                }
                 effects.push(Effect::FollowUpFailed {
                     plugin: failure.plugin,
                     kind: failure.error.kind(),

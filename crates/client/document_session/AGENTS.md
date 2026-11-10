@@ -125,3 +125,5 @@ Loro advancement. These APIs do not activate asynchronous paste or grant a scope
 that may survive an await.
 
 Pin application ROOT nested-state order against literal Source exports through both direct and fast JSON paths; keep raw fixtures intact and leave unknown-key and non-application defaults unchanged.
+
+Keep ordinary host listener registration behind the specialized EditorSurface session forwarders, and rebind from actual presence after core replacement. Associate reported typed errors with their exact view-effect push through the optional metadata observer; caught nested callback failures are not reported outer errors.
