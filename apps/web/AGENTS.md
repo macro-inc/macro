@@ -1,5 +1,7 @@
 ## Development Commands
 
+- Wait for an acknowledged native view generation before initial overlay queries; retire and report an unavailable optional overlay without failing document startup.
+
 - Validate native USER menu wiring with the real settled input and shared mention renderer in `editing/browser-test/user-mentions.browser.e2e.ts`; keep remaining mention kinds and service tracking as explicit coverage gaps.
 
 - Preserve Source call-expression order at overlay host seams: capture initial dependencies inside the async action and use lazy payload builders when a callee getter must run before payload getters.

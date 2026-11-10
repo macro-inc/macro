@@ -258,3 +258,66 @@ test('partial root attachment releases real Enter/event registrations and retain
     runtime.root.remove();
   }
 });
+
+test('invalid real query reply disables only the menu and leaves native editing admitted', async () => {
+  const runtime = mount();
+  const menu = createMenuOperations();
+  const unavailable = vi.fn();
+  const query = runtime.port.query.bind(runtime.port);
+  const fault = vi
+    .spyOn(runtime.port, 'query')
+    .mockImplementation((request) => ({
+      ...query(request),
+      text: 'null',
+    }));
+  const dispose = registerNativeMentionSearch(runtime.view, menu, unavailable);
+  try {
+    expect(fault).toHaveBeenCalledTimes(1);
+    expect(unavailable).toHaveBeenCalledExactlyOnceWith(
+      new Error('Invalid native inline-search controller snapshot')
+    );
+    expect(runtime.port.nativeEnter?.hasListeners()).toBe(false);
+    runtime.port.command(CommandCode.InsertText, 0, 0, 'still editable');
+    expect(runtime.root.textContent).toBe('still editablebody');
+    expect(fault).toHaveBeenCalledTimes(1);
+  } finally {
+    dispose();
+    fault.mockRestore();
+    await runtime.close();
+    runtime.root.remove();
+  }
+});
+
+test('optional partial menu attachment retains an opaque failure and releases bindings without closing the document', async () => {
+  const runtime = mount();
+  const menu = createMenuOperations();
+  const unavailable = vi.fn();
+  const add = runtime.root.addEventListener.bind(runtime.root);
+  const fault = vi
+    .spyOn(runtime.root, 'addEventListener')
+    .mockImplementation((name, listener, options) => {
+      if (name === 'beforeinput') throw undefined;
+      add(name, listener, options);
+    });
+  const dispose = registerNativeMentionSearch(runtime.view, menu, unavailable);
+  try {
+    expect(unavailable).toHaveBeenCalledExactlyOnceWith(undefined);
+    expect(runtime.port.nativeEnter?.hasListeners()).toBe(false);
+    fault.mockRestore();
+    runtime.root.dispatchEvent(
+      new KeyboardEvent('keydown', { key: '@', bubbles: true })
+    );
+    runtime.port.command(CommandCode.InsertText, 0, 0, 'literal');
+    expect(runtime.root.textContent).toBe('literalbody');
+    expect(
+      [...runtime.view.mirror.values()].some(
+        (node) => node.type === 'inline-search'
+      )
+    ).toBe(false);
+  } finally {
+    dispose();
+    fault.mockRestore();
+    await runtime.close();
+    runtime.root.remove();
+  }
+});

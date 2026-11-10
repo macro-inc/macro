@@ -487,3 +487,12 @@ before the user renderer context and runtime close. No captured selection is
 restored. The initial USER-only stage leaves all other Source catalog kinds open;
 it must expand to the complete Source configuration before catalog parity is
 claimed.
+
+
+Native overlay installation can precede the document's first projection. A null
+published generation means no query was issued; it is not a controller snapshot.
+Subscribe to actual projection/event lifetime, read the initial snapshot only
+once a generation exists, and preserve every ordered callback afterward. Retire
+pending subscriptions on disposal. Invalid optional menu replies release that
+menu's registrations, close its UI and report telemetry while the document and
+independent overlays remain available; never fabricate a default snapshot.

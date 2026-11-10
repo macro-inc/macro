@@ -2,29 +2,58 @@ import { writeFileSync } from 'node:fs';
 import { expect, type Page, test } from '@playwright/test';
 
 const errors = new WeakMap<Page, string[]>();
+const externalRequests = new WeakMap<Page, string[]>();
 test.beforeEach(async ({ page }) => {
   const failures: string[] = [];
   errors.set(page, failures);
   page.on('pageerror', (error) => failures.push(error.message));
-  await page.routeWebSocket(
-    (url) => url.hostname !== '127.0.0.1',
-    (socket) => socket.close()
-  );
-  await page.route('**/*', (route) =>
-    new URL(route.request().url()).hostname === '127.0.0.1'
-      ? route.continue()
-      : route.abort()
-  );
+  const external: string[] = [];
+  externalRequests.set(page, external);
+  await page.routeWebSocket('**/*', (socket) => {
+    const url = new URL(socket.url());
+    if (url.hostname !== '127.0.0.1') external.push(url.origin);
+    return socket.close();
+  });
+  await page.route('**/*', (route) => {
+    const url = new URL(route.request().url());
+    if (url.hostname !== '127.0.0.1') {
+      external.push(url.origin);
+      return route.abort();
+    }
+    if (url.pathname === '/auth/user/profile_pictures')
+      return route.fulfill({ json: { pictures: [] } });
+    return route.continue();
+  });
 });
 test.afterEach(async ({ page }, info) => {
   await info.attach('actual-menu-page', {
     body: await page.screenshot(),
     contentType: 'image/png',
   });
+  await info.attach('fixture-network-and-page-errors', {
+    body: JSON.stringify(
+      {
+        external: externalRequests.get(page),
+        errors: errors.get(page),
+        boot: await page.evaluate(() => window.nativeUserMenuBoot),
+      },
+      null,
+      2
+    ),
+    contentType: 'application/json',
+  });
+  expect(
+    externalRequests.get(page),
+    'fixture must never request production or another external host'
+  ).toEqual([]);
   expect(errors.get(page)).toEqual([]);
 });
-async function load(page: Page, engine: 'source' | 'native') {
-  await page.goto('/user-mentions.html?engine=' + engine);
+async function load(
+  page: Page,
+  engine: 'source' | 'native' | 'hosted',
+  options = ''
+) {
+  await page.goto('/user-mentions.html?engine=' + engine + options);
   await expect(page.locator('html')).toHaveAttribute('data-ready', 'true');
 }
 async function capture(page: Page) {
@@ -172,3 +201,70 @@ for (const disposed of [false, true]) {
     }
   );
 }
+
+test('actual app factory waits for first projection before querying and opens the native picker', async ({
+  page,
+}) => {
+  await load(page, 'hosted');
+  const boot = await page.evaluate(() => window.nativeUserMenuBoot);
+  expect(boot?.generationAtInstall).toBeNull();
+  expect(boot?.queriesAtInstall).toBe(0);
+  expect(boot?.queryCount).toBe(1);
+  const body = await open(page);
+  await page.keyboard.press('Enter');
+  await expect(body.locator('[data-user-mention]')).toHaveCount(1);
+  expect(await page.evaluate(() => window.nativeUserMenuBoot?.queryCount)).toBe(
+    1
+  );
+});
+
+for (const timing of ['immediate', 'deferred']) {
+  test(
+    'actual app factory keeps document editing when an optional menu snapshot is invalid: ' +
+      timing,
+    async ({ page }) => {
+      const reported = page.waitForEvent('console', {
+        predicate: (message) =>
+          message.type() === 'error' &&
+          message
+            .text()
+            .includes('Invalid native inline-search controller snapshot'),
+      });
+      await load(page, 'hosted', '&invalidSnapshot=' + timing);
+      await reported;
+      const boot = await page.evaluate(() => window.nativeUserMenuBoot);
+      expect(boot?.queryCount).toBe(1);
+      expect(boot?.overlaysAtInstall).toBe(timing === 'deferred');
+      const body = page.getByRole('textbox', { name: 'Body', exact: true });
+      await body.click();
+      await page.keyboard.type('@plain document');
+      await expect(body).toHaveText('@plain document');
+      await expect(page.locator('.menu-surface')).toHaveCount(0);
+      await page.keyboard.press('Enter');
+      await expect(body.locator('p')).toHaveCount(2);
+      await page.keyboard.type('still editable');
+      await expect(body).toContainText('still editable');
+      expect(
+        await page.evaluate(() => window.nativeUserMenuBoot?.queryCount)
+      ).toBe(1);
+    }
+  );
+}
+
+test('actual app factory disposes pending menu before first projection without querying', async ({
+  page,
+}) => {
+  await load(page, 'hosted', '&closeBeforeProjection=1');
+  const boot = await page.evaluate(() => window.nativeUserMenuBoot);
+  expect(boot?.generationAtInstall).toBeNull();
+  expect(boot?.queriesAtInstall).toBe(0);
+  expect(boot?.queryCount).toBe(0);
+  const body = page.getByRole('textbox', { name: 'Body', exact: true });
+  await body.click();
+  await page.keyboard.type('@ordinary text');
+  await expect(body).toHaveText('@ordinary text');
+  await expect(page.locator('.menu-surface')).toHaveCount(0);
+  expect(await page.evaluate(() => window.nativeUserMenuBoot?.queryCount)).toBe(
+    0
+  );
+});
