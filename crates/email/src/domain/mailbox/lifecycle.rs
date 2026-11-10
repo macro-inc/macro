@@ -8,6 +8,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use models_email::service::pubsub::DeletionReason;
 use serde::{Deserialize, Serialize};
 
+mod deleted_user;
+pub use deleted_user::{InboxDeletionQueue, UserInboxDeletionError};
+
 #[derive(Debug, thiserror::Error)]
 pub enum InboxLifecycleError {
     #[error("inbox not found")]
