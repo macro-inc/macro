@@ -63,6 +63,7 @@ async fn startup_without_agents_serves_model_probes_and_stop_closes_the_runtime(
     let credentials = HarnessCredentials {
         harness_id: harness_id::HarnessId::TEST_A,
         token: "mhns_test".to_owned(),
+        pairing_id: None,
     };
     let storage_task = tokio::spawn(async move {
         let (mut socket, _) = storage.accept().await.unwrap();
@@ -177,6 +178,7 @@ async fn a_handed_off_agent_keeps_running_and_streaming_under_the_next_daemon() 
     let credentials = HarnessCredentials {
         harness_id: harness_id::HarnessId::TEST_A,
         token: "mhns_test".to_owned(),
+        pairing_id: None,
     };
     tokio::spawn(serve_storage(storage));
 

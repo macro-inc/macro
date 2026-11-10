@@ -38,8 +38,13 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   minutes. `--root` (hidden) prefixes system paths for tests. Enrollment
   writes only the config, the credential and its markers: no systemd units,
   users or anything under `/etc`, which is read-only on the NixOS guest (the
-  image declares every unit). The marker lives on the data disk, so an image
-  update skips enrollment and macrod reconnects with its stored credential.
+  image declares every unit). The marker (`<computer id>\n<generation>`)
+  lives on the data disk, so an image update finds it and macrod reconnects
+  with its stored credential. A newer generation (a guest recreated on the
+  old disk) or a marker-less disk enrolls again; the credential records the
+  pairing it was claimed from (`credentials.pairing_id`), so only a new
+  pairing is claimed, and nothing else on the disk is touched. No enrollment
+  in the source (removed after macrod connects) with a marker means enrolled.
 - `src/capabilities.rs`: on an enrolled Macro computer only (the marker
   exists), reports `HarnessCapabilities` (`screen` = Xvnc on
   `127.0.0.1:5900`, and `claude` = the Claude sign-in, both probed once a

@@ -5,13 +5,20 @@
 //! Incus guest API on VMs, or a file in Docker. Enrolling writes `macrod.toml`
 //! for the deployment it names and claims the pre-approved harness pairing.
 //! Every step is safe to re-run until the enrolled marker exists.
+//!
+//! The marker records the computer and its enrollment generation, and lives
+//! on the data disk. A guest recreated on that disk is handed a newer
+//! generation, so enrollment runs again: it claims the new pairing and
+//! rewrites the config's deployment and credential, leaving the rest of the
+//! disk alone. A marker at least as new as the enrollment, or no enrollment
+//! (the control plane removes it once macrod connects), means enrolled.
 
 use std::os::unix::fs::{MetadataExt as _, OpenOptionsExt as _, PermissionsExt as _};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::{Duration, Instant};
 
-use hosted_runtimes::domain::enrollment::{Enrollment, INCUS_ENROLLMENT_KEY};
+use hosted_runtimes::domain::enrollment::{Enrollment, EnrollmentGeneration, INCUS_ENROLLMENT_KEY};
 use rootcause::prelude::ResultExt as _;
 
 use crate::capabilities::ENROLLED_MARKER;
@@ -109,7 +116,8 @@ impl Host for SystemHost {
     }
 }
 
-/// Enroll this computer; an enrolled one (the marker exists) is left as it is.
+/// Enroll this computer, or enroll it again for a newer enrollment
+/// generation; an enrolled one is left as it is.
 pub async fn run_enroll(options: EnrollOptions) -> rootcause::Result<()> {
     run_enroll_with_host(options, &SystemHost).await
 }
@@ -120,12 +128,27 @@ async fn run_enroll_with_host(options: EnrollOptions, host: &impl Host) -> rootc
         root: options.root.clone(),
     };
     let marker = paths.at(ENROLLED_MARKER);
-    if marker.exists() {
-        tracing::info!(marker = %marker.display(), "already enrolled");
-        return Ok(());
-    }
-
-    let enrollment = read_enrollment(&options.from, &paths).await?;
+    let enrolled = read_marker(&marker)?;
+    let enrollment = match (read_enrollment(&options.from, &paths).await?, enrolled) {
+        (None, Some(_)) => {
+            tracing::info!(marker = %marker.display(), "already enrolled");
+            return Ok(());
+        }
+        (Some(enrollment), Some(generation)) if generation >= enrollment.generation => {
+            tracing::info!(marker = %marker.display(), "already enrolled");
+            return Ok(());
+        }
+        (Some(enrollment), _) => enrollment,
+        (None, None) => rootcause::bail!(
+            "missing enrollment: {}",
+            match &options.from {
+                EnrollmentSource::Incus =>
+                    format!("set the {INCUS_ENROLLMENT_KEY} Incus instance config key"),
+                EnrollmentSource::File(path) =>
+                    format!("write the Enrollment JSON to {}", path.display()),
+            }
+        ),
+    };
     // Parent before entering so enrollment joins the setup trace.
     let span = tracing::info_span!(
         "run_enroll",
@@ -172,30 +195,65 @@ async fn enroll(
             0o644,
         )?;
     }
-    std::fs::write(marker, enrollment.computer_id.to_string())
-        .context(format!("could not write {}", marker.display()))?;
+    std::fs::write(
+        marker,
+        format!(
+            "{}\n{}\n",
+            enrollment.computer_id,
+            enrollment.generation.get()
+        ),
+    )
+    .context(format!("could not write {}", marker.display()))?;
     tracing::info!("enrolled");
     Ok(())
 }
 
+/// The generation the marker records; `None` when not enrolled. A marker
+/// without one is from before generations were recorded and counts as older
+/// than any enrollment.
+fn read_marker(marker: &Path) -> rootcause::Result<Option<EnrollmentGeneration>> {
+    let contents = match std::fs::read_to_string(marker) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        contents => contents.context(format!("could not read {}", marker.display()))?,
+    };
+    Ok(Some(EnrollmentGeneration::new(
+        contents
+            .lines()
+            .nth(1)
+            .and_then(|line| line.trim().parse().ok())
+            .unwrap_or(0),
+    )))
+}
+
+/// The enrollment, or `None` when its source holds none.
 async fn read_enrollment(
     source: &EnrollmentSource,
     paths: &SystemPaths,
-) -> rootcause::Result<Enrollment> {
+) -> rootcause::Result<Option<Enrollment>> {
     let raw = match source {
-        EnrollmentSource::File(path) => {
-            zeroize::Zeroizing::new(std::fs::read_to_string(path).context(format!(
+        EnrollmentSource::File(path) => match std::fs::read_to_string(path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Ok(raw) if raw.trim().is_empty() => return Ok(None),
+            raw => zeroize::Zeroizing::new(raw.context(format!(
                 "could not read the enrollment at {}",
                 path.display()
-            ))?)
-        }
-        EnrollmentSource::Incus => read_incus_enrollment(&paths.at(INCUS_SOCKET)).await?,
+            ))?),
+        },
+        EnrollmentSource::Incus => match read_incus_enrollment(&paths.at(INCUS_SOCKET)).await? {
+            Some(raw) => raw,
+            None => return Ok(None),
+        },
     };
-    Ok(serde_json::from_str(&raw).context("the enrollment is not valid Enrollment JSON")?)
+    Ok(Some(
+        serde_json::from_str(&raw).context("the enrollment is not valid Enrollment JSON")?,
+    ))
 }
 
-/// `GET /1.0/config/<key>` on the guest API answers the raw value.
-async fn read_incus_enrollment(socket: &Path) -> rootcause::Result<zeroize::Zeroizing<String>> {
+/// `GET /1.0/config/<key>` on the guest API answers the raw value, or 404
+/// once the control plane has removed it.
+async fn read_incus_enrollment(
+    socket: &Path,
+) -> rootcause::Result<Option<zeroize::Zeroizing<String>>> {
     let http = reqwest::Client::builder()
         .unix_socket(socket)
         .timeout(INCUS_TIMEOUT)
@@ -212,6 +270,9 @@ async fn read_incus_enrollment(socket: &Path) -> rootcause::Result<zeroize::Zero
             socket.display()
         ))?;
     let status = response.status();
+    if status == reqwest::StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
     let body = zeroize::Zeroizing::new(
         response
             .text()
@@ -221,7 +282,7 @@ async fn read_incus_enrollment(socket: &Path) -> rootcause::Result<zeroize::Zero
     if !status.is_success() {
         rootcause::bail!("the Incus guest API answered {status} for {INCUS_ENROLLMENT_KEY}");
     }
-    Ok(body)
+    Ok(Some(body))
 }
 
 /// The deployment URLs `macrod.toml` stores, from the enrollment's typed
@@ -269,16 +330,15 @@ fn write_config(
     Ok(())
 }
 
-/// Claim the pre-approved pairing unless a credential is already stored,
-/// which is what a retried enrollment finds.
+/// Claim the pre-approved pairing unless the stored credential was claimed
+/// from it, which is what a retried enrollment finds. A credential from an
+/// earlier enrollment's pairing is replaced.
 #[tracing::instrument(name = "macrod.enroll.claim", skip_all, fields(attempts = tracing::field::Empty), err)]
 async fn ensure_credentials(path: &Path, enrollment: &Enrollment) -> rootcause::Result<()> {
     let config = Config::load(path)?;
-    if config
-        .credentials
-        .as_ref()
-        .is_some_and(HarnessCredentials::is_valid)
-    {
+    if config.credentials.as_ref().is_some_and(|credentials| {
+        credentials.is_valid() && credentials.pairing_id == Some(enrollment.pairing_id)
+    }) {
         tracing::info!("credential already stored; skipping the claim");
         return Ok(());
     }
@@ -293,6 +353,10 @@ async fn ensure_credentials(path: &Path, enrollment: &Enrollment) -> rootcause::
             .await
         {
             Ok(ClaimStatus::Claimed(credentials)) => {
+                let credentials = HarnessCredentials {
+                    pairing_id: Some(enrollment.pairing_id),
+                    ..credentials
+                };
                 ConfigForm::load(path)?.persist_credentials(&credentials)?;
                 tracing::info!(harness_id = %credentials.harness_id, "pairing claimed");
                 return Ok(());

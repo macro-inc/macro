@@ -79,6 +79,7 @@ fn reconfigures_without_dropping_credentials() {
     let credentials = HarnessCredentials {
         harness_id: HarnessId::TEST_A,
         token: "mhns_test_secret".to_owned(),
+        pairing_id: None,
     };
     ConfigForm::load(&path)
         .expect("load form")

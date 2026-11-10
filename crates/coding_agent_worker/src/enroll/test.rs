@@ -85,7 +85,7 @@ async fn enrollment_reads_from_a_file_and_the_incus_guest_api() {
         read_enrollment(&EnrollmentSource::File(file), &paths)
             .await
             .unwrap(),
-        enrollment()
+        Some(enrollment())
     );
 
     let socket = paths.at(INCUS_SOCKET);
@@ -110,7 +110,7 @@ async fn enrollment_reads_from_a_file_and_the_incus_guest_api() {
         read_enrollment(&EnrollmentSource::Incus, &paths)
             .await
             .unwrap(),
-        enrollment()
+        Some(enrollment())
     );
     let request = server.await.unwrap();
     assert!(
@@ -142,6 +142,7 @@ path = "/"
 [credentials]
 harness_id = "00000000-0000-0000-0000-0000000000a1"
 token = "mhns_claimed"
+pairing_id = "00000000-0000-0000-0000-00000000000a"
 "#,
     )
     .unwrap();
@@ -265,4 +266,106 @@ path = "/"
         crate::outbound::pairing::ClaimStatus::Pending
     ));
     server.verify().await;
+}
+
+#[tokio::test]
+async fn a_marker_as_new_as_the_enrollment_is_left_alone() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let marker = directory.path().join("var/lib/macrod/enrolled");
+    std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+    std::fs::write(&marker, "00000000-0000-0000-0000-00000000000c\n1\n").unwrap();
+    let source = directory.path().join("enrollment.json");
+    std::fs::write(&source, ENROLLMENT_JSON).unwrap();
+    let config = directory.path().join("macrod.toml");
+    std::fs::write(&config, "existing config").unwrap();
+    run_enroll_with_host(
+        EnrollOptions {
+            from: EnrollmentSource::File(source),
+            config: config.clone(),
+            workspace: directory.path().join("work"),
+            agent: "claude-code".to_owned(),
+            root: directory.path().to_owned(),
+        },
+        &FakeHost::default(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(std::fs::read_to_string(config).unwrap(), "existing config");
+}
+
+/// A guest recreated on its old data disk: the marker and credential are
+/// from generation 1, the enrollment is generation 2 with a new pairing.
+#[tokio::test]
+async fn a_newer_generation_enrolls_again_and_claims_its_pairing() {
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{method, path},
+    };
+    let server = MockServer::start().await;
+    // Gone ends the claim at once; reaching it shows the new pairing was claimed.
+    Mock::given(method("POST"))
+        .and(path(
+            "/dss/harness-pairings/00000000-0000-0000-0000-00000000000b/claim",
+        ))
+        .respond_with(ResponseTemplate::new(410))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let directory = tempfile::tempdir().expect("temp dir");
+    let marker = directory.path().join("var/lib/macrod/enrolled");
+    std::fs::create_dir_all(marker.parent().unwrap()).unwrap();
+    std::fs::write(&marker, "00000000-0000-0000-0000-00000000000c\n1\n").unwrap();
+    let home_file = directory.path().join("work/notes.txt");
+    std::fs::create_dir_all(home_file.parent().unwrap()).unwrap();
+    std::fs::write(&home_file, "keep me").unwrap();
+    let config = directory.path().join("macrod.toml");
+    std::fs::write(
+        &config,
+        r#"
+[macro]
+api_url = "http://127.0.0.1:9/agent-harness"
+storage_url = "http://127.0.0.1:9/dss"
+
+[harness]
+command = "claude-code-acp"
+
+[workspace]
+path = "/"
+
+[credentials]
+harness_id = "00000000-0000-0000-0000-0000000000a1"
+token = "mhns_from_generation_one"
+pairing_id = "00000000-0000-0000-0000-00000000000a"
+"#,
+    )
+    .unwrap();
+    let mut enrollment: serde_json::Value = serde_json::from_str(ENROLLMENT_JSON).unwrap();
+    enrollment["generation"] = serde_json::json!(2);
+    enrollment["pairing_id"] = serde_json::json!("00000000-0000-0000-0000-00000000000b");
+    enrollment["deployment"]["document_storage_url"] =
+        serde_json::json!(format!("{}/dss", server.uri()));
+    let source = directory.path().join("enrollment.json");
+    std::fs::write(&source, enrollment.to_string()).unwrap();
+
+    let error = run_enroll_with_host(
+        EnrollOptions {
+            from: EnrollmentSource::File(source),
+            config: config.clone(),
+            workspace: directory.path().join("work"),
+            agent: "claude-code".to_owned(),
+            root: directory.path().to_owned(),
+        },
+        &FakeHost::default(),
+    )
+    .await
+    .unwrap_err();
+
+    assert!(error.to_string().contains("cannot be claimed"), "{error}");
+    server.verify().await;
+    // The old enrollment is not marked done again, and the disk is untouched.
+    assert_eq!(
+        std::fs::read_to_string(&marker).unwrap(),
+        "00000000-0000-0000-0000-00000000000c\n1\n"
+    );
+    assert_eq!(std::fs::read_to_string(home_file).unwrap(), "keep me");
 }

@@ -14,6 +14,7 @@ fn test_client(storage_url: &str) -> EventStreamClient {
         &HarnessCredentials {
             harness_id: HarnessId::TEST_A,
             token: "mhns_test".to_owned(),
+            pairing_id: None,
         },
     )
 }

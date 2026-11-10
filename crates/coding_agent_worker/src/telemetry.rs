@@ -64,7 +64,7 @@ pub(crate) fn install() -> Telemetry {
         }));
     let computer_id = std::fs::read_to_string("/var/lib/macrod/enrolled")
         .ok()
-        .and_then(|value| uuid::Uuid::parse_str(value.trim()).ok());
+        .and_then(|value| uuid::Uuid::parse_str(value.lines().next()?.trim()).ok());
     let provider = OtelExporterOtlpEndpoint::new().map(|endpoint| {
         let exporter = opentelemetry_otlp::SpanExporter::builder()
             .with_tonic()
