@@ -150,7 +150,12 @@ pub(super) async fn imported_call_people(
     .into_iter()
     .map(|row| CallGuest {
         email: row.email,
-        phone: row.phone,
+        // CRM matches numbers as E.164; the import port takes them as written.
+        phone: row
+            .phone
+            .as_deref()
+            .and_then(PhoneNumber::parse)
+            .map(String::from),
     })
     .collect();
     // An unparsable owner names nobody to match; the guests still link.

@@ -208,7 +208,8 @@ async fn an_attendee_with_an_account_is_a_participant_not_a_guest(
             user_id: None,
             display_name: Some("Caller".into()),
             email: None,
-            phone: Some("+1555010".into()),
+            // The import port takes numbers as the provider wrote them.
+            phone: Some("+1 555 010".into()),
             external_id: None,
             attendance: vec![],
         },
@@ -266,7 +267,7 @@ async fn an_attendee_with_an_account_is_a_participant_not_a_guest(
             (None, Some("+1555010".into())),
             (Some("ada@example.com".into()), None),
         ],
-        "only guests are matched to CRM records"
+        "only guests are matched to CRM records, by E.164 number"
     );
     Ok(())
 }
