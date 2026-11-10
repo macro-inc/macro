@@ -95,8 +95,10 @@ durable queue, or activity in the last hour (`modified_at`, or the listing's
 (`service/reattach.rs`). Every attach to an external runtime on a replica (a
 dial's restore, a prompt or delivery reconnecting a detached session,
 notification recovery) takes a permit from one `AttachBudget`
-(`domain/attach_budget.rs`), held until the session's `session/load` or
-`session/resume` finishes or `ATTACH_PERMIT_HOLD` runs out. User prompts draw on
+(`domain/attach_budget.rs`) in `reconnect`, on the session's worker, so no permit
+is held while waiting in a worker queue. It is held until the session's
+`session/load` or `session/resume` finishes or `ATTACH_PERMIT_HOLD` (the actor's
+`HANDSHAKE_TIMEOUT` plus a margin) runs out. User prompts draw on
 a reserved share background attaches cannot take, and background attaches queue
 per harness first, so one runtime's storm cannot starve another's. Managed
 container resumes are not budgeted. The `agent.runtime.attach_permit` span
