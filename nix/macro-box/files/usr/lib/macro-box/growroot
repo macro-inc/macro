@@ -1,8 +1,0 @@
-#!/bin/sh
-set -eu
-part="$(findmnt -no SOURCE /)"
-disk="/dev/$(lsblk -no PKNAME "$part")"
-number="$(cat "/sys/class/block/$(basename "$part")/partition")"
-# growpart exits 1 with NOCHANGE when the partition already fills the disk.
-growpart "$disk" "$number" || [ $? -eq 1 ]
-resize2fs "$part"

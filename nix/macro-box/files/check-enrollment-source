@@ -1,6 +1,4 @@
-#!/bin/sh
 # Fails macrod-enroll with a readable reason before macrod runs.
-set -eu
 case "${MACRO_ENROLL_FROM:-}" in
   incus)
     if [ ! -S /dev/incus/sock ]; then
@@ -27,7 +25,7 @@ case "${MACRO_ENROLL_FROM:-}" in
     fi
     ;;
   *)
-    echo "macrod-enroll: MACRO_ENROLL_FROM='${MACRO_ENROLL_FROM:-}' in /etc/macro/enroll.env is not 'incus' or 'file:<path>'" >&2
+    echo "macrod-enroll: MACRO_ENROLL_FROM='${MACRO_ENROLL_FROM:-}' (macro.box.enrollFrom) is not 'incus' or 'file:<path>'" >&2
     exit 1
     ;;
 esac
