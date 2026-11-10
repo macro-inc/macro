@@ -76,6 +76,7 @@ members = [
   "crates/google_token",
   "crates/graphql_activity",
   "crates/graphql_calendar",
+  "crates/graphql_contacts",
   "crates/graphql_channel",
   "crates/graphql_common",
   "crates/graphql_databases",
@@ -136,6 +137,7 @@ members = [
   "crates/reminders",
   "crates/email_sequences",
   "crates/search_service",
+  "crates/subsequence_match",
   "crates/skills",
   "crates/slack_integration",
   "crates/soup_filter_cache_adapter",
@@ -214,6 +216,7 @@ members = [
 ]
 
 [workspace.dependencies]
+macro_user_id = { path = "crates/macro_user_id" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
@@ -396,7 +399,7 @@ reqwest = { version = "0.13", default-features = false, features = [
   "json",
   "rustls",
 ] }
-rmcp = "1.6.0"
+rmcp = "3.9.0"
 skrifa = { version = "0.48", default-features = false, features = ["std"] }
 sse-stream = "0.2"
 rootcause = { version = "0.12", features = ["compat-anyhow1"] }

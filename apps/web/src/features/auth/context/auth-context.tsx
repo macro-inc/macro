@@ -14,7 +14,7 @@ export type AuthSession =
   | { t: 'signed-out' }
   | { t: 'signed-in'; user: AuthUser };
 
-export type SsoProvider = 'google' | 'apple';
+export type SsoProvider = 'google' | 'microsoft' | 'apple';
 export type AuthIntent = 'login' | 'signup' | 'agent-signup';
 
 export type SendCodeResult =

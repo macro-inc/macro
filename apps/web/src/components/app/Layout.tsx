@@ -274,7 +274,8 @@ export function AppChrome(props: ParentProps) {
   // Route mailto: links (via openExternalUrl) to the in-app email composer.
   registerMailtoComposerHandler();
   useNewOnboardingRedirect();
-  const systemStatus = useBannerStatus();
+  const { status: systemStatus, dismiss: dismissSystemStatus } =
+    useBannerStatus();
 
   const companyDialogUsed = hasOpened(companyCreation.open);
   const contactDialogUsed = hasOpened(
@@ -347,7 +348,9 @@ export function AppChrome(props: ParentProps) {
         </Show>
       </Suspense>
       <Show when={systemStatus()}>
-        {(status) => <StatusBanner {...status()} />}
+        {(status) => (
+          <StatusBanner {...status()} onDismiss={dismissSystemStatus} />
+        )}
       </Show>
       {/* The banner already sits below the status bar on touch devices. */}
       <div

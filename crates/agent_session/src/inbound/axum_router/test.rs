@@ -449,7 +449,7 @@ impl BotDirectory for OneBotDirectory {
 
 /// What a requester says when no runtime creates the session.
 const RUNTIME_UNAVAILABLE_REASON: &str =
-    "this agent's runtime did not open the session; make sure macrod is running and up to date";
+    "this agent's machine did not open the session; make sure macrod is running and up to date";
 
 /// Stands in for the bot's runtime: records what was asked and answers with
 /// a session under the requested id, as macrod would have created it.
