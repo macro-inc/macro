@@ -607,21 +607,30 @@ impl IdeaRepo for PgIdeaRepo {
         entity_type: EntityType,
         entity_id: &str,
     ) -> Result<Vec<OpenTarget>, Self::Err> {
+        // Every event of every person asks this: bounded, and the item's
+        // targets found by their index first whatever the statistics say
+        // (`OFFSET 0` keeps the planner from flattening the subquery).
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *tx)
+            .await?;
         let rows = sqlx::query!(
             r#"SELECT i.id, i.user_id, i.created_at, t.part_id, e.action AS "action?"
-               FROM idea_target t
+               FROM (SELECT idea_id, part_id, position FROM idea_target
+                     WHERE entity_type = $1 AND entity_id = $2 AND role = $3
+                     OFFSET 0) t
                JOIN idea i ON i.id = t.idea_id
                LEFT JOIN idea_entity e ON e.idea_id = i.id
-               WHERE t.entity_type = $1 AND t.entity_id = $2 AND t.role = $3
-                 AND i.state = ANY($4)
+               WHERE i.state = ANY($4)
                ORDER BY i.id, t.position"#,
             entity_type.as_ref(),
             entity_id,
             TargetRole::About.as_ref(),
             &open_states(),
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut *tx)
         .await?;
+        tx.commit().await?;
         let targets = rows.into_iter().filter_map(|row| {
             let id = row.id;
             let target = (|| -> Result<OpenTarget, PgIdeaRepoError> {
