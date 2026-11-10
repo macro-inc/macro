@@ -717,8 +717,12 @@ pub async fn build(
         .map(|service| tokio::spawn(granola_sync::inbound::run_worker(service.clone())));
 
     // Dialpad grants live in Macro Connect; without its key, sync is off.
+    let connect_key = config
+        .connect_customer_key
+        .value()
+        .filter(|key| !key.is_empty());
     let dialpad_sync: Option<Arc<dyn dialpad_sync::domain::service::SyncService>> =
-        match config.connect_customer_key.value().filter(|key| !key.is_empty()) {
+        match connect_key {
             Some(key) => {
                 let grants = dialpad_sync::outbound::connect::ConnectGrants::new(
                     macro_service_urls::ConnectApiUrl::new()?.as_ref(),
