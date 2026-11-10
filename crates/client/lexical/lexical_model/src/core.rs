@@ -62,6 +62,23 @@ impl EditorCore {
     pub fn editor(&self) -> &Editor {
         &self.editor
     }
+    /// Add an ordinary host listener to this core's real editor command list.
+    pub fn register_command_listener(
+        &mut self,
+        registration: CommandRegistration,
+        callback: Arc<dyn CommandListener>,
+    ) -> CommandListenerId {
+        self.editor
+            .register_command_listener(registration, callback)
+    }
+    /// Remove an exact ordinary listener without applying a model input.
+    pub fn unregister_command_listener(&mut self, id: &CommandListenerId) {
+        self.editor.unregister_command_listener(id);
+    }
+    /// Check whether an exact listener survived a core replacement.
+    pub fn has_command_listener(&self, id: &CommandListenerId) -> bool {
+        self.editor.has_command_listener(id)
+    }
     /// Current composition ownership.
     pub fn composition(&self) -> Composition {
         self.composition
