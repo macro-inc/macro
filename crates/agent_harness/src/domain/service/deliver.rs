@@ -3,6 +3,26 @@
 
 use super::*;
 
+/// How long a session goes without user-visible activity before it is idle:
+/// a runtime's dial no longer restores it, and its live transport is released.
+const IDLE_SESSION_AFTER: chrono::TimeDelta = chrono::TimeDelta::hours(1);
+
+/// Whether nobody has touched `session` for [`IDLE_SESSION_AFTER`].
+/// `modified_at` moves with every turn start, stop and block.
+fn is_idle(session: &AgentSession) -> bool {
+    chrono::Utc::now() - session.modified_at >= IDLE_SESSION_AFTER
+}
+
+/// What a runtime's dial does with a session it listed.
+pub(super) enum DialReattach {
+    /// Restore it now.
+    Eager,
+    /// Leave it to bind on its next prompt or delivery.
+    Lazy,
+    /// Already attached, archived, or not an external session.
+    Skip,
+}
+
 enum NotificationRecovery {
     Pending,
     Running,
@@ -130,6 +150,38 @@ where
         self.reconnect(session_id).await?;
         tracing::Span::current().record("agent.session.reattached", true);
         Ok(true)
+    }
+
+    /// What a runtime's dial does with one of the sessions it listed.
+    ///
+    /// Only work that would otherwise wait is restored at dial time: a
+    /// command in flight here, a durable queue nobody else dispatches, or a
+    /// session touched recently enough that its runtime may still be working
+    /// in it. Everything else binds on its next prompt or delivery, which
+    /// reconnects a detached session anyway; durable notifications and
+    /// conversation recovery reach theirs through their own sweeps.
+    pub(super) async fn dial_reattach(&self, session_id: AgentSessionId) -> Result<DialReattach> {
+        if self.sessions.attached_mcp_servers(session_id).is_some() {
+            return Ok(DialReattach::Skip);
+        }
+        let session = self.sessions.get_session(session_id).await?;
+        if session.is_archived()
+            || AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::External
+        {
+            return Ok(DialReattach::Skip);
+        }
+        if self.busy.is_pending(session_id) || !is_idle(&session) {
+            return Ok(DialReattach::Eager);
+        }
+        if !self
+            .sessions
+            .list_queued_actions(session_id)
+            .await?
+            .is_empty()
+        {
+            return Ok(DialReattach::Eager);
+        }
+        Ok(DialReattach::Lazy)
     }
 
     /// Reconcile a prior invocation before deciding whether a batch may run.

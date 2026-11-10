@@ -75,7 +75,14 @@ and ACP `session/list`, and `AgentHarnessService::reattach_live_sessions` runs
 `HarnessCommand::Reattach` for the listed sessions bound to that harness,
 restoring each (`session/load` or `session/resume`) without a prompt, then
 dispatching whatever its durable queue still holds when no turn is running;
-attached, archived and managed sessions are skipped. macrod's herdr-acp lists native
+attached, archived and managed sessions are skipped. Only sessions with a command
+in flight, a durable queue, or `modified_at` within the last hour are restored at
+dial time; idle ones bind on their next prompt or delivery, so a runtime listing
+hundreds of sessions cannot stampede a replica. At most `REATTACH_CONCURRENCY`
+attaches run at once, and one that fails is retried with jittered backoff while
+the runtime stays connected. An attach returns once the actor starts; its
+`session/load` or `session/resume` finishes on the actor. The `agent.runtime.reattach` span counts
+eager, lazy, skipped and failed sessions. macrod's herdr-acp lists native
 sessions whose Herdr agent still runs.
 
 Durable system events use the `agent_session` outbox, distinct from the user
