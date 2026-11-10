@@ -66,7 +66,9 @@ files; the [style guide](docs/development/style-guide.md) indexes them.
   ask.
 - **CS-26** Reuse before reimplementing. If the logic plausibly exists (service
   clients, permission checks, OAuth utilities, the `agent` crate), find it and
-  reuse or extract it instead of writing a second copy.
+  reuse or extract it instead of writing a second copy. The same goes for
+  conventions: follow the way the repo already does something instead of
+  introducing a new one.
 - **CS-71** Reuse only what was built for the same purpose. Don't repurpose a
   table, column, type, endpoint, or component for an unrelated feature because
   its shape fits; confirm what it's for (its owner, callers, and docs) first,

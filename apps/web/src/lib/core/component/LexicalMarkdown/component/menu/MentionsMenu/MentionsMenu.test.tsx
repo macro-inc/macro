@@ -33,6 +33,7 @@ vi.mock('@app/features/crm/record-adapter', () => ({
     mocks.contactSourceEnabled = enabled;
     return {
       entities: () => mocks.contacts,
+      users: () => [],
       totalCount: () => mocks.contacts.length,
       hasMore: () => mocks.hasMoreContacts,
       isLoadingMore: () => false,
@@ -126,6 +127,7 @@ vi.mock('@queries/external-chats', () => ({
 }));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
+    interactionForUser: () => undefined,
     usesRecordSelection: () => false,
     usesSearchProjection: () => false,
     useList: (...args: unknown[]) => {
@@ -184,6 +186,13 @@ vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@ui', () => ({
   Surface: (props: ParentProps) => <div>{props.children}</div>,
+  Button: (
+    props: ParentProps<{ onClick?: () => void; disabled?: boolean }>
+  ) => (
+    <button onClick={props.onClick} disabled={props.disabled}>
+      {props.children}
+    </button>
+  ),
   cn: (...classes: unknown[]) =>
     classes.filter((c) => typeof c === 'string').join(' '),
 }));
@@ -372,6 +381,44 @@ it('leaves a category list on the first desktop Escape and closes on the second'
   expect(screen.queryByText('Back to everything')).toBeNull();
   fireEvent.keyDown(document, { key: 'Escape' });
   expect(menu.isOpen()).toBe(false);
+});
+
+it('opens an empty continuation and keeps the editor menu open while paging', async () => {
+  mocks.crmEnabled = true;
+  mocks.hasMoreContacts = true;
+  mockNoEmails();
+  const menu = createMenuOperations();
+  const editor = createEditor();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      editor={editor}
+      users={() => []}
+      sources={['crm']}
+    />
+  ));
+
+  menu.openMenu();
+  expect(screen.queryByText('No results')).toBeNull();
+  fireEvent.click(screen.getByText('View all'));
+  const next = screen.getByText('Next options');
+  const callsBeforeClick = mocks.loadMoreContacts.mock.calls.length;
+  const pointer = new MouseEvent('pointerdown', {
+    bubbles: true,
+    cancelable: true,
+  });
+  next.dispatchEvent(pointer);
+  expect(pointer.defaultPrevented).toBe(true);
+  const mouse = new MouseEvent('mousedown', {
+    bubbles: true,
+    cancelable: true,
+  });
+  next.dispatchEvent(mouse);
+  expect(mouse.defaultPrevented).toBe(true);
+  fireEvent.click(next);
+
+  expect(mocks.loadMoreContacts).toHaveBeenCalledTimes(callsBeforeClick + 1);
+  expect(menu.isOpen()).toBe(true);
 });
 
 it('only paginates an open mobile menu and resumes on reopen', async () => {

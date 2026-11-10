@@ -2,7 +2,9 @@
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests 
-- `bun run check`: check typescript changes 
+- `bun run check`: check typescript changes
+- Forward `CacheHost.people` through the app's retiring host, resolving the current host on each call even for captured methods; retired reads return unsupported and context writes reject rather than acknowledge discarded publication.
+- `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write.
 - `bun run lint`: lint with biome 
 - `bun run format`: format changes with biome 
 - `bun run knip`: to check for dead code
@@ -22,6 +24,171 @@
 - Web asset publication and cache headers are covered by
   [web-app delivery](../../infra/stacks/web-app/README.md); its publisher tests
   are backend-free, and its Pulumi tests must not run real staging/cloud commands.
+
+## Account-scoped source queries
+
+Shared display names and `useUserNames` participant labels use the same account/session-
+scoped QueryClient cache (`queries/auth/user-name-cache.ts`), never a second name map.
+Pin only tracked active readers; bound idle names by count/bytes and batch/pending IDs.
+Retain pins across synchronous reevaluation and drop closed-reader interests. Keep
+old names during transient refresh failures, but clear them on authority changes;
+late responses and captured mutations cannot cross account/session or entry generations.
+Cancel obsolete transports and bound request lifetime; native participant metadata
+must publish fallbacks for pending new-scope names rather than retain old labels.
+Debug name seeds require a mounted authenticated scope, not module initialization.
+Editable own-profile queries stay separate and session-keyed. Reset cached Macro
+bearer tokens on login/account replacement, including pending token responses.
+
+Key channel lists/activity, cached Quick Access channels, email links and inbox
+health probes by viewer. Use `queries/auth/account-scope.ts` to fence requests
+and cache writes; mutation ownership comes from the execute-time
+`MutationFunctionContext.meta`, not a live accessor or mutable observer options.
+Login closes this source gate until a fresh auth query succeeds, without clearing
+the app shell's retained identity. Legacy unscoped channel lists are not restored.
+The settings signature browser suite also exercises real channel/link observers
+and the contact context publisher across account switches with delayed responses
+(`account-sources.browser.e2e.ts`). `queries/contacts/context-source.ts` reuses
+those keyed queries through ownership-tagged selectors; gate missing inputs rather
+than publishing an empty snapshot. `context-publisher.ts` caps pending IDs and
+write batches at 500, replaces overflowing/uncertain snapshots with a new epoch,
+and never writes directory names or membership. `useContactContextPublisher`
+shares Soup's leader, rollout and generation lifecycle; do not add another leader.
+The bounded directory window accepts external search/policy inputs. Bind continuations
+to each input transition, not just equal query strings; returning to an earlier input
+must start at page one. Person hydration wakes an initially unavailable offline
+window, never an authorization error. Interactive contact suggestions stay local:
+partial sync returns partial local results; unavailable or older hosts never fall
+back to server or generic text search. Refresh schedules the existing sync lane. Resolve self separately
+when 500 explicit selections fill the lookup batch. Prefer current-search DM metadata
+over a person's stored command target, then use recent conversations as fallback.
+Contact invalidations from messages, native sharing and websocket events call
+`requestContactRefresh()` in `queries/contacts/refresh`; the coalesced bounded
+runner owns the work. Full-list hooks, query keys and handwritten GET clients
+are retired; no compatibility query should be created by an invalidation.
+Ranked person
+cursors and contact reconciliation use coordinator protocol 17; native menu policy 5
+orders exact names, all-word prefixes, then literal contains by recency and identity.
+Explicit addresses/IDs never match name aliases; empty property browsing pins self.
+Exclude automated recipient addresses before limiting unless explicitly addressed.
+Generate separate suggestion/reference policy floors from Rust; reference evidence
+stays policy 4. Preserve personal window order through command/DM merging, mentions,
+properties and recipient composition. Cursors bind scope/policy/layout and live
+membership/context tokens, not previous result IDs or a scoring clock. Contact
+changes invalidate pending replies and restart paging; honor short/empty continuations.
+Quick Access person lists are per-observer windows, never global item-cache rows.
+Forward live queries from commands, mentions and property selectors; resolve CRM
+aliases only for their current window. Reset virtual focus/scroll on window
+replacement, not label updates. Keep explicit participant/team pools scoped and
+selected IDs/self independent of suggestion pages. Discussion mentions on documents,
+projects and calls delegate to the same bounded directory. In mention configuration,
+`users()` returning undefined selects that directory; [] remains an explicit empty
+scope, including while channel/CRM rosters load. `transformUsers` applies agent
+policy only to the current window or scoped roster, never a full personal pool.
+Keep native row timestamps and forwarding through both editor configuration and
+`MarkdownShell`; the channel mention browser suite exercises the real composition.
+`RecipientSelector.createSource`
+constructs a per-picker source from live query/open/self/domain inputs; use
+`useContactRecipientSource` or `useCombinedRecipientSource` for personal suggestions
+and keep `options` for explicit scoped extras. Closing releases the page and reopening
+starts at the first window. Selected chips remain caller-owned; Next options/PageDown
+can advance empty windows. Main email To/Cc/Bcc inputs receive the factory through
+`EmailComposeContext.createRecipientSource`; scoped hosts opt out explicitly with
+`undefined`. Thread extras and personal hits deduplicate by canonical email while
+preserving the selected representation. Keep selection/outside dismissal synchronous;
+a delayed combobox close must not cancel a new query after refocus. Keep nonmatching
+selected custom addresses out of visible suggestions during async search, so Enter
+cannot toggle an old chip while a new result window arrives. Pass supplied
+names to option/chip avatars instead of duplicating resolved names in the shared name cache. The internal
+recipient and email app-browser fixtures cover desktop/touch. Channel invitation
+and participant pickers use the same source with explicit roster exclusions; keep
+whole-team selection separate. Exclude up to the native IPC budget before ranking,
+filter any oversized roster remainder within each replaceable window, and retain
+empty continuations. Bind paging to the complete roster's reset key, including
+changes beyond that budget. Keep picker portals inside their owning dialog/drawer;
+cancel a recipient option's pointerup default so synchronous popup removal cannot
+be interpreted as an outside press that dismisses the containing drawer.
+Soup's Created by submenus, mobile accordion sections and consolidated chips
+use lazy contact sources. Assignee options stay team/agent-scoped and retain selected
+outsiders; do not replace an explicit roster with personal-directory suggestions. Resolve closed-chip labels with
+`useContactFilterLabels`, never by constructing a browse window or a directory map.
+Keep Unassigned outside contact lookups and restore the Owned preset when clearing
+its creator refinement. A query-driven combobox takes search edits from native input
+events; Kobalte's programmatic resets on option replacement must not clear a pending
+query. `internal/browser-test/soup-filters.browser.e2e.ts` covers both surfaces.
+CRM Owner chips use `CollectionSelectFilter.createChipSource`, with selected labels
+resolved separately; their header menu remains team-only. Keep No owner/Unassigned
+out of contact lookups through the shared empty-value adapter. Wait for the virtual
+list's initial viewport measurement before focus scrolling; otherwise the pending
+correction can snap a user's scroll back to the first selected row.
+Calendar guest editors (including event invitations and AI drafts) keep event-owned
+addresses/names as scoped extras and use bounded personal property windows.
+`PropertyEntitySelector.onUserSelected` carries UI-only chosen metadata separately
+from persisted entity-reference payloads. Preserve guest ID/address representations
+while comparing eligibility case-insensitively. A complete guest address is an
+identity, never another person's display-name alias. Do not re-cap or locally discard
+already matched person pages; expose continuation even for an empty window. Keep
+Quick Access list factory setup untracked so loading/paging cannot reconstruct its
+owner at page one. An in-flight multi-window advance stops when `inputKey` changes.
+Universal Input resolves only current person references through `useContactReferences`:
+task properties use `anyName`; recipients, guests and search use `preferFullName`.
+Keep incomplete/ambiguous evidence unresolved, preserve structured term boundaries,
+and never substitute a suggestion window for name proof. Use `recipientTerms` and
+`formatRecipientTerms` for recipient string fields so delimiter-bearing model names
+retain their boundaries while legacy manual separators remain supported. Explicit
+addresses cannot resolve through display-name aliases; channel IDs remain scoped choices.
+Picker factories and personal mentions use their own windows. Field-owned choice
+snapshots preserve selected labels without becoming inference evidence or reviving
+on a later return to the same text. Capture submission identities before async
+work and recheck the account before dependent writes. The `task-references` and
+`input-references` browser cases cover the real adapters/composers on desktop/phone.
+Tasks creator filters also use lazy desktop/mobile contact sources; Assignee keeps
+its explicit team/agent roster and selected outsiders. The planner extracts references
+without a people catalog, then resolves complete per-label evidence before applying
+any constraints. Preserve semantic Me separately from fixed self and resolve saved
+summary labels from their own IDs. Inline checklist labels resolve only referenced
+task assignees, in lookup-sized batches whose owners disappear with those references;
+never populate a personal-directory map or the shared name cache for them.
+Onboarding team prefill filters local browse windows to the server-approved domain,
+follows bounded continuations until six distinct non-self emails or exhaustion, and retains only
+that seed. No approved domain means no contact reads. Scope the source by account,
+session and cache generation; preserve the form's first settled seed through refreshes.
+Linear import resolves only current CSV assignees, serially in 500-label exact-reference
+batches, and uses the shared single-user property picker for manual mapping. Keep
+manual Unassigned distinct from no override; incomplete evidence requires retry or
+an explicit choice. Reset file-owned mappings on upload/account changes, snapshot
+assignments before creation, and use `createTaskForAccount` to fence dispatch and
+local publication. Imported-row state may scale with the file, never the directory.
+`CacheHost.people.resolveReferences` exposes the core's bounded full-directory
+ambiguity evidence. It needs a bound viewer and ready context only for inbox
+exclusions; callers must also check directory completeness. Missing reference
+support must not disable existing search. The real wrapper/worker/OPFS regression
+is `worker/browser-test/people-references.browser.e2e.ts` under `lib/graphql-cache`.
+`ContactReferencePage` provides fetch-only server fallback stages with exact/first-name
+matching before the limit. Follow empty continuations and keep the existing search
+budget; never infer uniqueness from one incomplete suggestion page.
+`useContactReferences` resolves only the current inference/import labels, with
+per-label complete/ambiguous evidence and separate exact identity lookup. Its
+reader keeps one physical read plus one replaceable pending input, samples cache
+completeness before scanning, and wakes incomplete reads only on readiness
+transitions. Source data is scoped and immediately collected, not a people pool.
+
+Execute browser `macro.people` SQL in the existing local Turso cache, including
+offline; authorized synchronization supplies records, not a server query endpoint.
+Use actual wasm compiler metadata to distinguish the built-in relation from ordinary
+tables named people. `CacheHost.people.readSql` exposes the scoped local capability;
+missing native support must not disable other person methods or trigger remote SQL.
+Serialize uninterruptible reads with one replaceable pending input. Wake incomplete
+queries on the committed contact checkpoint, not only the preceding hydration hint. Filter, aggregate and limit before materializing results; never
+enumerate contacts or fall back to remote SQL execution. Validate result metadata and
+fence account/session, storage generation, input transitions and disposal. Require
+complete synchronization before treating local results as directory-wide evidence;
+unsupported/incomplete reads stay explicit failures, not authoritative empty answers.
+Only actual people-ID join hints may enter bounded identity reads; email/name/virtual
+row keys must not masquerade as IDs. The real compiler/controller/Turso browser
+regression is `internal/browser-test/sql-people-joins.browser.e2e.ts`.
+Keep last same-owner results on ordinary failures, but clear them on account or
+authority changes. Preserve explicit post-disposal refreshes used to finish accepted
+database writes only for the original account/session.
 
 ## Verifying a change in a real browser
 
@@ -75,9 +242,10 @@ replacement, cancellation, keyboard editing, and read-only references. Navigatio
 adapter tests separately check file types, access failures, and split selection.
 
 Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
-backend-free desktop/phone regression: the card reserves its height from
-`previewData.poll.optionCount` as a `min-height`, grows to wrapped text, and
-never scrolls or clips inside:
+backend-free desktop/phone regression: while loading, the card draws its
+header with the question (the card's name, so it wraps as it will) above a body
+reserved from `previewData.poll.optionCount`, keeps that height through load,
+and never scrolls or clips inside:
 `bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts poll-card.browser.e2e.ts`.
 
 Pinch zoom on opened image files (Drive details and image splits) has a
@@ -90,6 +258,10 @@ The emoji reaction picker renders only the rows in view (about 1,900 emojis
 otherwise); its backend-free regression opens it, scrolls to the last group,
 searches, and picks by keyboard:
 `bunx playwright test --config src/lib/core/component/Emoji/browser-test/playwright.config.ts`.
+Size its glyphs off the row, never off a cell: a cell's width comes from `1fr`
+track sizing, which its own contents can push out, so a glyph sized off the cell
+feeds that loop and can settle with one emoji filling the picker. The same suite
+checks that widening a cell leaves the glyph alone.
 
 The email reminder menu reads typed times through the real natural-time wasm
 package; its backend-free desktop/phone regression, at a fixed New York clock,
@@ -111,6 +283,13 @@ blank slate, composer pinning, quote replies and the outside-message popup:
 `bunx playwright test --config src/features/channel/Call/discussion/browser-test/playwright.config.ts`.
 On a machine with many network interfaces, run it under `bwrap --dev-bind / / --unshare-net`:
 Chromium otherwise aborts module requests with `ERR_NETWORK_CHANGED`.
+A call's own chat on a meeting page (the real `CallDiscussionContent` and
+`MeetingDiscussionHost` under only the providers `Root` gives every page) has a
+backend-free desktop and phone regression: the first message sent shows in the
+panel instead of leaving it on "Loading chat…":
+`bunx playwright test --config src/features/channel/Call/chat/browser-test/playwright.config.ts`.
+A meeting page has none of `AppProviders`; anything rendering app messages there
+goes inside `MeetingDiscussionHost`, created by the host's render function.
 
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
@@ -200,20 +379,21 @@ Keep the shared uploader from restoring removed attachments or publishing after
 the composer is disposed. The Share button and shortcut use the same upload guard.
 Keep Share composers free of a paperclip button on desktop and mobile; preserve image paste and file drop.
 
-Menus that find entities by typed name (Command-K, mobile name search, @
+Non-personal entity rows in typed-name menus (Command-K, mobile name search, @
 mentions) rank with `NAME_MATCH_RANKING` in `@core/util/freshSort`: names equal
 to the query first, then names starting with it, then other matches, with tight
 matches near the start scoring higher. Each menu's recency weights and type
 boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
 lift a row past a better name match. The one exception: Cmd+K then keeps Macro
 users and DMs ahead of CRM contacts across the people positions, whatever their
-match. Tune name relevance there for every menu.
+match. Personal contact rows instead preserve policy-5 source order; tune only
+ordinary entity relevance here.
 Soup's local search pool (`createSearchState`) stays lazy: it builds only when
 local search has text. Measure Quick Access ranking at scale with the
 [scale fixture](src/features/command/browser-test/README.md).
-Cmd+K and mobile name search widen the first group: a query equal to the first
-word of a DM or person name counts as exact, so a person's first name reaches
-their full-name DM. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
+Ordinary DM entity matching in Cmd+K and mobile name search treats the first
+name as exact, so it reaches a full-name DM; personal contact windows keep their
+independent policy-5 tiers. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
 Quick Access, and Soup search including the Chat sidebar) matches channels and
 DMs by terms in any order, adding to uFuzzy's in-order matches, because names
 are generated from participants and people type them in any order. It also
@@ -223,6 +403,7 @@ with more people than the query names stays below it.
 Commas separate query terms like spaces in the cache search
 (`cache-core/search.rs`, mirrored by `matchesTokenSubsequences`) and in the
 server's channel name search; keep the three together.
+Name scores are per-row (a fixed 0–100 scale), not normalized against the current result corpus. Rust/browser fixtures in `crates/subsequence_match/src/ranking` keep match quality and recipient tiers aligned; surface weights and boosts remain caller-owned. Command-keyword eligibility keeps its dedicated matcher.
 Name groups and match position use the row's label (`getDisplayName`), so search
 text can add emails, aliases, or command keywords before or after it. Mention
 menus rank loaded entity sources together with `MENTION_RANKING_CONFIG` in
@@ -582,6 +763,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Publish recovery reset outcomes before parking while retaining the read pause.
   Bound foreground resume reads to one second without killing an owner, stealing
   its lock, replaying writes, or treating intentional parking as a failure.
+- Snapshot cache generation subscribers before dispatch and skip removed listeners;
+  reactive observers may resubscribe during notification and must not extend it.
 - Coalesce broad browser cache-change hints across the coordinator's in-flight
   backlog, not the engine's per-message queue; keep reset fences, mutation
   settlements, and query-specific invalidations immediate.
@@ -608,8 +791,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Key mobile name-result history ordering and scroll anchors by the other participant for one-to-one DMs, preserving a person's position when their conversation is created; keep group DMs keyed by channel.
 - Keep mobile Search history lightweight: save query/category/mode, account-scoped item anchors, and at most 200 ordering IDs per mode; never save row objects or virtualizer caches. Restore from current sources with at most three additional pages, fall back when an anchor disappears, and stop restoration on user interaction or scope changes. Dock navigation starts a fresh search session; cached rows belong to the source, not history.
 - Release per-history-entry state when its router entry is replaced, pruned, or closed; retain only the latest per-view session snapshot and the latest split event outside reachable Back/Forward history.
-- Keep Quick Access cache availability reactive to the GraphQL rollout flag; it can arrive after the provider mounts, and email has no legacy source fallback.
 - Cmd+K, mobile name search, and the desktop Search page find routines by name from the Quick Access `routine` bucket (the scheduled-action list); keep them out of `entityPool`, which Home, Drive, and Tasks searches share, and use `routinePool` for workspace Search only.
+- Keep Quick Access cache availability reactive to the GraphQL rollout flag; it can arrive after the provider mounts, and email has no legacy source fallback.
+- Browser storage schema 12 enables covering-index search through a fresh versioned cache; native upgrades reset incompatible caches, including queued writes. Preserve the historical unversioned tuple and existing old-queue cleanup safeguards; see `../../crates/client/README.md#streaming-text-search`.
+- Contact backfill shares Soup's authenticated tab leadership and account/session ownership. Capture contact admission before each fetch, hydrate with `contactFence`, then verify cached IDs in 500-record keyset windows through the existing exact lookup. Checkpoint v2 completes only after verification; persist cursors after acknowledged writes and generation checks. Never delete from scan omissions or failed/foreign evidence, and never downgrade unsupported fencing. Keep the 15-minute coalescing floor and hourly name refresh. Deploy canonical-ID lookup fixes before client removal checks; see `../../docs/design/disk-backed-contacts.md`.
+- Use bounded contact windows and separate exact selection lookup; copy primitive inputs/cursors out of reactive query data and keep history at `gcTime: 0`. Pass resolved `UserIcon.name` to avoid redundant shared-name lookups. `/app/debug/data`, Calendar search, Drive creators and CRM Notes creators exercise this on desktop/phone: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts`. DM-ranked pickers still need before-limit ranking/exclusions.
 - Cmd+K and mobile name search take task projects from the Quick Access `initiative` bucket (typed All queries and the Projects category), searched from the GraphQL cache like other entities. Don't give them a per-query server search: its rows drop out while each new query loads, so projects flash as you type.
 - Merge the complete channel list into Quick Access even with the GraphQL cache enabled; preserve newer viewed timestamps and apply the channel boost before the extra DM boost in shared command/mobile name ranking.
 - Include all channel metadata in Quick Access item versions; record complete, cached-recent, and merged channel counts plus the last index-build duration on cache-search traces.

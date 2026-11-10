@@ -435,6 +435,12 @@ const graphqlSoupClient = createClient({
   preferGetMethod: false,
 });
 
+/** Fetch-only transport for callers that must validate scope/cancellation before
+ * explicitly admitting a response to the normalized cache. */
+export function getGraphqlSoupNetworkClient(): Client {
+  return graphqlSoupClient;
+}
+
 const reconnectListeners = new Set<() => void>();
 
 /**
@@ -2249,6 +2255,23 @@ export function mapGraphqlSoupItem(
               createdAt: entity.createdAt,
             })),
             properties: mapGraphqlProperties(entity.properties),
+            notifications: mapGraphqlNotifications(entity.notifications),
+          },
+        }) as SoupApiItem
+    )
+    .with(
+      { __typename: 'GraphqlSoupHarness' },
+      (entity) =>
+        ({
+          tag: 'harness',
+          frecency_score: frecency,
+          is_favorited: entity.isFavorited,
+          data: {
+            id: entity.id,
+            name: entity.harnessName,
+            ownerId: entity.ownerId,
+            createdAt: entity.createdAt,
+            updatedAt: entity.updatedAt,
             notifications: mapGraphqlNotifications(entity.notifications),
           },
         }) as SoupApiItem
