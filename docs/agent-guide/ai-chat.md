@@ -736,10 +736,10 @@ the shimmer.
   field focused on open, and a default model picker that enables once the key is
   saved. Connected, the same page shows the saved date, **Disconnect**, and
   **Done**. **Manage** on a paired machine opens **Runtimes** (Back returns to
-  Agents): **Connected runtimes** (shown only once a paired machine is connected;
-  it then lists every paired machine, connected ones first, each with
-  **Connected** or **Offline** and **Remove**), built-in providers, and
-  **New runtime**.
+  Agents): **Your runtimes** (shown only once a paired machine is connected;
+  it then lists every machine you own, connected ones first, each with
+  **Connected** or **Offline**, **Share**, **Options** and **Remove**),
+  **Teammates' runtimes**, built-in providers, and **New runtime**.
   On the desktop app, **Runtimes** opens with a **This computer** card that sets
   up the bundled macrod daemon in one click: **Set up** detects installed agents,
   then **Start running agents here** configures, pairs (auto-approved, no code),
@@ -749,7 +749,7 @@ the shimmer.
   dismissing it affects only this desktop installation and signed-in user.
   Runtimes is available on desktop even when the newer Agents view is still
   rolling out. Each paired computer keeps its own runtime identity and appears
-  separately under Connected runtimes. The manual flow below remains for pairing
+  separately under Your runtimes. The manual flow below remains for pairing
   other machines. In the agent form, a runtime whose machine is away is labelled
   **· Offline** but stays selectable: binding an agent to a sleeping computer is
   normal.
@@ -2189,8 +2189,9 @@ must stay hidden; subsequent live messages must still appear.
   on the web. Settings → Agents → Runtimes → New runtime offers
   `Allow bypassing permission requests`, off by default; enabling it warns that
   agents may run commands and edit files on the machine without approval. Each
-  paired runtime then shows the same switch (enabling asks for confirmation) and
-  a `Rename` action; a change reaches live sessions from their next turn, with
+  paired runtime then has it as `Don't ask before acting` in its `Options` menu
+  (a sheet on touch; enabling asks for confirmation, and only the owner can
+  change it) and a `Rename` action; a change reaches live sessions from their next turn, with
   no re-pairing. macrod has no Full Access or scope setting; its Config tab shows
   these values read-only and links to Runtimes.
 - **Agent permission policy.** Settings → Agents → Runtime shows `Always prompt`

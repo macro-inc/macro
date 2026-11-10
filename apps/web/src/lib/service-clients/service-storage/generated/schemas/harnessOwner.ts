@@ -5,12 +5,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { HarnessOwnerOneOf } from './harnessOwnerOneOf';
-import type { HarnessOwnerOneOfThree } from './harnessOwnerOneOfThree';
 
 /**
  * Harness owner.
 
-Exactly one of a user or a team, mirroring the bots owner pattern. There
-are no system harnesses.
+Always one person: a runtime is someone's computer. A team runtime is a
+person's runtime with a grant to the team, never one owned by the team.
  */
-export type HarnessOwner = HarnessOwnerOneOf | HarnessOwnerOneOfThree;
+export type HarnessOwner = HarnessOwnerOneOf;
