@@ -51,3 +51,133 @@ it('preserves local-stack image references for the local attachment resolver', a
     'https://localhost:27709/static-file/file/test-image'
   );
 });
+
+it('routes a production bundle through an explicitly selected local proxy', async () => {
+  vi.stubEnv('MODE', 'production');
+  vi.stubEnv('DEV', false);
+  vi.stubEnv('VITE_LOCAL_SERVERS', 'ALL');
+  vi.stubEnv('VITE_LOCAL_BACKEND_ORIGIN', 'same-origin');
+  vi.stubEnv('VITE_SYNC_SERVICE_HOST', '');
+  vi.stubGlobal('location', new URL('https://localhost:3003'));
+  vi.resetModules();
+  const { SERVER_HOSTS, SYNC_SERVICE_HOSTS, SYNC_PERMISSION_TOKEN_DSS_HOST } =
+    await import('./servers');
+
+  expect(import.meta.env.DEV).toBe(false);
+  expect(import.meta.env.MODE).toBe('production');
+  expect(SERVER_HOSTS['auth-service']).toBe('https://localhost:3003/auth');
+  expect(SERVER_HOSTS['document-storage-service']).toBe(
+    'https://localhost:3003/dss'
+  );
+  expect(SERVER_HOSTS['connection-gateway']).toBe(
+    'wss://localhost:3003/connection-gateway'
+  );
+  expect(SERVER_HOSTS['static-file']).toBe(
+    'https://localhost:3003/static-file'
+  );
+  expect(SYNC_SERVICE_HOSTS).toEqual({
+    worker: 'https://localhost:3003/sync',
+    ws: 'wss://localhost:3003/sync',
+  });
+  expect(SYNC_PERMISSION_TOKEN_DSS_HOST).toBe('https://localhost:3003/dss');
+});
+
+it.each([
+  ['', ''],
+  ['ALL', ''],
+  ['', 'same-origin'],
+  ['document-storage-service,sync-service', 'same-origin'],
+])(
+  'keeps production remote without both ALL and a proxy: %s / %s',
+  async (servers, origin) => {
+    vi.stubEnv('MODE', 'production');
+    vi.stubEnv('DEV', false);
+    vi.stubEnv('VITE_LOCAL_SERVERS', servers);
+    vi.stubEnv('VITE_LOCAL_BACKEND_ORIGIN', origin);
+    vi.stubEnv('VITE_SYNC_SERVICE_HOST', '');
+    vi.stubGlobal('location', new URL('https://localhost:3003'));
+    vi.resetModules();
+    const { SERVER_HOSTS, SYNC_SERVICE_HOSTS, SYNC_PERMISSION_TOKEN_DSS_HOST } =
+      await import('./servers');
+
+    expect(SERVER_HOSTS['auth-service']).toBe('https://gateway.macro.com/auth');
+    expect(SERVER_HOSTS['document-storage-service']).toBe(
+      'https://gateway.macro.com/dss'
+    );
+    expect(SYNC_SERVICE_HOSTS).toEqual({
+      worker: 'https://sync-service-prod2.macroverse.workers.dev',
+      ws: 'wss://sync-service-prod2.macroverse.workers.dev',
+    });
+    expect(SYNC_PERMISSION_TOKEN_DSS_HOST).toBe(
+      'https://gateway.macro.com/dss'
+    );
+  }
+);
+
+it.each([
+  {
+    local: false,
+    override: '',
+    sync: 'https://sync-service-prod2.macroverse.workers.dev',
+    signer: 'https://gateway.macro.com/dss',
+  },
+  {
+    local: false,
+    override: 'sync.example.test',
+    sync: 'https://sync.example.test',
+    signer: 'https://gateway.macro.com/dss',
+  },
+  {
+    local: true,
+    override: '',
+    sync: 'https://localhost:3003/sync',
+    signer: 'https://localhost:3003/dss',
+  },
+  {
+    local: true,
+    override: 'sync.example.test',
+    sync: 'https://sync.example.test',
+    signer: 'https://gateway.macro.com/dss',
+  },
+])(
+  'preserves production permission signing: local=$local override=$override',
+  async ({ local, override, sync, signer }) => {
+    vi.stubEnv('MODE', 'production');
+    vi.stubEnv('VITE_LOCAL_SERVERS', local ? 'ALL' : '');
+    vi.stubEnv('VITE_LOCAL_BACKEND_ORIGIN', local ? 'same-origin' : '');
+    vi.stubEnv('VITE_SYNC_SERVICE_HOST', override);
+    vi.stubGlobal('location', new URL('https://localhost:3003'));
+    vi.resetModules();
+    const { SYNC_SERVICE_HOSTS, SYNC_PERMISSION_TOKEN_DSS_HOST } = await import(
+      './servers'
+    );
+
+    expect(SYNC_SERVICE_HOSTS.worker).toBe(sync);
+    expect(SYNC_SERVICE_HOSTS.ws).toBe(sync.replace(/^http/, 'ws'));
+    expect(SYNC_PERMISSION_TOKEN_DSS_HOST).toBe(signer);
+  }
+);
+
+it('preserves development partial-service routing', async () => {
+  vi.stubEnv('MODE', 'development');
+  vi.stubEnv('VITE_LOCAL_SERVERS', 'document-storage-service:8123');
+  vi.stubEnv('VITE_LOCAL_BACKEND_ORIGIN', 'same-origin');
+  vi.stubEnv('VITE_SYNC_SERVICE_HOST', '');
+  vi.stubGlobal('location', new URL('https://localhost:3003'));
+  vi.resetModules();
+  const { SERVER_HOSTS, SYNC_SERVICE_HOSTS, SYNC_PERMISSION_TOKEN_DSS_HOST } =
+    await import('./servers');
+
+  expect(SERVER_HOSTS['document-storage-service']).toBe(
+    'http://localhost:8123'
+  );
+  expect(SERVER_HOSTS['auth-service']).toBe(
+    'https://dev-gateway.macro.com/auth'
+  );
+  expect(SYNC_SERVICE_HOSTS.worker).toBe(
+    'https://sync-service-dev3.macroverse.workers.dev'
+  );
+  expect(SYNC_PERMISSION_TOKEN_DSS_HOST).toBe(
+    'https://dev-gateway.macro.com/dss'
+  );
+});
