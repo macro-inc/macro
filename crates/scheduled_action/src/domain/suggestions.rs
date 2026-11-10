@@ -210,7 +210,11 @@ where
                 ))?)
             })
             .collect::<Result<Vec<Surface>>>()?;
-        tracing::Span::current().record("agent.session.id", session.session.to_string());
+        let span = tracing::Span::current();
+        span.record("agent.session.id", session.session.to_string());
+        if let Some(trace) = &session.trace_id {
+            span.record("suggestion.generation.trace_id", trace.as_str());
+        }
         Ok((user, session, surfaces))
     }
 
@@ -461,6 +465,7 @@ where
 
     #[tracing::instrument(name = "routine.suggestions.review", skip_all, fields(
         agent.session.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         routine.suggestions.count = tracing::field::Empty,
     ), err)]
     async fn review(
@@ -510,6 +515,7 @@ where
 
     #[tracing::instrument(name = "routine.suggestions.retire", skip_all, fields(
         agent.session.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         routine.suggestion.id = %id,
         routine.suggestion.ok = tracing::field::Empty,
     ), err)]
@@ -606,6 +612,7 @@ where
     #[tracing::instrument(name = "routine.suggestions.suggest", skip_all, fields(
         routine.suggestion.kind = request.kind_name(),
         agent.session.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         routine.suggestion.ok = tracing::field::Empty,
         routine.suggestion.problems = tracing::field::Empty,
         routine.suggestion.id = tracing::field::Empty,

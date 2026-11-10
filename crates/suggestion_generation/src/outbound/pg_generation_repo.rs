@@ -221,6 +221,41 @@ impl GenerationRepo for PgGenerationRepo {
         Ok(())
     }
 
+    async fn account(&self, user: &MacroUserIdStr<'_>) -> Result<Option<Uuid>, Self::Err> {
+        let account = sqlx::query_scalar!(
+            r#"SELECT macro_user_id AS "macro_user_id?" FROM "User" WHERE id = $1"#,
+            user.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(account.flatten())
+    }
+
+    async fn prune_changes(&self, before: DateTime<Utc>, limit: u16) -> Result<u64, Self::Err> {
+        // Entries' ids are UUIDv7, ordered by when they were written: the
+        // primary key finds the old ones.
+        let deleted = sqlx::query!(
+            r#"DELETE FROM suggestion_change
+               WHERE id IN (SELECT id FROM suggestion_change WHERE id < $1 ORDER BY id LIMIT $2)"#,
+            uuid_v7_floor(before),
+            i64::from(limit),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(deleted.rows_affected())
+    }
+
+    async fn traced(&self, generation: Uuid, trace_id: &str) -> Result<(), Self::Err> {
+        sqlx::query!(
+            "UPDATE suggestion_generation SET trace_id = $2 WHERE id = $1",
+            generation,
+            trace_id,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
     async fn reschedule(
         &self,
         user: &MacroUserIdStr<'_>,
@@ -311,9 +346,10 @@ impl GenerationSessions for PgGenerationRepo {
         session: Uuid,
     ) -> Result<Option<GenerationSession>, rootcause::Report> {
         let row = sqlx::query!(
-            r#"SELECT session_id, generation_id, user_id, kind, surfaces
-               FROM suggestion_generation_session
-               WHERE session_id = $1 AND closed_at IS NULL"#,
+            r#"SELECT s.session_id, s.generation_id, s.user_id, s.kind, s.surfaces, g.trace_id
+               FROM suggestion_generation_session s
+               JOIN suggestion_generation g ON g.id = s.generation_id
+               WHERE s.session_id = $1 AND s.closed_at IS NULL"#,
             session,
         )
         .fetch_optional(&self.pool)
@@ -330,6 +366,7 @@ impl GenerationSessions for PgGenerationRepo {
                     .parse()
                     .map_err(|error| rootcause::Report::new(error).into_dynamic())?,
                 surfaces: row.surfaces,
+                trace_id: row.trace_id,
             })
         })
         .transpose()
@@ -356,4 +393,15 @@ impl GenerationStatuses for PgGenerationRepo {
             .map(|status| Ok(status.parse::<GenerationStatus>()?))
             .transpose()
     }
+}
+
+/// The smallest UUIDv7 written at `at`: every v7 id written before it sorts
+/// below it.
+fn uuid_v7_floor(at: DateTime<Utc>) -> Uuid {
+    let millis = u64::try_from(at.timestamp_millis()).unwrap_or(0);
+    let mut bytes = [0_u8; 16];
+    bytes[..6].copy_from_slice(&millis.to_be_bytes()[2..]);
+    bytes[6] = 0x70;
+    bytes[8] = 0x80;
+    Uuid::from_bytes(bytes)
 }

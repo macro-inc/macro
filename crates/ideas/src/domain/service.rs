@@ -150,6 +150,9 @@ where
         let span = tracing::Span::current();
         span.record("agent.session.id", session.session.to_string());
         span.record("suggestion.generation.id", session.generation.to_string());
+        if let Some(trace) = &session.trace_id {
+            span.record("suggestion.generation.trace_id", trace.as_str());
+        }
         Ok(session)
     }
 
@@ -363,6 +366,7 @@ where
     #[tracing::instrument(name = "ideas.review", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         ideas.count = tracing::field::Empty,
     ), err)]
     async fn review(
@@ -403,6 +407,7 @@ where
     #[tracing::instrument(name = "ideas.suggest", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         idea.kind = request.kind.as_ref(),
         idea.id = tracing::field::Empty,
         idea.outcome = tracing::field::Empty,
@@ -579,6 +584,7 @@ where
     #[tracing::instrument(name = "ideas.rewrite", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         idea.id = %id,
         idea.outcome = tracing::field::Empty,
         idea.problems = tracing::field::Empty,
@@ -691,6 +697,7 @@ where
     #[tracing::instrument(name = "ideas.retire", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         idea.id = %id,
         idea.outcome = tracing::field::Empty,
         idea.problems = tracing::field::Empty,

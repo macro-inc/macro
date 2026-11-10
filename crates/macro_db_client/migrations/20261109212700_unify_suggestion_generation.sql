@@ -17,6 +17,10 @@
 -- take them first, before the copy, and don't queue behind long transactions.
 SET LOCAL lock_timeout = '5s';
 
+-- The trace a generation runs in: its sessions' tool calls reach the API
+-- without its trace context and record this id to be joined to it.
+ALTER TABLE suggestion_generation ADD COLUMN trace_id text;
+
 -- A routine suggestion a nightly session found no longer fits. Hidden like a
 -- dismissed one, but a session may suggest the same routine again.
 ALTER TABLE routine_suggestion ADD COLUMN retired_at timestamptz;

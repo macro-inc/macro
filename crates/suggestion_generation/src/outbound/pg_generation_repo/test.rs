@@ -453,3 +453,61 @@ async fn the_feed_counts_in_only_paid_readers_due_in_their_night(pool: PgPool) {
     );
     assert_eq!(repo.due(next, far, 10).await.unwrap().len(), 1);
 }
+
+/// The change log keeps entries for a while: pruning deletes the ones
+/// written before the cut-off, a batch at a time, and keeps the rest.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn pruning_deletes_only_old_change_log_entries(pool: PgPool) {
+    insert_user(&pool, OWNER).await;
+    let repo = PgGenerationRepo::new(pool.clone());
+    let now = Utc::now();
+    let generation = repo
+        .begin(
+            &owner(),
+            GenerationTrigger::Onboarding,
+            now,
+            now - TimeDelta::minutes(25),
+            now - TimeDelta::hours(20),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let written = |at: DateTime<Utc>| {
+        let millis = u64::try_from(at.timestamp_millis()).unwrap();
+        let timestamp = uuid::Timestamp::from_unix(
+            uuid::NoContext,
+            millis / 1000,
+            u32::try_from(millis % 1000).unwrap() * 1_000_000,
+        );
+        Uuid::new_v7(timestamp)
+    };
+    for at in [
+        now - TimeDelta::days(120),
+        now - TimeDelta::days(100),
+        now - TimeDelta::days(91),
+        now - TimeDelta::days(1),
+    ] {
+        sqlx::query(
+            "INSERT INTO suggestion_change
+                 (id, user_id, generation_id, session_id, subject, subject_id, action, created_at)
+             VALUES ($1, $2, $3, $4, 'idea', $4, 'created', $5)",
+        )
+        .bind(written(at))
+        .bind(OWNER)
+        .bind(generation)
+        .bind(Uuid::now_v7())
+        .bind(at)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let cut = now - TimeDelta::days(90);
+    assert_eq!(repo.prune_changes(cut, 2).await.unwrap(), 2);
+    assert_eq!(repo.prune_changes(cut, 2).await.unwrap(), 1);
+    assert_eq!(repo.prune_changes(cut, 2).await.unwrap(), 0);
+    let left: i64 = sqlx::query_scalar("SELECT count(*) FROM suggestion_change")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(left, 1);
+}

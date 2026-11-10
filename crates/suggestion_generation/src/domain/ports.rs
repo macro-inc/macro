@@ -90,6 +90,28 @@ pub trait GenerationRepo: Send + Sync + 'static {
         next_run: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// The person's opaque account id, for traces: never their email-shaped
+    /// user id.
+    fn account(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
+    /// Delete at most `limit` change-log entries written before `before`;
+    /// how many.
+    fn prune_changes(
+        &self,
+        before: DateTime<Utc>,
+        limit: u16,
+    ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
+
+    /// Generation `generation` runs in trace `trace_id`.
+    fn traced(
+        &self,
+        generation: Uuid,
+        trace_id: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// The person's next nightly run is due at `at`.
     fn reschedule(
         &self,

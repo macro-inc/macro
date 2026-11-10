@@ -82,8 +82,12 @@ pub const MAX_NIGHTLY_RUNS: usize = 6;
 /// How many times a tick reads who is due while it has room.
 const DUE_BATCHES: usize = 4;
 const SWEEP_BATCH: u16 = 64;
+/// How long the change log keeps an entry.
+pub const CHANGES_KEPT: chrono::TimeDelta = chrono::TimeDelta::days(90);
+/// Change-log entries one sweep deletes at most.
+const PRUNE_BATCH: u16 = 1000;
 const FIRST_POLL: Duration = Duration::from_millis(500);
-const MAX_POLL: Duration = Duration::from_secs(2);
+const MAX_POLL: Duration = Duration::from_secs(5);
 const MAX_STATUS_FAILURES: u8 = 5;
 
 /// Starts and runs generations.
@@ -285,19 +289,57 @@ where
             ideas,
             routines,
         };
-        // A child of the starting span, so a start and its run stay one
-        // trace.
-        let run_span = tracing::info_span!(
-            "suggestion.generation",
-            suggestion.generation.id = %generation,
-            suggestion.generation.trigger = trigger.as_ref(),
-            suggestion.generation.ideas = ideas,
-            suggestion.generation.routines = routines,
-            suggestion.generation.ideas_kept = tracing::field::Empty,
-            suggestion.generation.routines_kept = tracing::field::Empty,
-            suggestion.generation.retries = tracing::field::Empty,
-            suggestion.generation.outcome = tracing::field::Empty,
-        );
+        // Onboarding: a child of the request that started it, one trace. A
+        // nightly tick starts many people's: each is its own trace, linked to
+        // the tick, so a trace never holds two people's runs.
+        let run_span = match trigger {
+            GenerationTrigger::Onboarding => tracing::info_span!(
+                "suggestion.generation",
+                suggestion.generation.id = %generation,
+                suggestion.generation.trigger = trigger.as_ref(),
+                suggestion.generation.ideas = ideas,
+                suggestion.generation.routines = routines,
+                suggestion.generation.ideas_kept = tracing::field::Empty,
+                suggestion.generation.routines_kept = tracing::field::Empty,
+                suggestion.generation.retries = tracing::field::Empty,
+                suggestion.generation.outcome = tracing::field::Empty,
+                user.id = tracing::field::Empty,
+                otel.status_code = tracing::field::Empty,
+            ),
+            GenerationTrigger::Nightly => {
+                let span = tracing::info_span!(
+                    parent: None,
+                    "suggestion.generation",
+                    suggestion.generation.id = %generation,
+                    suggestion.generation.trigger = trigger.as_ref(),
+                    suggestion.generation.ideas = ideas,
+                    suggestion.generation.routines = routines,
+                    suggestion.generation.ideas_kept = tracing::field::Empty,
+                    suggestion.generation.routines_kept = tracing::field::Empty,
+                    suggestion.generation.retries = tracing::field::Empty,
+                    suggestion.generation.outcome = tracing::field::Empty,
+                    user.id = tracing::field::Empty,
+                    otel.status_code = tracing::field::Empty,
+                );
+                span.follows_from(&tracing::Span::current());
+                span
+            }
+        };
+        // Its sessions' tool calls arrive without this trace's context: they
+        // record its id, kept with the generation, to be joined to it.
+        if let Some(trace) = run_span.in_scope(current_trace_id)
+            && let Err(error) = repo.traced(generation, &trace).await
+        {
+            tracing::warn!(?error, "could not keep a generation's trace id");
+        }
+        // The person's opaque id, to find their generations by.
+        match repo.account(user).await {
+            Ok(Some(account)) => {
+                run_span.record("user.id", account.to_string());
+            }
+            Ok(None) => {}
+            Err(error) => tracing::warn!(?error, "could not read a person's account id"),
+        }
         let runner = Arc::clone(&self.runner);
         let shutdown = self.shutdown.clone();
         let permit = match trigger {
@@ -405,6 +447,7 @@ where
     /// mid-generation left behind. How many it cleaned up.
     #[tracing::instrument(name = "suggestion.sweep", skip_all, fields(
         suggestion.swept = tracing::field::Empty,
+        suggestion.changes_pruned = tracing::field::Empty,
     ), err)]
     pub async fn sweep(&self) -> Result<usize, GenerationError> {
         let stale = chrono::Duration::from_std(STALE_SESSION).map_err(GenerationError::internal)?;
@@ -416,6 +459,19 @@ where
             .map_err(GenerationError::internal)?;
         for session in &stale {
             self.runner.clean_up(&action_for(session), false).await;
+        }
+        // The change log is for us, never shown: kept for a while, then
+        // deleted a batch at a time.
+        match self
+            .runner
+            .repo
+            .prune_changes(Utc::now() - CHANGES_KEPT, PRUNE_BATCH)
+            .await
+        {
+            Ok(pruned) => {
+                tracing::Span::current().record("suggestion.changes_pruned", pruned);
+            }
+            Err(error) => tracing::warn!(?error, "could not prune the suggestion change log"),
         }
         tracing::Span::current().record("suggestion.swept", stale.len());
         Ok(stale.len())
@@ -525,6 +581,9 @@ where
         span.record("suggestion.generation.routines_kept", routines_kept);
         span.record("suggestion.generation.retries", retries);
         span.record("suggestion.generation.outcome", outcome.as_ref());
+        if outcome == GenerationOutcome::Failed {
+            span.record("otel.status_code", "ERROR");
+        }
         tracing::info!(
             event = "suggestion_generation.finished",
             trigger = run.trigger.as_ref(),
@@ -709,6 +768,7 @@ where
             suggestion.session.turns = tracing::field::Empty,
             suggestion.session.ended = tracing::field::Empty,
         );
+        let reads = std::sync::atomic::AtomicU32::new(0);
         async {
             let action = RoutineSessionAction {
                 owner: run.user.clone(),
@@ -733,7 +793,7 @@ where
                 return Ending::Failed;
             }
             let ending = tokio::select! {
-                ending = tokio::time::timeout(timeout, self.turn(&action, brief)) => match ending {
+                ending = tokio::time::timeout(timeout, self.turn(&action, brief, &reads)) => match ending {
                     Ok(Ok(ending)) => ending,
                     Ok(Err(RoutineSessionError::PromptDeliveryUnknown)) => Ending::DeliveryUnknown,
                     Ok(Err(error)) => {
@@ -744,8 +804,13 @@ where
                 },
                 () = shutdown.cancelled() => Ending::Cancelled,
             };
+            // Each field once: a span keeps a bounded number of attributes.
             let span = tracing::Span::current();
             span.record("suggestion.session.ended", ending.as_ref());
+            span.record(
+                "suggestion.session.status_reads",
+                reads.load(std::sync::atomic::Ordering::Relaxed),
+            );
             if let Ok(activity) = self.sessions.activity(action.clone()).await {
                 span.record("suggestion.session.tool_calls", activity.tool_calls);
                 span.record("suggestion.session.turns", activity.turns);
@@ -762,6 +827,7 @@ where
         &self,
         action: &RoutineSessionAction,
         brief: String,
+        reads: &std::sync::atomic::AtomicU32,
     ) -> Result<Ending, RoutineSessionError> {
         self.sessions
             .prepare(PrepareRoutineSession {
@@ -790,15 +856,14 @@ where
                 context: None,
             })
             .await?;
-        let span = tracing::Span::current();
+        // The session has no completion signal to wait on: read its status,
+        // less often the longer it runs.
         let mut delay = FIRST_POLL;
         let mut failures = 0;
-        let mut reads = 0_u32;
         loop {
             tokio::time::sleep(delay).await;
             delay = (delay * 2).min(MAX_POLL);
-            reads += 1;
-            span.record("suggestion.session.status_reads", reads);
+            reads.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             match self.sessions.status(action.clone()).await {
                 Ok(RoutineActionStatus::Succeeded | RoutineActionStatus::Failed(_)) => {
                     return Ok(Ending::Finished);
@@ -838,6 +903,15 @@ where
             tracing::warn!(error = ?error, "could not close a generation session");
         }
     }
+}
+
+/// The current span's trace id, as W3C trace context writes it.
+fn current_trace_id() -> Option<String> {
+    let mut headers = http::HeaderMap::new();
+    macro_tower_layers::inject_trace_headers(&mut headers);
+    let parent = headers.get("traceparent")?.to_str().ok()?;
+    let trace = parent.split('-').nth(1)?;
+    (trace.len() == 32 && trace.bytes().any(|byte| byte != b'0')).then(|| trace.to_owned())
 }
 
 fn action_for(session: &StaleSession) -> RoutineSessionAction {

@@ -377,6 +377,18 @@ impl GenerationRepo for FakeRepo {
         Ok(())
     }
 
+    async fn account(&self, _: &MacroUserIdStr<'_>) -> Result<Option<Uuid>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn prune_changes(&self, _: DateTime<Utc>, _: u16) -> Result<u64, Self::Err> {
+        Ok(0)
+    }
+
+    async fn traced(&self, _: Uuid, _: &str) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
     async fn reschedule(
         &self,
         user: &MacroUserIdStr<'_>,

@@ -232,6 +232,7 @@ impl Harness {
                     .iter()
                     .map(|surface| surface_name(*surface).to_owned())
                     .collect(),
+                trace_id: None,
             },
         );
         session

@@ -71,6 +71,7 @@ impl GenerationSessions for RowSessions {
             user: MacroUserIdStr::try_from(row.user_id).unwrap(),
             kind: row.kind.parse().unwrap(),
             surfaces: Vec::new(),
+            trace_id: None,
         }))
     }
 }
