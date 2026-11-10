@@ -45,7 +45,9 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/cognition/`: legacy chat reads, completions, integrations, and
   projection workers; the library also exports their OpenAPI document. Legacy
   AI chats are read-only: `POST /stream/chat/message` answers 410
-  `chat_read_only` for every request, before admission.
+  `chat_read_only` for every request, before admission, and `POST /chats` and
+  `POST /chats/{chat_id}/copy` (`src/cognition/api/chats/retired.rs`, not in
+  the OpenAPI spec) answer the same body for stale clients.
   `src/cognition/service/integration_analytics.rs` sends PostHog
   `integration_connected` / `integration_disconnected` for native MCP servers
   and Pipedream apps, from the router hooks wired in `src/cognition/server.rs`.
