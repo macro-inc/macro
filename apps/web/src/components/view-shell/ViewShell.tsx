@@ -99,7 +99,7 @@ type ViewShellInternal = ViewShellLayout & {
 };
 
 const RESIZE_GUTTER = 1;
-const WIDE_TOUCH_ASIDE_SCALE = 1.5546875;
+const WIDE_TOUCH_ASIDE_SCALE = 1.57421875;
 
 const ViewShellContext = createContext<ViewShellInternal>();
 
@@ -501,6 +501,7 @@ function Root(props: ViewShellRootProps) {
         <Resize.Zone
           direction="horizontal"
           gutter={RESIZE_GUTTER}
+          showTouchDividers={isTouchDevice() && !atLayoutBreakpoint()}
           resizable={resizable()}
         >
           {local.children}

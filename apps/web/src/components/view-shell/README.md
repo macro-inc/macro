@@ -55,7 +55,8 @@ Collapse controls and `Cmd+.` are off there; wide layouts are unchanged.
 Workspace sidebars use the shared 720px container breakpoint on touch and desktop.
 Wide panes dock navigation; narrow panes open it as an overlay. The title header
 places collapse on the right; collapsed touch navigation uses the leading pill
-control, before filters.
+control, before filters. Wide touch panes use the same 1px dividers as desktop
+between docked navigation, lists, and inline details.
 
 `ViewShell.Main` and `ViewShell.Detail` scope floating mobile accessory chrome
 to their pane through `FloatRegionScope`. The app-wide host follows the winning
@@ -69,7 +70,7 @@ and paints the top fade only inside that list pane. Reserve its
 desktop headers stay in flow. Keep workspace metadata composable on touch when
 its chrome is local, so the legacy split-wide fade does not cover the sidebar.
 
-Docked touch sidebars above the layout breakpoint use 1.5546875 times the base width
-and bounds (398px initially), and preserve that width while space permits.
+Docked touch sidebars above the layout breakpoint use 1.57421875 times the base width
+and bounds (403px initially), and preserve that width while space permits.
 Desktop and narrow overlays keep base sizing. Normalize manually resized touch
 widths before saving so switching layouts or devices does not compound scaling.

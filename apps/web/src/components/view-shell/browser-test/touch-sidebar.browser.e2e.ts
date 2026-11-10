@@ -18,7 +18,10 @@ test('collapses beside the view title and reopens before touch filters', async (
   });
   const collapse = page.getByRole('button', { name: 'Hide navigation' });
   await expect(navigation).toBeVisible();
-  await expect(navigation).toHaveCSS('width', '398px');
+  await expect(navigation).toHaveCSS('width', '403px');
+  const divider = page.locator('[data-resize-divider]');
+  await expect(divider).toBeVisible();
+  await expect(divider).toHaveCSS('border-left-width', '1px');
   await expect(collapse).toBeVisible();
   const title = await navigation
     .getByRole('heading', { name: 'Drive' })
@@ -30,6 +33,7 @@ test('collapses beside the view title and reopens before touch filters', async (
   ).toBeLessThan(1);
 
   await collapse.tap();
+  await expect(divider).toHaveCount(0);
   const expand = page.getByRole('button', { name: 'Show navigation' });
   await expect(expand).toBeVisible();
   const controls = await page.evaluate(() => {
@@ -49,6 +53,7 @@ test('collapses beside the view title and reopens before touch filters', async (
   expect(controls.expandRight).toBeLessThan(controls.filterLeft);
   await expand.tap();
   await expect(collapse).toBeVisible();
+  await expect(divider).toBeVisible();
   await expect(collapse).toBeFocused();
   await page.getByRole('button', { name: 'Recent', exact: true }).tap();
   await expect(page.getByText('Selected: recent')).toBeVisible();
@@ -395,6 +400,12 @@ test('floating chrome hands ownership back when a detail closes', async ({
   await detailReply.fill('Detail draft');
   const detail = page.locator('[data-view-shell-detail-placement="inline"]');
   await expect(detail).toBeVisible();
+  const dividers = page.locator('[data-resize-divider]');
+  await expect(dividers).toHaveCount(2);
+  for (const divider of await dividers.all()) {
+    await expect(divider).toBeVisible();
+    await expect(divider).toHaveCSS('border-left-width', '1px');
+  }
   const detailWidth = await detail.evaluate(
     (element) => element.getBoundingClientRect().width
   );
