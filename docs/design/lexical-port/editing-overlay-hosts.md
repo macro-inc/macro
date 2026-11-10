@@ -118,9 +118,9 @@ must not mutate whichever unrelated range happens to be current on submit.
 Create-picker opening is an explicit host request, not a synthetic Lexical
 command. Native registration must prove command priority and disposal parity.
 
-Proposed first hunks: new `editing/overlay-hosts/link.ts` contract;
-new `editing/overlay-hosts/lexical-link.ts` Source adapter;
-`component/menu/FloatingLinkMenu.tsx` wrapper plus shared host-driven component.
+The Source extraction uses `editing/overlay-hosts/link.ts` and
+`editing/overlay-hosts/lexical-link.ts`, with a thin
+`component/menu/FloatingLinkMenu.tsx` wrapper over the shared component.
 No changes to decorator native factories, full registry, EditorView, SessionPort,
 Normal Enter or executor construction are needed for that extraction.
 
