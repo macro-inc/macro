@@ -194,7 +194,8 @@ workload. Tests and the library keep the system allocator.
 
 `AGENT_SESSION_IDLE_TIMEOUT_SECS` (default 900, so no Doppler key) is how long
 a session's command worker waits before it releases a quiet session from
-memory and exits; lower it only to exercise the release end to end.
+memory and exits; lower it only to exercise the release end to end. Values
+below 30 fail startup.
 
 The shared Postgres pool defaults to 30 connections (`DATABASE_MAX_CONNECTIONS`).
 Routine dispatch waits for the shared HTTP listener and calls its loopback
