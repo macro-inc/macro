@@ -763,6 +763,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Publish recovery reset outcomes before parking while retaining the read pause.
   Bound foreground resume reads to one second without killing an owner, stealing
   its lock, replaying writes, or treating intentional parking as a failure.
+- Snapshot cache generation subscribers before dispatch and skip removed listeners;
+  reactive observers may resubscribe during notification and must not extend it.
 - Coalesce broad browser cache-change hints across the coordinator's in-flight
   backlog, not the engine's per-message queue; keep reset fences, mutation
   settlements, and query-specific invalidations immediate.

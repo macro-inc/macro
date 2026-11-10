@@ -324,8 +324,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       }
       if (msg.kind === 'cache-changed') {
         if (msg.reset) {
-          for (const cb of generationChangeSubscribers)
-            cb({ storage: 'reset' });
+          emitGenerationChange({ storage: 'reset' });
         }
         for (const cb of cacheChangeSubscribers) {
           if (
@@ -419,6 +418,14 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     for (const cb of affectedSubscribers) cb(opKeys);
   }
 
+  function emitGenerationChange(change: CacheGenerationChange): void {
+    // Reactive observers can unsubscribe and resubscribe during notification.
+    // A live Set iterator would keep visiting the replacement subscriptions.
+    for (const cb of [...generationChangeSubscribers]) {
+      if (generationChangeSubscribers.has(cb)) cb(change);
+    }
+  }
+
   function onEngineReplaced(
     ownerEpoch: number,
     openOutcome: EngineOpenOutcome
@@ -438,7 +445,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     const change: CacheGenerationChange = {
       storage: openOutcome === 'opened-existing' ? 'preserved' : 'reset',
     };
-    for (const cb of generationChangeSubscribers) cb(change);
+    emitGenerationChange(change);
     if (state === 'ready') {
       beginRecoveryGeneration();
       // No old response put this host into recovery. Requests still pending at
@@ -1258,8 +1265,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
           // A surviving coordinator need not send engine-replaced to a late
           // joiner. Resets while frozen are unknowable, so conservatively
           // invalidate local checkpoints as well as revision/dependency state.
-          for (const cb of generationChangeSubscribers)
-            cb({ storage: 'reset' });
+          emitGenerationChange({ storage: 'reset' });
         }
         telemetry?.record({
           name: 'graphql_cache.host_ready',
