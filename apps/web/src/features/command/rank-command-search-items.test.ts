@@ -283,14 +283,14 @@ describe('command menu search ranking', () => {
     expect(ids([...items].reverse(), 'Planning')).toEqual(['a', 'b', 'older']);
   });
 
-  it('retains broader cache subsequences after regular matches without retaining unmatched commands', () => {
+  it('uses the same per-row subsequences for cached/local entities without widening command keywords', () => {
     const items = [
       channel('b', 'Quarterly plan'),
       channel('a', 'Quarterly plan'),
       command('unmatched-command', 'Quarterly plan', NOW),
       channel('direct-match', 'Qtr plan', NOW - DAY),
     ];
-    expect(ids(items, 'qtr', false)).toEqual(['direct-match']);
+    expect(ids(items, 'qtr', false)).toEqual(['direct-match', 'a', 'b']);
     expect(ids(items, 'qtr')).toEqual(['direct-match', 'a', 'b']);
     expect(ids([...items].reverse(), 'qtr')).toEqual([
       'direct-match',
@@ -377,7 +377,7 @@ describe('command menu search ranking', () => {
     ];
 
     expect(ids(items, 'qtr')).toEqual(['dm', 'crm']);
-    expect(ids(items, 'qtr', false)).toEqual(['crm']);
+    expect(ids(items, 'qtr', false)).toEqual(['dm', 'crm']);
   });
 
   it('prioritizes a preserved server-matched person over a directly matched CRM contact', () => {

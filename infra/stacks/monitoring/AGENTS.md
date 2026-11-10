@@ -4,7 +4,7 @@
 
 Org-global Datadog monitors, synthetics, and rollout dashboards. This stack is
 manual and has only a prod stack, even for monitors covering both environments.
-Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions,outlook-sync,routine-suggestions}.ts`
+Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions,outlook-sync,routine-suggestions,harness-runtimes}.ts`
 (`prodMonitor()` in `prod-monitor.ts`), each file with a dashboard graphing its
 monitors that their messages link to; every monitor notifies through `notify.ts`.
 `dashboards/web-performance.ts` holds the web app performance dashboard with the
@@ -72,6 +72,10 @@ From `infra/`:
   events (`@event`) that `crates/scheduled_action` emits; its header is the
   field contract. Its failure monitor does not page while suggestions are
   behind their flag.
+- `monitors/harness-runtimes.ts` reads the `agent.runtime.reattach` span fields
+  in `crates/agent_harness/src/domain/service.rs` and matches the text of the
+  `tokio runtime starvation detected` warning in `crates/macro_tower_layers`;
+  its header is the field contract.
 - `monitors/calls.ts` matches the text of the `voip push: SNS delivery failed`
   log in `crates/notification/src/domain/service/voip.rs` and the
   `PushEndpointUnavailable` message. Rewording either silently breaks it.
