@@ -71,7 +71,8 @@ fn held_output_waits_for_all_earlier_writes_and_crash_drops_unconfirmed_data() {
     );
     ports.confirm_through(ports.write_generation());
     assert_eq!(ports.take_effects()[0].operation, "send_text");
-    block_on(ports.put_pending_operation(&OperationId::new("pending".into()), b"update")).unwrap();
+    block_on(ports.put_pending_operation(&OperationId::new("pending".into()), b"update", None))
+        .unwrap();
     ports.send_text(&socket(), "unconfirmed").unwrap();
     ports.recover();
     assert_eq!(block_on(ports.session_key()).unwrap(), Some(key()));
@@ -712,15 +713,15 @@ fn native_loro_envelopes_allow_export_chunks_but_keep_other_fields_exact() {
 fn cold_forks_include_only_confirmed_writes_and_are_isolated() {
     let ports = SimPorts::new();
     ports.set_gate(GateMode::Held);
-    block_on(ports.put_pending_operation(&OperationId::new("first".into()), b"a")).unwrap();
+    block_on(ports.put_pending_operation(&OperationId::new("first".into()), b"a", None)).unwrap();
     assert!(ports.fork_durable().storage_dump().is_empty());
     let first = ports.write_generation();
     ports.confirm_through(first);
     let cold = ports.fork_durable();
     assert_eq!(cold.storage_dump()["o/first"], serde_json::json!([97]));
-    block_on(cold.put_pending_operation(&OperationId::new("cold".into()), b"b")).unwrap();
+    block_on(cold.put_pending_operation(&OperationId::new("cold".into()), b"b", None)).unwrap();
     assert!(!ports.storage_dump().contains_key("o/cold"));
-    block_on(ports.put_pending_operation(&OperationId::new("later".into()), b"c")).unwrap();
+    block_on(ports.put_pending_operation(&OperationId::new("later".into()), b"c", None)).unwrap();
     assert!(!cold.storage_dump().contains_key("o/later"));
 }
 
@@ -730,7 +731,8 @@ fn completed_write_evidence_excludes_failed_attempts_and_matches_generations() {
     ports.set_gate(GateMode::Held);
     ports.set_operation_error("storage.put", Some("unavailable".into()));
     assert!(
-        block_on(ports.put_pending_operation(&OperationId::new("failed".into()), b"a")).is_err()
+        block_on(ports.put_pending_operation(&OperationId::new("failed".into()), b"a", None))
+            .is_err()
     );
     assert!(ports.take_completed_puts().is_empty());
     assert!(
@@ -740,7 +742,7 @@ fn completed_write_evidence_excludes_failed_attempts_and_matches_generations() {
             .any(|effect| effect.operation == "storage.put")
     );
     ports.set_operation_error("storage.put", None);
-    block_on(ports.put_pending_operation(&OperationId::new("ok".into()), b"b")).unwrap();
+    block_on(ports.put_pending_operation(&OperationId::new("ok".into()), b"b", None)).unwrap();
     assert_eq!(
         ports.take_completed_puts(),
         [(
@@ -755,15 +757,16 @@ fn completed_write_evidence_excludes_failed_attempts_and_matches_generations() {
 #[test]
 fn relative_faults_count_across_capabilities_without_matching_clock_reads() {
     let ports = SimPorts::new();
-    block_on(ports.put_pending_operation(&OperationId::new("before".into()), b"a")).unwrap();
+    block_on(ports.put_pending_operation(&OperationId::new("before".into()), b"a", None)).unwrap();
     ports.fault_after_calls(1, Fault::Error("planned".into()));
     Clock::unix_time(&ports);
     block_on(ports.pending_operations()).unwrap();
     assert!(
-        block_on(ports.put_pending_operation(&OperationId::new("failed".into()), b"b")).is_err()
+        block_on(ports.put_pending_operation(&OperationId::new("failed".into()), b"b", None))
+            .is_err()
     );
     assert!(!ports.storage_dump().contains_key("o/failed"));
-    block_on(ports.put_pending_operation(&OperationId::new("after".into()), b"c")).unwrap();
+    block_on(ports.put_pending_operation(&OperationId::new("after".into()), b"c", None)).unwrap();
 }
 
 #[test]
@@ -771,7 +774,7 @@ fn successful_send_enqueues_exclude_failed_attempts_and_precede_gate_release() {
     let ports = SimPorts::new();
     ports.accept(&socket()).unwrap();
     ports.set_gate(GateMode::Held);
-    block_on(ports.put_pending_operation(&OperationId::new("held".into()), b"x")).unwrap();
+    block_on(ports.put_pending_operation(&OperationId::new("held".into()), b"x", None)).unwrap();
     ports.set_operation_error("connections.send_binary", Some("unavailable".into()));
     assert!(ports.send_binary(&socket(), &[1, 2]).is_err());
     assert!(ports.take_queued_sends().is_empty());
@@ -821,9 +824,15 @@ fn confirming_an_earlier_generation_keeps_its_overwritten_values_and_snapshots()
         let ports = SimPorts::new();
         ports.set_gate(GateMode::Held);
         let id = OperationId::new("same-key".into());
-        ports.put_pending_operation(&id, b"first").await.unwrap();
+        ports
+            .put_pending_operation(&id, b"first", None)
+            .await
+            .unwrap();
         let first = ports.write_generation();
-        ports.put_pending_operation(&id, b"later").await.unwrap();
+        ports
+            .put_pending_operation(&id, b"later", None)
+            .await
+            .unwrap();
         ports.confirm_through(first);
         let cold = ports.fork_durable();
         assert_eq!(

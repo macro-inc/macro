@@ -3,7 +3,7 @@ use crate::domain::{
     migration::{SourceState, TargetState},
     ports::UnixMillis,
     socket::WebSocketId,
-    types::PendingOperation,
+    types::{OperationArchive, PendingOperation},
 };
 use crate::domain::{
     document::DocumentAttribution,
@@ -26,8 +26,13 @@ pub(crate) struct Store {
     pub(crate) lifecycle: Cell<Option<SurfaceLifecycle>>,
     pub(crate) events: Events,
     pub(crate) pending: RefCell<BTreeMap<String, Vec<u8>>>,
+    pub(crate) archive_writes: Cell<bool>,
+    pub(crate) attributions: RefCell<BTreeMap<String, DocumentAttribution>>,
+    pub(crate) archives: RefCell<BTreeMap<String, Vec<u8>>>,
+    pub(crate) archive_status: RefCell<BTreeMap<String, OperationArchive>>,
     pub(crate) saved: RefCell<Option<Vec<u8>>>,
     pub(crate) unreadable: Cell<bool>,
+    pub(crate) fail_pending: Cell<bool>,
     pub(crate) fail_archive: Cell<bool>,
     pub(crate) delete_count: Cell<Option<usize>>,
 }
@@ -95,6 +100,12 @@ impl RoomStorage for Store {
                 Ok(PendingOperation {
                     id: OperationId::new(id.clone()),
                     update: update.clone(),
+                    archive: self
+                        .archive_status
+                        .borrow()
+                        .get(id)
+                        .cloned()
+                        .unwrap_or_default(),
                 })
             })
             .collect();
@@ -103,26 +114,90 @@ impl RoomStorage for Store {
         }
         Ok(entries)
     }
-    async fn put_pending_operation(&self, id: &OperationId, update: &[u8]) -> io::Result<()> {
+    fn operation_archive_writes(&self) -> bool {
+        self.archive_writes.get()
+    }
+    async fn complete_operation_archive(&self, id: &OperationId) -> io::Result<()> {
+        if self.archive_writes.get() {
+            self.events.borrow_mut().push("archive-complete");
+            self.archive_status
+                .borrow_mut()
+                .insert(id.as_str().to_owned(), OperationArchive::Complete);
+        }
+        Ok(())
+    }
+    async fn put_complete_operation(
+        &self,
+        id: &OperationId,
+        update: &[u8],
+        attribution: Option<&DocumentAttribution>,
+    ) -> Result<(), OperationAppendError<io::Error>> {
+        self.events.borrow_mut().push("append");
+        if self.fail_pending.get() {
+            return Err(OperationAppendError::Pending(io::Error::other(
+                "pending write failed",
+            )));
+        }
+        if self.fail_archive.get() {
+            return Err(OperationAppendError::Archive(io::Error::other(
+                "archive write failed",
+            )));
+        }
+        self.pending
+            .borrow_mut()
+            .insert(id.as_str().to_owned(), update.to_vec());
+        self.archives
+            .borrow_mut()
+            .insert(id.as_str().to_owned(), update.to_vec());
+        if let Some(attribution) = attribution {
+            self.attributions
+                .borrow_mut()
+                .insert(id.as_str().to_owned(), attribution.clone());
+        }
+        self.archive_status
+            .borrow_mut()
+            .insert(id.as_str().to_owned(), OperationArchive::Complete);
+        Ok(())
+    }
+    async fn put_pending_operation(
+        &self,
+        id: &OperationId,
+        update: &[u8],
+        attribution: Option<&DocumentAttribution>,
+    ) -> io::Result<()> {
         self.events.borrow_mut().push("pending");
         self.pending
             .borrow_mut()
             .insert(id.as_str().to_owned(), update.to_vec());
+        if self.archive_writes.get() {
+            self.archive_status.borrow_mut().insert(
+                id.as_str().to_owned(),
+                OperationArchive::Incomplete {
+                    attribution: attribution.cloned(),
+                },
+            );
+        }
         Ok(())
     }
-    async fn put_archived_operation(&self, _: &OperationId, _: &[u8]) -> io::Result<()> {
+    async fn put_archived_operation(&self, id: &OperationId, update: &[u8]) -> io::Result<()> {
         self.events.borrow_mut().push("archive");
         if self.fail_archive.get() {
             return Err(io::Error::other("archive write failed"));
         }
+        self.archives
+            .borrow_mut()
+            .insert(id.as_str().to_owned(), update.to_vec());
         Ok(())
     }
     async fn put_operation_attribution(
         &self,
-        _: &OperationId,
-        _: &DocumentAttribution,
+        id: &OperationId,
+        attribution: &DocumentAttribution,
     ) -> io::Result<()> {
         self.events.borrow_mut().push("attribution");
+        self.attributions
+            .borrow_mut()
+            .insert(id.as_str().to_owned(), attribution.clone());
         Ok(())
     }
     async fn delete_pending_operations(&self, ids: &[OperationId]) -> io::Result<usize> {
@@ -133,7 +208,10 @@ impl RoomStorage for Store {
         let mut pending = self.pending.borrow_mut();
         Ok(ids
             .iter()
-            .filter(|id| pending.remove(id.as_str()).is_some())
+            .filter(|id| {
+                self.archive_status.borrow_mut().remove(id.as_str());
+                pending.remove(id.as_str()).is_some()
+            })
             .count())
     }
     async fn delete_all(&self) -> io::Result<()> {
@@ -143,6 +221,9 @@ impl RoomStorage for Store {
         self.lifecycle.set(None);
         self.saved.borrow_mut().take();
         self.pending.borrow_mut().clear();
+        self.archives.borrow_mut().clear();
+        self.attributions.borrow_mut().clear();
+        self.archive_status.borrow_mut().clear();
         Ok(())
     }
 }

@@ -168,5 +168,14 @@ pub fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError> {
     if !ENABLED.contains(&transcript.name.as_str()) {
         return Err(ReplayError::NotEnabled(transcript.name.clone()));
     }
-    golden::replay(transcript)
+    golden::replay(transcript, false)
+}
+
+/// Replay the explicitly activated writer corpus through the same native callbacks.
+/// The caller selects deployment configuration; recorded effects never select policy.
+pub fn replay_activated(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError> {
+    if !ENABLED.contains(&transcript.name.as_str()) {
+        return Err(ReplayError::NotEnabled(transcript.name.clone()));
+    }
+    golden::replay(transcript, true)
 }

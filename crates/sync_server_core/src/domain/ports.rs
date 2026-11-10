@@ -105,6 +105,17 @@ pub trait Connections {
     fn close(&self, socket: &Self::Socket, reason: CloseReason) -> Result<(), Self::Error>;
 }
 
+/// Atomic append failure identifies whether core may retain pending bytes separately.
+#[derive(Debug, thiserror::Error)]
+pub enum OperationAppendError<E: std::error::Error + 'static> {
+    /// Pending staging failed; the transaction rolled back and nothing is visible.
+    #[error(transparent)]
+    Pending(E),
+    /// Archive/completion or an atomic batch failed; all rolled back. Retain pending separately.
+    #[error(transparent)]
+    Archive(E),
+}
+
 /// Durable Object transactional storage, typed. The adapter owns key spelling and value encoding.
 pub trait RoomStorage {
     /// Adapter-specific failure without thread-safety requirements.
@@ -157,15 +168,31 @@ pub trait RoomStorage {
         encoded: &[u8],
     ) -> impl Future<Output = Result<(), Self::Error>>;
     /// `o/*` in key order. A per-entry error is a legacy unreadable entry (logged and skipped, H8).
-    /// New-format marker or chunk corruption fails the outer load; never replay a partial operation.
+    /// New-format receipt, marker or chunk corruption fails the outer load; never replay a partial operation.
     fn pending_operations(
         &self,
     ) -> impl Future<Output = Result<Vec<Result<PendingOperation, Self::Error>>, Self::Error>>;
-    /// Persist an unmodified pending update.
+    /// Enable archive completion receipts and duplicate suppression. Readers are unconditional.
+    fn operation_archive_writes(&self) -> bool;
+    /// Atomically append pending, archive, original attribution and Complete status.
+    /// A failure publishes none of these writes; core owns durable pending fallback.
+    fn put_complete_operation(
+        &self,
+        id: &OperationId,
+        update: &[u8],
+        attribution: Option<&DocumentAttribution>,
+    ) -> impl Future<Output = Result<(), OperationAppendError<Self::Error>>>;
+    /// Persist unmodified pending bytes and, when activated, Incomplete status atomically.
     fn put_pending_operation(
         &self,
         id: &OperationId,
         update: &[u8],
+        attribution: Option<&DocumentAttribution>,
+    ) -> impl Future<Output = Result<(), Self::Error>>;
+    /// Mark archive and attribution complete after both writes succeed.
+    fn complete_operation_archive(
+        &self,
+        id: &OperationId,
     ) -> impl Future<Output = Result<(), Self::Error>>;
     /// Archive an unmodified update.
     fn put_archived_operation(

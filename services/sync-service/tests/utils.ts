@@ -53,6 +53,8 @@ export async function setupMiniflare(
     workerScriptPath?: string;
     record?: boolean;
     fixedWallTime?: number;
+    measureMessages?: boolean;
+    inspectorPort?: number;
     dssUrl?: string;
     lexicalServiceUrl?: string;
     lexicalServiceAuthKey?: string | null;
@@ -63,6 +65,7 @@ export async function setupMiniflare(
   const persist = (name: string) => options.persistPath ? `${options.persistPath}/${name}` : false;
   const capture = process.env.SYNC_RECORD === "1" && options.record !== false ? runtimeCapture(Boolean(expect.getState().currentTestName) && !options.persistPath, options.persistPath) : undefined;
   const mf = new Miniflare({
+    ...(options.inspectorPort !== undefined ? {inspectorPort: options.inspectorPort} : {}),
     ...(capture ? { handleRuntimeStdio: capture.stdio } : {}),
     d1Databases: {
       USER_PEER_MAPPING: 'user-peer-mapping-database-id',
@@ -95,6 +98,7 @@ export async function setupMiniflare(
       COMMENT_GATE_MODE: options.commentGateMode ?? "http",
       SYNC_RECORD: process.env.SYNC_RECORD === "1" && options.record !== false,
       ...(options.holdAlarms ? { SYNC_TEST_HOLD_ALARMS: true } : {}),
+      ...(options.measureMessages ? { SYNC_TEST_MESSAGE_TIMING: true } : {}),
       ...(options.fixedWallTime !== undefined ? { SYNC_TEST_WALL_MS: options.fixedWallTime } : {}),
       ...(options.fetchMock ? { DSS_URL: "https://dss.test", DSS_INTERNAL_AUTH_KEY: "local" } : {}),
       DOCUMENT_PERMISSIONS_SECRET: "local",

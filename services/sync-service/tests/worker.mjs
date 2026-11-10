@@ -66,12 +66,34 @@ export class DocumentSyncSession extends DurableObject {
     this.accepted = 0;
     this.expireAfterAccept = 0;
     this.operationChunkFailure = 0;
+    this.archiveFailure = false;
+    this.operationTransactions = 0;
+    this.operationAtomicBatches = 0;
+    this.rootWriteCalls = 0;
+    this.messageTimings = [];
+    this.operationWrites = { pending: 0, archive: 0, status: 0 };
+    const observeOperationWrite = (key, value) => {
+      if (typeof key === 'object' && key !== null && value === undefined) {
+        for (const [name, entry] of Object.entries(key)) observeOperationWrite(name, entry);
+        return;
+      }
+      key = String(key);
+      if (key.startsWith('a/') || key.startsWith('operation-chunks/a/')) {
+        if (this.archiveFailure) throw new Error('injected archive write failure');
+      }
+      if (key.startsWith('a/')) this.operationWrites.archive += 1;
+      if (key.startsWith('o/!archive-status-v1/')) this.operationWrites.status += 1;
+      else if (key.startsWith('o/') && !key.startsWith('o/!')) this.operationWrites.pending += 1;
+    };
     const storage = new Proxy(state.storage, {
       get: (target, key) => {
         if (key === 'constructor') return Reflect.get(target, key, target);
-        if (key === 'transaction') return callback => target.transaction(transaction => callback(new Proxy(transaction, {
+        if (key === 'transaction') return callback => {
+          this.operationTransactions += 1;
+          return target.transaction(transaction => callback(new Proxy(transaction, {
           get: (transaction, method) => {
             if (method === 'put') return async (key, value) => {
+              observeOperationWrite(key, value);
               if (String(key).startsWith('operation-chunks/') && this.operationChunkFailure > 0) {
                 this.operationChunkFailure -= 1;
                 if (this.operationChunkFailure === 0) throw new Error('injected operation chunk write failure');
@@ -82,7 +104,11 @@ export class DocumentSyncSession extends DurableObject {
             return typeof value === 'function' ? value.bind(transaction) : value;
           },
         })));
+        };
         if (key === 'put') return (...args) => {
+          this.rootWriteCalls += 1;
+          if (typeof args[0] === 'object' && args[0] !== null) this.operationAtomicBatches += 1;
+          observeOperationWrite(args[0], args[1]);
           if (String(args[0]).startsWith('ws_id') && this.expireAfterAccept) {
             return new Promise(resolve => setTimeout(resolve, Math.max(0, this.expireAfterAccept - Date.now()))).then(() => target.put(...args));
           }
@@ -119,6 +145,50 @@ export class DocumentSyncSession extends DurableObject {
 
   async fetch(request) {
     const control = new URL(request.url);
+    if (control.pathname === '/__sync_test_atomic_batch_probe') {
+      await this.state.storage.put('batch-probe-first', 'old');
+      let error;
+      try {
+        await this.state.storage.put({'batch-probe-first': 'new', 'batch-probe-large': new Uint8Array(9_000_000)});
+      } catch (failure) { error = String(failure); }
+      const first = await this.state.storage.get('batch-probe-first');
+      const large = await this.state.storage.get('batch-probe-large');
+      await this.state.storage.delete(['batch-probe-first', 'batch-probe-large']);
+      return Response.json({error, first, largeMissing: large === undefined});
+    }
+    if (control.pathname === '/__sync_test_message_timing') {
+      return Response.json({messages: this.messageTimings, writes: this.operationWrites, transactions: this.operationTransactions, atomicBatches: this.operationAtomicBatches, rootWriteCalls: this.rootWriteCalls});
+    }
+    if (control.pathname === '/__sync_test_operation_archive') {
+      if (control.searchParams.has('fail')) this.archiveFailure = control.searchParams.get('fail') === '1';
+      // Test-only legacy migration seed: remove completion metadata and,
+      // optionally, the archive while retaining the exact original pending row.
+      const unwrapInlineReceipt = async key => {
+        const value = await this.state.storage.get(key);
+        if (Array.isArray(value) && value.length === 2 && value[0] === 0x53430001 && value[1] instanceof Uint8Array) await this.state.storage.put(key, [...value[1]]);
+      };
+      if (control.searchParams.has('seedStates')) {
+        const rows = [...(await this.state.storage.list({prefix: 'o/'})).keys()].filter(key => !key.startsWith('o/!'));
+        if (rows.length !== 3) throw new Error('archive reader seed requires exactly three pending rows');
+        await unwrapInlineReceipt(rows[0]);
+        await unwrapInlineReceipt(rows[1]);
+        await this.state.storage.delete(`o/!archive-status-v1/${rows[0].slice(2)}`);
+        await this.state.storage.put(`o/!archive-status-v1/${rows[1].slice(2)}`,
+          [...new TextEncoder().encode(JSON.stringify({state: 'incomplete', attribution: null}))]);
+        await this.state.storage.delete(`a/${rows[1].slice(2)}`);
+      }
+      if (control.searchParams.has('legacy')) {
+        const pending = await this.state.storage.list({prefix: 'o/'});
+        for (const key of pending.keys()) if (!key.startsWith('o/!')) await unwrapInlineReceipt(key);
+        const rows = await this.state.storage.list({prefix: 'o/!archive-status-v1/'});
+        for (const key of rows.keys()) await this.state.storage.delete(key);
+        if (control.searchParams.get('legacy') === 'missing') {
+          const archive = await this.state.storage.list({prefix: 'a/'});
+          for (const key of archive.keys()) await this.state.storage.delete(key);
+        }
+      }
+      return Response.json(this.operationWrites);
+    }
     if (control.pathname === '/__sync_test_operation_chunks') {
       this.operationChunkFailure = Number(control.searchParams.get('failAt') ?? 0);
       return new Response(null, { status: 204 });
@@ -199,6 +269,12 @@ export class DocumentSyncSession extends DurableObject {
     recorder?.begin({ in: 'message', ws_id: this.state.getTags(ws)[0],
       ...(typeof message === 'string' ? { text: message } : { binary_b64: b64(message) }) });
     globalThis.__syncTranscriptCurrent = recorder;
+    if (this.env.SYNC_TEST_MESSAGE_TIMING) {
+      const start = performance.now();
+      const bytes = typeof message === 'string' ? message.length : message.byteLength;
+      try { return await this.track(this.session.webSocketMessage(ws, message)); }
+      finally { this.messageTimings.push({start, end: performance.now(), bytes}); }
+    }
     return this.track(this.session.webSocketMessage(ws, message));
   }
 
@@ -230,11 +306,14 @@ export class DocumentSyncSession extends DurableObject {
     while (this.callbacks.size) await Promise.allSettled([...this.callbacks]);
     await this.recorder()?.drain();
     const stored = [...await this.state.storage.list()];
-    const kv = stored.map(([key, value]) => [key,
-      value instanceof Uint8Array || value instanceof ArrayBuffer ? { bytes_b64: b64(value) } : value]);
+    const storedValue = value => value instanceof Uint8Array || value instanceof ArrayBuffer
+      ? {bytes_b64: b64(value)} : Array.isArray(value) ? value.map(storedValue) : value;
+    const kv = stored.map(([key, value]) => [key, storedValue(value)]);
     // Match DurableKv::list_do_kv's Uint8Array conversion, while retaining
     // structured metadata separately for the typed RoomStorage replay.
-    const kv_bytes = stored.map(([key, value]) => [key, { bytes_b64: b64(new Uint8Array(value)) }]);
+    const kv_bytes = stored.map(([key, value]) => [key, {bytes_b64: b64(
+      Array.isArray(value) && value.length === 2 && value[0] === 0x53430001 && value[1] instanceof Uint8Array
+        ? value[1] : new Uint8Array(value))}]);
     const tables = this.state.storage.sql.exec("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'kv_store'").toArray();
     const sql = tables.length ? this.state.storage.sql.exec('SELECT id, chunk, data FROM kv_store ORDER BY id, chunk').toArray()
       .map(row => ({ ...row, data: { bytes_b64: b64(row.data) } })) : [];

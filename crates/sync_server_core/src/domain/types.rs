@@ -64,6 +64,8 @@ pub struct PendingOperation {
     pub id: OperationId,
     /// Unmodified Loro update bytes.
     pub update: Vec<u8>,
+    /// Archive completion loaded in the same pending-prefix read.
+    pub archive: OperationArchive,
 }
 
 /// A buffered last-editor observation awaiting the background writer.
@@ -111,3 +113,27 @@ impl std::borrow::Borrow<u64> for PeerId {
 
 /// Attribution used for document writes without a user identity.
 pub const SYSTEM_AUTHOR_ID: &str = "system";
+
+/// Persisted completion of the archive and signed attribution for a pending row.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case", deny_unknown_fields)]
+pub enum OperationArchive {
+    /// A deployed row predating completion receipts; repair conservatively once.
+    #[default]
+    Legacy,
+    /// Pending bytes are durable, but archive or attribution may still be absent.
+    Incomplete {
+        /// Original verified attribution; never replace it with retrying claims.
+        attribution: Option<super::document::DocumentAttribution>,
+    },
+    /// Archive and attribution completed; retain this receipt until pending GC.
+    Complete,
+}
+
+/// Reserved pending-prefix sidecars, excluded from Loro operation replay.
+pub const OPERATION_ARCHIVE_PREFIX: &str = "o/!archive-status-v1/";
+
+/// Durable archive-status key for one logical pending row.
+pub fn operation_archive_key(id: &OperationId) -> String {
+    format!("{OPERATION_ARCHIVE_PREFIX}{}", id.as_str())
+}

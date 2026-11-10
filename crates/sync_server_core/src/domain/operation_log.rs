@@ -1,10 +1,10 @@
 //! Pending-operation durability and snapshot replay policy.
 use super::{
     document::DocumentAttribution,
-    ports::{Clock, RoomStorage, SnapshotReadError, SnapshotStore},
+    ports::{Clock, OperationAppendError, RoomStorage, SnapshotReadError, SnapshotStore},
     state::{DocumentState, ImportedUpdate},
     state_error::{ResultExt, StateError},
-    types::{OperationId, SessionKey},
+    types::{OperationArchive, OperationId, PendingOperation, SessionKey},
 };
 use loro::VersionVector;
 use macro_sync_service_jwt::session::SessionKind;
@@ -68,6 +68,7 @@ pub struct OperationLog {
     ids: OrderedIds,
     applied: BTreeSet<OperationId>,
     unresolved: BTreeMap<OperationId, VersionVector>,
+    archive_debt: BTreeMap<OperationId, PendingOperation>,
 }
 impl OperationLog {
     /// Start a fresh log for a session identity.
@@ -78,6 +79,7 @@ impl OperationLog {
             ids: OrderedIds::default(),
             applied: BTreeSet::new(),
             unresolved: BTreeMap::new(),
+            archive_debt: BTreeMap::new(),
         }
     }
 
@@ -86,8 +88,9 @@ impl OperationLog {
         self.key == *key
     }
 
-    /// Import synchronously, then persist pending bytes, archive and attribution
-    /// in that order. The returned future deliberately does not borrow `document`.
+    /// Import synchronously, then append pending bytes, archive and attribution.
+    /// Activated appends are atomic with durable pending fallback on archive failure.
+    /// The returned future deliberately does not borrow `document`.
     pub fn apply<'a, S: RoomStorage, C: Clock>(
         &'a mut self,
         storage: &'a S,
@@ -106,6 +109,7 @@ impl OperationLog {
                 break candidate;
             }
         };
+        let before = document.loro_doc.oplog_vv();
         let imported = document.import_with_clock(update, || clock.monotonic());
         let required = loro::LoroDoc::decode_import_blob_meta(update, false)
             .context("failed to read update metadata")
@@ -114,8 +118,53 @@ impl OperationLog {
         async move {
             let imported = imported.map_err(OperationError::State)?;
             let required = required.map_err(OperationError::State)?;
+            // A causal-pending import may report unchanged while containing new
+            // operations. Only coverage BEFORE import proves a duplicate.
+            // Snapshot-origin history is already durable; only pending-origin
+            // history carries archive debt. Do not invent archives for snapshots.
+            if storage.operation_archive_writes() && covers(&before, &required) {
+                self.repair_archives(storage).await?;
+                return Ok(imported);
+            }
+            if storage.operation_archive_writes() {
+                match storage
+                    .put_complete_operation(&id, update, attribution)
+                    .await
+                {
+                    Ok(()) => {
+                        self.unresolved.insert(id, required);
+                        self.mark_resolved(&known);
+                        return Ok(imported);
+                    }
+                    Err(OperationAppendError::Pending(error)) => {
+                        return Err(OperationError::Storage(error));
+                    }
+                    Err(OperationAppendError::Archive(error)) => {
+                        // The fast transaction published nothing. Preserve the
+                        // accepted bytes and original attribution for cold repair
+                        // before exposing its failure; never ACK this path.
+                        storage
+                            .put_pending_operation(&id, update, attribution)
+                            .await
+                            .map_err(OperationError::Storage)?;
+                        self.archive_debt.insert(
+                            id.clone(),
+                            PendingOperation {
+                                id: id.clone(),
+                                update: update.to_vec(),
+                                archive: OperationArchive::Incomplete {
+                                    attribution: attribution.cloned(),
+                                },
+                            },
+                        );
+                        self.unresolved.insert(id, required);
+                        self.mark_resolved(&known);
+                        return Err(OperationError::Storage(error));
+                    }
+                }
+            }
             storage
-                .put_pending_operation(&id, update)
+                .put_pending_operation(&id, update, attribution)
                 .await
                 .map_err(OperationError::Storage)?;
             self.unresolved.insert(id.clone(), required);
@@ -132,6 +181,35 @@ impl OperationLog {
             }
             Ok(imported)
         }
+    }
+
+    async fn repair_archives<S: RoomStorage>(
+        &mut self,
+        storage: &S,
+    ) -> Result<(), OperationError<S::Error>> {
+        // Retain debt through every failure. A duplicate receipt promises the
+        // original archive, not just bytes recoverable from the pending log.
+        while let Some((id, entry)) = self.archive_debt.first_key_value() {
+            storage
+                .put_archived_operation(id, &entry.update)
+                .await
+                .map_err(OperationError::Storage)?;
+            if let OperationArchive::Incomplete {
+                attribution: Some(attribution),
+            } = &entry.archive
+            {
+                storage
+                    .put_operation_attribution(id, attribution)
+                    .await
+                    .map_err(OperationError::Storage)?;
+            }
+            storage
+                .complete_operation_archive(id)
+                .await
+                .map_err(OperationError::Storage)?;
+            self.archive_debt.pop_first();
+        }
+        Ok(())
     }
 
     fn mark_resolved(&mut self, known: &VersionVector) {
@@ -165,12 +243,12 @@ impl OperationLog {
         );
         let mut failures = Vec::new();
         let mut updates = Vec::new();
-        let mut ids = Vec::new();
+        let mut entries = Vec::new();
         for entry in pending {
             match entry {
                 Ok(entry) => {
-                    ids.push(entry.id);
                     updates.push(entry.update);
+                    entries.push((entry.id, entry.archive));
                 }
                 Err(error) => failures.push(error),
             }
@@ -181,11 +259,26 @@ impl OperationLog {
         document
             .replay_pending_operations(&updates)
             .map_err(OperationError::Replay)?;
-        for (id, update) in ids.into_iter().zip(&updates) {
-            let required = loro::LoroDoc::decode_import_blob_meta(update, false)
+        for ((id, archive), update) in entries.into_iter().zip(updates) {
+            let required = loro::LoroDoc::decode_import_blob_meta(&update, false)
                 .context("failed to read pending update metadata")
                 .map_err(OperationError::Replay)?
                 .partial_end_vv;
+            let retain_debt = matches!(&archive, OperationArchive::Incomplete { .. })
+                || (matches!(&archive, OperationArchive::Legacy)
+                    && storage.operation_archive_writes());
+            if retain_debt {
+                self.archive_debt.insert(
+                    id.clone(),
+                    PendingOperation {
+                        id: id.clone(),
+                        update,
+                        archive,
+                    },
+                );
+            } else {
+                self.archive_debt.remove(&id);
+            }
             self.unresolved.insert(id, required);
         }
         self.mark_resolved(&document.loro_doc.oplog_vv());
@@ -200,7 +293,20 @@ impl OperationLog {
         if self.applied.is_empty() {
             return Ok(());
         }
-        let ids: Vec<_> = self.applied.iter().cloned().collect();
+        if storage.operation_archive_writes() {
+            self.repair_archives(storage).await?;
+        }
+        // A snapshot covering these bytes does not prove archive completion.
+        // Reader-only rollback keeps incomplete rows until a writer can repair.
+        let ids: Vec<_> = self
+            .applied
+            .iter()
+            .filter(|id| !self.archive_debt.contains_key(*id))
+            .cloned()
+            .collect();
+        if ids.is_empty() {
+            return Ok(());
+        }
         let deleted = storage
             .delete_pending_operations(&ids)
             .await
@@ -303,5 +409,14 @@ impl OperationLog {
     }
 }
 
+fn covers(known: &VersionVector, required: &VersionVector) -> bool {
+    matches!(
+        known.partial_cmp(required),
+        Some(std::cmp::Ordering::Equal | std::cmp::Ordering::Greater)
+    )
+}
+
+#[cfg(test)]
+mod archive_test;
 #[cfg(test)]
 mod test;

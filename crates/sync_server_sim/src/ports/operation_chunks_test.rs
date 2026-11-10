@@ -11,7 +11,7 @@ fn chunked_pending_corruption_fails_the_complete_load() {
             let ports = SimPorts::new();
             let update = vec![255; INLINE_BYTES + 1];
             ports
-                .put_pending_operation(&OperationId::new("large".into()), &update)
+                .put_pending_operation(&OperationId::new("large".into()), &update, None)
                 .await
                 .unwrap();
             let pending = ports.pending_operations().await.unwrap();

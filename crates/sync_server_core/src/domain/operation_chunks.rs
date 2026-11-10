@@ -17,7 +17,7 @@ pub const ROW_BUDGET_BYTES: usize = if SQLITE_ROW_LIMIT_BYTES < DOCUMENTED_ROW_L
 pub const FORMAT_MARKER_KEY: &str = "o/!operation-chunks-v1";
 /// Versioned metadata is not a logical operation and must never be replayed as Loro.
 pub const FORMAT_MARKER_VALUE: &[u8] = b"SYNC_OPERATION_CHUNKS_V1";
-/// Keep existing small operation values byte-for-byte unchanged.
+/// Retain legacy inline/archive bytes; activated pending rows may embed receipts.
 pub const INLINE_BYTES: usize = 512 * 1024;
 /// Maximum raw bytes in a physical operation chunk.
 pub const CHUNK_BYTES: usize = 256 * 1024;
@@ -28,14 +28,16 @@ const _: () = assert!(INLINE_BYTES * 3 < ROW_BUDGET_BYTES);
 /// Physical keys are outside the legacy pending/archive prefixes.
 pub const CHUNK_PREFIX: &str = "operation-chunks/";
 const MAGIC: &[u8] = b"SYNC_OP_CHUNKS\x01";
+const COMPLETE_MAGIC: &[u8] = b"SYNC_OP_CHUNKS\x02";
 const HEADER_BYTES: usize = MAGIC.len() + 16 + 32;
 
-/// Complete-operation metadata committed atomically with its chunks.
+/// Chunk geometry, checksum and optional atomic archive-completion receipt.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Manifest {
     length: usize,
     count: usize,
     digest: [u8; 32],
+    archive_complete: bool,
 }
 /// An incomplete or corrupt physical operation is never replayed as a prefix.
 #[derive(Clone, Debug, thiserror::Error, PartialEq, Eq)]
@@ -57,7 +59,17 @@ impl Manifest {
             length: update.len(),
             count: update.len().div_ceil(CHUNK_BYTES),
             digest: Sha256::digest(update).into(),
+            archive_complete: false,
         })
+    }
+    /// Record that pending and archive committed in the same atomic append.
+    pub fn with_archive_complete(mut self) -> Self {
+        self.archive_complete = true;
+        self
+    }
+    /// Whether the pending row contains an atomic archive-completion receipt.
+    pub fn archive_complete(&self) -> bool {
+        self.archive_complete
     }
     /// Number of chunks belonging to this logical operation.
     pub fn count(&self) -> usize {
@@ -65,7 +77,11 @@ impl Manifest {
     }
     /// Distinguish the versioned manifest from legacy Loro operation bytes.
     pub fn decode(bytes: &[u8]) -> Result<Option<Self>, ChunkError> {
-        if !bytes.starts_with(MAGIC) {
+        let archive_complete = bytes.starts_with(COMPLETE_MAGIC);
+        if !bytes.starts_with(MAGIC) && !archive_complete {
+            if bytes.starts_with(&MAGIC[..MAGIC.len() - 1]) {
+                return Err(ChunkError::Manifest);
+            }
             return Ok(None);
         }
         if bytes.len() != HEADER_BYTES {
@@ -87,12 +103,17 @@ impl Manifest {
             length,
             count,
             digest,
+            archive_complete,
         }))
     }
     /// Persisted marker; raw Loro values have a different magic prefix.
     pub fn encode(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(HEADER_BYTES);
-        bytes.extend_from_slice(MAGIC);
+        bytes.extend_from_slice(if self.archive_complete {
+            COMPLETE_MAGIC
+        } else {
+            MAGIC
+        });
         bytes.extend_from_slice(&(self.length as u64).to_le_bytes());
         bytes.extend_from_slice(&(self.count as u64).to_le_bytes());
         bytes.extend_from_slice(&self.digest);
@@ -122,38 +143,33 @@ impl Manifest {
         Ok(bytes)
     }
 }
+/// Four-byte receipt tag, outside the byte range of legacy Loro number arrays.
+pub const INLINE_COMPLETE_TAG: u32 = 0x5343_0001;
+
+/// Stream a receipt tag and typed byte buffer without concatenating the payload.
+pub struct CompleteInline<'a>(pub &'a [u8]);
+impl serde::Serialize for CompleteInline<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeTuple;
+        let mut tuple = serializer.serialize_tuple(2)?;
+        tuple.serialize_element(&INLINE_COMPLETE_TAG)?;
+        tuple.serialize_element(&ChunkBytes(self.0))?;
+        tuple.end()
+    }
+}
+
+/// Serialize physical buffers as bytes rather than one JavaScript number per byte.
+pub struct ChunkBytes<'a>(pub &'a [u8]);
+impl serde::Serialize for ChunkBytes<'_> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(self.0)
+    }
+}
+
 /// Stable physical key scoped to the complete legacy logical key.
 pub fn chunk_key(logical: &str, index: usize) -> String {
     format!("{CHUNK_PREFIX}{logical}/{index:08x}")
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn complete_operations_reject_missing_reordered_and_corrupt_chunks() {
-        let data: Vec<u8> = (0..INLINE_BYTES + 31)
-            .map(|i| (i.wrapping_mul(17) % 251) as u8)
-            .collect();
-        assert_eq!(
-            chunk_key("o/record", 1),
-            "operation-chunks/o/record/00000001"
-        );
-        let manifest = Manifest::for_update(&data).unwrap();
-        assert_eq!(
-            Manifest::decode(&manifest.encode()).unwrap(),
-            Some(manifest.clone())
-        );
-        let mut chunks: Vec<_> = data.chunks(CHUNK_BYTES).map(<[u8]>::to_vec).collect();
-        assert_eq!(manifest.assemble(&chunks).unwrap(), data);
-        assert_eq!(manifest.assemble(&chunks[..2]), Err(ChunkError::Incomplete));
-        chunks.swap(0, 1);
-        assert_eq!(manifest.assemble(&chunks), Err(ChunkError::Checksum));
-        chunks.swap(0, 1);
-        chunks[0][1] ^= 1;
-        assert_eq!(manifest.assemble(&chunks), Err(ChunkError::Checksum));
-        assert!(Manifest::for_update(&vec![0; INLINE_BYTES]).is_none());
-        assert_eq!(Manifest::decode(b"loro legacy bytes").unwrap(), None);
-        assert_eq!(Manifest::decode(MAGIC), Err(ChunkError::Manifest));
-    }
-}
+mod test;

@@ -20,6 +20,7 @@ use sync_server_core::domain::{
 mod comment;
 mod storage;
 pub use comment::CommentEvaluator;
+pub(crate) use storage::inline_receipt;
 
 /// An ordered call or delivery at a room port boundary.
 #[derive(Clone, Debug, PartialEq)]
@@ -81,6 +82,7 @@ struct DurableData {
 }
 #[derive(Default)]
 struct State {
+    operation_archive_writes: bool,
     data: DurableData,
     durable: DurableData,
     checkpoints: BTreeMap<u64, DurableData>,
@@ -181,6 +183,10 @@ impl SimPorts {
     pub fn new() -> Self {
         Self::default()
     }
+    /// Activate archive receipts and duplicate suppression, matching the Worker writer switch.
+    pub fn set_operation_archive_writes(&self, enabled: bool) {
+        self.0.borrow_mut().operation_archive_writes = enabled;
+    }
     /// Set the time at callback entry and reset accumulated network latency.
     pub fn set_now(&self, now: SimNow) {
         let mut s = self.0.borrow_mut();
@@ -239,6 +245,7 @@ impl SimPorts {
             data: state.durable.clone(),
             durable: state.durable.clone(),
             now: state.now,
+            operation_archive_writes: state.operation_archive_writes,
             comment_gate: state.comment_gate,
             ..State::default()
         })))
@@ -869,3 +876,6 @@ impl RoomPorts for SimPorts {
 
 #[cfg(test)]
 mod operation_chunks_test;
+
+#[cfg(test)]
+mod operation_archive_test;

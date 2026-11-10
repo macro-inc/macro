@@ -150,6 +150,27 @@ outside the existing small-message golden corpus. They still run with the
 transcript feature built; all existing 155 scenarios retain unchanged capture.
 Never disable recording for an existing corpus scenario to conceal a difference.
 
+The same default-off writer switch activates dedup and per-row archive receipts.
+Deploy the reader for chunks, embedded Complete receipts and failure sidecars
+before activation; an earlier chunk-only reader is below the new rollback floor.
+Common appends atomically write pending, archive and original attribution with an
+embedded receipt, without a separate status write. Failed archive appends roll
+back, then retain pending+Incomplete before returning failure/no ACK. Retain that
+debt through GC and repair it before a duplicate ACK. Legacy unwrapped rows need
+one conservative archive repair. Never infer a duplicate from an unchanged import
+alone: novel causal-pending operations still need durability.
+
+A duplicate ACK guarantees completion of pending-origin archives. History already
+covered by a durable snapshot (initialization/copy or after pending GC) remains
+covered by that snapshot; duplicate exports do not create per-update archives.
+Require zero-write controls for snapshot-initialized and post-GC cold duplicates.
+
+Audit activated storage fixtures with `bun scripts/audit-activated-transcripts.mjs`
+against the unchanged default corpus. Keep the generated ledger with the activated
+corpus; require exact wire hashes, pre-import VV proofs for removed writes and
+unchanged remaining effects. Never use storage projection to normalize wire data
+or conceal clock/alarm changes.
+
 Capture atomic storage transactions losslessly, including each retry, argument,
 return, error and commit. Normalize recorded clock/entropy IDs in bulk put keys
 with the same rules as string keys; never normalize payload values or arbitrary

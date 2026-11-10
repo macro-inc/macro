@@ -55,7 +55,9 @@ test.runIf(process.env.SYNC_CHUNK_WRITER === '1')('oversized operations commit a
 
     user.makeChange('legacy prefix\n');
     expect((await user.readNextMessage()).isRemoteUpdateAck()).toBe(true);
-    const legacy = (await dump()).kv.filter(([key]) => key.startsWith('o/') && key !== 'o/!operation-chunks-v1');
+    // An actual unwrapped deployed row must coexist with new receipt manifests.
+    await stub.fetch('http://sync-test/__sync_test_operation_archive?legacy=present');
+    const legacy = (await dump()).kv.filter(([key]) => key.startsWith('o/') && !key.startsWith('o/!'));
     expect(legacy.length).toBe(1);
     expect(Array.isArray(legacy[0][1])).toBe(true);
     const from = user.doc.version();
@@ -73,7 +75,7 @@ test.runIf(process.env.SYNC_CHUNK_WRITER === '1')('oversized operations commit a
     expect(await user.waitForNextMessage()).toBe('pong');
     const failed = await dump();
     expect(failed.kv.filter(([key]) => key.startsWith('operation-chunks/'))).toEqual([]);
-    expect(failed.kv.filter(([key]) => key.startsWith('o/') && key !== 'o/!operation-chunks-v1')).toEqual(legacy);
+    expect(failed.kv.filter(([key]) => key.startsWith('o/') && !key.startsWith('o/!'))).toEqual(legacy);
     await abortObjectBetweenMessages(stub);
     const beforeRetry = await snapshot();
     expect(beforeRetry.getText('content').toString()).toBe('legacy prefix\n');
@@ -84,7 +86,7 @@ test.runIf(process.env.SYNC_CHUNK_WRITER === '1')('oversized operations commit a
     const receipt = await user.readNextMessage();
     expect(receipt.isRemoteUpdateAck() && receipt.value.id).toBe('large-row');
     const stored = await dump();
-    expect(stored.kv.filter(([key]) => key.startsWith('o/') && key !== 'o/!operation-chunks-v1').length).toBe(2);
+    expect(stored.kv.filter(([key]) => key.startsWith('o/') && !key.startsWith('o/!')).length).toBe(2);
     expect(stored.kv.filter(([key]) => key.startsWith('operation-chunks/o/')).length).toBeGreaterThan(1);
     expect(stored.kv.filter(([key]) => key.startsWith('operation-chunks/a/')).length).toBeGreaterThan(1);
     expect(stored.kv.find(([key]) => key === legacy[0][0])).toEqual(legacy[0]);
@@ -119,7 +121,7 @@ test.runIf(process.env.SYNC_CHUNK_WRITER === '1')('oversized operations commit a
     // Real alarm snapshots the document and removes pending physical chunks.
     await stub.fetch('http://sync-test/__sync_test_flush_alarm');
     const compacted = await dump();
-    expect(compacted.kv.filter(([key]) => key.startsWith('o/') && key !== 'o/!operation-chunks-v1' || key.startsWith('operation-chunks/o/'))).toEqual([]);
+    expect(compacted.kv.filter(([key]) => key.startsWith('o/') && !key.startsWith('o/!') || key.startsWith('operation-chunks/o/'))).toEqual([]);
     expect(compacted.kv.filter(([key]) => key.startsWith('operation-chunks/a/')).length).toBeGreaterThan(1);
     editor.getWebSocket().close();
     await mf.dispose();
@@ -155,8 +157,8 @@ test.runIf(Boolean(process.env.SYNC_CHUNK_READER_STORE) && process.env.SYNC_CHUN
     expect([...doc.oplogVersion().toJSON()]).toEqual(expected.vv);
     doc.free();
     const dump = await (await stub.fetch('http://sync-test/__sync_test_dump')).json() as {kv: [string, unknown][]};
-    expect(dump.kv.filter(([key]) => key.startsWith('o/') && key !== 'o/!operation-chunks-v1').length).toBe(2);
-    expect(dump.kv.some(([key, value]) => key.startsWith('o/') && key !== 'o/!operation-chunks-v1' && Array.isArray(value))).toBe(true);
+    expect(dump.kv.filter(([key]) => key.startsWith('o/') && !key.startsWith('o/!')).length).toBe(2);
+    expect(dump.kv.some(([key, value]) => key.startsWith('o/') && !key.startsWith('o/!') && Array.isArray(value))).toBe(true);
     // Archive/debug reads use the same unconditional reader as pending replay.
     const archived = await stub.fetch(`http://localhost/document/large-operation-fixture/debug_do_kv_get/${encodeURIComponent(expected.archive)}`, {
       headers: {'x-internal-auth-key': 'local'},
@@ -200,9 +202,9 @@ test.runIf(process.env.SYNC_CHUNK_WRITER === '1')('inline threshold and first ch
     const namespace = await mf.getDurableObjectNamespace('DOCUMENT_SYNC_SESSION');
     const stub = namespace.get(namespace.idFromName(id));
     const dump = await (await stub.fetch('http://sync-test/__sync_test_dump')).json() as {kv: [string, unknown][]};
-    const rows = dump.kv.filter(([key]) => key.startsWith('o/') && key !== 'o/!operation-chunks-v1');
+    const rows = dump.kv.filter(([key]) => key.startsWith('o/') && !key.startsWith('o/!'));
     expect(rows.length).toBe(4);
-    expect(rows.some(([, value]) => Array.isArray(value) && value.length === 524288)).toBe(true);
+    expect(rows.some(([, value]) => Array.isArray(value) && value.length === 2 && value[0] === 0x53430001 && Buffer.from((value[1] as {bytes_b64: string}).bytes_b64, 'base64').length === 524288)).toBe(true);
     const physical = dump.kv.filter(([key]) => key.startsWith('operation-chunks/o/')).map(([, value]) =>
       Buffer.from((value as {bytes_b64: string}).bytes_b64, 'base64').length);
     expect(physical.sort((a, b) => a - b)).toEqual([1, 262144, 262144]);
@@ -246,7 +248,7 @@ test.runIf(process.env.SYNC_CHUNK_WRITER === '1')('cold archive timestamp reuse 
     expect(archived.length).toBe(1);
     expect(stored.kv.some(([key]) => key.startsWith('operation-chunks/a/'))).toBe(true);
     expect(stored.kv.some(([key]) => key === 'o/!operation-chunks-v1')).toBe(true);
-    expect(stored.kv.filter(([key]) => key.startsWith('o/') && key !== 'o/!operation-chunks-v1')).toEqual([]);
+    expect(stored.kv.filter(([key]) => key.startsWith('o/') && !key.startsWith('o/!'))).toEqual([]);
     user.getWebSocket().close();
     await mf.dispose();
     mf = await setupMiniflare({...options, migrate: false});

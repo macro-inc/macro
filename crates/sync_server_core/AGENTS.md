@@ -55,3 +55,9 @@ by runtime adapters and simulation. Keep legacy inline bytes readable, validate
 complete length/geometry/checksum before replay, and keep physical chunk writes
 below the logical operation/ACK boundary. Activation belongs to the Worker;
 reader support is unconditional and writer activation defaults off.
+
+Operation-log duplicate suppression is explicitly activated by the storage port.
+Retain original archive/attribution debt separately from oplog coverage; a duplicate
+ACK requires that debt repaired, and GC must never erase it. Archive completion
+statuses are loaded in the existing pending read, including reader-only rollback.
+Distinguish pre-import VV coverage from an unchanged causal-pending import.

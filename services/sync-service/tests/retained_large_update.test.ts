@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,7 +11,7 @@ import { createTestUser, getTokenForDocument, setupMiniflare } from './utils';
 
 // Opaque source bytes remain outside the repository. Exact hashes prevent this
 // real failure witness from silently turning into a smaller synthetic payload.
-test.runIf(process.env.SYNC_CHUNK_WRITER === '1' && Boolean(process.env.SYNC_RETAINED_UPDATE_DIR))('retained 4847484-byte update receives a durable receipt and survives workerd restart', async () => {
+test.runIf(process.env.SYNC_CHUNK_WRITER === '1' && Boolean(process.env.SYNC_RETAINED_UPDATE_DIR))('retained 4847484-byte update persists once, acknowledges duplicates and survives workerd restart', async () => {
   const source = process.env.SYNC_RETAINED_UPDATE_DIR!;
   const update = new Uint8Array(readFileSync(join(source, 'storage-003.bin')));
   expect(update.length).toBe(4_847_484);
@@ -32,7 +32,8 @@ test.runIf(process.env.SYNC_CHUNK_WRITER === '1' && Boolean(process.env.SYNC_RET
   for (const method of ['POST', 'PUT']) {
     fetchMock.get('https://dss.test').intercept({path: /.*/, method}).reply(200, '').persist();
   }
-  const options = {record: false, persistPath: directory, holdAlarms: true, fetchMock};
+  const options = {record: false, persistPath: directory, holdAlarms: true, fetchMock,
+    workerScriptPath: process.env.SYNC_RETAINED_WORKER_SCRIPT};
   let mf = await setupMiniflare(options);
   const id = 'retained-large-operation';
   try {
@@ -45,26 +46,57 @@ test.runIf(process.env.SYNC_CHUNK_WRITER === '1' && Boolean(process.env.SYNC_RET
     for (const peer of decodeImportBlobMeta(update, true).partialEndVersionVector.toJSON().keys()) {
       user.send(FromPeer.fromPeerRegisterId({peerid: BigInt(peer)}).encode());
     }
+    const namespace = await mf.getDurableObjectNamespace('DOCUMENT_SYNC_SESSION');
+    let stub = namespace.get(namespace.idFromName(id));
+    const sentAt = performance.now();
     user.send(FromPeer.fromPeerUpdate({updates: [update], id: 'retained-update'}).encode());
     const ack = FromRemote.decode(new Uint8Array(await user.waitForNextMessage(30_000) as ArrayBuffer));
     expect(ack.isRemoteUpdateAck() && ack.value.id).toBe('retained-update');
+    const ackLatencyMs = performance.now() - sentAt;
+    console.log('retained update durable ACK latency ms', ackLatencyMs);
+    expect(ackLatencyMs).toBeLessThan(5_000);
+    const beforeDuplicate = await (await stub.fetch('http://sync-test/__sync_test_operation_archive')).json();
+    const duplicateSentAt = performance.now();
+    user.send(FromPeer.fromPeerUpdate({updates: [update], id: 'retained-duplicate'}).encode());
+    const duplicate = await user.readNextMessage();
+    expect(duplicate.isRemoteUpdateAck() && duplicate.value.id).toBe('retained-duplicate');
+    const duplicateAckLatencyMs = performance.now() - duplicateSentAt;
+    expect(await (await stub.fetch('http://sync-test/__sync_test_operation_archive')).json()).toEqual(beforeDuplicate);
+    const stored = await (await stub.fetch('http://sync-test/__sync_test_dump')).json() as {kv: [string, unknown][]};
+    expect(stored.kv.filter(([key]) => key.startsWith('o/') && !key.startsWith('o/!'))).toHaveLength(1);
+    expect(stored.kv.filter(([key]) => key.startsWith('a/'))).toHaveLength(1);
     user.getWebSocket().close();
     await mf.dispose();
     mf = await setupMiniflare({...options, migrate: false});
-    const namespace = await mf.getDurableObjectNamespace('DOCUMENT_SYNC_SESSION');
-    const stub = namespace.get(namespace.idFromName(id));
+    const coldNamespace = await mf.getDurableObjectNamespace('DOCUMENT_SYNC_SESSION');
+    stub = coldNamespace.get(coldNamespace.idFromName(id));
     // Direct real-DO read tests cold pending-log recovery without conflating
     // the separate front worker's short HTTP timeout with persistence safety.
+    const coldStartedAt = performance.now();
     const response = await stub.fetch(`http://localhost/document/${id}/snapshot`, {
       headers: {authorization: `Bearer ${getTokenForDocument(id, 'fixture-user', 'owner')}`},
     });
     expect(response.status).toBe(200);
+    const coldSnapshot = new Uint8Array(await response.arrayBuffer());
+    const coldSnapshotLatencyMs = performance.now() - coldStartedAt;
     const restored = new LoroDoc();
-    restored.import(new Uint8Array(await response.arrayBuffer()));
+    restored.import(coldSnapshot);
     expect(restored.toJSON()).toEqual(expected.toJSON());
     expect(restored.oplogVersion().toJSON()).toEqual(expected.oplogVersion().toJSON());
     expect(restored.oplogFrontiers()).toEqual(expected.oplogFrontiers());
     restored.free();
+    const coldUser = await createTestUser(mf, id);
+    const coldWrites = await (await stub.fetch('http://sync-test/__sync_test_operation_archive')).json();
+    coldUser.send(FromPeer.fromPeerUpdate({updates: [update], id: 'cold-duplicate'}).encode());
+    const coldAck = await coldUser.readNextMessage();
+    expect(coldAck.isRemoteUpdateAck() && coldAck.value.id).toBe('cold-duplicate');
+    expect(await (await stub.fetch('http://sync-test/__sync_test_operation_archive')).json()).toEqual(coldWrites);
+    coldUser.getWebSocket().close();
+    if (process.env.SYNC_RETAINED_METRICS) writeFileSync(process.env.SYNC_RETAINED_METRICS, JSON.stringify({
+      updateBytes: update.length, updateSha256: createHash('sha256').update(update).digest('hex'),
+      workerScript: options.workerScriptPath ?? './tests/worker.mjs',
+      ackLatencyMs, duplicateAckLatencyMs, coldSnapshotLatencyMs,
+    }, null, 2) + '\n');
   } finally {
     await mf.dispose();
     expected.free();

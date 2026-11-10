@@ -80,7 +80,8 @@ pub struct PreparedUpdate {
 }
 
 /// Signed-token attribution stored alongside the existing operation log.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct DocumentAttribution {
     #[serde(skip_serializing_if = "Option::is_none")]
     /// The optional signed agent invocation identifier.

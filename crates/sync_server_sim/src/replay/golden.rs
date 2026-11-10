@@ -4,6 +4,7 @@ use crate::{ports::*, transcript::*};
 use base64::{Engine, engine::general_purpose::STANDARD};
 mod http;
 mod receipts;
+mod transactions;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use sync_server_core::domain::types::SessionKey;
@@ -30,6 +31,8 @@ fn socket(value: &Value) -> Result<sync_server_core::domain::socket::WebSocketId
     .map_err(|e| invalid(e.to_string()))
 }
 fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> {
+    let transaction_records = transactions::project(records)?;
+    let records: Vec<_> = transaction_records.iter().collect();
     let mut result = Vec::new();
     for (index, record) in records.iter().enumerate() {
         let args = &record["args"];
@@ -50,6 +53,17 @@ fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> 
             let next = match port {
                 "storage.get" => effect("storage.get", args[0].clone()),
                 "storage.put" => effect("storage.put", json!({"key":args[0],"value":args[1]})),
+                "storage.operation.put" => effect(
+                    "storage.operation.put",
+                    json!({"key":args[0],"value":args[1],"attribution":args[2]}),
+                ),
+                "storage.pending.put" => effect(
+                    "storage.pending.put",
+                    json!({"key":args[0],"value":args[1],"archive":args[2]}),
+                ),
+                "storage.pending.delete_multiple" => {
+                    effect("storage.pending.delete_multiple", args[0].clone())
+                }
                 "storage.delete" if args[0].is_array() => {
                     effect("storage.delete_multiple", args[0].clone())
                 }
@@ -309,7 +323,10 @@ fn projected(records: &[&Value], key: &str) -> Result<Vec<Effect>, ReplayError> 
     }
     Ok(result)
 }
-pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError> {
+pub(super) fn replay(
+    transcript: &Transcript,
+    archive_writes: bool,
+) -> Result<Vec<Effect>, ReplayError> {
     let mut rooms: BTreeMap<String, SimRoom> = BTreeMap::new();
     let mut all = Vec::new();
     let mut receipts = receipts::Receipts::default();
@@ -324,9 +341,11 @@ pub(super) fn replay(transcript: &Transcript) -> Result<Vec<Effect>, ReplayError
             .filter(|(id, _)| **id != recorded.room)
             .map(|(_, room)| room.room.ports().directory_dump())
             .collect();
-        let room = rooms
-            .entry(recorded.room.clone())
-            .or_insert_with(|| SimRoom::new(SimPorts::new()));
+        let room = rooms.entry(recorded.room.clone()).or_insert_with(|| {
+            let ports = SimPorts::new();
+            ports.set_operation_archive_writes(archive_writes);
+            SimRoom::new(ports)
+        });
         let callback = serde_json::json!(recorded.callback);
         let raw = &transcript.records[recorded.record_index];
         let end = transcript.records[recorded.record_index + 1..]

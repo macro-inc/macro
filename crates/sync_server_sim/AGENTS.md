@@ -95,3 +95,12 @@ logical bytes. `operation_storage_proof` independently reconstructs physical
 records for simulator invariants; missing/corrupt chunks fail rather than replaying
 a prefix. Pruning pending manifests also removes their physical chunks, while
 archives retain theirs.
+
+Archive receipts/dedup default off in SimPorts, matching the Worker activation.
+Use `set_operation_archive_writes` for activated tests; cold forks preserve the
+selection. Readers always accept legacy absent, Incomplete and Complete statuses.
+Common pending/archive/attribution writes and the embedded Complete receipt share
+one durable generation. Failed-append pending bytes and Incomplete sidecar share
+one generation. GC removes sidecars with logical rows and retains archive history.
+
+Keep default-OFF `tests/transcripts` unchanged and writer-ON `tests/transcripts-activated` separate. Replay activated fixtures with explicit deployment configuration, never infer policy from recorded outputs. Transaction projection validates exact supported calls/returns/retries and publishes the logical effect only at commit, so premature ACKs remain observable. Keep unrecognized transactions fail-closed.

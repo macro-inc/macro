@@ -351,9 +351,47 @@ the exact 512 KiB legacy number-array threshold is tested with high byte values
 and valid Loro operations. Do not change the budget based solely on current
 platform documentation: exercise the actual pinned runtime when updating it.
 
+Archive completion receipts and dedup use the same default-off writer activation.
+The common path atomically appends pending bytes, archive and original signed
+attribution together. Inline pending tuples carry a four-byte receipt tag plus a Uint8Array payload;
+chunked pending values carry the receipt in manifest version2 without copying
+or re-exporting the Loro payload. Archive bytes remain unchanged. The inline
+append uses one `put(entries)` call, which the [SQLite storage API](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/) guarantees is
+atomic and isolated; chunk replacement retains an explicit transaction. No extra
+common-path status record or per-room migration sweep is required.
+
+If the atomic archive append fails, it publishes nothing. Core then separately
+persists pending bytes plus `o/!archive-status-v1/{operation-id}` Incomplete status,
+including the original signed attribution, before returning failure without ACK.
+Failure known to occur while staging pending chunks does not publish a fallback.
+Cold replay retains incomplete rows through compaction; a duplicate repairs their
+archive and original attribution, then records Complete until pending GC.
+The existing pending-prefix read loads all receipts without another read and
+excludes sidecars from Loro replay. Invalid receipt bytes fail the load.
+
+With the writer enabled, an import whose required operations were already covered
+before import stores no new pending or archive row. It first repairs retained
+archive debt. A modern completed duplicate performs no storage writes, including
+after restart. The receipt guarantees completion of every pending-origin archive.
+History already covered by a durable snapshot, including initialization/copy and
+history after pending GC, remains covered by that snapshot; duplicate exports do
+not invent per-update archive rows. A legacy unwrapped row without status gets one
+conservative idempotent archive repair, even if the archive already exists. An
+unchanged import containing novel operations waiting for causal dependencies is
+not a duplicate and remains durable. Logical updates, framing and ACK payloads
+are unchanged; no client-side update splitting is required.
+
+The rollback reader floor includes chunk manifests, embedded Complete receipts
+and archive-status sidecars. Earlier chunk-only readers are below this floor and
+would attempt to import receipt metadata as Loro. Reader-only rollback accepts
+legacy unwrapped rows, embedded receipts, Incomplete and Complete sidecars, and
+retains incomplete pending rows. It does not activate dedup or new receipts;
+subsequent legacy writes remain distinguishable because receipts are per row.
+Do not use the earlier chunk reader as the first deployment for this activation.
+
 Required deployment order (operator authorization is separate from this guide):
 
-1. Deploy this reader-capable release with `chunked-operation-writes` absent.
+1. Deploy this chunk-and-archive-status reader-capable release with `chunked-operation-writes` absent.
    This configuration writes only the legacy format and can still be rolled back
    to the preceding release. Wait for the Durable Object code-update deferral to
    expire and verify that all rooms are on the reader-capable version.
@@ -365,7 +403,8 @@ Required deployment order (operator authorization is separate from this guide):
    alone is insufficient to permit downgrade because archived operations remain.
    Downgrading below reader support requires a separately reviewed history-
    preserving migration and proof that no chunk manifests remain, including in
-   archives, and that the reserved activation marker has been migrated too.
+   archives, and that the reserved activation marker and archive statuses have
+   been migrated too.
    Legacy readers also attempt to import that marker as Loro. Do not delete
    archive history or activation metadata as an ad hoc downgrade workaround.
 

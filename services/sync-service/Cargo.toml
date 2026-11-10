@@ -7,7 +7,8 @@ build = "build.rs"
 publish = false
 
 [features]
-# Activate only after the always-on chunk reader has reached every room.
+# Activate chunk writes, archive completion receipts and dedup only after the
+# always-on chunk AND archive-status reader has reached every room.
 # Default-off reader-only deployments remain safe to roll back to legacy code.
 chunked-operation-writes = []
 
@@ -57,6 +58,7 @@ sync_protocol = { workspace = true }
 sync_server_core = { workspace = true, features = ["in-process-gate"] }
 serde_json.workspace = true
 serde.workspace = true
+serde-wasm-bindgen.workspace = true
 getrandom = { workspace = true, features = ["wasm_js"] }
 wasm-bindgen.workspace = true
 uuid = { workspace = true, features = ["js"] }
