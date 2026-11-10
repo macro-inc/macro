@@ -35,6 +35,9 @@ pub const SYMBOLS: &[&str] = &[
     "RoutineNamespace.list",
     "AgentNamespace.list",
     "DatabaseNamespace.list",
+    "EmailThread.drafts",
+    "EmailNamespace.createDraft",
+    "Idea.attachDraft",
 ];
 
 /// The handles whose fields the reference lists.
