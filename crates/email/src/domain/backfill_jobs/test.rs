@@ -1,4 +1,6 @@
 use super::*;
+
+mod connection;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use models_email::service::link::UserProvider;
 use std::sync::{Arc, Mutex};
@@ -24,6 +26,8 @@ enum Step {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum Call {
+    History(Uuid),
+    Connected(Uuid),
     Job(Uuid),
     Scoped(Uuid, Uuid),
     List(String),

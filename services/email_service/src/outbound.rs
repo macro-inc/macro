@@ -52,3 +52,4 @@ pub mod signature_settings;
 
 /// Backfill-job persistence and initialization publication.
 pub mod backfill_jobs;
+pub mod inbox_connection;

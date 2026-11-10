@@ -16,6 +16,9 @@ the gateway `/email` prefix.
 - `src/outbound/inbox_access.rs`, `inbox_contacts.rs`, `scheduled_drafts.rs`,
   `calendar_disconnect.rs`, and `signature_settings.rs`: adapters for the five
   inbox-scoped use cases; handlers delegate to their email-domain services.
+- `src/outbound/inbox_connection.rs`: adapters for the domain-owned `/email/init`
+  flow; transaction boundaries, legacy errors, and token-info HTTP are preserved.
+  The transport failure observer and shared HTTP status rule live in `src/api/email/init.rs`.
 - `src/outbound/backfill_jobs.rs`: the existing job queries and initialization
   queue send behind the email domain backfill-job service.
 - `src/parity/`: HTTP characterization lab and its golden suites (message labels,
