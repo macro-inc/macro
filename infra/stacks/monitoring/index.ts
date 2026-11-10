@@ -20,6 +20,7 @@ import './synthetics';
 import './goalert';
 import './monitors/ai-editing';
 import './monitors/calls';
+import './monitors/computers';
 import './monitors/graphql-soup';
 import './monitors/harness-presence';
 import './monitors/macrodb';
