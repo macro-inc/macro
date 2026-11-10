@@ -4,12 +4,20 @@ import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
+import { MessageReferenceNavigation } from '@core/messages/message-reference-navigation';
 import { $dfs } from '@lexical/utils';
 import {
+  $createAccountManagerRequestNode,
+  $createAgentContextNode,
+  $createAwaitNode,
   $createConnectAppNode,
+  $createCursorSystemNotificationNode,
   $createGroupMentionNode,
+  $createReplyTargetNode,
   $createThemeMentionNode,
   $createUnknownMentionNode,
+  $createWatermarkNode,
+  type ReplyTargetData,
 } from '@macro-inc/lexical-core';
 import { $setId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import { authKeys } from '@queries/auth/keys';
@@ -51,12 +59,24 @@ queryClient.setQueryData(authKeys.userInfo.queryKey, {
 });
 
 type FixtureKind =
+  | 'watermark'
+  | 'await'
+  | 'agent-context'
+  | 'reply-target'
+  | 'account-manager-request'
+  | 'system-notification'
   | 'group-mention'
   | 'unknown-mention'
   | 'theme-mention'
   | 'connect-app';
 const candidate = new URLSearchParams(location.search).get('kind');
 const kind: FixtureKind =
+  candidate === 'watermark' ||
+  candidate === 'await' ||
+  candidate === 'agent-context' ||
+  candidate === 'reply-target' ||
+  candidate === 'account-manager-request' ||
+  candidate === 'system-notification' ||
   candidate === 'unknown-mention' ||
   candidate === 'theme-mention' ||
   candidate === 'connect-app'
@@ -72,6 +92,7 @@ interface Capture {
 declare global {
   interface Window {
     fastSelectionInput?: string;
+    fastReplyNavigations?: ReplyTargetData[];
     fastSelectionFixture?: {
       snapshot(): Capture;
       trace(): {
@@ -89,7 +110,57 @@ declare global {
 function seedDocument() {
   const root = $getRoot();
   $setId(root, 'fast-decorator-root');
-  if (kind === 'group-mention') {
+  if (kind === 'watermark') {
+    root.append(
+      $createParagraphNode().append(
+        $createWatermarkNode({ content: 'Fixture watermark' })
+      )
+    );
+  } else if (kind === 'await') {
+    root.append(
+      $createParagraphNode().append(
+        $createAwaitNode({
+          awaitId: 'fixture-await',
+          text: 'Waiting for fixture',
+          inline: true,
+        })
+      )
+    );
+  } else if (kind === 'agent-context') {
+    root.append(
+      $createAgentContextNode({ version: 1, text: 'Hidden fixture context' })
+    );
+  } else if (kind === 'reply-target') {
+    root.append(
+      $createReplyTargetNode({
+        parent: { type: 'channel', id: 'fixture-channel' },
+        targetMessageId: 'fixture-message',
+        targetThreadId: 'fixture-thread',
+        displayText: 'Fixture reply **content**',
+        senderId: 'fixture-sender',
+      })
+    );
+  } else if (kind === 'account-manager-request') {
+    root.append(
+      $createParagraphNode().append(
+        $createAccountManagerRequestNode('fixture-grant')
+      )
+    );
+  } else if (kind === 'system-notification') {
+    root.append(
+      $createCursorSystemNotificationNode({
+        source: 'github',
+        attributes: {
+          subscriptionType: 'github:ci:branch',
+          conclusion: 'success',
+          checks: '3',
+          branch: 'fixture-branch',
+          extra: 'fixture-extra',
+        },
+        text: 'Fixture checks completed',
+      })
+    );
+  } else if (kind === 'group-mention') {
     root.append(
       $createParagraphNode().append(
         $createGroupMentionNode({ groupAlias: 'fixture-group' })
@@ -307,31 +378,39 @@ function Fixture() {
 }
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing fixture host');
+window.fastReplyNavigations = [];
 render(
   () => (
-    <AnalyticsContextProvider>
-      <PosthogProvider>
-        <QueryClientProvider client={queryClient}>
-          <UserContextProvider>
-            <EmailLinksContextProvider>
-              <MobileSettingsProvider>
-                <MemoryRouter>
-                  <Route
-                    path="*"
-                    component={
-                      new URLSearchParams(location.search).get('engine') ===
-                      'native'
-                        ? NativeFixture
-                        : Fixture
-                    }
-                  />
-                </MemoryRouter>
-              </MobileSettingsProvider>
-            </EmailLinksContextProvider>
-          </UserContextProvider>
-        </QueryClientProvider>
-      </PosthogProvider>
-    </AnalyticsContextProvider>
+    <MessageReferenceNavigation.Provider
+      value={(target) => {
+        window.fastReplyNavigations?.push(target);
+        return true;
+      }}
+    >
+      <AnalyticsContextProvider>
+        <PosthogProvider>
+          <QueryClientProvider client={queryClient}>
+            <UserContextProvider>
+              <EmailLinksContextProvider>
+                <MobileSettingsProvider>
+                  <MemoryRouter>
+                    <Route
+                      path="*"
+                      component={
+                        new URLSearchParams(location.search).get('engine') ===
+                        'native'
+                          ? NativeFixture
+                          : Fixture
+                      }
+                    />
+                  </MemoryRouter>
+                </MobileSettingsProvider>
+              </EmailLinksContextProvider>
+            </UserContextProvider>
+          </QueryClientProvider>
+        </PosthogProvider>
+      </AnalyticsContextProvider>
+    </MessageReferenceNavigation.Provider>
   ),
   root
 );
