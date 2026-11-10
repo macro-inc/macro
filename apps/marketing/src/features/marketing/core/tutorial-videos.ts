@@ -11,6 +11,7 @@ export const TUTORIAL_VIDEOS = {
   calls: { title: 'Learn how to use Macro Calls', length: '1:10' },
   crm: { title: 'Learn how to use Macro CRM', length: '1:26' },
   agents: { title: 'Learn how to use Macro Agents', length: '1:05' },
+  macrod: { title: 'Learn how to use MacroD', length: '1:17' },
   github: { title: 'Learn how to use Macro with GitHub', length: '1:01' },
 } as const;
 

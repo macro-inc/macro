@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { Accessor } from 'solid-js';
+import type { Accessor, JSX } from 'solid-js';
 import { RoutinesList } from '../components/routines-list';
 import type { RoutineListSource } from '../context/routine-sources';
 import type { RoutineTemplate } from '../core/routine-templates';
@@ -15,6 +15,8 @@ export function RoutinesListView(props: {
   /** Templates to start from, above the list. */
   templates?: RoutineTemplate[];
   onTemplate?: (template: RoutineTemplate) => void;
+  /** Below the list, e.g. suggested routines. */
+  footer?: JSX.Element;
 }) {
   const rows = createRoutineRows(props.source, props.userId);
   return (
@@ -31,6 +33,7 @@ export function RoutinesListView(props: {
       onToggle={(row) => props.source.setEnabled(row.id, !row.enabled)}
       templates={props.templates}
       onTemplate={props.onTemplate}
+      footer={props.footer}
     />
   );
 }

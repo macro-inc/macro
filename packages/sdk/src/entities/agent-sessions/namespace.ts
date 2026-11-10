@@ -7,6 +7,7 @@ import type {
 import type { MacroClient } from '../../utils/client';
 import {
   AgentSession,
+  type AgentSessionUpdates,
   type CreateManagedSessionOptions,
   type RegisteredWork,
   type SelectableRepository,
@@ -39,6 +40,10 @@ import {
  * ```
  *
  * The prompt must be self-contained: the task, repository, relevant findings and links, constraints, and expected outcome. The new session does not receive this conversation. When the outcome is a pull request, require it to be ready for review, not a draft, with CI passing before the agent finishes. Create once per task and do not retry automatically after an uncertain failure. Link the session in your reply with its id. To check on it later, create a routine; never wait or poll inside an execution.
+ *
+ * ## Sessions waiting for the user
+ *
+ * macro.agentSessions.updates() lists the user's sessions waiting on them (permission requests, questions, held tool approvals) or stalled. A session's held tool calls come from session.pendingApprovals(); approve or deny one only when the user said so for that call. session.linkTask(task) links a session the user owns to its Macro task, and the session's pull request with it.
  */
 export class AgentSessionNamespace {
   constructor(private readonly client: MacroClient) {}
@@ -93,6 +98,16 @@ export class AgentSessionNamespace {
    */
   repositoryBranches(repoUrl: string): Promise<string[]> {
     return AgentSession.repositoryBranches(this.client, repoUrl);
+  }
+
+  /**
+   * The caller's coding sessions waiting for them: permission requests,
+   * questions and held tool approvals to answer, and sessions stalled for
+   * over 20 minutes, newest activity first. Read a session's held approvals
+   * with {@link AgentSession.pendingApprovals}.
+   */
+  updates(): Promise<AgentSessionUpdates> {
+    return AgentSession.updates(this.client);
   }
 
   /**

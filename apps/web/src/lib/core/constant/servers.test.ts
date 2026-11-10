@@ -51,3 +51,75 @@ it('preserves local-stack image references for the local attachment resolver', a
     'https://localhost:27709/static-file/file/test-image'
   );
 });
+
+// Only a self-contained local stack's proxy keeps instances' cookies apart.
+// `run_dev` serves the same proxy origin without those rules, and a hosted
+// build must never take the handoff even if local settings leaked into it.
+it.each([
+  {
+    name: 'run_local / just stack',
+    mode: 'development',
+    servers: 'ALL',
+    backend: 'same-origin',
+    stack: 'true',
+    page: 'https://localhost:28009/app/login',
+    expected: true,
+  },
+  {
+    name: 'run_dev',
+    mode: 'development',
+    servers: 'ALL',
+    backend: 'same-origin',
+    stack: undefined,
+    page: 'https://localhost:28009/app/login',
+    expected: false,
+  },
+  {
+    name: 'no proxy origin',
+    mode: 'development',
+    servers: 'ALL',
+    backend: undefined,
+    stack: 'true',
+    page: 'https://localhost:28009/app/login',
+    expected: false,
+  },
+  {
+    name: 'hosted dev services',
+    mode: 'development',
+    servers: '',
+    backend: 'same-origin',
+    stack: 'true',
+    page: 'https://localhost:28009/app/login',
+    expected: false,
+  },
+  {
+    name: 'production',
+    mode: 'production',
+    servers: undefined,
+    backend: undefined,
+    stack: undefined,
+    page: 'https://macro.com/app/login',
+    expected: false,
+  },
+  {
+    name: 'production with leaked local settings',
+    mode: 'production',
+    servers: 'ALL',
+    backend: 'same-origin',
+    stack: 'true',
+    page: 'https://macro.com/app/login',
+    expected: false,
+  },
+])(
+  'reports a local stack proxy for $name',
+  async ({ mode, servers, backend, stack, page, expected }) => {
+    vi.stubEnv('MODE', mode);
+    vi.stubEnv('VITE_LOCAL_SERVERS', servers);
+    vi.stubEnv('VITE_LOCAL_BACKEND_ORIGIN', backend);
+    vi.stubEnv('VITE_LOCAL_STACK', stack);
+    vi.stubGlobal('location', new URL(page));
+    vi.resetModules();
+    const { usesLocalStackProxy } = await import('./servers');
+    expect(usesLocalStackProxy()).toBe(expected);
+  }
+);

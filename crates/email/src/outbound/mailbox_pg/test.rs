@@ -2,6 +2,8 @@ use super::*;
 use email_api_client::domain::models::FolderRole;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
+mod retries;
+
 pub(super) async fn fixture(db: &PgPool) -> (PgMailboxSync, Uuid) {
     let link = macro_uuid::generate_uuid_v7();
     sqlx::query!(r#"
@@ -244,6 +246,7 @@ pub(super) fn snapshot(
             message,
             calendar_parts: Vec::new(),
         },
+        calendar_parts_unavailable: false,
         state,
         folder_id: Some(ProviderId::new("folder").unwrap()),
         tags: vec!["TRASH".into()],

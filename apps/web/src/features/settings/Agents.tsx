@@ -211,7 +211,7 @@ export function Agents(props: {
           // that is merely asleep is normal, and the label says what to expect.
           name: [
             harness?.name ?? 'macrod',
-            harness?.owner.type === 'team' ? 'Team' : undefined,
+            harness?.shared_team_ids.length ? 'Team machine' : undefined,
             harness && !harness.connected ? 'Offline' : undefined,
           ]
             .filter(Boolean)
@@ -1484,8 +1484,9 @@ function AgentEditorPage(props: {
                           when={allowPermissionBypass()}
                           fallback={
                             <p class="text-xs text-ink-muted">
-                              This runtime requires permission prompts. Allow
-                              bypass in its Runtimes settings.
+                              This runtime requires permission prompts. Turn on
+                              Don't ask before acting in its Options in Runtimes
+                              settings.
                             </p>
                           }
                         >
