@@ -2,6 +2,7 @@
 //! channel, compose it with channel context, and prompt the runtime.
 
 use super::*;
+use crate::domain::attach_budget::{AttachPath, AttachPermit};
 
 /// How long a session goes without user-visible activity before a runtime's
 /// dial stops restoring it.
@@ -32,6 +33,29 @@ pub(super) enum DialReattach {
     Lazy,
     /// Archived, or not an external session.
     Skip,
+}
+
+/// Whether a [`reconnect`](AgentHarnessInner::reconnect) takes its own
+/// permit from the attach budget.
+pub(super) enum AttachAdmission {
+    /// Take one for this path.
+    Budget(AttachPath),
+    /// The caller already holds one: a dial's restore.
+    HeldByCaller,
+}
+
+/// The attach path a delivery's reconnect is counted under: a prompt someone
+/// sent, or work nobody is waiting on.
+pub(super) fn delivery_path(
+    action: &AgentAction,
+    actor: Option<&MacroUserIdStr<'static>>,
+) -> AttachPath {
+    let user_prompt = matches!(action, AgentAction::Prompt(prompt) if !prompt.notifications.as_ref().is_some_and(|input| input.system_turn));
+    if user_prompt && actor.is_some() {
+        AttachPath::Prompt
+    } else {
+        AttachPath::Delivery
+    }
 }
 
 enum NotificationRecovery {
@@ -77,7 +101,14 @@ where
     Notifier: AgentSessionNotifier,
 {
     /// Restore the runtime transport without starting a new invocation.
-    async fn reconnect(&self, session_id: AgentSessionId) -> Result<AgentSession> {
+    ///
+    /// Binding an external session takes a permit from the attach budget
+    /// under `admission`, held until the runtime has restored it.
+    async fn reconnect(
+        &self,
+        session_id: AgentSessionId,
+        admission: AttachAdmission,
+    ) -> Result<AgentSession> {
         let session = self.sessions.get_session(session_id).await?;
         let permission_policy = self
             .permission_policy_for_session(session_id, session.bot_id)
@@ -112,6 +143,10 @@ where
             // yet. That is the ordinary case: sessions bind when they
             // are prompted, not when the runtime dials, so the first
             // prompt after a reconnect is what restores the session.
+            let permit = match admission {
+                AttachAdmission::Budget(path) => Some(self.attach_permit(path, &session).await?),
+                AttachAdmission::HeldByCaller => None,
+            };
             let Some(mut attachment) = self.runtimes.bind(session.bot_id, session_id).await else {
                 // Kept in the session vocabulary so transports report
                 // it as a disconnect, not an internal error.
@@ -138,8 +173,33 @@ where
                 )
                 .await?;
             self.restore_queue(session_id).await?;
+            if let Some(permit) = permit {
+                // Whether it opened is the next send's to report.
+                let _opened = permit
+                    .hold_until(self.sessions.wait_opened(session_id))
+                    .await;
+            }
         }
         Ok(session)
+    }
+
+    /// A permit to attach `session` onto its bot's harness for `path`.
+    async fn attach_permit(
+        &self,
+        path: AttachPath,
+        session: &AgentSession,
+    ) -> Result<AttachPermit<'_>> {
+        let disconnected = || HarnessError::Session(AgentSessionError::Disconnected(session.id));
+        let harness = self
+            .runtimes
+            .bound_harness(session.bot_id)
+            .await
+            .map_err(AgentSessionError::Unknown)?
+            .ok_or_else(disconnected)?;
+        self.attach_budget
+            .acquire(path, harness, session.id)
+            .await
+            .map_err(|_| disconnected())
     }
 
     /// Load a live external session onto its runtime's new connection.
@@ -162,7 +222,8 @@ where
             self.ensure_hydrated(session_id).await?;
             return Ok(true);
         }
-        self.reconnect(session_id).await?;
+        self.reconnect(session_id, AttachAdmission::HeldByCaller)
+            .await?;
         tracing::Span::current().record("agent.session.reattached", true);
         Ok(true)
     }
@@ -278,7 +339,9 @@ where
                 if !matches!(
                     self.sessions.management(session_id).await?,
                     SessionManagement::Ours
-                ) && let Err(error) = self.reconnect(session_id).await
+                ) && let Err(error) = self
+                    .reconnect(session_id, AttachAdmission::Budget(AttachPath::Recovery))
+                    .await
                 {
                     self.notification_batches.remove(&session_id);
                     self.busy.clear(session_id);
@@ -434,7 +497,10 @@ where
                 return Err(error.into());
             }
             Err(AgentSessionError::Disconnected(_)) => {
-                let session = self.reconnect(session_id).await?;
+                let path = delivery_path(&action, actor.as_ref());
+                let session = self
+                    .reconnect(session_id, AttachAdmission::Budget(path))
+                    .await?;
                 if action.occupies_turn() {
                     self.admit_session(&session).await?;
                 }

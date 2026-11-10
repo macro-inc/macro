@@ -2,6 +2,10 @@
 //! and the harness loads them without anyone prompting.
 
 use super::*;
+use crate::domain::attach_budget::{
+    ATTACH_CONCURRENCY, ATTACH_PERMIT_HOLD, AttachPath, AttachPermit, HARNESS_ATTACH_SHARE,
+    USER_RESERVED_ATTACHES,
+};
 use agent_client_protocol::schema::v1::LoadSessionResponse;
 use agent_session::domain::connection::ListedSession;
 
@@ -773,4 +777,110 @@ async fn a_redial_restores_a_session_its_runtime_saw_active_recently() {
 
     assert_eq!((report.eager, report.lazy), (1, 1), "{report:?}");
     assert_eq!(loaded(&runtime.agent()), [worked_locally.to_string()]);
+}
+
+/// Hold every background permit of the replica's attach budget, on
+/// harnesses other than the one under test.
+async fn fill_background_attaches(service: &TestHarness) -> Vec<AttachPermit<'_>> {
+    let mut held = Vec::new();
+    let others = ATTACH_CONCURRENCY - USER_RESERVED_ATTACHES;
+    for index in 0..others {
+        let harness = harness_id::HarnessId::new_from_uuid(macro_uuid::Uuid::from_u128(
+            0xB0_0000 + u128::try_from(index / HARNESS_ATTACH_SHARE).unwrap(),
+        ));
+        held.push(
+            service
+                .inner
+                .attach_budget
+                .acquire(AttachPath::Dial, harness, AgentSessionId::new())
+                .await
+                .unwrap(),
+        );
+    }
+    held
+}
+
+#[tokio::test]
+async fn a_prompt_restores_its_session_while_a_reattach_storm_holds_every_background_permit() {
+    let (service, repo, _containers, _announcer, runtimes) = harness();
+    let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let idle = native_session(&service, &repo, bot_id).await;
+    let runtime = ContainerMock::default();
+    runtimes.attach(harness_for_bot(bot_id), runtime.clone());
+    let storm = fill_background_attaches(&service).await;
+
+    let drive = async {
+        initializes_loading(&runtime).await;
+        let agent = runtime.agent();
+        agent.wait_for_requests(2).await;
+        assert_eq!(
+            service.inner.attach_budget.available(),
+            USER_RESERVED_ATTACHES - 1,
+            "the prompt holds a reserved permit while its session loads"
+        );
+        agent.loads_session(LoadSessionResponse::new());
+        agent.wait_for_requests(3).await;
+    };
+    let (result, ()) = tokio::join!(prompt(&service, idle, "still there?"), drive);
+
+    result.expect("the prompt restores its session");
+    let agent = runtime.agent();
+    assert_eq!(loaded(&agent), [idle.to_string()]);
+    assert_eq!(prompts(&agent), [vec![ContentBlock::from("still there?")]]);
+    assert_eq!(
+        service.inner.attach_budget.available(),
+        USER_RESERVED_ATTACHES,
+        "the prompt's permit is back once its session is restored"
+    );
+    drop(storm);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_restore_that_never_answers_gives_its_permit_back_at_the_limit() {
+    let (service, repo, _containers, _announcer, runtimes) = harness();
+    let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let idle = native_session(&service, &repo, bot_id).await;
+    let runtime = ContainerMock::default();
+    runtimes.attach(harness_for_bot(bot_id), runtime.clone());
+
+    let prompted = tokio::spawn({
+        let service = service.clone();
+        async move { prompt(&service, idle, "hello?").await }
+    });
+    initializes_loading(&runtime).await;
+    runtime.agent().wait_for_requests(2).await;
+    assert_eq!(loaded(&runtime.agent()), [idle.to_string()]);
+    assert_eq!(
+        service.inner.attach_budget.available(),
+        ATTACH_CONCURRENCY - 1
+    );
+
+    // The runtime never answers `session/load`.
+    tokio::time::sleep(ATTACH_PERMIT_HOLD + std::time::Duration::from_secs(1)).await;
+
+    assert_eq!(
+        service.inner.attach_budget.available(),
+        ATTACH_CONCURRENCY,
+        "a hung restore no longer holds a permit"
+    );
+    prompted.abort();
+}
+
+#[test]
+fn only_a_prompt_someone_sent_counts_as_a_user_attach() {
+    use super::super::deliver::delivery_path;
+    let sender = sender();
+
+    assert_eq!(
+        delivery_path(&AgentAction::prompt("hi"), Some(&sender)),
+        AttachPath::Prompt
+    );
+    assert_eq!(
+        delivery_path(&AgentAction::prompt("hi"), None),
+        AttachPath::Delivery
+    );
+    assert_eq!(
+        delivery_path(&AgentAction::Stop, Some(&sender)),
+        AttachPath::Delivery
+    );
 }
