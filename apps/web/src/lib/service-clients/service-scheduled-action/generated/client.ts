@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AcceptIdeaRequest,
   ActionConfiguration,
   ActionConfigurationUpdate,
   ActionExecutionRecord,
@@ -381,6 +382,11 @@ export type acceptIdeaResponse204 = {
   status: 204;
 };
 
+export type acceptIdeaResponse400 = {
+  data: string;
+  status: 400;
+};
+
 export type acceptIdeaResponse401 = {
   data: string;
   status: 401;
@@ -389,6 +395,11 @@ export type acceptIdeaResponse401 = {
 export type acceptIdeaResponse404 = {
   data: string;
   status: 404;
+};
+
+export type acceptIdeaResponse409 = {
+  data: string;
+  status: 409;
 };
 
 export type acceptIdeaResponse500 = {
@@ -400,8 +411,10 @@ export type acceptIdeaResponseSuccess = acceptIdeaResponse204 & {
   headers: Headers;
 };
 export type acceptIdeaResponseError = (
+  | acceptIdeaResponse400
   | acceptIdeaResponse401
   | acceptIdeaResponse404
+  | acceptIdeaResponse409
   | acceptIdeaResponse500
 ) & {
   headers: Headers;
@@ -417,11 +430,14 @@ export const getAcceptIdeaUrl = (id: string) => {
 
 export const acceptIdea = async (
   id: string,
+  acceptIdeaRequest: AcceptIdeaRequest,
   options?: RequestInit
 ): Promise<acceptIdeaResponse> => {
   const res = await fetch(getAcceptIdeaUrl(id), {
     ...options,
     method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(acceptIdeaRequest),
   });
 
   const body = [204, 205, 304].includes(res.status) ? null : await res.text();

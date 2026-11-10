@@ -5,6 +5,17 @@ export type ClientOptions = {
 };
 
 /**
+ * Acting on an idea, as the caller's copy of it shows it.
+ */
+export type AcceptIdeaRequest = {
+    /**
+     * The idea's `updatedAt` as the caller read it. A background idea runs
+     * only if it is unchanged since; otherwise the answer is 409.
+     */
+    updatedAt: string;
+};
+
+/**
  * Client configuration, the create body. Ownership and execution state are
  * server-owned.
  */
@@ -1793,7 +1804,7 @@ export type RewriteIdeaResponses = {
 export type RewriteIdeaResponse = RewriteIdeaResponses[keyof RewriteIdeaResponses];
 
 export type AcceptIdeaData = {
-    body?: never;
+    body: AcceptIdeaRequest;
     path: {
         /**
          * ID of the idea
@@ -1805,11 +1816,16 @@ export type AcceptIdeaData = {
 };
 
 export type AcceptIdeaErrors = {
+    400: string;
     401: string;
     /**
      * No open or done idea with this id for the caller, or ideas are off
      */
     404: string;
+    /**
+     * The idea changed since the caller read it: read it again
+     */
+    409: string;
     500: string;
 };
 
@@ -1817,7 +1833,7 @@ export type AcceptIdeaError = AcceptIdeaErrors[keyof AcceptIdeaErrors];
 
 export type AcceptIdeaResponses = {
     /**
-     * Accepted: a background prompt idea is taken on, any other idea is done; accepting a done idea again changes nothing
+     * Accepted: a background prompt idea starts its run when the person accepts it in the app (anyone acting for them only takes it on), any other idea is done; accepting a done idea again changes nothing
      */
     204: void;
 };
