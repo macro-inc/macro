@@ -80,6 +80,11 @@ channel list measures it. The backend-free desktop/phone regression (the real
 `ChannelMessage` over stored previews) checks the cards are there on first
 render, their content and order, their fit in the message column, and opening:
 `bunx playwright test --config src/features/channel/Message/browser-test/playwright.config.ts`.
+A send or edit response, and its realtime event, carry the previews stored
+before that write and can arrive after the `link_previews_updated` computed
+from the new text. `applyMessage` therefore keeps previews over those of a
+copy of the text they were computed from (`link_previews_content`); never
+overwrite `link_previews` from an `edited` or `posted` copy without that check.
 
 Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
 backend-free desktop/phone regression: the card reserves its height from
