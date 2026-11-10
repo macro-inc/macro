@@ -185,17 +185,23 @@ impl From<FfiCommand> for Command {
         }
     }
 }
-/// Shared application clipboard facts, generated for native hosts.
+/// Captured paste policy from the input event; independent of clipboard MIME content.
+pub type FfiPasteIntent = PasteIntent;
+#[uniffi::remote(Record)]
+struct FfiPasteIntent {
+    plain_only: bool,
+}
+
+/// Shared application file-admission facts, generated for native hosts.
 pub type FfiPasteFacts = macro_document_model::plugins_group_b::PasteFacts;
 #[uniffi::remote(Record)]
 struct FfiPasteFacts {
     request: u32,
-    plain_only: bool,
     has_file_entries: bool,
     mobile_image_recovery: bool,
 }
 
-/// Encode the shared paste facts without native mirrors of its wire format.
+/// Encode shared file-admission facts; modifier intent travels in the typed clipboard payload.
 #[uniffi::export]
 pub fn clipboard_paste_facts(facts: FfiPasteFacts) -> Result<FfiClipboardEntry, FfiSessionError> {
     Ok(FfiClipboardEntry {
@@ -221,6 +227,8 @@ pub struct FfiClipboardPayload {
     pub has_files: bool,
     /// Optional host-imported HTML nodes.
     pub html_nodes: Option<Vec<SerializedNode>>,
+    /// Actual event intent; ordinary paste and drop explicitly use false.
+    pub intent: FfiPasteIntent,
 }
 /// A correlated storage completion; no I/O runs while the session lock is held.
 #[derive(Debug, uniffi::Enum)]
@@ -472,6 +480,7 @@ impl FfiInput {
                         data: payload.data.into_iter().map(|e| (e.mime, e.text)).collect(),
                         has_files: payload.has_files,
                         html_nodes: payload.html_nodes,
+                        intent: payload.intent,
                     }),
                     selection,
                 });

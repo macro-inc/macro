@@ -28,7 +28,7 @@ internal class EditorClipboard(context: Context) {
         }
         item.text?.let { entries += FfiClipboardEntry("text/plain", it.toString()) }
         val files = (0 until clip.itemCount).any { clip.getItemAt(it).uri != null }
-        return FfiClipboardPayload(entries, files, null)
+        return FfiClipboardPayload(entries, files, null, FfiPasteIntent(false))
     }
 
     fun write(entries: List<FfiClipboardEntry>): Boolean {

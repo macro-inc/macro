@@ -1808,6 +1808,10 @@ public struct FfiClipboardPayload: Equatable, Hashable {
      * Optional host-imported HTML nodes.
      */
     public var htmlNodes: [SerializedNode]?
+    /**
+     * Actual event intent; ordinary paste and drop explicitly use false.
+     */
+    public var intent: FfiPasteIntent
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -1820,10 +1824,14 @@ public struct FfiClipboardPayload: Equatable, Hashable {
          */hasFiles: Bool, 
         /**
          * Optional host-imported HTML nodes.
-         */htmlNodes: [SerializedNode]?) {
+         */htmlNodes: [SerializedNode]?, 
+        /**
+         * Actual event intent; ordinary paste and drop explicitly use false.
+         */intent: FfiPasteIntent) {
         self.data = data
         self.hasFiles = hasFiles
         self.htmlNodes = htmlNodes
+        self.intent = intent
     }
 
     
@@ -1844,7 +1852,8 @@ public struct FfiConverterTypeFfiClipboardPayload: FfiConverterRustBuffer {
             try FfiClipboardPayload(
                 data: FfiConverterSequenceTypeFfiClipboardEntry.read(from: &buf), 
                 hasFiles: FfiConverterBool.read(from: &buf), 
-                htmlNodes: FfiConverterOptionSequenceTypeSerializedNode.read(from: &buf)
+                htmlNodes: FfiConverterOptionSequenceTypeSerializedNode.read(from: &buf), 
+                intent: FfiConverterTypeFfiPasteIntent.read(from: &buf)
         )
     }
 
@@ -1852,6 +1861,7 @@ public struct FfiConverterTypeFfiClipboardPayload: FfiConverterRustBuffer {
         FfiConverterSequenceTypeFfiClipboardEntry.write(value.data, into: &buf)
         FfiConverterBool.write(value.hasFiles, into: &buf)
         FfiConverterOptionSequenceTypeSerializedNode.write(value.htmlNodes, into: &buf)
+        FfiConverterTypeFfiPasteIntent.write(value.intent, into: &buf)
     }
 }
 
@@ -2871,15 +2881,13 @@ public func FfiConverterTypeFfiOutput_lower(_ value: FfiOutput) -> RustBuffer {
 
 public struct FfiPasteFacts: Equatable, Hashable {
     public var request: UInt32
-    public var plainOnly: Bool
     public var hasFileEntries: Bool
     public var mobileImageRecovery: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(request: UInt32, plainOnly: Bool, hasFileEntries: Bool, mobileImageRecovery: Bool) {
+    public init(request: UInt32, hasFileEntries: Bool, mobileImageRecovery: Bool) {
         self.request = request
-        self.plainOnly = plainOnly
         self.hasFileEntries = hasFileEntries
         self.mobileImageRecovery = mobileImageRecovery
     }
@@ -2901,7 +2909,6 @@ public struct FfiConverterTypeFfiPasteFacts: FfiConverterRustBuffer {
         return
             try FfiPasteFacts(
                 request: FfiConverterUInt32.read(from: &buf), 
-                plainOnly: FfiConverterBool.read(from: &buf), 
                 hasFileEntries: FfiConverterBool.read(from: &buf), 
                 mobileImageRecovery: FfiConverterBool.read(from: &buf)
         )
@@ -2909,7 +2916,6 @@ public struct FfiConverterTypeFfiPasteFacts: FfiConverterRustBuffer {
 
     public static func write(_ value: FfiPasteFacts, into buf: inout [UInt8]) {
         FfiConverterUInt32.write(value.request, into: &buf)
-        FfiConverterBool.write(value.plainOnly, into: &buf)
         FfiConverterBool.write(value.hasFileEntries, into: &buf)
         FfiConverterBool.write(value.mobileImageRecovery, into: &buf)
     }
@@ -2928,6 +2934,56 @@ public func FfiConverterTypeFfiPasteFacts_lift(_ buf: RustBuffer) throws -> FfiP
 #endif
 public func FfiConverterTypeFfiPasteFacts_lower(_ value: FfiPasteFacts) -> RustBuffer {
     return FfiConverterTypeFfiPasteFacts.lower(value)
+}
+
+
+public struct FfiPasteIntent: Equatable, Hashable {
+    public var plainOnly: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(plainOnly: Bool) {
+        self.plainOnly = plainOnly
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension FfiPasteIntent: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFfiPasteIntent: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FfiPasteIntent {
+        return
+            try FfiPasteIntent(
+                plainOnly: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: FfiPasteIntent, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.plainOnly, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiPasteIntent_lift(_ buf: RustBuffer) throws -> FfiPasteIntent {
+    return try FfiConverterTypeFfiPasteIntent.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFfiPasteIntent_lower(_ value: FfiPasteIntent) -> RustBuffer {
+    return FfiConverterTypeFfiPasteIntent.lower(value)
 }
 
 
@@ -15799,7 +15855,7 @@ public func FfiConverterTypeWallDuration_lower(_ value: WallDuration) -> Int64 {
 }
 
 /**
- * Encode the shared paste facts without native mirrors of its wire format.
+ * Encode shared file-admission facts; modifier intent travels in the typed clipboard payload.
  */
 public func clipboardPasteFacts(facts: FfiPasteFacts)throws  -> FfiClipboardEntry  {
     return try  FfiConverterTypeFfiClipboardEntry_lift(try rustCallWithError(FfiConverterTypeFfiSessionError_lift) {
@@ -15835,7 +15891,7 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_document_session_ffi_checksum_func_clipboard_paste_facts() != 58742) {
+    if (uniffi_document_session_ffi_checksum_func_clipboard_paste_facts() != 48756) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_document_session_ffi_checksum_func_sync_defaults() != 56654) {
