@@ -1,7 +1,9 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { getWebOrigin } from '@core/util/webOrigin';
 import type { MessageParent } from '@service-storage/messages';
+import { confirmDialog } from '@ui';
 import type { Accessor } from 'solid-js';
 import type {
   MessageActionHandler,
@@ -41,8 +43,16 @@ export type DeleteMessageInput = {
   threadID?: string;
 };
 
+export type RemoveLinkPreviewsInput = {
+  parent: MessageParent;
+  messageID: string;
+  threadID?: string;
+};
+
 type ChannelMessageActionEffects = {
   getLocationHref: () => string;
+  /** Resolves true once the sender confirms removing their link previews. */
+  confirmRemoveLinkPreviews: () => Promise<boolean>;
   copyToClipboard: (text: string) => Promise<void>;
   notifyCopyLinkSuccess: () => void;
   notifyCopyLinkFailure: (error: unknown) => void;
@@ -61,6 +71,8 @@ export type CreateChannelMessageActionsOptions = {
   canModerate?: Accessor<boolean>;
   buildLink?: (message: MessageData) => string;
   deleteMessage: (input: DeleteMessageInput) => void;
+  /** Hosts whose messages show link preview cards let their sender remove them. */
+  removeLinkPreviews?: (input: RemoveLinkPreviewsInput) => void;
   addReaction: (input: AddReactionInput) => void;
   removeReaction: (input: RemoveReactionInput) => void;
   onReply?: MessageActionHandler;
@@ -77,6 +89,14 @@ function createDefaultEffects(): ChannelMessageActionEffects {
       window.location.pathname +
       window.location.search +
       window.location.hash,
+    confirmRemoveLinkPreviews: () =>
+      confirmDialog({
+        title: t('channelLinkPreviews.removeTitle'),
+        body: t('channelLinkPreviews.removeBody'),
+        confirmLabel: t('channelLinkPreviews.removeConfirm'),
+        cancelLabel: t('common.cancel'),
+        tone: 'danger',
+      }),
     copyToClipboard: (text) => navigator.clipboard.writeText(text),
     notifyCopyLinkSuccess: () => {
       toast.success('Link copied to clipboard');
@@ -96,6 +116,21 @@ function createDefaultEffects(): ChannelMessageActionEffects {
 }
 
 const emptyReplyHandler: MessageActionHandler = () => undefined;
+
+/** Removes a message's link previews once its sender confirms. */
+function removeLinkPreviewsHandler(
+  input: RemoveLinkPreviewsInput,
+  removeLinkPreviews: (input: RemoveLinkPreviewsInput) => void,
+  confirm: () => Promise<boolean>
+): MessageActionHandler {
+  return async (ctx) => {
+    // Shift skips the question, for removing several in a row.
+    const skipConfirmation = ctx.event?.shiftKey ?? false;
+    if (!skipConfirmation && !(await confirm())) return;
+
+    removeLinkPreviews(input);
+  };
+}
 
 export function createChannelMessageActions(
   options: CreateChannelMessageActionsOptions
@@ -204,6 +239,21 @@ export function createChannelMessageActions(
             });
           }
         : undefined,
+      // The sender's alone, like editing: a moderator can't decide it.
+      onRemoveLinkPreviews:
+        canEdit && options.removeLinkPreviews
+          ? removeLinkPreviewsHandler(
+              {
+                parent: message.parent ?? options.parent(),
+                messageID: message.id,
+                threadID:
+                  (message as MessageData & { thread_id?: string | null })
+                    .thread_id ?? undefined,
+              },
+              options.removeLinkPreviews,
+              effects.confirmRemoveLinkPreviews
+            )
+          : undefined,
       onCreateTask: options.onCreateTask,
       onChat: !isDeleted ? options.onChat : undefined,
     };

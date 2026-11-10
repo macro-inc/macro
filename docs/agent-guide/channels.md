@@ -85,9 +85,12 @@ check is in
 `apps/web/src/lib/core/component/LexicalMarkdown/component/core/browser-test/README.md`.
 
 A web link in a channel message also shows a preview card beneath the text,
-inside `[data-message-link-previews]`: the site's favicon and domain, the page
-title, up to two lines of description, and the page's preview image as a
-thumbnail. Clicking or tapping the card opens the link like the link itself.
+inside `[data-message-link-previews]`, one `[data-link-preview]` per link: the
+site's favicon and domain, the page title, up to three lines of what the page
+says it is about, and the page's preview image as a thumbnail. The title is the
+link: clicking or tapping it opens the page like the link in the text does. The
+description is the page's Open Graph, Twitter card, or `<meta>` description, or,
+for a page with none (a Wikipedia article), its first paragraph.
 The server reads the pages after a message is posted or edited, whoever sent it
 (a person, an agent, the API), and stores the previews with the message, so a
 message loads with its cards and the list never grows under the reader; a
@@ -99,9 +102,19 @@ An edit keeps the cards of the links it kept and fetches only new ones; a card
 of a link the edit removed disappears once the previews are recomputed.
 Document comments and GitHub PR comments show no cards.
 
+A message's sender can remove its previews: every card on their own message has
+a **Remove link previews** button (an X at the end of the site line), shown
+while the card is hovered or focused and always on touch. It asks first, with
+**Cancel** and **Remove**; holding Shift while clicking skips the question. All
+of the message's cards go, for everyone in the conversation, at once and without
+a reload, and the message gets none again, whatever links a later edit adds.
+Nobody else sees the button, channel admins included, and the server refuses
+them.
+
 Verify by sending a public article link on desktop and phone: its card appears
 within a few seconds and is there, at the same height, when the channel is
-reopened. The backend-free browser check is in
+reopened; then remove it as the sender and check it is gone for a second person
+too. The backend-free browser check is in
 `apps/web/src/features/channel/Message/browser-test/README.md`.
 
 ## Block formatting

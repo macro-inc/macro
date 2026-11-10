@@ -163,6 +163,12 @@ export const entityMessagesClient = {
       { emoji, add, nonce }
     );
   },
+  removeLinkPreviews(parent: MessageParent, id: string) {
+    return request<Message>(
+      `${path(parent)}/items/${encodeURIComponent(id)}/link_previews`,
+      'DELETE'
+    );
+  },
   patchThread(parent: MessageParent, rootId: string, patch: ThreadPatch) {
     return request<ThreadState>(
       `${path(parent)}/threads/${encodeURIComponent(rootId)}`,

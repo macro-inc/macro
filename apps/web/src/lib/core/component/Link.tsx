@@ -7,7 +7,7 @@ import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnf
 import type { GetUnfurlResponseFaviconUrl } from '@service-unfurl/generated/schemas/getUnfurlResponseFaviconUrl';
 import { UnfurlEmbedType } from '@service-unfurl/generated/schemas/unfurlEmbedType';
 import { cn } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { children, createSignal, type JSX, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 
 function extractDomain(url: string) {
@@ -152,11 +152,17 @@ export function UnfurlLink(props: UnfurlLinkProps) {
 
 /**
  * A link's preview as a card beneath the text it appears in: the site, the
- * page title and description, and its preview image as a thumbnail. Opens
- * the link like the link itself does.
+ * page title linking to the page, a few lines of what the page says it is
+ * about, and its preview image as a thumbnail. `action` sits at the end of
+ * the site line, shown while the card is hovered or focused and always on
+ * touch.
  */
-export function LinkPreviewCard(props: { preview: LinkPreview }) {
+export function LinkPreviewCard(props: {
+  preview: LinkPreview;
+  action?: JSX.Element;
+}) {
   const domain = () => extractDomain(props.preview.url);
+  const action = children(() => props.action);
   const [failedImageSrc, setFailedImageSrc] = createSignal<string>();
   const imageSrc = () => {
     const url = props.preview.image_url;
@@ -168,51 +174,67 @@ export function LinkPreviewCard(props: { preview: LinkPreview }) {
   };
 
   return (
-    <a
-      href={props.preview.url}
-      target="_blank"
-      rel="noopener"
-      draggable={false}
-      class="flex w-full max-w-md items-start gap-3 overflow-hidden whitespace-normal rounded-xl border border-edge-muted p-3 text-left not-touch:hover:border-accent hover-transition-border focus-visible:outline-2 focus-visible:outline-accent"
-      onClick={(event) => {
-        // Modified/middle clicks keep native anchor behavior; plain clicks go
-        // through openExternalUrl so Macro links open in-app under Tauri.
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-          return;
-        }
-        event.preventDefault();
-        openExternalUrl(props.preview.url);
-      }}
+    <div
+      data-link-preview
+      class="group/link-preview w-full max-w-lg overflow-hidden whitespace-normal rounded-xl border border-edge-muted p-3 text-left"
     >
-      <div class="min-w-0 flex-1">
-        <div class="flex items-center gap-1.5 text-xs text-ink-muted">
-          <Favicon url={props.preview.favicon_url} class="size-4 rounded-sm" />
-          <span class="truncate">{domain()}</span>
+      <div class="flex min-h-6 items-center gap-1.5 text-xs text-ink-muted">
+        <Favicon url={props.preview.favicon_url} class="size-4 rounded-sm" />
+        <span class="min-w-0 flex-1 truncate">{domain()}</span>
+        <Show when={action()}>
+          <div class="-my-1.5 -mr-1.5 flex shrink-0 opacity-0 transition-opacity group-hover/link-preview:opacity-100 group-focus-within/link-preview:opacity-100 touch:opacity-100">
+            {action()}
+          </div>
+        </Show>
+      </div>
+      <div class="mt-1 flex items-start gap-3">
+        <div class="min-w-0 flex-1">
+          <a
+            href={props.preview.url}
+            target="_blank"
+            rel="noopener"
+            draggable={false}
+            class="line-clamp-2 text-sm font-medium text-link hover:text-link-hover hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+            onClick={(event) => {
+              // Modified/middle clicks keep native anchor behavior; plain
+              // clicks go through openExternalUrl so Macro links open in-app
+              // under Tauri.
+              if (
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey
+              ) {
+                return;
+              }
+              event.preventDefault();
+              openExternalUrl(props.preview.url);
+            }}
+          >
+            {props.preview.title || domain()}
+          </a>
+          <Show when={props.preview.description}>
+            {(description) => (
+              <p class="mt-0.5 line-clamp-3 text-sm text-ink-muted">
+                {description()}
+              </p>
+            )}
+          </Show>
         </div>
-        <div class="mt-1 line-clamp-2 text-sm font-medium text-ink">
-          {props.preview.title || domain()}
-        </div>
-        <Show when={props.preview.description}>
-          {(description) => (
-            <div class="mt-0.5 line-clamp-2 text-sm text-ink-muted">
-              {description()}
-            </div>
+        <Show when={imageSrc()}>
+          {(src) => (
+            <img
+              src={src()}
+              crossorigin={
+                isImageProxyUrl(src()) ? 'use-credentials' : 'anonymous'
+              }
+              alt=""
+              class="size-20 shrink-0 rounded-lg bg-edge-muted object-cover"
+              on:error={() => setFailedImageSrc(src())}
+            />
           )}
         </Show>
       </div>
-      <Show when={imageSrc()}>
-        {(src) => (
-          <img
-            src={src()}
-            crossorigin={
-              isImageProxyUrl(src()) ? 'use-credentials' : 'anonymous'
-            }
-            alt=""
-            class="size-16 shrink-0 rounded-lg bg-edge-muted object-cover"
-            on:error={() => setFailedImageSrc(src())}
-          />
-        )}
-      </Show>
-    </a>
+    </div>
   );
 }

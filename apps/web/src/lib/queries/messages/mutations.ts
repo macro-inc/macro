@@ -1,4 +1,5 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import type { OptimisticPostMessageAttachment } from '@channel/Input/message-payload';
 import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
@@ -630,6 +631,57 @@ export function useDeleteMessageMutation(
       },
       callbacks
     ),
+  }));
+}
+
+type RemoveLinkPreviewsParams = {
+  parent: MessageParent;
+  messageID: string;
+  threadID?: string;
+};
+
+/**
+ * Mutation to remove a message's link previews for everyone. The cards go at
+ * once and come back if the server refuses.
+ */
+export function useRemoveLinkPreviewsMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: (vars: RemoveLinkPreviewsParams) =>
+      entityMessagesClient.removeLinkPreviews(vars.parent, vars.messageID),
+    onMutate: (vars) => {
+      const target = resolveMessageTarget({
+        parent: vars.parent,
+        messageId: vars.messageID,
+        threadId: vars.threadID,
+      });
+      const shown = getTargetMessage(vars.parent, target);
+      if (!shown) return;
+
+      // Removed for this very text: a copy of it that still carries the
+      // previews, such as a late edit response, must not bring them back.
+      patchTargetMessage(vars.parent, target, {
+        link_previews: [],
+        link_previews_content: shown.content,
+      });
+      return {
+        target,
+        previous: {
+          link_previews: shown.link_previews,
+          link_previews_content: shown.link_previews_content,
+        },
+      };
+    },
+    onSuccess: (data) => {
+      applyMessage(data, 'link_previews_updated');
+    },
+    onError: (error, vars, context) => {
+      console.error('failed to remove link previews', error);
+      toast.failure(t('channelLinkPreviews.removeFailed'));
+      if (context) {
+        patchTargetMessage(vars.parent, context.target, context.previous);
+      }
+    },
   }));
 }
 

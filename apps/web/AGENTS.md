@@ -244,9 +244,13 @@ adapter tests separately check file types, access failures, and split selection.
 Link preview cards in channel messages render from the previews stored with
 each message, never from a fetch after mount, so a row has its height when the
 channel list measures it. The backend-free desktop/phone regression (the real
-`ChannelMessage` over stored previews) checks the cards are there on first
-render, their content and order, their fit in the message column, and opening:
+`ChannelMessage` and channel actions over stored previews) checks the cards are
+there on first render, their content and order, the three-line description,
+their fit in the message column, opening from the title, and removal by the
+sender alone (after confirming, or at once with Shift):
 `bunx playwright test --config src/features/channel/Message/browser-test/playwright.config.ts`.
+The card is not itself a link, so it can hold the sender's remove button; keep
+the title as its one link.
 A send or edit response, and its realtime event, carry the previews stored
 before that write and can arrive after the `link_previews_updated` computed
 from the new text. `applyMessage` therefore keeps previews over those of a

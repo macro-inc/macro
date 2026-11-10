@@ -8,17 +8,26 @@ import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
 import { UserContextProvider } from '@core/context/user';
 import type { MessageData } from '@core/messages/types';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { EntityProvider } from '@entity';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { ImperativeDialogHost } from '@ui';
 import { For, onCleanup } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { render } from 'solid-js/web';
+import { createChannelMessageActions } from '../../Channel/create-channel-message-actions';
 import { ChannelMessage } from '../ChannelMessage';
+
+const VIEWER = 'macro|ada@example.com';
+
+// The app's entry point does this; `touch:` styles follow it.
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 
 const ARTICLE = {
   url: 'https://news.example.com/2026/11/offline-first',
   title: 'Offline first, without the sync bugs',
   description:
-    'What we learned moving a collaborative editor to local-first storage, and the three conflicts that still need a person to resolve them.',
+    'What we learned moving a collaborative editor to local-first storage, and the three conflicts that still need a person to resolve them. The first is a rename racing a delete, the second is two people reordering the same list, and the third is an edit made on a device that was offline for longer than the history we keep. Each needed its own rule, and none of them could be merged away.',
   image_url: 'https://news.example.com/images/offline-first.png',
   favicon_url: 'https://news.example.com/favicon.ico',
 };
@@ -29,7 +38,11 @@ const GUIDE = {
   favicon_url: 'https://docs.example.org/favicon.ico',
 };
 
-const MESSAGES: Pick<MessageData, 'id' | 'content' | 'link_previews'>[] = [
+type FixtureMessage = Pick<MessageData, 'id' | 'content' | 'link_previews'> & {
+  sender_id?: string;
+};
+
+const MESSAGES: FixtureMessage[] = [
   {
     id: 'article',
     content: `Worth a read before Thursday: ${ARTICLE.url}`,
@@ -48,17 +61,56 @@ const MESSAGES: Pick<MessageData, 'id' | 'content' | 'link_previews'>[] = [
     id: 'pending',
     content: 'Previews not computed yet: https://later.example.net',
   },
+  {
+    id: 'other',
+    content: `Someone else's link: ${GUIDE.url}`,
+    link_previews: [GUIDE],
+    sender_id: 'macro|grace@example.com',
+  },
 ];
 
-function message(entry: (typeof MESSAGES)[number]): MessageData {
+function message(entry: FixtureMessage): MessageData {
   return {
+    sender_id: VIEWER,
     ...entry,
-    sender_id: 'macro|ada@example.com',
     created_at: '2026-11-04T17:21:45.000Z',
     updated_at: '2026-11-04T17:21:45.000Z',
     attachments: [],
     reactions: [],
   };
+}
+
+/**
+ * The messages as Ada sees them, with the channel's real actions. Removing
+ * previews empties them here, where the app would ask the server.
+ */
+function Messages() {
+  const [messages, setMessages] = createStore(MESSAGES.map(message));
+  const getMessageActions = createChannelMessageActions({
+    parent: () => ({ type: 'channel', id: 'fixture-channel' }),
+    userId: () => VIEWER,
+    deleteMessage: () => {},
+    addReaction: () => {},
+    removeReaction: () => {},
+    removeLinkPreviews: ({ messageID }) => {
+      setMessages((entry) => entry.id === messageID, 'link_previews', []);
+    },
+  });
+
+  return (
+    <main class="min-h-screen bg-page py-4 text-ink">
+      <For each={messages}>
+        {(entry) => (
+          <div data-fixture-message={entry.id}>
+            <ChannelMessage
+              message={entry}
+              actions={getMessageActions(entry)}
+            />
+          </div>
+        )}
+      </For>
+    </main>
+  );
 }
 
 /** Production channel messages over synthetic data, previews included. */
@@ -78,15 +130,8 @@ function Fixture() {
                 <ChannelsContextProvider>
                   <QuickAccessProvider>
                     <StaticMarkdownContext theme={channelTheme} host="channel">
-                      <main class="min-h-screen bg-page py-4 text-ink">
-                        <For each={MESSAGES}>
-                          {(entry) => (
-                            <div data-fixture-message={entry.id}>
-                              <ChannelMessage message={message(entry)} />
-                            </div>
-                          )}
-                        </For>
-                      </main>
+                      <Messages />
+                      <ImperativeDialogHost />
                     </StaticMarkdownContext>
                   </QuickAccessProvider>
                 </ChannelsContextProvider>

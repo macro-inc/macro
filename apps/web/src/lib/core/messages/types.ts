@@ -59,6 +59,8 @@ export type MessageActions = {
   onCopyMessageText?: MessageActionHandler;
   onEdit?: MessageActionHandler;
   onDelete?: MessageActionHandler;
+  /** Remove the message's link previews for everyone; its sender's alone. */
+  onRemoveLinkPreviews?: MessageActionHandler;
   onCreateTask?: MessageActionHandler;
   onChat?: MessageActionHandler;
 };
