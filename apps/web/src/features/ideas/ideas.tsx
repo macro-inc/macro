@@ -1,5 +1,4 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useUserId } from '@core/context/user';
 import { useRoutineIdeaSuggestions } from '../routine-suggestions/routine-suggestions';
 import { createIdeaActions } from './idea-actions';
 import { useIdeasSource } from './queries/ideas-source';
@@ -14,5 +13,5 @@ export function useIdeas() {
     turnOnRoutine: routines.turnOn,
   });
 
-  return { source: useIdeasSource(), actions, userId: useUserId() };
+  return { source: useIdeasSource(), actions };
 }

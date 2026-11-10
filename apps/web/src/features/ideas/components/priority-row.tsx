@@ -1,5 +1,4 @@
 import { t } from '@app/lib/i18n';
-import { Spinner } from '@ui';
 import { Show } from 'solid-js';
 import type { Idea, IdeaStatus } from '../core/idea';
 import { IdeaTile } from './idea-tile';
@@ -18,14 +17,13 @@ export function PriorityRow(props: {
         data-priority={props.idea.id}
         onClick={props.onOpen}
       >
-        <IdeaTile idea={props.idea} />
+        <IdeaTile idea={props.idea} status={props.status} />
         <span class="flex min-w-0 flex-1 flex-col">
           <span class="truncate text-sm font-medium text-ink">
             {props.idea.title}
           </span>
           <span class="flex min-w-0 items-center gap-1.5 text-xs text-ink-extra-muted">
             <Show when={props.status === 'running'}>
-              <Spinner size="sm" decorative class="size-3" />
               <span class="shrink-0">{t('ideas.badgeRunning')}</span>
             </Show>
             <Show when={props.status === 'failed'}>

@@ -63,13 +63,14 @@ export type Idea = IdeaKind & {
  * - `open`: waiting for the person.
  * - `running`: its background run is under way.
  * - `failed`: its last background run failed; Run tries again.
- * - `done`: finished, with what it produced.
+ * - `done`: finished, or taken up by opening it: nothing more to do here.
  */
 export type IdeaStatus = 'open' | 'running' | 'failed' | 'done';
 
 export function ideaStatus(idea: Idea): IdeaStatus {
   if (idea.state === 'done') return 'done';
 
+  const isBackground = idea.kind === 'prompt' && idea.runMode === 'background';
   if (idea.kind === 'prompt' && idea.runMode === 'background' && idea.run) {
     if (idea.run.progress === 'failed') return 'failed';
     // Finished, and about to be listed as done.
@@ -77,6 +78,9 @@ export function ideaStatus(idea: Idea): IdeaStatus {
 
     return 'running';
   }
+
+  // Opening an idea's item, draft or composer is all there is to do with it.
+  if (idea.state === 'accepted' && !isBackground) return 'done';
 
   return 'open';
 }
@@ -109,22 +113,13 @@ export function matchesFilter(status: IdeaStatus, filter: FeedFilter) {
 }
 
 /**
- * The feed in the order it shows: what is running or failed first, then open
- * ideas as the server ranked them, then what is done.
+ * The feed in the order it shows: ideas as the server ranked them, most
+ * important first, then what is done.
  */
 export function orderFeed(ideas: Idea[]): Idea[] {
-  const rank = (idea: Idea) => {
-    const status = ideaStatus(idea);
-    if (status === 'running' || status === 'failed') return 0;
-    if (status === 'open') return 1;
+  const isDone = (idea: Idea) => ideaStatus(idea) === 'done';
 
-    return 2;
-  };
-
-  return ideas
-    .map((idea, index) => ({ idea, index }))
-    .sort((a, b) => rank(a.idea) - rank(b.idea) || a.index - b.index)
-    .map((entry) => entry.idea);
+  return [...ideas.filter((idea) => !isDone(idea)), ...ideas.filter(isDone)];
 }
 
 /** How many ideas each filter holds, for the tabs. */
@@ -145,11 +140,4 @@ export function topPriorities(ideas: Idea[], limit: number): Idea[] {
   return orderFeed(ideas)
     .filter((idea) => ideaStatus(idea) !== 'done')
     .slice(0, limit);
-}
-
-/** Whether an idea arrived after the person last looked at the feed. */
-export function isNewSince(idea: Idea, lastSeenAt: string | undefined) {
-  if (!lastSeenAt || idea.state !== 'proposed') return false;
-
-  return Date.parse(idea.createdAt) > Date.parse(lastSeenAt);
 }

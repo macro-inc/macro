@@ -18,11 +18,11 @@ for (const theme of ['dark', 'light']) {
       );
     }
 
-    // Running and failed runs lead, then the open ideas; done ones are left out.
+    // The most important first, as the server ranked them; done ones are left out.
     await expect(page.locator('[data-priority]')).toHaveCount(5);
     await expect(page.locator('[data-priority]').first()).toHaveAttribute(
       'data-priority',
-      'idea-running'
+      'idea-drafted-reply'
     );
     await expect(page.locator('[data-priority="idea-done"]')).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath(`home-${theme}.png`) });

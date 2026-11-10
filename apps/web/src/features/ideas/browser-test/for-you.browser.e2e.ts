@@ -148,13 +148,44 @@ test('tabs filter by where an idea stands', async ({ page }) => {
   await expect(page.locator('[data-idea]')).toHaveCount(6);
 });
 
-test('the idea opened from Home is first and ringed', async ({ page }) => {
-  await page.goto('/?idea=idea-reply');
+test('the idea opened from Home is scrolled to, in its place', async ({
+  page,
+}) => {
+  await page.goto('/?idea=idea-done');
 
+  await expect(card(page, 'idea-done')).toBeInViewport();
   await expect(page.locator('[data-idea]').first()).toHaveAttribute(
     'data-idea',
-    'idea-reply'
+    'idea-drafted-reply'
   );
+});
+
+test('a running idea reads as under way, not as one waiting', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const running = card(page, 'idea-running');
+
+  await expect(running.locator('[data-idea-run-started]')).toBeVisible();
+  await expect(
+    running.getByRole('button', { name: 'View progress' })
+  ).toBeVisible();
+  await expect(running.getByLabel('Prompt')).toHaveCount(0);
+});
+
+test('an opened idea becomes done and can be opened again', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const reply = card(page, 'idea-reply');
+  await reply.getByRole('button', { name: 'Open', exact: true }).click();
+
+  await expect(reply).toHaveAttribute('data-idea-status', 'done');
+  await reply.getByRole('button', { name: 'Open', exact: true }).click();
+  await expect(requests(page).getByText('accept idea-reply')).toHaveCount(1);
+  await expect(
+    requests(page).getByText('open email_thread thread-1')
+  ).toHaveCount(2);
 });
 
 test('loading, failure with retry, and empty', async ({ page }) => {

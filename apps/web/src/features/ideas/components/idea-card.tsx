@@ -1,12 +1,11 @@
+import { formatRelativeTimestamp } from '@app/features/entity/utils/timestamp';
 import { t } from '@app/lib/i18n';
-import CheckIcon from '@icon/system/regular/check.svg';
 import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
 import LightningIcon from '@icon/system/regular/lightning.svg';
 import PaperPlaneIcon from '@icon/system/regular/paper-plane-tilt.svg';
 import PlayIcon from '@icon/system/regular/play.svg';
-import WarningIcon from '@icon/system/regular/warning.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
-import { Badge, Button, Card, Spinner } from '@ui';
+import { Badge, Button, Surface } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import type { RoutineIdeaText } from '../context/ideas-source';
 import type { Idea, IdeaStatus } from '../core/idea';
@@ -17,19 +16,16 @@ function StateBadge(props: { idea: Idea; status: IdeaStatus }) {
     <Switch>
       <Match when={props.status === 'running'}>
         <Badge variant="secondary" size="xs">
-          <Spinner size="sm" decorative class="size-3" />
           {t('ideas.badgeRunning')}
         </Badge>
       </Match>
       <Match when={props.status === 'failed'}>
         <Badge variant="secondary" size="xs">
-          <WarningIcon class="size-3 text-failure" />
           {t('ideas.badgeFailed')}
         </Badge>
       </Match>
       <Match when={props.status === 'done'}>
         <Badge variant="secondary" size="xs">
-          <CheckIcon class="size-3 text-success" />
           {t('ideas.badgeDone')}
         </Badge>
       </Match>
@@ -64,7 +60,7 @@ function RunEffects(props: { sends: string | undefined }) {
 function RoutineSentence(props: { text: RoutineIdeaText }) {
   return (
     <>
-      <p class="text-[15px] leading-7 text-ink-muted">
+      <p class="text-sm leading-6 text-ink-muted">
         <For each={props.text.sentence}>
           {(part) => (
             <Show when={part.picked} fallback={part.text}>
@@ -90,7 +86,7 @@ function IdeaBody(props: { idea: Idea; routine?: RoutineIdeaText }) {
         {(prompt) => (
           <>
             <p
-              class="rounded-lg bg-ink/[0.03] px-3 py-2 text-sm leading-6 text-ink-muted"
+              class="rounded-lg bg-inset px-3 py-2 text-sm leading-6 text-ink-muted"
               aria-label={t('ideas.promptLabel')}
             >
               “{prompt.prompt}”
@@ -114,11 +110,8 @@ function IdeaBody(props: { idea: Idea; routine?: RoutineIdeaText }) {
 export type IdeaCardProps = {
   idea: Idea;
   status: IdeaStatus;
-  isNew: boolean;
   busy: boolean;
   failed: boolean;
-  /** Ringed: the idea the person came here for. */
-  focused: boolean;
   routine?: RoutineIdeaText;
   onAccept(): void;
   onOpen(): void;
@@ -141,17 +134,25 @@ function CardActions(props: IdeaCardProps): JSX.Element {
   };
   const isBackground = () =>
     props.idea.kind === 'prompt' && props.idea.runMode === 'background';
+  const openLabel = () => {
+    if (isBackground()) return t('ideas.openResult');
+    if (props.idea.kind === 'entity' && props.idea.draft) {
+      return t('ideas.openDraft');
+    }
+
+    return t('ideas.openItem');
+  };
 
   return (
     <Switch>
       <Match when={props.status === 'running'}>
-        <Button variant="ghost" size="sm" onClick={props.onOpen}>
+        <Button variant="secondary" size="sm" onClick={props.onOpen}>
           {t('ideas.viewProgress')}
         </Button>
       </Match>
       <Match when={props.status === 'done'}>
         <Button variant="secondary" size="sm" onClick={props.onOpen}>
-          {isBackground() ? t('ideas.openResult') : t('ideas.openItem')}
+          {openLabel()}
         </Button>
       </Match>
       <Match when={props.status === 'open' || props.status === 'failed'}>
@@ -177,33 +178,42 @@ function CardActions(props: IdeaCardProps): JSX.Element {
   );
 }
 
+/** When a background run started, for the card of one under way. */
+function RunStarted(props: { idea: Idea }) {
+  const startedAt = () =>
+    props.idea.kind === 'prompt' && props.idea.runMode === 'background'
+      ? props.idea.run?.startedAt
+      : undefined;
+
+  return (
+    <p class="text-sm text-ink" data-idea-run-started>
+      <Show when={startedAt()} fallback={t('ideas.runningNow')} keyed>
+        {(at) => t('ideas.runningSince', { when: formatRelativeTimestamp(at) })}
+      </Show>
+    </p>
+  );
+}
+
 /** One idea, in the routine step's language: tile, title, state, one action. */
 export function IdeaCard(props: IdeaCardProps) {
   const titleId = () => `idea-title-${props.idea.id}`;
+  const waiting = () => props.status === 'open' || props.status === 'failed';
 
   return (
-    <Card
+    <Surface
+      depth={1}
       role="article"
-      variant="filled"
       aria-labelledby={titleId()}
       data-idea={props.idea.id}
       data-idea-status={props.status}
-      class={
-        props.focused ? 'gap-2.5 p-4 ring-2 ring-accent/60' : 'gap-2.5 p-4'
-      }
+      class="flex h-auto min-w-0 flex-col gap-2.5 rounded-xl p-4 text-ink"
     >
       <header class="flex min-w-0 items-center gap-2.5">
-        <IdeaTile idea={props.idea} />
-        <Show when={props.isNew}>
-          <span
-            class="size-1.5 shrink-0 rounded-full bg-violet"
-            role="img"
-            aria-label={t('ideas.newIdea')}
-          />
-        </Show>
+        <IdeaTile idea={props.idea} status={props.status} />
         <h2
           id={titleId()}
-          class="min-w-0 truncate text-[15px] font-medium text-ink"
+          class="min-w-0 truncate text-sm font-medium"
+          classList={{ 'text-ink-muted': props.status === 'done' }}
         >
           {props.idea.title}
         </h2>
@@ -223,7 +233,13 @@ export function IdeaCard(props: IdeaCardProps) {
         <Show when={props.idea.summary}>
           <p class="text-sm leading-6 text-ink-muted">{props.idea.summary}</p>
         </Show>
-        <IdeaBody idea={props.idea} routine={props.routine} />
+        {/* What it would do matters before it is taken up, not after. */}
+        <Show when={waiting()}>
+          <IdeaBody idea={props.idea} routine={props.routine} />
+        </Show>
+        <Show when={props.status === 'running'}>
+          <RunStarted idea={props.idea} />
+        </Show>
         <Show when={props.status === 'failed'}>
           <p class="text-sm text-failure">{t('ideas.runFailed')}</p>
         </Show>
@@ -236,7 +252,7 @@ export function IdeaCard(props: IdeaCardProps) {
           <CardActions {...props} />
         </div>
       </div>
-    </Card>
+    </Surface>
   );
 }
 

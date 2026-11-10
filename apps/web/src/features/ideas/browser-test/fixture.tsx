@@ -120,10 +120,7 @@ function Fixture() {
       change('idea-routine', (idea) => ({ ...idea, state: 'done' }));
     },
   };
-  const feed = createIdeasFeed(source, actions, {
-    lastSeenAt: () => '2026-11-09T05:00:00Z',
-    focusedId: () => PARAMS.get('idea') ?? undefined,
-  });
+  const feed = createIdeasFeed(source, actions);
   /** Finish the fixture's runs, as the server's next answer would. */
   const finishRuns = () =>
     setIdeas((list) =>

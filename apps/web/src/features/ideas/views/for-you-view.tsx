@@ -144,10 +144,8 @@ export function ForYouView(props: {
                           <IdeaCard
                             idea={entry.idea}
                             status={entry.status}
-                            isNew={entry.isNew}
                             busy={entry.busy}
                             failed={entry.failed}
-                            focused={entry.idea.id === props.focusedId}
                             routine={
                               entry.idea.kind === 'routine'
                                 ? props.actions.routineText(

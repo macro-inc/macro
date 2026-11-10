@@ -1,7 +1,7 @@
 import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
-import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
+import { createMemo, createSignal, onCleanup } from 'solid-js';
 import type { IdeaActions, IdeasSource } from '../context/ideas-source';
 import {
   type FeedFilter,
@@ -10,7 +10,6 @@ import {
   type IdeaStatus,
   ideaResult,
   ideaStatus,
-  isNewSince,
   matchesFilter,
   orderFeed,
 } from '../core/idea';
@@ -21,8 +20,6 @@ export type FeedEntry = {
   status: IdeaStatus;
   /** Turned down here, not yet sent: its card is a one-line Undo row. */
   dismissed: boolean;
-  /** Arrived since the person last looked. */
-  isNew: boolean;
   /** Its action is under way. */
   busy: boolean;
   /** Its last action failed. */
@@ -36,10 +33,6 @@ export type FeedView =
   | { kind: 'ideas'; entries: FeedEntry[] };
 
 export type IdeasFeedOptions = {
-  /** When the person last looked at the feed, for the new marks. */
-  lastSeenAt?: Accessor<string | undefined>;
-  /** The idea to show first, ringed: the one clicked on Home. */
-  focusedId?: Accessor<string | undefined>;
   /** How long a dismissal waits for Undo before it is sent. */
   undoMs?: number;
 };
@@ -68,12 +61,8 @@ export function createIdeasFeed(
     if (!ideas) return undefined;
 
     const sent = sentIds();
-    const feed = orderFeed(ideas.filter((idea) => !sent.includes(idea.id)));
-    const focusedId = options.focusedId?.();
-    const focused = feed.find((idea) => idea.id === focusedId);
-    if (!focused) return feed;
 
-    return [focused, ...feed.filter((idea) => idea !== focused)];
+    return orderFeed(ideas.filter((idea) => !sent.includes(idea.id)));
   });
 
   const counts = createMemo(() => {
@@ -88,13 +77,11 @@ export function createIdeasFeed(
     if (!ideas)
       return source.failed() ? { kind: 'error' } : { kind: 'loading' };
 
-    const lastSeenAt = options.lastSeenAt?.();
     const entries = ideas
       .map((idea) => ({
         idea,
         status: ideaStatus(idea),
         dismissed: dismissedIds().includes(idea.id),
-        isNew: isNewSince(idea, lastSeenAt),
         busy: busyIds().includes(idea.id),
         failed: failedIds().includes(idea.id),
       }))
@@ -187,10 +174,21 @@ export function createIdeasFeed(
     counts,
     view,
     accept,
-    /** Open what a finished idea made, or the item an idea is about. */
+    /** Open what an idea made, else what taking it up opened. */
     open(idea: Idea) {
-      const target = ideaResult(idea) ?? idea.about[0];
-      if (target) actions.openItem(target);
+      const result = ideaResult(idea);
+      if (result) return actions.openItem(result);
+
+      if (idea.kind === 'prompt' && idea.runMode === 'composer') {
+        return fireAndForget(actions.openComposer(idea.prompt), 'ideas');
+      }
+
+      if (idea.kind === 'entity' && idea.draft) {
+        return actions.openDraft(idea.draft);
+      }
+
+      const [about] = idea.about;
+      if (about) actions.openItem(about);
     },
     reviewRoutine(idea: Idea) {
       if (idea.kind === 'routine') {

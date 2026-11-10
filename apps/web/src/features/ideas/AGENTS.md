@@ -47,5 +47,9 @@ only, behind `enable-ideas`.
   seconds after the last one, or when the person leaves (`sendDismissals`,
   with `keepalive` on unload). Splits can stay mounted after navigating away,
   so leaving alone would not send it.
-- Violet marks what AI picked (a routine's values, the new dot) and nothing else.
+- Violet marks what AI picked (a routine's values) and nothing else.
+- The feed keeps the server's order (most important first); only done ideas
+  move, to the end. An idea taken up by opening it (`accepted`, no run) shows
+  as done; Open on it opens again without accepting, which the server refuses
+  twice.
 - Gate every entry point with `useIdeasFlag`, which is also false on touch.

@@ -13,19 +13,14 @@ import { onCleanup, Show } from 'solid-js';
 import { forYouSearch } from './for-you-search';
 import { useIdeas } from './ideas';
 import { createIdeasFeed } from './primitives/feed';
-import { createLastSeen } from './primitives/last-seen';
 import { useIdeasFlag } from './use-ideas-flag';
 import { ForYouView } from './views/for-you-view';
 
 function ForYouPage() {
   usePageViewTracking('for-you');
   const [search] = createSearchParams(forYouSearch);
-  const { source, actions, userId } = useIdeas();
-  const lastSeen = createLastSeen(userId);
-  const feed = createIdeasFeed(source, actions, {
-    lastSeenAt: lastSeen.before,
-    focusedId: () => search.idea,
-  });
+  const { source, actions } = useIdeas();
+  const feed = createIdeasFeed(source, actions);
   usePending('ideas.load', () => feed.view().kind === 'loading');
   // A dismissal held for Undo still has to reach the server if the tab closes.
   window.addEventListener('pagehide', feed.sendDismissals);

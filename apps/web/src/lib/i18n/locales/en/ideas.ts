@@ -9,7 +9,6 @@ export default {
   badgeDone: 'Done',
   badgeFailed: 'Failed',
   badgeRoutine: 'Routine',
-  newIdea: 'New',
   run: 'Run',
   runInBackground: 'Run in background',
   runAgain: 'Run again',
@@ -24,6 +23,10 @@ export default {
   dismissed: 'Dismissed “{{title}}”. You won’t see it again unless it changes.',
   undo: 'Undo',
   promptLabel: 'Prompt',
+  runningNow:
+    'Working on this in the background. The result will show up here.',
+  runningSince:
+    'Working on this in the background, started {{when}}. The result will show up here.',
   sendsNothing: 'Runs in the background. It posts and sends nothing.',
   sendsUnknown: 'Runs in the background as your agent.',
   draftReady: 'A reply is drafted for you. Nothing is sent until you send it.',

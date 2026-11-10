@@ -59,15 +59,15 @@ function shownIds(feed: IdeasFeed) {
 }
 
 describe('ideas feed', () => {
-  it('shows running and failed runs first, then open ideas, then done ones', async () => {
+  it('keeps the server’s order, most important first, with done ideas last', async () => {
     await withFeed(
       [composerIdea, doneIdea, replyIdea, failedIdea, runningIdea],
       async (feed) => {
         expect(shownIds(feed)).toEqual([
-          'idea-failed',
-          'idea-running',
           'idea-composer',
           'idea-reply',
+          'idea-failed',
+          'idea-running',
           'idea-done',
         ]);
         expect(feed.counts()).toEqual({ all: 5, running: 2, open: 2, done: 1 });
@@ -157,6 +157,22 @@ describe('ideas feed', () => {
         entityType: 'email_thread',
         entityId: 'thread-1',
       });
+    });
+  });
+
+  it('shows an idea that was opened as done, and opens it again without accepting', async () => {
+    const opened = { ...draftedReplyIdea, state: 'accepted' as const };
+    await withFeed([opened, replyIdea], async (feed, { source, actions }) => {
+      expect(shownIds(feed)).toEqual(['idea-reply', opened.id]);
+      expect(feed.counts()).toEqual({ all: 2, running: 0, open: 1, done: 1 });
+
+      feed.open(opened);
+      expect(actions.openDraft).toHaveBeenCalledWith({
+        entityType: 'email_thread',
+        entityId: 'thread-1',
+        partId: 'draft-1',
+      });
+      expect(source.accept).not.toHaveBeenCalled();
     });
   });
 
