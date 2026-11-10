@@ -6,6 +6,7 @@
 //! `claude_mode` writes across replicas.
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use agent_runtime_protocol::domain::schema::v0::{ComputerCommand, ComputerControlResult};
 use axum::extract::{FromRef, Path, State};
@@ -31,7 +32,21 @@ mod test;
 use super::control::{self as bus, ComputerControl};
 
 /// State for the Claude sign-in routes.
+/// Wakes an asleep computer so a Claude account change can reach its macrod.
+pub trait ComputerWaker: Send + Sync + 'static {
+    /// Ask the control plane to wake the computer behind `harness`.
+    fn wake(
+        &self,
+        harness: HarnessId,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send + '_>>;
+}
+
+/// How long an account change waits for an asleep computer's macrod.
+const WAKE_TIMEOUT: Duration = Duration::from_secs(90);
+const WAKE_RETRY: Duration = Duration::from_secs(1);
+
 pub struct ClaudeAccessState<Harnesses, Auth> {
+    waker: Option<Arc<dyn ComputerWaker>>,
     harnesses: Arc<Harnesses>,
     rollout: hosted_runtimes::domain::rollout::ComputerRollout,
     fleet_attachment: FleetAttachment,
@@ -44,6 +59,7 @@ pub struct ClaudeAccessState<Harnesses, Auth> {
 impl<Harnesses, Auth> Clone for ClaudeAccessState<Harnesses, Auth> {
     fn clone(&self) -> Self {
         Self {
+            waker: self.waker.clone(),
             harnesses: Arc::clone(&self.harnesses),
             rollout: self.rollout.clone(),
             fleet_attachment: self.fleet_attachment,
@@ -75,6 +91,7 @@ pub fn router<Harnesses, Auth>(
     authorization_state: MacroAuthorizationState<Auth>,
     rollout: hosted_runtimes::domain::rollout::ComputerRollout,
     fleet_attachment: FleetAttachment,
+    waker: Option<Arc<dyn ComputerWaker>>,
     tasks: &TaskTracker,
 ) -> Router
 where
@@ -82,6 +99,7 @@ where
     Auth: MacroAuthorizationService,
 {
     let state = ClaudeAccessState {
+        waker,
         harnesses: Arc::new(harnesses),
         control,
         rollout,
@@ -180,8 +198,7 @@ where
         .await?
         .cancel_on_drop(state.control.clone(), path.harness_id);
     let result = match state
-        .control
-        .send(path.harness_id, ComputerCommand::ClaudeSignInStart)
+        .send_awake(path.harness_id, ComputerCommand::ClaudeSignInStart)
         .await?
     {
         ComputerControlResult::SignInStarted { url } => Ok(Json(ClaudeSignInStarted { url })),
@@ -290,8 +307,7 @@ where
     let account_change =
         bus::AccountChange::claim(&state.redis, path.harness_id, &state.cleanup).await?;
     let result = match state
-        .control
-        .send(path.harness_id, ComputerCommand::ClaudeSignOut)
+        .send_awake(path.harness_id, ComputerCommand::ClaudeSignOut)
         .await?
     {
         ComputerControlResult::SignedOut => {
@@ -399,6 +415,22 @@ where
         })?;
         waiter.disarm();
         result
+    }
+
+    /// Send `command`, first waking an asleep computer and waiting for its
+    /// macrod to connect.
+    async fn send_awake(
+        &self,
+        harness_id: HarnessId,
+        command: ComputerCommand,
+    ) -> Result<ComputerControlResult, ComputerRouteError> {
+        let control = self.control.clone();
+        send_waking(self.waker.as_deref(), harness_id, WAKE_TIMEOUT, || {
+            let control = control.clone();
+            let command = command.clone();
+            async move { control.send(harness_id, command).await }
+        })
+        .await
     }
 
     /// The harness, when the caller has `access` and it is a Macro computer.
@@ -515,5 +547,38 @@ impl IntoResponse for ComputerRouteError {
             body["code"] = serde_json::json!("invalid_code");
         }
         (status, Json(body)).into_response()
+    }
+}
+
+/// Run `send`; when the computer is not connected, wake it once and retry
+/// until it answers or `timeout` passes.
+#[tracing::instrument(name = "computer.claude.wake", skip_all, fields(harness_id = %harness_id, woke = tracing::field::Empty))]
+pub(crate) async fn send_waking<Attempt, Sent>(
+    waker: Option<&dyn ComputerWaker>,
+    harness_id: HarnessId,
+    timeout: Duration,
+    mut send: Attempt,
+) -> Result<ComputerControlResult, ComputerRouteError>
+where
+    Attempt: FnMut() -> Sent,
+    Sent: std::future::Future<Output = Result<ComputerControlResult, ComputerRouteError>>,
+{
+    let first = send().await;
+    let (Err(ComputerRouteError::Conflict(_)), Some(waker)) = (&first, waker) else {
+        return first;
+    };
+    tracing::Span::current().record("woke", true);
+    waker
+        .wake(harness_id)
+        .await
+        .map_err(|error| ComputerRouteError::Internal(rootcause::report!("{error}")))?;
+    let deadline = tokio::time::Instant::now() + timeout;
+    loop {
+        tokio::time::sleep(WAKE_RETRY).await;
+        match send().await {
+            Err(ComputerRouteError::Conflict(_)) if tokio::time::Instant::now() < deadline => {}
+            Err(ComputerRouteError::Conflict(_)) => return Err(ComputerRouteError::Timeout),
+            other => return other,
+        }
     }
 }

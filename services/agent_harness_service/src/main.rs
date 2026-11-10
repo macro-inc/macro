@@ -1776,6 +1776,9 @@ async fn run() -> anyhow::Result<()> {
         hosted_runtimes::domain::models::FleetAttachment::from_operator_present(
             computer_operator.is_some(),
         ),
+        computer_operator
+            .clone()
+            .map(|operator| -> Arc<dyn computers::claude::ComputerWaker> { operator }),
         &computer_tasks,
     );
     let gateway_state = RuntimeGatewayState::new(

@@ -676,3 +676,18 @@ where
         Arc::clone(&self.inner).renew(live)
     }
 }
+
+/// Claude account changes wake an asleep computer the way a prompt does.
+impl claude::ComputerWaker for Operator {
+    fn wake(
+        &self,
+        harness: HarnessId,
+    ) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send + '_>> {
+        Box::pin(async move {
+            self.prompt_arrived(harness)
+                .await
+                .map(drop)
+                .map_err(|error| error.to_string())
+        })
+    }
+}
