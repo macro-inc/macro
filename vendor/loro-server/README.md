@@ -34,3 +34,6 @@ The 256-peer resource control bounds retained index payload by history length.
 Encoder, version pins, public APIs and wire/corpus expectations remain unchanged.
 This patch is maintained for both server1.16.2 and editor1.17.1; upstream branch
 preparation is separate and does not authorize publication.
+
+Legacy upstream source/test layout is normalized by the workspace Rust formatter.
+Formatting changes preserve syntax, assertions, encoder behavior and version pins.

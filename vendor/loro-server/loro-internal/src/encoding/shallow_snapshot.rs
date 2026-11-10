@@ -9,7 +9,7 @@ use crate::{
     container::{idx::ContainerIdx, list::list_op::InnerListOp},
     dag::DagUtils,
     encoding::export_fast_updates_in_range,
-    encoding::fast_snapshot::{_encode_snapshot, Snapshot},
+    encoding::fast_snapshot::{Snapshot, _encode_snapshot},
     state::{
         container_store::{ContainerWrapper, FRONTIERS_KEY},
         redact_dead_style_values, DocState,
