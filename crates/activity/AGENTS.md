@@ -18,6 +18,9 @@ distribution.
 - `src/outbound/pg_activity_repo.rs`: the single `activity_events` table.
 - `src/inbound/kafka_consumer.rs` + `src/outbound/activity_topic_consumer.rs`:
   generic Kafka consumer wired to per-domain event mappings.
+- `src/inbound/toolset/` (`ai_tools`) and `src/inbound/axum_router.rs`
+  (`axum`, mounted by cognition): `ReadActivity` and `GET /activity`, the
+  acting user's own activity through `ReadActivityResponse::read`.
 
 ## Scope
 
@@ -39,7 +42,7 @@ distribution.
   `EntityAccessService::get_users_by_entity`; change both together.
 - Used by: most domain crates with activity surfaces (`documents`, `forms`,
   `databases`, `initiative`, `messages`, `channels`, `soup`, `call`, `chat`,
-  `work_feed`, `projects`, `github`, `email`, `properties`) and `ai_tools`.
+  `attention_feed`, `projects`, `github`, `email`, `properties`) and `ai_tools`.
 
 ## Recipes
 
@@ -59,3 +62,5 @@ distribution.
 ## Related
 
 - Rules: `.agents/rules/rust/architecture.md`, `.agents/rules/rust/db.md`
+
+- Session activity reads preserve `agent_correlation_id` and use session visibility; entity and subject feeds retain their existing authorization.

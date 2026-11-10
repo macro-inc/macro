@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::{
-    PipelineToolContext, ToolFieldValue, ToolRecord, json, pairs, record_name, workflow_error,
+    PipelineToolContext, ToolFieldValue, ToolRecord, entry_name, json, pairs, workflow_error,
 };
 use crate::domain::pipeline_workflows::{EntryTarget, EntryUpdate, PipelineWorkflowService};
 
@@ -76,8 +76,9 @@ pub struct ToolFieldChange {
 pub struct ToolUpdatedEntry {
     /// The entry.
     pub entry_id: Uuid,
-    /// The company or contact it tracks.
-    pub record: ToolRecord,
+    /// The company or contact it tracks; missing in a generic pipeline.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub record: Option<ToolRecord>,
     /// The fields set.
     pub changes: Vec<ToolFieldChange>,
 }
@@ -150,7 +151,7 @@ impl<Workflows: PipelineWorkflowService> AsyncTool<PipelineToolContext<Workflows
             .iter()
             .map(|entry| ToolUpdatedEntry {
                 entry_id: entry.entry_id.into_uuid(),
-                record: (&entry.record).into(),
+                record: entry.record.as_ref().map(Into::into),
                 changes: entry
                     .changes
                     .iter()
@@ -174,7 +175,8 @@ impl<Workflows: PipelineWorkflowService> AsyncTool<PipelineToolContext<Workflows
                             format!("{} {} → {}", change.field, change.before, change.after)
                         })
                         .collect();
-                    format!("{} ({})", record_name(&entry.record), fields.join("; "))
+                    let name = entry_name(entry.record.as_ref(), entry.entry_id);
+                    format!("{name} ({})", fields.join("; "))
                 })
                 .collect::<Vec<_>>()
                 .join(", ")

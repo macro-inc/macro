@@ -151,6 +151,13 @@ pub struct CallStart {
     pub call_id: String,
 }
 
+/// Payload of [`Action::AccessRequested`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AccessRequest {
+    /// The request; the owning domain serves its current outcome.
+    pub request_id: Uuid,
+}
+
 /// Task referenced by a project membership event. No task name is stored.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct InitiativeTaskChange {
@@ -217,6 +224,8 @@ pub enum Action {
     TaskAdded(InitiativeTaskChange),
     /// A task was removed from an initiative.
     TaskRemoved(InitiativeTaskChange),
+    /// A principal asked to join the entity (channel membership).
+    AccessRequested(AccessRequest),
 }
 
 /// The names captured when an entity is renamed.
@@ -292,6 +301,7 @@ impl Action {
             Action::Renamed(change) => payload(change),
             Action::CallEnded(end) => payload(end),
             Action::TaskAdded(change) | Action::TaskRemoved(change) => payload(change),
+            Action::AccessRequested(request) => payload(request),
         };
         (tag, payload)
     }
@@ -335,6 +345,7 @@ impl Action {
             ActionTag::CallEnded => Ok(Action::CallEnded(parsed(payload)?)),
             ActionTag::TaskAdded => Ok(Action::TaskAdded(parsed(payload)?)),
             ActionTag::TaskRemoved => Ok(Action::TaskRemoved(parsed(payload)?)),
+            ActionTag::AccessRequested => Ok(Action::AccessRequested(parsed(payload)?)),
         }
     }
 }
@@ -407,6 +418,8 @@ impl RecordedAction {
 /// construction invariants to seal; the row already exists.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ActivityRecord {
+    /// Originating code-mode invocation; absent for non-agent and historical activity.
+    pub agent_correlation_id: Option<Uuid>,
     /// The stored activity id.
     pub id: Uuid,
     /// Who mechanically acted.
@@ -480,6 +493,8 @@ pub enum Ingest {
 #[readonly::make]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Activity {
+    /// Originating code-mode invocation; absent for non-agent and historical activity.
+    pub agent_correlation_id: Option<Uuid>,
     /// Deterministic id: uuidv5 over (source event id, ordinal), so replays
     /// of the same broker event re-derive the same activity ids.
     pub id: Uuid,
@@ -499,6 +514,12 @@ pub struct Activity {
 }
 
 impl Activity {
+    /// Retain a specific editor's invocation when one event contains multiple editors.
+    pub fn with_agent_correlation(mut self, id: Option<Uuid>) -> Self {
+        self.agent_correlation_id = id;
+        self
+    }
+
     /// Builds an activity for a [`CommonAction`] from a resolved
     /// [`Attribution`].
     pub fn attributed(
@@ -586,6 +607,7 @@ impl Activity {
             .unwrap_or_else(|| actor.as_ref().to_owned());
         Self {
             id: activity_id(source_event_id, ordinal),
+            agent_correlation_id: agent_correlation::context::current(),
             actor,
             subject_id,
             entity_type,

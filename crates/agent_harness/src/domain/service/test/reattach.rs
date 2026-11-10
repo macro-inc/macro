@@ -179,7 +179,7 @@ fn listing_harness() -> (
         ),
         MockContainerManager::new(),
         AnnouncerMock::new(),
-        TestConnections::new(MirrorBindings, Arc::clone(&runtimes)),
+        TestConnections::new(MirrorBindings::default(), Arc::clone(&runtimes)),
         PromptContextMock::default(),
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),
@@ -273,4 +273,59 @@ async fn a_dial_restores_only_this_harness_tracked_sessions_from_an_agent_that_l
         ClientRequest::ResumeSessionRequest(request) if request.session_id.to_string() == tracked.to_string()
     ));
     assert!(prompts(&agent).is_empty(), "restoring never prompts");
+}
+
+#[tokio::test]
+async fn a_redial_delivers_the_prompt_queued_behind_the_turn_the_drop_interrupted() {
+    let ((service, repo, _containers, _announcer, runtimes), turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let session = native_session(&service, &repo, bot_id).await;
+    let first = ContainerMock::default();
+    runtimes.attach(harness_for_bot(bot_id), first.clone());
+
+    let drive = async {
+        initializes_loading(&first).await;
+        let agent = first.agent();
+        agent.wait_for_requests(2).await;
+        agent.loads_session(LoadSessionResponse::new());
+    };
+    let (result, ()) = tokio::join!(prompt(&service, session, "fix the failing test"), drive);
+    result.expect("the first prompt binds the session");
+    let queued = prompt(&service, session, "and now the docs")
+        .await
+        .expect("a prompt behind a running turn is accepted");
+    assert!(matches!(queued, CommandOutcome::Queued));
+
+    // The connection drops mid-turn: the turn is lost, the queued prompt is
+    // not, and nobody prompts the session again.
+    let published = turns.lifecycle().len();
+    first.disconnects();
+    turns.lifecycle_published(published + 1).await;
+    assert!(matches!(
+        turns.lifecycle().last(),
+        Some(AgentSessionLifecycleEvent::Stopped(_))
+    ));
+
+    let second = ContainerMock::default();
+    runtimes.attach(harness_for_bot(bot_id), second.clone());
+    let drive = async {
+        initializes_loading(&second).await;
+        let agent = second.agent();
+        agent.wait_for_requests(2).await;
+        agent.loads_session(LoadSessionResponse::new());
+    };
+    tokio::join!(
+        service.reattach_live_sessions(
+            harness_for_bot(bot_id),
+            vec![SessionId::new(session.to_string())],
+            tracing::Span::none(),
+        ),
+        drive
+    );
+
+    assert_eq!(
+        prompts(&second.agent()),
+        [vec![ContentBlock::from("and now the docs")]]
+    );
 }

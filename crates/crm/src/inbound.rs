@@ -12,3 +12,7 @@ pub mod toolset;
 /// Pipeline routes.
 #[cfg(feature = "axum")]
 pub mod pipelines;
+
+/// Pipeline entry, field and CSV routes addressed by name.
+#[cfg(feature = "axum")]
+pub mod pipeline_workflows;

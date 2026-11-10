@@ -1,47 +1,20 @@
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::enqueue_populate_crm_contacts;
+use crm::domain::email_privacy::EmailPrivacyService;
 use crm::domain::service::CrmService;
 use models_email::email::service::backfill::PopulateCrmForUserPayload;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 
-/// Seeds the team's CRM tables with every contact the user has sent email
-/// to in the past. Triggered when a user is added to a team — the user only
-/// has their macro_id at this point, so this handler resolves the link and
-/// team itself, then fans out one `PopulateCrmContact` job per distinct
-/// recipient of a sent message on that link.
+/// Fans out historical contacts only for the user's explicitly consented
+/// primary mailbox. Consent and exclusions are rechecked by each contact job.
 ///
-/// No-ops (acks the message) when the user has no email link or no team
-/// membership. The downstream `PopulateCrmContact` consumer is idempotent
-/// and re-checks the team membership + per-domain killswitch, so racing
-/// removals between fan-out and consumption are safe.
-#[tracing::instrument(skip(ctx), err, fields(macro_id = %payload.macro_id))]
+/// Stale requests after withdrawal, account switching, or team removal no-op.
+#[tracing::instrument(skip_all, err, fields(team_id, link_id))]
 pub async fn populate_crm_for_user(
     ctx: &PubSubContext,
     payload: &PopulateCrmForUserPayload,
 ) -> Result<(), ProcessingError> {
     let macro_id_str = payload.macro_id.0.as_ref();
-    // Resolve the user's own inbox — the link whose address matches the email
-    // embedded in the macro_id — not merely the newest link on the macro_id.
-    let email_address = payload.macro_id.email_str();
-
-    let link = email_db_client::links::get::fetch_link_by_macro_id_and_email_address(
-        &ctx.db,
-        macro_id_str,
-        email_address,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::DatabaseQueryFailed,
-            source: e.context("Failed to fetch link by macro_id and email_address"),
-        })
-    })?;
-
-    let Some(link) = link else {
-        tracing::debug!("User has no email link; skipping CRM fan-out");
-        return Ok(());
-    };
-
     let team_id = ctx
         .crm_service
         .get_team_id_for_user(macro_id_str)
@@ -53,17 +26,34 @@ pub async fn populate_crm_for_user(
             })
         })?;
 
-    if team_id.is_none() {
+    let Some(team_id) = team_id else {
         tracing::debug!("User has no team; skipping CRM fan-out");
         return Ok(());
-    }
+    };
 
-    let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
+    let mailbox = ctx
+        .crm_service
+        .contribution_mailbox(team_id, macro_id_str)
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: anyhow::Error::from(e).context("Failed to resolve CRM email consent"),
+            })
+        })?;
+    let Some(mailbox) = mailbox else {
+        tracing::debug!("User has no consented mailbox; skipping CRM fan-out");
+        return Ok(());
+    };
+
+    tracing::Span::current().record("team_id", tracing::field::display(team_id));
+    tracing::Span::current().record("link_id", tracing::field::display(mailbox.link_id));
+    let self_email = mailbox.email_address.to_ascii_lowercase();
 
     // The by_link queries aggregate MIN/MAX of `internal_date_ts` per
     // contact, so each fan-out job carries the contact's full known
-    // activity range. The consumer stamps `first_interaction` /
-    // `last_interaction` directly from those endpoints.
+    // activity range. The consumer recomputes the eligible range from stored
+    // messages so stale jobs and mixed-domain threads cannot bypass blocks.
     //
     // Two fan-outs: sent recipients (`is_sent=true`, may create new
     // `crm_companies` rows), then received senders (`is_sent=false`,
@@ -72,7 +62,8 @@ pub async fn populate_crm_for_user(
     // idempotent.
     let sent_recipients =
         email_db_client::contacts::get::fetch_sent_message_recipient_contacts_by_link(
-            &ctx.db, link.id,
+            &ctx.db,
+            mailbox.link_id,
         )
         .await
         .map_err(|e| {
@@ -82,17 +73,19 @@ pub async fn populate_crm_for_user(
             })
         })?;
 
-    enqueue_populate_crm_contacts(ctx, link.id, &self_email, sent_recipients, true).await?;
+    enqueue_populate_crm_contacts(ctx, mailbox.link_id, &self_email, sent_recipients, true).await?;
 
-    let received_senders =
-        email_db_client::contacts::get::fetch_received_sender_contacts_by_link(&ctx.db, link.id)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to fetch received-message senders"),
-                })
-            })?;
+    let received_senders = email_db_client::contacts::get::fetch_received_sender_contacts_by_link(
+        &ctx.db,
+        mailbox.link_id,
+    )
+    .await
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e.context("Failed to fetch received-message senders"),
+        })
+    })?;
 
-    enqueue_populate_crm_contacts(ctx, link.id, &self_email, received_senders, false).await
+    enqueue_populate_crm_contacts(ctx, mailbox.link_id, &self_email, received_senders, false).await
 }

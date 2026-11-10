@@ -85,7 +85,12 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 ## Agent accounts
 
 - An agent can do everything a person can, including inviting other agents. Do
-  not gate actions on `isAgent`; it only changes signup and labeling.
+  not gate actions on `isAgent`; it only changes signup and labeling. The one
+  exception: only an agent can be an account manager, and an agent can't be
+  managed (`crates/account_manager`).
+- Routes that mint credentials, link a sign-in, merge accounts, or delete the
+  account use `AccountHolderOrInternal`, so an account manager's credential can't
+  outlast its own revocation or lock the account's owner out.
 - `User."isAgent"` is set in the FusionAuth `user.create` webhook, from
   `is_agent` on `/login/passwordless` (carried as FusionAuth user data) or a
   pending agent `team_invite`. Those agents skip the seeded content, Loops, and
@@ -98,7 +103,9 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 - `POST /user/agent_setup` joins the inviting team and replaces the
   `Agent signup` API key. It is repeatable until `tutorialComplete` is true.
 - `POST /user/profile_picture/file` reserves an SFS upload for API-key callers,
-  since `static_file_service` cannot check keys. `PUT` on that path takes the SFS
+  since `static_file_service` cannot check keys. It caps a picture at 16 MB and a
+  user at 20 uploads an hour, and signs the declared size into the upload URL so
+  storage rejects any other size. `PUT` on that path takes the SFS
   id and accepts only the caller's PNG, JPEG, WebP, or GIF; it does not wait for
   the asynchronous upload event.
 
@@ -113,6 +120,8 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   `FusionAuthClientError` whose `upstream()` is set with that error's
   `into_response()`. Document 502/503 with `UpstreamErrorResponse` in the
   route's `utoipa::path`.
+- Name-lookup spans record batch counts, never request bodies: Macro user IDs contain email addresses.
+
 - Fail closed if team cleanup encounters an external chat: external chats require human ownership.
 
 - GitHub reconnect preserves the current link until OAuth completes. A different
@@ -121,6 +130,12 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   failures remain server errors.
   Deploy grant-refresh support before releasing clients that omit the pre-OAuth
   disconnect; older callbacks leave an existing grant unchanged.
+- `/internal/google_access_token` answers 403 for every grant Google refuses
+  for this user (`InvalidGrant`, and `GrantBlocked` for policy codes such as
+  `access_not_configured`); email and calendar callers then mark the link for
+  reauthorization instead of retrying. Keep it 4xx: a 500 makes callers retry
+  and trips the HTTP server-errors monitor. Macro's own OAuth client failing
+  (`invalid_client`) stays a 500.
 - FusionAuth reports a link owner that was deleted as `UserDoesNotExist`. That
   user has no links or grants left, so answer the route's "not linked" outcome
   (404 no grant, 200 for an idempotent removal), not a 500.
@@ -171,3 +186,5 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 - Rules: `.agents/rules/config-and-service-urls.md`,
   `.agents/rules/rust/security.md` · Skill: `new-service`
+
+- The HTTP boundary validates optional signed agent correlation without changing existing authorization.

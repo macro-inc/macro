@@ -19,7 +19,7 @@ export type {
 /**
  * Shared cognition endpoints, charged to the authenticated acting user.
  *
- * @routing Use when generating structured objects or images, or classifying supplied content with Jev; not answering the user yourself.
+ * @routing Use when generating structured objects or classifying supplied content with Jev; not generating images (`macro.images`) or answering the user yourself.
  */
 export class AiNamespace {
   /** Read AI usage over a time range, optionally restricting it to users. */

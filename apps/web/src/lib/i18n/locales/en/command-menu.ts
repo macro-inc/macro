@@ -36,7 +36,6 @@ export default {
   projectBadge: 'Project',
   newProject: 'New project',
   contentAlreadyOpen: 'Content already open',
-  unableToOpenConversation: 'Unable to open conversation. Please try again.',
   mobileSearchPlaceholder: 'Search…',
   mobileSearchOrCreate: 'Search or create',
   closeSearch: 'Close search',

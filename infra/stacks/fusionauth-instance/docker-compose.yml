@@ -18,6 +18,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      # FusionAuth starts once this passes: probe every second while starting.
+      start_period: 30s
+      start_interval: 1s
     networks:
       - auth-internal
     volumes:
@@ -44,7 +47,7 @@ services:
       FUSIONAUTH_APP_RUNTIME_MODE: development
       FUSIONAUTH_APP_URL: http://fusionauth:9011
     healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:9011/api/status | grep -q '\"status\":\"Ok\"'"]
+      test: ["CMD-SHELL", "curl -s --max-time 4 http://localhost:9011/api/status | grep -q '\"status\":\"Ok\"'"]
       interval: 5s
       timeout: 5s
       retries: 5

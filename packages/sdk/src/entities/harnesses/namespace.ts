@@ -6,7 +6,11 @@ import { Agent } from '../agents/agent';
 import { Harness } from './harness';
 import { DevicePairing, HarnessPairing } from './pairing';
 
-/** Hosts and device pairing. Self operations require host credentials. */
+/**
+ * Hosts and device pairing. Self operations require host credentials.
+ *
+ * @routing Use when listing, pairing or removing the machines (hosts) that run the user's agents; not changing an agent persona's setup (`macro.agents`).
+ */
 export class HarnessNamespace {
   constructor(private readonly client: MacroClient) {}
 
@@ -15,9 +19,19 @@ export class HarnessNamespace {
     return Harness.byId(this.client, id);
   }
 
-  /** All hosts visible to the caller. */
+  /** The hosts the caller may run agents on. */
   async list(): Promise<Harness[]> {
     return unwrap(await this.client.storage.listHarnesses()).map((h) =>
+      Harness.from(this.client, h),
+    );
+  }
+
+  /**
+   * Every host of the caller's teammates, including ones the caller cannot use
+   * yet. `Harness.callerAccess()` says which, and `Harness.requestAccess()` asks.
+   */
+  async directory(): Promise<Harness[]> {
+    return unwrap(await this.client.storage.listHarnessDirectory()).map((h) =>
       Harness.from(this.client, h),
     );
   }

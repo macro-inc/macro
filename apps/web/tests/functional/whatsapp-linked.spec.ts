@@ -163,7 +163,16 @@ const incomingMessage = {
   editedAt: null,
   deleted: false,
   replyTo: null,
-  reactions: [{ emoji: '👍', count: 2, mine: false }],
+  reactions: [
+    {
+      emoji: '👍',
+      reactors: [
+        { name: 'Ben Okafor', userId: null },
+        { name: '+5550002', userId: null },
+      ],
+      mine: false,
+    },
+  ],
   attachments: [
     {
       ordinal: 0,
@@ -286,6 +295,7 @@ async function mount(page: Page, state: LinkedServer, query = '') {
                     jid: '14155550199@s.whatsapp.net',
                     alternateJid: null,
                     displayName: 'Ana Ruiz',
+                    name: 'Ana Ruiz',
                     admin: true,
                   },
                 ],
@@ -1072,6 +1082,16 @@ test('an independent group reads, replies, reacts and pages through channel rows
   await expect(page.getByText(/may already have arrived/)).toHaveCount(0);
   await expect.poll(() => state.readMessages).toContain('message-2');
   expect(state.outgoing).toEqual([]);
+  // Reactors outside Macro go by the name DSS gives them.
+  await page.locator('[data-message-reaction-chip][data-emoji="👍"]').hover();
+  await expect(
+    page.getByText('Ben Okafor and +5550002 reacted with')
+  ).toBeVisible();
+  await page.screenshot({
+    path: process.env.WHATSAPP_SCREENSHOT_DIR
+      ? join(process.env.WHATSAPP_SCREENSHOT_DIR, 'whatsapp-reactors.png')
+      : test.info().outputPath('whatsapp-reactors.png'),
+  });
   await page.locator('[data-message-id="message-1"]').hover();
   await page.getByRole('button', { name: 'Reply', exact: true }).click();
   await expect(page.getByText('Replying to Ana Ruiz')).toBeVisible();
@@ -1277,6 +1297,41 @@ function everyMessageType() {
     },
   ];
 }
+
+test('a send settling keeps an older page that is still loading', async ({
+  page,
+}) => {
+  const state = server();
+  await mount(page, state, `?chat=${CHAT_ID}`);
+  await expect(
+    page.getByRole('button', { name: 'Load earlier messages' })
+  ).toBeVisible();
+  let releaseOlder = () => {};
+  const older = new Promise<void>((resolve) => {
+    releaseOlder = resolve;
+  });
+  let olderRequested = false;
+  await page.route(
+    (url) =>
+      url.pathname.endsWith('/messages') && url.searchParams.has('before'),
+    async (route) => {
+      olderRequested = true;
+      await older;
+      await route.fallback();
+    }
+  );
+  await page.getByRole('button', { name: 'Load earlier messages' }).click();
+  await expect.poll(() => olderRequested).toBe(true);
+  await typeInComposer(page, 'Sent while history loads');
+  await page.getByRole('button', { name: 'Send message' }).click();
+  await expect.poll(() => state.outgoing.length).toBe(1);
+  // The send's reply has reached the page, and its refresh with it.
+  await expect(
+    page.getByText('Sent while history loads', { exact: true })
+  ).toBeVisible();
+  releaseOlder();
+  await expect(page.getByText('Previous day discussion')).toBeVisible();
+});
 
 test('every WhatsApp message type renders with Chat parts and small cards', async ({
   page,
@@ -1551,8 +1606,49 @@ test('a shared viewer can read without connecting WhatsApp', async ({
   await expect(
     page.getByRole('button', { name: 'Edit', exact: true })
   ).toHaveCount(0);
+  // Making a task needs only read access.
+  await page.locator('[data-message-id="message-1"]').hover();
+  await expect(
+    page.getByRole('button', { name: 'Task', exact: true })
+  ).toBeVisible();
   expect(state.outgoing).toEqual([]);
   expect(unexpected).toEqual([]);
+});
+
+test.describe('phone task', () => {
+  test.use({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+  });
+  test('a shared viewer makes a task from the action drawer', async ({
+    page,
+  }) => {
+    const state = server();
+    state.canSend = false;
+    const unexpected = await mount(page, state, `?chat=${CHAT_ID}`);
+    const row = page.locator('[data-message-id="message-1"]');
+    await expect(row).toBeVisible();
+    const box = await row.boundingBox();
+    if (!box) throw new Error('message row has no box');
+    const touch = {
+      identifier: 1,
+      clientX: box.x + box.width / 2,
+      clientY: box.y + box.height / 2,
+    };
+    await row.dispatchEvent('touchstart', {
+      touches: [touch],
+      changedTouches: [touch],
+    });
+    await expect(
+      page.getByRole('button', { name: 'Create task', exact: true })
+    ).toBeVisible();
+    await row.dispatchEvent('touchend', {
+      touches: [],
+      changedTouches: [touch],
+    });
+    expect(unexpected).toEqual([]);
+  });
 });
 
 for (const mobile of [false, true]) {

@@ -755,6 +755,10 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.get(id).await
     }
 
+    async fn billing(&self, id: AgentSessionId) -> Result<crate::domain::model::SessionBilling> {
+        self.repo.billing(id).await
+    }
+
     async fn find(&self, id: AgentSessionId) -> Result<Option<AgentSession>> {
         self.repo.find(id).await
     }
@@ -1676,6 +1680,64 @@ async fn a_recorded_frame_is_stored_and_published_at_once() {
         1,
         "viewers hear it without a flush"
     );
+}
+
+/// A review's change announcement is stored and reaches viewers at once,
+/// and projects nothing: viewers are not told to refetch the session.
+#[tokio::test]
+async fn an_unprojected_frame_is_stored_and_published_without_a_session_update() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    for entry in parse_log_as(
+        session,
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":1,"method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"Draft the email"}]}}}"#,
+    ) {
+        AgentSessionLogRepo::create(&repo, entry)
+            .await
+            .expect("the prompt is stored");
+    }
+    let realtime = RecordingRealtime::new();
+    let service = AgentSessionServiceImpl::new(
+        repo.clone(),
+        FoldedMessageService::new(repo.clone()),
+        realtime.clone(),
+        NoOpAgentSessionNameGenerator,
+        Arc::new(NoOpTurnObserver),
+        Arc::new(NoopLifecyclePublisher),
+        ReplicaId::mint(),
+    );
+    let update = agent_runtime_protocol::domain::review::ReviewUpdatedNotification {
+        review_id: Uuid::from_u128(0xA),
+        revision: 4,
+    };
+
+    service
+        .record_unprojected_frame(session, update.to_server_message())
+        .await
+        .expect("the frame is recorded");
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, session)
+        .await
+        .expect("stored log can be read");
+    assert_eq!(stored.len(), 2);
+    let published = realtime.published();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].entries.len(), 1);
+    assert_eq!(published[0].entries[0].id, stored[1].id);
+    assert_eq!(
+        serde_json::to_value(&published[0].entries[0].entry.content).unwrap(),
+        serde_json::json!({
+            "direction": "to_server",
+            "content": {
+                "type": "acp",
+                "jsonrpc": "2.0",
+                "method": "_macro/review_updated",
+                "params": {"reviewId": "00000000-0000-0000-0000-00000000000a", "revision": 4},
+            },
+        })
+    );
+    assert!(realtime.updated().is_empty());
 }
 
 #[tokio::test(start_paused = true)]

@@ -1,21 +1,15 @@
 import { expect, type Page, test } from '@playwright/test';
 
 async function removed(page: Page) {
+  await page.getByRole('button', { name: 'Visibility', exact: true }).click();
   await page
-    .getByRole('button', { name: 'People display options', exact: true })
+    .getByRole('menuitemradio', { name: 'Archived', exact: true })
     .click();
-  const checkbox = page.getByRole('menuitemcheckbox', {
-    name: 'Show removed people',
-  });
-  await expect(checkbox).toBeInViewport({ ratio: 1 });
-  await checkbox.click();
   await page.keyboard.press('Escape');
-  await expect(
-    page.getByRole('heading', { name: 'Removed people', exact: true })
-  ).toBeVisible();
 }
 async function confirm(page: Page, action: string) {
   await page.getByRole('button', { name: action, exact: true }).click();
+  if (action === 'Restore') return;
   const dialog = page.getByRole('dialog');
   await expect(dialog).not.toHaveAttribute('data-transitioning');
   await dialog.getByRole('button', { name: action, exact: true }).click();
@@ -32,11 +26,11 @@ test.beforeEach(async ({ page }) => {
   ).toBeVisible();
 });
 
-test('admin hides, discovers through removed search, and restores with the existing eye', async ({
+test('admin archives, discovers through archived search, and restores', async ({
   page,
 }, info) => {
   await results(page).getByRole('button', { name: 'Active person' }).click();
-  await confirm(page, 'Remove from CRM');
+  await confirm(page, 'Archive');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(
     results(page).getByRole('button', { name: 'Active person' })
@@ -51,16 +45,18 @@ test('admin hides, discovers through removed search, and restores with the exist
   await page.screenshot({
     path: info.outputPath('removed-people-restore.png'),
   });
-  await confirm(page, 'Restore to CRM');
+  await confirm(page, 'Restore');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(
     results(page).getByRole('button', { name: 'Active person' })
   ).toHaveCount(0);
-  await expect(results(page).getByText('No removed people')).toBeVisible();
+  await expect(results(page).getByText('No archived people')).toBeVisible();
   await page.getByRole('button', { name: 'Back to People' }).click();
+  await page.getByRole('button', { name: 'Visibility' }).click();
   await page
-    .getByRole('button', { name: 'Show active people', exact: true })
+    .getByRole('menuitemradio', { name: 'Visible', exact: true })
     .click();
+  await page.keyboard.press('Escape');
   await expect(
     results(page).getByRole('button', { name: 'Active person' })
   ).toBeVisible();
@@ -103,17 +99,17 @@ test('server pagination and search find later removed rows, handle errors and pr
   await results(page)
     .getByRole('button', { name: 'Hidden company person' })
     .click();
-  await expect(
-    page.getByRole('button', { name: 'Restore to CRM', exact: true })
-  ).toHaveCount(0);
-  await expect(
-    page.getByText(/stay removed until their company is restored/)
-  ).toBeVisible();
+  await page.getByRole('button', { name: 'Restore', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText(
+    'Restore the company first'
+  );
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.screenshot({
     path: info.outputPath('removed-hidden-company.png'),
   });
   await page.getByRole('searchbox').fill('no-match');
-  await expect(results(page).getByText('No removed people')).toBeVisible();
+  await expect(results(page).getByText('No archived people')).toBeVisible();
 });
 
 test('unfiled records restore, rejected writes stay retryable, and scope changes close removed mode', async ({
@@ -121,25 +117,27 @@ test('unfiled records restore, rejected writes stay retryable, and scope changes
 }) => {
   await results(page).getByRole('button', { name: 'Unfiled person' }).click();
   await page.getByRole('button', { name: 'Fail next write' }).click();
-  await confirm(page, 'Remove from CRM');
-  await expect(page.getByRole('alert', { includeHidden: true })).toHaveText(
-    'Could not update contact visibility'
-  );
+  await confirm(page, 'Archive');
+  await expect(
+    page
+      .getByRole('alert', { includeHidden: true })
+      .filter({ hasText: 'Could not update contact visibility' })
+  ).toHaveText('Could not update contact visibility');
   await page
     .getByRole('dialog')
-    .getByRole('button', { name: 'Remove from CRM', exact: true })
+    .getByRole('button', { name: 'Archive', exact: true })
     .click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await page.getByRole('button', { name: 'Back to People' }).click();
   await removed(page);
   await page.getByRole('searchbox').fill('Unfiled');
   await results(page).getByRole('button', { name: 'Unfiled person' }).click();
-  await confirm(page, 'Restore to CRM');
+  await confirm(page, 'Restore');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByLabel('Contact identity')).toHaveText(
     'unfiled / unfiled'
   );
-  await expect(results(page).getByText('No removed people')).toBeVisible();
+  await expect(results(page).getByText('No archived people')).toBeVisible();
   await page.getByRole('button', { name: 'Back to People' }).click();
   await page.getByRole('searchbox').fill('');
   await page.getByRole('button', { name: 'Switch team' }).click();
@@ -168,8 +166,8 @@ test('unfiled records restore, rejected writes stay retryable, and scope changes
     .getByRole('button', { name: 'Toggle member', exact: true })
     .click();
   await expect(
-    page.getByRole('button', { name: 'People display options' })
-  ).toHaveCount(0);
+    page.getByRole('button', { name: 'Visibility', exact: true })
+  ).toContainText('Visible');
   await page.getByRole('button', { name: 'Inject hidden filters' }).click();
   await expect(
     results(page).getByRole('button', { name: /Removed|Other team/ })
@@ -203,6 +201,30 @@ test('loading and late removed responses cannot resurrect rows after a role chan
     })
   ).toHaveCount(0);
   await expect(
-    page.getByRole('button', { name: 'People display options' })
-  ).toHaveCount(0);
+    page.getByRole('button', { name: 'Visibility', exact: true })
+  ).toContainText('Visible');
+});
+
+test('Companies keeps its search while switching exclusive visibility', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Toggle list', exact: true }).click();
+  const results = page.getByRole('region', { name: 'Company results' });
+  await expect(results.getByText('Example visible company')).toBeVisible();
+  await expect(results.getByText('Example archived company')).toHaveCount(0);
+  await page
+    .getByRole('searchbox', { name: 'Search companies' })
+    .fill('Example');
+  await removed(page);
+  await expect(results.getByText('Example archived company')).toBeVisible();
+  await expect(results.getByText('Example visible company')).toHaveCount(0);
+  await expect(
+    page.getByRole('searchbox', { name: 'Search companies' })
+  ).toHaveValue('Example');
+  await expect(page.getByLabel('Company filter')).toHaveText('true');
+  await page
+    .getByRole('button', { name: 'Toggle member', exact: true })
+    .click();
+  await expect(results.getByText('Example visible company')).toBeVisible();
+  await expect(results.getByText('Example archived company')).toHaveCount(0);
 });

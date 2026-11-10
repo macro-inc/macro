@@ -12,6 +12,15 @@ export type CacheRecoveryState =
   | 'unavailable'
   | 'recovery-required';
 
+/** Only known untouched/bootstrap or owner-handoff failures permit reopening. */
+export function canRetryCacheFailure(error: unknown): boolean {
+  return (
+    error instanceof CacheBootstrapExhaustedError ||
+    isOwnerLockUnavailableError(error) ||
+    isOwnerHandoffBlockedError(error)
+  );
+}
+
 /** Owns a page session's retry cycle, never the persisted cache or its scope. */
 export function createCacheRecovery(rebuild: () => Promise<void>) {
   const [state, setState] = createSignal<CacheRecoveryState>('ready');
@@ -59,10 +68,7 @@ export function createCacheRecovery(rebuild: () => Promise<void>) {
     // Only these typed errors prove restarting cannot bypass a quarantined
     // journal: nothing opened storage, or a read was refused while the database
     // moved between owners. Unknown storage/transport failures stay closed.
-    const recoverable =
-      error instanceof CacheBootstrapExhaustedError ||
-      isOwnerLockUnavailableError(error) ||
-      isOwnerHandoffBlockedError(error);
+    const recoverable = canRetryCacheFailure(error);
     setState(recoverable ? 'unavailable' : 'recovery-required');
     if (recoverable) schedule();
     else {

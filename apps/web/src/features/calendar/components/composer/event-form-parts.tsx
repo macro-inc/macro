@@ -599,6 +599,12 @@ function EditScope(props: { class?: string }) {
   );
 }
 
+/** The host's status beside the actions, such as a loading indicator. */
+function Status() {
+  const form = useEventForm();
+  return <>{form.props.status}</>;
+}
+
 function Cancel() {
   const form = useEventForm();
   return (
@@ -663,6 +669,7 @@ export const EventFormParts = {
   CustomRecurrence,
   SaveError,
   EditScope,
+  Status,
   Cancel,
   Submit,
 };

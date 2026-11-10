@@ -1,9 +1,11 @@
 //! Domain policies for channel side effects.
 
 use crate::domain::{
+    access_requests::ChannelAccessRequest,
     broker_events::{
-        ChannelCreatedMetadata, ChannelDeletedMetadata, ChannelMacroEvent,
-        ChannelParticipantAddedMetadata, ChannelParticipantRemovedMetadata, ChannelUpdatedMetadata,
+        ChannelAccessRequestedMetadata, ChannelCreatedMetadata, ChannelDeletedMetadata,
+        ChannelMacroEvent, ChannelParticipantAddedMetadata, ChannelParticipantRemovedMetadata,
+        ChannelUpdatedMetadata,
     },
     events::ChannelEvent,
     mention_events::{EntityRef, MentionMacroEvent, MentionMetadata},
@@ -50,6 +52,15 @@ pub enum ChannelRealtimeEffect {
         recipients: Vec<MacroUserIdStr<'static>>,
         /// Channel whose picture changed.
         channel_id: Uuid,
+    },
+    /// Refresh a request to join after it was made or answered.
+    AccessRequestChanged {
+        /// Participants and the requester.
+        recipients: Vec<MacroUserIdStr<'static>>,
+        /// Channel the request is for.
+        channel_id: Uuid,
+        /// The changed attempt.
+        request_id: Uuid,
     },
 }
 
@@ -124,6 +135,10 @@ pub struct ThreadNotificationContext {
     pub participants: Vec<MacroUserIdStr<'static>>,
     /// Sender of the thread parent message.
     pub parent_sender_id: Option<MacroUserIdStr<'static>>,
+    /// People connected to the call, when the thread belongs to a live call.
+    /// They read it in the call, so its notifications are dropped for them.
+    /// They stay followers, and later replies reach them once they leave.
+    pub connected_call_participants: Vec<MacroUserIdStr<'static>>,
 }
 
 /// Notification requested by the channel domain.
@@ -206,6 +221,24 @@ pub enum ChannelNotificationEffect {
         /// Optional sender profile picture URL.
         sender_profile_picture_url: Option<String>,
         /// Users that should receive the notification.
+        recipient_ids: HashSet<MacroUserIdStr<'static>>,
+    },
+    /// Someone asked to join a channel.
+    AccessRequested {
+        /// The new attempt.
+        request: ChannelAccessRequest,
+        /// Optional requester profile picture URL.
+        sender_profile_picture_url: Option<String>,
+        /// Channel display metadata.
+        metadata: ChannelMetadata,
+        /// Participants who may answer it.
+        recipient_ids: HashSet<MacroUserIdStr<'static>>,
+    },
+    /// A request to join was answered or withdrawn; its notifications are done.
+    AccessRequestResolved {
+        /// The resolved attempt, which is also its notification id.
+        request_id: Uuid,
+        /// Participants who were notified about it.
         recipient_ids: HashSet<MacroUserIdStr<'static>>,
     },
     /// Participants were invited to a channel.
@@ -301,12 +334,12 @@ where
 {
     fn dispatch(&self, event: ChannelEvent) {
         let handler = self.handler.clone();
-        tokio::spawn(
+        tokio::spawn(agent_correlation::context::capture(
             async move {
                 handler.handle(event).await;
             }
             .instrument(tracing::info_span!("channel.side_effects")),
-        );
+        ));
     }
 }
 
@@ -421,6 +454,37 @@ where
                 }
             }
             ChannelEvent::ParticipantJoined { .. } => {}
+            ChannelEvent::AccessRequested {
+                request,
+                participant_user_ids,
+                metadata,
+            } => {
+                self.publish_access_request_change(&request, &participant_user_ids)
+                    .await;
+                let sender_profile_picture_url = self
+                    .context
+                    .get_sender_profile_picture_url(request.requester_id.clone())
+                    .await;
+                self.send_notification(ChannelNotificationEffect::AccessRequested {
+                    request,
+                    sender_profile_picture_url,
+                    metadata,
+                    recipient_ids: participant_user_ids.into_iter().collect(),
+                })
+                .await;
+            }
+            ChannelEvent::AccessRequestResolved {
+                request,
+                participant_user_ids,
+            } => {
+                self.publish_access_request_change(&request, &participant_user_ids)
+                    .await;
+                self.send_notification(ChannelNotificationEffect::AccessRequestResolved {
+                    request_id: request.id,
+                    recipient_ids: participant_user_ids.into_iter().collect(),
+                })
+                .await;
+            }
         }
 
         if let Some(users) = contact_sync_users
@@ -476,6 +540,28 @@ where
             });
         }
         self.context.get_bot_sender_profile(bot_id).await
+    }
+
+    /// Tell participants and the requester to refresh a request to join.
+    async fn publish_access_request_change(
+        &self,
+        request: &ChannelAccessRequest,
+        participant_user_ids: &[MacroUserIdStr<'static>],
+    ) {
+        let mut recipients = participant_user_ids.to_vec();
+        recipients.push(request.requester_id.clone());
+        if let Err(error) = self
+            .realtime
+            .publish(ChannelRealtimeEffect::AccessRequestChanged {
+                recipients,
+                channel_id: request.channel_id,
+                request_id: request.id,
+            })
+            .await
+        {
+            let error: anyhow::Error = error.into();
+            tracing::error!(error=?error, "unable to publish channel access request change");
+        }
     }
 
     async fn send_notification(&self, effect: ChannelNotificationEffect) {
@@ -614,6 +700,12 @@ where
             .map(|user_id| user_id.as_ref().to_string())
             .into_iter()
             .chain(user_mentions.iter().cloned())
+            .chain(
+                thread_context
+                    .connected_call_participants
+                    .iter()
+                    .map(|user_id| user_id.as_ref().to_string()),
+            )
             .collect::<Vec<_>>();
         let recipients_without_sender = recipients_excluding(
             participants
@@ -704,7 +796,12 @@ where
             },
             recipient_ids: recipients_excluding(
                 context.user_mentions.iter().map(String::as_str),
-                context.sender.as_user().map(|user_id| user_id.as_ref()),
+                context
+                    .sender
+                    .as_user()
+                    .map(|user_id| user_id.as_ref())
+                    .into_iter()
+                    .chain(context.connected_in_thread()),
             )
             .collect(),
         })
@@ -734,7 +831,12 @@ where
                     .participants
                     .iter()
                     .map(|participant| participant.as_ref()),
-                context.sender.as_user().map(|user_id| user_id.as_ref()),
+                context
+                    .sender
+                    .as_user()
+                    .map(|user_id| user_id.as_ref())
+                    .into_iter()
+                    .chain(context.connected_in_thread()),
             )
             .collect(),
             None => context.recipients_without_sender.clone(),
@@ -956,6 +1058,16 @@ struct PostedMessageNotificationContext {
     is_first_top_level_message: bool,
 }
 
+impl PostedMessageNotificationContext {
+    /// Who the thread's call is showing this message to already.
+    fn connected_in_thread(&self) -> impl Iterator<Item = &str> {
+        self.thread_context
+            .connected_call_participants
+            .iter()
+            .map(|user_id| user_id.as_ref())
+    }
+}
+
 /// Whether a participant principal id refers to a bot (e.g. `bot|<uuid>`).
 /// Bots are not user recipients and are not valid `MacroUserIdStr`s, so they are
 /// skipped before parsing to avoid spurious parse warnings.
@@ -1098,9 +1210,18 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                 removed_user_ids: removed_user_ids.clone(),
             },
         )],
-        ChannelEvent::EntityMentionCreated { .. } | ChannelEvent::EntityMentionDeleted { .. } => {
-            Vec::new()
+        ChannelEvent::AccessRequested { request, .. } => {
+            vec![ChannelMacroEvent::access_requested(
+                ChannelAccessRequestedMetadata {
+                    channel_id: request.channel_id,
+                    request_id: request.id,
+                    requester_id: request.requester_id.clone(),
+                },
+            )]
         }
+        ChannelEvent::EntityMentionCreated { .. }
+        | ChannelEvent::EntityMentionDeleted { .. }
+        | ChannelEvent::AccessRequestResolved { .. } => Vec::new(),
     }
 }
 

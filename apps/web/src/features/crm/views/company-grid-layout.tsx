@@ -25,6 +25,7 @@ import {
   companyGridTemplateAreas,
   companyGridTemplateColumns,
 } from '../components/company-grid-template';
+import { ArchivedRecordBadge } from '../components/record-archived-status';
 import {
   useBulkSaveEntityPropertiesMutation,
   useCrmDisplayOptions,
@@ -185,6 +186,9 @@ export function CompanyGridLayout(props: LayoutProps) {
           <span class="truncate min-w-0">
             <Entity.Title entity={props.entity} />
           </span>
+          <Show when={isCrmCompanyEntity(props.entity) && props.entity.hidden}>
+            <ArchivedRecordBadge />
+          </Show>
           <Show when={primaryDomain()}>
             {(domain) => (
               <span class="truncate shrink-[2] min-w-0 text-xs font-normal text-ink-extra-muted">

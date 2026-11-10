@@ -69,12 +69,25 @@ Remember successful announcements. After 24 hours, recover replies without a
 persisted completion at most hourly, preserving late answers after lost callbacks.
 Persisted completions bypass this backoff; direct completion handling is immediate.
 
+Prompts to an external runtime pass `authorize_runtime` when accepted and
+`runtime_refusal` again when they dispatch, so a prompt queued before access was
+removed never runs: `RuntimeAccessFacts::may_run` requires a coding agent's
+prompter to have access and a resident's (a bound non-coding agent's) owner to
+have access (`agent_owner_can_run` in SQL), so removing access shuts a resident
+down without touching its binding. A turn nobody prompted runs on the agent
+owner's access. A refused prompt fails its conversation turn, publishes
+`command_rejected` with code `no_runtime_access`, and posts the reason into the
+conversation it came from as a `ReplyOutcome::Refused` reply under an id derived
+from the action, so redelivery finds the same message. The session API answers
+it with a 403 whose JSON `code` is `no_runtime_access`.
+
 External runtimes bind sessions lazily. On each dial `RuntimeRegistry` has the
 connection run `initialize` (shared with every session through its handshake)
 and ACP `session/list`, and `AgentHarnessService::reattach_live_sessions` runs
 `HarnessCommand::Reattach` for the listed sessions bound to that harness,
-restoring each (`session/load` or `session/resume`) without a prompt; attached,
-archived and managed sessions are skipped. macrod's herdr-acp lists native
+restoring each (`session/load` or `session/resume`) without a prompt, then
+dispatching whatever its durable queue still holds when no turn is running;
+attached, archived and managed sessions are skipped. macrod's herdr-acp lists native
 sessions whose Herdr agent still runs.
 
 Durable system events use the `agent_session` outbox, distinct from the user
@@ -92,6 +105,16 @@ wrap after its final page so those sessions cannot starve later ones.
 Reconcile active leases against terminal log evidence too: an observer can miss a
 completion during takeover. Previously bound quiet attempts reconcile before new
 wakes; interrupted quiet batches return to the next real prompt.
+
+Harness presence is per connection, because a runtime's redial can land on a
+different replica than the socket it replaced, and a stalled replica can notice
+that socket's end long after. `RuntimeRegistry` mints a `RuntimeConnectionId` per
+dial and reports it to `HarnessPresence`; a close removes only its own row, and
+each replica renews the leases of what it holds, so a crash reads offline within
+the lease. To debug a harness in Datadog, search `@harness:<id>` for
+`@telemetry_event:(harness_runtime_connected OR harness_runtime_disconnected OR
+harness_runtime_lease_restored)`: each carries `connection` and `replica`, and a
+disconnect's `other_live_connections` above 0 is a stale close that changed nothing.
 
 ## Checks
 

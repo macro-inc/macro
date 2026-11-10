@@ -74,6 +74,11 @@ Type design, idioms, errors and observability, performance, and tests.
   and never record prompts, tool arguments or tool results as span fields or
   logs — they are content, recorded on the spans under the
   `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` policy and a size budget.
+- **CS-73** A function that reaches a service's router or composition root is
+  never a non-generic `pub async fn`, even in a private module: rustc compiles
+  the body of every such function in every build, so the lib test compiles the
+  whole service. Use `pub(crate) async fn`, or `pub fn run() -> impl Future` over
+  a private `async fn` when another crate calls it.
 - **CS-68** Don't mark types `#[non_exhaustive]` by default. Exhaustive matches
   are how a new variant reaches every place that must handle it; reserve the
   attribute for types published outside the workspace.

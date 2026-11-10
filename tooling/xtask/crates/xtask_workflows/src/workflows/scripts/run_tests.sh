@@ -9,22 +9,35 @@ set -euo pipefail
 # The filterset only decides which tests *run* after a workspace build; `-p`
 # is what keeps an unrelated crate's test binary from being compiled.
 #
-# `--lib --bins --tests` is safe with `--workspace` (cargo skips packages that
-# lack a given target type) but fails with `-p` when any selected package has
-# no lib — xtask binaries such as xtask_nextest_filter / xtask_workflows.
+# `--tests` with `--workspace` builds the test binary of every target with
+# `test = true`. `--bins` would also build the bins that opt out, and the normal
+# library beneath them.
 # Unconstrained `-p` still runs that package's tests.
 
 : "${RUST_PACKAGES:?RUST_PACKAGES is required}"
-# Dependencies build without debug info, which cuts compile, link and disk cost.
-# Workspace crates keep CARGO_PROFILE_*_DEBUG=limited, so backtraces still carry
-# line numbers in our own code.
+# Nothing in this build carries debug info: the job sets CARGO_PROFILE_*_DEBUG=0 for
+# workspace crates, and this flag covers dependencies. Panic messages keep their
+# file and line; backtrace frames keep function names only.
 common=(
   --config 'profile.dev.package."*".debug=false'
-  --all-features --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS"
+  --all-features --no-tests=pass
 )
 
+# The Deno tests (code execution, authenticated SDK runs and routine code checks)
+# are ignored by default because they need the pinned runtime. They
+# run from this same script so cargo sees identical flags and selection and reuses
+# what the first run compiled. Only tests in packages this PR selected can match.
+if [ "${NEXTEST_RUN_DENO_TESTS:-}" = "true" ]; then
+  common+=(
+    --run-ignored only --test-threads 2
+    -E 'package(code_execution) or (package(agent_harness_service) and (test(authenticated_mcp_runs_javascript_and_persists_source_and_result) or test(routine_code::)))'
+  )
+else
+  common+=(--test-threads "$NEXTEST_TEST_THREADS")
+fi
+
 if [ "$RUST_PACKAGES" = "all" ]; then
-  cargo nextest run --workspace --exclude sync_service --lib --bins --tests "${common[@]}"
+  cargo nextest run --workspace --exclude sync_service --tests "${common[@]}"
   exit 0
 fi
 

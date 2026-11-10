@@ -82,7 +82,9 @@ and `macro.agent_session_lifecycle`. It supports these event names:
 - Documents: `document.created`, `document.updated`, `document.deleted`, and
   `document.copied`.
 - Channels: `channel.created`, `channel.updated`, `channel.deleted`,
-  `channel.participant_added`, and `channel.participant_removed`.
+  `channel.participant_added`, `channel.participant_removed`, and
+  `channel.access_requested` (someone outside a private or team channel asked
+  to join; the payload carries the request id).
 - Messages, on channels and document discussions alike: `message.posted`,
   `message.patched`, `message.deleted`, `message.attachment_created`,
   `message.attachment_removed`, and `message.mentioned`. Each payload carries
@@ -95,6 +97,16 @@ and `macro.agent_session_lifecycle`. It supports these event names:
   `agent_session.waiting_for_input`, `agent_session.input_received`,
   `agent_session.stopped`, `agent_session.renamed`, and
   `agent_session.deleted`.
+- Calls: `call.started`, `call.ended`, `call.participant_joined`,
+  `call.participant_left`, `call.recording_ready`, `call.summarized`,
+  `call.ringing`, `call.answered`, `call.declined`, and `call.invited`.
+
+Call events use `entity_type = "call"` and the call ID as the entity and
+ordering key. Public events resolve the call's current accessor set before
+matching personal and team webhooks or streaming to a subscriber. Ringing,
+answered, declined, and invited events address one user: only that user's
+personal webhook workspace and personal event stream may receive them. The
+broker's recipient routing field is removed from delivered metadata.
 
 For document, channel, and message events, ingestion asks `EntityAccessService`
 for the people who currently have access to the entity; a message's entity is

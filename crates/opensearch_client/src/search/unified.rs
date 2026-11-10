@@ -960,7 +960,7 @@ fn paginate_unified_hits(
     (results, cursor)
 }
 
-#[tracing::instrument(skip(client, args), err)]
+#[tracing::instrument(skip(client, args))]
 pub(crate) async fn search_unified(
     client: &opensearch::OpenSearch,
     args: UnifiedSearchArgs,

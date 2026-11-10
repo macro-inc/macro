@@ -25,10 +25,19 @@ pub struct MacroUserAuthentication {
     pub user_context: UserContext,
 }
 
+impl MacroUserAuthentication {
+    /// Whether a person is acting through their own session, rather than an API
+    /// token or an agent acting for them.
+    #[must_use]
+    pub fn is_human_session(&self) -> bool {
+        self.origin == CredentialOrigin::Session && self.agent_id.is_none()
+    }
+}
+
 /// The kind of credential that authenticated a user, set where the credential
 /// is verified. Policies that need a person's own session match on it rather
 /// than on request hints.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CredentialOrigin {
     /// A personal session JWT.
     Session,
@@ -36,12 +45,23 @@ pub enum CredentialOrigin {
     MacroApiJwt,
     /// A user API key.
     UserApiKey,
+    /// A manager's credential for this account, held by another account.
+    AccountManager(AccountManagerCredential),
     /// The acting user of a verified bot credential.
     Bot,
     /// The acting user of a verified harness credential.
     Harness,
     /// The acting user claimed by a verified internal service caller.
     Internal,
+}
+
+/// Who holds an account manager credential, and through which grant.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AccountManagerCredential {
+    /// The grant that issued the credential.
+    pub grant_id: Uuid,
+    /// The agent account holding the credential.
+    pub manager_user_id: MacroUserIdStr<'static>,
 }
 
 /// The access scope selected for a bot-authorized request.
@@ -177,7 +197,7 @@ pub enum BotAuthorizationOwner {
 
 /// Ownership facts for a harness whose token has been validated.
 ///
-/// Unlike bots, a harness always has a user or team owner; there are no
+/// Unlike bots, a harness always has one person as its owner; there are no
 /// system harnesses.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum HarnessAuthorizationOwner {
@@ -185,11 +205,6 @@ pub enum HarnessAuthorizationOwner {
     User {
         /// The owning Macro user identifier.
         user_id: String,
-    },
-    /// A harness owned by a team.
-    Team {
-        /// The owning team identifier.
-        team_id: Uuid,
     },
 }
 
@@ -239,6 +254,17 @@ pub struct ResolvedApiKeyUser {
     pub fusion_user_id: String,
     /// The user's organization, when present.
     pub organization_id: Option<i32>,
+    /// Set when the key is an account manager's credential, not the user's own.
+    pub account_manager: Option<AccountManagerCredential>,
+}
+
+/// A user API key's owner, and the manager holding the key when it isn't theirs.
+#[derive(Clone, Debug)]
+pub struct AuthorizedUserApiKey {
+    /// The account the key acts as.
+    pub user_context: UserContext,
+    /// Set when the key is an account manager's credential, not the user's own.
+    pub account_manager: Option<AccountManagerCredential>,
 }
 
 /// Unverified acting-user claims presented by a bot.

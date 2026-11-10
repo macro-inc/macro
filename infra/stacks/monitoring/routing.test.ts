@@ -164,7 +164,7 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
   const prod = monitors().filter((r) =>
     r.inputs.message.includes('Runbook: https://github.com/macro-inc/macro/')
   );
-  expect(prod).toHaveLength(31);
+  expect(prod).toHaveLength(32);
   for (const monitor of prod) {
     const linked = monitor.inputs.message.match(
       /Dashboard: https:\/\/us5\.datadoghq\.com\/dashboard\/([\w-]+)\//
@@ -182,12 +182,6 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
       );
     const { critical, warning } = monitor.inputs.monitorThresholds;
     const anomaly = monitor.inputs.query.includes('anomalies(');
-    // The long-running transaction monitor reads DBM query samples so the
-    // notification can include the SQL. Its graph still plots xact_start_age.
-    const graphThresholds =
-      monitor.name === 'macrodb-long-transactions'
-        ? { critical: '1800', warning: '600' }
-        : { critical, warning };
     expect({
       name: monitor.name,
       markers: graph?.timeseriesDefinition.markers.map(
@@ -197,21 +191,18 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
       name: monitor.name,
       markers: anomaly
         ? []
-        : [
-            `y = ${graphThresholds.critical}`,
-            ...(graphThresholds.warning
-              ? [`y = ${graphThresholds.warning}`]
-              : []),
-          ],
+        : [`y = ${critical}`, ...(warning ? [`y = ${warning}`] : [])],
     });
   }
 });
 
-test('the long-running transaction alert names the SQL', () => {
-  const monitor = monitors().find(
-    (r) => r.name === 'macrodb-long-transactions'
+test('routine suggestion failures notify over an hour, above a floor', () => {
+  const failures = monitors().find(
+    (r) => r.name === 'routine-suggestions-failures'
   );
-  expect(monitor?.inputs.type).toBe('database-monitoring alert');
-  expect(monitor?.inputs.query).toContain('by("host,@db.statement")');
-  expect(monitor?.inputs.message).toContain('{{[@db.statement].name}}');
+  expect(failures?.inputs.query).toBe(
+    'sum(last_1h):sum:macro.routine_suggestions.generation{env:prod,outcome:failed}.as_count() / (sum:macro.routine_suggestions.generation{env:prod,!outcome:cancelled}.as_count() + 20) > 0.1'
+  );
+  expect(failures?.inputs.priority).toBe('3');
+  expect(failures?.inputs.message).not.toContain('@webhook-goalert ');
 });

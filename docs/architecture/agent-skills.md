@@ -30,7 +30,8 @@ turn ─┬─ memory, SDK docs, auto model ...
            list ≤256 of the user's skills (soup, access-checked), newest first,
              with descriptions; skip ones this session loaded or the request @mentions
            ceil(n/32) parallel Jev calls (≤8): "Would skill X help? <description>"
-           1 s deadline; any failure loads nothing and the turn runs as usual
+           1 s deadline; a late or failed call loses only its own skills, and
+             when none answers nothing loads and the turn runs as usual
            load ≥0.8 (≥0.95 without a description), at most 2, most relevant first
            read bodies through ReadSkill's access check, 1 s
       ▼

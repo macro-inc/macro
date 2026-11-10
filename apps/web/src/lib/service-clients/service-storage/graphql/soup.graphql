@@ -556,6 +556,13 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		entityAccessGrantedFileType: fileType
 		entityAccessGrantedAccessLevel: accessLevel
 	}
+	... on GraphqlRuntimeAccessRemovedMetadata {
+		runtimeAccessRemovedRuntimeName: runtimeName
+		runtimeAccessRemovedAgents: agents {
+			botId
+			name
+		}
+	}
 	... on GraphqlCommentedOnDocumentMetadata {
 		commentedOnDocumentDocumentName: documentName
 		commentedOnDocumentOwner: owner
@@ -605,6 +612,12 @@ fragment SoupNotificationNavigationMetadataFields on GraphqlNotifEvent {
 		channelMessageReactionChannelType: channelType
 		channelMessageReactionChannelName: channelName
 		channelMessageReactionSenderProfilePictureUrl: senderProfilePictureUrl
+	}
+	... on GraphqlChannelAccessRequestedMetadata {
+		channelAccessRequestedRequestId: requestId
+		channelAccessRequestedChannelType: channelType
+		channelAccessRequestedChannelName: channelName
+		channelAccessRequestedSenderProfilePictureUrl: senderProfilePictureUrl
 	}
 	... on GraphqlChannelReplyMetadata {
 		channelReplyThreadId: threadId

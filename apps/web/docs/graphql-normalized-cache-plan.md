@@ -75,7 +75,28 @@ entire cache in browser memory. With 10s of thousands of cached objects
     database (`__meta:identity`), so compare-and-wipe is atomic with the
     triggering write (no stale-in-flight-write races). A mismatch wipes and
     rebinds (“silent restart”) and all active operations re-execute. Eager
-    path: clear on logout.
+    path: clear on logout. REST contact-edit responses use a separate captured
+    write-session token: logout closes admission and drains admitted durable
+    write/delete operations before clearing registered hosts. Independent local
+    auth cleanup and server sign-out begin without waiting for this drain; reload
+    and replacement admission still wait for all cleanup. Tracked contact writes
+    retain their exact physical host even if auth propagation retires the public
+    wrapper, whose callbacks and subsequent operations are silenced immediately.
+    Successful login
+    also retires this token, drains writes and deletes only the contact records
+    written by that session before refetching. This preserves unrelated durable
+    queues during same-account reauthentication, while handling native account
+    replacement that keeps the same client and host objects. A readiness probe
+    precedes tracking so failed initialization cannot strand a never-written key.
+    Logical retirement keeps narrow cleanup usable through the retained owner.
+    Typed recoverable bootstrap/owner failures may reconstruct a cleanup-only host
+    from the original backend/scope factory without booting a user client or queue;
+    unknown or quarantined failures cannot use this path. Failed repair retains
+    keys/ownership, reports the failure, and leaves admission closed for retry.
+    A no-op delete is not proof of storage cleanup, and a never-settling durable
+    write cannot be bypassed by a timeout. Login waits for all logout wipes and teardown, not just
+    normalized-cache clearing. A post-write identity check cannot
+    undo a native mutation already dispatched.
     Additive GraphQL schema changes retain existing normalized records;
     fragment reads can continue projecting fields already present. Manually
     bump the schema compatibility epoch when identity, field storage shape, or
@@ -591,7 +612,7 @@ apps/web/src/lib/graphql-cache/ # JS glue
   Locks / BroadcastChannel machinery. DB at
   `{app_data_dir}/graphql-cache/cache.turso`.
   JS side: `createTauriCacheHost` (`host/tauri-host.ts`) — invoke-based
-  RPC with the same 10s timeout + Error-normalized rejections, event
+  RPC with the same read-only 10s timeout + Error-normalized rejections, event
   subscription filtered by clientId prefix; `isTauri()` selects it in
   `graphql-soup.ts`.
 
@@ -1196,12 +1217,12 @@ unrelated queued hydration just like other authoritative writes.
 
 `graphql.subscription.cache_queue` times preceding effects from the same
 subscription operation. `graphql.subscription.cache_apply` starts afterward
-and includes host readiness, IPC, engine admission and persistence. Native IPC
-has a 10-second request deadline, so a 10-second apply duration alone does not
-prove successful engine work. Apply/write/delete spans carry `cache.failure`
-from the bounded cache error classifier; use it with `cache.effects_applied`
-to distinguish timeouts from successful slow applies. Native engine admission
-has a `graphql_cache.native.lock` phase, emitted once by `EngineAccess`
+and includes host readiness, IPC, engine admission and persistence. Native
+writes and deletes have no IPC deadline (see Native IPC transport), so a long
+apply is a slow engine queue, not a timeout. Apply/write/delete spans carry
+`cache.failure` from the bounded cache error classifier; use it with
+`cache.effects_applied` to separate engine failures from slow applies. Native
+engine admission has a `graphql_cache.native.lock` phase, emitted once by `EngineAccess`
 for each foreground or hydrate acquisition. Its `graphql_cache.lock.wait_ms`
 includes waiting until admission or supersession, not time holding the lock. Native scheduling changes require a
 rebuilt native binary; older installed binaries retain their scheduling.
@@ -1217,6 +1238,23 @@ cache changes (including resets), hydration or mutation settlements, the host
 flushes earlier invalidations so other observers cannot overtake them. Disposal
 drops pending callbacks.
 
+Tauri cannot cancel a command, and the engine runs commands one at a time, so a
+caller that stops waiting only loses the outcome of work that still happens.
+As in worker-host, only reads and initialization have the ten-second deadline:
+a read falls back to the network, and every request waits behind init. Writes,
+hydration, queue claims and settlements, deletes, invalidations, teardown and
+clear wait for the engine's answer. A timeout would report a failure for a
+commit that still lands, and callers act on it: the mutation queue runner holds
+later edits for its five-minute lease after an unconfirmed commit, and a failed
+logout clear rotates the cache scope, which the running native engine refuses
+with `graphql cache scope mismatch`.
+
+The deadline counts only time the page runs on time. When the page itself
+stalls (an occluded or napping macOS window, a long task), the overdue timer
+would otherwise run before an answer the engine already sent and fail every
+request in flight at once, so a timer that fires more than a second late starts
+a new window.
+
 Native live views advertise a specification-bound registration token. The host
 retains at most 32 descriptors and resumes an unchanged specification from its
 id, token and revision; a missing registration triggers a full request. Changed
@@ -1225,7 +1263,8 @@ installed binaries omit the token and keep receiving full requests. Empty record
 selections fetch only the current revision, with no unused fragment.
 
 `graphql_cache.ipc.request` is a `perf`-class span (`sampling: 'perf'`) that
-records command and outcome. The webview does not re-encode read
+records command and outcome, plus `graphql_cache.ipc.page_stall_ms` when a page
+stall extended its deadline. The webview does not re-encode read
 arguments to count bytes or create spans for notification callbacks.
 `graphql_cache.ipc.notification` in the native emitter measures serialization and
 emission, recording the single serialized payload's byte count. Native read, watch,

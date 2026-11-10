@@ -101,6 +101,16 @@ export default {
   undo: 'Undo',
 
   // Toasts.
+  toastOpenSplit: 'Open split',
+  toastFolderCreated: '{{name}} created',
+  toastFolderUploaded: '{{name}} uploaded',
+  toastFolderCreateFailed: 'Folder creation failed',
+  toastFolderCreateError: 'Could not create the folder. Please try again.',
+  toastFolderItemsSaveFailed:
+    'Folder created, but some items could not be saved. Retry to finish adding your tags and files.',
+  toastChannelAccessRequestFailed: 'Could not send your request to join',
+  toastChannelAccessWithdrawalFailed: 'Could not withdraw your request',
+  toastChannelAccessResolveFailed: 'Could not answer this request',
   toastAutoArchiveFailed: 'Could not update auto-archive',
   toastCopied: 'Copied',
   toastCopiedCount: {

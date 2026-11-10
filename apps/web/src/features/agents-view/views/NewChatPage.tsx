@@ -1,5 +1,6 @@
 import { promptActionOf } from '@app/features/block-agent/component/prompt-action';
 import { createRecentAgentSelections } from '@app/features/block-agent/context/recent-agent-selections';
+import { requestRuntimeAccess } from '@app/features/runtime-sharing/core/request-access';
 import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
 import {
   createInputAttachmentTracker,
@@ -31,7 +32,7 @@ import { useAiBillingSummaryQuery } from '@queries/auth/ai-billing';
 import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
 import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createMemo, createSignal, type JSX, Show } from 'solid-js';
 import { AgentUpdatesStack } from '../../agent-updates/views/AgentUpdatesStack';
 import { EffortSelector } from '../../block-agent/component/EffortSelector';
 import {
@@ -108,6 +109,8 @@ export function NewChatPage(props: {
   updateSessions?: readonly AgentSessionEntity[];
   onOpenUpdateSession?: (sessionId: string) => void;
   showUpdates?: boolean;
+  /** Centered under the composer, such as the Agents tutorial pill. */
+  belowComposer?: JSX.Element;
 }) {
   const userId = useUserId();
   const billing = useAiBillingSummaryQuery();
@@ -284,6 +287,13 @@ export function NewChatPage(props: {
   };
 
   const connect = (agent: RosterAgent) => {
+    if (agent.needsRuntimeAccess && agent.harnessId) {
+      fireAndForget(
+        requestRuntimeAccess(agent.harnessId),
+        'runtime-sharing.request'
+      );
+      return;
+    }
     // Both land on Settings → Runtimes: Cursor to save an API key, macrod to
     // restart the local runtime (one click on desktop) or re-pair it.
     if (agent.harness === 'cursor' || agent.harness === 'macrod') {
@@ -605,6 +615,7 @@ export function NewChatPage(props: {
               {composer()}
             </div>
           </FloatRegionOrInline>
+          {props.belowComposer}
           <Show
             when={
               props.showUpdates &&
