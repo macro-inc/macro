@@ -139,8 +139,11 @@ each run.
   their grants and registry rows (`delete_action`; the foreign key's cascade
   is only the fence against a racing create). `POST
   /scheduled-actions/{id}/detach` ("Keep as my routine") clears the link. The
-  list returns top-level routines unless `include_children` or `parent=` is
-  passed; history rows carry `created`, the sub-routines that run created
+  list returns top-level routines; `include_children` adds their active
+  sub-routines and `parent=` returns one routine's, active ones plus its
+  newest 200 finished one-time ones. Finished ones accumulate without bound,
+  so every read of active sub-routines repeats the predicate of the partial
+  index `scheduled_action_active_children_idx` and never touches them; history rows carry `created`, the sub-routines that run created
   (`created_by_runs`). A sub-routine's run notification names its parent
   (`FinishedRoutineRun::parent_name`). Spans: `routine.create` (parent, run,
   keyed, outcome `created`/`updated`/`refused_cap`), `routine.follow_parent`,

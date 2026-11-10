@@ -12,12 +12,14 @@ export type ListScheduledActionsParams = {
    */
   include_events?: boolean | null;
   /**
- * Also list sub-routines, the routines other routines' runs created;
-defaults to false (top-level routines only).
+ * Also list active sub-routines, the routines other routines' runs
+created, without finished one-time ones; defaults to false (top-level
+routines only).
  */
   include_children?: boolean | null;
   /**
-   * List only this routine's sub-routines, finished ones included.
-   */
+ * List only this routine's sub-routines: the active ones and its newest
+200 finished one-time ones.
+ */
   parent?: string | null;
 };

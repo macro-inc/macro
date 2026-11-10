@@ -46,7 +46,7 @@
           {
             "name": "include_children",
             "in": "query",
-            "description": "Also list sub-routines, the routines other routines' runs created;\ndefaults to false (top-level routines only).",
+            "description": "Also list active sub-routines, the routines other routines' runs\ncreated, without finished one-time ones; defaults to false (top-level\nroutines only).",
             "required": false,
             "schema": {
               "type": ["boolean", "null"],
@@ -56,7 +56,7 @@
           {
             "name": "parent",
             "in": "query",
-            "description": "List only this routine's sub-routines, finished ones included.",
+            "description": "List only this routine's sub-routines: the active ones and its newest\n200 finished one-time ones.",
             "required": false,
             "schema": {
               "type": ["string", "null"],
