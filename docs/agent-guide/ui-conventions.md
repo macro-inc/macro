@@ -12,7 +12,9 @@ keeps loaded items visible. Wait for real rows before navigating or selecting.
 On touch devices, check top bars with a nonzero safe area as well as at phone
 and tablet widths. Collection headers clear the pane's full top content inset:
 safe area only in composable CRM/Tasks/Drive, plus the floating split header in
-Reviews. Native project detail navigation also clears the safe area, with its
+Reviews. Floating entity split headers add the same 0.5rem top gutter as
+collection controls, with that gutter included in the measured content inset.
+Native project detail navigation also clears the safe area, with its
 content directly below it. Content nested below an in-flow header must not add
 the same inset again. See the [mobile layout rule](../../.agents/rules/web/mobile.md#layout-and-chrome).
 

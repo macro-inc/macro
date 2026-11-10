@@ -147,6 +147,10 @@ not by injecting mutation failures into a dev or production account.
 
 ## iPhone Duo navigation
 
+Entity headers (tasks, documents, and email) float 0.5rem below the safe-area
+edge on touch, matching the list-view top gutter. The content inset includes
+that gutter and the header height, including when Duo is folded.
+
 With a native build containing `layout_plugin`, the mobile navigation dock
 follows UIKit's preferred edge: a right-side vertical sidebar in the usual Duo
 layouts, the outer edge in Split View, and the bottom when horizontal bars are
