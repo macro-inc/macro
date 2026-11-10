@@ -99,7 +99,7 @@ impl<B: BotFacts + 'static> PgDocumentRepo<B> {
                 self.reused_linked_email_attachment(email_attachment_id)
                     .await
             }
-            Err(e) => Err(e.into()),
+            Err(e) => Err(create::email_link_error(e)),
         }
     }
 }
@@ -580,7 +580,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
         Ok(metadata)
     }
 
-    #[tracing::instrument(err, skip(self, args, share_permission))]
+    #[tracing::instrument(skip(self, args, share_permission))]
     async fn import_email_attachment_document(
         &self,
         args: ImportEmailAttachmentRepoArgs,
@@ -622,7 +622,8 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
             &document.sha,
             email_attachment_id,
         )
-        .await?
+        .await
+        .map_err(create::email_link_error)?
         {
             transaction.commit().await?;
             return self.reused_email_document(existing_id).await;
@@ -650,7 +651,7 @@ impl<B: BotFacts + 'static> DocumentRepo for PgDocumentRepo<B> {
                     .reused_linked_email_attachment(email_attachment_id)
                     .await;
             }
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(create::email_link_error(e)),
         }
 
         transaction.commit().await?;

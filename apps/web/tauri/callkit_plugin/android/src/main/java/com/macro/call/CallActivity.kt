@@ -124,7 +124,19 @@ class CallActivity : Activity() {
         permissionAction = null; permissionCallId = null
         callId?.let { Calls.finishMicrophonePermission(it) }
         if (granted) action?.invoke()
-        else { Calls.error = "Permission denied. Enable it in Android settings to use this control."; render() }
+        else { Calls.error = deniedMessages[permissions.firstOrNull()] ?: PERMISSION_DENIED; render() }
+    }
+    private fun settingsButton(colors: CallTheme) = actionButton("Open settings", colors.edgeMuted) { openSettings() }.apply {
+        setTextColor(colors.text); background = background(colors.edgeMuted, 12, colors.edge)
+    }
+    private fun openSettings() {
+        val keyguard = getSystemService(KeyguardManager::class.java)
+        // Settings can't show over the lock screen, which this call screen can.
+        if (Build.VERSION.SDK_INT >= 26 && keyguard.isKeyguardLocked) {
+            keyguard.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
+                override fun onDismissSucceeded() { runCatching { Calls.openAppSettings(this@CallActivity) } }
+            })
+        } else runCatching { Calls.openAppSettings(this) }
     }
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
     private fun background(color: Int, radius: Int = 16, border: Int? = null) = GradientDrawable().apply {
@@ -209,6 +221,7 @@ class CallActivity : Activity() {
         Calls.error?.let { message ->
             content.addView(label(message, 14f, colors.muted).apply { gravity = Gravity.CENTER; maxLines = 3 },
                 LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(16) })
+            if (opensSettings(message)) content.addView(settingsButton(colors), LinearLayout.LayoutParams(-1, dp(48)).apply { bottomMargin = dp(16) })
         }
         val actions = LinearLayout(this).apply { gravity = Gravity.CENTER }
         actions.addView(actionButton("Decline", colors.failure) { Calls.end(this, call.callId, outcome = "declined") },
@@ -277,7 +290,10 @@ class CallActivity : Activity() {
         header.addView(label(Calls.title ?: call.title, 18f), LinearLayout.LayoutParams(0, dp(48), 1f))
         header.addView(actionButton(if (media == null) "Decline" else "Leave", theme!!.failure) { Calls.end(this, call.callId) }, LinearLayout.LayoutParams(-2, dp(48)))
         drawer.addView(header, LinearLayout.LayoutParams(-1, dp(56)))
-        if (Calls.error != null) drawer.addView(label(Calls.error!!, 12f, theme!!.muted).apply { maxLines = 2 }, LinearLayout.LayoutParams(-1, -2))
+        Calls.error?.let { message ->
+            drawer.addView(label(message, 12f, theme!!.muted).apply { maxLines = 2 }, LinearLayout.LayoutParams(-1, -2))
+            if (opensSettings(message)) drawer.addView(settingsButton(theme!!), LinearLayout.LayoutParams(-2, dp(40)).apply { topMargin = dp(8) })
+        }
         drawer.addView(tile(primary, true), LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(8) })
         val strip = HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; tag = "call-participant-strip" }
         val stripContent = LinearLayout(this)
@@ -384,5 +400,11 @@ class CallActivity : Activity() {
         private var current: WeakReference<CallActivity>? = null
         val isOpen get() = current?.get() != null
         val inPictureInPicture get() = current?.get()?.isInPictureInPictureMode == true
+        private const val PERMISSION_DENIED = "Permission denied. Allow it in Settings to use this control."
+        private val deniedMessages = mapOf(
+            Manifest.permission.RECORD_AUDIO to "Microphone access is off. Allow it in Settings to answer.",
+            Manifest.permission.CAMERA to "Camera access is off. Allow it in Settings to turn on video.",
+        )
+        private fun opensSettings(error: String) = error == PERMISSION_DENIED || error in deniedMessages.values
     }
 }

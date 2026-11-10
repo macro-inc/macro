@@ -24,11 +24,13 @@ afterEach(() => {
 
 function setup() {
   const google = vi.fn().mockResolvedValue(undefined);
+  const microsoft = vi.fn().mockResolvedValue(undefined);
   const signIn = vi.fn();
   renderWithFakeOnboarding(
     () => (
       <SignupJourneyView
         onGoogle={google}
+        onMicrosoft={microsoft}
         onBackFromEmail={() => {}}
         onSignIn={signIn}
         onAgentSignup={() => {}}
@@ -37,7 +39,7 @@ function setup() {
     ),
     { viewer: null }
   );
-  return { google, signIn };
+  return { google, microsoft, signIn };
 }
 
 describe('sign-up starts before authentication', () => {
@@ -64,12 +66,15 @@ describe('sign-up starts before authentication', () => {
     ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(google).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Connect work email' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue with Google' })
+    );
     expect(google).toHaveBeenCalledOnce();
     expect(readSignupDraft()).toEqual({
       step: 'work',
       accent: '#f77d67',
       authenticating: true,
+      provider: 'google',
     });
   });
 
@@ -78,7 +83,9 @@ describe('sign-up starts before authentication', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Bypass' }));
     expect(readSignupDraft()?.step).toBe('work');
     expect(google).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Connect work email' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue with Google' })
+    );
     expect(google).toHaveBeenCalledOnce();
     expect(readSignupDraft()?.authenticating).toBe(true);
   });
@@ -90,9 +97,27 @@ describe('sign-up starts before authentication', () => {
       screen.queryByRole('heading', { name: 'Create your workspace' })
     ).toBeNull();
     expect(google).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Connect work email' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue with Google' })
+    );
     expect(google).toHaveBeenCalledOnce();
     expect(readSignupDraft()?.accent).toBe('#65d8ac');
+  });
+
+  it('starts Microsoft signup from the work step instead of Google', () => {
+    saveSignupDraft({ step: 'work', accent: '#65d8ac', authenticating: false });
+    const { google, microsoft } = setup();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Continue with Microsoft' })
+    );
+    expect(microsoft).toHaveBeenCalledOnce();
+    expect(google).not.toHaveBeenCalled();
+    expect(readSignupDraft()).toEqual({
+      step: 'work',
+      accent: '#65d8ac',
+      authenticating: true,
+      provider: 'microsoft',
+    });
   });
 
   it('clears pending authentication when returning to an earlier step', () => {

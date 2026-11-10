@@ -682,3 +682,43 @@ MACRO_LOCAL_TIMINGS=/tmp/run-local-timings.jsonl just run_local
 ```
 
 For the default instance, omit `--instance`.
+
+### Sending timings to Grafana (opt-in)
+
+`run_local` can also send its timings to Loki and Tempo, as CI does, for the
+`Macro run_local` dashboard. It is off unless you create
+`~/.config/macro/local-telemetry.toml` (`$XDG_CONFIG_HOME/macro/` if set):
+
+```toml
+endpoint = "https://otlp.macro-internal.com"
+token = "<OTLP ingestion token>"
+# traces = false  # only Loki
+```
+
+```bash
+chmod 600 ~/.config/macro/local-telemetry.toml
+```
+
+The token is the bearer token of the OTLP ingest route: it can send telemetry
+but not read it. Ask an observability owner for it. It stays in this file: it is
+not read from Doppler or the environment, so it never reaches a generated env
+file or a container. `endpoint` must be `https://`, except for `localhost`, and a
+file with a token that others can read is refused with a one-line warning.
+Delete the file to turn telemetry off; without it nothing is written or sent.
+
+Each bring-up, `rebuild`, `restart-frontend`, `stop` and `r`/`f` hotkey sends one
+`run` line, plus a line per step, per service build (cargo units compiled,
+sccache hits) and per container's wait for its first passing health probe. Lines
+carry step and service names, timings, the instance name, branch and commit, and
+hashed host and worktree ids; never paths, env values, error text or the token.
+Fields and queries: [observability README](../../infra/stacks/observability/README.md#run_local-events-in-loki).
+
+Sending never slows a run down or fails it. Events are written to
+`~/.local/state/macro/local-telemetry/` first and sent in the background every
+20 seconds and when the run is ready; `last-send.json` there shows the last
+attempt's HTTP status. A run killed before sending, a `stop`, or a send that
+failed is sent by your next run, and a killed bring-up shows up as
+`outcome="interrupted"` with the step it was in.
+
+To try it without the hosted stack, run a throwaway Loki and point the file at
+it with `endpoint = "http://127.0.0.1:3100/otlp"` and `traces = false`.

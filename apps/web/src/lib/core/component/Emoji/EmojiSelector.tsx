@@ -16,7 +16,7 @@ import { emojiRows } from './emoji-rows';
 import { type SimpleEmoji, useEmojiData } from './emojis';
 import { recordEmojiUsage } from './emojiUsage';
 
-function renderEmoji(emoji: string, size?: string): JSX.Element {
+function renderEmoji(emoji: string, size: string): JSX.Element {
   return (
     <p
       class={`emoji flex items-center justify-center`}
@@ -43,6 +43,8 @@ interface EmojiOptionProps {
   emoji: SimpleEmoji;
   onEmojiClick: (emoji: SimpleEmoji) => void;
   isSelected: boolean;
+  /** A length against the row's query container, from `emojiSize` below. */
+  size: string;
 }
 
 function EmojiOption(props: EmojiOptionProps): JSX.Element {
@@ -53,13 +55,12 @@ function EmojiOption(props: EmojiOptionProps): JSX.Element {
         'hover:bg-hover hover-transition-bg rounded-md p-1 aspect-square w-full flex items-center justify-center',
         props.isSelected && 'bg-hover'
       )}
-      style={{ 'container-type': 'inline-size' }}
       onClick={() => props.onEmojiClick(props.emoji)}
       title={props.emoji.slug}
       role="option"
       aria-selected={props.isSelected}
     >
-      {renderEmoji(props.emoji.emoji, '90cqi')}
+      {renderEmoji(props.emoji.emoji, props.size)}
     </button>
   );
 }
@@ -67,6 +68,9 @@ function EmojiOption(props: EmojiOptionProps): JSX.Element {
 function validFilter(filter: string | undefined): filter is string {
   return Boolean(filter && filter.trim().length > 0);
 }
+
+/** `p-1` on either side of a cell. */
+const CELL_PADDING_PX = 8;
 
 export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
   const { groups, emojis: filteredEmojis, filter } = useEmojiData();
@@ -166,10 +170,21 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
     });
   });
 
+  // The row is the query container rather than the cell. A row's inline size
+  // comes from its containing block alone, while a cell's comes from `1fr`
+  // track sizing, which the cell's own contents can push out. Sizing a glyph
+  // off its cell closes that loop, and it can settle with one emoji filling
+  // the picker. `minmax(0, …)` keeps contents out of a track's minimum.
   const gridStyle = () => ({
     display: 'grid',
-    'grid-template-columns': `repeat(${columns()}, 1fr)`,
+    'grid-template-columns': `repeat(${columns()}, minmax(0, 1fr))`,
+    'container-type': 'inline-size',
   });
+
+  // 90% of a cell's content box: its share of the row, less the `p-1` either
+  // side that a cell's own content box would have excluded.
+  const emojiSize = () =>
+    `calc(0.9 * (100cqi / ${columns()} - ${CELL_PADDING_PX}px))`;
 
   return (
     <VList
@@ -197,6 +212,7 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
                     <EmojiOption
                       emoji={emojiItem}
                       onEmojiClick={selectEmoji}
+                      size={emojiSize()}
                       isSelected={
                         selectedIndex() === emojiRow().start + index()
                       }

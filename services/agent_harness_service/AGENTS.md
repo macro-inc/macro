@@ -80,6 +80,12 @@ Pulumi stacks; they do not host extra agent processes.
   `dangerously_operate_as_user`, to the owner with no agent badge. Every such
   token carries the routine id, which the events its writes produce keep, so
   they never start routines.
+  Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
+  newest 100 messages (labels, 500-character snippets) through
+  email_service's internal recent-messages route and the person's connected
+  Pipedream apps; their hidden sessions run on the free tier's model, gated
+  on `enable-routine-suggestions`. `scheduling.rs` sweeps suggestion
+  sessions a stopped process left open every minute.
   A routine's code steps are checked together, one file each; the owner's
   time zone for `run.timezone` comes from their primary calendar
   (`CalendarTimeZones`).
@@ -168,6 +174,11 @@ feature flags and the MCP and integration analytics; when the key is unset,
 analytics are off and routine template publishing, reads, and activation are
 disabled. Scheduling wires the per-user `enable-routine-sharing` PostHog gate;
 owner unsharing and already activated routines remain available.
+`AUTHENTICATION_SERVICE_SECRET_KEY` is required in harness, cognition, and
+scheduling configs regardless of billing flags. It is a Secrets Manager name
+in deployed configs and a direct key locally. Resolve it for the harness, cognition, and
+scheduling configs before building authentication service clients; the task
+role must allow reading its ARN.
 In deployed configs, `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY`
 is cognition's Secrets Manager reference; AI tools resolve the separate
 `DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME` reference.

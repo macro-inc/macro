@@ -499,7 +499,8 @@ const fn _rankable_entity_types_are_exhaustive(entity_type: EntityType) {
         | EntityType::CrmPipeline
         | EntityType::DatabaseRow
         | EntityType::Form
-        | EntityType::ExternalChat => {}
+        | EntityType::ExternalChat
+        | EntityType::Harness => {}
     }
 }
 

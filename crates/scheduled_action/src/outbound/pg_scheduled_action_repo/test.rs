@@ -119,6 +119,7 @@ pub(crate) fn sample_action(owner: Owner, name: &str) -> ScheduledAction {
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
         appearance: model_entity::EntityAppearance::default(),
+        suggestion_id: None,
         description: String::new(),
     }
 }

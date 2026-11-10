@@ -3,9 +3,10 @@
 use xtask_paths::RepoGlob;
 
 /// Shared by web checks and preview builds so a cache-WASM, fold-WASM,
-/// SQL-WASM, or shared-package change cannot be tested without being built
-/// (or built without being tested). The push-to-main dev deploy is not
-/// path-gated at all — see [`crate::workflows::deploy_on_push`] for why.
+/// SQL-WASM, natural-time-WASM, or shared-package change cannot be tested
+/// without being built (or built without being tested). The push-to-main dev
+/// deploy is not path-gated at all — see [`crate::workflows::deploy_on_push`]
+/// for why.
 pub const WEB_ARTIFACT_PATHS: &[RepoGlob<'static>] = &[
     RepoGlob::new("package.json"),
     RepoGlob::new("bun.lock"),
@@ -21,6 +22,7 @@ pub const WEB_ARTIFACT_PATHS: &[RepoGlob<'static>] = &[
     RepoGlob::new("crates/database_sql/**"),
     RepoGlob::new("crates/filter_ast/**"),
     RepoGlob::new("crates/item_filters/**"),
+    RepoGlob::new("crates/natural_time/**"),
     RepoGlob::new("static_assets/schema.graphql"),
     RepoGlob::new("Cargo.toml"),
     RepoGlob::new("Cargo.lock"),

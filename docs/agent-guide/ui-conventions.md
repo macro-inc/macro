@@ -178,12 +178,33 @@ settings sizes retain their existing geometry. Native keyboard behavior, form
 values, labels, disabled/read-only state, and surrounding row hit targets stay
 unchanged. See the [selection-control API contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
 
+## Recipient suggestions
+
+New message/channel, main email, call, routine-template and sharing pickers search personal
+contacts through one bounded window. Type to find later contacts; **Next options**
+or PageDown replaces the window, and ArrowDown at its end advances it. An empty
+window can still have a next page. Touch Next preserves input focus. Closing and
+reopening starts at the first window, without clearing selected/custom chips.
+Explicit participant/agent/thread choices remain scoped extras. Matching addresses
+are deduplicated while keeping the caller's selected representation. Other recipient surfaces
+are migrating separately; these controls do not change the AI planner's people pool.
+
+## Property people pickers
+
+Personal user rows and calendar guest pickers use replaceable windows with Next
+options/PageDown. Selections and scoped extras stay independent of the page; names
+from a chosen row survive later searches. A returned person page is not capped a
+second time, and broader native/server matches are kept. Search changes immediately
+remove stale person results from keyboard selection while the source debounces its
+read. Explicit team/participant pools remain scoped rather than becoming directory
+search. Custom calendar addresses are added only by choosing their Add row; a
+complete address never resolves through another person's display-name alias.
+
 ## Multiselect dropdowns
 
 Use `Dropdown.MultiSelectItem` for filter options, not independent settings.
-Clicking the left checkbox toggles only that option and keeps the menu open.
-Clicking the rest of the row adds the option and closes the whole dropdown;
-clicking an already-selected row leaves it selected. Shift-click or **Only**
+Clicking an option's row or its checkbox toggles only that option and keeps
+the menu open. Shift-click or **Only**
 replaces that group's selection with the option and keeps the menu open, even
 when it is already the sole selection. Other filter groups stay unchanged.
 Only also clears persisted selections missing from the current options. Dynamic
@@ -195,10 +216,22 @@ whole group's selection in one write, without intermediate per-option writes.
 Arrow keys navigate. Space toggles a focused menu row; Enter adds and closes;
 Shift+Enter selects only that option without closing. Searchable filters retain
 input focus and use Enter/Shift+Enter on the highlighted search result.
+A searchable group's `createOption` turns typed text no option lists into a
+leading `Add “…”` row, so a typed address joins the selection like an option.
 **Only** sits at the right on hover or keyboard highlight and remains visible on
 touch devices. Touch rows and checkbox hit areas use the shared touch sizing.
 Existing mobile filter drawers retain their toggle-and-stay-open behavior.
 Inbox selectors retain their explicit **Only**/**All** reset action.
+
+Query-driven filter groups keep the existing menu/drawer controls but load only
+while open. Their source keeps all selected IDs in the collection (including
+unavailable values), separately from the current visible window. Do not apply a
+second substring filter to already matched source rows. Next options replaces
+the window; scroll and virtual focus reset only when a replacement is committed,
+not when selection labels or highlights change. Checkbox toggles keep row order
+stable within a window. A zero-result page can still offer Next options.
+`ListFilterGroup.createSource` requires explicit `selectedIds` and multiselect;
+static groups keep their existing behavior.
 
 | Pointer dropdown | Touch dropdown |
 | --- | --- |

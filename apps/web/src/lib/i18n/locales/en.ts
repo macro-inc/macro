@@ -12,12 +12,15 @@ import commands from './en/commands';
 import common from './en/common';
 import create from './en/create';
 import crm from './en/crm';
+import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import entityIcons from './en/entity-icons';
 import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
 import notificationsInbox from './en/notifications-inbox';
+import routineSuggestions from './en/routine-suggestions';
+import runtimeSharing from './en/runtime-sharing';
 import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
@@ -45,12 +48,15 @@ export default {
   common,
   create,
   crm,
+  emailViews,
   entityActions,
   entityIcons,
   localRuntime,
   mobile,
   nav,
   notificationsInbox,
+  routineSuggestions,
+  runtimeSharing,
   settingsLanguage,
   settingsMobileApp,
   settingsNav,

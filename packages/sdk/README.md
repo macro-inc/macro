@@ -584,6 +584,36 @@ with `setImportant` and `delete`. Omit the inbox to select the caller's primary.
 caller-persisted operation IDs. `email.reminders({ inboxes })` auto-paginates and
 returns thread handles alongside reminder snapshots.
 
+### Saved views
+
+```ts
+const view = await macro.savedViews.create({
+  name: 'Invoices',
+  config: {
+    kind: 'email',
+    version: 1,
+    filters: {
+      inboxIds: [], participants: [{ type: 'domain', domain: 'example.com' }],
+      participantFields: ['from'], subject: ['invoice'], starred: false,
+      attachments: [], calendarInvite: false, tags: [],
+    },
+  },
+});
+await view.edit({ name: 'Bills', team: macro.teams.byId(teamId) });
+for await (const each of macro.savedViews.list({ kind: 'email' })) {
+  console.log(await each.name());
+}
+await macro.savedViews.reorder('email', [view]);
+await view.remove();
+```
+
+A saved view is a named filter definition the app shows in a surface's sidebar
+(`kind` picks the surface, such as Email). `edit` and `remove` are checked
+against the revision the handle last saw: a write made elsewhere since then
+fails with a 409 conflict instead of being overwritten, and `view.refresh()`
+picks up the current revision. Order is personal; `reorder` sets yours for one
+kind.
+
 ### CRM contact fields
 
 `macro.crm.contactById(id).setEmail(address)` adds an address only when absent;

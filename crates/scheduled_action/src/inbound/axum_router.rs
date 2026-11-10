@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
-use crate::domain::code_check::{CodeCheckError, StarterRoutine};
+use crate::domain::catalog::CatalogEntry;
+use crate::domain::code_check::CodeCheckError;
 use crate::domain::code_upgrade::CodeUpgrade;
 use crate::domain::drafts::InvalidDraft;
 use crate::domain::event_trigger::ActionTrigger;
@@ -202,10 +203,7 @@ where
             "/scheduled-actions/check",
             post(check_action::<S, Svc, Auth>),
         )
-        .route(
-            "/scheduled-actions/code/starters",
-            get(code_starters::<S, Svc, Auth>),
-        )
+        .route("/scheduled-actions/catalog", get(catalog::<S, Svc, Auth>))
         .with_state(state)
 }
 
@@ -265,6 +263,15 @@ pub async fn health() -> impl IntoResponse {
     Json(EmptyResponse::default())
 }
 
+/// Where a new routine came from.
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct CreateActionQuery {
+    /// The routine suggestion it is saved from, recorded on the routine.
+    #[param(value_type = Option<String>, format = Uuid)]
+    pub suggestion_id: Option<Uuid>,
+}
+
 #[utoipa::path(
     post,
     path = "/scheduled-actions/check",
@@ -311,6 +318,7 @@ where
     path = "/scheduled-actions",
     tag = "scheduled actions",
     operation_id = "create_scheduled_action",
+    params(CreateActionQuery),
     request_body = ActionConfiguration,
     responses(
         (status = 201, body = ScheduledActionResponse),
@@ -323,6 +331,7 @@ where
 pub async fn create_action<S, Svc, Auth>(
     State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
+    Query(query): Query<CreateActionQuery>,
     body: Result<Json<ActionConfiguration>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
 where
@@ -331,7 +340,15 @@ where
     Auth: MacroAuthorizationService,
 {
     let Json(req) = body.map_err(ScheduledActionApiError::InvalidRequest)?;
-    let created = state.service.create_action(&principal, req).await?;
+    let created = match query.suggestion_id {
+        Some(suggestion_id) => {
+            state
+                .service
+                .create_action_from_suggestion(&principal, req, suggestion_id)
+                .await?
+        }
+        None => state.service.create_action(&principal, req).await?,
+    };
     Ok((
         StatusCode::CREATED,
         Json(ScheduledActionResponse::from(created)),
@@ -636,26 +653,38 @@ where
     Ok(Json(upgrades))
 }
 
+/// Which zone the catalog's schedules are written in.
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct CatalogQuery {
+    /// IANA time zone, e.g. `America/New_York`.
+    #[param(value_type = String)]
+    pub timezone: Tz,
+}
+
 #[utoipa::path(
     get,
-    path = "/scheduled-actions/code/starters",
+    path = "/scheduled-actions/catalog",
     tag = "scheduled actions",
-    operation_id = "routine_code_starters",
+    operation_id = "routine_catalog",
+    params(CatalogQuery),
     responses(
-        (status = 200, body = Vec<StarterRoutine>, description = "Starter routines whose step is code; empty where code steps aren't available"),
+        (status = 200, body = Vec<CatalogEntry>, description = "Macro's routines, with schedules in the given zone; code steps only where code can be saved"),
+        (status = 400, body = String, description = "Not a time zone"),
         (status = 401, body = String),
     )
 )]
-pub async fn code_starters<S, Svc, Auth>(
+pub async fn catalog<S, Svc, Auth>(
     State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
     _user: MacroAuthorizationExtractor<Auth, UserOnly>,
-) -> Json<Vec<StarterRoutine>>
+    Query(query): Query<CatalogQuery>,
+) -> Json<Vec<CatalogEntry>>
 where
     S: ScheduledActionService + Send + Sync + 'static,
     Svc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    Json(state.service.code_starters())
+    Json(state.service.catalog(query.timezone))
 }
 
 pub enum ScheduledActionApiError {
@@ -690,6 +719,7 @@ impl IntoResponse for ScheduledActionApiError {
             let status = match policy {
                 ActionPolicyError::NotFound => StatusCode::NOT_FOUND,
                 ActionPolicyError::UpdateConflict => StatusCode::CONFLICT,
+                ActionPolicyError::NotSuggesting => StatusCode::FORBIDDEN,
                 ActionPolicyError::NoFutureFirings
                 | ActionPolicyError::EventManagementDisabled
                 | ActionPolicyError::ConditionsDisabled

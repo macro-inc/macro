@@ -92,9 +92,10 @@ fn every_host_toolset_passes_schema_validation() {
 }
 
 /// Gemini rejects a whole request when one tool schema has a `$ref` loop of
-/// required fields, so every turn advertising that tool fails.
+/// required fields or nests too deeply, so every turn advertising that tool
+/// fails.
 #[test]
-fn no_tool_schema_has_a_ref_loop_of_required_fields() {
+fn every_tool_schema_is_one_gemini_accepts() {
     let mut schemas = Vec::new();
     for tools in [
         tools_for(AiHost::Chat),
@@ -120,6 +121,11 @@ fn no_tool_schema_has_a_ref_loop_of_required_fields() {
             ai_toolset::schema::required_ref_loop(schema.as_value()),
             None,
             "{name}"
+        );
+        let depth = ai_toolset::schema::nesting_depth(schema.as_value());
+        assert!(
+            depth <= ai_toolset::schema::GEMINI_MAX_SCHEMA_DEPTH,
+            "{name} nests {depth} levels"
         );
     }
 }

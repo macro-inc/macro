@@ -24,6 +24,10 @@ export const DEFAULT_ASIDE_LAYOUT: AsideLayout = {
 };
 
 export type MainLayout = {
+  /**
+   * Width Main holds beside an inline detail, which takes the rest of the
+   * shell. A drag moves it; feed `onWidthChangeEnd` back here to keep it.
+   */
   width?: number;
   min: number;
   max?: number;

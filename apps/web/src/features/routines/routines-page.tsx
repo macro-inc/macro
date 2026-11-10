@@ -6,19 +6,21 @@ import { useHasPaidAccess } from '@core/auth/license';
 import { defaultModelForPlan } from '@core/component/AI/constant';
 import { toast } from '@core/component/Toast/Toast';
 import {
+  enableRoutineCodeSteps,
   enableRoutineConditions,
   enableRoutineStarterTemplates,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { Show, Suspense } from 'solid-js';
+import { useRoutinesDiscover } from '../routine-suggestions/routine-suggestions';
 import { getErrorMessage } from './core/routine-draft';
 import {
   featuredTemplates,
   newRoutineDraft,
   type RoutineTemplate,
 } from './core/routine-templates';
+import { useRoutineCatalog } from './queries/catalog';
 import { createRoutineListSource } from './queries/routine-sources';
-import { useStarterSteps } from './queries/starters';
 import { RoutineDetail } from './routine-detail';
 import { startRoutineDraft } from './routine-draft-start';
 import { routineContent, routineIdFromContent } from './routine-navigation';
@@ -54,7 +56,9 @@ function RoutinesContent() {
   const decisions = useFeatureFlag(enableRoutineConditions);
   const starterTemplates = useFeatureFlag(enableRoutineStarterTemplates);
   const hasPaidAccess = useHasPaidAccess();
-  const starters = useStarterSteps();
+  const codeSteps = useFeatureFlag(enableRoutineCodeSteps);
+  const catalog = useRoutineCatalog();
+  const discover = useRoutinesDiscover();
   /** New routine: describe it, pick a template, or start fresh. */
   function create() {
     layout.popoverSplit({
@@ -68,7 +72,7 @@ function RoutinesContent() {
     startRoutineDraft(
       newRoutineDraft(template, {
         defaultModel: defaultModelForPlan(hasPaidAccess()),
-        starters: starters(),
+        codeSteps: codeSteps().enabled,
       })
     );
     open('new');
@@ -86,10 +90,11 @@ function RoutinesContent() {
           onOpen={(id) => open(id)}
           templates={
             starterTemplates().enabled
-              ? featuredTemplates(decisions().enabled)
+              ? featuredTemplates(catalog(), decisions().enabled)
               : []
           }
           onTemplate={startFrom}
+          discover={discover()}
         />
       }
     >

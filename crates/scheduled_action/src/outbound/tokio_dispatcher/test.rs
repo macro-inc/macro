@@ -29,6 +29,7 @@ fn only_enabled_cron_actions_get_a_timer() {
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
         appearance: model_entity::EntityAppearance::default(),
+        suggestion_id: None,
         description: String::new(),
     };
     assert!(action_sleep(id, &action, 0).is_some());

@@ -18,7 +18,7 @@ use model_owner::{CreationPrincipal, Owner};
 use tokio::sync::mpsc::Sender;
 
 use super::appearance::ChangeAppearance;
-use super::code_check::{CodeCheckError, StarterRoutine, checked_task, named_steps, same_task};
+use super::code_check::{CodeCheckError, checked_task, named_steps, same_task};
 use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades};
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
@@ -30,7 +30,7 @@ use super::models::{
 use super::ports::{
     CodeUpgrades, DraftHandBacks, NoRoutineCode, RequestSessions, RoutineCode,
     ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, StepProblems,
-    TaskTargetValidator,
+    SuggestionOrigins, TaskTargetValidator,
 };
 use super::target_validation::{ModelOnlyTargets, require_explicit_selection};
 
@@ -60,6 +60,8 @@ pub struct ScheduledActionServiceImpl<
     upgrades: Arc<Upgrades>,
     /// Where a routine draft's session hands its check back.
     drafts: Option<DraftChecks>,
+    /// What a suggestion a routine is saved from was, for its log.
+    origins: Option<Arc<dyn SuggestionOrigins>>,
 }
 
 /// What keeps a draft session's check as its answer.
@@ -107,6 +109,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             code: Arc::new(NoRoutineCode),
             upgrades: Arc::new(NoCodeUpgrades),
             drafts: None,
+            origins: None,
         }
     }
 }
@@ -130,6 +133,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
             code: self.code,
             upgrades: self.upgrades,
             drafts: self.drafts,
+            origins: self.origins,
         }
     }
 
@@ -150,6 +154,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
             code: self.code,
             upgrades: self.upgrades,
             drafts: self.drafts,
+            origins: self.origins,
         }
     }
 
@@ -172,6 +177,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
             code,
             upgrades,
             drafts: self.drafts,
+            origins: self.origins,
         }
     }
 
@@ -186,6 +192,12 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
             hand_backs,
             sessions,
         });
+        self
+    }
+
+    /// Log what suggestion a routine is saved from, found through `origins`.
+    pub fn with_suggestion_origins(mut self, origins: Arc<dyn SuggestionOrigins>) -> Self {
+        self.origins = Some(origins);
         self
     }
 
@@ -241,6 +253,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         input: ActionConfiguration,
         template_id: Option<Uuid>,
         appearance: EntityAppearance,
+        suggestion_id: Option<Uuid>,
     ) -> Result<ScheduledAction>
     where
         Targets: TaskTargetValidator,
@@ -286,6 +299,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
                 claimed: None,
                 template_id,
                 appearance,
+                suggestion_id,
                 description,
             })
             .await?;
@@ -677,7 +691,7 @@ where
         principal: &CreationPrincipal,
         input: ActionConfiguration,
     ) -> Result<ScheduledAction> {
-        self.create(principal, input, None, EntityAppearance::default())
+        self.create(principal, input, None, EntityAppearance::default(), None)
             .await
     }
 
@@ -715,8 +729,45 @@ where
         template_id: Uuid,
         appearance: EntityAppearance,
     ) -> Result<ScheduledAction> {
-        self.create(principal, input, Some(template_id), appearance)
+        self.create(principal, input, Some(template_id), appearance, None)
             .await
+    }
+
+    async fn create_action_from_suggestion(
+        &self,
+        principal: &CreationPrincipal,
+        input: ActionConfiguration,
+        suggestion_id: Uuid,
+    ) -> Result<ScheduledAction> {
+        let created = self
+            .create(
+                principal,
+                input,
+                None,
+                EntityAppearance::default(),
+                Some(suggestion_id),
+            )
+            .await?;
+        // Accepts by who suggested, kind and surface, for the suggestions
+        // dashboard. A failed lookup only leaves those fields out.
+        let origin = match (&self.origins, principal.owner().as_user()) {
+            (Some(origins), Some(owner)) => origins
+                .origin(owner, suggestion_id)
+                .await
+                .inspect_err(|error| tracing::warn!(error = ?error, "could not read the suggestion a routine was saved from"))
+                .ok()
+                .flatten(),
+            _ => None,
+        };
+        tracing::info!(
+            event = "routine_suggestions.saved",
+            routine.suggestion.id = %suggestion_id,
+            from = origin.map(|origin| origin.from),
+            kind = origin.map(|origin| origin.kind),
+            surface = origin.and_then(|origin| origin.surface),
+            enabled = created.enabled,
+        );
+        Ok(created)
     }
 
     async fn get_actions(
@@ -848,8 +899,8 @@ where
         self.repo.get_execution_records(&id).await
     }
 
-    fn code_starters(&self) -> Vec<StarterRoutine> {
-        super::code_check::starters(self.code.as_ref())
+    fn catalog(&self, timezone: chrono_tz::Tz) -> Vec<super::catalog::CatalogEntry> {
+        super::catalog::catalog(self.code.as_ref(), timezone)
     }
 
     async fn get_code_upgrades(

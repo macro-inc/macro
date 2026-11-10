@@ -39,6 +39,7 @@ jobs:
             - 'crates/database_sql/**'
             - 'crates/filter_ast/**'
             - 'crates/item_filters/**'
+            - 'crates/natural_time/**'
             - 'static_assets/schema.graphql'
             - 'Cargo.toml'
             - 'Cargo.lock'
@@ -65,6 +66,7 @@ jobs:
             - 'crates/database_sql/**'
             - 'crates/filter_ast/**'
             - 'crates/item_filters/**'
+            - 'crates/natural_time/**'
             - 'static_assets/schema.graphql'
             - 'Cargo.toml'
             - 'Cargo.lock'
@@ -670,6 +672,12 @@ jobs:
         fi
     - name: Build agent-fold WASM for tests
       run: just build-agent-fold-wasm
+      env:
+        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+      timeout-minutes: 15
+      working-directory: apps/web
+    - name: Build natural-time WASM for tests
+      run: just build-natural-time-wasm
       env:
         WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
       timeout-minutes: 15

@@ -82,6 +82,7 @@ struct ActionRow {
     run_visibility: String,
     template_id: Option<Uuid>,
     appearance: Option<sqlx::types::Json<EntityAppearance>>,
+    suggestion_id: Option<Uuid>,
     description: String,
 }
 
@@ -126,6 +127,7 @@ impl TryFrom<ActionRow> for ScheduledAction {
             event_activated_at: row.event_activated_at,
             template_id: row.template_id,
             appearance: row.appearance.map(|value| value.0).unwrap_or_default(),
+            suggestion_id: row.suggestion_id,
             description: row.description,
         })
     }
@@ -193,12 +195,12 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             INSERT INTO scheduled_action
                 (id, owner, name, schedule, kind, timezone, task, next_run_at, enabled,
                  trigger_type, event_filters, configuration_revision, event_activated_at, trigger_config,
-                 run_visibility, template_id, appearance, description)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                 run_visibility, template_id, appearance, suggestion_id, description)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
             RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                       updated_at, next_run_at, enabled, trigger_type, event_filters,
                       configuration_revision, event_activated_at, trigger_config, run_visibility, template_id,
-                      appearance AS "appearance: _", description
+                      appearance AS "appearance: _", suggestion_id, description
             "#,
             id,
             owner,
@@ -217,6 +219,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             <&str>::from(action.run_visibility),
             action.template_id,
             sqlx::types::Json(&action.appearance) as _,
+            action.suggestion_id,
             action.description,
         )
         .fetch_one(&mut *tx)
@@ -253,7 +256,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", description
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id, description
             FROM scheduled_action
             WHERE owner = $1
             "#,
@@ -270,7 +273,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters, trigger_config,
-                   configuration_revision, event_activated_at, run_visibility, template_id, appearance AS "appearance: _", description
+                   configuration_revision, event_activated_at, run_visibility, template_id, appearance AS "appearance: _", suggestion_id, description
             FROM scheduled_action
             WHERE id = ANY($1)
             "#,
@@ -287,7 +290,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", description
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id, description
             FROM scheduled_action
             WHERE id = $1
             "#,
@@ -306,7 +309,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
             r#"
             SELECT id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                    updated_at, next_run_at, enabled, trigger_type, event_filters,
-                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", description
+                   configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id, description
             FROM scheduled_action
             WHERE enabled AND trigger_type IN ('cron', 'once', 'multiple') AND next_run_at IS NOT NULL
               AND (claimed IS NULL OR claimed < $1)
@@ -363,7 +366,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
               )
             RETURNING id, owner, name, schedule, kind, timezone, task, claimed, created_at,
                       updated_at, next_run_at, enabled, trigger_type, event_filters,
-                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", description
+                      configuration_revision, event_activated_at, trigger_config, run_visibility, template_id, appearance AS "appearance: _", suggestion_id, description
             "#,
             action.name,
             trigger.schedule,

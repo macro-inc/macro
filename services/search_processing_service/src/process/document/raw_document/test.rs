@@ -393,6 +393,154 @@ async fn an_unreadable_pdf_is_indexed_by_name_only(pool: sqlx::PgPool) {
     assert_eq!(bulk[1]["document_relation"], "document");
 }
 
+/// Indexes a `text_documents` fixture document whose stored content is
+/// `object`, and returns the storage and search requests made, with each
+/// `_bulk` body parsed into its lines.
+async fn index_text_file(
+    pool: &sqlx::PgPool,
+    document_id: &str,
+    file_type: FileType,
+    object: &'static [u8],
+) -> (Vec<String>, Vec<serde_json::Value>) {
+    let (endpoint, requests) = fake_storage(object).await;
+    let message = SearchExtractorMessage {
+        user_id: String::new(),
+        document_id: document_id.to_string(),
+        file_type,
+        document_version_id: None,
+        index_override: None,
+    };
+
+    update_search_with_raw_document(
+        &fake_opensearch(&endpoint),
+        pool,
+        &fake_s3(&endpoint),
+        BUCKET,
+        &message,
+    )
+    .await
+    .expect("a text file is indexed without an error to retry");
+
+    let requests = requests.lock().unwrap().clone();
+    let lines = requests.iter().map(|(line, _)| line.clone()).collect();
+    let bulk = requests
+        .iter()
+        .filter(|(line, _)| line.ends_with("/_bulk"))
+        .flat_map(|(_, body)| body.lines().map(|line| serde_json::from_str(line).unwrap()))
+        .collect();
+    (lines, bulk)
+}
+
+fn indexed_content(bulk: &[serde_json::Value]) -> Vec<&str> {
+    bulk.iter()
+        .filter_map(|line| line["content"].as_str())
+        .filter(|content| !content.is_empty())
+        .collect()
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn html_in_a_legacy_charset_is_indexed_by_its_text(pool: sqlx::PgPool) {
+    let (lines, bulk) = index_text_file(
+        &pool,
+        "htm-document",
+        FileType::Htm,
+        b"<meta charset=windows-1252><p>Caf\xe9 \x93menu\x94</p>",
+    )
+    .await;
+
+    assert_eq!(lines.len(), 2, "{lines:?}");
+    assert!(
+        lines[0].starts_with(&format!("GET /{BUCKET}/")),
+        "{lines:?}"
+    );
+    assert_eq!(lines[1], "POST /documents/_bulk");
+    assert_eq!(
+        indexed_content(&bulk),
+        ["<meta charset=windows-1252><p>Café \u{201c}menu\u{201d}</p>"]
+    );
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn html_with_invalid_utf8_is_indexed_instead_of_failing(pool: sqlx::PgPool) {
+    let (lines, bulk) = index_text_file(
+        &pool,
+        "htm-document",
+        FileType::Htm,
+        b"<html><title>Quarterly report\x92s summary</title></html>",
+    )
+    .await;
+
+    assert_eq!(lines[1..], ["POST /documents/_bulk"], "{lines:?}");
+    assert_eq!(
+        indexed_content(&bulk),
+        ["<html><title>Quarterly report\u{fffd}s summary</title></html>"]
+    );
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn valid_utf8_html_is_indexed_unchanged(pool: sqlx::PgPool) {
+    let html = "<meta charset=\"utf-8\"><p>naïve café — 東京</p>";
+
+    let (lines, bulk) =
+        index_text_file(&pool, "html-document", FileType::Html, html.as_bytes()).await;
+
+    assert_eq!(lines[1..], ["POST /documents/_bulk"], "{lines:?}");
+    assert_eq!(indexed_content(&bulk), [html]);
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn a_binary_file_named_as_html_is_indexed_by_name_only(pool: sqlx::PgPool) {
+    let (lines, bulk) = index_text_file(
+        &pool,
+        "htm-document",
+        FileType::Htm,
+        b"\x1f\x8b\x08\x00\xd4\xe1\xfa\xff\x80\x81\xfe\xb0\xc0\xf5",
+    )
+    .await;
+
+    assert_eq!(
+        lines[1..],
+        ["POST /documents/_delete_by_query", "POST /documents/_bulk"],
+        "{lines:?}"
+    );
+    assert_eq!(bulk.len(), 2, "only the parent doc is written: {bulk:?}");
+    assert_eq!(bulk[1]["document_name"], "saved page");
+    assert!(indexed_content(&bulk).is_empty(), "{bulk:?}");
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("text_documents"))
+)]
+async fn legacy_markdown_with_invalid_utf8_is_indexed(pool: sqlx::PgPool) {
+    let (lines, bulk) = index_text_file(
+        &pool,
+        "md-document",
+        FileType::Md,
+        b"{\"root\":{\"children\":[{\"$\":{\"id\":\"n1\",\"searchText\":\"Caf\xe9 notes\"}}]}}",
+    )
+    .await;
+
+    assert_eq!(
+        lines[1..],
+        ["POST /documents/_delete_by_query", "POST /documents/_bulk"],
+        "{lines:?}"
+    );
+    assert_eq!(indexed_content(&bulk), ["Caf\u{fffd} notes"]);
+}
+
 #[tokio::test]
 async fn test_unreadable_designs_are_read_errors() {
     for file_type in [FileType::Psd, FileType::Psb, FileType::Ai, FileType::Md] {
