@@ -93,6 +93,25 @@ Smoke test: `incus launch macro-box t --vm --profile macro-box`, then
   mount) and read `systemd-analyze critical-chain macrod-enroll.service`.
   Docker skips networkd and wait-online, so VM gains need an Incus host.
 
+### Direct kernel boot (not done)
+
+An Incus VM boots ~15 s slower than the Docker image; besides the serial
+console and wait-online (handled above), it pays for OVMF, shim, GRUB and a
+generic initramfs before userspace. Options, best first:
+
+- A UKI (kernel + virtio-only initrd + command line) as
+  `\EFI\BOOT\BOOTX64.EFI`: OVMF runs it directly, skipping shim and GRUB,
+  with no host coupling. Secure Boot is off, so it needs no signing. Guest
+  `apt` kernel upgrades stop taking effect; the image is rebuilt by Nix anyway.
+- `raw.qemu` `-kernel/-initrd/-append`: skips the ESP but still runs OVMF,
+  and puts per-image kernel files on every host; Incus treats `raw.qemu` as
+  unsafe configuration.
+- QEMU `microvm`: Incus only runs q35 + OVMF, so this means leaving Incus.
+
+Next step: on runtime-dev-1, time `incus start` to `macrod-enroll` for the
+current image, a UKI with `MODULES=dep`, and `raw.qemu` direct boot, then
+build the UKI with `ukify` in `_build.nix` if it wins.
+
 ## Checks
 
 - `nix build .#macro-box-claude-agent-acp` (and `nix flake check`, which runs
