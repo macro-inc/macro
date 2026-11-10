@@ -1,0 +1,43 @@
+[package]
+edition = "2024"
+name = "notification_routing"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:model-error-response",
+  "dep:utoipa",
+  "macro_user_id/schema",
+  "notification/schema",
+]
+postgres = ["dep:sqlx", "dep:system_properties"]
+
+[dependencies]
+axum = { workspace = true, optional = true }
+chrono = { workspace = true, features = ["serde"] }
+feature_flags = { path = "../feature_flags" }
+futures = { workspace = true }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+model-error-response = { path = "../model-error-response", optional = true }
+model_notifications = { path = "../model_notifications" }
+notification = { path = "../notification", default-features = false }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, optional = true }
+system_properties = { path = "../system_properties", optional = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true, features = ["serde", "v7"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

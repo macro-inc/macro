@@ -135,6 +135,7 @@ members = [
   "crates/mcp_toolset",
   "crates/natural_time",
   "crates/notification_inbox",
+  "crates/notification_routing",
   "crates/notification_state",
   "crates/pipedream_mcp",
   "crates/granola_sync",

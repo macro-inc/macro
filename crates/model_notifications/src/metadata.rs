@@ -502,7 +502,7 @@ impl NotificationTitle for GithubPrReview {
     }
 }
 
-#[derive(Debug, Clone, Copy, ToSchema, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ToSchema, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ChannelType {
     #[serde(alias = "Public", alias = "public")]

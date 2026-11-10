@@ -71,6 +71,11 @@ In `crates/model_notifications/src/lib.rs`:
   generated web files.
 - Add arms to both `format_title` and `format_body` in `impl NotificationTitle for NotifEvent`.
 
+The build then stops in `Conversation::of`
+(`crates/notification_routing/src/domain/evaluate.rs`) until you say whether a
+person's notification stacks can capture the kind. Only conversation does: a
+message, mention, reply, reaction or comment. Everything else returns `None`.
+
 Then decide two lists in other crates; nothing will force you to:
 
 - **Blockable:** add `<Name>Metadata::TYPE_NAME` to `BLOCKABLE_NOTIFICATIONS` in
