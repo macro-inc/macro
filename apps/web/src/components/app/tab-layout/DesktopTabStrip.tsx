@@ -72,6 +72,10 @@ function TabItem(props: { tabManager: TabManager; tab: DesktopTab }) {
   );
 }
 
+function tabListBasis(count: number) {
+  return `calc(${count} * 18rem + ${count - 1} * 0.25rem)`;
+}
+
 /**
  * The browser-style tab strip in the title bar's center slot. Renders nothing
  * until the tab manager exists (desktop tabs enabled and a user signed in).
@@ -87,7 +91,10 @@ export function DesktopTabStrip() {
           <div
             role="tablist"
             aria-label={t('tabs.tablist')}
-            class="scrollbar-hidden flex min-w-0 items-center gap-1 overflow-x-auto"
+            class="scrollbar-hidden flex min-w-0 flex-initial items-center gap-1 overflow-x-auto"
+            // Size the list from the tabs' 18rem basis plus gap-1, not from
+            // their titles, so tab widths don't change as a title changes.
+            style={{ 'flex-basis': tabListBasis(tabManager().tabs().length) }}
           >
             <For each={tabManager().tabs()}>
               {(tab) => <TabItem tabManager={tabManager()} tab={tab} />}

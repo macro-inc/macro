@@ -189,7 +189,7 @@ where
         server_name: &str,
     ) -> anyhow::Result<String> {
         let mut auth_manager = AuthorizationManager::new(server_url).await?;
-        let metadata = auth_manager.discover_metadata().await?;
+        let metadata = auth_manager.resolve_metadata().await?.metadata;
         let supports_client_metadata = supports_client_id_metadata(&metadata);
         auth_manager.set_metadata(metadata);
 
@@ -241,7 +241,7 @@ where
             .ok_or_else(|| anyhow::anyhow!("no pending authorization for state"))?;
 
         let mut auth_manager = AuthorizationManager::new(&pending.server_url).await?;
-        let metadata = auth_manager.discover_metadata().await?;
+        let metadata = auth_manager.resolve_metadata().await?.metadata;
         auth_manager.set_metadata(metadata);
 
         let pkce_state = StoredAuthorizationState::new(

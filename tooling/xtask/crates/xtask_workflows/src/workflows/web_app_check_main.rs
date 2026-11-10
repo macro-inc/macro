@@ -280,6 +280,7 @@ fn test() -> Job {
         .add_step(steps::setup_reqs_web("Setup", false))
         .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(build_agent_fold_for_tests())
+        .add_step(build_natural_time_for_tests())
         .add_step(run_tests())
         .add_step(steps::teardown_nix())
 }
@@ -596,6 +597,14 @@ fn run_collaboration_biome() -> Step<Run> {
 fn build_agent_fold_for_tests() -> Step<Run> {
     Step::new("Build agent-fold WASM for tests")
         .run("just build-agent-fold-wasm")
+        .add_env(("WASM_PKG_CACHE_DIR", vars::WASM_PKG_CACHE_DIR))
+        .working_directory(xtask_paths::repo_dir!("apps/web"))
+        .timeout_minutes(15u32)
+}
+
+fn build_natural_time_for_tests() -> Step<Run> {
+    Step::new("Build natural-time WASM for tests")
+        .run("just build-natural-time-wasm")
         .add_env(("WASM_PKG_CACHE_DIR", vars::WASM_PKG_CACHE_DIR))
         .working_directory(xtask_paths::repo_dir!("apps/web"))
         .timeout_minutes(15u32)

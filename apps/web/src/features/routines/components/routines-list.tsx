@@ -30,6 +30,8 @@ export function RoutinesList(props: {
   onTemplate?: (template: RoutineTemplate) => void;
   /** Pinned at the top of the list, above the templates: the tutorial row. */
   listStart?: JSX.Element;
+  /** Scrolls with the list, below it, e.g. suggested routines. */
+  footer?: JSX.Element;
 }) {
   const [search, setSearch] = createSignal('');
   const [show, setShow] = createSignal<'all' | 'on'>('all');
@@ -245,6 +247,7 @@ export function RoutinesList(props: {
             </div>
           </Show>
         </div>
+        {props.footer}
       </div>
     </div>
   );
