@@ -24,6 +24,7 @@ import {
 import { TransitionGroup } from 'solid-transition-group';
 import { useAgentActivitySource } from '../context/agent-activity-source';
 import type { AgentActivityItem, AgentActivityStep } from '../core/fold-rows';
+import { stepLabelKey } from '../core/step-label';
 import { createPanelState } from '../primitives/create-panel-state';
 
 const PROPERTY_ENTITY_TYPES: Partial<
@@ -343,8 +344,7 @@ function AgentActivityItemRow(props: {
 }
 
 function StepLabel(props: { step: AgentActivityStep }) {
-  const verb = () =>
-    props.step.verb.charAt(0).toUpperCase() + props.step.verb.slice(1);
+  const verb = () => t(stepLabelKey(props.step.verb));
   return (
     <>
       {props.step.rows.length > 1
