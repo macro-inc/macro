@@ -58,9 +58,9 @@ const RUNBOOK = 'docs/runbooks/agent-harness-runtimes.md';
 const QUERIES = {
   dials:
     'sum:macro.agent_harness.runtime_reattach{env:prod} by {harness}.as_count()',
-  sessions: 'sum:macro.agent_harness.runtime_reattach.sessions{env:prod} by {harness}',
-  starvation:
-    'sum:macro.agent_harness.runtime_starvation{env:prod}.as_count()',
+  sessions:
+    'sum:macro.agent_harness.runtime_reattach.sessions{env:prod} by {harness}',
+  starvation: 'sum:macro.agent_harness.runtime_starvation{env:prod}.as_count()',
 };
 
 const TITLES = {
@@ -79,7 +79,11 @@ const lines = (
   q: string,
   displayType = 'line'
 ): datadog.types.input.DashboardWidget => ({
-  timeseriesDefinition: { title, showLegend: true, requests: [{ q, displayType }] },
+  timeseriesDefinition: {
+    title,
+    showLegend: true,
+    requests: [{ q, displayType }],
+  },
 });
 
 const ENV_VALUE = 'env:$env.value';
