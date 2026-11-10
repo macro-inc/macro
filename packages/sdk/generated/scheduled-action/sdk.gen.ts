@@ -105,7 +105,9 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * The caller acts on a proposed idea.
+     * The caller acts on an idea: a background prompt idea is taken on; any
+     * other is done once they act on it (open its item, the composer, the
+     * routine), and shows in the feed's `done`.
      */
     public acceptIdea<ThrowOnError extends boolean = false>(options: Options<AcceptIdeaData, ThrowOnError>): RequestResult<AcceptIdeaResponses, AcceptIdeaErrors, ThrowOnError> {
         return (options.client ?? this.client).post<AcceptIdeaResponses, AcceptIdeaErrors, ThrowOnError>({ url: '/ideas/{id}/accept', ...options });

@@ -142,7 +142,7 @@ impl RoutineSuggestionApi for FakeRoutines {
         Ok(format!("routines {} {surfaces:?}", trigger.as_ref()))
     }
 
-    async fn kept(&self, session: Uuid) -> anyhow::Result<u32> {
+    async fn kept(&self, _: &MacroUserIdStr<'static>, session: Uuid) -> anyhow::Result<u32> {
         Ok(self.0.of(session))
     }
 
@@ -206,7 +206,7 @@ impl IdeaApi for FakeIdeas {
         format!("ideas {}", trigger.as_ref())
     }
 
-    async fn kept(&self, session: Uuid) -> Result<u32, IdeaError> {
+    async fn kept(&self, _: Uuid, session: Uuid) -> Result<u32, IdeaError> {
         Ok(self.0.of(session))
     }
 
@@ -263,6 +263,31 @@ struct FakeRepo {
     /// Whether a routines session ran this week.
     routines_this_week: std::sync::atomic::AtomicBool,
     forgotten: Mutex<usize>,
+    rescheduled: Mutex<usize>,
+}
+
+/// A zone that is in its night now, so a nightly tick starts its people.
+fn zone_in_its_night() -> chrono_tz::Tz {
+    *chrono_tz::TZ_VARIANTS
+        .iter()
+        .find(|zone| night::in_night(**zone, Utc::now()))
+        .unwrap()
+}
+
+/// A zone that isn't.
+fn zone_out_of_its_night() -> chrono_tz::Tz {
+    *chrono_tz::TZ_VARIANTS
+        .iter()
+        .find(|zone| !night::in_night(**zone, Utc::now()))
+        .unwrap()
+}
+
+fn member(timezone: chrono_tz::Tz) -> AudienceMember {
+    AudienceMember {
+        user: user(),
+        timezone,
+        seen_at: Utc::now(),
+    }
 }
 
 impl GenerationRepo for FakeRepo {
@@ -350,8 +375,34 @@ impl GenerationRepo for FakeRepo {
         _: &MacroUserIdStr<'_>,
         timezone: &str,
         _: DateTime<Utc>,
+        _: DateTime<Utc>,
     ) -> Result<(), Self::Err> {
         self.seen.lock().unwrap().push(timezone.to_owned());
+        Ok(())
+    }
+
+    async fn account(&self, _: &MacroUserIdStr<'_>) -> Result<Option<Uuid>, Self::Err> {
+        Ok(None)
+    }
+
+    async fn prune_changes(&self, _: DateTime<Utc>, _: u16) -> Result<u64, Self::Err> {
+        Ok(0)
+    }
+
+    async fn traced(&self, _: Uuid, _: &str) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    async fn reschedule(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        _: DateTime<Utc>,
+    ) -> Result<(), Self::Err> {
+        *self.rescheduled.lock().unwrap() += 1;
+        self.due
+            .lock()
+            .unwrap()
+            .retain(|member| member.user != *user);
         Ok(())
     }
 
@@ -365,8 +416,13 @@ impl GenerationRepo for FakeRepo {
             .load(std::sync::atomic::Ordering::SeqCst))
     }
 
-    async fn forget(&self, _: &MacroUserIdStr<'_>) -> Result<(), Self::Err> {
+    async fn forget(&self, user: &MacroUserIdStr<'_>) -> Result<(), Self::Err> {
         *self.forgotten.lock().unwrap() += 1;
+        // The first of theirs: the tests' people share an id.
+        let mut due = self.due.lock().unwrap();
+        if let Some(index) = due.iter().position(|member| member.user == *user) {
+            due.remove(index);
+        }
         Ok(())
     }
 
@@ -374,12 +430,8 @@ impl GenerationRepo for FakeRepo {
         &self,
         _: DateTime<Utc>,
         _: DateTime<Utc>,
-        _: DateTime<Utc>,
-        _: DateTime<Utc>,
-        night: (u8, u8),
         limit: u16,
     ) -> Result<Vec<AudienceMember>, Self::Err> {
-        assert_eq!(night, NIGHT);
         let due = self.due.lock().unwrap();
         Ok(due.iter().take(usize::from(limit)).cloned().collect())
     }
@@ -569,10 +621,7 @@ async fn an_onboarding_routines_session_that_kept_nothing_is_retried_once_a_nigh
     assert_eq!(h.sessions.prepared.lock().unwrap().len(), 1 + groups * 2);
 
     let h = harness(true, true, second_try, false);
-    h.repo.due.lock().unwrap().push(AudienceMember {
-        user: user(),
-        timezone: chrono_tz::Asia::Tokyo,
-    });
+    h.repo.due.lock().unwrap().push(member(zone_in_its_night()));
     assert_eq!(h.service.nightly().await.unwrap(), 1);
     h.service.wait().await;
     // At night one routines session covers every surface.
@@ -605,14 +654,42 @@ async fn a_generation_whose_prompts_may_not_have_arrived_is_recorded_failed() {
 async fn nightly_starts_at_most_as_many_runs_as_the_process_has_room_for() {
     let h = harness(true, false, |_, _| 1, false);
     for _ in 0..5 {
-        h.repo.due.lock().unwrap().push(AudienceMember {
-            user: user(),
-            timezone: chrono_tz::UTC,
-        });
+        h.repo.due.lock().unwrap().push(member(zone_in_its_night()));
     }
     // The fake lets one run at a time per person, so one starts.
     assert_eq!(h.service.nightly().await.unwrap(), 1);
     h.service.wait().await;
+}
+
+/// People dropped (inactive or unpaid) or whose night ended don't use up a
+/// tick: it keeps reading who is due, starts those in their night, and moves
+/// the rest to their next night.
+#[tokio::test]
+async fn dropped_and_passed_over_people_dont_hold_up_a_nightly_tick() {
+    let h = harness(true, false, |_, _| 1, false);
+    let inactive = AudienceMember {
+        seen_at: Utc::now() - ACTIVE_WITHIN - chrono::TimeDelta::hours(1),
+        ..member(zone_in_its_night())
+    };
+    for _ in 0..(MAX_NIGHTLY_RUNS * 2 + 3) {
+        h.repo.due.lock().unwrap().push(inactive.clone());
+    }
+    h.repo.due.lock().unwrap().push(member(zone_in_its_night()));
+    assert_eq!(h.service.nightly().await.unwrap(), 1);
+    h.service.wait().await;
+    assert_eq!(*h.repo.forgotten.lock().unwrap(), MAX_NIGHTLY_RUNS * 2 + 3);
+    assert_eq!(*h.repo.rescheduled.lock().unwrap(), 1);
+    // Due after their night ended: no run, the next night instead.
+    let h = harness(true, false, |_, _| 1, false);
+    h.repo
+        .due
+        .lock()
+        .unwrap()
+        .push(member(zone_out_of_its_night()));
+    assert_eq!(h.service.nightly().await.unwrap(), 0);
+    assert_eq!(*h.repo.rescheduled.lock().unwrap(), 1);
+    assert_eq!(*h.repo.forgotten.lock().unwrap(), 0);
+    assert!(h.sessions.prepared.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -697,10 +774,7 @@ async fn a_nightly_run_suggests_routines_once_a_week() {
 async fn only_paid_plans_get_nightly_runs() {
     let h = harness(true, false, |_, _| 1, false);
     h.plans.0.store(false, std::sync::atomic::Ordering::SeqCst);
-    h.repo.due.lock().unwrap().push(AudienceMember {
-        user: user(),
-        timezone: chrono_tz::UTC,
-    });
+    h.repo.due.lock().unwrap().push(member(zone_in_its_night()));
     assert_eq!(h.service.nightly().await.unwrap(), 0);
     assert_eq!(*h.repo.forgotten.lock().unwrap(), 1);
     assert!(h.onboard().await.unwrap());

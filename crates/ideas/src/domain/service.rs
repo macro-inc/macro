@@ -45,6 +45,11 @@ pub const DONE_WITHIN: chrono::TimeDelta = chrono::TimeDelta::hours(24);
 /// Ideas whose items the feed checks at once.
 const ACCESS_CHECKS_AT_ONCE: usize = 8;
 
+/// How many of the person's closed ideas a session's review shows, most
+/// recently closed first: enough not to suggest again what they just turned
+/// down. Older ones still count: proposing one comes back to the same row.
+const REVIEW_CLOSED: u32 = 60;
+
 const LIMITS: Limits = Limits {
     open: OPEN_LIMIT,
     new_per_generation: NEW_PER_GENERATION,
@@ -273,6 +278,9 @@ where
         let span = tracing::Span::current();
         span.record("agent.session.id", session.session.to_string());
         span.record("suggestion.generation.id", session.generation.to_string());
+        if let Some(trace) = &session.trace_id {
+            span.record("suggestion.generation.trace_id", trace.as_str());
+        }
         Ok(session)
     }
 
@@ -284,17 +292,33 @@ where
         problems: &mut Vec<String>,
     ) -> Result<(), IdeaError> {
         for target in targets {
-            let viewable = self
+            let mut viewable = self
                 .access
                 .can_view(user, target)
                 .await
                 .map_err(IdeaError::internal)?;
+            if let Some(part) = target.part_id.as_deref().filter(|_| viewable) {
+                viewable = self
+                    .access
+                    .is_part_of(target, part)
+                    .await
+                    .map_err(IdeaError::internal)?;
+            }
             if !viewable {
-                problems.push(format!(
-                    "the user can't open {} `{}`; an idea is only about items they can open",
-                    target.entity_type.as_ref(),
-                    target.entity_id
-                ));
+                let item = target.entity_type.as_ref();
+                problems.push(match &target.part_id {
+                    Some(part) => format!(
+                        "the user can't open {item} `{}`, or `{part}` isn't one of its parts \
+                         (a message of a channel or email thread); an idea is only about \
+                         items they can open",
+                        target.entity_id
+                    ),
+                    None => format!(
+                        "the user can't open {item} `{}`; an idea is only about items they \
+                         can open",
+                        target.entity_id
+                    ),
+                });
             }
         }
         Ok(())
@@ -383,15 +407,9 @@ where
         let done_since = Utc::now() - DONE_WITHIN;
         let shown: Vec<Idea> = self
             .repo
-            .ideas(user)
+            .shown(user, done_since)
             .await
-            .map_err(IdeaError::internal)?
-            .into_iter()
-            .filter(|idea| {
-                idea.state.is_open()
-                    || (idea.state == IdeaState::Done && idea.state_changed_at >= done_since)
-            })
-            .collect();
+            .map_err(IdeaError::internal)?;
         let before = shown.len();
         // Up to 30 ideas of up to 5 items each: check a few at a time.
         let viewable: Vec<Idea> = futures::stream::iter(shown)
@@ -424,9 +442,9 @@ where
         prompt::brief(trigger, timezone.name(), Utc::now(), &self.sdk_reference)
     }
 
-    async fn kept(&self, session: Uuid) -> Result<u32, IdeaError> {
+    async fn kept(&self, generation: Uuid, session: Uuid) -> Result<u32, IdeaError> {
         self.repo
-            .kept_by(session)
+            .kept_by(generation, session)
             .await
             .map_err(IdeaError::internal)
     }
@@ -450,22 +468,23 @@ where
                 .start_run(user, &idea, &run_prompt(prompt, sends.as_deref()))
                 .await;
         }
+        // Anything else the person acts on themself (opens the item, the
+        // composer, the routine) is done when they do; accepting a done idea
+        // again changes nothing.
+        if idea.state == IdeaState::Done {
+            return Ok(());
+        }
+        let (from, to): (&[IdeaState], IdeaState) =
+            (&[IdeaState::Proposed, IdeaState::Accepted], IdeaState::Done);
         let moved = self
             .repo
-            .set_state(
-                user,
-                id,
-                &[IdeaState::Proposed],
-                IdeaState::Accepted,
-                None,
-                Utc::now(),
-            )
+            .set_state(user, id, from, to, None, Utc::now())
             .await
             .map_err(IdeaError::internal)?;
         if !moved {
             return Err(IdeaError::NotFound);
         }
-        tracing::info!(event = "ideas.accepted");
+        tracing::info!(event = "ideas.accepted", done = true);
         Ok(())
     }
 
@@ -610,6 +629,7 @@ where
     #[tracing::instrument(name = "ideas.review", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         ideas.count = tracing::field::Empty,
     ), err)]
     async fn review(
@@ -621,7 +641,7 @@ where
         let (ideas, added) = tokio::try_join!(
             async {
                 self.repo
-                    .ideas(&session.user)
+                    .for_review(&session.user, REVIEW_CLOSED)
                     .await
                     .map_err(IdeaError::internal)
             },
@@ -652,6 +672,7 @@ where
     #[tracing::instrument(name = "ideas.suggest", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         idea.kind = request.kind.as_ref(),
         idea.id = tracing::field::Empty,
         idea.outcome = tracing::field::Empty,
@@ -837,6 +858,7 @@ where
     #[tracing::instrument(name = "ideas.rewrite", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         idea.id = %id,
         idea.outcome = tracing::field::Empty,
         idea.problems = tracing::field::Empty,
@@ -962,6 +984,7 @@ where
     #[tracing::instrument(name = "ideas.retire", skip_all, fields(
         agent.session.id = tracing::field::Empty,
         suggestion.generation.id = tracing::field::Empty,
+        suggestion.generation.trace_id = tracing::field::Empty,
         idea.id = %id,
         idea.outcome = tracing::field::Empty,
         idea.problems = tracing::field::Empty,

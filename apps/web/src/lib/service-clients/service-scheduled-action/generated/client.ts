@@ -372,7 +372,9 @@ export const rewriteIdea = async (
 };
 
 /**
- * @summary The caller acts on a proposed idea.
+ * @summary The caller acts on an idea: a background prompt idea is taken on; any
+other is done once they act on it (open its item, the composer, the
+routine), and shows in the feed's `done`.
  */
 export type acceptIdeaResponse204 = {
   data: void;

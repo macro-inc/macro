@@ -94,7 +94,7 @@ async fn a_session_counts_what_it_kept_and_every_keep_and_retire_is_logged(pool:
     let repo = PgSuggestionRepo::new(pool.clone());
     let a = user(USER_A);
     let session = Uuid::now_v7();
-    assert_eq!(repo.kept_by(session).await.unwrap(), 0);
+    assert_eq!(repo.kept_by(&a, session).await.unwrap(), 0);
     let picked = stored(
         repo.add(&a, session, generation, &catalog("email_tags"), Utc::now())
             .await
@@ -105,7 +105,7 @@ async fn a_session_counts_what_it_kept_and_every_keep_and_retire_is_logged(pool:
             .await
             .unwrap(),
     );
-    assert_eq!(repo.kept_by(session).await.unwrap(), 2);
+    assert_eq!(repo.kept_by(&a, session).await.unwrap(), 2);
 
     assert!(
         repo.retire(
@@ -295,4 +295,36 @@ async fn a_drafted_suggestion_past_the_ideas_limit_keeps_nothing(pool: PgPool) {
         repo.suggestions(&a).await.unwrap().len(),
         usize::try_from(ideas::domain::service::NEW_PER_GENERATION).unwrap()
     );
+}
+
+/// A drafted suggestion with no idea (one the previous release drafted
+/// during a deploy) is still retired and dismissed.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_drafted_suggestion_without_its_idea_still_closes(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let generation = generation(&pool, USER_A).await;
+    let repo = PgSuggestionRepo::new(pool.clone());
+    let a = user(USER_A);
+    let session = Uuid::now_v7();
+    let retired = stored(
+        repo.add(&a, session, generation, &drafted(), Utc::now())
+            .await
+            .unwrap(),
+    );
+    let dismissed = stored(
+        repo.add(&a, session, generation, &drafted(), Utc::now())
+            .await
+            .unwrap(),
+    );
+    sqlx::query("DELETE FROM idea WHERE user_id = $1")
+        .bind(USER_A)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert!(
+        repo.retire(&a, retired, session, generation, "No longer fits", Utc::now())
+            .await
+            .unwrap()
+    );
+    assert!(repo.dismiss(&a, dismissed).await.unwrap());
 }

@@ -45,10 +45,18 @@ pub trait IdeaRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Every idea the person has, in any state.
-    fn ideas(
+    /// The person's open ideas, and those done since `done_since`.
+    fn shown(
         &self,
         user: &MacroUserIdStr<'_>,
+        done_since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Vec<Idea>, Self::Err>> + Send;
+
+    /// The person's open ideas, and the `closed` most recently closed.
+    fn for_review(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        closed: u32,
     ) -> impl Future<Output = Result<Vec<Idea>, Self::Err>> + Send;
 
     /// The person's idea `id`.
@@ -68,8 +76,13 @@ pub trait IdeaRepo: Send + Sync + 'static {
     /// How many ideas generation `generation` added or brought back.
     fn added_in(&self, generation: Uuid) -> impl Future<Output = Result<u32, Self::Err>> + Send;
 
-    /// How many changes session `session` logged.
-    fn kept_by(&self, session: Uuid) -> impl Future<Output = Result<u32, Self::Err>> + Send;
+    /// How many changes session `session` of generation `generation`
+    /// logged.
+    fn kept_by(
+        &self,
+        generation: Uuid,
+        session: Uuid,
+    ) -> impl Future<Output = Result<u32, Self::Err>> + Send;
 
     /// Start run `run` of the person's background prompt idea: one that is
     /// proposed, or accepted with its last run failed. The idea becomes
@@ -175,6 +188,14 @@ pub trait IdeaAccess: Send + Sync + 'static {
         user: &MacroUserIdStr<'_>,
         target: &Target,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Whether `part` is one of `target`'s item's own parts, such as a
+    /// message of its channel. Parts never move, so writes check this once.
+    fn is_part_of(
+        &self,
+        target: &Target,
+        part: &str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
 /// The agent session behind a code-mode request. Object-safe, so one
@@ -272,8 +293,13 @@ pub trait IdeaApi: Send + Sync + 'static {
     /// for a person in `timezone`.
     fn brief(&self, trigger: GenerationTrigger, timezone: chrono_tz::Tz) -> String;
 
-    /// How many changes ideas session `session` made.
-    fn kept(&self, session: Uuid) -> impl Future<Output = Result<u32, IdeaError>> + Send;
+    /// How many changes ideas session `session` of generation `generation`
+    /// made.
+    fn kept(
+        &self,
+        generation: Uuid,
+        session: Uuid,
+    ) -> impl Future<Output = Result<u32, IdeaError>> + Send;
 
     /// Settle the runs whose sessions finished: a finished one makes its
     /// idea done with what it produced. How many it settled.

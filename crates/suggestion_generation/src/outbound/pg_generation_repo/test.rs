@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use chrono::TimeDelta;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
@@ -159,49 +161,53 @@ async fn a_session_is_found_while_open_and_swept_when_left_open(pool: PgPool) {
     assert!(repo.stale_sessions(now, 10).await.unwrap().is_empty());
 }
 
+/// A person is due from their next run time until it moves on; seeing them
+/// again in the same zone keeps it, a new zone takes the new one; a
+/// generation running holds them back.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn people_seen_this_week_are_due_in_their_night_once(pool: PgPool) {
+async fn a_person_is_due_from_their_next_run_until_it_moves_on(pool: PgPool) {
     insert_user(&pool, OWNER).await;
     let repo = PgGenerationRepo::new(pool);
-    // 18:30 UTC is 03:30 in Tokyo, inside the night.
     let now = at_hour(18);
-    let due = |now: DateTime<Utc>| {
+    let due = |at: DateTime<Utc>| {
         let repo = repo.clone();
-        async move {
-            repo.due(
-                now,
-                now - TimeDelta::days(7),
-                now - TimeDelta::hours(20),
-                now - TimeDelta::minutes(25),
-                (2, 5),
-                10,
-            )
-            .await
-            .unwrap()
-        }
+        async move { repo.due(at, at - TimeDelta::minutes(25), 10).await.unwrap() }
     };
     assert!(due(now).await.is_empty(), "never seen");
-    repo.see(&owner(), "Asia/Tokyo", now - TimeDelta::days(2))
-        .await
-        .unwrap();
+    let seen = now - TimeDelta::days(2);
+    let next = now - TimeDelta::minutes(1);
+    repo.see(&owner(), "Asia/Tokyo", seen, next).await.unwrap();
     assert_eq!(
         due(now).await,
         [AudienceMember {
             user: owner(),
-            timezone: chrono_tz::Asia::Tokyo
+            timezone: chrono_tz::Asia::Tokyo,
+            seen_at: seen,
         }]
     );
-    // 09:30 UTC is 18:30 in Tokyo: not their night.
-    assert!(due(at_hour(9)).await.is_empty());
-    // Seen over a week ago.
-    assert!(due(now + TimeDelta::days(6)).await.is_empty());
-    // Not again once tonight's run started.
+    assert!(
+        due(next - TimeDelta::minutes(1)).await.is_empty(),
+        "not yet"
+    );
+    // Seen again in the same zone: the next run stays.
+    repo.see(&owner(), "Asia/Tokyo", now, now + TimeDelta::hours(5))
+        .await
+        .unwrap();
+    assert_eq!(due(now).await.len(), 1);
+    // In another zone: the next run is that zone's.
+    repo.see(&owner(), "Europe/Paris", now, now + TimeDelta::hours(5))
+        .await
+        .unwrap();
+    assert!(due(now).await.is_empty());
+    repo.reschedule(&owner(), now).await.unwrap();
+    assert_eq!(due(now).await.len(), 1);
+    // A generation running holds them back.
     let night = repo
         .begin(
             &owner(),
             GenerationTrigger::Nightly,
             now,
-            now,
+            now - TimeDelta::minutes(25),
             now - TimeDelta::hours(20),
         )
         .await
@@ -209,8 +215,11 @@ async fn people_seen_this_week_are_due_in_their_night_once(pool: PgPool) {
         .unwrap();
     assert!(due(now).await.is_empty());
     repo.finish(night, true, now).await.unwrap();
+    // Rescheduled to the next night, they are due then.
+    repo.reschedule(&owner(), now + TimeDelta::days(1))
+        .await
+        .unwrap();
     assert!(due(now + TimeDelta::minutes(30)).await.is_empty());
-    // The next night, it is due again.
     assert_eq!(due(now + TimeDelta::days(1)).await.len(), 1);
 }
 
@@ -223,23 +232,12 @@ async fn an_interrupted_generation_holds_no_one_back_once_stale(pool: PgPool) {
     let repo = PgGenerationRepo::new(pool.clone());
     let now = at_hour(18);
     let stale = TimeDelta::minutes(25);
-    repo.see(&owner(), "Asia/Tokyo", now - TimeDelta::days(1))
+    repo.see(&owner(), "Asia/Tokyo", now - TimeDelta::days(1), now)
         .await
         .unwrap();
     let due = |at: DateTime<Utc>| {
         let repo = repo.clone();
-        async move {
-            repo.due(
-                at,
-                at - TimeDelta::days(7),
-                at - TimeDelta::hours(20),
-                at - TimeDelta::minutes(25),
-                (2, 5),
-                10,
-            )
-            .await
-            .unwrap()
-        }
+        async move { repo.due(at, at - TimeDelta::minutes(25), 10).await.unwrap() }
     };
     let begun = now - TimeDelta::minutes(10);
     let onboarding = repo
@@ -325,7 +323,7 @@ async fn an_interrupted_nightly_run_holds_no_cooldown(pool: PgPool) {
     let repo = PgGenerationRepo::new(pool);
     let now = at_hour(18);
     let stale = TimeDelta::minutes(25);
-    repo.see(&owner(), "Asia/Tokyo", now - TimeDelta::days(1))
+    repo.see(&owner(), "Asia/Tokyo", now - TimeDelta::days(1), now)
         .await
         .unwrap();
     let begun = now - TimeDelta::minutes(30);
@@ -340,17 +338,7 @@ async fn an_interrupted_nightly_run_holds_no_cooldown(pool: PgPool) {
         .await
         .unwrap()
         .unwrap();
-    let due = repo
-        .due(
-            now,
-            now - TimeDelta::days(7),
-            now - TimeDelta::hours(20),
-            now - stale,
-            (2, 5),
-            10,
-        )
-        .await
-        .unwrap();
+    let due = repo.due(now, now - stale, 10).await.unwrap();
     assert_eq!(due.len(), 1);
     let again = repo
         .begin(
@@ -413,22 +401,113 @@ async fn routines_come_weekly_and_a_forgotten_person_is_not_due(pool: PgPool) {
             .unwrap()
     );
 
-    repo.see(&owner(), "Asia/Tokyo", now - TimeDelta::days(1))
+    repo.see(&owner(), "Asia/Tokyo", now - TimeDelta::days(1), now)
         .await
         .unwrap();
     let due = |repo: PgGenerationRepo| async move {
-        repo.due(
-            now,
-            now - TimeDelta::days(7),
-            now - TimeDelta::hours(20),
-            now - TimeDelta::minutes(25),
-            (2, 5),
-            10,
-        )
-        .await
-        .unwrap()
+        repo.due(now, now - TimeDelta::minutes(25), 10)
+            .await
+            .unwrap()
     };
     assert_eq!(due(repo.clone()).await.len(), 1);
     repo.forget(&owner()).await.unwrap();
     assert!(due(repo.clone()).await.is_empty());
+}
+
+/// Everyone paid or nobody.
+struct Plans(bool);
+
+#[async_trait::async_trait]
+impl crate::domain::ports::Plans for Plans {
+    async fn paid(&self, _: &MacroUserIdStr<'static>) -> Result<bool, rootcause::Report> {
+        Ok(self.0)
+    }
+}
+
+/// Reading the ideas feed counts a person in for nightly runs only on a
+/// paid plan, due in their next night.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_feed_counts_in_only_paid_readers_due_in_their_night(pool: PgPool) {
+    use ideas::domain::ports::SuggestionAudience;
+
+    use crate::domain::audience::PaidAudience;
+    use crate::domain::night;
+
+    insert_user(&pool, OWNER).await;
+    let repo = Arc::new(PgGenerationRepo::new(pool));
+    let now = Utc::now();
+    let unpaid = PaidAudience::new(Arc::clone(&repo), Arc::new(Plans(false)));
+    unpaid.seen(&owner(), "Asia/Tokyo", now).await.unwrap();
+    let far = now + TimeDelta::days(2);
+    assert!(repo.due(far, far, 10).await.unwrap().is_empty());
+    let paid = PaidAudience::new(Arc::clone(&repo), Arc::new(Plans(true)));
+    paid.seen(&owner(), "Not/AZone", now).await.unwrap();
+    assert!(repo.due(far, far, 10).await.unwrap().is_empty());
+    paid.seen(&owner(), "Asia/Tokyo", now).await.unwrap();
+    let next = night::upcoming(&owner(), chrono_tz::Asia::Tokyo, now);
+    assert!(
+        repo.due(next - TimeDelta::seconds(1), far, 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(repo.due(next, far, 10).await.unwrap().len(), 1);
+}
+
+/// The change log keeps entries for a while: pruning deletes the ones
+/// written before the cut-off, a batch at a time, and keeps the rest.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn pruning_deletes_only_old_change_log_entries(pool: PgPool) {
+    insert_user(&pool, OWNER).await;
+    let repo = PgGenerationRepo::new(pool.clone());
+    let now = Utc::now();
+    let generation = repo
+        .begin(
+            &owner(),
+            GenerationTrigger::Onboarding,
+            now,
+            now - TimeDelta::minutes(25),
+            now - TimeDelta::hours(20),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let written = |at: DateTime<Utc>| {
+        let millis = u64::try_from(at.timestamp_millis()).unwrap();
+        let timestamp = uuid::Timestamp::from_unix(
+            uuid::NoContext,
+            millis / 1000,
+            u32::try_from(millis % 1000).unwrap() * 1_000_000,
+        );
+        Uuid::new_v7(timestamp)
+    };
+    for at in [
+        now - TimeDelta::days(120),
+        now - TimeDelta::days(100),
+        now - TimeDelta::days(91),
+        now - TimeDelta::days(1),
+    ] {
+        sqlx::query(
+            "INSERT INTO suggestion_change
+                 (id, user_id, generation_id, session_id, subject, subject_id, action, created_at)
+             VALUES ($1, $2, $3, $4, 'idea', $4, 'created', $5)",
+        )
+        .bind(written(at))
+        .bind(OWNER)
+        .bind(generation)
+        .bind(Uuid::now_v7())
+        .bind(at)
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let cut = now - TimeDelta::days(90);
+    assert_eq!(repo.prune_changes(cut, 2).await.unwrap(), 2);
+    assert_eq!(repo.prune_changes(cut, 2).await.unwrap(), 1);
+    assert_eq!(repo.prune_changes(cut, 2).await.unwrap(), 0);
+    let left: i64 = sqlx::query_scalar("SELECT count(*) FROM suggestion_change")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(left, 1);
 }

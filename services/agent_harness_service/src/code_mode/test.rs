@@ -85,3 +85,119 @@ async fn execution_credentials_use_the_gate_resolved_requester() {
         requester
     );
 }
+
+/// Every session is a generation session, or none is.
+struct Scopes(Option<SessionScope>);
+
+#[async_trait]
+impl SessionScopes for Scopes {
+    async fn scope(&self, _: uuid::Uuid) -> Result<Option<SessionScope>, rootcause::Report> {
+        Ok(self.0)
+    }
+}
+
+/// Lets everything run.
+struct Open;
+
+impl NativeToolGate for Open {
+    fn check<'a>(
+        &'a self,
+        _: AgentSessionId,
+        _: &'a str,
+        _: &'a serde_json::Value,
+    ) -> Pin<Box<dyn Future<Output = NativeToolVerdict> + Send + 'a>> {
+        Box::pin(async { NativeToolVerdict::Run })
+    }
+}
+
+/// A generation session's native tools are code mode's and finding tools
+/// only; any other session's go to the owner's gate as before.
+#[tokio::test]
+async fn a_generation_session_uses_only_code_and_finding_tools() {
+    let gate = |scope| ScopedToolGate {
+        inner: Arc::new(Open),
+        scopes: Arc::new(Scopes(scope)),
+    };
+    let session = AgentSessionId::new();
+    let args = serde_json::json!({});
+    let generation = gate(Some(SessionScope::Generation));
+    for tool in [
+        "ExecuteCode",
+        "DescribeCodeTools",
+        "ReadCodeDocs",
+        "SearchTools",
+        "LoadTools",
+    ] {
+        assert_eq!(
+            generation.check(session, tool, &args).await,
+            NativeToolVerdict::Run,
+            "{tool}"
+        );
+    }
+    for tool in [
+        "SendConfirmedEmail",
+        "SendChannelMessage",
+        "CreateMemory",
+        "WebFetch",
+        "Subagent",
+    ] {
+        assert!(
+            matches!(
+                generation.check(session, tool, &args).await,
+                NativeToolVerdict::Refuse(_)
+            ),
+            "{tool}"
+        );
+    }
+    assert_eq!(
+        gate(None).check(session, "SendConfirmedEmail", &args).await,
+        NativeToolVerdict::Run
+    );
+}
+
+/// The scope's list of POST reads covers every read the SDK sends as a POST,
+/// and the only writes it lets a generation session make are its own tools
+/// and creating an email draft.
+#[test]
+fn the_generation_scope_matches_the_sdk_catalog() {
+    let concrete = |path: &str| {
+        path.split('/')
+            .map(|segment| {
+                if segment.starts_with('{') {
+                    "x"
+                } else {
+                    segment
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("/")
+    };
+    let intended = [
+        "scheduled-action.suggestIdea",
+        "scheduled-action.rewriteIdea",
+        "scheduled-action.retireIdea",
+        "scheduled-action.attachIdeaDraft",
+        "scheduled-action.suggestRoutine",
+        "scheduled-action.retireRoutineSuggestion",
+        "email.createDraft",
+    ];
+    let scope = SessionScope::Generation;
+    for (key, operation) in code_execution::domain::operations() {
+        let allowed = scope.allows(&operation.method, &concrete(&operation.path));
+        if !operation.write {
+            assert!(
+                allowed,
+                "the read {key} ({} {}) is refused",
+                operation.method, operation.path
+            );
+        } else {
+            assert_eq!(
+                allowed,
+                intended.contains(&key.as_str()),
+                "{key} ({} {})",
+                operation.method,
+                operation.path
+            );
+        }
+    }
+}

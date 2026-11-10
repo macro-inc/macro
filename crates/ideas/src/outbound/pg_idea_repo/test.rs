@@ -98,7 +98,7 @@ async fn concurrent_creates_stay_within_the_limits(pool: PgPool) {
         3
     );
     assert_eq!(repo.added_in(generation).await.unwrap(), 3);
-    assert_eq!(repo.ideas(&user).await.unwrap().len(), 3);
+    assert_eq!(repo.for_review(&user, 60).await.unwrap().len(), 3);
 }
 
 async fn routine_idea(pool: &PgPool) -> (Uuid, Uuid) {
@@ -176,12 +176,92 @@ async fn a_broken_idea_row_is_skipped_and_the_rest_read(pool: PgPool) {
     .unwrap();
     let repo = PgIdeaRepo::new(pool);
     let user = MacroUserIdStr::parse_from_str(OWNER).unwrap();
-    let ideas = repo.ideas(&user).await.unwrap();
+    let ideas = repo.for_review(&user, 60).await.unwrap();
     assert_eq!(
         ideas.iter().map(|idea| idea.id).collect::<Vec<_>>(),
         vec![idea]
     );
     assert!(repo.idea(&user, broken).await.unwrap().is_none());
+}
+
+/// The feed reads open ideas and those done lately; a review reads open
+/// ideas and only the most recently closed.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reads_load_only_the_ideas_they_show(pool: PgPool) {
+    insert_user(&pool, OWNER).await;
+    let generation = generation(&pool).await;
+    let repo = PgIdeaRepo::new(pool);
+    let user = MacroUserIdStr::parse_from_str(OWNER).unwrap();
+    let limits = Limits {
+        open: 30,
+        new_per_generation: 12,
+    };
+    let now = Utc::now();
+    let mut ids = Vec::new();
+    for n in 0..5 {
+        let id = Uuid::now_v7();
+        let change = Change {
+            session: Uuid::now_v7(),
+            generation,
+            action: ChangeAction::Created,
+            old: None,
+            new: None,
+            reason: None,
+            at: now,
+        };
+        repo.create(
+            &user,
+            id,
+            &NewKind::Prompt {
+                run_mode: RunMode::Composer,
+            },
+            &content(&format!("idea:{n}")),
+            limits,
+            &change,
+        )
+        .await
+        .unwrap();
+        ids.push(id);
+    }
+    let hours = chrono::TimeDelta::hours;
+    // Done two days ago, done an hour ago, dismissed an hour ago; two open.
+    for (id, to, at) in [
+        (ids[0], IdeaState::Done, now - hours(48)),
+        (ids[1], IdeaState::Done, now - hours(1)),
+        (ids[2], IdeaState::Dismissed, now - hours(2)),
+    ] {
+        assert!(
+            repo.set_state(&user, id, &[IdeaState::Proposed], to, None, at)
+                .await
+                .unwrap()
+        );
+    }
+    let mut shown: Vec<Uuid> = repo
+        .shown(&user, now - hours(24))
+        .await
+        .unwrap()
+        .iter()
+        .map(|idea| idea.id)
+        .collect();
+    shown.sort();
+    assert_eq!(shown, vec![ids[1], ids[3], ids[4]]);
+    let mut reviewed: Vec<Uuid> = repo
+        .for_review(&user, 1)
+        .await
+        .unwrap()
+        .iter()
+        .map(|idea| idea.id)
+        .collect();
+    reviewed.sort();
+    assert_eq!(reviewed, vec![ids[1], ids[3], ids[4]]);
+    assert_eq!(repo.for_review(&user, 60).await.unwrap().len(), 5);
+    assert_eq!(
+        repo.by_dedup_key(&user, "idea:2")
+            .await
+            .unwrap()
+            .map(|idea| idea.id),
+        Some(ids[2])
+    );
 }
 
 async fn idea_about_document(pool: &PgPool, user: &str, document: &str) -> Uuid {
