@@ -73,6 +73,9 @@ enforced by the ordinary backend APIs.
   name-based pipeline methods (`find`, `addRecords`, `updateEntries`,
   `removeRecords`, `edit`, `importCsv`/`exportCsv`), which call
   `crm::inbound::pipeline_workflows`; field values are tagged by kind.
+- `src/entities/saved-views/`: `macro.savedViews` over the revision-guarded
+  `/saved_views/definitions` routes; `edit` and `remove` send the revision the
+  handle last saw, and keep the response's record so chained writes stay guarded.
 - `src/entities/external-chat/`: added provider chats (`macro.externalChats`, entity type
   `external_chat`) and their message/send/upload/participant handles.
 - `src/entities/connected-apps/`: `macro.connectedApps.list(execution)` returns the

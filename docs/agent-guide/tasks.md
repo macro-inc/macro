@@ -12,8 +12,8 @@ The single-row desktop header contains the title, `Filter`, a separate
 its button, without overlapping the icon or the group border;
 the filter uses the legacy compact option rows and searchable Assignee, Created by,
 and Tags submenus. They use the [shared multiselect dropdown pattern](ui-conventions.md#multiselect-dropdowns):
-checkboxes toggle and stay open, rows add and close, and Shift/Only selects just
-one option and stays open. Escape dismisses the menu.
+clicking a row or its checkbox toggles and stays open, Enter adds and closes, and
+Shift/Only selects just one option and stays open. Escape dismisses the menu.
 The top of the `Filter` menu is a `Filter with AI…` textbox, focused when the menu opens: type a plain-English
 description such as `urgent and high priority tasks that are not completed` and press
 Enter. It replaces the current selection with the matching Status, Priority, Assignee,
