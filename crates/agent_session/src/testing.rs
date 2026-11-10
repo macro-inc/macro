@@ -115,6 +115,19 @@ impl InMemoryAgentSessionRepo {
             .insert(session.id, session);
     }
 
+    /// Backdate `session`'s last user-visible activity, as if nobody had
+    /// touched it since `at`.
+    pub fn set_modified_at(&self, session: AgentSessionId, at: chrono::DateTime<chrono::Utc>) {
+        if let Some(stored) = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .get_mut(&session)
+        {
+            stored.modified_at = at;
+        }
+    }
+
     /// Who prompted `session` directly, in the order they first did.
     #[must_use]
     pub fn followers(&self, session: AgentSessionId) -> Vec<MacroUserIdStr<'static>> {

@@ -307,6 +307,8 @@ async fn a_redial_delivers_the_prompt_queued_behind_the_turn_the_drop_interrupte
         Some(AgentSessionLifecycleEvent::Stopped(_))
     ));
 
+    // Untouched for days, but its queue still holds work: a dial restores it.
+    repo.set_modified_at(session, chrono::Utc::now() - chrono::Duration::days(2));
     let second = ContainerMock::default();
     runtimes.attach(harness_for_bot(bot_id), second.clone());
     let drive = async {
@@ -327,5 +329,59 @@ async fn a_redial_delivers_the_prompt_queued_behind_the_turn_the_drop_interrupte
     assert_eq!(
         prompts(&second.agent()),
         [vec![ContentBlock::from("and now the docs")]]
+    );
+}
+
+#[tokio::test]
+async fn a_redial_restores_recent_sessions_and_leaves_idle_ones_to_their_next_prompt() {
+    let (service, repo, _containers, _announcer, runtimes) = harness();
+    let bot_id = BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let recent = native_session(&service, &repo, bot_id).await;
+    let idle = native_session(&service, &repo, bot_id).await;
+    repo.set_modified_at(idle, chrono::Utc::now() - chrono::Duration::days(9));
+    let runtime = ContainerMock::default();
+    runtimes.attach(harness_for_bot(bot_id), runtime.clone());
+
+    let drive = async {
+        initializes_loading(&runtime).await;
+        let agent = runtime.agent();
+        agent.wait_for_requests(2).await;
+        agent.loads_session(LoadSessionResponse::new());
+    };
+    tokio::join!(
+        service.reattach_live_sessions(
+            harness_for_bot(bot_id),
+            vec![
+                SessionId::new(recent.to_string()),
+                SessionId::new(idle.to_string()),
+            ],
+            tracing::Span::none(),
+        ),
+        drive
+    );
+
+    let agent = runtime.agent();
+    assert_eq!(loaded(&agent), [recent.to_string()]);
+    assert!(
+        agent_session::domain::service::AgentSessionService::attached_mcp_servers(
+            &service.inner.sessions,
+            idle
+        )
+        .is_none(),
+        "an idle session is not restored at dial time"
+    );
+
+    // The idle session's next prompt restores it on the same connection.
+    let drive = async {
+        agent.wait_for_requests(3).await;
+        agent.loads_session(LoadSessionResponse::new());
+        agent.wait_for_requests(4).await;
+    };
+    let (result, ()) = tokio::join!(prompt(&service, idle, "pick this back up"), drive);
+    result.expect("the prompt restores the idle session");
+    assert_eq!(loaded(&agent), [recent.to_string(), idle.to_string()]);
+    assert_eq!(
+        prompts(&agent),
+        [vec![ContentBlock::from("pick this back up")]]
     );
 }

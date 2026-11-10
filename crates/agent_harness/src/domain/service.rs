@@ -30,6 +30,25 @@ mod warm;
 use futures::FutureExt as _;
 use std::sync::Arc;
 
+/// How many sessions one runtime's dial attaches at once. Each attach claims
+/// the session and provisions its egress before its actor starts the ACP
+/// restore, so a runtime holding hundreds must not take them all at once.
+pub(crate) const REATTACH_CONCURRENCY: usize = 8;
+/// How many times a dial tries to restore one session.
+const REATTACH_ATTEMPTS: u32 = 3;
+/// The delay before the first retry, doubled for each later one, plus up to
+/// as much again in jitter so a runtime's sessions do not retry in step.
+const REATTACH_RETRY_BASE: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// What a dial did with one listed session, counted on its span.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ReattachOutcome {
+    Restored,
+    Lazy,
+    Skipped,
+    Failed,
+}
+
 type NotificationDrain = futures::future::Shared<futures::future::BoxFuture<'static, ()>>;
 
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
@@ -688,7 +707,10 @@ where
     ///
     /// Only sessions whose bot is bound to `harness` are touched, each on its
     /// own command worker, so a reattach waits behind whatever that session
-    /// is already doing. One session failing never stops the others.
+    /// is already doing. Idle sessions are left to bind on their next prompt
+    /// (see `dial_reattach`), at most [`REATTACH_CONCURRENCY`] attach at
+    /// once, and a failed attach is retried with jittered backoff while the
+    /// runtime stays connected. One session failing never stops the others.
     #[tracing::instrument(
         name = "agent.runtime.reattach",
         skip_all,
@@ -696,6 +718,9 @@ where
             %harness,
             agent.runtime.live_sessions = acp_sessions.len(),
             agent.runtime.reattach_sessions = tracing::field::Empty,
+            agent.runtime.reattach_eager = tracing::field::Empty,
+            agent.runtime.reattach_lazy = tracing::field::Empty,
+            agent.runtime.reattach_skipped = tracing::field::Empty,
             agent.runtime.reattach_failures = tracing::field::Empty,
         )
     )]
@@ -705,6 +730,8 @@ where
         acp_sessions: Vec<agent_client_protocol::schema::v1::SessionId>,
         cause: tracing::Span,
     ) {
+        use futures::StreamExt as _;
+
         tracing::Span::current().follows_from(&cause);
         let sessions = match self
             .inner
@@ -720,20 +747,63 @@ where
         };
         let span = tracing::Span::current();
         span.record("agent.runtime.reattach_sessions", sessions.len());
-        let results = futures::future::join_all(
-            sessions
+
+        let outcomes: Vec<ReattachOutcome> = futures::stream::iter(sessions)
+            .map(|session_id| self.reattach_live_session(harness, session_id))
+            .buffer_unordered(REATTACH_CONCURRENCY)
+            .collect()
+            .await;
+        let count = |wanted: ReattachOutcome| {
+            outcomes
                 .iter()
-                .map(|session_id| self.execute(*session_id, HarnessCommand::Reattach)),
-        )
-        .await;
-        let mut failures = 0;
-        for (session_id, result) in sessions.iter().zip(results) {
-            if let Err(error) = result {
-                failures += 1;
-                tracing::warn!(error = ?error, %session_id, "could not reattach a live session");
+                .filter(|outcome| **outcome == wanted)
+                .count()
+        };
+        span.record(
+            "agent.runtime.reattach_eager",
+            count(ReattachOutcome::Restored),
+        );
+        span.record("agent.runtime.reattach_lazy", count(ReattachOutcome::Lazy));
+        span.record(
+            "agent.runtime.reattach_skipped",
+            count(ReattachOutcome::Skipped),
+        );
+        span.record(
+            "agent.runtime.reattach_failures",
+            count(ReattachOutcome::Failed),
+        );
+    }
+
+    /// Restore one listed session if it needs it now, retrying a failed
+    /// restore while `harness` is still connected here.
+    async fn reattach_live_session(
+        &self,
+        harness: harness_id::HarnessId,
+        session_id: AgentSessionId,
+    ) -> ReattachOutcome {
+        match self.inner.dial_reattach(session_id).await {
+            Ok(deliver::DialReattach::Eager) => {}
+            Ok(deliver::DialReattach::Lazy) => return ReattachOutcome::Lazy,
+            Ok(deliver::DialReattach::Skip) => return ReattachOutcome::Skipped,
+            Err(error) => {
+                tracing::warn!(error = ?error, %session_id, "could not decide whether to reattach a live session");
+                return ReattachOutcome::Failed;
             }
         }
-        span.record("agent.runtime.reattach_failures", failures);
+        let mut delay = REATTACH_RETRY_BASE;
+        for attempt in 1..=REATTACH_ATTEMPTS {
+            let Err(error) = self.execute(session_id, HarnessCommand::Reattach).await else {
+                return ReattachOutcome::Restored;
+            };
+            tracing::warn!(error = ?error, %session_id, attempt, "could not reattach a live session");
+            if attempt == REATTACH_ATTEMPTS || !self.inner.runtimes.is_connected(harness) {
+                break;
+            }
+            let jitter = delay.mul_f64(rand::random::<f64>());
+            tokio::time::sleep(delay + jitter).await;
+            delay *= 2;
+        }
+        ReattachOutcome::Failed
     }
 
     /// Post the announcement for a prompt an external runtime delivers.
