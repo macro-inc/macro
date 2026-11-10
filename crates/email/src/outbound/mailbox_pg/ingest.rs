@@ -15,6 +15,7 @@ impl MailboxIngest for PgMailboxSync {
             folder_id,
             tags,
             version,
+            ..
         } = snapshot;
         let mut message = content.message;
         if message.link_id != lease.mailbox.link_id

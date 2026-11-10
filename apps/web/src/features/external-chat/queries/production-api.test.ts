@@ -79,7 +79,16 @@ it('decodes pagination, deleted flags, reaction ownership and attachment states 
         receivedAt: '2026-10-21T12:00:01Z',
         editedAt: null,
         deleted: true,
-        reactions: [{ emoji: '👍', count: 2, mine: true }],
+        reactions: [
+          {
+            emoji: '👍',
+            reactors: [
+              { name: 'Ana', userId: null },
+              { name: 'Ben', userId: 'macro|ben@example.com' },
+            ],
+            mine: true,
+          },
+        ],
         attachments: [
           {
             ordinal: 0,
@@ -101,7 +110,16 @@ it('decodes pagination, deleted flags, reaction ownership and attachment states 
   expect(result.messages[0]).toMatchObject({
     deleted: true,
     sender: { name: 'Ana Ruiz' },
-    reactions: [{ emoji: '👍', count: 2, mine: true }],
+    reactions: [
+      {
+        emoji: '👍',
+        reactors: [
+          { name: 'Ana' },
+          { name: 'Ben', userId: 'macro|ben@example.com' },
+        ],
+        mine: true,
+      },
+    ],
     attachments: [
       { state: 'unsupported', fileName: 'drawing.psd', fileId: undefined },
     ],

@@ -133,6 +133,7 @@ macro_authorization = { path = "../../crates/macro_authorization", features = [
   "postgres",
 ] }
 macro_cors = { path = "../../crates/macro_cors" }
+macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 macro_config = { path = "../../crates/macro_config" }
 macro_db_client = { path = "../../crates/macro_db_client" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
