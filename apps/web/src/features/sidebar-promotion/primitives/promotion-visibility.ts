@@ -4,7 +4,12 @@ import { type Accessor, untrack } from 'solid-js';
 import { z } from 'zod';
 import { allOf, type Verdict } from '../core/verdict';
 import { createLastKnown } from './last-known';
-import { hidePromotion, isPromotionHiddenLocally } from './promotion';
+import {
+  hidePromotion,
+  hidePromotionUntilCommitted,
+  isPromotionHiddenLocally,
+  type PendingDismissal,
+} from './promotion';
 
 /**
  * Whether a dismissible sidebar card shows, and its dismiss action.
@@ -18,7 +23,12 @@ export function createPromotionVisibility(
   id: Accessor<string>,
   /** `undefined` while the host's flags or queries load. */
   applies: Accessor<Verdict>
-): { shown: Accessor<boolean | undefined>; dismiss: () => void } {
+): {
+  shown: Accessor<boolean | undefined>;
+  dismiss: () => void;
+  /** Hide now and dismiss everywhere once committed; see `hidePromotionUntilCommitted`. */
+  dismissUndoably: () => PendingDismissal;
+} {
   const userId = useUserId();
   const dismissals = usePromptDismissalsQuery();
   // An unreachable server falls back to what this browser remembers.
@@ -35,5 +45,9 @@ export function createPromotionVisibility(
       allOf(applies(), dismissed() === undefined ? undefined : !dismissed()),
     z.boolean()
   );
-  return { shown, dismiss: () => hidePromotion(userId(), id()) };
+  return {
+    shown,
+    dismiss: () => hidePromotion(userId(), id()),
+    dismissUndoably: () => hidePromotionUntilCommitted(userId(), id()),
+  };
 }

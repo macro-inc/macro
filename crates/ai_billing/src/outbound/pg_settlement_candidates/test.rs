@@ -22,6 +22,7 @@ async fn usage_row(
                 user: user.clone(),
                 entity: None,
                 agent_api_key_id: None,
+                agent_session_id: None,
                 cost: Usage {
                     amount: UsageAmount::Tokens {
                         input: 1_000,
