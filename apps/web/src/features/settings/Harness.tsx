@@ -196,11 +196,15 @@ export function Harness(
               harnesses={
                 harnessesQuery.isSuccess
                   ? harnessesQuery.data.filter(
-                      // A Macro computer is listed once, under Macro computers.
+                      // A Macro computer is listed once, under Macro computers;
+                      // with that section off it stays an ordinary machine.
                       (harness) =>
                         harness.access === 'owner' &&
-                        !harness.computer_id &&
-                        !computerHarnessIds().has(harness.id)
+                        !(
+                          teamComputers.enabled() &&
+                          (harness.computer_id ||
+                            computerHarnessIds().has(harness.id))
+                        )
                     )
                   : []
               }

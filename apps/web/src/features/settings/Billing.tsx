@@ -4,7 +4,11 @@ import { t } from '@app/lib/i18n';
 import { TraceFlow } from '@app/observability/flow';
 import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
-import { enableAiUsageBilling, LOCAL_ONLY } from '@core/constant/featureFlags';
+import {
+  enableAiUsageBilling,
+  enableMacroComputers,
+  LOCAL_ONLY,
+} from '@core/constant/featureFlags';
 import { PERMISSION_IDS } from '@core/constant/permissions';
 import {
   useLicenseStatus,
@@ -64,6 +68,7 @@ function LiveBilling(props: { controls?: JSX.Element }) {
   const team = useCurrentTeamQuery();
   const summary = useAiBillingSummaryQuery();
   const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
+  const macroComputers = useFeatureFlag(enableMacroComputers);
   const changePlan = useChangePlanMutation();
   const checkout = useCreateCheckoutSessionMutation();
   const portal = useCreateBillingPortalMutation();
@@ -201,30 +206,33 @@ function LiveBilling(props: { controls?: JSX.Element }) {
           : undefined
       }
       computers={
-        <Suspense
-          fallback={<p role="status">{t('settingsBilling.loading')}</p>}
-        >
-          <Show
-            when={
-              queryReadyGate(subscriptionStatus)
-                ? subscriptionStatus.data.billing
-                : undefined
-            }
-            fallback={<BillingComputers />}
+        // Flag off: nothing to wait for, so no loading line flashes by.
+        <Show when={macroComputers().enabled}>
+          <Suspense
+            fallback={<p role="status">{t('settingsBilling.loading')}</p>}
           >
-            {(billing) => (
-              <TraceFlow
-                name="team.billing.breakdown"
-                attributes={billingAttributes()}
-              >
-                <ConnectedTeamBillingBreakdown
-                  billing={billing()}
-                  teamId={userTeam()?.id}
-                />
-              </TraceFlow>
-            )}
-          </Show>
-        </Suspense>
+            <Show
+              when={
+                queryReadyGate(subscriptionStatus)
+                  ? subscriptionStatus.data.billing
+                  : undefined
+              }
+              fallback={<BillingComputers />}
+            >
+              {(billing) => (
+                <TraceFlow
+                  name="team.billing.breakdown"
+                  attributes={billingAttributes()}
+                >
+                  <ConnectedTeamBillingBreakdown
+                    billing={billing()}
+                    teamId={userTeam()?.id}
+                  />
+                </TraceFlow>
+              )}
+            </Show>
+          </Suspense>
+        </Show>
       }
       subscriptionStatusFailed={subscriptionStatus.isError}
       onRefreshStatus={() =>

@@ -51,7 +51,8 @@ vi.mock('./computers/views/MacroComputers', () => ({
 
 vi.mock('./computers/primitives/team-computers', () => ({
   useTeamComputers: () => ({
-    enabled: () => false,
+    // With computers on, a computer's harness is listed only under them.
+    enabled: () => true,
     computers: () => [],
     failed: () => false,
   }),
