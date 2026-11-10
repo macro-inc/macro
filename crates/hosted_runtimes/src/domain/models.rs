@@ -467,6 +467,9 @@ pub struct ComputerStatus {
     pub powered_on: bool,
     /// When billing stops, for a computer canceled at period end.
     pub cancels_at: Option<DateTime<Utc>>,
+    /// Whether a cancel at period end can still be undone; false once its
+    /// billing item was removed ahead of the renewal.
+    pub can_undo_cancel: bool,
     /// When the disk is destroyed, for a canceled computer.
     pub retained_until: Option<DateTime<Utc>>,
     /// Harness claimed by this guest.
@@ -511,7 +514,7 @@ impl Computer {
         });
         let (cancels_at, retained_until) = match self.state.billing {
             Billing::Active => (None, None),
-            Billing::CancelAtPeriodEnd { at } => (Some(at), None),
+            Billing::CancelAtPeriodEnd { at } | Billing::BillingStopped { at } => (Some(at), None),
             Billing::Canceled { retained_until } => (None, Some(retained_until)),
         };
 
@@ -529,6 +532,7 @@ impl Computer {
             setup,
             powered_on: self.state.power == Power::On,
             cancels_at,
+            can_undo_cancel: matches!(self.state.billing, Billing::CancelAtPeriodEnd { .. }),
             retained_until,
             harness_id: self.harness_id,
             created_at: self.created_at,
@@ -555,6 +559,7 @@ impl ComputerRecord {
                 setup: None,
                 powered_on: false,
                 cancels_at: None,
+                can_undo_cancel: false,
                 retained_until: None,
                 harness_id: None,
                 created_at: display.created_at,

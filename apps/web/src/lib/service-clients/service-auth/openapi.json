@@ -7428,9 +7428,14 @@
           "catalogEntry",
           "status",
           "poweredOn",
+          "canUndoCancel",
           "createdAt"
         ],
         "properties": {
+          "canUndoCancel": {
+            "type": "boolean",
+            "description": "Whether a cancel at period end can still be undone; false once its\nbilling item was removed ahead of the renewal."
+          },
           "cancelsAt": {
             "type": ["string", "null"],
             "format": "date-time",

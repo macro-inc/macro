@@ -36,6 +36,10 @@ pub const POWER_ON_RETRY: Duration = Duration::seconds(20);
 pub const MAX_POWER_ON_RETRY: Duration = Duration::minutes(10);
 /// First restart backoff after a crash; doubles per recent crash.
 pub const RESTART_BACKOFF: Duration = Duration::seconds(30);
+/// How long before a cancel-at-period-end's period ends its billing item is
+/// removed. Stripe drafts the renewal invoice at the period boundary, so a
+/// removal racing it would bill the team one more period without a credit.
+pub const BILLING_STOP_LEAD: Duration = Duration::hours(1);
 
 /// Where a computer is and what it is doing, as last observed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -111,6 +115,12 @@ pub enum Billing {
     /// Billing stops at `at` (the current period end); undo is allowed until then.
     CancelAtPeriodEnd {
         /// Time the operation takes effect.
+        at: DateTime<Utc>,
+    },
+    /// The billing item is already removed, ahead of the renewal; the
+    /// computer keeps running until `at`, the end of the period paid for.
+    BillingStopped {
+        /// End of the paid period.
         at: DateTime<Utc>,
     },
     /// No longer billed; the disk is kept until `retained_until`.
@@ -289,6 +299,8 @@ pub enum Event {
     },
     /// Withdraw a pending cancellation.
     UndoCancel,
+    /// Timer: shortly before a cancel-at-period-end's period ends.
+    BillingStops,
     /// Timer: the billing period of a cancel-at-period-end ended.
     PeriodEnded,
     /// Billing removed the item outside our timer (webhook).
@@ -330,6 +342,8 @@ pub enum TimerKind {
     PowerOnRetry,
     /// Another computer on the host released awake units.
     CapacityChanged,
+    /// Remove a canceled computer's billing item before the renewal.
+    BillingStops,
     /// Apply the scheduled billing cancellation.
     PeriodEnded,
     /// The retained disk may now be deleted.
@@ -344,6 +358,7 @@ impl TimerKind {
             Self::RestartDue => Event::RestartDue,
             Self::PowerOnRetry => Event::PowerOnRetry,
             Self::CapacityChanged => Event::CapacityChanged,
+            Self::BillingStops => Event::BillingStops,
             Self::PeriodEnded => Event::PeriodEnded,
             Self::RetentionExpired => Event::RetentionExpired,
         }
@@ -710,10 +725,25 @@ pub fn transition(
                     return (next, effects);
                 }
                 next.billing = Billing::CancelAtPeriodEnd { at: *at };
+                if state.payment == PaymentOutcome::Paid {
+                    effects.push(Effect::ScheduleTimer {
+                        kind: TimerKind::BillingStops,
+                        at: (*at - BILLING_STOP_LEAD).max(now),
+                    });
+                }
                 effects.push(Effect::ScheduleTimer {
                     kind: TimerKind::PeriodEnded,
                     at: *at,
                 });
+            }
+        }
+
+        Event::BillingStops => {
+            if let Billing::CancelAtPeriodEnd { at } = state.billing
+                && state.payment == PaymentOutcome::Paid
+            {
+                effects.push(Effect::RemoveBillingItem);
+                next.billing = Billing::BillingStopped { at };
             }
         }
 
@@ -723,14 +753,17 @@ pub fn transition(
             }
         }
 
-        Event::PeriodEnded => {
-            if let Billing::CancelAtPeriodEnd { .. } = state.billing {
+        Event::PeriodEnded => match state.billing {
+            // The early removal never ran (e.g. canceled within the lead).
+            Billing::CancelAtPeriodEnd { .. } => {
                 if state.payment == PaymentOutcome::Paid {
                     effects.push(Effect::RemoveBillingItem);
                 }
                 cancel(&mut next, &mut effects, host, now);
             }
-        }
+            Billing::BillingStopped { .. } => cancel(&mut next, &mut effects, host, now),
+            Billing::Active | Billing::Canceled { .. } => {}
+        },
 
         Event::SubscriptionCanceled => {
             if state.payment != PaymentOutcome::Comped
@@ -742,7 +775,10 @@ pub fn transition(
 
         Event::ReleaseNow => {
             if state.payment == PaymentOutcome::Paid
-                && !matches!(state.billing, Billing::Canceled { .. })
+                && matches!(
+                    state.billing,
+                    Billing::Active | Billing::CancelAtPeriodEnd { .. }
+                )
             {
                 effects.push(Effect::RemoveBillingItem);
             }

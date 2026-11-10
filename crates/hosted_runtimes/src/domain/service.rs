@@ -454,6 +454,18 @@ impl<
         computer_id: ComputerId,
     ) -> Result<ComputerStatus, ComputerError> {
         self.require_attached().await?;
+        let record = self.team_record(team_id, computer_id).await?;
+        if record.healthy().is_some_and(|computer| {
+            matches!(
+                computer.state.billing,
+                crate::domain::lifecycle::Billing::BillingStopped { .. }
+            )
+        }) {
+            return Err(ComputerError::BadRequest(
+                "Billing for this computer has already stopped; it turns off when the period ends."
+                    .to_owned(),
+            ));
+        }
         self.apply_for_team(team_id, computer_id, Event::UndoCancel)
             .await
     }
@@ -834,7 +846,10 @@ impl Computer {
                 self.state.phase,
                 Phase::PendingPayment { .. } | Phase::PaymentFailed | Phase::Destroyed
             )
-            && !matches!(self.state.billing, Billing::Canceled { .. })
+            && matches!(
+                self.state.billing,
+                Billing::Active | Billing::CancelAtPeriodEnd { .. }
+            )
     }
 }
 

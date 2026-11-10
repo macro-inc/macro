@@ -16,6 +16,9 @@ import type { ComputerStatusSetup } from './computerStatusSetup';
  * A computer as its team sees it.
  */
 export interface ComputerStatus {
+  /** Whether a cancel at period end can still be undone; false once its
+billing item was removed ahead of the renewal. */
+  canUndoCancel: boolean;
   /** When billing stops, for a computer canceled at period end. */
   cancelsAt?: ComputerStatusCancelsAt;
   /** Versioned catalog entry saved at purchase. */
