@@ -39,6 +39,7 @@ use uuid::Uuid;
 
 /// Whether a change was initiated by a Macro user action or first observed
 /// syncing from the email provider. Lets automation ignore its own echoes.
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum EmailEventOrigin {
@@ -49,6 +50,8 @@ pub enum EmailEventOrigin {
 }
 
 /// Reference to an email label carried on wire events.
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailLabelRef))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LabelRef {
     /// Macro's label row id, when the label is known locally.
@@ -60,6 +63,8 @@ pub struct LabelRef {
 }
 
 /// Why an email link (connected inbox) was disconnected.
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailLinkDisconnectReason))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LinkDisconnectReason {
@@ -76,6 +81,8 @@ pub enum LinkDisconnectReason {
 }
 
 /// Why a queued send was cancelled before reaching the provider.
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailSendCancelReason))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SendCancelReason {
@@ -86,6 +93,8 @@ pub enum SendCancelReason {
 }
 
 /// Why a set of threads was asked to be reindexed for search.
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailThreadsReindexReason))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ThreadsReindexReason {
@@ -96,6 +105,8 @@ pub enum ThreadsReindexReason {
 }
 
 /// Metadata for [`EmailTopicEvent::LinkConnected`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailLinkConnectedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LinkConnectedMetadata {
     /// The id of the connected link (inbox).
@@ -113,6 +124,8 @@ pub struct LinkConnectedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::LinkDisconnected`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailLinkDisconnectedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LinkDisconnectedMetadata {
     /// The id of the disconnected link.
@@ -126,6 +139,8 @@ pub struct LinkDisconnectedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::LinkReauthRequired`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailLinkReauthRequiredMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LinkReauthRequiredMetadata {
     /// The id of the link needing re-authentication.
@@ -139,6 +154,8 @@ pub struct LinkReauthRequiredMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::MessageReceived`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailMessageReceivedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageReceivedMetadata {
     /// The link (inbox) that received the message.
@@ -172,6 +189,8 @@ pub struct MessageReceivedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::MessageDraftSynced`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailMessageDraftSyncedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageDraftSyncedMetadata {
     /// The link (inbox) containing the draft.
@@ -191,6 +210,8 @@ pub struct MessageDraftSyncedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::MessageSent`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailMessageSentMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageSentMetadata {
     /// The link (inbox) the message was sent from.
@@ -222,6 +243,8 @@ pub struct MessageSentMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::MessageDeleted`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailMessageDeletedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageDeletedMetadata {
     /// The link (inbox) the message belonged to.
@@ -237,6 +260,8 @@ pub struct MessageDeletedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::MessageSendQueued`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailMessageSendQueuedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageSendQueuedMetadata {
     /// The link (inbox) the message will be sent from.
@@ -257,6 +282,8 @@ pub struct MessageSendQueuedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::MessageSendCancelled`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailMessageSendCancelledMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MessageSendCancelledMetadata {
     /// The link (inbox) the message would have been sent from.
@@ -274,6 +301,8 @@ pub struct MessageSendCancelledMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::ThreadArchived`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailThreadArchivedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadArchivedMetadata {
     /// The link (inbox) containing the thread.
@@ -292,6 +321,8 @@ pub struct ThreadArchivedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::ThreadTrashed`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailThreadTrashedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadTrashedMetadata {
     /// The link (inbox) containing the thread.
@@ -310,6 +341,8 @@ pub struct ThreadTrashedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::ThreadRead`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailThreadReadMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadReadMetadata {
     /// The link (inbox) containing the thread.
@@ -328,6 +361,8 @@ pub struct ThreadReadMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::ThreadStarred`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailThreadStarredMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadStarredMetadata {
     /// The link (inbox) containing the thread.
@@ -346,6 +381,8 @@ pub struct ThreadStarredMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::ThreadSpamChanged`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailThreadSpamChangedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadSpamChangedMetadata {
     /// The link (inbox) containing the thread.
@@ -364,6 +401,8 @@ pub struct ThreadSpamChangedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::ThreadProjectChanged`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailThreadProjectChangedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadProjectChangedMetadata {
     /// The link (inbox) containing the thread.
@@ -387,6 +426,8 @@ pub struct ThreadProjectChangedMetadata {
 /// [`EmailTopicEvent::ThreadArchived`] / [`EmailTopicEvent::ThreadTrashed`] /
 /// [`EmailTopicEvent::ThreadRead`] / [`EmailTopicEvent::ThreadStarred`] /
 /// [`EmailTopicEvent::ThreadSpamChanged`] events instead.
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailThreadLabelsUpdatedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadLabelsUpdatedMetadata {
     /// The link (inbox) containing the thread.
@@ -407,6 +448,8 @@ pub struct ThreadLabelsUpdatedMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::ThreadBackfilled`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailThreadBackfilledMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadBackfilledMetadata {
     /// The link (inbox) containing the thread.
@@ -418,6 +461,8 @@ pub struct ThreadBackfilledMetadata {
 }
 
 /// Metadata for [`EmailTopicEvent::ThreadsReindexRequested`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = EmailThreadsReindexRequestedMetadata))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ThreadsReindexRequestedMetadata {
     /// The link (inbox) containing the threads.
@@ -431,6 +476,7 @@ pub struct ThreadsReindexRequestedMetadata {
 }
 
 /// Events that can be published to [`MacroEmailTopic`].
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event_type", content = "metadata")]
 pub enum EmailTopicEvent {
@@ -469,7 +515,7 @@ pub enum EmailTopicEvent {
     MessageDeleted(MessageDeletedMetadata),
     /// A send was committed and queued (undo window or scheduled send).
     /// Emitted from the email domain service and the schedule handler.
-    /// Always resolved by exactly one later `message_sent` or
+    /// A completed send or cancellation may later publish `message_sent` or
     /// `message_send_cancelled` for the same message.
     #[serde(rename = "email.message_send_queued")]
     MessageSendQueued(MessageSendQueuedMetadata),
@@ -521,6 +567,80 @@ pub enum EmailTopicEvent {
     /// names change. Producers must include at most 50 thread ids.
     #[serde(rename = "email.threads_reindex_requested")]
     ThreadsReindexRequested(ThreadsReindexRequestedMetadata),
+}
+
+impl EmailTopicEvent {
+    /// The event name carried by the wire `event_type` tag.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::LinkConnected(..) => "email.link_connected",
+            Self::LinkDisconnected(..) => "email.link_disconnected",
+            Self::LinkReauthRequired(..) => "email.link_reauth_required",
+            Self::MessageReceived(..) => "email.message_received",
+            Self::MessageDraftSynced(..) => "email.message_draft_synced",
+            Self::MessageSent(..) => "email.message_sent",
+            Self::MessageDeleted(..) => "email.message_deleted",
+            Self::MessageSendQueued(..) => "email.message_send_queued",
+            Self::MessageSendCancelled(..) => "email.message_send_cancelled",
+            Self::ThreadArchived(..) => "email.thread_archived",
+            Self::ThreadTrashed(..) => "email.thread_trashed",
+            Self::ThreadRead(..) => "email.thread_read",
+            Self::ThreadStarred(..) => "email.thread_starred",
+            Self::ThreadSpamChanged(..) => "email.thread_spam_changed",
+            Self::ThreadProjectChanged(..) => "email.thread_project_changed",
+            Self::ThreadLabelsUpdated(..) => "email.thread_labels_updated",
+            Self::ThreadBackfilled(..) => "email.thread_backfilled",
+            Self::ThreadsReindexRequested(..) => "email.threads_reindex_requested",
+        }
+    }
+
+    /// The user whose private inbox owns this event.
+    pub fn owner(&self) -> &MacroUserIdStr<'static> {
+        match self {
+            Self::LinkConnected(metadata) => &metadata.owner,
+            Self::LinkDisconnected(metadata) => &metadata.owner,
+            Self::LinkReauthRequired(metadata) => &metadata.owner,
+            Self::MessageReceived(metadata) => &metadata.owner,
+            Self::MessageDraftSynced(metadata) => &metadata.owner,
+            Self::MessageSent(metadata) => &metadata.owner,
+            Self::MessageDeleted(metadata) => &metadata.owner,
+            Self::MessageSendQueued(metadata) => &metadata.owner,
+            Self::MessageSendCancelled(metadata) => &metadata.owner,
+            Self::ThreadArchived(metadata) => &metadata.owner,
+            Self::ThreadTrashed(metadata) => &metadata.owner,
+            Self::ThreadRead(metadata) => &metadata.owner,
+            Self::ThreadStarred(metadata) => &metadata.owner,
+            Self::ThreadSpamChanged(metadata) => &metadata.owner,
+            Self::ThreadProjectChanged(metadata) => &metadata.owner,
+            Self::ThreadLabelsUpdated(metadata) => &metadata.owner,
+            Self::ThreadBackfilled(metadata) => &metadata.owner,
+            Self::ThreadsReindexRequested(metadata) => &metadata.owner,
+        }
+    }
+
+    /// The connected inbox that published this event.
+    pub fn link_id(&self) -> Uuid {
+        match self {
+            Self::LinkConnected(metadata) => metadata.link_id,
+            Self::LinkDisconnected(metadata) => metadata.link_id,
+            Self::LinkReauthRequired(metadata) => metadata.link_id,
+            Self::MessageReceived(metadata) => metadata.link_id,
+            Self::MessageDraftSynced(metadata) => metadata.link_id,
+            Self::MessageSent(metadata) => metadata.link_id,
+            Self::MessageDeleted(metadata) => metadata.link_id,
+            Self::MessageSendQueued(metadata) => metadata.link_id,
+            Self::MessageSendCancelled(metadata) => metadata.link_id,
+            Self::ThreadArchived(metadata) => metadata.link_id,
+            Self::ThreadTrashed(metadata) => metadata.link_id,
+            Self::ThreadRead(metadata) => metadata.link_id,
+            Self::ThreadStarred(metadata) => metadata.link_id,
+            Self::ThreadSpamChanged(metadata) => metadata.link_id,
+            Self::ThreadProjectChanged(metadata) => metadata.link_id,
+            Self::ThreadLabelsUpdated(metadata) => metadata.link_id,
+            Self::ThreadBackfilled(metadata) => metadata.link_id,
+            Self::ThreadsReindexRequested(metadata) => metadata.link_id,
+        }
+    }
 }
 
 impl TopicEvent for EmailTopicEvent {

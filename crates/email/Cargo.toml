@@ -47,6 +47,7 @@ inbound = ["ports"]
 outbound = ["dep:calendar_events", "dep:sqlx", "ports"]
 sqs = ["dep:models_email", "dep:sqs_client", "ports"]
 ports = ["crm/ports", "dep:chrono-tz", "dep:tokio", "frecency/ports"]
+schema = ["dep:utoipa", "macro_user_id/schema"]
 # The S3 adapter for staged draft attachments.
 s3 = ["dep:aws-sdk-s3", "ports"]
 

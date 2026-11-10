@@ -230,7 +230,7 @@ fn threads_reindex_reason_uses_snake_case() {
 
 #[test]
 fn event_type_strings_follow_dot_convention() {
-    let link_id = Uuid::nil();
+    let link_id = Uuid::new_v4();
     let owner = user_id("macro|owner@example.com");
     let actor = Some(user_id("macro|actor@example.com"));
 
@@ -449,6 +449,13 @@ fn event_type_strings_follow_dot_convention() {
     for (event, expected_type) in cases {
         let value = serde_json::to_value(event.event()).expect("serializable");
         assert_eq!(value["event_type"], *expected_type);
+        assert_eq!(event.event().event.name(), expected_type);
+        assert_eq!(event.event().event.link_id(), link_id);
+        assert_eq!(event.key(), link_id.to_string());
+        assert_eq!(
+            event.event().event.owner().to_string(),
+            "macro|owner@example.com"
+        );
     }
 }
 
