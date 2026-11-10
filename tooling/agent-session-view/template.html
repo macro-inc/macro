@@ -67,7 +67,8 @@ main { padding: 16px 24px 80px; min-width: 0; }
 .timeline.models { height: 14px; margin-top: 3px; background: transparent; border: 1px dashed var(--line); cursor: default; }
 .timeline.models .seg.call { background: var(--model); opacity: .7; border-right: 1px solid var(--bg, #fff); }
 .timeline.models .seg.call.failed { background: var(--fail); }
-table.calls { border-collapse: collapse; font-size: 12px; margin: 6px 0; }
+div.calls { overflow-x: auto; }
+table.calls { border-collapse: collapse; font-size: 12px; margin: 6px 0; white-space: nowrap; }
 table.calls td, table.calls th { padding: 2px 8px; border-bottom: 1px solid var(--line); text-align: right; }
 table.calls td:nth-child(4), table.calls th:nth-child(4), table.calls td:last-child, table.calls th:last-child { text-align: left; }
 .timeline .tick { position: absolute; bottom: 0; font-size: 10px; color: var(--muted); padding-left: 2px; border-left: 1px solid var(--line); height: 12px; line-height: 12px; }
@@ -392,7 +393,7 @@ function renderModelCalls(turn) {
     return `<tr><td>+${secs(call.start_ms - turn.start)}</td><td>${secs(call.end_ms - call.start_ms)}</td><td>${secs(call.first_chunk_ms)} ${esc(call.first_chunk_kind || '')}</td><td>${esc(call.model)}</td>` +
       `<td>${count(call.input_tokens)}</td><td>${count(call.cache_read_tokens)}</td><td>${count(call.cache_write_tokens)}</td><td>${count(call.output_tokens)}</td><td>${largest}</td></tr>`;
   }).join('');
-  details.append(el('table', { class: 'calls' }, `<tr><th>at</th><th>took</th><th>first chunk</th><th>model</th><th>input</th><th>cache read</th><th>cache write</th><th>output</th><th>largest prompt parts</th></tr>${rows}`));
+  details.append(el('div', { class: 'calls' }, `<table class="calls"><tr><th>at</th><th>took</th><th>first chunk</th><th>model</th><th>input</th><th>cache read</th><th>cache write</th><th>output</th><th>largest prompt parts</th></tr>${rows}</table>`));
   return details;
 }
 
