@@ -2265,7 +2265,7 @@ async fn run() -> anyhow::Result<()> {
                                 | HarnessCommand::ToolApproval(_)
                                 | HarnessCommand::PresentTool { .. }
                                 | HarnessCommand::SessionStopped { .. }
-                                | HarnessCommand::Reattach
+                                | HarnessCommand::Reattach(_)
                                 | HarnessCommand::DrainNotifications => "agent_trigger.unexpected",
                             };
                             tracing::Span::current().record("macro.event.type", event_type);
