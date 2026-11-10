@@ -725,6 +725,17 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
 
 const SYNC_RETRY_COUNT = 5;
 const SYNC_RETRY_SCHEDULE = Schedule.exponential('2 seconds');
+/** How long to wait before asking a busy server again (its `Retry-After`). */
+const SYNC_BUSY_PAUSE_MS = 30_000;
+/**
+ * Statuses that tell this client to wait, not that the stream failed: the
+ * user already has a stream open (409), or the server holds its most open
+ * streams or asks for fewer requests (503, 429).
+ */
+const SYNC_BUSY_STATUSES: readonly number[] = [409, 429, 503];
+
+const isServerBusy = (failure: SyncFailure): boolean =>
+  failure.kind === 'http' && SYNC_BUSY_STATUSES.includes(failure.status);
 /**
  * A lane that fails this many times in one pass is left out of that pass's
  * later streams; it resumes from its saved state on the next pass.
@@ -808,11 +819,13 @@ function recordSyncTelemetry(pass: SyncPass, outcome: SyncRunOutcome): void {
 }
 
 /**
- * One stream of `pass`, retried with backoff (except `unsupported`). Every
- * attempt re-plans from the cache's saved lane state, so it resumes rather
- * than restarts. Interrupting it stops the host's run. With `stopAfterMs`,
- * an attempt still running then is stopped (pages written so far are kept)
- * and the stream resolves to `None` instead of a result.
+ * One stream of `pass`, retried with backoff (except `unsupported`). A busy
+ * server is asked again every `SYNC_BUSY_PAUSE_MS` for as long as it stays
+ * busy, without spending retries. Every attempt re-plans from the cache's
+ * saved lane state, so it resumes rather than restarts. Interrupting it stops
+ * the host's run. With `stopAfterMs`, an attempt still running then is
+ * stopped (pages written so far are kept) and the stream resolves to `None`
+ * instead of a result.
  */
 const runSyncStream = (
   host: StreamedSyncHost,
@@ -850,6 +863,10 @@ const runSyncStream = (
             Effect.map(Option.flatten)
           ),
     Effect.retry({
+      schedule: Schedule.spaced(SYNC_BUSY_PAUSE_MS),
+      while: isServerBusy,
+    }),
+    Effect.retry({
       times: SYNC_RETRY_COUNT,
       schedule: SYNC_RETRY_SCHEDULE,
       while: (failure: SyncFailure) => failure.kind !== 'unsupported',
@@ -857,11 +874,12 @@ const runSyncStream = (
   );
 
 /**
- * The streamed cache sync: the first pass as one stream, then the second pass
- * as streams sized by time and bytes (`SECOND_PASS_STREAM`) with a short
- * pause between them, until a stream completes. A lane that fails (the
- * server's `laneError`) does not stop the others: each pass re-runs it, from
- * its saved state, until it has failed `SYNC_LANE_FAILURES` times.
+ * The streamed cache sync: the first pass, resumed for as long as the server
+ * ends its stream early, then the second pass as streams sized by time and
+ * bytes (`SECOND_PASS_STREAM`) with a short pause between them, until a
+ * stream completes. A lane that fails (the server's `laneError`) does not
+ * stop the others: each pass re-runs it, from its saved state, until it has
+ * failed `SYNC_LANE_FAILURES` times.
  */
 export const runStreamedSync = Effect.fn('runStreamedSync')(function* (
   host: StreamedSyncHost
@@ -878,8 +896,10 @@ export const runStreamedSync = Effect.fn('runStreamedSync')(function* (
     const retry = Option.isSome(result)
       ? recordFailedLanes(firstFailures, result.value)
       : undefined;
-    if (retry === undefined) break;
-    yield* Effect.sleep(retry);
+    const endedEarly =
+      Option.isSome(result) && result.value.reason !== 'complete';
+    if (!endedEarly && retry === undefined) break;
+    yield* Effect.sleep(retry ?? 0);
   }
   const secondPassStartedAt = new Date().toISOString();
   const secondFailures: LaneFailures = new Map();

@@ -62,8 +62,8 @@ function fakeHost() {
 const asHost = (host: ReturnType<typeof fakeHost>) =>
   host as unknown as CacheHost & SyncHost;
 
-/** Advances fake time until `promise` settles. */
-async function settle<T>(promise: Promise<T>): Promise<T> {
+/** Advances fake time until `promise` settles, for at most `seconds`. */
+async function settle<T>(promise: Promise<T>, seconds = 100): Promise<T> {
   let done = false;
   promise.then(
     () => {
@@ -73,7 +73,7 @@ async function settle<T>(promise: Promise<T>): Promise<T> {
       done = true;
     }
   );
-  for (let step = 0; step < 100 && !done; step += 1) {
+  for (let step = 0; step < seconds && !done; step += 1) {
     await vi.advanceTimersByTimeAsync(1_000);
   }
   return promise;
@@ -163,10 +163,37 @@ describe('runStreamedSync', () => {
     expect(host.syncStop).toHaveBeenCalledOnce();
   });
 
+  it('resumes a first pass the server ended early before the second pass', async () => {
+    runSyncPass
+      .mockResolvedValueOnce(chunked)
+      .mockResolvedValueOnce(complete)
+      .mockResolvedValueOnce(complete);
+    await settle(Effect.runPromise(runStreamedSync(asHost(fakeHost()))));
+    expect(runSyncPass.mock.calls.map(([, pass]) => pass)).toEqual([
+      'first',
+      'first',
+      'second',
+    ]);
+  });
+
+  it('waits out a busy server without spending retries', async () => {
+    runSyncPass.mockResolvedValueOnce(complete);
+    // More busy answers than a failing stream gets retries.
+    for (const status of [503, 503, 429, 409, 503, 503, 503]) {
+      runSyncPass.mockResolvedValueOnce({
+        ok: false,
+        failure: { kind: 'http', status },
+      });
+    }
+    runSyncPass.mockResolvedValueOnce(complete);
+    await settle(Effect.runPromise(runStreamedSync(asHost(fakeHost()))), 300);
+    expect(runSyncPass).toHaveBeenCalledTimes(9);
+  });
+
   it('still gives up on a second-pass stream that keeps failing', async () => {
     runSyncPass
       .mockResolvedValueOnce(complete)
-      .mockResolvedValue({ ok: false, failure: { kind: 'http', status: 503 } });
+      .mockResolvedValue({ ok: false, failure: { kind: 'http', status: 500 } });
     const outcome = settle(
       Effect.runPromiseExit(runStreamedSync(asHost(fakeHost())))
     );
@@ -179,7 +206,7 @@ describe('runStreamedSync', () => {
     runSyncPass
       .mockResolvedValueOnce({
         ok: false,
-        failure: { kind: 'http', status: 503 },
+        failure: { kind: 'http', status: 500 },
       })
       .mockRejectedValueOnce(new Error('offline'))
       .mockResolvedValueOnce(complete)

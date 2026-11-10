@@ -218,5 +218,10 @@ streamed sync in the leader tab when the remote flag
 build older than the sync commands answers `Command … not found`), the paged
 backfill runs as before. A lane that fails is re-run in the same pass after
 2 s, then 4 s; after three failures it is left out of the pass and resumes on
-the next one. Each stream is recorded as a `graphql_cache.sync` span (pass,
-outcome, duration, bytes, lanes, pages, items, failed lanes).
+the next one. A first-pass stream the server ended early (`deadline`) is
+resumed until the pass completes, and only then does the second pass start.
+A stream that fails is retried five times with backoff; a busy server (409,
+429 or 503) is instead asked again every 30 s for as long as it stays busy,
+without spending those retries. Each stream is recorded as a
+`graphql_cache.sync` span (pass, outcome, duration, bytes, lanes, pages,
+items, failed lanes).
