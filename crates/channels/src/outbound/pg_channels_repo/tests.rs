@@ -3023,7 +3023,7 @@ fn home_unread_thread_feed_reads_notifications_once() {
     assert_eq!(sql.matches("FROM user_notification").count(), 1, "{sql}");
     assert!(!sql.contains("INTERSECT"), "{sql}");
     assert!(!sql.contains("UNION"), "{sql}");
-    // Matches idx_user_notification_channel_threads' predicate.
+    // Matches idx_user_notification_channel_threads_lane's predicate.
     assert!(
         sql.contains("un.notification_event_type <> 'channel_message_send'"),
         "{sql}"

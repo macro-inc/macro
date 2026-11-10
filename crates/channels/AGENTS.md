@@ -104,7 +104,7 @@ DMs, and the shared message store other domains discuss things on.
   per candidate channel; an array of the user's notified channels reads every
   notification the user has in that state, PR ones included.
 - The thread feed's notified roots skip `channel_message_send` rows, which never
-  name a thread, so `idx_user_notification_channel_threads` holds only rows
+  name a thread, so `idx_user_notification_channel_threads_lane` holds only rows
   that can. Web Home sends `(unseen OR seen) AND unseen`;
   `drop_implied_notification_conjuncts` folds that to one notification read.
 

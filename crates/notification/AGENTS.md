@@ -87,7 +87,8 @@ through the same service.
   `outbound/repository/test/lane.rs`.
 - The indexes hot reads answer from alone carry the lane
   (`idx_user_notification_viewer_entity_lane`,
-  `idx_user_notification_user_pending_lane`, `idx_user_notification_active_lane`).
+  `idx_user_notification_user_pending_lane`, `idx_user_notification_active_lane`,
+  `idx_user_notification_channel_threads_lane`).
   An index for a lane-filtered read must include it too, or every probe fetches
   the table row.
 - Feature flags gate most adapters (`axum`, `ai_tool`, `clear_ios_push`,

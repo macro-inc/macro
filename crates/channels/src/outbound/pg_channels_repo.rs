@@ -1035,7 +1035,7 @@ fn channel_thread_expr_mentions_notification(expr: &Expr<ChannelThreadLiteral>) 
 /// `$1` is the requesting user, the first bind `build_channel_thread_notification_query`
 /// pushes. Message sends never carry a thread and are most of a user's channel
 /// notifications, so skipping them by the copied event type lets
-/// `idx_user_notification_channel_threads` return only rows that can name a
+/// `idx_user_notification_channel_threads_lane` return only rows that can name a
 /// root before any `notification` lookup.
 /// Each arm fences the user's rows and the notification lookup with
 /// `OFFSET 0`. Without the inner fence Postgres hashes every `channel_message`
