@@ -5,6 +5,7 @@
 
 pub(crate) mod bots;
 pub(crate) mod entity_access;
+pub(crate) mod sessions;
 #[cfg(test)]
 mod test;
 
@@ -24,9 +25,10 @@ pub(crate) const MAX_TITLE_CHARS: usize = 120;
 /// The longest body, in characters; longer ones are rejected, not cut.
 pub(crate) const MAX_BODY_CHARS: usize = 1000;
 
-/// The kinds of entity a manual notification can link to: the ones a
-/// recipient's access can be checked against and the app can open.
-pub(crate) const LINKABLE_ENTITY_TYPES: [EntityType; 9] = [
+/// The kinds of entity whose view access the shared entity access check
+/// answers and the app can open. A link must also be one the inbox and Home
+/// list; see [`shown_in_inbox_and_home`].
+pub(crate) const ACCESS_CHECKED_TYPES: [EntityType; 9] = [
     EntityType::Document,
     EntityType::Chat,
     EntityType::Channel,
@@ -37,6 +39,13 @@ pub(crate) const LINKABLE_ENTITY_TYPES: [EntityType; 9] = [
     EntityType::Database,
     EntityType::Form,
 ];
+
+/// Whether the inbox and Home list notifications filed under this kind of
+/// entity. Anything else would be delivered and then never shown.
+pub(crate) fn shown_in_inbox_and_home(entity_type: EntityType) -> bool {
+    notification_inbox::domain::policy::CANDIDATE_TYPES.contains(&entity_type)
+        && work_feed::domain::policy::candidate_types(&[]).contains(&entity_type)
+}
 
 /// Who is sending: the acting user, and the agent whose code runs for them.
 pub(crate) struct ManualSender {
@@ -64,6 +73,15 @@ pub(crate) enum ManualNotificationError {
     BodyTooLong,
     #[error("notifications cannot link to a {0}")]
     UnlinkableEntity(EntityType),
+    /// The inbox and Home never list notifications about this kind of entity.
+    #[error("notifications linking to a {0} would not appear in the inbox or Home")]
+    NotShownInInbox(EntityType),
+    /// The inbox and Home leave out unlisted and hidden agent sessions, such
+    /// as a routine's runs unless the routine lists them.
+    #[error(
+        "the linked agent session is not listed, so the notification would not appear in the inbox or Home"
+    )]
+    UnlistedAgentSession,
     /// The sender cannot see the link, or it does not exist.
     #[error("the linked entity was not found")]
     LinkNotFound,
@@ -83,6 +101,14 @@ pub(crate) trait LinkAccess: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, rootcause::Report>> + Send;
 }
 
+/// Whether an agent session is listed: shown wherever its owner's sessions are.
+pub(crate) trait SessionListing: Send + Sync + 'static {
+    fn is_listed(
+        &self,
+        session: &Entity<'_>,
+    ) -> impl Future<Output = Result<bool, rootcause::Report>> + Send;
+}
+
 /// The name and avatar an agent shows as a sender.
 pub(crate) trait AgentProfiles: Send + Sync + 'static {
     /// `None` when no such agent exists.
@@ -93,15 +119,17 @@ pub(crate) trait AgentProfiles: Send + Sync + 'static {
 }
 
 /// Validates manual notifications and hands them to the notification ingress.
-pub(crate) struct ManualNotifications<Access, Agents, Ingress> {
+pub(crate) struct ManualNotifications<Access, Sessions, Agents, Ingress> {
     pub access: Access,
+    pub sessions: Sessions,
     pub agents: Agents,
     pub ingress: Ingress,
 }
 
-impl<Access, Agents, Ingress> ManualNotifications<Access, Agents, Ingress>
+impl<Access, Sessions, Agents, Ingress> ManualNotifications<Access, Sessions, Agents, Ingress>
 where
     Access: LinkAccess,
+    Sessions: SessionListing,
     Agents: AgentProfiles,
     Ingress: NotificationIngress,
 {
@@ -142,10 +170,12 @@ where
             return Err(ManualNotificationError::BodyTooLong);
         }
 
-        if !LINKABLE_ENTITY_TYPES.contains(&draft.link.entity_type) {
-            return Err(ManualNotificationError::UnlinkableEntity(
-                draft.link.entity_type,
-            ));
+        let entity_type = draft.link.entity_type;
+        if !ACCESS_CHECKED_TYPES.contains(&entity_type) {
+            return Err(ManualNotificationError::UnlinkableEntity(entity_type));
+        }
+        if !shown_in_inbox_and_home(entity_type) {
+            return Err(ManualNotificationError::NotShownInInbox(entity_type));
         }
 
         let sender_sees_link = self
@@ -155,6 +185,19 @@ where
             .map_err(ManualNotificationError::Internal)?;
         if !sender_sees_link {
             return Err(ManualNotificationError::LinkNotFound);
+        }
+
+        // Email threads are left as they are: the inbox shows them only while
+        // Signal-important and not shared, which changes after sending.
+        if entity_type == EntityType::AgentSession {
+            let listed = self
+                .sessions
+                .is_listed(&draft.link)
+                .await
+                .map_err(ManualNotificationError::Internal)?;
+            if !listed {
+                return Err(ManualNotificationError::UnlistedAgentSession);
+            }
         }
 
         let recipient = draft

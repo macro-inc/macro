@@ -66,6 +66,7 @@ models_pagination = { path = "../../crates/models_pagination", features = [
 ] }
 notification = { path = "../../crates/notification", features = ["axum"] }
 notification_db_client = { path = "../../crates/notification_db_client" }
+notification_inbox = { path = "../../crates/notification_inbox" }
 rate_limit = { path = "../../crates/rate_limit", features = ["axum"] }
 redis = { workspace = true }
 rootcause = { workspace = true }
@@ -83,9 +84,22 @@ tracing = { workspace = true }
 utoipa = { workspace = true, features = ["chrono"] }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
+work_feed = { path = "../../crates/work_feed" }
 
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+attention_feed = { path = "../../crates/attention_feed", features = ["outbound", "test-utils"] }
+call = { path = "../../crates/call", default-features = false, features = ["outbound", "ports"] }
+channels = { path = "../../crates/channels", features = ["outbound"] }
+crm = { path = "../../crates/crm" }
+email = { path = "../../crates/email", features = ["outbound"] }
+entity_access_management = { path = "../../crates/entity_access_management" }
+foreign_entity = { path = "../../crates/foreign_entity" }
+frecency = { path = "../../crates/frecency", features = ["outbound", "postgres"] }
+github_pull_requests = { path = "../../crates/github_pull_requests" }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+readonly_pool = { path = "../../crates/readonly_pool" }
+soup = { path = "../../crates/soup", features = ["outbound"] }

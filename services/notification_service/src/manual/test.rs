@@ -14,8 +14,10 @@ use uuid::Uuid;
 
 use super::{
     AgentProfiles, LinkAccess, ManualNotificationDraft, ManualNotificationError,
-    ManualNotifications, ManualSender,
+    ManualNotifications, ManualSender, SessionListing,
 };
+
+mod delivered;
 
 /// Records every request as JSON, the way the SQS ingress would serialize it.
 #[derive(Default)]
@@ -55,6 +57,15 @@ impl LinkAccess for GrantedAccess {
     }
 }
 
+/// Lists every session except `session-unlisted`.
+struct ListedSessions;
+
+impl SessionListing for ListedSessions {
+    async fn is_listed(&self, session: &Entity<'_>) -> Result<bool, Report> {
+        Ok(session.entity_id != "session-unlisted")
+    }
+}
+
 /// Knows one agent, the one the sending code runs as.
 struct OneAgent;
 
@@ -76,9 +87,10 @@ fn user(id: &str) -> MacroUserIdStr<'static> {
 
 fn service(
     grants: &[(&'static str, &'static str)],
-) -> ManualNotifications<GrantedAccess, OneAgent, RecordingIngress> {
+) -> ManualNotifications<GrantedAccess, ListedSessions, OneAgent, RecordingIngress> {
     ManualNotifications {
         access: GrantedAccess(grants.iter().copied().collect()),
+        sessions: ListedSessions,
         agents: OneAgent,
         ingress: RecordingIngress::default(),
     }
@@ -293,5 +305,69 @@ async fn refuses_blank_or_oversized_text_and_unlinkable_entities() {
         ManualNotificationError::UnlinkableEntity(EntityType::User)
     ));
 
+    assert!(notifications.ingress.sent.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn refuses_links_the_inbox_and_home_never_list() {
+    let notifications = service(&[
+        ("macro|sender@macro.com", "routine-1"),
+        ("macro|sender@macro.com", "database-1"),
+        ("macro|sender@macro.com", "form-1"),
+    ]);
+
+    for (entity_type, id) in [
+        (EntityType::ScheduledAction, "routine-1"),
+        (EntityType::Database, "database-1"),
+        (EntityType::Form, "form-1"),
+    ] {
+        let error = notifications
+            .send(
+                ManualSender {
+                    user: user("macro|sender@macro.com"),
+                    agent_id: None,
+                },
+                ManualNotificationDraft {
+                    recipient: None,
+                    title: "Done".to_string(),
+                    body: None,
+                    link: entity_type.with_entity_string(id.to_string()),
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(error, ManualNotificationError::NotShownInInbox(refused) if refused == entity_type),
+            "{entity_type}: {error:?}"
+        );
+    }
+
+    assert!(notifications.ingress.sent.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn refuses_an_agent_session_the_inbox_leaves_out() {
+    let notifications = service(&[("macro|sender@macro.com", "session-unlisted")]);
+
+    let error = notifications
+        .send(
+            ManualSender {
+                user: user("macro|sender@macro.com"),
+                agent_id: None,
+            },
+            ManualNotificationDraft {
+                recipient: None,
+                title: "Run finished".to_string(),
+                body: None,
+                link: EntityType::AgentSession.with_entity_string("session-unlisted".to_string()),
+            },
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        ManualNotificationError::UnlistedAgentSession
+    ));
     assert!(notifications.ingress.sent.lock().unwrap().is_empty());
 }

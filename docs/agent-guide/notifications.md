@@ -382,9 +382,17 @@ The alert's title and body are the sender's words. An agent's notification
 reads as from the agent (its name and avatar as they were when sent); without
 an agent it reads as from the sending user. Opening one opens the link:
 documents and tasks by their file type, plus chats, channels, projects, email
-threads, agent sessions, routines, databases and forms.
+threads and agent sessions.
+
+A link must be something the inbox and Home list, or the notification would
+be delivered and never shown. The service derives the allowed kinds from the
+inbox's `CANDIDATE_TYPES` and Home's candidate types, and refuses the rest
+(routines, databases, forms) with 400. It also refuses unlisted and hidden
+agent sessions (a routine's runs, unless the routine lists them). An email
+thread is accepted but shows only while it is Signal-important and not shared.
 In the unified Notifications view a manual notification is an agent row on its
-linked entity, from the agent (or the sending user when no agent sent it).
+linked entity, from the agent (or the sending user when no agent sent it); on
+a channel it is its own row beside the channel's messages.
 
 Verify from an agent session: ask the agent to notify you about a task, and a
 teammate who can and one who cannot see it. You get an inbox row with the

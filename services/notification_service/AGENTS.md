@@ -17,7 +17,9 @@ worker that sends email/mobile-push/websocket notifications.
   (list/read), `unsubscribe.rs` (single and atomic bulk item mute/snooze), `health.rs`.
 - `src/manual.rs` + `src/api/manual_notification.rs`: manual notifications
   (`POST /user_notifications/send`, the SDK's `notifications.send`). The
-  domain checks that sender and recipient can see the link, snapshots the
+  domain checks that sender and recipient can see the link, that the inbox
+  and Home list it (types from `notification_inbox`'s `CANDIDATE_TYPES` and
+  `work_feed`'s candidate types; agent sessions must be listed), snapshots the
   sending agent, and enqueues through the notification ingress; the route
   limits each sender to 60 an hour. It lives here, not in
   `crates/notification`, because `model_notifications` depends on that crate.
@@ -48,6 +50,11 @@ worker that sends email/mobile-push/websocket notifications.
   `crates/notification_db_client`).
 
 ## Gotchas
+
+- `src/manual/test/delivered.rs` sends a manual notification for every
+  linkable kind and reads it back through the real inbox and Home services
+  over Soup; a kind that becomes linkable needs an entity in
+  `fixtures/manual_links.sql`, or the test fails.
 
 - PostgreSQL delete forwarding emits `notification.delete.publish` spans and
   logs publication failures. The retention Lambda is a separate binary/role;

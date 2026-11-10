@@ -31,6 +31,7 @@ use utoipa::ToSchema;
 use crate::api::context::AuthorizationService;
 use crate::manual::bots::BotAgentProfiles;
 use crate::manual::entity_access::EntityAccessLinks;
+use crate::manual::sessions::PgSessionListing;
 use crate::manual::{
     ManualNotificationDraft, ManualNotificationError, ManualNotifications, ManualSender,
 };
@@ -41,6 +42,7 @@ const WINDOW: Duration = Duration::from_secs(60 * 60);
 
 pub(crate) type Notifications = ManualNotifications<
     EntityAccessLinks<EntityAccessServiceImpl<PgAccessRepository>>,
+    PgSessionListing,
     BotAgentProfiles<PgBotsRepo>,
     SqsNotificationIngress<SqsQueue>,
 >;
@@ -127,8 +129,9 @@ impl FromRequestParts<ManualNotificationState> for PerSenderRateLimit {
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ManualNotificationLink {
-    /// One of document, chat, channel, project, email_thread, agent_session,
-    /// scheduled_action, database or form.
+    /// One of document, chat, channel, project, email_thread or agent_session:
+    /// the kinds the inbox and Home list. An agent session must be listed;
+    /// an email thread shows only while it is Signal-important and not shared.
     pub entity_type: EntityType,
     /// The entity's id.
     pub entity_id: String,
@@ -219,7 +222,9 @@ fn error_response(error: ManualNotificationError) -> (StatusCode, Json<ErrorResp
         ManualNotificationError::EmptyTitle
         | ManualNotificationError::TitleTooLong
         | ManualNotificationError::BodyTooLong
-        | ManualNotificationError::UnlinkableEntity(_) => StatusCode::BAD_REQUEST,
+        | ManualNotificationError::UnlinkableEntity(_)
+        | ManualNotificationError::NotShownInInbox(_)
+        | ManualNotificationError::UnlistedAgentSession => StatusCode::BAD_REQUEST,
         ManualNotificationError::LinkNotFound => StatusCode::NOT_FOUND,
         ManualNotificationError::RecipientCannotSeeLink => StatusCode::FORBIDDEN,
         ManualNotificationError::Internal(report) => {

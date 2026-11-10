@@ -260,6 +260,7 @@ pub async fn main() -> anyhow::Result<()> {
                     entity_access::outbound::PgAccessRepository::new(db.clone()),
                 ),
             ),
+            sessions: manual::sessions::PgSessionListing(db.clone()),
             agents: manual::bots::BotAgentProfiles(bots::outbound::pg_bots_repo::PgBotsRepo::new(
                 db.clone(),
             )),

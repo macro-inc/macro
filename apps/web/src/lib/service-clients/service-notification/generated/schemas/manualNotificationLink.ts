@@ -12,7 +12,8 @@ import type { EntityType } from './entityType';
 export interface ManualNotificationLink {
   /** The entity's id. */
   entityId: string;
-  /** One of document, chat, channel, project, email_thread, agent_session,
-scheduled_action, database or form. */
+  /** One of document, chat, channel, project, email_thread or agent_session:
+the kinds the inbox and Home list. An agent session must be listed;
+an email thread shows only while it is Signal-important and not shared. */
   entityType: EntityType;
 }
