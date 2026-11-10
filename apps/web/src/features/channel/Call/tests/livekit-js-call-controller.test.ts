@@ -180,7 +180,9 @@ describe('livekit call controller prejoin tracks', () => {
   });
 });
 
-const { startCallSpeakerDetection } = await import('../call-speaker-detection');
+const { startCallSpeakerDetection } = await import(
+  '../primitives/call-speaker-detection'
+);
 
 describe('visual call speaker detection', () => {
   let listeners: Map<string, Set<() => void>>;

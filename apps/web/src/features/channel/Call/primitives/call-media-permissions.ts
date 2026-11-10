@@ -1,15 +1,27 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { createSignal, onCleanup } from 'solid-js';
+import { onCleanup } from 'solid-js';
+import { createStore } from 'solid-js/store';
 
 export type CallMediaDevice = 'microphone' | 'camera';
+
+export function isPermissionDenial(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  return 'name' in error && error.name === 'NotAllowedError';
+}
 
 /** Permission state and pending recovery belong to the call owner. */
 export function createCallMediaPermissions(options?: {
   onGranted: (device: CallMediaDevice) => Promise<void>;
 }) {
-  const [microphone, setMicrophone] = createSignal<PermissionState>('prompt');
-  const [camera, setCamera] = createSignal<PermissionState>('prompt');
+  const [permissions, setPermission] = createStore<
+    Record<CallMediaDevice, PermissionState>
+  >({
+    microphone: 'prompt',
+    camera: 'prompt',
+  });
   const revisions = { microphone: 0, camera: 0 };
+  const cancellations = { microphone: 0, camera: 0 };
+  const attempts = { microphone: 0, camera: 0 };
   const recovery: Partial<Record<CallMediaDevice, () => boolean>> = {};
   const recovering = new Set<CallMediaDevice>();
   const cleanups: (() => void)[] = [];
@@ -17,8 +29,14 @@ export function createCallMediaPermissions(options?: {
   const set = (device: CallMediaDevice, state: PermissionState) => {
     if (disposed) return;
     revisions[device] += 1;
-    if (device === 'microphone') setMicrophone(state);
-    else setCamera(state);
+    setPermission(device, state);
+  };
+  // Retire the request as well as its saved denial so a later grant cannot
+  // enable a device after Cancel, key release, or a different user action.
+  const cancelRecovery = (device: CallMediaDevice) => {
+    revisions[device] += 1;
+    cancellations[device] += 1;
+    delete recovery[device];
   };
   const recover = (device: CallMediaDevice) => {
     if (disposed || !recovery[device] || recovering.has(device)) return;
@@ -74,26 +92,31 @@ export function createCallMediaPermissions(options?: {
   async function capture<T>(
     device: CallMediaDevice,
     action: () => Promise<T>,
-    current: () => boolean = () => true
+    current: () => boolean = () => true,
+    onCancelled?: () => Promise<void>
   ): Promise<T> {
     const revision = ++revisions[device];
+    const cancellation = cancellations[device];
+    const attempt = ++attempts[device];
     try {
       const result = await action();
+      // A browser prompt cannot be withdrawn. If Cancel wins while capture is
+      // pending, disable its result before returning; a newer explicit capture wins.
+      const cancelled = cancellation !== cancellations[device];
+      if (cancelled) {
+        if (current() && attempts[device] === attempt) await onCancelled?.();
+        return result;
+      }
       if (current() && revisions[device] === revision) {
         delete recovery[device];
         set(device, 'granted');
       }
       return result;
     } catch (error) {
-      if (
-        !disposed &&
-        current() &&
-        revisions[device] === revision &&
-        typeof error === 'object' &&
-        error !== null &&
-        'name' in error &&
-        error.name === 'NotAllowedError'
-      ) {
+      const currentRequest =
+        !disposed && current() && revisions[device] === revision;
+      const denied = isPermissionDenial(error);
+      if (currentRequest && denied) {
         recovery[device] = current;
         let state: PermissionState = 'denied';
         try {
@@ -124,5 +147,10 @@ export function createCallMediaPermissions(options?: {
   });
   fireAndForget(watch('microphone'), 'call-media-permission');
   fireAndForget(watch('camera'), 'call-media-permission');
-  return { microphone, camera, capture };
+  return {
+    microphone: () => permissions.microphone,
+    camera: () => permissions.camera,
+    capture,
+    cancelRecovery,
+  };
 }

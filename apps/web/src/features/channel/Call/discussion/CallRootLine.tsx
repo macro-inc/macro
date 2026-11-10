@@ -17,8 +17,8 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { CallWaveform } from '../CallWaveform';
-import { useParticipantSpeaking } from '../use-call-speaking';
+import { CallWaveform } from '../components/CallWaveform';
+import { useParticipantSpeaking } from '../primitives/use-call-speaking';
 import { formatCallElapsed } from './format-call-elapsed';
 import { callerName, PastCallLine } from './PastCallLine';
 

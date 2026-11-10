@@ -5,11 +5,11 @@ import { UserGroup } from '@core/component/UserGroup';
 import { useActiveCallQuery, useLiveCallRecordQuery } from '@queries/call/call';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
-import { ActiveCallLink } from './ActiveCallLink';
-import { CallLiveChip } from './CallLiveChip';
-import { getCallJoinTab } from './call-tabs';
+import { ActiveCallLink } from '../ActiveCallLink';
+import { getCallJoinTab } from '../call-tabs';
+import { CallLiveChip } from '../components/CallLiveChip';
+import { useParticipantSpeaking } from '../primitives/use-call-speaking';
 import { PhoneAudioOutput } from './PhoneAudioOutput';
-import { useParticipantSpeaking } from './use-call-speaking';
 
 function CallHeaderPill(props: { channelId: string; startedAt?: string }) {
   const { setActiveTab } = useChannelTab();

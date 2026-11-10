@@ -3,17 +3,15 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
-import type { CallState } from './CallContext';
+import type { CallState } from '../CallContext';
 
 export function canHoldToTalk(event?: KeyboardEvent) {
   if (!event || event.isComposing || event.repeat) return false;
-  const target = event.target;
-  return !(
-    target instanceof Element &&
-    target.closest(
-      'input, textarea, select, button, a[href], [role="button"], [role="textbox"], [role^="menuitem"], [contenteditable]:not([contenteditable="false"])'
-    )
+  if (!(event.target instanceof Element)) return true;
+  const interactive = event.target.closest(
+    'input, textarea, select, button, summary, a[href], [role="button"], [role="textbox"], [role^="menuitem"], [role="option"], [role="tab"], [role="radio"], [role="checkbox"], [role="switch"], [role="combobox"], [role="listbox"], [role="slider"], [contenteditable]:not([contenteditable="false"])'
   );
+  return !interactive;
 }
 
 /** Register only while the call view owns these shortcuts; leave the app sheet unchanged. */
@@ -27,8 +25,10 @@ export function createCallHotkeys(
     | 'isAudioMuted'
     | 'toggleAudio'
     | 'toggleVideo'
+    | 'cancelMediaPermissionRecovery'
   >,
-  fullscreen: { available: Accessor<boolean>; toggle: () => Promise<void> }
+  fullscreen: { available: Accessor<boolean>; toggle: () => Promise<void> },
+  scopeId: string
 ) {
   let hold:
     | { id: string; room: ReturnType<CallState['room']>; ready: Promise<void> }
@@ -38,26 +38,26 @@ export function createCallHotkeys(
     const current = hold;
     hold = undefined;
     if (!current) return;
+    call.cancelMediaPermissionRecovery('microphone');
     restoring = true;
-    // The press promise already reports its error; still restore after a failed press.
-    fireAndForget(
-      current.ready
-        .catch(() => {})
-        .then(async () => {
-          if (
-            call.isInCall() &&
-            call.activeCallId() === current.id &&
-            call.room() === current.room &&
-            !call.isAudioMuted()
-          ) {
-            await call.toggleAudio();
-          }
-        })
-        .finally(() => {
-          restoring = false;
-        }),
-      'call.push-to-talk.release'
-    );
+    // Wait for the press capture, then restore mute only in the same call.
+    // Keyup, focus loss, and teardown share this path, including failed captures.
+    const restoreMute = async () => {
+      try {
+        await current.ready;
+      } catch {
+        // The press reports capture errors; restoration must still continue.
+      }
+      try {
+        const sameCall = call.activeCallId() === current.id;
+        const sameRoom = call.room() === current.room;
+        if (!call.isInCall() || !sameCall || !sameRoom) return;
+        if (!call.isAudioMuted()) await call.toggleAudio();
+      } finally {
+        restoring = false;
+      }
+    };
+    fireAndForget(restoreMute(), 'call.push-to-talk.release');
   };
   createEffect(
     on(
@@ -107,6 +107,7 @@ export function createCallHotkeys(
         });
         registerHotkey({
           ...common,
+          scopeId,
           hotkey: 'space',
           description: 'Hold to talk while muted',
           keyDownHandler: (event) => {

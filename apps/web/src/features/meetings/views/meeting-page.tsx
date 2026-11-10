@@ -1,6 +1,4 @@
-import { CallLiveChip } from '@channel/Call/CallLiveChip';
 import { getCallExitPath } from '@channel/Call/call-exit';
-import { PhoneAudioOutput } from '@channel/Call/PhoneAudioOutput';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import type { BackgroundEffect } from '@core/media/background-effect';
 import { isMobile } from '@core/mobile/isMobile';
@@ -20,6 +18,8 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { CallLiveChip } from '../../channel/Call/components/CallLiveChip';
+import { PhoneAudioOutput } from '../../channel/Call/views/PhoneAudioOutput';
 import { MeetingCallHeading } from '../components/meeting-call-heading';
 import { MeetingCopyButton } from '../components/meeting-copy-button';
 import {

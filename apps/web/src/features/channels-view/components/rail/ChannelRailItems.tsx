@@ -2,7 +2,6 @@ import { dismissIncomingCallEverywhere } from '@app/features/block-call/sidebar/
 import { toEntityActionListState } from '@app/features/next-soup/actions';
 import { SoupEntityContextMenu } from '@app/features/soup/SoupEntityContextMenu';
 import { useCallContextOptional } from '@channel/Call/CallContext';
-import { CallWaveform } from '@channel/Call/CallWaveform';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
 import { CHANNEL_ACTION_VIEW_CONTEXT } from '@channel/Channel/channel-actions';
 import { ChannelMutedIndicator } from '@channel/components/ChannelMutedIndicator';
@@ -22,6 +21,7 @@ import PhoneDisconnectIcon from '@icon/system/regular/phone-disconnect.svg';
 import { getBotDisplayName } from '@queries/messages/message-sender';
 import { Button, cn, Tooltip } from '@ui';
 import { type JSX, Match, type ParentProps, Show, Switch } from 'solid-js';
+import { CallWaveform } from '../../../channel/Call/components/CallWaveform';
 import { formatDetailedTimestamp, isDirectMessage } from '../../utils';
 import {
   type ChannelRailRow,

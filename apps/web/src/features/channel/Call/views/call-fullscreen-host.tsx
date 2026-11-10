@@ -11,7 +11,7 @@ import {
   useContext,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { createCallFullscreen } from './call-fullscreen';
+import { createCallFullscreen } from '../primitives/call-fullscreen';
 
 const CallFullscreenContext = createContext<{
   host: () => HTMLDivElement | undefined;

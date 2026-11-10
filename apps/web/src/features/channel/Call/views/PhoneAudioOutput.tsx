@@ -4,8 +4,8 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import Speaker from '@icon/system/regular/speaker-high.svg';
 import { Dropdown, SingleSelectCheck } from '@ui';
 import { For, Show } from 'solid-js';
-import { useCallContextOptional } from './CallContext';
-import { createCallAudioOutput } from './primitives/create-call-audio-output';
+import { useCallContextOptional } from '../CallContext';
+import { createCallAudioOutput } from '../primitives/create-call-audio-output';
 
 /** The native session owns its output; browser media uses the CallContext device picker. */
 export function PhoneAudioOutput() {

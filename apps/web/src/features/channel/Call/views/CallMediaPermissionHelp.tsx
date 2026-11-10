@@ -6,7 +6,7 @@ import { openExternalUrl } from '@core/util/url';
 import { Popover } from '@kobalte/core/popover';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
-import type { createCallMediaPermissionHelp } from './primitives/create-call-media-permission-help';
+import type { createCallMediaPermissionHelp } from '../primitives/create-call-media-permission-help';
 
 function permissionInstructions() {
   if (isDesktopPlatform()) return t('calls.permissionHelpNative');
@@ -27,6 +27,11 @@ export function CallMediaPermissionHelp(props: {
     control.help()?.device === 'camera'
       ? t('calls.enableCamera')
       : t('calls.enableMicrophone');
+  const settingsUrl = () => {
+    const device =
+      control.help()?.device === 'camera' ? 'Camera' : 'Microphone';
+    return `x-apple.systempreferences:com.apple.preference.security?Privacy_${device}`;
+  };
   return (
     <Popover
       open={!!control.help()}
@@ -66,11 +71,7 @@ export function CallMediaPermissionHelp(props: {
               <Button
                 size="sm"
                 variant="secondary"
-                onClick={() =>
-                  openExternalUrl(
-                    `x-apple.systempreferences:com.apple.preference.security?Privacy_${control.help()?.device === 'camera' ? 'Camera' : 'Microphone'}`
-                  )
-                }
+                onClick={() => openExternalUrl(settingsUrl())}
               >
                 {t('calls.openSystemSettings')}
               </Button>

@@ -1341,9 +1341,9 @@ The sectioned sidebar also offers **New section** in the same menu.
 Check each creation action with the sidebar flag on and off; changing the layout
 must not change the creation flow.
 
-When calls are enabled, `Live` appears below the rail's toolbar while an active
-quick call is available. It stays visible while browsing sections and during conversation
-search, and disappears when no active quick calls remain. Entries are titled
+Standalone quick calls retain a separate `Live` list below the rail's toolbar;
+this list does not contain channel-call indicators. It stays visible while
+browsing sections and searching, and disappears when no active quick calls remain. Entries are titled
 `Call with <creator's name>`. Clicking a call opens
 its camera/microphone setup at `/app/meet/join/<token>`; it does not join immediately.
 Live rows use the shaking incoming-phone icon, respecting reduced motion.
@@ -1534,9 +1534,9 @@ initials; the speaker has a success-colored outline.
 
 Away from the call, the desktop rail opens its participant/control popover and
 can show a draggable mini player. Phones show a compact call island above the
-dock without replacing the current composer. Live and ringing state lives on
-conversation rows, not a separate Live section. See [Calls](calls.md) for the
-current control layout, sharing semantics and verification cases.
+dock without replacing the current composer. Channel-call live and ringing
+indicators live on conversation rows; the separate `Live` list is only for
+standalone quick calls. See [Calls](calls.md) for controls and sharing semantics.
 
 Signed-in participants in channel, quick, and scheduled calls use the same chat
 panel. Guests in quick and scheduled calls can also open chat and read and send

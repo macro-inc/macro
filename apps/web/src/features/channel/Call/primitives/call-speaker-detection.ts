@@ -84,12 +84,9 @@ export function startCallSpeakerDetection(
       Track.Source.Microphone
     );
     const track = publication?.audioTrack?.mediaStreamTrack;
-    if (
-      participant.isAgent ||
-      !publication ||
-      publication.isMuted ||
-      !publication.isEnabled
-    ) {
+    const unavailable =
+      !publication || publication.isMuted || !publication.isEnabled;
+    if (participant.isAgent || unavailable) {
       removeInput(identity);
       return;
     }
@@ -112,6 +109,8 @@ export function startCallSpeakerDetection(
       return;
     }
 
+    // RMS removes DC offset before thresholding quiet speech. The release hold
+    // bridges short gaps so UI rings do not flicker between syllables.
     input.analyser.getFloatTimeDomainData(input.samples);
     let energy = 0;
     let sum = 0;
@@ -148,25 +147,18 @@ export function startCallSpeakerDetection(
       }
     }
 
-    if (
+    const membershipChanged =
       next.size !== speaking.size ||
-      [...next].some((identity) => !speaking.has(identity))
-    ) {
+      [...next].some((identity) => !speaking.has(identity));
+    if (membershipChanged) {
       speaking = next;
       onChange(next);
     }
   }
 
   async function resumeAnalysis() {
-    if (
-      stopped ||
-      !context ||
-      context.state === 'running' ||
-      context.state === 'closed' ||
-      document.hidden
-    ) {
-      return;
-    }
+    if (stopped || !context || document.hidden) return;
+    if (context.state === 'running' || context.state === 'closed') return;
     try {
       await context.resume();
     } catch {

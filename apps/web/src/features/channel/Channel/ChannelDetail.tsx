@@ -18,10 +18,6 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { TraceFlow } from '@app/observability/flow';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
-import {
-  ActiveCallHeader,
-  JoinableCallStatus,
-} from '@channel/Call/ActiveCallHeader';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CallEventSync } from '@channel/Call/CallEventSync';
 import { ChannelCallAutoJoin } from '@channel/Call/ChannelCallAutoJoin';
@@ -65,6 +61,10 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import {
+  ActiveCallHeader,
+  JoinableCallStatus,
+} from '../Call/views/ActiveCallHeader';
 import { ChannelLoading } from './ChannelLoading';
 import {
   ChannelMessages,

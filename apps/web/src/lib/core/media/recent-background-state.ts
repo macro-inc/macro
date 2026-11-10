@@ -11,16 +11,21 @@ import {
 const [recent, setRecent] = createSignal<RecentBackgroundImage[]>([]);
 let pending: Promise<unknown> = Promise.resolve();
 
+// Serialize device-local writes before updating the shared list. A failed write
+// leaves the previous list intact and never prevents the next queued operation.
 function enqueue(action: () => Promise<RecentBackgroundImage[] | null>) {
-  const result = pending.then(action);
-  pending = result.catch(() => {});
-  return result
-    .then((images) => {
+  const run = async () => {
+    await pending;
+    try {
+      const images = await action();
       if (images) setRecent(images);
-    })
-    .catch(() => {
-      // Storage is optional. Never change the list on a failed transaction.
-    });
+    } catch {
+      // Storage is optional; preserve the last successful list.
+    }
+  };
+  const result = run();
+  pending = result;
+  return result;
 }
 
 export function rememberRecentBackgroundImage(image: RecentBackgroundImage) {
@@ -69,14 +74,11 @@ export function createRecentBackgrounds(options: RecentBackgroundOptions) {
     );
   };
   const select = (image: RecentBackgroundImage) => {
-    fireAndForget(
-      Promise.resolve(options.onSelect({ type: 'image', ...image })).then(
-        (applied) => {
-          if (applied) return rememberRecentBackgroundImage(image);
-        }
-      ),
-      'recent-background-images'
-    );
+    const apply = async () => {
+      const applied = await options.onSelect({ type: 'image', ...image });
+      if (applied) await rememberRecentBackgroundImage(image);
+    };
+    fireAndForget(apply(), 'recent-background-images');
   };
 
   return { current, removing, remove, select };

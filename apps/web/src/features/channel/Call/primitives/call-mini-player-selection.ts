@@ -9,7 +9,7 @@ import {
 import {
   type CallPreviewParticipant,
   selectCallPreview,
-} from './call-mini-player';
+} from '../core/call-mini-player';
 
 export const CALL_SPEAKER_HOLD_MS = 650;
 
@@ -23,6 +23,8 @@ export function createHeldCallPreview<T extends CallPreviewParticipant>(
   const present = createMemo(() =>
     participants().some((person) => person.id === id())
   );
+  // Restart the hold when the desired speaker changes. Shares and departures
+  // bypass the timer; cleanup cancels an old speaker's pending switch.
   createEffect(
     on([desired, reducedMotion, present], ([next, reduced, currentPresent]) => {
       if (next === id()) return;

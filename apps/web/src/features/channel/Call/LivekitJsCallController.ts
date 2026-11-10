@@ -18,7 +18,7 @@ import {
 } from './CallSessionController';
 import { startReceiverStatsSampling } from './call-audio-receiver-stats';
 import { traceCallMedia } from './call-media-telemetry';
-import { startCallSpeakerDetection } from './call-speaker-detection';
+import { startCallSpeakerDetection } from './primitives/call-speaker-detection';
 
 type LivekitJsCallControllerState = {
   activeChannelId: string | null;

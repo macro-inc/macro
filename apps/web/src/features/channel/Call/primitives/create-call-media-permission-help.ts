@@ -1,12 +1,16 @@
 import { createMemo, onCleanup } from 'solid-js';
 import { createStore, produce, unwrap } from 'solid-js/store';
-import type { CallMediaDevice } from '../call-media-permissions';
+import {
+  type CallMediaDevice,
+  isPermissionDenial,
+} from './call-media-permissions';
 
 type Media = {
   microphonePermission?: () => PermissionState;
   cameraPermission?: () => PermissionState;
   toggleAudio: (enabled?: boolean) => Promise<void>;
   toggleVideo: (enabled?: boolean) => Promise<void>;
+  cancelMediaPermissionRecovery?: (device: CallMediaDevice) => void;
 };
 
 type PermissionHelpState = {
@@ -45,6 +49,8 @@ export function createCallMediaPermissionHelp(media: Media) {
     return current === retiredHelp() ? undefined : current;
   };
   const close = () => {
+    const current = help();
+    if (current) media.cancelMediaPermissionRecovery?.(current.device);
     revision++;
     setHelp(undefined);
   };
@@ -56,13 +62,14 @@ export function createCallMediaPermissionHelp(media: Media) {
     if (state.pending[device] || disposed) return;
     const current = ++revision;
     const previous = help();
-    const anchor =
-      trigger ??
-      (retry && previous?.device === device
-        ? previous.anchor
-        : document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : undefined);
+    const findAnchor = () => {
+      if (trigger) return trigger;
+      if (retry && previous?.device === device) return previous.anchor;
+      if (document.activeElement instanceof HTMLElement)
+        return document.activeElement;
+      return undefined;
+    };
+    const anchor = findAnchor();
     returnFocus = anchor;
     const blocked = permission(device) === 'denied';
     if (blocked) setHelp({ device, anchor });
@@ -73,10 +80,7 @@ export function createCallMediaPermissionHelp(media: Media) {
       else await media.toggleVideo(enable);
       if (!disposed && current === revision) setHelp(undefined);
     } catch (error) {
-      if (
-        permission(device) !== 'denied' &&
-        !(error instanceof DOMException && error.name === 'NotAllowedError')
-      )
+      if (permission(device) !== 'denied' && !isPermissionDenial(error))
         throw error;
       if (!disposed && current === revision) setHelp({ device, anchor });
     } finally {

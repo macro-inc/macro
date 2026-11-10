@@ -72,12 +72,16 @@ function setup(unframed = false) {
   } satisfies CallMediaControlsState;
   const leave = vi.fn();
   render(() => (
-    <CallMediaControls
+    <CallMediaControls.Root
       media={media}
-      onLeave={leave}
       unframed={unframed}
       compact={unframed}
-    />
+    >
+      <CallMediaControls.Microphone />
+      <CallMediaControls.Camera />
+      <CallMediaControls.Screen />
+      <CallMediaControls.Leave onLeave={leave} />
+    </CallMediaControls.Root>
   ));
   return { media, leave };
 }

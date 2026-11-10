@@ -10,13 +10,13 @@ import { Avatar, Badge, cn, Tooltip } from '@ui';
 import type { RemoteParticipant } from 'livekit-client';
 import { createMemo, For, Show } from 'solid-js';
 import { useCallContext } from './CallContext';
-import { CallParticipantVolume } from './CallParticipantVolume';
-import { CallWaveform } from './CallWaveform';
-import { useCallVolumeOptional } from './call-volume';
+import { CallWaveform } from './components/CallWaveform';
+import { MutedForYouBadge } from './components/MutedForYouBadge';
+import { useCallVolumeOptional } from './context/call-volume';
 import { isProgramParticipant } from './is-program-participant';
 import { LK_TRACK_SOURCE } from './livekit-loader';
-import { MutedForYouBadge } from './MutedForYouBadge';
 import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
+import { CallParticipantVolume } from './views/CallParticipantVolume';
 
 function ParticipantRow(props: {
   name: string;

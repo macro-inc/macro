@@ -13,20 +13,20 @@ import type { Participant } from 'livekit-client';
 import { createMemo, For, Show, untrack } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { Transition } from 'solid-transition-group';
-import { useCallContext } from './CallContext';
-import { CallLiveChip } from './CallLiveChip';
+import { useCallContext } from '../CallContext';
+import { CallLiveChip } from '../components/CallLiveChip';
+import { CallReactionLayer } from '../components/CallReactionLayer';
+import { MutedForYouBadge } from '../components/MutedForYouBadge';
+import { useCallVolumeOptional } from '../context/call-volume';
+import type { CallPlayerResizeEdge } from '../core/call-mini-player';
+import { LK_TRACK_SOURCE } from '../livekit-loader';
+import { MutedMicrophoneBadge } from '../MutedMicrophoneBadge';
+import { createHeldCallPreview } from '../primitives/call-mini-player-selection';
+import { createCallMiniPlayer } from '../primitives/create-call-mini-player';
+import { createCallReactions } from '../primitives/create-call-reactions';
+import { TrackView } from '../TrackView';
 import { CallParticipantVolume } from './CallParticipantVolume';
 import { CallQuickControls } from './CallQuickControls';
-import { CallReactionLayer } from './CallReactionLayer';
-import type { CallPlayerResizeEdge } from './call-mini-player';
-import { createHeldCallPreview } from './call-mini-player-selection';
-import { createCallReactions } from './call-reactions';
-import { useCallVolumeOptional } from './call-volume';
-import { LK_TRACK_SOURCE } from './livekit-loader';
-import { MutedForYouBadge } from './MutedForYouBadge';
-import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
-import { createCallMiniPlayer } from './primitives/create-call-mini-player';
-import { TrackView } from './TrackView';
 
 export function CallMiniPlayer(props: {
   onCollapse: () => void;
@@ -341,13 +341,19 @@ export function CallMiniPlayer(props: {
             </div>
           )}
         </Show>
-        <CallQuickControls
-          settings
-          controls={['camera', 'screen']}
-          onReaction={(emoji) =>
-            fireAndForget(reactions.send(emoji), 'call-mini-player')
-          }
-        />
+        <CallQuickControls.Root>
+          <CallQuickControls.Settings>
+            <CallQuickControls.MediaMicrophone />
+            <CallQuickControls.MediaCamera />
+            <CallQuickControls.MediaScreen />
+            <CallQuickControls.Reactions
+              onReaction={(emoji) =>
+                fireAndForget(reactions.send(emoji), 'call-mini-player')
+              }
+            />
+            <CallQuickControls.MediaLeave />
+          </CallQuickControls.Settings>
+        </CallQuickControls.Root>
         <For
           each={
             [

@@ -15,13 +15,14 @@ export function createCallVolumeState() {
       const chosen = choices.get(participant);
       if (chosen !== undefined) return chosen;
       const reported = participant.getVolume?.(LK_TRACK_SOURCE.Microphone);
-      return reported !== undefined && Number.isFinite(reported) && reported > 0
-        ? reported
-        : 1;
+      if (reported === undefined || !Number.isFinite(reported)) return 1;
+      return reported > 0 ? reported : 1;
     },
     set(participant: RemoteParticipant, value: number) {
       if (!Number.isFinite(value)) return;
       const level = Math.max(0, Math.min(1, value));
+      // LiveKit remembers microphone gain for replacement tracks. Keep the SDK
+      // object identity in the WeakMap so a rejoined participant starts fresh.
       participant.setVolume(level, LK_TRACK_SOURCE.Microphone);
       choices.set(participant, level);
       setVersion((value) => value + 1);

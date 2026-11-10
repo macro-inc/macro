@@ -7,10 +7,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { useLiveCallRecordQuery } from '@queries/call/call';
 import { Button, cn } from '@ui';
 import { Show } from 'solid-js';
-import { useCallContextOptional } from './CallContext';
-import { CallLiveChip } from './CallLiveChip';
+import { useCallContextOptional } from '../CallContext';
+import { CallLiveChip } from '../components/CallLiveChip';
+import { useActiveCallCompanion } from '../primitives/use-active-call-companion';
 import { CallQuickControls } from './CallQuickControls';
-import { useActiveCallCompanion } from './use-active-call-companion';
 
 export function MobileCallIsland() {
   const call = useCallContextOptional();
@@ -80,7 +80,13 @@ export function MobileCallIsland() {
                 />
               </span>
             </Button>
-            <CallQuickControls controls={[]} size="icon-lg" />
+            <CallQuickControls.Root size="icon-lg">
+              <CallQuickControls.Frame>
+                <CallQuickControls.Microphone />
+                <span class="flex-1" />
+                <CallQuickControls.Leave />
+              </CallQuickControls.Frame>
+            </CallQuickControls.Root>
           </div>
         </div>
       </Show>

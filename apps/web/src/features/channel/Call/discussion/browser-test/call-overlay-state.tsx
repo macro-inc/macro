@@ -2,7 +2,7 @@ import type { BackgroundEffect } from '@core/media/background-effect';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createClient, fetchExchange } from '@urql/core';
 import { createSignal, type ParentProps } from 'solid-js';
-import { createCallMediaPermissions } from '../../call-media-permissions';
+import { createCallMediaPermissions } from '../../primitives/call-media-permissions';
 
 const params = new URLSearchParams(location.search);
 if (params.has('layout'))
@@ -168,29 +168,37 @@ async function captureMedia(
   device: 'microphone' | 'camera',
   enabled: boolean
 ): Promise<void> {
-  await permissions?.capture(device, async () => {
-    if (params.get('capture') === 'permissions' && enabled) {
-      const permission = await navigator.permissions.query({
-        name: device as PermissionName,
-      });
-      if (permission.state !== 'granted')
+  await permissions?.capture(
+    device,
+    async () => {
+      if (params.get('capture') === 'permissions' && enabled) {
+        const permission = await navigator.permissions.query({
+          name: device as PermissionName,
+        });
+        if (permission.state !== 'granted')
+          throw new DOMException('Device blocked', 'NotAllowedError');
+      } else if (params.get('capture') === 'true' && enabled) {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: device === 'microphone',
+          video: device === 'camera',
+        });
+        stream.getTracks().forEach((track) => track.stop());
+      } else if (
+        (device === 'microphone'
+          ? permissions?.microphone()
+          : permissions?.camera()) === 'denied'
+      ) {
         throw new DOMException('Device blocked', 'NotAllowedError');
-    } else if (params.get('capture') === 'true' && enabled) {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: device === 'microphone',
-        video: device === 'camera',
-      });
-      stream.getTracks().forEach((track) => track.stop());
-    } else if (
-      (device === 'microphone'
-        ? permissions?.microphone()
-        : permissions?.camera()) === 'denied'
-    ) {
-      throw new DOMException('Device blocked', 'NotAllowedError');
+      }
+      if (device === 'microphone') setAudioMuted(!enabled);
+      else setVideoMuted(!enabled);
+    },
+    () => true,
+    async () => {
+      if (device === 'microphone') setAudioMuted(true);
+      else setVideoMuted(true);
     }
-    if (device === 'microphone') setAudioMuted(!enabled);
-    else setVideoMuted(!enabled);
-  });
+  );
 }
 const call = {
   activeCallId: () => callId,
@@ -218,6 +226,8 @@ const call = {
   isAudioMuted: audioMuted,
   microphonePermission: () => permissions?.microphone() ?? 'prompt',
   cameraPermission: () => permissions?.camera() ?? 'prompt',
+  cancelMediaPermissionRecovery: (device: 'microphone' | 'camera') =>
+    permissions?.cancelRecovery(device),
   isVideoMuted: videoMuted,
   isScreenSharing: screenSharing,
   toggleAudio: async (enabled?: boolean) =>

@@ -258,7 +258,7 @@ function useNewOnboardingRedirect() {
  * content; auth, booking, and meeting pages render without this chrome.
  */
 const MobileCallIsland = lazyNamed(
-  () => import('@channel/Call/MobileCallIsland'),
+  () => import('../../features/channel/Call/views/MobileCallIsland'),
   'MobileCallIsland'
 );
 

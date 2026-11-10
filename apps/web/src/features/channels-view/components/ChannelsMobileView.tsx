@@ -14,7 +14,6 @@ import { TutorialPill } from '@app/features/video-tutorials';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { t } from '@app/lib/i18n';
 import { useCallContextOptional } from '@channel/Call/CallContext';
-import { CallWaveform } from '@channel/Call/CallWaveform';
 import { CHANNEL_ACTION_VIEW_CONTEXT } from '@channel/Channel/channel-actions';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
@@ -41,6 +40,7 @@ import {
   Switch,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import { CallWaveform } from '../../channel/Call/components/CallWaveform';
 import type { ChannelsDataSource } from '../queries';
 import { ChannelPin, ChannelPinGrid } from './ChannelPins';
 import { ChannelsEmptyState } from './ChannelsEmptyState';
@@ -164,6 +164,19 @@ export function ChannelsMobileView(props: {
     }
   };
 
+  const callActions = (channelId: string) => {
+    const ringing = channelActivity.incomingCallIds().get(channelId);
+    const live = channelActivity.callStatuses().has(channelId);
+    if (!ringing && !live) return undefined;
+    return (
+      <Show
+        when={ringing}
+        fallback={<ChannelLiveCallBadge channelId={channelId} />}
+      >
+        {(id) => <IncomingCallActions callId={id()} channelId={channelId} />}
+      </Show>
+    );
+  };
   return (
     <div
       role="tree"
@@ -335,26 +348,7 @@ export function ChannelsMobileView(props: {
                           ? t('calls.callingYou')
                           : undefined
                       }
-                      trailing={
-                        channelActivity.callStatuses().has(channel.id) ||
-                        channelActivity.incomingCallIds().has(channel.id) ? (
-                          <Show
-                            when={channelActivity
-                              .incomingCallIds()
-                              .get(channel.id)}
-                            fallback={
-                              <ChannelLiveCallBadge channelId={channel.id} />
-                            }
-                          >
-                            {(id) => (
-                              <IncomingCallActions
-                                callId={id()}
-                                channelId={channel.id}
-                              />
-                            )}
-                          </Show>
-                        ) : undefined
-                      }
+                      trailing={callActions(channel.id)}
                       item={{
                         ...toInboxCardDisplayItem(channel),
                         unread: isUnread(channel),

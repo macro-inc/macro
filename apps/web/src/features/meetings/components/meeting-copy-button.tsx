@@ -37,13 +37,17 @@ export function MeetingCopyButton(props: {
     }
   }
 
+  const size = () => {
+    if (props.compact) return 'icon-sm';
+    return isMobile() ? 'icon-lg' : 'lg';
+  };
   return (
     <div class="min-w-0 text-sm text-ink-muted">
       <HeaderIsland class="px-0">
         <CopyButton
           type="button"
           variant="ghost"
-          size={props.compact ? 'icon-sm' : isMobile() ? 'icon-lg' : 'lg'}
+          size={size()}
           aria-label="Copy Meeting Url"
           tooltip={{ content: 'Copy Meeting Url', placement: 'top' }}
           disabled={props.disabled || copying()}

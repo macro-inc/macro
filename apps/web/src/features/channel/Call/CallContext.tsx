@@ -41,12 +41,10 @@ import {
   createCallSessionController,
   stopPrejoinTracks,
 } from './CallSessionController';
-import { CallFullscreenProvider } from './call-fullscreen-host';
 import { type CallLifecycleState, createCallLifecycle } from './call-lifecycle';
-import { createCallMediaPermissions } from './call-media-permissions';
 import { traceCallMedia } from './call-media-telemetry';
 import { publishCallResolution } from './call-resolution';
-import { CallVolumeProvider } from './call-volume';
+import { CallVolumeProvider } from './context/call-volume';
 import { createLatestAsyncRequestQueue } from './latest-async-request-queue';
 import {
   getKrisp,
@@ -63,12 +61,14 @@ import {
   type NativeCallConnectionState,
   useMaybeNativeCallState,
 } from './native-call-state';
+import { createCallMediaPermissions } from './primitives/call-media-permissions';
 import { ScreenShareError } from './screen-share-error';
 import {
   isNativeCallEnabled,
   prepareNativeCallJoin,
   registerCallKitCallEndedHandler,
 } from './use-callkit';
+import { CallFullscreenProvider } from './views/call-fullscreen-host';
 
 type LivekitJsCallController = ReturnType<
   typeof import('./LivekitJsCallController')['createLivekitJsCallController']
@@ -420,6 +420,7 @@ export type CallState = {
   isVideoMuted: () => boolean;
   microphonePermission: () => PermissionState;
   cameraPermission: () => PermissionState;
+  cancelMediaPermissionRecovery: (device: 'microphone' | 'camera') => void;
   /** Whether local screen share is active */
   isScreenSharing: () => boolean;
   /** Available audio input devices (microphones) */
@@ -1491,14 +1492,12 @@ function createCallState() {
   async function toggleAudio(enabled?: boolean) {
     const r = room();
     if (!r) return;
-    const newMuted =
-      enabled !== undefined
-        ? !enabled
-        : mediaPermissions.microphone() === 'denied'
-          ? false
-          : !store.isAudioMuted;
+    let newMuted = !store.isAudioMuted;
+    if (enabled !== undefined) newMuted = !enabled;
+    else if (mediaPermissions.microphone() === 'denied') newMuted = false;
     try {
       if (newMuted) {
+        mediaPermissions.cancelRecovery('microphone');
         await traceCallMedia(
           'toggle',
           {
@@ -1529,7 +1528,11 @@ function createCallState() {
                   true,
                   currentMicrophoneCaptureOptions(deviceId)
                 ),
-              () => room() === r
+              () => room() === r,
+              async () => {
+                await r.localParticipant.setMicrophoneEnabled(false);
+                newMuted = true;
+              }
             )
         );
         // The mic track may have changed — re-apply the selected audio processing.
@@ -1552,14 +1555,12 @@ function createCallState() {
 
     const r = room();
     if (!r) return;
-    const newMuted =
-      enabled !== undefined
-        ? !enabled
-        : mediaPermissions.camera() === 'denied'
-          ? false
-          : !store.isVideoMuted;
+    let newMuted = !store.isVideoMuted;
+    if (enabled !== undefined) newMuted = !enabled;
+    else if (mediaPermissions.camera() === 'denied') newMuted = false;
     try {
       if (newMuted) {
+        mediaPermissions.cancelRecovery('camera');
         await traceCallMedia(
           'toggle',
           {
@@ -1588,7 +1589,11 @@ function createCallState() {
                   true,
                   deviceId ? { deviceId: { exact: deviceId } } : undefined
                 ),
-              () => room() === r
+              () => room() === r,
+              async () => {
+                await r.localParticipant.setCameraEnabled(false);
+                newMuted = true;
+              }
             )
         );
         // Read the actual device the browser chose so the dropdown is accurate
@@ -1877,6 +1882,7 @@ function createCallState() {
     isVideoMuted: currentIsVideoMuted,
     microphonePermission: mediaPermissions.microphone,
     cameraPermission: mediaPermissions.camera,
+    cancelMediaPermissionRecovery: mediaPermissions.cancelRecovery,
     isScreenSharing: () => store.isScreenSharing,
     audioInputDevices: () => store.audioInputDevices,
     audioOutputDevices: () => store.audioOutputDevices,

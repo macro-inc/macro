@@ -11,6 +11,7 @@ import { Resize } from '@core/component/Resize';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { UserIcon } from '@core/component/UserIcon';
 import { useAuthor, useUserId } from '@core/context/user';
+import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
@@ -23,7 +24,7 @@ import CaretUp from '@icon/system/regular/caret-up.svg';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { Avatar, Button, cn } from '@ui';
+import { Avatar, Button, cn, Dropdown } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -42,34 +43,34 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
-import { CallMoreMenu } from './CallControls/CallMoreMenu';
-import { CallReactionMenu } from './CallControls/CallReactionMenu';
 import { CallSharingMenu } from './CallControls/CallSharingMenu';
 import { CallParticipantsList } from './CallParticipantsList';
+import { CallChatPanel } from './chat/components/CallChatPanel';
+import { CallMoreMenu } from './components/CallMoreMenu';
+import { CallReactionLayer } from './components/CallReactionLayer';
+import { CallReactionMenu } from './components/CallReactionMenu';
+import { CallWaveform } from './components/CallWaveform';
+import { callStageGridStyle } from './core/call-layout';
+import { createControlsVisibility } from './create-controls-visibility';
+import type { CallPanelState } from './discussion/CallDiscussionContent';
+import { isProgramParticipant } from './is-program-participant';
+import { LK_TRACK_SOURCE } from './livekit-loader';
+import { createCallFullscreen } from './primitives/call-fullscreen';
+import { createCallHotkeys } from './primitives/call-hotkeys';
+import { createCallPanel } from './primitives/create-call-panel';
+import { createCallReactions } from './primitives/create-call-reactions';
+import { createCallStage } from './primitives/create-call-stage';
+import { useActiveCallTeamShare } from './use-toggle-share-with-team';
 import {
   LocalParticipantTile,
   LocalScreenShareTile,
   ParticipantTile,
   ScreenShareTile,
-} from './CallParticipantTiles';
-import { CallReactionLayer } from './CallReactionLayer';
-import { CallWaveform } from './CallWaveform';
-import { createCallFullscreen } from './call-fullscreen';
+} from './views/CallParticipantTiles';
 import {
   CallFullscreenPortal,
   useCallFullscreenOptional,
-} from './call-fullscreen-host';
-import { createCallHotkeys } from './call-hotkeys';
-import { callStageGridStyle } from './call-layout';
-import { createCallReactions } from './call-reactions';
-import { CallChatPanel } from './chat/components/CallChatPanel';
-import { createControlsVisibility } from './create-controls-visibility';
-import type { CallPanelState } from './discussion/CallDiscussionContent';
-import { isProgramParticipant } from './is-program-participant';
-import { LK_TRACK_SOURCE } from './livekit-loader';
-import { createCallPanel } from './primitives/create-call-panel';
-import { createCallStage } from './primitives/create-call-stage';
-import { useActiveCallTeamShare } from './use-toggle-share-with-team';
+} from './views/call-fullscreen-host';
 
 const CallChat = lazy(() => import('./chat/CallChat'));
 const GuestCallChat = lazy(() => import('./chat/GuestCallChat'));
@@ -101,7 +102,8 @@ export function CallOverlay(props: {
   const [callRoot, setCallRoot] = createSignal<HTMLDivElement>();
   const fullscreen =
     useCallFullscreenOptional()?.fullscreen ?? createCallFullscreen(callRoot);
-  createCallHotkeys(callCtx, fullscreen);
+  const [attachCallScope, callScope] = useHotkeyDOMScope('call');
+  createCallHotkeys(callCtx, fullscreen, callScope);
   const reactions = createCallReactions(callCtx.room);
   const [reactionRoot, setReactionRoot] = createSignal<HTMLDivElement>();
   const currentUserId = useUserId();
@@ -175,7 +177,7 @@ export function CallOverlay(props: {
         'relative',
         !isMobile() && !panelOpen() && 'menu-surface text-ink'
       )}
-      variant={panelOpen() ? (isMobile() ? 'accent' : 'primary') : 'secondary'}
+      variant={panelButtonVariant()}
       size={compactControls() ? 'icon-md' : 'icon-lg'}
       aria-label={panelOpen() ? t('calls.closePanel') : t('calls.openPanel')}
       tooltip={{
@@ -307,11 +309,9 @@ export function CallOverlay(props: {
     ) ?? (isLocalSpeaking() ? 'local' : undefined);
   const talkingId = () => {
     const participant = talking();
-    return participant === 'local'
-      ? localUserId()
-      : participant
-        ? tryMacroId(participant.identity)
-        : undefined;
+    if (participant === 'local') return localUserId();
+    if (!participant) return undefined;
+    return tryMacroId(participant.identity);
   };
   const talkingName = () => {
     const participant = talking();
@@ -319,6 +319,79 @@ export function CallOverlay(props: {
       ? t('calls.you')
       : participant?.name ||
           (participant ? getDisplayName(tryMacroId(participant.identity)) : '');
+  };
+  const stageClass = () => {
+    if (staged()) return 'grid justify-center gap-2';
+    return sideStrip() ? 'flex-row gap-2' : 'flex-col';
+  };
+  const stageStyle = () => {
+    if (!staged()) return undefined;
+    return callStageGridStyle(
+      stripTargets().length,
+      sideStrip(),
+      hideParticipants()
+    );
+  };
+  const slotClass = (onStage: boolean) => {
+    if (!staged()) return undefined;
+    if (onStage)
+      return sideStrip()
+        ? 'col-start-1 row-start-1'
+        : 'col-span-full row-start-1';
+    return sideStrip() ? 'col-start-2' : 'row-start-2';
+  };
+  const edgeStyle = () => {
+    if (hideParticipants()) return undefined;
+    if (sideStrip()) return { right: 'calc(9rem + 1rem)' };
+    return { bottom: 'calc(6rem + 1rem)' };
+  };
+  const edgeIcon = () => {
+    if (layout() === 'sidebar')
+      return hideParticipants() ? CaretLeft : CaretRight;
+    return hideParticipants() ? CaretUp : CaretDown;
+  };
+  const participantAreaClass = () => {
+    if (staged()) return 'contents';
+    if (!showScreenShare() && !spotlight()) return 'flex-1 min-h-0';
+    if (sideStrip()) return 'w-48 shrink-0 min-h-0 overflow-y-auto';
+    return layout() === 'grid' ? 'h-48 shrink-0' : 'h-24 shrink-0';
+  };
+  const remoteGridClass = () => {
+    if (staged() || selfInGrid()) return 'contents';
+    if (!showScreenShare())
+      return `grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden size-full`;
+    if (sideStrip())
+      return 'flex h-full flex-col items-center gap-2 overflow-y-auto size-full';
+    return 'flex h-full justify-center gap-2 overflow-hidden size-full';
+  };
+  const smallParticipant = (participant: ReturnType<typeof stagePerson>) => {
+    const inStrip = staged() && stagePerson() !== participant;
+    return inStrip || showScreenShare();
+  };
+  const selfPositionClass = () => {
+    if (localOnStage()) return cn(slotClass(true), 'min-h-0');
+    if (!selfInGrid())
+      return 'absolute z-10 bottom-4 right-4 w-48 aspect-video shadow-lg';
+    return staged() ? 'row-start-2 min-h-0' : 'relative min-h-0';
+  };
+  const controlsRowStyle = () => {
+    if (isMobile()) return undefined;
+    const toggleWidth = panelToggleSize.width ?? (compactControls() ? 32 : 40);
+    const gap = compactControls() ? 8 : 12;
+    return {
+      'grid-template-columns': `minmax(min-content,1fr) auto minmax(${toggleWidth + gap}px,1fr)`,
+    };
+  };
+  const sendReaction = (emoji: Parameters<typeof reactions.send>[0]) => {
+    fireAndForget(reactions.send(emoji), 'call-reaction');
+  };
+  const reactionAction = () => {
+    if (!callCtx.room()) return undefined;
+    return sendReaction;
+  };
+  const panelButtonVariant = () => {
+    if (!panelOpen()) return 'secondary';
+    return isMobile() ? 'accent' : 'primary';
   };
   const LocalTile = (tile: {
     class?: string;
@@ -360,7 +433,11 @@ export function CallOverlay(props: {
   return (
     <CallFullscreenPortal>
       <div
-        ref={setCallRoot}
+        ref={(element) => {
+          setCallRoot(element);
+          attachCallScope(element);
+        }}
+        tabIndex={-1}
         class={cn(
           'portal-scope relative flex h-full min-h-0 flex-col @container/call touch:pt-[var(--mobile-content-inset-top,0px)] touch:pb-(--mobile-content-inset-bottom) mobile:pb-0',
           fullscreen.active() && 'h-dvh w-dvw bg-surface',
@@ -369,7 +446,12 @@ export function CallOverlay(props: {
         )}
         data-call-layout={layout()}
         data-call-fullscreen={isMobile() ? '' : undefined}
-        onPointerDown={() => {
+        onPointerDown={(event) => {
+          // A stage click owns Space; clicks in other panes keep their own scope.
+          const root = event.currentTarget;
+          if (!root.contains(document.activeElement)) {
+            root.focus({ preventScroll: true });
+          }
           setKeyboardFocus(false);
           controls.reveal();
         }}
@@ -424,22 +506,10 @@ export function CallOverlay(props: {
                   data-call-participant-stage
                   class={cn(
                     'relative flex min-h-0 flex-1',
-                    staged()
-                      ? 'grid justify-center gap-2'
-                      : sideStrip()
-                        ? 'flex-row gap-2'
-                        : 'flex-col',
+                    stageClass(),
                     sideStrip() && staged() && 'overflow-hidden'
                   )}
-                  style={
-                    staged()
-                      ? callStageGridStyle(
-                          stripTargets().length,
-                          sideStrip(),
-                          hideParticipants()
-                        )
-                      : undefined
-                  }
+                  style={stageStyle()}
                 >
                   {/* Screen share area */}
                   <Show when={hasAnyScreenShare()}>
@@ -465,14 +535,7 @@ export function CallOverlay(props: {
                             }
                             class={cn(
                               'min-h-0 min-w-0 size-full',
-                              staged() &&
-                                (activePin() === 'local-share'
-                                  ? sideStrip()
-                                    ? 'col-start-1 row-start-1'
-                                    : 'col-span-full row-start-1'
-                                  : sideStrip()
-                                    ? 'col-start-2'
-                                    : 'row-start-2')
+                              slotClass(activePin() === 'local-share')
                             )}
                             style={tilePosition('local-share')}
                           >
@@ -495,14 +558,7 @@ export function CallOverlay(props: {
                               class={cn(
                                 'min-w-0 min-h-0',
                                 !staged() && 'flex-1',
-                                staged() &&
-                                  (pinnedShare() === participant
-                                    ? sideStrip()
-                                      ? 'col-start-1 row-start-1'
-                                      : 'col-span-full row-start-1'
-                                    : sideStrip()
-                                      ? 'col-start-2'
-                                      : 'row-start-2')
+                                slotClass(pinnedShare() === participant)
                               )}
                               style={tilePosition({ share: participant })}
                             >
@@ -571,13 +627,7 @@ export function CallOverlay(props: {
                               placement:
                                 layout() === 'sidebar' ? 'left' : 'top',
                             }}
-                            style={
-                              hideParticipants()
-                                ? undefined
-                                : sideStrip()
-                                  ? { right: 'calc(9rem + 1rem)' }
-                                  : { bottom: 'calc(6rem + 1rem)' }
-                            }
+                            style={edgeStyle()}
                             class={cn(
                               'absolute z-20 rounded-full border border-edge-muted bg-surface/70 text-ink opacity-0 pointer-events-none group-hover/share:opacity-100 group-hover/share:pointer-events-auto group-focus-within/share:opacity-100 group-focus-within/share:pointer-events-auto focus-visible:opacity-100 focus-visible:pointer-events-auto',
                               layout() === 'sidebar'
@@ -588,18 +638,7 @@ export function CallOverlay(props: {
                               changeParticipantVisibility(!hideParticipants())
                             }
                           >
-                            <Dynamic
-                              component={
-                                layout() === 'sidebar'
-                                  ? hideParticipants()
-                                    ? CaretLeft
-                                    : CaretRight
-                                  : hideParticipants()
-                                    ? CaretUp
-                                    : CaretDown
-                              }
-                              class="size-4"
-                            />
+                            <Dynamic component={edgeIcon()} class="size-4" />
                           </Button>
                         </Show>
                       </div>
@@ -612,15 +651,7 @@ export function CallOverlay(props: {
                       (spotlight() && participants().length === 0)
                     }
                     class={cn(
-                      staged()
-                        ? 'contents'
-                        : sideStrip() && (showScreenShare() || spotlight())
-                          ? 'w-48 shrink-0 min-h-0 overflow-y-auto'
-                          : showScreenShare() || spotlight()
-                            ? layout() === 'grid'
-                              ? 'h-48 shrink-0'
-                              : 'h-24 shrink-0'
-                            : 'flex-1 min-h-0',
+                      participantAreaClass(),
 
                       !staged() &&
                         selfInGrid() &&
@@ -635,22 +666,7 @@ export function CallOverlay(props: {
                       }
                     >
                       {/* Remote participants grid */}
-                      <div
-                        class={
-                          staged()
-                            ? 'contents'
-                            : selfInGrid()
-                              ? 'contents'
-                              : cn(
-                                  showScreenShare()
-                                    ? sideStrip()
-                                      ? 'flex h-full flex-col items-center gap-2 overflow-y-auto'
-                                      : 'flex h-full justify-center gap-2 overflow-hidden'
-                                    : `grid ${gridCols()} gap-2 auto-rows-fr overflow-hidden`,
-                                  'size-full'
-                                )
-                        }
-                      >
+                      <div class={remoteGridClass()}>
                         <For each={participants()}>
                           {(participant) => (
                             <div
@@ -660,14 +676,7 @@ export function CallOverlay(props: {
                                   (showScreenShare()
                                     ? 'flex-1 max-w-36'
                                     : 'size-full'),
-                                staged() &&
-                                  (stagePerson() === participant
-                                    ? sideStrip()
-                                      ? 'col-start-1 row-start-1'
-                                      : 'col-span-full row-start-1'
-                                    : sideStrip()
-                                      ? 'col-start-2'
-                                      : 'row-start-2')
+                                slotClass(stagePerson() === participant)
                               )}
                               style={tilePosition(participant)}
                             >
@@ -679,15 +688,9 @@ export function CallOverlay(props: {
                                 sidebar={
                                   sideStrip() && stagePerson() !== participant
                                 }
-                                filmstrip={
-                                  (staged() && stagePerson() !== participant) ||
-                                  showScreenShare()
-                                }
+                                filmstrip={smallParticipant(participant)}
                                 avatarSize={
-                                  (staged() && stagePerson() !== participant) ||
-                                  showScreenShare()
-                                    ? 'sm'
-                                    : 'md'
+                                  smallParticipant(participant) ? 'sm' : 'md'
                                 }
                                 isPinned={pinnedPerson() === participant}
                                 hidden={false}
@@ -711,17 +714,7 @@ export function CallOverlay(props: {
                       <div
                         hidden={false}
                         style={tilePosition('local')}
-                        class={cn(
-                          localOnStage()
-                            ? sideStrip()
-                              ? 'col-start-1 row-start-1 min-h-0'
-                              : 'col-span-full row-start-1 min-h-0'
-                            : selfInGrid()
-                              ? staged()
-                                ? 'row-start-2 min-h-0'
-                                : 'relative min-h-0'
-                              : 'absolute z-10 bottom-4 right-4 w-48 aspect-video shadow-lg'
-                        )}
+                        class={selfPositionClass()}
                       >
                         <LocalTile
                           class={
@@ -751,13 +744,7 @@ export function CallOverlay(props: {
                   <div
                     data-call-controls-row
                     class="grid w-full items-center mobile:w-fit mobile:grid-cols-[auto_auto] mobile:gap-2 mobile:px-[max(16px,var(--mobile-chrome-gutter))]"
-                    style={
-                      isMobile()
-                        ? undefined
-                        : {
-                            'grid-template-columns': `minmax(min-content,1fr) auto minmax(${(panelToggleSize.width ?? (compactControls() ? 32 : 40)) + (compactControls() ? 8 : 12)}px,1fr)`,
-                          }
-                    }
+                    style={controlsRowStyle()}
                   >
                     <Show when={!isMobile() && props.footerLeading}>
                       <div class="col-start-1 row-start-1 mr-2 justify-self-start">
@@ -798,42 +785,50 @@ export function CallOverlay(props: {
                           />
                         </Show>
                         <Show when={!isMobile()}>
-                          <CallMoreMenu
+                          <CallMoreMenu.Root
                             compact={compactControls()}
-                            layout={layout()}
-                            fullscreen={fullscreen.active()}
-                            fullscreenAvailable={fullscreen.available()}
-                            onFullscreen={() =>
-                              fireAndForget(
-                                fullscreen.toggle(),
-                                'call-fullscreen'
-                              )
-                            }
-                            onReaction={
-                              callCtx.room()
-                                ? (emoji) =>
-                                    fireAndForget(
-                                      reactions.send(emoji),
-                                      'call-reaction'
-                                    )
-                                : undefined
-                            }
-                            onLayoutChange={(value) => {
-                              const interaction =
-                                beginInteraction('call.layout.change');
-                              try {
-                                setSavedLayout(value);
-                              } finally {
-                                interaction.end();
-                              }
-                            }}
-                            hasScreenShare={hasAnyScreenShare()}
-                            hideParticipants={hideParticipants()}
-                            onHideParticipantsChange={
-                              changeParticipantVisibility
-                            }
                             onOpenChange={setSettingsOpen}
-                          />
+                          >
+                            <Show when={reactionAction()}>
+                              {(send) => (
+                                <CallMoreMenu.Reactions onReaction={send()} />
+                              )}
+                            </Show>
+                            <Dropdown.Group>
+                              <CallMoreMenu.Layout
+                                layout={layout()}
+                                onLayoutChange={(value) => {
+                                  const interaction =
+                                    beginInteraction('call.layout.change');
+                                  try {
+                                    setSavedLayout(value);
+                                  } finally {
+                                    interaction.end();
+                                  }
+                                }}
+                              />
+                              <CallMoreMenu.Participants
+                                hasScreenShare={hasAnyScreenShare()}
+                                hideParticipants={hideParticipants()}
+                                onHideParticipantsChange={
+                                  changeParticipantVisibility
+                                }
+                              />
+                              <CallMoreMenu.Fullscreen
+                                fullscreen={fullscreen.active()}
+                                fullscreenAvailable={fullscreen.available()}
+                                onFullscreen={() =>
+                                  fireAndForget(
+                                    fullscreen.toggle(),
+                                    'call-fullscreen'
+                                  )
+                                }
+                              />
+                            </Dropdown.Group>
+                            <Dropdown.Group>
+                              <CallMoreMenu.Shortcuts />
+                            </Dropdown.Group>
+                          </CallMoreMenu.Root>
                         </Show>
                       </CallControls>
                     </div>

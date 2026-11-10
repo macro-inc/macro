@@ -9,7 +9,10 @@ import { Popover } from '@kobalte/core/popover';
 import { Avatar, Button, Slider, Tooltip } from '@ui';
 import type { RemoteParticipant } from 'livekit-client';
 import { Show } from 'solid-js';
-import { createCallVolumeState, useCallVolumeOptional } from './call-volume';
+import {
+  createCallVolumeState,
+  useCallVolumeOptional,
+} from '../context/call-volume';
 
 /** iOS Safari exposes volume but ignores writes; native mobile owns its audio. */
 export function supportsParticipantVolume() {

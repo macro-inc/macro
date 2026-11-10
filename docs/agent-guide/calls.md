@@ -434,10 +434,12 @@ inside the fullscreen surface. Unsupported webviews disable the action.
 
 Desktop **More → Keyboard shortcuts** opens a four-row call-only popover.
 While the call view is open, ⌘D toggles the microphone, ⇧⌘E toggles the camera,
-Space holds the microphone open while muted, and ⌃⌘F toggles full screen.
-Non-Mac desktops use Ctrl for ⌘ and F11 for full screen. Space ignores text fields,
-editable content and buttons. Releasing Space, losing window focus or leaving the
-view restores mute; a delayed action never mutes a replacement call. These
+Space holds the microphone open only in the focused call view while muted,
+and ⌃⌘F toggles full screen. Non-Mac desktops use Ctrl for ⌘ and F11 for full screen.
+Space ignores text fields, editable content, buttons and ARIA widgets. Releasing
+Space, losing window focus or leaving the view restores mute; cancellation also
+retires permission recovery so a later grant cannot enable the microphone. A
+delayed action never mutes a replacement call. These
 bindings use the app hotkey registry without changing the global shortcut sheet.
 
 Open **Chat** and **Participants** from the button beside the media controls.

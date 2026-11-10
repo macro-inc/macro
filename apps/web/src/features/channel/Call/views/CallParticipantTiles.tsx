@@ -11,52 +11,24 @@ import { Popover } from '@kobalte/core/popover';
 import { Badge, Button, cn } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import { createSignal, type JSXElement, Show } from 'solid-js';
-import { useCallContext } from './CallContext';
+import { useCallContext } from '../CallContext';
+import { MutedForYouBadge } from '../components/MutedForYouBadge';
+import { useCallVolumeOptional } from '../context/call-volume';
+import { isProgramParticipant } from '../is-program-participant';
+import { LK_TRACK_SOURCE } from '../livekit-loader';
+import { MutedMicrophoneBadge } from '../MutedMicrophoneBadge';
+import { TrackView } from '../TrackView';
 import { CallParticipantVolume } from './CallParticipantVolume';
-import { useCallVolumeOptional } from './call-volume';
-import { isProgramParticipant } from './is-program-participant';
-import { LK_TRACK_SOURCE } from './livekit-loader';
-import { MutedForYouBadge } from './MutedForYouBadge';
-import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
-import { TrackView } from './TrackView';
 
-function VideoTag(props: {
-  children: JSXElement;
-  class?: string;
-  variant?: 'default' | 'truncated';
-  isProgram?: boolean;
-  muted?: boolean;
-  mutedForYou?: boolean;
-  mutedLabel?: string;
-  sharing?: boolean;
-  pinned?: boolean;
-}) {
+function VideoTag(props: { children: JSXElement; class?: string }) {
   return (
     <div
       class={cn(
         'absolute bottom-1 left-1 flex max-w-[calc(100%-0.5rem)] items-center gap-1 rounded bg-surface/70 px-1.5 py-0.5 text-ink text-xs',
-        props.variant === 'truncated' && 'max-w-[80%]',
         props.class
       )}
     >
-      <Show when={props.pinned}>
-        <PinIcon class="size-3 shrink-0" />
-      </Show>
-      <Show when={props.sharing}>
-        <Screencast class="size-3 shrink-0" />
-      </Show>
-      <MutedMicrophoneBadge
-        muted={props.muted ?? false}
-        label={props.mutedLabel ?? ''}
-        inline
-      />
-      <MutedForYouBadge muted={!!props.mutedForYou} inline />
-      <span class="min-w-0 truncate">{props.children}</span>
-      <Show when={props.isProgram}>
-        <Badge variant="secondary" size="xs">
-          {t('calls.agent')}
-        </Badge>
-      </Show>
+      {props.children}
     </div>
   );
 }
@@ -325,18 +297,26 @@ export function LocalParticipantTile(props: {
       <Show
         when={props.isConnecting}
         fallback={
-          <VideoTag
-            isProgram={props.isProgram}
-            muted={props.isAudioMuted}
-            mutedLabel="You are muted"
-            pinned={props.isPinned}
-          >
-            You
+          <VideoTag>
+            <Show when={props.isPinned}>
+              <PinIcon class="size-3 shrink-0" />
+            </Show>
+            <MutedMicrophoneBadge
+              muted={props.isAudioMuted}
+              label={t('calls.youAreMuted')}
+              inline
+            />
+            <span class="min-w-0 truncate">{t('calls.you')}</span>
+            <Show when={props.isProgram}>
+              <Badge variant="secondary" size="xs">
+                {t('calls.agent')}
+              </Badge>
+            </Show>
           </VideoTag>
         }
       >
         <div class="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-surface/70 text-ink-muted text-xs">
-          Connecting...
+          {t('calls.connecting')}
         </div>
       </Show>
     </ParticipantTileWrapper>
@@ -358,7 +338,7 @@ export function ParticipantTile(props: {
   const macroId = () => tryMacroId(props.participant.identity);
   const displayName = () =>
     props.participant.name?.trim() ||
-    (macroId() ? getDisplayName(macroId()) : 'Guest');
+    (macroId() ? getDisplayName(macroId()) : t('calls.guest'));
 
   const cameraTrack = () => {
     callCtx.trackVersion();
@@ -421,22 +401,33 @@ export function ParticipantTile(props: {
         />
       </Show>
 
-      <VideoTag
-        variant="truncated"
-        pinned={props.isPinned}
-        isProgram={isProgramParticipant(props.participant.attributes)}
-        muted={isAudioMuted()}
-        mutedForYou={mutedForYou()}
-        mutedLabel={`${displayName()} is muted`}
-        sharing={(() => {
-          callCtx.trackVersion();
-          const publication = props.participant.getTrackPublication(
-            LK_TRACK_SOURCE.ScreenShare
-          );
-          return publication?.isMuted === false;
-        })()}
-      >
-        {displayName()}
+      <VideoTag class="max-w-[80%]">
+        <Show when={props.isPinned}>
+          <PinIcon class="size-3 shrink-0" />
+        </Show>
+        <Show
+          when={(() => {
+            callCtx.trackVersion();
+            return (
+              props.participant.getTrackPublication(LK_TRACK_SOURCE.ScreenShare)
+                ?.isMuted === false
+            );
+          })()}
+        >
+          <Screencast class="size-3 shrink-0" />
+        </Show>
+        <MutedMicrophoneBadge
+          muted={isAudioMuted()}
+          label={t('calls.participantMuted', { name: displayName() })}
+          inline
+        />
+        <MutedForYouBadge muted={mutedForYou()} inline />
+        <span class="min-w-0 truncate">{displayName()}</span>
+        <Show when={isProgramParticipant(props.participant.attributes)}>
+          <Badge variant="secondary" size="xs">
+            {t('calls.agent')}
+          </Badge>
+        </Show>
       </VideoTag>
     </ParticipantTileWrapper>
   );
@@ -453,7 +444,7 @@ export function ScreenShareTile(props: {
   const macroId = () => tryMacroId(props.participant.identity);
   const displayName = () =>
     props.participant.name?.trim() ||
-    (macroId() ? getDisplayName(macroId()) : 'Guest');
+    (macroId() ? getDisplayName(macroId()) : t('calls.guest'));
   const screenTrack = () => {
     callCtx.trackVersion();
     return props.participant.getTrackPublication(LK_TRACK_SOURCE.ScreenShare)
@@ -476,11 +467,10 @@ export function ScreenShareTile(props: {
     >
       <TrackView track={screenTrack()} fit="contain" />
 
-      <VideoTag
-        variant="truncated"
-        pinned={props.isPinned}
-        isProgram={isProgramParticipant(props.participant.attributes)}
-      >
+      <VideoTag class="max-w-[80%]">
+        <Show when={props.isPinned}>
+          <PinIcon class="size-3 shrink-0" />
+        </Show>
         <span data-call-stage-chip="share" class="flex items-center gap-1.5">
           <Screencast class="size-3.5 shrink-0" />
           <Show when={macroId()}>
@@ -500,6 +490,11 @@ export function ScreenShareTile(props: {
             ? t('calls.participantScreen', { name: displayName() })
             : t('calls.presenterSharing', { name: displayName() })}
         </span>
+        <Show when={isProgramParticipant(props.participant.attributes)}>
+          <Badge variant="secondary" size="xs">
+            {t('calls.agent')}
+          </Badge>
+        </Show>
       </VideoTag>
     </ParticipantTileWrapper>
   );
@@ -527,7 +522,12 @@ export function LocalScreenShareTile(props: {
       <div class="flex size-full flex-col items-center justify-center gap-3 p-4">
         <Show
           when={!props.inStrip}
-          fallback={<VideoTag sharing>{t('calls.yourScreen')}</VideoTag>}
+          fallback={
+            <VideoTag>
+              <Screencast class="size-3 shrink-0" />
+              <span class="min-w-0 truncate">{t('calls.yourScreen')}</span>
+            </VideoTag>
+          }
         >
           <Screencast class="size-10 text-accent" />
           <p class="font-semibold">{t('calls.youAreSharing')}</p>

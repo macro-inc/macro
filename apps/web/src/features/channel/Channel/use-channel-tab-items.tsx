@@ -1,4 +1,3 @@
-import { CallWaveform } from '@channel/Call/CallWaveform';
 import { useCall } from '@channel/Call/use-call';
 import { isNativeCallEnabled } from '@channel/Call/use-callkit';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
@@ -7,6 +6,7 @@ import { useActiveCallQuery } from '@queries/call/call';
 import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { cn, type TabOption } from '@ui';
 import type { Accessor } from 'solid-js';
+import { CallWaveform } from '../Call/components/CallWaveform';
 import { useChannelTab } from './ChannelTabContext';
 import {
   CHANNEL_TABS,

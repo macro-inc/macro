@@ -11,14 +11,14 @@ import { Popover } from '@kobalte/core/popover';
 import { useLiveCallRecordQuery } from '@queries/call/call';
 import { Button, Dropdown, Hotkey } from '@ui';
 import { Show } from 'solid-js';
-import { useQuickCallsFlag } from '../../meetings/use-quick-calls-flag';
-import { ActiveCallLink } from './ActiveCallLink';
-import { useCallContext } from './CallContext';
-import { CallLiveChip } from './CallLiveChip';
-import { CallParticipantsList } from './CallParticipantsList';
+import { useQuickCallsFlag } from '../../../meetings/use-quick-calls-flag';
+import { ActiveCallLink } from '../ActiveCallLink';
+import { useCallContext } from '../CallContext';
+import { CallParticipantsList } from '../CallParticipantsList';
+import { CallLiveChip } from '../components/CallLiveChip';
+import { createCallReactions } from '../primitives/create-call-reactions';
 import { CallQuickControls } from './CallQuickControls';
 import { useCallFullscreenOptional } from './call-fullscreen-host';
-import { createCallReactions } from './call-reactions';
 
 export function ActiveCallPopover(props: {
   onOpenCall: () => void;
@@ -120,18 +120,19 @@ export function ActiveCallPopover(props: {
         <CallParticipantsList compact />
       </div>
       <div class="border-t border-edge-muted">
-        <CallQuickControls
-          settings
-          onReaction={(emoji) =>
-            fireAndForget(reactions.send(emoji), 'active-call-popover')
-          }
-          controls={['camera', 'screen']}
-          channelName={
-            record.isSuccess && record.data.discussion.kind === 'channel_thread'
-              ? (record.data.channelName ?? undefined)
-              : undefined
-          }
-        />
+        <CallQuickControls.Root>
+          <CallQuickControls.Settings>
+            <CallQuickControls.MediaMicrophone />
+            <CallQuickControls.MediaCamera />
+            <CallQuickControls.MediaScreen />
+            <CallQuickControls.Reactions
+              onReaction={(emoji) =>
+                fireAndForget(reactions.send(emoji), 'active-call-popover')
+              }
+            />
+            <CallQuickControls.MediaLeave />
+          </CallQuickControls.Settings>
+        </CallQuickControls.Root>
       </div>
     </Popover.Content>
   );

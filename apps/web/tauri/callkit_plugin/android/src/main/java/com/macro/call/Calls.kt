@@ -131,7 +131,12 @@ internal object Calls {
             val audio = ctx.getSystemService(AudioManager::class.java)
             audio.availableCommunicationDevices.forEach { device ->
                 val id = "device:${device.id}"
-                outputs.put(JSONObject().put("id", id).put("label", device.productName.toString()))
+                val label = when (device.type) {
+                    AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "Speaker"
+                    AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "Phone"
+                    else -> device.productName.toString()
+                }
+                outputs.put(JSONObject().put("id", id).put("label", label))
                 if (audio.communicationDevice?.id == device.id) selectedId = id
             }
         } else {

@@ -14,6 +14,8 @@ export function createCallPanel(
   opensByDefault: Accessor<boolean>,
   restoreFocus: () => void
 ) {
+  // Remember each automatic-open transition without copying it into UI state.
+  // Explicit close records the revision, so the same discussion cannot reopen it.
   const defaultOpen = createMemo(opensByDefault);
   const defaultRevision = createMemo(
     (previous: number) => (defaultOpen() ? previous + 1 : previous),
@@ -53,7 +55,10 @@ export function createCallPanel(
     },
     open,
     close,
-    toggle: () => (view().open ? close() : open(true)),
+    toggle: () => {
+      if (view().open) close();
+      else open(true);
+    },
     selectTab: (tab: CallPanelTab) => setState({ tab, focusOnOpen: false }),
   };
 }

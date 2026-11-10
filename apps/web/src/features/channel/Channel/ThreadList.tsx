@@ -320,12 +320,10 @@ export function ThreadList(props: ThreadListProps) {
     // height. The default sync path returns cached sizes, exposing the old
     // layout until ResizeObserver fires. Read mounted rows before first paint.
     measureElement: (element, entry, instance) => {
-      if (
-        props.preserveReflowGap &&
-        (element.offsetWidth === 0 ||
-          element.offsetHeight === 0 ||
-          !scrollEl()?.clientHeight)
-      ) {
+      const unmeasured =
+        element.offsetWidth === 0 || element.offsetHeight === 0;
+      const hiddenViewport = !scrollEl()?.clientHeight;
+      if (props.preserveReflowGap && (unmeasured || hiddenViewport)) {
         const index = Number(element.getAttribute('data-index'));
         const key = instance.options.getItemKey(index);
         return (
@@ -423,15 +421,12 @@ export function ThreadList(props: ThreadListProps) {
           writingScroll ||
           (programmaticOffset !== undefined &&
             Math.abs(offset - programmaticOffset) < 1.5);
-        if (
-          props.preserveReflowGap &&
-          (trackReadingGap || readingGap === undefined) &&
-          !reflowing &&
-          element &&
-          element.clientWidth > 0 &&
-          element.clientHeight > 0 &&
-          element.clientWidth === observedWidth
-        ) {
+        const tracking = trackReadingGap || readingGap === undefined;
+        const visible =
+          element && element.clientWidth > 0 && element.clientHeight > 0;
+        const stableWidth = visible && element.clientWidth === observedWidth;
+        const canReadGap = props.preserveReflowGap && tracking && !reflowing;
+        if (canReadGap && stableWidth) {
           const gap = Math.max(
             0,
             element.scrollHeight - element.clientHeight - offset
@@ -482,13 +477,8 @@ export function ThreadList(props: ThreadListProps) {
           reflowing = false;
           if (reflowFrame !== undefined) cancelAnimationFrame(reflowFrame);
         }
-        if (
-          props.preserveReflowGap &&
-          lifecycle.isReady() &&
-          widthChanged &&
-          rect.width > 0 &&
-          readingGap !== undefined
-        )
+        const preserveGap = props.preserveReflowGap && readingGap !== undefined;
+        if (preserveGap && lifecycle.isReady() && widthChanged)
           reflowing = true;
         const wasAtEnd =
           instance.getTotalSize() -

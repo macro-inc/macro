@@ -1010,6 +1010,21 @@ export function Channel(props: ChannelProps) {
                                           threadManager.getOrCreateThreadState(
                                             item.id
                                           );
+                                        const callRootSlot = () => {
+                                          if (!isCallRow()) return undefined;
+                                          return () => (
+                                            <Show when={callStatus()}>
+                                              {(status) => (
+                                                <CallRootLine
+                                                  channelId={props.channelId}
+                                                  message={m()}
+                                                  status={status()}
+                                                  inCallPanel={isPanelRoot()}
+                                                />
+                                              )}
+                                            </Show>
+                                          );
+                                        };
                                         return (
                                           <div
                                             class={
@@ -1021,24 +1036,7 @@ export function Channel(props: ChannelProps) {
                                             <ChannelThread
                                               repliesAsRoots={isPanelRoot()}
                                               hideRail={isPanelRoot()}
-                                              rootSlot={
-                                                isCallRow()
-                                                  ? () => (
-                                                      <Show when={callStatus()}>
-                                                        {(status) => (
-                                                          <CallRootLine
-                                                            channelId={
-                                                              props.channelId
-                                                            }
-                                                            message={m()}
-                                                            status={status()}
-                                                            inCallPanel={isPanelRoot()}
-                                                          />
-                                                        )}
-                                                      </Show>
-                                                    )
-                                                  : undefined
-                                              }
+                                              rootSlot={callRootSlot()}
                                               hideCollapsedPreview={isCallRow()}
                                               beforeMessage={
                                                 <AgentConversationContextBoundary

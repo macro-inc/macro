@@ -1,3 +1,4 @@
+import { match } from 'ts-pattern';
 export type CallLayout = 'auto' | 'grid' | 'speaker' | 'sidebar';
 export type CallPin<T extends object> =
   | T
@@ -23,25 +24,16 @@ export function sameCallPin<T extends object>(
   target: CallPin<T>
 ): boolean {
   if (typeof target === 'object' && 'share' in target) {
-    return (
-      !!current &&
-      typeof current === 'object' &&
-      'share' in current &&
-      current.share === target.share
-    );
+    if (!current || typeof current !== 'object') return false;
+    return 'share' in current && current.share === target.share;
   }
   return current === target;
 }
 
 export function normalizeCallLayout(value: unknown): CallLayout {
-  switch (value) {
-    case 'grid':
-    case 'speaker':
-    case 'sidebar':
-      return value;
-    default:
-      return 'auto';
-  }
+  return match(value)
+    .with('grid', 'speaker', 'sidebar', (layout) => layout)
+    .otherwise(() => 'auto' as const);
 }
 
 export function selectCallStageParticipant<T>(
@@ -49,10 +41,10 @@ export function selectCallStageParticipant<T>(
   speaking: (participant: T) => boolean,
   localSpeaking: boolean
 ): T | 'local' {
-  return (
-    participants.find(speaking) ??
-    (localSpeaking ? 'local' : (participants[0] ?? 'local'))
-  );
+  const active = participants.find(speaking);
+  if (active !== undefined) return active;
+  if (localSpeaking) return 'local';
+  return participants[0] ?? 'local';
 }
 
 /** One shared stage/strip geometry for automatic, speaker and pinned placement. */

@@ -1,7 +1,14 @@
-import { CallFullscreenProvider } from '../../call-fullscreen-host';
-import { CallVolumeProvider, useCallVolumeOptional } from '../../call-volume';
+import {
+  CallVolumeProvider,
+  useCallVolumeOptional,
+} from '../../context/call-volume';
+import { CallFullscreenProvider } from '../../views/call-fullscreen-host';
 import '@app/index.css';
-import { CallOverlay as MainCallOverlay } from 'virtual:baseline-call-overlay';
+
+const MainCallOverlay = lazy(async () => ({
+  default: (await import('virtual:baseline-call-overlay')).CallOverlay,
+}));
+
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
@@ -22,15 +29,15 @@ import { MemoryRouter, Route } from '@solidjs/router';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { DragDropProvider } from '@thisbeyond/solid-dnd';
 import { ImperativeDialogHost } from '@ui';
-import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
+import { createSignal, lazy, Match, Show, Suspense, Switch } from 'solid-js';
 import { Dynamic, render } from 'solid-js/web';
 import { ChannelTabProvider } from '../../../Channel/ChannelTabContext';
 import type { ChannelTabId } from '../../../Channel/channel-tabs';
-import { ActiveCallHeader } from '../../ActiveCallHeader';
-import { ActiveCallPopover } from '../../ActiveCallPopover';
 import { useCallContext } from '../../CallContext';
-import { CallMiniPlayer } from '../../CallMiniPlayer';
 import { CallOverlay } from '../../CallOverlay';
+import { ActiveCallHeader } from '../../views/ActiveCallHeader';
+import { ActiveCallPopover } from '../../views/ActiveCallPopover';
+import { CallMiniPlayer } from '../../views/CallMiniPlayer';
 import { CallDiscussionContent } from '../CallDiscussionContent';
 
 function SeedVolume() {

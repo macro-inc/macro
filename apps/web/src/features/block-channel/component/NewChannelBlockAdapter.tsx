@@ -14,7 +14,6 @@ import { TraceFlow } from '@app/observability/flow';
 import { URL_PARAMS } from '@block-channel/constants';
 import { ChannelAttachmentsTab } from '@channel/Attachments/ChannelAttachmentsTab';
 import { useChannelBotManagement } from '@channel/Bots/use-channel-bot-management';
-import { ActiveCallHeader } from '@channel/Call/ActiveCallHeader';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CallEventSync } from '@channel/Call/CallEventSync';
 import { ChannelCallAutoJoin } from '@channel/Call/ChannelCallAutoJoin';
@@ -113,6 +112,7 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
+import { ActiveCallHeader } from '../../channel/Call/views/ActiveCallHeader';
 import { ChannelTopLeft } from './Top';
 
 const CHANNEL_STATE_ENTRY_KEY = 'channel.state';

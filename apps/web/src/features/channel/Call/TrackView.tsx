@@ -15,6 +15,8 @@ export function TrackView(props: {
   const [attachedElement, setAttachedElement] =
     createSignal<HTMLMediaElement>();
 
+  // Crossfades can mount two views of one track. Detach only this view's
+  // element, then attach its replacement; never interrupt the sibling view.
   createEffect(
     on(
       () => props.track,
@@ -39,6 +41,7 @@ export function TrackView(props: {
     )
   );
 
+  // Layout changes update the mounted element without detaching its stream.
   createEffect(
     on(
       () => [attachedElement(), props.fit, props.mirror] as const,

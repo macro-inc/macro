@@ -1,11 +1,11 @@
 import { useCallContextOptional } from '@channel/Call/CallContext';
-import { CallLiveChip } from '@channel/Call/CallLiveChip';
-import { useParticipantSpeaking } from '@channel/Call/use-call-speaking';
 import { UserGroup } from '@core/component/UserGroup';
 import { useUserId } from '@core/context/user';
 import { tryMacroId } from '@core/user';
 import { useActiveCallsQuery } from '@queries/call/call';
 import { Show } from 'solid-js';
+import { CallLiveChip } from '../../../channel/Call/components/CallLiveChip';
+import { useParticipantSpeaking } from '../../../channel/Call/primitives/use-call-speaking';
 
 /** Only mounted for a live row; shares the app's existing active-call query. */
 export function ChannelLiveCallBadge(props: { channelId: string }) {

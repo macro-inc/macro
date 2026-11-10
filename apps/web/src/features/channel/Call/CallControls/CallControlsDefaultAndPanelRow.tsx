@@ -27,15 +27,17 @@ export function CallControlsDefaultAndPanelRow(props: {
     );
   };
   return (
-    <CallMediaControls
+    <CallMediaControls.Root
       showShortcuts
       compact={props.compact}
       media={call}
-      screenUnavailable={screenUnavailable()}
-      onLeave={props.onLeave}
       onSettingsOpenChange={props.onSettingsOpenChange}
     >
+      <CallMediaControls.Microphone />
+      <CallMediaControls.Camera />
+      <CallMediaControls.Screen unavailable={screenUnavailable()} />
       {props.children}
-    </CallMediaControls>
+      <CallMediaControls.Leave onLeave={props.onLeave} />
+    </CallMediaControls.Root>
   );
 }

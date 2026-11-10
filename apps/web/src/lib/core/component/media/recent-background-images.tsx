@@ -32,18 +32,17 @@ export function RecentBackgroundImages(props: {
         tone: 'danger',
       })),
   });
+  const containerClass = () => {
+    if (props.embedded) return 'contents';
+    if (props.phone) return 'space-y-2';
+    return 'space-y-2 pt-2';
+  };
   return (
-    <div
-      class={
-        props.embedded
-          ? 'contents'
-          : props.phone
-            ? 'space-y-2'
-            : 'space-y-2 pt-2'
-      }
-    >
+    <div class={containerClass()}>
       <Show when={!props.embedded}>
-        <span class="text-xs text-ink-muted">Recent</span>
+        <span class="text-xs text-ink-muted">
+          {t('calls.recentBackgrounds')}
+        </span>
       </Show>
       <Dynamic
         component={props.phone ? 'div' : Dropdown.RadioGroup}
@@ -58,14 +57,19 @@ export function RecentBackgroundImages(props: {
         <For each={recent()}>
           {(image, index) => (
             <div class="group relative min-w-0">
-              <Tooltip label={`Recent image ${index() + 1}`} class="block">
+              <Tooltip
+                label={t('calls.recentBackground', { number: index() + 1 })}
+                class="block"
+              >
                 <Dynamic
                   component={props.phone ? 'button' : Dropdown.RadioItem}
                   value={image.path}
                   type="button"
                   closeOnSelect={false}
                   role={props.phone ? 'radio' : 'menuitemradio'}
-                  aria-label={`Recent image ${index() + 1}`}
+                  aria-label={t('calls.recentBackground', {
+                    number: index() + 1,
+                  })}
                   aria-checked={current(image)}
                   disabled={props.disabled}
                   class="relative aspect-[4/3] w-full overflow-hidden rounded-lg border border-edge-muted p-0 after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] data-highlighted:after:overlay-hover data-highlighted:bg-transparent focus-visible:outline-2 focus-visible:outline-accent"
@@ -84,9 +88,9 @@ export function RecentBackgroundImages(props: {
               </Tooltip>
               <button
                 type="button"
-                aria-label="Remove from recent"
+                aria-label={t('calls.removeRecentBackground')}
                 disabled={props.disabled || removing()}
-                class="absolute top-1 right-1 flex size-6 items-center justify-center rounded-full bg-surface/80 text-ink opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100"
+                class="absolute top-1 right-1 flex size-6 items-center justify-center rounded-full bg-surface/80 text-ink opacity-0 touch:opacity-100 not-touch:group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100"
                 onClick={(event) => {
                   event.stopPropagation();
                   remove(image);
@@ -97,11 +101,11 @@ export function RecentBackgroundImages(props: {
             </div>
           )}
         </For>
-        <Tooltip label="Upload background image" class="block">
+        <Tooltip label={t('calls.uploadBackground')} class="block">
           <Dynamic
             component={props.phone ? 'button' : Dropdown.Item}
             type="button"
-            aria-label="Upload background image"
+            aria-label={t('calls.uploadBackground')}
             disabled={props.disabled || props.uploading}
             class="flex w-full aspect-[4/3] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-edge-muted text-xs text-ink-muted"
             onClick={props.phone ? props.onUploadClick : undefined}
@@ -109,7 +113,9 @@ export function RecentBackgroundImages(props: {
           >
             <Upload class="size-4" />
             <Show when={!props.embedded}>
-              {props.uploading ? 'Loading…' : 'Upload'}
+              {props.uploading
+                ? t('calls.uploadingBackground')
+                : t('calls.uploadBackgroundAction')}
             </Show>
           </Dynamic>
         </Tooltip>

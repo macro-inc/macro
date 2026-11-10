@@ -32,15 +32,21 @@ export function matchingAudioOutputState(
 // One native channel per webview; unmounting removes only this surface's subscriber.
 const nativeSubscribers = new Set<(state: AudioOutputState) => void>();
 let nativeWatch: Promise<void> | undefined;
-function watchNativeAudioOutput() {
-  nativeWatch ??= invoke<void>('plugin:call-kit|watch_audio_output', {
-    channel: new Channel<AudioOutputState>((state) => {
-      for (const subscriber of nativeSubscribers) subscriber(state);
-    }),
-  }).catch((error: unknown) => {
+async function startNativeWatch() {
+  try {
+    await invoke<void>('plugin:call-kit|watch_audio_output', {
+      channel: new Channel<AudioOutputState>((state) => {
+        for (const subscriber of nativeSubscribers) subscriber(state);
+      }),
+    });
+  } catch (error) {
     nativeWatch = undefined;
     throw error;
-  });
+  }
+}
+
+function watchNativeAudioOutput() {
+  nativeWatch ??= startNativeWatch();
   return nativeWatch;
 }
 
@@ -111,13 +117,15 @@ export function createCallAudioOutput(
     );
   }
 
-  const outputs = () =>
-    native
-      ? (output()?.outputs ?? [])
-      : (call
-          ?.audioOutputDevices()
-          .map((device) => ({ id: device.deviceId, label: device.label })) ??
-        []);
+  const outputs = () => {
+    if (native) return output()?.outputs ?? [];
+    return (
+      call?.audioOutputDevices().map((device) => ({
+        id: device.deviceId,
+        label: device.label,
+      })) ?? []
+    );
+  };
   const selected = () =>
     native ? output()?.selectedId : call?.activeAudioOutputDeviceId();
   async function select(id: string) {

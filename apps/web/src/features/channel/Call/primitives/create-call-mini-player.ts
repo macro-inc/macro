@@ -9,7 +9,7 @@ import {
   getCallPlayerSnapTarget,
   MAX_CALL_PLAYER_WIDTH,
   resizeCallPlayer,
-} from '../call-mini-player';
+} from '../core/call-mini-player';
 
 type Position = { x: number; y: number };
 type PreviewSize = { width: number; audioHeight: number };
@@ -100,20 +100,14 @@ export function createCallMiniPlayer(options: {
     };
   };
   const atDefaults = () => {
+    if (storedWidth() !== 336 || storedAudioHeight() !== 144) return false;
+    if (placement.corner !== 'bottom-right') return false;
     const point = placement.position;
-    return (
-      storedWidth() === 336 &&
-      storedAudioHeight() === 144 &&
-      placement.corner === 'bottom-right' &&
-      (!point ||
-        (Math.abs(point.x - (size.viewport.width - width() - 20)) < 1 &&
-          Math.abs(
-            point.y -
-              (size.viewport.height -
-                options.root().getBoundingClientRect().height -
-                20)
-          ) < 1))
-    );
+    if (!point) return true;
+    const box = options.root().getBoundingClientRect();
+    const right = size.viewport.width - width() - 20;
+    const bottom = size.viewport.height - box.height - 20;
+    return Math.abs(point.x - right) < 1 && Math.abs(point.y - bottom) < 1;
   };
   const constrainPosition = (previous: Position | undefined) => {
     if (!previous) return previous;
@@ -171,10 +165,9 @@ export function createCallMiniPlayer(options: {
         window.innerWidth,
         window.innerHeight
       );
-      if (
-        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ||
-        (Math.abs(box.x - target.x) < 1 && Math.abs(box.y - target.y) < 1)
-      ) {
+      const settled =
+        Math.abs(box.x - target.x) < 1 && Math.abs(box.y - target.y) < 1;
+      if (options.reducedMotion() || settled) {
         setPlacement({ snapping: false, position: undefined });
         return;
       }
@@ -219,15 +212,12 @@ export function createCallMiniPlayer(options: {
   const onDragStart = (
     event: PointerEvent & { currentTarget: HTMLElement }
   ) => {
-    if (
-      event.button !== 0 ||
-      event.isPrimary === false ||
-      drag ||
-      resize ||
-      (event.target instanceof Element &&
-        event.target.closest('button, [role="menu"]'))
-    )
-      return;
+    if (event.button !== 0 || event.isPrimary === false) return;
+    if (drag || resize) return;
+    const target = event.target;
+    const interactive =
+      target instanceof Element && target.closest('button, [role="menu"]');
+    if (interactive) return;
     const box = options.root().getBoundingClientRect();
     setPlacement({
       snapping: false,
@@ -270,8 +260,8 @@ export function createCallMiniPlayer(options: {
     edge: CallPlayerResizeEdge,
     event: PointerEvent & { currentTarget: HTMLElement }
   ) => {
-    if (event.button !== 0 || event.isPrimary === false || drag || resize)
-      return;
+    if (event.button !== 0 || event.isPrimary === false) return;
+    if (drag || resize) return;
     event.preventDefault();
     event.stopPropagation();
     setPlacement('snapping', false);
@@ -311,12 +301,10 @@ export function createCallMiniPlayer(options: {
     if (event.target !== options.root()) return;
     setPlacement('snapping', false);
     const box = options.root().getBoundingClientRect();
-    if (
-      placement.corner === 'bottom-right' &&
-      Math.abs(box.right - (window.innerWidth - 20)) < 1 &&
-      Math.abs(box.bottom - (window.innerHeight - 20)) < 1
-    )
-      setPlacement('position', undefined);
+    if (placement.corner !== 'bottom-right') return;
+    const alignedRight = Math.abs(box.right - (window.innerWidth - 20)) < 1;
+    const alignedBottom = Math.abs(box.bottom - (window.innerHeight - 20)) < 1;
+    if (alignedRight && alignedBottom) setPlacement('position', undefined);
   };
 
   const previewAnimations = new Set<Animation>();
@@ -326,6 +314,8 @@ export function createCallMiniPlayer(options: {
       animation.cancel();
     }
   });
+  // Keep both media nodes mounted during the fade; Transition removes the old
+  // node only after its animation finishes. Reduced motion skips that overlap.
   const animatePreview = (
     element: Element,
     done: () => void,

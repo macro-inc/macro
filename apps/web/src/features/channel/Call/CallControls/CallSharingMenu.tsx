@@ -76,12 +76,14 @@ export function CallSharingMenu(props: {
       icon: props.channelName ? Hash : Lock,
     },
   ];
-  const label = () =>
-    props.sharedWithTeam
-      ? t('calls.team')
-      : props.channelName
-        ? t('calls.channel')
-        : t('calls.private');
+  const label = () => {
+    if (props.sharedWithTeam) return t('calls.team');
+    return props.channelName ? t('calls.channel') : t('calls.private');
+  };
+  const sharingIcon = () => {
+    if (props.sharedWithTeam) return Users;
+    return props.channelName ? Hash : Lock;
+  };
   const setMenuOpen = (open: boolean) => {
     setOpen(open);
     props.onOpenChange(open);
@@ -110,12 +112,7 @@ export function CallSharingMenu(props: {
             disabled: open(),
           }}
         >
-          <Dynamic
-            component={
-              props.sharedWithTeam ? Users : props.channelName ? Hash : Lock
-            }
-            class="size-4"
-          />
+          <Dynamic component={sharingIcon()} class="size-4" />
           <Show when={!props.compact}>
             <span class="not-mobile:@max-[36rem]/call-stage:hidden">
               {label()}

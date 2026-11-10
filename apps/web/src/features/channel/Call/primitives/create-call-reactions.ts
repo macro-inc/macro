@@ -7,37 +7,15 @@ import {
   on,
   onCleanup,
 } from 'solid-js';
-import { LK_ROOM_EVENT } from './livekit-loader';
-
-export const CALL_REACTION_EMOJIS = ['👍', '👏', '😂', '❤️', '🎉'] as const;
-export type CallReactionEmoji = (typeof CALL_REACTION_EMOJIS)[number];
-export type CallReaction = {
-  id: number;
-  sender: string;
-  emoji: CallReactionEmoji;
-};
-export const CALL_REACTION_TOPIC = 'macro.call.reaction.v1';
-export const CALL_REACTION_LIFETIME_MS = 3200;
-
-export function decodeCallReaction(
-  payload: Uint8Array
-): CallReactionEmoji | undefined {
-  if (payload.byteLength > 256) return undefined;
-  try {
-    const value: unknown = JSON.parse(new TextDecoder().decode(payload));
-    if (
-      !value ||
-      typeof value !== 'object' ||
-      !('version' in value) ||
-      value.version !== 1 ||
-      !('emoji' in value)
-    )
-      return undefined;
-    return CALL_REACTION_EMOJIS.find((emoji) => emoji === value.emoji);
-  } catch {
-    return undefined;
-  }
-}
+import {
+  CALL_REACTION_EMOJIS,
+  CALL_REACTION_LIFETIME_MS,
+  CALL_REACTION_TOPIC,
+  type CallReaction,
+  type CallReactionEmoji,
+  decodeCallReaction,
+} from '../core/call-reactions';
+import { LK_ROOM_EVENT } from '../livekit-loader';
 
 export function createCallReactions(room: Accessor<Room | null | undefined>) {
   const [entries, setEntries] = createSignal<CallReaction[]>([]);
@@ -45,6 +23,8 @@ export function createCallReactions(room: Accessor<Room | null | undefined>) {
   let nextId = 0;
   let disposed = false;
   const add = (sender: string, emoji: CallReactionEmoji) => {
+    // Bound transient reactions, then expire each entry independently. Timers
+    // belong to the room subscription so reconnecting cannot replay old reactions.
     if (!sender || entries().length >= 20) return;
     const id = ++nextId;
     setEntries((items) => [...items, { id, sender, emoji }]);
@@ -63,13 +43,10 @@ export function createCallReactions(room: Accessor<Room | null | undefined>) {
         _kind?: unknown,
         topic?: string
       ) => {
-        if (
-          room() !== active ||
-          topic !== CALL_REACTION_TOPIC ||
-          !participant ||
-          participant.identity === active.localParticipant.identity
-        )
-          return;
+        const staleRoom = room() !== active;
+        const wrongTopic = topic !== CALL_REACTION_TOPIC;
+        if (staleRoom || wrongTopic || !participant) return;
+        if (participant.identity === active.localParticipant.identity) return;
         const emoji = decodeCallReaction(payload);
         if (emoji) add(participant.identity, emoji);
       };

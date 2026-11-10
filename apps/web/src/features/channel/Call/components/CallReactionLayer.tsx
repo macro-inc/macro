@@ -1,5 +1,8 @@
 import { type Accessor, For } from 'solid-js';
-import { CALL_REACTION_LIFETIME_MS, type CallReaction } from './call-reactions';
+import {
+  CALL_REACTION_LIFETIME_MS,
+  type CallReaction,
+} from '../core/call-reactions';
 import './call-reactions.css';
 
 export function CallReactionLayer(props: {

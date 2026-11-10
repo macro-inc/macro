@@ -1,7 +1,7 @@
 import { createContext, type ParentProps, useContext } from 'solid-js';
-import { createCallVolumeState } from './primitives/create-call-volume';
+import { createCallVolumeState } from '../primitives/create-call-volume';
 
-export { createCallVolumeState } from './primitives/create-call-volume';
+export { createCallVolumeState } from '../primitives/create-call-volume';
 
 const CallVolumeContext =
   createContext<ReturnType<typeof createCallVolumeState>>();

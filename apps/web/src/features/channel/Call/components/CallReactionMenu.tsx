@@ -6,7 +6,7 @@ import { createSignal, For, Show } from 'solid-js';
 import {
   CALL_REACTION_EMOJIS,
   type CallReactionEmoji,
-} from '../call-reactions';
+} from '../core/call-reactions';
 
 export function CallReactionRow(props: {
   onReaction: (emoji: CallReactionEmoji) => void;
@@ -25,27 +25,40 @@ export function CallReactionRow(props: {
           ['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)
         )
           return;
-        const offset = ['ArrowRight', 'ArrowDown'].includes(event.key)
-          ? 1
-          : ['ArrowLeft', 'ArrowUp'].includes(event.key)
-            ? -1
-            : 0;
-        if (!offset && event.key !== 'Home' && event.key !== 'End') return;
+        let offset = 0;
+        if (['ArrowRight', 'ArrowDown'].includes(event.key)) offset = 1;
+        if (['ArrowLeft', 'ArrowUp'].includes(event.key)) offset = -1;
+        const jump = event.key === 'Home' || event.key === 'End';
+        if (!offset && !jump) return;
         event.preventDefault();
         event.stopPropagation();
-        const next =
-          event.key === 'Home'
-            ? 0
-            : event.key === 'End'
-              ? buttons.length - 1
-              : (focused() + offset + buttons.length) % buttons.length;
+        let next = (focused() + offset + buttons.length) % buttons.length;
+        if (event.key === 'Home') next = 0;
+        if (event.key === 'End') next = buttons.length - 1;
         setFocused(next);
         buttons[next]?.focus();
       }}
     >
       <For each={CALL_REACTION_EMOJIS}>
-        {(emoji, index) =>
-          props.inMenu ? (
+        {(emoji, index) => (
+          <Show
+            when={props.inMenu}
+            fallback={
+              <Button
+                ref={(element) => {
+                  buttons[index()] = element;
+                }}
+                variant="ghost"
+                size="icon-lg"
+                aria-label={emoji}
+                tabIndex={focused() === index() ? 0 : -1}
+                onFocus={() => setFocused(index())}
+                onClick={() => props.onReaction(emoji)}
+              >
+                <span class="text-xl">{emoji}</span>
+              </Button>
+            }
+          >
             <Dropdown.Item
               ref={(element: HTMLDivElement) => {
                 buttons[index()] = element;
@@ -59,22 +72,8 @@ export function CallReactionRow(props: {
             >
               <span class="text-xl">{emoji}</span>
             </Dropdown.Item>
-          ) : (
-            <Button
-              ref={(element) => {
-                buttons[index()] = element;
-              }}
-              variant="ghost"
-              size="icon-lg"
-              aria-label={emoji}
-              tabIndex={focused() === index() ? 0 : -1}
-              onFocus={() => setFocused(index())}
-              onClick={() => props.onReaction(emoji)}
-            >
-              <span class="text-xl">{emoji}</span>
-            </Button>
-          )
-        }
+          </Show>
+        )}
       </For>
     </div>
   );

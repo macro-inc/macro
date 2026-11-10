@@ -35,7 +35,11 @@ export type CallMediaControlsState = Pick<
   Partial<
     Pick<
       CallState,
-      'microphonePermission' | 'cameraPermission' | 'room' | 'trackVersion'
+      | 'microphonePermission'
+      | 'cameraPermission'
+      | 'cancelMediaPermissionRecovery'
+      | 'room'
+      | 'trackVersion'
     >
   >;
 
@@ -51,13 +55,22 @@ export function createCallMediaSettings(call: CallMediaControlsState) {
       ?.localParticipant.getTrackPublication(LK_TRACK_SOURCE.Camera)?.track;
     // mediaStreamTrack returns processed output when a processor is active.
     const processor = track?.getProcessor?.();
-    const source =
-      processor &&
-      'source' in processor &&
-      processor.source instanceof MediaStreamTrack
-        ? processor.source
-        : (track?.mediaStream?.getVideoTracks()[0] ??
-          (!processor ? track?.mediaStreamTrack : undefined));
+    // Prefer the processor's raw input so preview tiles apply each effect once.
+    // Unprocessed tracks expose their camera stream directly.
+    const rawSource = () => {
+      if (
+        processor &&
+        'source' in processor &&
+        processor.source instanceof MediaStreamTrack
+      ) {
+        return processor.source;
+      }
+      const streamTrack = track?.mediaStream?.getVideoTracks()[0];
+      if (streamTrack) return streamTrack;
+      if (!processor) return track?.mediaStreamTrack;
+      return undefined;
+    };
+    const source = rawSource();
     return source?.readyState === 'live' ? source : undefined;
   });
   const [state, setState] = createStore<MediaSettingsState>({
@@ -97,26 +110,24 @@ export function createCallMediaSettings(call: CallMediaControlsState) {
     setApplyingBackground(true);
     let next: BackgroundEffect | undefined;
     const applied = await run(async () => {
-      next =
-        effect instanceof File
-          ? {
-              type: 'image',
-              id: 'custom',
-              path: await readBackgroundImage(effect),
-            }
-          : effect;
+      if (effect instanceof File) {
+        next = {
+          type: 'image',
+          id: 'custom',
+          path: await readBackgroundImage(effect),
+        };
+      } else {
+        next = effect;
+      }
       if (!disposed) await call.setBackgroundEffect(next);
     });
-    if (
-      applied &&
-      effect instanceof File &&
-      next?.type === 'image' &&
-      !disposed
-    )
+    const uploadedImage = effect instanceof File && next?.type === 'image';
+    if (applied && uploadedImage && !disposed && next?.type === 'image') {
       fireAndForget(
         rememberRecentBackgroundImage({ id: next.id, path: next.path }),
         'recent-background-images'
       );
+    }
     if (!disposed) setApplyingBackground(false);
     return applied && !disposed;
   }

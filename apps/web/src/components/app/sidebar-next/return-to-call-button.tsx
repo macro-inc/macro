@@ -2,8 +2,6 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
 import { beginInteraction } from '@app/observability/flow';
 import { useCallContextOptional } from '@channel/Call/CallContext';
-import { CallWaveform } from '@channel/Call/CallWaveform';
-import { useActiveCallCompanion } from '@channel/Call/use-active-call-companion';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -11,13 +9,15 @@ import { lazyNamed } from '@core/util/lazyNamed';
 import { Popover } from '@kobalte/core/popover';
 import { Button } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
+import { CallWaveform } from '../../../features/channel/Call/components/CallWaveform';
+import { useActiveCallCompanion } from '../../../features/channel/Call/primitives/use-active-call-companion';
 
 const ActiveCallPopover = lazyNamed(
-  () => import('@channel/Call/ActiveCallPopover'),
+  () => import('../../../features/channel/Call/views/ActiveCallPopover'),
   'ActiveCallPopover'
 );
 const CallMiniPlayer = lazyNamed(
-  () => import('@channel/Call/CallMiniPlayer'),
+  () => import('../../../features/channel/Call/views/CallMiniPlayer'),
   'CallMiniPlayer'
 );
 

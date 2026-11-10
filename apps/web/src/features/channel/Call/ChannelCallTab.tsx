@@ -16,12 +16,12 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { ActiveCallHeader } from './ActiveCallHeader';
 import { CallOverlay } from './CallOverlay';
 import { getCallJoinTab, getCallLeaveTab } from './call-tabs';
 import { CallDiscussionContent } from './discussion/CallDiscussionContent';
 import { callDiscussionOf } from './discussion/call-discussion';
 import { useCall } from './use-call';
+import { ActiveCallHeader } from './views/ActiveCallHeader';
 
 function ParticipantFirstName(props: { id: string }) {
   const name = createMemo(() => {

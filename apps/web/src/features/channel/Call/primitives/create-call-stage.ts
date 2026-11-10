@@ -11,7 +11,7 @@ import {
   normalizeCallLayout,
   sameCallPin,
   selectCallStageParticipant,
-} from '../call-layout';
+} from '../core/call-layout';
 
 type CallStageState = {
   pin?: CallPin<RemoteParticipant>;
@@ -107,15 +107,13 @@ export function createCallStage(options: CallStageSources) {
   };
   const pinnedShare = () => {
     const selected = activePin();
-    return selected && typeof selected === 'object' && 'share' in selected
-      ? selected.share
-      : undefined;
+    if (!selected || typeof selected !== 'object') return undefined;
+    return 'share' in selected ? selected.share : undefined;
   };
   const pinnedPerson = () => {
     const selected = activePin();
-    return selected && typeof selected === 'object' && !('share' in selected)
-      ? selected
-      : undefined;
+    if (!selected || typeof selected !== 'object') return undefined;
+    return 'share' in selected ? undefined : selected;
   };
   const showScreenShare = () => hasAnyScreenShare() && !activePin();
   const speakerLayout = () => layout() === 'speaker' || layout() === 'sidebar';
@@ -125,11 +123,10 @@ export function createCallStage(options: CallStageSources) {
       (participant) => options.isSpeaking(participant),
       options.localSpeaking()
     );
-  const spotlight = () =>
-    speakerLayout() &&
-    options.participants().length > 0 &&
-    !hasAnyScreenShare() &&
-    !activePin();
+  const spotlight = () => {
+    if (!speakerLayout() || options.participants().length === 0) return false;
+    return !hasAnyScreenShare() && !activePin();
+  };
   const stageTarget = (): CallPin<RemoteParticipant> | undefined => {
     const pinned = activePin();
     if (pinned) return pinned;
@@ -149,18 +146,17 @@ export function createCallStage(options: CallStageSources) {
     !hideParticipants();
   const stagePerson = () => {
     const target = stageTarget();
-    return target && typeof target === 'object' && !('share' in target)
-      ? target
-      : undefined;
+    if (!target || typeof target !== 'object') return undefined;
+    return 'share' in target ? undefined : target;
   };
   const localOnStage = () => stageTarget() === 'local';
-  const selfInGrid = () =>
-    !localOnStage() &&
-    (layout() !== 'auto' ||
-      (staged() && !!activePin()) ||
-      (options.mobile() && (staged() || !hasAnyScreenShare())) ||
-      (options.compact() && !hasAnyScreenShare())) &&
-    options.participants().length > 0;
+  const selfInGrid = () => {
+    if (localOnStage() || options.participants().length === 0) return false;
+    if (layout() !== 'auto') return true;
+    if (staged() && activePin()) return true;
+    if (options.mobile()) return staged() || !hasAnyScreenShare();
+    return options.compact() && !hasAnyScreenShare();
+  };
   const stripTargets = () => {
     const targets: CallPin<RemoteParticipant>[] = [
       ...(options.screenSharing() ? ['local-share' as const] : []),

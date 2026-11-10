@@ -1,8 +1,8 @@
 import { cn } from '@ui';
 import { createSignal, onCleanup, Show } from 'solid-js';
+import { formatCallElapsed } from '../discussion/format-call-elapsed';
+import type { SpeakingCall } from '../primitives/use-call-speaking';
 import { CallWaveform } from './CallWaveform';
-import { formatCallElapsed } from './discussion/format-call-elapsed';
-import type { SpeakingCall } from './use-call-speaking';
 
 export function CallLiveChip(
   props: SpeakingCall & {

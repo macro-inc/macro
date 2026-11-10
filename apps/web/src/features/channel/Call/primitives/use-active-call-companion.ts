@@ -1,9 +1,9 @@
 import { useMeetingSessionOwnerOptional } from '@app/features/meetings/context/meeting-session-owner';
 import { Telemetry } from '@macro-inc/observability';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { useCallContextOptional } from './CallContext';
-import { getActiveMeetingPath, getMeetingShareToken } from './call-link';
-import { openChannelCallTab } from './open-channel-call-tab';
+import { useCallContextOptional } from '../CallContext';
+import { getActiveMeetingPath, getMeetingShareToken } from '../call-link';
+import { openChannelCallTab } from '../open-channel-call-tab';
 
 /** Navigation and leave always use the owner of the current media session. */
 export function useActiveCallCompanion() {
