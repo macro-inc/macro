@@ -69,10 +69,15 @@ changes preserve the mounted detail/editor. The list stays mounted while wide
 selections or the navigation sheet change. Replacement layouts unmount their
 hidden list to retire its keyboard handlers, preserving desktop behavior.
 Hosts continue to own queries, selection, route admission, and loading states.
-Mail retains its custom desktop reading-pane composition by declaring a root
-`detail` layout; the same collection policy sizes its wide touch columns and
-honors the host's chosen list width. Mail normalizes touch resizing into its
-existing reading-pane width preference's desktop units.
+Mail retains its custom desktop reading pane and uses `CollectionPanes` on
+touch. It normalizes touch resizing into its existing reading-pane width
+preference's desktop units.
+
+Pass `onBack` when a collection detail can return to its list. At narrow touch
+widths, the detail's `ViewShell.TopBar` offers Back and the detail handles a
+rightward swipe from the left edge. Both invoke the host's return action in
+the current workspace. The enclosing split stack leaves that gesture to the
+detail.
 
 Sheet visibility is temporary and independent of the saved desktop sidebar
 preference. `ViewSidebar.Item` dismisses a sheet after destination activation;

@@ -5,10 +5,8 @@ import { createMobileForwardAnimation } from './createMobileForwardAnimation';
 import type { MobilePaneStack } from './createMobilePaneStack';
 import { createMobileSwipeBackGesture } from './createMobileSwipeBackGesture';
 
-/** Px from the left edge where a touch starts the swipe-back gesture. */
-export const SWIPE_EDGE_THRESHOLD = 40;
-const SWIPE_VELOCITY_THRESHOLD = 0.3; // px/ms - fast flick completes swipe
-const SWIPE_DISTANCE_THRESHOLD = 0.5; // fraction of screen width
+export { SWIPE_EDGE_THRESHOLD } from './createMobileEdgeSwipe';
+
 const SWIPE_ANIMATION_MS = 88;
 const BG_PEEK_OFFSET = 110; // px the pane behind is offset left at rest; closes to 0 as the front slides away
 
@@ -22,9 +20,6 @@ export function createMobileSplitMotion(options: { stack: MobilePaneStack }) {
   const swipeBackGesture = createMobileSwipeBackGesture({
     animationMs: SWIPE_ANIMATION_MS,
     bgPeekOffset: BG_PEEK_OFFSET,
-    edgeThreshold: SWIPE_EDGE_THRESHOLD,
-    velocityThreshold: SWIPE_VELOCITY_THRESHOLD,
-    distanceThreshold: SWIPE_DISTANCE_THRESHOLD,
     stack,
     canStart: () => forwardAnimation.phase() === 'idle',
   });

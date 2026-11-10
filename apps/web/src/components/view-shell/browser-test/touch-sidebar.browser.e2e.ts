@@ -752,6 +752,57 @@ test('folding a collection preserves the mounted detail and its draft', async ({
   ).toBeVisible();
 });
 
+test('Back and a left-edge swipe return a folded detail to its list', async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  await page.setViewportSize({ width: 1000, height: 844 });
+  await page.goto(
+    '/src/components/view-shell/browser-test/touch-sidebar.html?workspace'
+  );
+  const list = page.getByTestId('workspace-list');
+  const preview = page.getByTestId('workspace-preview');
+  const back = preview.getByRole('button', { name: 'Back', exact: true });
+  const select = () => list.locator('[data-workspace-row="0"]').tap();
+  const narrow = () => page.setViewportSize({ width: 390, height: 844 });
+  const wide = () => page.setViewportSize({ width: 1000, height: 844 });
+
+  await select();
+  await expect(preview).toBeVisible();
+  await expect(back).toBeHidden();
+  await narrow();
+  await expect(list).toBeHidden();
+  await back.tap();
+  await expect(list).toBeVisible();
+  await expect(preview).toBeHidden();
+
+  await wide();
+  await select();
+  await narrow();
+  await expect(back).toBeVisible();
+
+  const touch = await page.context().newCDPSession(page);
+  const swipe = async (end: { x: number; y: number }) => {
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchStart',
+      touchPoints: [{ x: 4, y: 160 }],
+    });
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchMove',
+      touchPoints: [end],
+    });
+    await touch.send('Input.dispatchTouchEvent', {
+      type: 'touchEnd',
+      touchPoints: [],
+    });
+  };
+  await swipe({ x: 12, y: 340 });
+  await expect(preview).toBeVisible();
+  await swipe({ x: 240, y: 160 });
+  await expect(list).toBeVisible();
+  await expect(preview).toBeHidden();
+});
+
 test('custom reading panes retain a resized wide touch list across container resizing', async ({
   page,
 }) => {

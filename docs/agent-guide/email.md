@@ -1,6 +1,11 @@
 # Email
 
-Email paints its touch top fade within the email-list pane only. Above 720px on touch, the list stays left of an empty or selected reading pane; Show sidebar opens mailbox/sub-view navigation in a sheet that slides from the left over the email list, keeping the preview in place. Desktop reading-pane preferences and narrow-touch item navigation are unchanged.
+Email paints its touch top fade within the email-list pane only. Above 720px on touch, the list stays left of an empty or selected reading pane. Show sidebar opens mailbox navigation in a sheet that slides over the email list.
+
+Fold with a thread open to verify the same thread and its draft stay mounted.
+The thread fills the pane and its top-left Back button returns to the current
+mailbox and filter. A rightward swipe starting at the left edge does the same.
+Unfolding before going back restores the side-by-side reading pane.
 
 ## Thread motion
 

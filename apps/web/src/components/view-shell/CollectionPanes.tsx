@@ -1,10 +1,14 @@
 import { FloatRegionScope } from '@components/app/mobile/float-regions/FloatRegionScope';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { createMobileEdgeSwipe } from '@components/app/split-layout/mobile/createMobileEdgeSwipe';
 import { Resize } from '@core/component/Resize';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createSignal, createUniqueId, type JSX, Show } from 'solid-js';
 import { ViewShell } from './ViewShell';
 import {
   useViewShellInternal,
   ViewShellPaneContext,
+  ViewShellReturnToListContext,
 } from './view-shell-context';
 import {
   DEFAULT_ASIDE_LAYOUT,
@@ -16,17 +20,33 @@ export function CollectionPanes(props: {
   list: JSX.Element;
   hasDetail: boolean;
   empty?: JSX.Element;
+  onListWidthChangeEnd?: (width: number) => void;
+  onBack?: () => void;
   children: JSX.Element;
 }) {
   const ws = useViewShellInternal();
+  const panel = useSplitPanel();
   const id = createUniqueId();
   const [listWidth, setListWidth] = createSignal(
     DEFAULT_ASIDE_LAYOUT.width * WIDE_TOUCH_ASIDE_SCALE
   );
   const [listFrame, setListFrame] = createSignal<HTMLElement>();
   const [detailFrame, setDetailFrame] = createSignal<HTMLElement>();
+  const preferredListWidth = () => ws.main.layout().width ?? listWidth();
   const listVisible = () => ws.collectionLayout() || !props.hasDetail;
   const detailVisible = () => ws.collectionLayout() || props.hasDetail;
+  const returnToList = () => {
+    if (!isTouchDevice() || listVisible() || panel?.isPanelActive() === false) {
+      return;
+    }
+    return props.onBack;
+  };
+  const swipe = createMobileEdgeSwipe({
+    enabled: () => !!returnToList(),
+    onEnd: (completed) => {
+      if (completed) returnToList()?.();
+    },
+  });
   return (
     <ViewShell.Main class="relative overflow-hidden">
       <Resize.Zone
@@ -39,17 +59,19 @@ export function CollectionPanes(props: {
           id={`${id}-list`}
           index={0}
           minSize={320}
-          maxSize={ws.collectionLayout() ? 720 : undefined}
-          redistributionPreferredSize={
-            ws.collectionLayout() ? listWidth() : undefined
+          maxSize={
+            ws.collectionLayout() ? (ws.main.layout().max ?? 720) : undefined
           }
-          onSizeChangeEnd={setListWidth}
+          redistributionPreferredSize={
+            ws.collectionLayout() ? preferredListWidth() : undefined
+          }
+          onSizeChangeEnd={props.onListWidthChangeEnd ?? setListWidth}
           collapsed={() => !listVisible()}
           target={
             ws.collectionLayout()
               ? {
                   kind: 'px',
-                  px: listWidth(),
+                  px: preferredListWidth(),
                 }
               : undefined
           }
@@ -80,6 +102,14 @@ export function CollectionPanes(props: {
                 ref={setDetailFrame}
                 class="relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden touch:[--mobile-content-inset-top:0px]"
                 data-view-shell-detail
+                on:touchstart={(event) => {
+                  // A narrow detail returns within its own workspace. Do not
+                  // also start the enclosing split's back gesture.
+                  if (swipe.handleTouchStart(event)) event.stopPropagation();
+                }}
+                on:touchmove={swipe.handleTouchMove}
+                on:touchend={swipe.handleTouchEnd}
+                on:touchcancel={swipe.handleTouchCancel}
                 inert={!detailVisible()}
                 aria-hidden={!detailVisible()}
               >
@@ -87,7 +117,9 @@ export function CollectionPanes(props: {
                   when={props.hasDetail}
                   fallback={props.empty ?? <CollectionEmpty />}
                 >
-                  {props.children}
+                  <ViewShellReturnToListContext.Provider value={returnToList}>
+                    {props.children}
+                  </ViewShellReturnToListContext.Provider>
                 </Show>
               </div>
             </FloatRegionScope>

@@ -1,4 +1,5 @@
 import {
+  CollectionPanes,
   useViewShell,
   ViewBreadcrumbs,
   ViewShell,
@@ -32,7 +33,7 @@ import {
 import { EmailFilterDrawer } from './components/EmailFilterDrawer';
 import { EmailHeader, EmailViewBreadcrumbItem } from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
-import { EmailReader } from './components/EmailReader';
+import { EmailReader, EmailReaderEmpty } from './components/EmailReader';
 import { EmailSidebar } from './components/EmailSidebar';
 import {
   EMAIL_INBOX_TAB_IDS,
@@ -84,7 +85,7 @@ function EmailListFallback() {
   );
 }
 
-function EmailPanes(props: {
+function DesktopEmailPanes(props: {
   list: JSX.Element;
   focusList: () => void;
   setListPane: (pane: EmailListPane | undefined) => void;
@@ -94,20 +95,11 @@ function EmailPanes(props: {
   const listColumn = (beside?: 'reader') => (
     <>
       <ViewTour tour={emailTour} />
-      <Show
-        when={isTouchDevice()}
-        fallback={
-          <>
-            <EmailHeader
-              tabOnly={beside === 'reader'}
-              onSearchEscape={props.focusList}
-            />
-            <ViewShell.Content>{props.list}</ViewShell.Content>
-          </>
-        }
-      >
-        <EmailMobileLayout>{props.list}</EmailMobileLayout>
-      </Show>
+      <EmailHeader
+        tabOnly={beside === 'reader'}
+        onSearchEscape={props.focusList}
+      />
+      <ViewShell.Content>{props.list}</ViewShell.Content>
     </>
   );
 
@@ -138,6 +130,38 @@ function EmailPanes(props: {
   );
 }
 
+function TouchEmailPanes(props: {
+  list: JSX.Element;
+  focusList: () => void;
+  setListPane: (pane: EmailListPane | undefined) => void;
+  onListWidthChange: (width: number) => void;
+}) {
+  const shell = useViewShell();
+  const { selectedThread, composing, closeThread } = useEmailView();
+  return (
+    <CollectionPanes
+      list={
+        <>
+          <ViewTour tour={emailTour} />
+          <EmailMobileLayout>{props.list}</EmailMobileLayout>
+        </>
+      }
+      hasDetail={!!selectedThread() || composing()}
+      empty={<EmailReaderEmpty />}
+      onListWidthChangeEnd={props.onListWidthChange}
+      onBack={selectedThread() ? closeThread : undefined}
+    >
+      <EmailReader
+        focusList={() => {
+          if (shell.breakpoints.narrow?.()) closeThread();
+          else props.focusList();
+        }}
+        setListPane={props.setListPane}
+      />
+    </CollectionPanes>
+  );
+}
+
 /** The list column's width beside the reading pane, in pixels. */
 const LIST_WIDTH = { default: 440, min: 340, max: 720 };
 
@@ -163,6 +187,7 @@ function EmailLayout(props: {
   const listWidth = () =>
     Math.min(LIST_WIDTH.max, Math.max(LIST_WIDTH.min, storedListWidth())) *
     listScale();
+  const updateListWidth = (width: number) => setListWidth(width / listScale());
 
   return (
     <ViewShell.Root
@@ -176,24 +201,40 @@ function EmailLayout(props: {
         min: isTouchDevice() || !readerBeside() ? 320 : LIST_WIDTH.min,
         max: LIST_WIDTH.max * listScale(),
       }}
-      detail={{
-        width: 640,
-        initialWidth: 'auto',
-        min: 440,
-        max: 4000,
-        whenNarrow: 'hide',
-      }}
-      detailOpen={readerBeside()}
+      detail={
+        isTouchDevice()
+          ? undefined
+          : {
+              width: 640,
+              initialWidth: 'auto',
+              min: 440,
+              max: 4000,
+              whenNarrow: 'hide',
+            }
+      }
+      detailOpen={!isTouchDevice() && readerBeside()}
     >
       <ViewShell.Aside>
         <EmailSidebar />
       </ViewShell.Aside>
-      <EmailPanes
-        list={props.list}
-        focusList={props.focusList}
-        setListPane={props.setListPane}
-        onListWidthChange={(width) => setListWidth(width / listScale())}
-      />
+      <Show
+        when={isTouchDevice()}
+        fallback={
+          <DesktopEmailPanes
+            list={props.list}
+            focusList={props.focusList}
+            setListPane={props.setListPane}
+            onListWidthChange={updateListWidth}
+          />
+        }
+      >
+        <TouchEmailPanes
+          list={props.list}
+          focusList={props.focusList}
+          setListPane={props.setListPane}
+          onListWidthChange={updateListWidth}
+        />
+      </Show>
     </ViewShell.Root>
   );
 }

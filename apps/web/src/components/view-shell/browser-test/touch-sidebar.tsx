@@ -337,6 +337,7 @@ function CollectionWorkspaceFixture(
           </ViewShell.Aside>
           <CollectionPanes
             hasDetail={selected() !== undefined}
+            onBack={() => setSelected(undefined)}
             list={
               <MobileListLayout
                 header={
@@ -383,7 +384,10 @@ function CollectionWorkspaceFixture(
               <ViewShell.TopBar class="touch:flex">
                 <span>Preview {selected()}</span>
               </ViewShell.TopBar>
-              <textarea class="min-h-0 flex-1" aria-label="Preview draft" />
+              <textarea
+                class="ml-12 min-h-0 flex-1"
+                aria-label="Preview draft"
+              />
               <FloatRegion region="accessory">
                 <div class="pointer-events-auto px-(--mobile-chrome-gutter)">
                   <input

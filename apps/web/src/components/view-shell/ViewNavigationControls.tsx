@@ -9,7 +9,11 @@ import { Button, cn } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { type ComponentProps, Show, splitProps, useContext } from 'solid-js';
 import { VIEW_SHELL_TOUR } from './tour';
-import { ViewShellContext, ViewShellPaneContext } from './view-shell-context';
+import {
+  ViewShellContext,
+  ViewShellPaneContext,
+  ViewShellReturnToListContext,
+} from './view-shell-context';
 
 /** Keep split close available in both docked and overlay navigation. */
 export function ViewSidebarCloseButton(
@@ -107,13 +111,26 @@ function ViewListBackButton(props: { onClick: () => void }) {
       data-allow-focus-in-preview
       onClick={() => props.onClick()}
     >
-      <ArrowLeftIcon class="size-4" />
+      <ArrowLeftIcon class="size-4 touch:size-6" />
     </Button>
   );
 }
 
 /** Shared leading controls, kept in place beneath navigation overlays. */
 export function ViewNavigationControls() {
+  const returnToList = useContext(ViewShellReturnToListContext);
+  return (
+    <Show
+      when={returnToList?.()}
+      keyed
+      fallback={<SidebarNavigationControls />}
+    >
+      {(onBack) => <ViewListBackButton onClick={onBack} />}
+    </Show>
+  );
+}
+
+function SidebarNavigationControls() {
   const ws = useContext(ViewShellContext);
   const pane = useContext(ViewShellPaneContext);
   return (

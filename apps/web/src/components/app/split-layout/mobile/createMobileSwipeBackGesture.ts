@@ -1,4 +1,5 @@
 import { batch, createSignal, onCleanup } from 'solid-js';
+import { createMobileEdgeSwipe } from './createMobileEdgeSwipe';
 import type { MobilePaneStack } from './createMobilePaneStack';
 
 type SplitTransformStyle = {
@@ -10,9 +11,6 @@ type SplitTransformStyle = {
 type MobileSwipeBackGestureOptions = {
   animationMs: number;
   bgPeekOffset: number;
-  edgeThreshold: number;
-  velocityThreshold: number;
-  distanceThreshold: number;
   stack: MobilePaneStack;
   canStart: () => boolean;
 };
@@ -24,8 +22,6 @@ export function createMobileSwipeBackGesture(
   const [isDragging, setIsDragging] = createSignal(false);
   const [isAnimatingOut, setIsAnimatingOut] = createSignal(false);
 
-  let startX = 0;
-  let startTime = 0;
   let animationTimer: ReturnType<typeof setTimeout> | undefined;
 
   function clearScheduledAnimation() {
@@ -35,6 +31,7 @@ export function createMobileSwipeBackGesture(
   onCleanup(clearScheduledAnimation);
 
   function reset() {
+    gesture.reset();
     clearScheduledAnimation();
     batch(() => {
       setIsDragging(false);
@@ -72,56 +69,17 @@ export function createMobileSwipeBackGesture(
     animateComplete(() => options.stack.completeGoBack());
   }
 
-  function handleTouchStart(e: TouchEvent) {
-    if (!options.canStart() || isAnimatingOut()) return;
-    if (!options.stack.canGoBack()) return;
-    const touch = e.touches[0];
-    if (!touch) return;
-    const left =
-      e.currentTarget instanceof Element
-        ? e.currentTarget.getBoundingClientRect().left
-        : 0;
-    if (touch.clientX - left > options.edgeThreshold) return;
-    // Buttons can sit inside the swipe-edge zone. If we start the gesture, the preventDefault() in touchmove suppresses the synthesized click on iOS.
-    if (
-      e.target instanceof Element &&
-      e.target.closest('button, a, [role="button"]')
-    ) {
-      return;
-    }
-    startX = touch.clientX;
-    startTime = Date.now();
-    setIsDragging(true);
-  }
-
-  function handleTouchMove(e: TouchEvent) {
-    if (!isDragging()) return;
-    e.preventDefault();
-    const touch = e.touches[0];
-    if (!touch) return;
-    const dx = Math.max(0, touch.clientX - startX);
-    setDragOffset(dx);
-  }
-
-  function handleTouchEnd() {
-    if (!isDragging()) return;
-    setIsDragging(false);
-    const dx = dragOffset();
-    const elapsed = Date.now() - startTime;
-    const velocity = elapsed > 0 ? dx / elapsed : 0;
-    const threshold = window.innerWidth * options.distanceThreshold;
-    if (dx > threshold || velocity > options.velocityThreshold) {
-      trigger();
-    } else {
-      animateSnapBack();
-    }
-  }
-
-  function handleTouchCancel() {
-    if (!isDragging()) return;
-    setIsDragging(false);
-    animateSnapBack();
-  }
+  const gesture = createMobileEdgeSwipe({
+    enabled: () =>
+      options.canStart() && !isAnimatingOut() && options.stack.canGoBack(),
+    onStart: () => setIsDragging(true),
+    onMove: setDragOffset,
+    onEnd(completed) {
+      setIsDragging(false);
+      if (completed) trigger();
+      else animateSnapBack();
+    },
+  });
 
   function getTransition(): string {
     if (isDragging()) return 'none';
@@ -156,10 +114,10 @@ export function createMobileSwipeBackGesture(
     isAnimatingOut,
     reset,
     trigger,
-    handleTouchStart,
-    handleTouchMove,
-    handleTouchEnd,
-    handleTouchCancel,
+    handleTouchStart: gesture.handleTouchStart,
+    handleTouchMove: gesture.handleTouchMove,
+    handleTouchEnd: gesture.handleTouchEnd,
+    handleTouchCancel: gesture.handleTouchCancel,
     styleForSlot,
   };
 }

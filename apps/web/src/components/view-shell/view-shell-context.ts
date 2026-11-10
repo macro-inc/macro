@@ -57,6 +57,8 @@ export const ViewShellContext = createContext<ViewShellInternal>();
 export const ViewShellPaneContext = createContext<
   'main' | 'detail' | 'aside'
 >();
+export const ViewShellReturnToListContext =
+  createContext<Accessor<(() => void) | undefined>>();
 
 export function useViewShellInternal(): ViewShellInternal {
   const ctx = useContext(ViewShellContext);
