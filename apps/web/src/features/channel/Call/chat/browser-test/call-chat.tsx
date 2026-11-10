@@ -13,22 +13,23 @@ import { queryClient } from '@queries/client';
 import { Router } from '@solidjs/router';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { render } from 'solid-js/web';
-import { MeetingDiscussionHost } from '../../../../meetings/views/meeting-discussion-host';
 import { CallProvider } from '../../CallContext';
 import { CallDiscussionContent } from '../../discussion/CallDiscussionContent';
 
-// A signed-in viewer, without a session: nothing here reaches a real account.
-queryClient.setQueryData(authKeys.userInfo.queryKey, {
-  authenticated: true,
-  id: 'macro|me@example.com',
-  permissions: [],
-} as unknown as UserInfoData);
+const access = new URLSearchParams(window.location.search).get('access');
+if (access === 'member') {
+  queryClient.setQueryData(authKeys.userInfo.queryKey, {
+    authenticated: true,
+    id: 'macro|me@example.com',
+    permissions: [],
+  } as unknown as UserInfoData);
+}
 
 const CALL_ID = '00000000-0000-7000-8000-0000000ca110';
 
 /**
  * A call's own chat as a meeting page mounts it: under the providers every
- * page gets (`routes/Root.tsx`), with the app's supplied by the meeting's host.
+ * page gets (`routes/Root.tsx`). No app-only providers are mounted here.
  */
 function Fixture() {
   useHotKeyRoot();
@@ -68,9 +69,17 @@ function MeetingPanel() {
           discussion={() => ({ kind: 'call_chat', call_id: CALL_ID })}
           panel={{ open: true, focusOnOpen: false, onClose: () => {} }}
           onViewChannel={() => {}}
-          host={(panel) => (
-            <MeetingDiscussionHost>{panel()}</MeetingDiscussionHost>
-          )}
+          access={
+            access === 'guest'
+              ? {
+                  kind: 'guest',
+                  session: {
+                    token: 'fixture-guest-token',
+                    participantId: 'guest-1',
+                  },
+                }
+              : { kind: 'member' }
+          }
         />
       </div>
     </main>
