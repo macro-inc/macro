@@ -60,6 +60,13 @@ pub fn application_editor_config(
                 bytes
             })))
             .extension_state(NodeHost::default());
+        let builder = if editor_type == macro_document_model::EditorType::MarkdownSync {
+            builder.extension_state(macro_document_model::peer::PeerIdState {
+                peer_id: Some(peer.to_string()),
+            })
+        } else {
+            builder
+        };
         with_session_plugins_with_id_state(builder, peer, &macro_document_model::node_ids::ID_STATE)
     });
     config
@@ -106,4 +113,16 @@ pub fn export_application_html_for_selection(
         lexical_html::EditorTheme::default(),
     )
     .generate_html_from_nodes(state, selection)?)
+}
+
+impl crate::EditorSurface {
+    /// Read an application snapshot or its committed mutation-controller cache.
+    pub fn application_query(
+        &self,
+        name: &str,
+        data: &serde_json::Value,
+        generation: u32,
+    ) -> Result<Option<serde_json::Value>, lexical_model::Error> {
+        macro_document_model::surface::query_editor(name, data, generation, self.core.editor())
+    }
 }

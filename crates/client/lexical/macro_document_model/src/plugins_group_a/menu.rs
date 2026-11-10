@@ -4,6 +4,7 @@ use crate::{
     plugins_group_b::{BlockKind, NODE_TRANSFORM},
 };
 use lexical_model::*;
+pub(crate) mod search;
 mod source;
 
 /// Source menu choices retain authored node payloads rather than display labels.
@@ -141,6 +142,9 @@ static SELECT: CommandKey<MenuCommand> = CommandKey::new("group-a.menu-select");
 
 /// Decode a source menu answer; generation belongs to the receiving model.
 pub fn decode_command(name: &str, json: &str, generation: u32) -> Result<Option<Command>, Error> {
+    if let Some(command) = search::decode(name, json, generation)? {
+        return Ok(Some(command));
+    }
     if name == RESOLVE.name() {
         return Ok(Some(Command::Extension(ExtensionCommand::new(
             &RESOLVE,
@@ -162,7 +166,7 @@ pub fn decode_command(name: &str, json: &str, generation: u32) -> Result<Option<
     ))))
 }
 pub(super) fn register(builder: EditorBuilder) -> EditorBuilder {
-    builder
+    search::register(builder)
         .extension_state(source::ExtractionState::default())
         .plugin(Menu)
 }

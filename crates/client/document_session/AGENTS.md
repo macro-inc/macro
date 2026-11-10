@@ -7,6 +7,8 @@ The host supplies identities and both clocks and executes the returned effects.
 
 ## Boundaries
 
+- Forward application controller queries through EditorSurface.application_query using only the existing read-only core editor; never expose mutable Core or grant callback reentry.
+
 - Keep storage, transports, timers and identity generation outside this crate.
 - Read `last_output` to encode committed effects without processing another input.
 - One host input calls `handle` once; keep keystrokes inside the append/presence window.

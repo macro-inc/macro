@@ -28,7 +28,7 @@ existing app providers. Dispose listeners and pending uploads before closing the
 session. Do not fabricate unused toolbar/comment methods to satisfy the existing,
 currently unimplemented `NativeMarkdownEditingPort` interface.
 
-The native document installation owns the actual checklist bridge and
+The checklist/focus checkpoint owns the actual native checklist bridge and
 `group-b.focus-end` action. Its shared exterior-focus host retains the existing
 focused-range guard. Browser focus runs in actual SessionPort completion,
 rechecking the installation lifetime, mounted view and UI editability. Missing
@@ -41,6 +41,21 @@ ordered native command scope must use that scope's explicit native read API.
 Ordinary `registerViewCommand` priority ties remain invalid; consume the separately
 owned ordered Normal Enter facade when a controller needs that priority.
 
+## Native gesture component checkpoint
+
+The separately validated gesture component (`cd73811b9f`, prerequisite
+`8de980536a`) requires a live `canEdit` accessor when installing native overlays.
+Its listener scope owns completed and partial installations, preserves an opaque
+construction failure, and disposes each actual listener once. Later menu and
+progress mounts must retain that ownership and the required options at every
+caller.
+
+That component combines the checklist bridge, real trailing-gap focus completion,
+and touch long-press gesture. It preserves the captured app owner and the
+existing completion-based focus guards. Its component evidence does not establish
+a table selection action bar, installed application acceptance, or complete
+editing-overlay parity.
+
 ## Source dependency inventory and native capabilities
 
 All component paths below are relative to
@@ -49,7 +64,7 @@ All component paths below are relative to
 | Overlay | Actual Source reads/calls | Narrow host capability | Native status at review base |
 | --- | --- | --- | --- |
 | Slash (`component/menu/ActionsMenu.tsx`) | Root listener/root, `hasNodes`, CLOSE/REMOVE action search, `Action.action(editor, context)`, existing menu operations; dependency check differs between click and keyboard selection | Root subscription, action availability, close query, remove query, execute selected catalog action with pointer/keyboard origin | Existing strict `group-a.menu-select` atomically validates/replaces a supplied range. Full catalog behavior separately requires Source REMOVE admission then actual action/request; it must not be silently replaced with an atomic removal/choice. No consumable general menu query/close primitive. Filtering to nine block actions would lose Source rows. |
-| Checklist (`plugins/checklist/checklistPlugin.ts`) | Owned listitem DOM, editable gate, checkbox hit geometry, drag threshold, toggle-selection keyboard routing | Register owned pointer bridge and dispatch toggle by key | `registerNativeChecklist` already exists but is unmounted. `group-b.checklist` supports toggle, toggle-selection, settings with attached/type/generation checks. Native task-list controls are separate from toggling. |
+| Checklist (`plugins/checklist/checklistPlugin.ts`) | Owned listitem DOM, editable gate, checkbox hit geometry, drag threshold, toggle-selection keyboard routing | Register owned pointer bridge and dispatch toggle by key | `registerNativeChecklist` is installed through the additive overlay lifetime. `group-b.checklist` supports toggle, toggle-selection, settings with attached/type/generation checks. Native task-list controls are separate from toggling. |
 | Link (`component/menu/FloatingLinkMenu.tsx`) | `isEditable`, `isInteractable`, root/focus; `linksPlugin` hover/click/create callbacks; insert/update/url/unlink commands; HIGH Escape and CRITICAL Enter handlers | `LinkMenuHost` below | Existing `registerNativeLinks` supplies hover/click and `group-b.link` supplies insert/update/url/toggle/unlink. Create-picker notification and captured-link selection targeting need explicit native wiring. |
 | Mentions and inline search (`component/menu/MentionsMenu`, `EmojiMenu.tsx`, `SnippetsMenu.tsx`) | Inline-search mutation/query state, live range/peer validation, catalog/service providers, typed mention payloads, collapse/remove and insertion commands | `MentionMenuHost` supplies root, close and selection to the actual mention controller; query/range and other search controllers remain separate | `group-a.menu-select` supports text, user, document, date, group, agent-session, booking-link, block, snippet and snippet-start. No consumable general web menu-query API. Existing Android source providers retain their own lifetime protocol and are not a replacement web UI. |
 | Emoji (`component/menu/EmojiMenu.tsx`) | Actual root subscription, search removal before text insertion, CLOSE and an editor-owned InlineSearchNode text transform | `EmojiMenuHost` supplies root/subscription, compound insert, close and raw search-text registration | The Source controller is shared. Native click/keyboard menu commits still need actual query/ordered events; enclosed-shortcode transform/resolution remains a separate unavailable policy/callback contract. |
@@ -166,6 +181,46 @@ offset 0. Both remove the search node and close the menu. These controls are
 Source evidence. Existing native menu-select validation separately requires an
 attached exact range, no composition/code and a collapsed caret at its end;
 it does not establish a native query API.
+
+`search-dispatch-contract.test.ts` executes a higher-priority listener on the
+actual private Source slash command. Eligibility reads committed state even
+after that listener changes active text/caret; insertion uses the active
+transaction. A committed-valid caret still opens after an active invalidation,
+at the active insertion position. A committed-invalid caret stays closed after
+an active edit makes it eligible. This is separate from browser-default input.
+
+Mixed imported local-peer search nodes retain mutation-listener order. Each
+kind's creation helper returns on the first peer-valid created node whose text
+is not its exact bare symbol, so only the kind matching the first created bare
+symbol opens. A first non-bare search leaves every menu closed. Updated search
+text publishes a term to all four registered menus even when they are closed;
+it does not open them. CLOSE and REMOVE traverse all eligible search kinds.
+The control retains complete imported/created/updated/closed/removed JSON and
+selection; removing four paragraph children leaves four empty paragraphs and
+their ordinary six-newline root text, rather than deleting the paragraphs.
+
+`search-peer-contract.test.ts` pins the actual peer ownership boundary. The
+validator reads live node state or serialized `$.peerId`, never key/generation,
+`local` or `sharedPeerIds`. Disabled validation accepts every node. With a
+current peer, a missing/falsy peer is rejected and a truthy peer must equal the
+current string; with no current peer the validator accepts either. The document
+uses disabled validation outside sync and a live current-peer accessor in sync.
+The actual authored-node transform assigns current peer only when its parsed
+peer is null. Parsing/setting imported state does not run that adoption:
+missing-peer imports initially stay unowned/closed, empty-string imports stay rejected,
+and remote imports remain rejected even if shared peers include the local peer.
+A later ordinary dirty transform can assign the current peer to a missing owner;
+it leaves an empty owner unchanged. This is separate from import and query.
+`search-callback-order.test.ts` records full Source JSON and actual callbacks in
+body registration order (emoji, mentions, snippets, actions, then peer plugin).
+Authored and imported local searches open, then a real `local-status` created-node
+follow-up sets `$.local` and invokes four term callbacks. Imported remote/empty
+owners acquire `local:false` without search callbacks; missing owners acquire
+neither field until a later dirty transform. A format-only edit repeats the four
+term callbacks with equal payloads. These controls use the actual Source plugins
+and menu operations, not rendered picker UI or native execution.
+CLOSE and REMOVE leave all those imported nodes unchanged; explicit local imports
+are eligible. Do not add an eager import/query ownership transform in native code.
 
 ## Source catalog action and I/O boundaries
 
@@ -337,16 +392,17 @@ retain open/query/completed model JSON and DOM without masking fields or IDs;
 transient Await behavior is additionally covered by the existing actual-plugin
 sequential-state controls. No native snippet host is installed here.
 
-## Native search controller decision awaiting implementation
+## Native search controller boundary
 
-The agreed phase-one design is not a consumable native capability or binding.
-It reserves `group-a.search-trigger` with `{kind}` for actions, mentions, emojis
+Phase one implements model policy and a read-only query bridge; consumer
+activation and installed browser acceptance remain separate. It supplies
+`group-a.search-trigger` with `{kind}` for actions, mentions, emojis
 and snippets; `group-a.search-close` and `group-a.search-remove` take strict
 empty objects and traverse all peer-valid search kinds. Eligibility reads the
 committed snapshot and insertion runs in the active LOW ordered handler. CLOSE
 keeps LOW and REMOVE keeps HIGH. No native priority workaround is permitted.
 
-The proposed `group-a.search-query` snapshot is
+The `group-a.search-query` snapshot is
 `{kind, open, term, range: null | {key, offset, expected}}`, with offset at the
 UTF-16 start and expected containing the full trigger/search text. Generation
 uses the existing envelope. It reflects the native mutation-controller cache,
@@ -358,8 +414,24 @@ receive every actual ordered controller callback event, even when payloads are
 equal, preserving mutation visitation/order. Shared UI cache setters remain
 host-owned: keyboard term resets and `setIsOpen` are not model mutations, and
 query polling must not overwrite those local UI decisions. Query `open` does
-not claim that the menu is currently visible. Concrete event types, sequencing,
-implementation hash and consumer validation remain required before activation.
+not claim that the menu is currently visible. The ordered event is
+`group-a.search-change` with `{callback: 'open' | 'close' | 'term', kind, open,
+term, range}`. Consumers apply only the field owned by that callback: open/close
+changes openness, term changes the term. They must not replay the full snapshot
+onto locally reset UI state on every event. Equal full payloads are emitted
+again. Native listeners follow the body editor registration order; each listener
+retains the Source early return on a first mismatching created node.
+
+`surface::query_editor(&Editor)` reads the committed transactional controller
+extension; `EditorSurface.application_query` forwards through the existing
+read-only core editor reference. WASM application query kind 9 retains its actual
+generation fence and existing envelope. This does not authorize ordinary receiver
+queries inside dispatcher callbacks. FFI forwarding has separate ownership.
+Search-only dirty transforms may seed canonical peer identity; imports and
+queries never adopt ownership, and no global peer plugin is installed. Created
+local-status reconciliation uses actual model writes and subsequent mutations,
+not synthesized callback events. API hash and consumer validation are required
+before activation.
 
 Full-catalog choice policy remains separate: preserve Source REMOVE admission
 followed by the actual action or host request, including IO/lifetime boundaries.
