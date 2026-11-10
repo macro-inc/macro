@@ -47,7 +47,6 @@ From `apps/web`:
 - `bun run test -- src/features/block-call src/features/channel/Call/chat/CallChatHistory.test.tsx src/components/app/side-panel/SidePanel.test.tsx src/components/ui/components/ProgressPill.test.ts --maxWorkers=1`
 - `bun run type-check`
 - From the repository root: `just check full`
-- `bunx playwright test --config src/features/block-call/browser-test/playwright.config.ts`: backend-free playback, volume dragging, control frame timing and responsive-card geometry, themes, navigation and overlapping card state.
 - Exercise desktop, 680px and 480px panes, and 390x844 touch with an authorized saved call; follow `docs/agent-guide/calls.md`.
 
 ## Related
