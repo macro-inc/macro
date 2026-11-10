@@ -13,6 +13,7 @@ Shared collaborative document models, transport and portable session host adapte
 ## Boundaries
 
 SessionExecutor executes effects; Rust owns retry, backoff, WAL and permission policy.
+Inspect callback leases only through beforeConsume after successful native calls; finish cleanup and original-cause delivery through afterDrain after the outer FIFO unlocks, preserving an explicit failure holder even for throw undefined.
 Transfer native ownership to SessionExecutor only through create; constructor failure invokes the typed onConstructionFailure hook before freeing native resources and releases its lease asynchronously without masking the original cause.
 Storage remains compatible with v1 macro-document-wal and macro-document-snapshots.
 Hold the owner's Web Lock before storage; release after terminal append and FIFO drain,

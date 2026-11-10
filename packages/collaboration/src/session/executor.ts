@@ -36,6 +36,10 @@ export interface ViewApplier {
     effects: IViewEffectMsg[]
   ): void;
 }
+/** Presence distinguishes an aborted call from a successful call, including throw undefined. */
+export interface ExecutorFailure {
+  readonly error: unknown;
+}
 export interface ExecutorOptions<S extends NativeSession> {
   doc: string;
   owner: string;
@@ -43,6 +47,10 @@ export interface ExecutorOptions<S extends NativeSession> {
   create: (now: number, wall: number) => S;
   /** Release typed host ownership before native free if executor construction fails. */
   onConstructionFailure?: (session: S) => void;
+  /** Inspect issued callback metadata after a native call and before output transfer. */
+  beforeConsume?: (flags: number) => void;
+  /** Complete invocation cleanup after the outer FIFO exits and synchronous admission unlocks. */
+  afterDrain?: (failure?: ExecutorFailure) => void;
   view: ViewApplier;
   auth: SessionAuthorization;
   /** Supplied by the application's servers.ts; the package never invents hosts. */
@@ -217,20 +225,35 @@ export class SessionExecutor<S extends NativeSession = EditorSession> {
     if (this.closed) return;
     this.queue.push(() => {
       const flags = call();
+      this.options.beforeConsume?.(flags);
       this.consume(flags);
       after?.(flags);
     });
     if (this.busy) return;
     this.busy = true;
+    let failure: ExecutorFailure | undefined;
     try {
       while (this.queue.length) {
         const call = this.queue.shift();
         if (!call) break;
         call();
       }
+    } catch (error) {
+      failure = { error };
     } finally {
       this.busy = false;
     }
+    try {
+      this.options.afterDrain?.(failure);
+    } catch (error) {
+      if (!failure) throw error;
+      try {
+        Telemetry.error(error, { surface: 'session.drain.cleanup' });
+      } catch {
+        // Preserve the original admission failure, including throw undefined.
+      }
+    }
+    if (failure) throw failure.error;
   }
   /** Admit a synchronous transaction without queueing rejected reentrant work. */
   runSync(call: () => number, after?: (flags: number) => void): void {
