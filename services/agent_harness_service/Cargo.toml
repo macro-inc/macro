@@ -146,6 +146,7 @@ models_permissions = { path = "../../crates/models_permissions" }
 non_empty = { path = "../../crates/non_empty" }
 notification = { path = "../../crates/notification", features = ["ai_tool"] }
 onboarding = { path = "../../crates/onboarding" }
+opentelemetry = { workspace = true, features = ["metrics"] }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
 prompt = { path = "../../crates/prompt" }
 properties = { path = "../../crates/properties", default-features = false, features = ["outbound"] }

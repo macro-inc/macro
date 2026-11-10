@@ -90,12 +90,12 @@ impl InMemModelAccess for FreeModels {
 
 fn in_process_runtime(repo: InMemoryAgentSessionRepo) -> InMemRuntime {
     InMemRuntime {
-        manager: InMemAgentManager::new(
+        manager: Arc::new(InMemAgentManager::new(
             Arc::new(IdleEngine),
             Arc::new(LogFrameSource::new(repo)),
             Arc::new(NoMcpServers),
             Arc::new(FreeModels),
-        ),
+        )),
     }
 }
 

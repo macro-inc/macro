@@ -20,6 +20,11 @@ Pulumi stacks; they do not host extra agent processes.
 - `src/model_providers/`: per-harness runtime adapters — `cursor.rs`,
   `macrod.rs`, `in_memory.rs`.
 - `src/containers.rs`: Daytona sandbox lifecycle; local Docker opt-in.
+- `src/runtime_gauges.rs`: one task recording, every minute, what the process
+  holds per session as OTel gauges (`ahs.harness.workers`,
+  `ahs.harness.hydrated`, `ahs.agent_session.active{instance}`,
+  `ahs.inmem.store_sessions`, `ahs.inmem.live_agents`,
+  `ahs.tokio.alive_tasks`); no per-session attributes.
 - `src/trigger.rs`: turns channel/webhook triggers into sessions.
 - `src/pull_request_archive.rs`: consumes `macro.github_pull_requests` (group
   `agent-harness-pull-request-archive`) and auto-archives sessions whose

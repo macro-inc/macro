@@ -129,6 +129,18 @@ impl InMemAgentManager {
         self
     }
 
+    /// How many sessions' conversations this process holds.
+    #[must_use]
+    pub fn conversations(&self) -> usize {
+        self.store.len()
+    }
+
+    /// How many sessions have a running agent task in this process.
+    #[must_use]
+    pub fn live_agents(&self) -> usize {
+        self.live.len()
+    }
+
     /// The egress token `attach` was handed for `session`, if this process
     /// still holds it.
     #[must_use]

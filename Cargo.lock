@@ -687,6 +687,7 @@ dependencies = [
  "non_empty",
  "notification",
  "onboarding",
+ "opentelemetry",
  "pipedream_mcp",
  "prompt",
  "properties",

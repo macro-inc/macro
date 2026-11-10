@@ -7,6 +7,8 @@
 //! container is asked for - decides which runtime a session's transport comes
 //! from.
 
+use std::sync::Arc;
+
 use agent_egress::domain::model::SessionToken;
 use agent_harness::domain::error::{HarnessError, Result};
 use agent_harness::domain::model::{AgentKind, SpawnContainer};
@@ -71,8 +73,8 @@ impl TransportSender<ToRuntimeMessage> for RoutedSender {
 
 /// The shared in-memory runtime used by every in-memory agent session.
 pub struct InMemRuntime {
-    /// In-memory session provisioner.
-    pub manager: InMemAgentManager,
+    /// In-memory session provisioner, shared with the runtime gauges.
+    pub manager: Arc<InMemAgentManager>,
 }
 
 /// The deployment's [`ContainerManager`]: the sandbox provider for the

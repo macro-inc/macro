@@ -435,6 +435,18 @@ where
         self
     }
 
+    /// How many sessions have a command worker in this process right now.
+    #[must_use]
+    pub fn command_workers(&self) -> usize {
+        self.workers.len()
+    }
+
+    /// How many sessions have their durable queue loaded in this process.
+    #[must_use]
+    pub fn hydrated_sessions(&self) -> usize {
+        self.inner.hydrated.len()
+    }
+
     /// Reconcile durable events through the same routed worker as user prompts.
     #[tracing::instrument(skip_all, err)]
     pub async fn recover_notifications(&self) -> Result<()> {

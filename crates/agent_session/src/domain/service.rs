@@ -588,6 +588,13 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         self.replica
     }
 
+    /// How many sessions have a live actor (or one being attached) on this
+    /// service right now.
+    #[must_use]
+    pub fn active_sessions(&self) -> usize {
+        self.active.len()
+    }
+
     /// Stop active actors and wait for their tasks to release their transports.
     pub async fn shutdown(&self) {
         let lifecycle = self.lifecycle.lock().await;
