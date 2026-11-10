@@ -137,7 +137,12 @@ async fn a_redial_reopens_sessions_an_idle_teardown_closed() {
     let first = native_session(&service, &repo, bot_id).await;
     let second = native_session(&service, &repo, bot_id).await;
     for session in [first, second] {
-        service.inner.sessions.mark_disconnected(session).await.unwrap();
+        service
+            .inner
+            .sessions
+            .mark_disconnected(session)
+            .await
+            .unwrap();
     }
     let runtime = ContainerMock::default();
     runtimes.attach(harness_for_bot(bot_id), runtime.clone());
