@@ -13,6 +13,7 @@ pub struct FakeRepository {
     pub staged: Mutex<HashMap<Uuid, Record>>,
     pub memberships: Mutex<HashMap<String, Vec<TeamId>>>,
     pub fail_save: AtomicBool,
+    pub lock_calls: AtomicUsize,
     pub audits: Mutex<Vec<Action>>,
     pub enrollments: Mutex<HashMap<Uuid, (TeamId, ItemId, bool, bool, bool)>>,
 }
@@ -23,6 +24,7 @@ impl FakeRepository {
             staged: Mutex::new(HashMap::new()),
             memberships: Mutex::new(HashMap::new()),
             fail_save: AtomicBool::new(false),
+            lock_calls: AtomicUsize::new(0),
             audits: Mutex::new(vec![]),
             enrollments: Mutex::new(HashMap::new()),
         }
@@ -150,6 +152,7 @@ impl Repository for FakeRepository {
     }
 
     async fn lock(&self, _: TeamId, _: ItemId) -> Result<Box<dyn ItemLock>, Error> {
+        self.lock_calls.fetch_add(1, Ordering::SeqCst);
         Ok(Box::new(FakeLock))
     }
     async fn stage(&self, operation: Uuid, record: &Record) -> Result<(), Error> {
