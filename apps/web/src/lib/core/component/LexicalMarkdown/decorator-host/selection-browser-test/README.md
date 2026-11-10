@@ -4,6 +4,9 @@ This isolated fixture covers GroupMention, UnknownMention, ThemeMention and
 ConnectApp. It uses their actual Source factories/components/providers and the
 production native EditorSession, SessionPort and EditorView. Only their narrow
 selection capability changes; ordinary Source calls retain the original context.
+The shared native adapter obtains the actual initialized component registry;
+rows only project typed props. One real view-backed selection context is bound
+to its acknowledged generation and disposed by the view owner.
 
 baseline.browser.e2e.ts compares OFF model and DOM bytes against immutable
 pre-refactor captures. import-matched.browser.e2e.ts imports the identical saved

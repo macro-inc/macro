@@ -1,84 +1,87 @@
-import type { ConnectAppInfo } from '@macro-inc/lexical-core';
+import {
+  type ConnectAppDecoratorProps,
+  ConnectAppNode,
+  type GroupMentionDecoratorProps,
+  GroupMentionNode,
+  type ThemeMentionDecoratorProps,
+  ThemeMentionNode,
+  type UnknownMentionDecoratorProps,
+  UnknownMentionNode,
+} from '@macro-inc/lexical-core';
 import type { MacroDecorators } from '@macro-inc/lexical-wasm-view/view/node-views/macro';
 import type {
   JsonObject,
   JsonValue,
 } from '@macro-inc/lexical-wasm-view/view/types';
-import type { EditorThemeClasses } from 'lexical';
-import { createMemo } from 'solid-js';
-import { ConnectApp } from '../component/decorator/ConnectApp';
-import { GroupMention } from '../component/decorator/GroupMention';
-import { ThemeMention } from '../component/decorator/ThemeMention';
-import { UnknownMention } from '../component/decorator/UnknownMention';
-import { createNativeSelectionHost } from './native-selection-host';
+import type { DecoratorHostCapabilities } from '../context/DecoratorHostContext';
+import {
+  createNativeDecoratorAdapter,
+  type NativeDecoratorContext,
+} from './native-adapter';
+import type {
+  DecoratorSelectionHost,
+  DecoratorSelectionHostProp,
+} from './selection-host';
 
 function isObject(value: JsonValue | undefined): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** Reuse the four application chips with their complete, narrow editor dependency. */
-export function createNativeFastSelectionDecoratorViews(
-  theme: EditorThemeClasses
+/** The shared adapter owns rendering; each row only projects actual Source props. */
+export function createNativeFastSelectionDecoratorViews<
+  Host extends DecoratorHostCapabilities & DecoratorSelectionHost,
+>(
+  context: NativeDecoratorContext<Host>
 ): Pick<
   MacroDecorators,
   'group-mention' | 'unknown-mention' | 'theme-mention' | 'connect-app'
 > {
+  const bind = createNativeDecoratorAdapter(context);
   return {
-    'group-mention'(props) {
-      const host = createNativeSelectionHost(props);
-      const groupAlias = createMemo(() => {
-        const value = props.node().props().groupAlias;
-        if (typeof value !== 'string') throw new Error('Invalid group alias');
-        return value;
-      });
-      return (
-        <GroupMention
-          groupAlias={groupAlias()}
-          key={String(props.node().key)}
-          theme={theme}
-          host={host}
-        />
-      );
-    },
-    'unknown-mention'(props) {
-      const host = createNativeSelectionHost(props);
-      const name = createMemo(() => {
-        const value = props.node().props().name;
-        if (typeof value !== 'string')
-          throw new Error('Invalid unknown mention name');
-        return value;
-      });
-      return (
-        <UnknownMention
-          name={name()}
-          key={String(props.node().key)}
-          theme={theme}
-          host={host}
-        />
-      );
-    },
-    'theme-mention'(props) {
-      const host = createNativeSelectionHost(props);
-      const payload = createMemo(() => {
-        const value = props.node().props();
-        if (typeof value.name !== 'string' || !isObject(value.data))
-          throw new Error('Invalid theme mention payload');
-        return { name: value.name, data: value.data };
-      });
-      return (
-        <ThemeMention
-          name={payload().name}
-          data={payload().data}
-          key={String(props.node().key)}
-          theme={theme}
-          host={host}
-        />
-      );
-    },
-    'connect-app'(props) {
-      const host = createNativeSelectionHost(props);
-      const payload = createMemo<ConnectAppInfo>(() => {
-        const value = props.node().props();
+    'group-mention': bind<
+      GroupMentionDecoratorProps & DecoratorSelectionHostProp
+    >(GroupMentionNode, (node, context) => {
+      const value = node.props().groupAlias;
+      if (typeof value !== 'string')
+        throw new Error('Invalid group alias');
+      return {
+        groupAlias: value,
+        key: String(node.key),
+        theme: context.theme,
+        host: context.host,
+      };
+    }),
+    'unknown-mention': bind<
+      UnknownMentionDecoratorProps & DecoratorSelectionHostProp
+    >(UnknownMentionNode, (node, context) => {
+      const value = node.props().name;
+      if (typeof value !== 'string')
+        throw new Error('Invalid unknown mention name');
+      return {
+        name: value,
+        key: String(node.key),
+        theme: context.theme,
+        host: context.host,
+      };
+    }),
+    'theme-mention': bind<
+      ThemeMentionDecoratorProps & DecoratorSelectionHostProp
+    >(ThemeMentionNode, (node, context) => {
+      const value = node.props();
+      if (typeof value.name !== 'string' || !isObject(value.data))
+        throw new Error('Invalid theme mention payload');
+      return {
+        name: value.name,
+        data: value.data,
+        key: String(node.key),
+        theme: context.theme,
+        host: context.host,
+      };
+    }),
+    'connect-app': bind<ConnectAppDecoratorProps & DecoratorSelectionHostProp>(
+      ConnectAppNode,
+      (node, context) => {
+        const value = node.props();
         if (
           typeof value.name !== 'string' ||
           typeof value.appSlug !== 'string' ||
@@ -89,18 +92,11 @@ export function createNativeFastSelectionDecoratorViews(
           name: value.name,
           appSlug: value.appSlug,
           target: value.target,
+          key: String(node.key),
+          theme: context.theme,
+          host: context.host,
         };
-      });
-      return (
-        <ConnectApp
-          name={payload().name}
-          appSlug={payload().appSlug}
-          target={payload().target}
-          key={String(props.node().key)}
-          theme={theme}
-          host={host}
-        />
-      );
-    },
+      }
+    ),
   };
 }
