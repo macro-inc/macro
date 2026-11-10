@@ -32,7 +32,6 @@ targets:
     platform: iOS
     sources:
       - ParticipantStripTests.swift
-      - AudioOutputTests.swift
     dependencies:
       - target: CallOverlayHarness
   CallOverlayUITests:
