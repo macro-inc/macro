@@ -8,6 +8,7 @@ use uuid::Uuid;
 
 mod access;
 mod boundaries;
+mod coverage_gaps;
 mod deep_faults;
 mod faults;
 mod outlook;
