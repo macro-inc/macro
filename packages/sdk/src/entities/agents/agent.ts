@@ -1,7 +1,7 @@
 import { match } from 'ts-pattern';
 import type {
-  AgentMemory as AgentMemoryRecord,
   AgentMcpServers,
+  AgentMemory as AgentMemoryRecord,
   Agent as AgentRecord,
   CreateAgentRequest,
   PatchAgentRequest,
