@@ -231,11 +231,16 @@ impl Config {
             path: path.to_owned(),
             source,
         })?;
-        let parse = |source| ConfigError::Parse {
+        Self::parse(&raw).map_err(|source| ConfigError::Parse {
             path: path.to_owned(),
             source,
-        };
-        let mut table: toml::Table = toml::from_str(&raw).map_err(parse)?;
+        })
+    }
+
+    /// Parse config text the way [`Config::load`] does, so a file that has
+    /// not been migrated yet can still be edited and saved.
+    pub fn parse(raw: &str) -> Result<Self, toml::de::Error> {
+        let mut table: toml::Table = toml::from_str(raw)?;
         for setting in &RETIRED_SETTINGS {
             match setting.key {
                 None => {
@@ -251,7 +256,7 @@ impl Config {
                 }
             }
         }
-        table.try_into().map_err(parse)
+        table.try_into()
     }
 }
 

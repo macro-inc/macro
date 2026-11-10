@@ -325,7 +325,7 @@ impl ConfigForm {
     /// Validate the complete document and write it out.
     pub fn save(&self) -> rootcause::Result<()> {
         let rendered = self.doc.to_string();
-        toml::from_str::<Config>(&rendered)
+        Config::parse(&rendered)
             .context("the edited config would not load; the value was rejected before writing")?;
         crate::config::write_sensitive(&self.path, rendered.as_bytes())
             .context(format!("failed to write config at {}", self.path.display()))?;

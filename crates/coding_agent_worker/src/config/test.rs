@@ -193,6 +193,7 @@ fn a_current_or_missing_config_is_left_alone() {
 fn unknown_fields_are_rejected() {
     let with_typo = EXAMPLE.replace("repo_url", "repo_uri");
     assert!(toml::from_str::<Config>(&with_typo).is_err());
+    assert!(Config::parse(&format!("{RELEASED_CONFIG}\n[update]\nautoo = true\n")).is_err());
 
     let macro_typo = format!("{DEFAULT}\n[macro]\napi_uri = \"http://localhost\"\n");
     assert!(toml::from_str::<Config>(&macro_typo).is_err());

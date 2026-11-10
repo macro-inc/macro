@@ -144,6 +144,42 @@ fn persists_and_clears_embedded_credentials_without_losing_comments() {
 }
 
 #[test]
+fn a_config_with_settings_macrod_no_longer_reads_can_still_be_paired() {
+    // What a released macrod left behind when its migration could not run.
+    let directory = tempfile::tempdir().expect("temp dir");
+    let path = directory.path().join("macrod.toml");
+    fs::write(
+        &path,
+        "[identity]\nscope = \"private\"\n\n[server]\nport = 8790\n\n\
+         [harness]\ncommand = \"hermes\"\nargs = [\"acp\"]\n\n\
+         [workspace]\npath = \"/tmp\"\n",
+    )
+    .expect("write config");
+    let credentials = HarnessCredentials {
+        harness_id: HarnessId::TEST_A,
+        token: "mhns_abc_secret".to_owned(),
+    };
+
+    ConfigForm::load(&path)
+        .expect("load form")
+        .persist_credentials(&credentials)
+        .expect("persist credentials");
+
+    let paired = Config::load(&path).expect("load paired config");
+    assert_eq!(paired.credentials, Some(credentials));
+    let mut form = ConfigForm::load(&path).expect("load form");
+    form.clear_credentials().expect("clear credentials");
+    let unpaired = Config::load(&path).expect("load unpaired config");
+    assert_eq!(unpaired.credentials, None);
+    assert!(
+        !fs::read_to_string(&path)
+            .expect("read config")
+            .contains("[credentials]")
+    );
+    assert_private_mode(&path);
+}
+
+#[test]
 fn quickstart_edits_preserve_existing_deployment_and_comments() {
     let directory = tempfile::tempdir().expect("temp dir");
     let workspace = directory.path().join("workspace");
