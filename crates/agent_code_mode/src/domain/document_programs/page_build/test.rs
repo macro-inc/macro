@@ -126,6 +126,82 @@ async fn refuses_a_client_bundle_that_would_close_its_own_script() {
     );
 }
 
+#[tokio::test]
+async fn refuses_reserved_program_ids_and_an_empty_client() {
+    let toolchain = Toolchain::default();
+    let html = r#"
+<script type="text/macro" id="run">export default async () => 1;</script>
+<script type="text/macro" id="delete">export default async () => 1;</script>
+<script type="module" lang="ts">  </script>
+"#;
+
+    let BuildOutcome::Failed(problems) = build(html, &toolchain, &toolchain).await.unwrap() else {
+        panic!("reserved ids must fail the build");
+    };
+
+    let messages: Vec<&str> = problems.iter().map(|p| p.message.as_str()).collect();
+    assert_eq!(
+        messages,
+        [
+            "Program id `run` is a reserved word in JavaScript or `macro:programs`; rename it.",
+            "Program id `delete` is a reserved word in JavaScript or `macro:programs`; rename it.",
+            "The `<script type=\"module\" lang=\"ts\">` is empty; write the client script or remove it.",
+        ]
+    );
+    assert_eq!(toolchain.checks.load(Ordering::SeqCst), 0);
+}
+
+/// A bundler whose program bundles exceed what a run accepts.
+struct OversizedBundler;
+
+#[async_trait]
+impl ProgramBundler for OversizedBundler {
+    async fn bundle(
+        &self,
+        _files: &[SourceFile],
+        _entry: &str,
+        _target: BundleTarget,
+    ) -> Result<Bundle, CheckError> {
+        Ok(Bundle::Code("x".repeat(65 * 1024)))
+    }
+}
+
+#[tokio::test]
+async fn refuses_a_program_bundle_a_run_would_refuse() {
+    let html = r#"<script type="text/macro" id="tasks">export default async () => 1;</script>"#;
+
+    let BuildOutcome::Failed(problems) = build(html, &Toolchain::default(), &OversizedBundler)
+        .await
+        .unwrap()
+    else {
+        panic!("an oversized bundle must fail the build");
+    };
+
+    assert_eq!(problems[0].file.as_deref(), Some("program tasks"));
+    assert!(
+        problems[0].message.contains("65 KiB") && problems[0].message.contains("64 KiB"),
+        "{problems:?}"
+    );
+}
+
+#[test]
+fn names_the_macro_client_module_in_diagnostics() {
+    let ids = [ProgramId::try_new("tasks".to_owned()).unwrap()];
+    let renamed = named(
+        vec![Diagnostic {
+            file: Some(MACRO_CLIENT_FILE.to_owned()),
+            message: "TS2345 at macro_client.ts:3:1 and client.ts:1:1".to_owned(),
+        }],
+        &ids,
+    );
+
+    assert_eq!(renamed[0].file.as_deref(), Some("macro:client"));
+    assert_eq!(
+        renamed[0].message,
+        "TS2345 at macro:client:3:1 and client script:1:1"
+    );
+}
+
 #[test]
 fn source_hash_accepts_only_its_own_shape() {
     let hash = SourceHash::of("<p>hi</p>");
@@ -267,6 +343,54 @@ mod with_deno {
             "{problems:?}"
         );
         assert!(problems[0].message.contains("TS2554"), "{problems:?}");
+    }
+
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn a_program_whose_first_parameter_is_not_an_object_fails_by_name() {
+        let (_root, deno) = deno().await;
+        let html = r#"<script type="text/macro" id="echo" lang="ts">
+  export default async function (text: string) {
+    return text;
+  }
+</script>"#;
+
+        let BuildOutcome::Failed(problems) = build(html, &deno, &deno).await.unwrap() else {
+            panic!("a non-object first parameter must fail the build");
+        };
+
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert_eq!(problems[0].file.as_deref(), Some("program echo"));
+        assert!(
+            problems[0]
+                .message
+                .starts_with("Program `echo`'s first parameter must be an object type"),
+            "{problems:?}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn the_client_receives_a_program_value_as_json() {
+        let (_root, deno) = deno().await;
+        let html = r#"<script type="text/macro" id="when" lang="ts">
+  export default async function () {
+    return { at: new Date(), format: () => 'x', labels: ['a'] };
+  }
+</script>
+<script type="module" lang="ts">
+  import { when } from 'macro:programs';
+  const value = await when();
+  const at: string = value.at;
+  const labels: string[] = value.labels;
+  // @ts-expect-error functions don't survive JSON
+  value.format();
+  document.title = `${at} ${labels.length}`;
+</script>"#;
+
+        let outcome = build(html, &deno, &deno).await.unwrap();
+
+        assert!(matches!(outcome, BuildOutcome::Built { .. }), "{outcome:?}");
     }
 
     /// The demo pages in `demos/` build against the current SDK, so an SDK

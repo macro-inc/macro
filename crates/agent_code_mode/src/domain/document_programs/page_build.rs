@@ -10,7 +10,8 @@
 //! bundles without any program source, so server code never reaches the page.
 
 use code_execution::domain::{
-    Bundle, BundleTarget, CheckError, Diagnostic, ProgramBundler, ProgramChecker, SourceFile,
+    Bundle, BundleTarget, CheckError, Diagnostic, Limits, ProgramBundler, ProgramChecker,
+    SourceFile,
 };
 use lol_html::{RewriteStrSettings, element, html_content::ContentType, rewrite_str, text};
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,63 @@ declare global {\n\
   /** What a program receives beside its arguments: the SDK, signed in as the viewer. */\n\
   interface ProgramContext { macro: Macro }\n\
 }\n";
+/// Words a program id can't be: the generated `macro:programs` declares each
+/// id as a `const` beside its `run` import, so reserved words, strict-mode
+/// bindings and `run` would not compile.
+const RESERVED_IDS: &[&str] = &[
+    "arguments",
+    "await",
+    "break",
+    "case",
+    "catch",
+    "class",
+    "const",
+    "continue",
+    "debugger",
+    "default",
+    "delete",
+    "do",
+    "else",
+    "enum",
+    "eval",
+    "export",
+    "extends",
+    "false",
+    "finally",
+    "for",
+    "function",
+    "if",
+    "implements",
+    "import",
+    "in",
+    "instanceof",
+    "interface",
+    "let",
+    "new",
+    "null",
+    "package",
+    "private",
+    "protected",
+    "public",
+    "return",
+    "run",
+    "static",
+    "super",
+    "switch",
+    "this",
+    "throw",
+    "true",
+    "try",
+    "typeof",
+    "var",
+    "void",
+    "while",
+    "with",
+    "yield",
+];
+/// What a program's arguments check reports when its first parameter isn't
+/// an object; [`named`] replaces it with [`object_arguments_problem`].
+const NOT_AN_OBJECT: &str = "first parameter is not an object";
 /// The client's check adds the browser's types.
 const DOM_REFERENCE: &str =
     "/// <reference lib=\"dom\" />\n/// <reference lib=\"dom.iterable\" />\n";
@@ -53,7 +111,10 @@ fn is_identifier(id: &str) -> bool {
     let starts = chars
         .next()
         .is_some_and(|first| first.is_ascii_alphabetic() || first == '_');
-    starts && chars.all(|rest| rest.is_ascii_alphanumeric() || rest == '_') && id.len() <= 64
+    starts
+        && chars.all(|rest| rest.is_ascii_alphanumeric() || rest == '_')
+        && id.len() <= 64
+        && !RESERVED_IDS.contains(&id)
 }
 
 /// The SHA-256 of a document's source, in lowercase hex: which build a page
@@ -148,7 +209,16 @@ pub async fn build(
         .collect();
 
     if !program_files.is_empty() {
-        let problems = check_verdict(checker.check_files(&program_files, PROGRAM_CONTEXT).await)?;
+        let argument_checks = (0..program_files.len()).map(|index| SourceFile {
+            name: arguments_file(index),
+            source: arguments_module(index),
+        });
+        let checked: Vec<SourceFile> = program_files
+            .iter()
+            .cloned()
+            .chain(argument_checks)
+            .collect();
+        let problems = check_verdict(checker.check_files(&checked, PROGRAM_CONTEXT).await)?;
         if !problems.is_empty() {
             return Ok(rename(problems));
         }
@@ -191,10 +261,25 @@ pub async fn build(
                 source: entry_module(index),
             },
         ];
-        match bundle_verdict(bundler.bundle(&files, ENTRY_FILE, BundleTarget::Deno).await)? {
-            Bundle::Code(code) => programs.insert(id.clone(), code),
-            Bundle::Rejected(problems) => return Ok(rename(problems)),
-        };
+        let code =
+            match bundle_verdict(bundler.bundle(&files, ENTRY_FILE, BundleTarget::Deno).await)? {
+                Bundle::Code(code) => code,
+                Bundle::Rejected(problems) => return Ok(rename(problems)),
+            };
+        // A run refuses a bundle over the runtime's module limit, so the
+        // build does too, where the author can see it.
+        let limit = Limits::default().max_source_bytes;
+        if code.len() > limit {
+            return Ok(BuildOutcome::Failed(vec![Diagnostic {
+                file: Some(format!("program {id}")),
+                message: format!(
+                    "Program `{id}` bundles to {} KiB; a program may be at most {} KiB once bundled. Move what the page can do itself into the client script, or split the program.",
+                    code.len().div_ceil(1024),
+                    limit / 1024
+                ),
+            }]));
+        }
+        programs.insert(id.clone(), code);
     }
 
     let mut client_bundle = None;
@@ -313,6 +398,12 @@ fn extract(html: &str) -> Result<Extracted, Vec<Diagnostic>> {
             ));
             continue;
         };
+        if RESERVED_IDS.contains(&id.as_str()) {
+            problems.push(problem(&format!(
+                "Program id `{id}` is a reserved word in JavaScript or `macro:programs`; rename it."
+            )));
+            continue;
+        }
         let Ok(program) = ProgramId::try_new(id.clone()) else {
             problems.push(problem(&format!(
                 "Program id `{id}` must be a JavaScript identifier: letters, digits and `_`, not starting with a digit."
@@ -328,6 +419,15 @@ fn extract(html: &str) -> Result<Extracted, Vec<Diagnostic>> {
             continue;
         }
         programs.push((program, source));
+    }
+
+    if clients
+        .last()
+        .is_some_and(|client| client.trim().is_empty())
+    {
+        problems.push(problem(
+            "The `<script type=\"module\" lang=\"ts\">` is empty; write the client script or remove it.",
+        ));
     }
 
     if !problems.is_empty() {
@@ -367,25 +467,47 @@ fn assemble(
 }
 
 /// `macro:programs`: each program as a typed function that runs it by id.
-/// The argument may be left out when an empty object would satisfy it.
+/// The argument may be left out when an empty object would satisfy it. Each
+/// resolves to the program's value as the page receives it: its JSON form.
 fn programs_module(ids: &[ProgramId]) -> String {
-    let mut module = String::from(
-        "import { run } from 'macro:client';\n\
-         type ArgsOf<P extends (...args: never[]) => unknown> = Parameters<P> extends []\n  \
-           ? []\n  \
-           : {} extends Parameters<P>[0]\n    \
-             ? [args?: Parameters<P>[0]]\n    \
-             : [args: Parameters<P>[0]];\n",
-    );
+    let mut module = String::from(include_str!("programs_prelude.ts"));
     for (index, id) in ids.iter().enumerate() {
         let file = program_file(index);
         module.push_str(&format!(
             "type Program{index} = typeof import('./{file}').default;\n\
-             export const {id} = (...args: ArgsOf<Program{index}>): Promise<Awaited<ReturnType<Program{index}>>> =>\n  \
+             export const {id} = (...args: ArgsOf<Program{index}>): Promise<Returned<Awaited<ReturnType<Program{index}>>>> =>\n  \
                run('{id}', args.at(0) ?? {{}});\n"
         ));
     }
     module
+}
+
+/// Checks that a program's first parameter, if it has one, is an object:
+/// the page always calls it with one.
+fn arguments_module(index: usize) -> String {
+    let file = program_file(index);
+    format!(
+        "import type program from './{file}';\n\
+         type Argument<P> = P extends (...args: infer A) => unknown\n  \
+           ? A extends [] ? 'ok'\n  \
+           : 0 extends 1 & A[0] ? 'ok'\n  \
+           : [NonNullable<A[0]>] extends [readonly unknown[]] ? '{NOT_AN_OBJECT}'\n  \
+           : [NonNullable<A[0]>] extends [(...args: never[]) => unknown] ? '{NOT_AN_OBJECT}'\n  \
+           : [NonNullable<A[0]>] extends [object] ? 'ok'\n  \
+           : '{NOT_AN_OBJECT}'\n  \
+           : 'ok';\n\
+         export const checked: Argument<typeof program> = 'ok';\n"
+    )
+}
+
+fn arguments_file(index: usize) -> String {
+    format!("program_{index}_args.ts")
+}
+
+fn object_arguments_problem(id: &ProgramId) -> String {
+    format!(
+        "Program `{id}`'s first parameter must be an object type, such as `{{ query: string }}`: the page always passes its arguments as one object."
+    )
 }
 
 /// The runtime's `main({ macro, ...args })`, calling the program's default
@@ -409,23 +531,44 @@ fn named(diagnostics: Vec<Diagnostic>, ids: &[ProgramId]) -> Vec<Diagnostic> {
     diagnostics
         .into_iter()
         .map(|diagnostic| {
+            let arguments_of = diagnostic.file.as_deref().and_then(|file| {
+                ids.iter()
+                    .enumerate()
+                    .find(|(index, _)| arguments_file(*index) == file)
+                    .map(|(_, id)| id)
+            });
+            if let Some(id) = arguments_of
+                && diagnostic.message.contains(NOT_AN_OBJECT)
+            {
+                return Diagnostic {
+                    file: Some(format!("program {id}")),
+                    message: object_arguments_problem(id),
+                };
+            }
+
             let mut message = diagnostic.message;
             // Highest index first, so `program_1` doesn't rewrite `program_10`.
             for (index, id) in ids.iter().enumerate().rev() {
-                message = message.replace(&program_file(index), &format!("program {id}"));
+                message = message
+                    .replace(&arguments_file(index), &format!("program {id}"))
+                    .replace(&program_file(index), &format!("program {id}"));
             }
+            // `macro_client.ts` first, since it ends in `client.ts`.
             message = message
+                .replace(MACRO_CLIENT_FILE, "macro:client")
                 .replace(CLIENT_FILE, "client script")
-                .replace(PROGRAMS_FILE, "macro:programs")
-                .replace(MACRO_CLIENT_FILE, "macro:client");
+                .replace(PROGRAMS_FILE, "macro:programs");
             let file = diagnostic.file.map(|file| {
                 ids.iter()
                     .enumerate()
-                    .find(|(index, _)| program_file(*index) == file)
+                    .find(|(index, _)| {
+                        program_file(*index) == file || arguments_file(*index) == file
+                    })
                     .map(|(_, id)| format!("program {id}"))
                     .unwrap_or_else(|| match file.as_str() {
                         CLIENT_FILE => "client script".to_owned(),
                         PROGRAMS_FILE => "macro:programs".to_owned(),
+                        MACRO_CLIENT_FILE => "macro:client".to_owned(),
                         _ => file,
                     })
             });
