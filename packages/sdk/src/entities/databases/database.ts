@@ -36,8 +36,8 @@ import {
   queryDatabases,
 } from './query';
 import type { DatabaseRow } from './row';
-import { DatabaseSync, type DatabaseSyncSource, sourceRecord } from './sync';
 import { SavedQuery, type SaveQueryOptions } from './saved-query';
+import { DatabaseSync, type DatabaseSyncSource, sourceRecord } from './sync';
 import { DatabaseTable } from './table';
 import type { DatabaseView } from './view';
 import { DatabaseWebhook } from './webhook';
