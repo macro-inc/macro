@@ -59,7 +59,9 @@ above it and overlays below it. Wide touch has two compositions:
 - A collection (Mail, Drive, Tasks, CRM, Calls, Reviews) passes
   `contentLayout="collection"`. Its list stays left and its empty or selected
   preview stays right. The leading **Show sidebar** control opens the existing
-  sub-view navigation in `NavigationSheet`, built on `MobileDrawer`.
+  sub-view navigation in `NavigationSheet`, built on `MobileDrawer`. The sheet
+  slides in from the left and covers the list's exact bounds, leaving the
+  preview's layout unchanged. It follows viewport and pane geometry changes.
 
 Use `CollectionPanes` with the host's `list`, `hasDetail`, and detail children.
 It owns one pair of resize frames and pane-scoped floating regions; breakpoint

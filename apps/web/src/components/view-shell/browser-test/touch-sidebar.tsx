@@ -202,7 +202,12 @@ function CollectionWorkspaceFixture() {
   return (
     <div
       class="relative h-dvh bg-panel text-ink"
-      style={{ '--safe-top': '24px' }}
+      style={{
+        '--safe-top': '24px',
+        'padding-left': new URLSearchParams(location.search).has('offset')
+          ? '64px'
+          : undefined,
+      }}
     >
       <SplitPanel.Root
         controller={{
@@ -238,6 +243,11 @@ function CollectionWorkspaceFixture() {
                   Recent items
                 </ViewSidebar.Item>
               </ViewSidebar.Content>
+              <ViewSidebar.Footer>
+                <button type="button" class="h-10">
+                  Sidebar footer
+                </button>
+              </ViewSidebar.Footer>
             </ViewSidebar.Root>
           </ViewShell.Aside>
           <CollectionPanes

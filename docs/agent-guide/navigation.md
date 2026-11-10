@@ -407,7 +407,8 @@ initial list width is 403px, with thin desktop-style pane dividers.
 Mail, Drive, Tasks, CRM, Calls, and Reviews instead keep their main list on the
 left and reserve an empty preview on the right until selection. Their outer
 sub-view navigation takes no column: **Show sidebar**, first in the list's
-filter row, opens it in a sheet. Picking a destination closes the sheet; closing
+filter row, opens a sheet from the left over that list pane. The preview stays
+in place to its right. Picking a destination closes the sheet; closing
 it restores focus to that button. Opening or closing it preserves the list's
 scroll, the selected detail, and its draft. Its temporary visibility does not
 change the saved desktop sidebar preference. Resizing a hosted detail preserves

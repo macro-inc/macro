@@ -577,6 +577,10 @@ test('wide touch collections keep their list beside an empty or selected preview
   await page.goto(
     '/src/components/view-shell/browser-test/touch-sidebar.html?workspace'
   );
+  await page.evaluate(() => {
+    document.documentElement.style.setProperty('--safe-top', '24px');
+    document.documentElement.style.setProperty('--safe-bottom', '34px');
+  });
   const list = page.getByTestId('workspace-list');
   const listFrame = page.locator('[data-view-shell-list]');
   const detail = page.locator('[data-view-shell-detail]');
@@ -606,6 +610,22 @@ test('wide touch collections keep their list beside an empty or selected preview
   const sheet = page.getByRole('dialog', { name: 'Sidebar' });
   await expect(sheet).toBeInViewport({ ratio: 1 });
   await expect(sheet).not.toHaveAttribute('data-transitioning');
+  await expect(sheet).toHaveAttribute('data-side', 'left');
+  expect(await sheet.boundingBox()).toEqual(await listFrame.boundingBox());
+  await expect(sheet.locator('[data-drawer-scroll-body]')).toHaveCSS(
+    'padding-bottom',
+    '34px'
+  );
+  const footer = await sheet
+    .getByRole('button', { name: 'Sidebar footer' })
+    .boundingBox();
+  expect(footer!.y + footer!.height).toBeLessThanOrEqual(844 - 34);
+  expect(
+    (await sheet.getByRole('heading', { name: 'Collection' }).boundingBox())!.y
+  ).toBeGreaterThanOrEqual(24);
+  expect(
+    (await sheet.getByRole('button', { name: 'Hide sidebar' }).boundingBox())!.y
+  ).toBeGreaterThanOrEqual(24);
   expect(await detail.boundingBox()).toEqual(detailBox);
   expect(
     await list.evaluate((element, original) => element === original, listNode)
@@ -690,4 +710,25 @@ test('custom reading panes retain a resized wide touch list across container res
   await page.setViewportSize({ width: 700, height: 844 });
   await page.setViewportSize({ width: 1100, height: 844 });
   await expect(main).toHaveCSS('width', '443px');
+});
+
+test('the left navigation sheet covers an offset list and follows its viewport height', async ({
+  page,
+}) => {
+  test.setTimeout(120000);
+  await page.setViewportSize({ width: 1100, height: 844 });
+  await page.goto(
+    '/src/components/view-shell/browser-test/touch-sidebar.html?workspace&offset'
+  );
+  const listFrame = page.locator('[data-view-shell-list]');
+  await page.getByRole('button', { name: 'Show sidebar' }).tap();
+  const sheet = page.getByRole('dialog', { name: 'Sidebar' });
+  await expect(sheet).toBeInViewport({ ratio: 1 });
+  await expect(sheet).not.toHaveAttribute('data-transitioning');
+  await expect(sheet).toHaveAttribute('data-side', 'left');
+  expect((await sheet.boundingBox())!.x).toBe(64);
+  expect(await sheet.boundingBox()).toEqual(await listFrame.boundingBox());
+  await page.setViewportSize({ width: 1200, height: 780 });
+  await expect(sheet).toHaveCSS('height', '780px');
+  expect(await sheet.boundingBox()).toEqual(await listFrame.boundingBox());
 });
