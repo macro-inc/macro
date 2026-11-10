@@ -172,7 +172,8 @@ prodMonitor('ai-editing-provider-account-unavailable', {
   description: ACCOUNT_DESCRIPTION,
   runbook: `${RUNBOOK}#account-suspended-or-out-of-credit`,
   dashboard: dashboard.url,
-  alertDetail: '{{provider.name}} refused {{value}} edit requests ({{reason.name}})',
+  alertDetail:
+    '{{provider.name}} refused {{value}} edit requests ({{reason.name}})',
   recoveryDetail: '{{provider.name}} is serving edit requests again',
 });
 
