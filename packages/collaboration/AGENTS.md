@@ -90,3 +90,5 @@ EditorPasteWithIntent tag 10 only for captured Shift intent on a matched reader;
 carry PasteIntentMsg.plainOnly explicitly. Legacy paste/drop maps to the real
 model default false; never infer intent from unknown branches or private MIME.
 Keep HTML/Lexical precedence and use this flag only for Markdown policy.
+
+Format the ABI samples and executor trace JSON with Biome after recording; freshness checks canonicalize only JSON whitespace and retain exact ordered packet bytes and calls.

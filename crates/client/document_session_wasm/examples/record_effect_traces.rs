@@ -1,11 +1,11 @@
 //! Deterministic native executor oracle; the JS host replays these same external events.
 use bebop::{Record, SliceWrapper};
 use document_session_wasm::{
-    generated::{self, owned as w},
     DocSession,
+    generated::{self, owned as w},
 };
 use loro::{ExportMode, LoroDoc, VersionVector};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::VecDeque;
 fn bytes<'a, T: Record<'a>>(value: &T) -> Vec<u8> {
     let mut b = vec![];
@@ -311,8 +311,14 @@ fn main() {
         let recorded = serde_json::to_string_pretty(&fixture).unwrap() + "\n";
         if std::env::var_os("CHECK_SESSION_TRACES").is_some() {
             assert_eq!(
-                std::fs::read_to_string(&path).unwrap(),
-                recorded,
+                serde_json::to_string(
+                    &serde_json::from_str::<serde_json::Value>(
+                        &std::fs::read_to_string(&path).unwrap(),
+                    )
+                    .expect("valid trace JSON"),
+                )
+                .expect("canonical trace JSON"),
+                serde_json::to_string(&fixture).expect("canonical recorded trace"),
                 "stale trace: {}",
                 path.display()
             );

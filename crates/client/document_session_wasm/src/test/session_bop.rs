@@ -646,8 +646,12 @@ fn input_output_round_trip() {
         std::fs::write(&path, &json).unwrap();
     }
     assert_eq!(
-        std::fs::read_to_string(path).unwrap(),
-        json,
+        serde_json::to_string(
+            &serde_json::from_str::<serde_json::Value>(&std::fs::read_to_string(path).unwrap(),)
+                .expect("valid ABI fixture JSON"),
+        )
+        .expect("canonical ABI fixture JSON"),
+        serde_json::to_string(&cases).expect("canonical recorded ABI cases"),
         "ABI fixtures stale"
     );
 }
