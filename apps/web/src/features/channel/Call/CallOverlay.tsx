@@ -26,12 +26,8 @@ import {
   createUniqueId,
   For,
   type JSXElement,
-  lazy,
-  Match,
   on,
   Show,
-  Suspense,
-  Switch,
 } from 'solid-js';
 import { useCallContext } from './CallContext';
 import { CallControls } from './CallControls/CallControls';
@@ -49,9 +45,6 @@ import { MutedMicrophoneBadge } from './MutedMicrophoneBadge';
 import { ParticipantAvatarBackground } from './ParticipantAvatarBackground';
 import { TrackView } from './TrackView';
 import { useActiveCallTeamShare } from './use-toggle-share-with-team';
-
-const CallChat = lazy(() => import('./chat/CallChat'));
-const GuestCallChat = lazy(() => import('./chat/GuestCallChat'));
 
 function VideoTag(props: {
   children: JSXElement;
@@ -337,9 +330,7 @@ export function CallOverlay(props: {
   showChat?: boolean;
   /** Host-owned action aligned to the left of the media controls. */
   footerLeading?: JSXElement;
-  /** Narrow RTC credential for a guest; never an account bearer. */
-  guestChatSession?: { token: string; participantId: string };
-  /** The host's own discussion, in place of the call's chat. */
+  /** The host's discussion for this call. */
   discussion?: {
     /** Names the panel's discussion tab. */
     label: () => string | undefined;
@@ -822,46 +813,18 @@ export function CallOverlay(props: {
             returnFocus={panelButton}
             discussionLabel={props.discussion?.label()}
           >
-            <Show when={canChat() && callCtx.activeCallId()} keyed>
-              {(callId) => (
-                <Suspense>
-                  <Switch
-                    fallback={
-                      <CallChat
-                        callId={callId}
-                        open={panelOpen() && activeTab() === 'chat'}
-                        focusOnOpen={focusChatOnOpen()}
-                        onClose={closePanel}
-                      />
-                    }
-                  >
-                    <Match when={props.discussion}>
-                      {(discussion) =>
-                        discussion().render({
-                          get open() {
-                            return panelOpen() && activeTab() === 'chat';
-                          },
-                          get focusOnOpen() {
-                            return focusChatOnOpen();
-                          },
-                          onClose: closePanel,
-                        })
-                      }
-                    </Match>
-                    <Match when={props.guestChatSession} keyed>
-                      {(session) => (
-                        <GuestCallChat
-                          callId={callId}
-                          session={session}
-                          open={panelOpen() && activeTab() === 'chat'}
-                          focusOnOpen={focusChatOnOpen()}
-                          onClose={closePanel}
-                        />
-                      )}
-                    </Match>
-                  </Switch>
-                </Suspense>
-              )}
+            <Show when={canChat() && props.discussion}>
+              {(discussion) =>
+                discussion().render({
+                  get open() {
+                    return panelOpen() && activeTab() === 'chat';
+                  },
+                  get focusOnOpen() {
+                    return focusChatOnOpen();
+                  },
+                  onClose: closePanel,
+                })
+              }
             </Show>
           </CallChatPanel>
         </Show>
