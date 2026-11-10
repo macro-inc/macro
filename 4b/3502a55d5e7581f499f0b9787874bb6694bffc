@@ -1,0 +1,47 @@
+packages/sdk/src/coverage/skipped.ts
+  s_f385c1167dfa50::t_a5d3a18c8485f8 369-370,372-373,375
+packages/sdk/specs/storage.json
+  s_f385c1167dfa50::t_2063d4ce5c6007 2294-2506,33252,33254-33261,45258-45269,45287-45308
+  s_f385c1167dfa50::t_b6a55fe160e9ed 33253
+packages/sdk/generated/storage/index.ts
+  s_f385c1167dfa50::t_1cdec6466d7820 4
+packages/sdk/generated/storage/sdk.gen.ts
+  s_f385c1167dfa50::t_1cdec6466d7820 5,439-493
+  s_f385c1167dfa50::t_3d273fb7218f68 494
+packages/sdk/generated/storage/types.gen.ts
+  s_f385c1167dfa50::t_1cdec6466d7820 4857-4861,12301-12310,12325-12335,23834-23930
+  s_f385c1167dfa50::t_e12b59a0767a1f 4862
+  s_f385c1167dfa50::t_8cd63ad3be12e4 23931
+apps/web/src/lib/service-clients/service-storage/generated/schemas/countedReaction.ts
+  s_f385c1167dfa50::t_4047a2156a7d8a 7,15-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/countedReactionNames.ts
+  s_f385c1167dfa50::t_086097da2fc5ff 1-11
+apps/web/src/lib/service-clients/service-storage/generated/schemas/guestChatPatch.ts
+  s_f385c1167dfa50::t_00c95f6193b33c 1-14
+apps/web/src/lib/service-clients/service-storage/generated/schemas/guestChatThread.ts
+  s_f385c1167dfa50::t_d91c0cc0b3c7f6 1-16
+apps/web/src/lib/service-clients/service-storage/generated/schemas/guestChatThreadThread.ts
+  s_f385c1167dfa50::t_fb41b089f689f0 1-9
+apps/web/src/lib/service-clients/service-storage/generated/schemas/index.ts
+  s_f385c1167dfa50::t_7555c83f0565d8 657,1776,1778-1779
+apps/web/src/lib/service-clients/service-storage/generated/zod.ts
+  s_f385c1167dfa50::t_bb8a5007216d08 2895-4041,24466-24471,69072-69077,69433-69438,69818-69823,69998-70003,70182-70464,70466,70650-70655,70837-70842,71042-71047,71227-71232,71837-71842,72228-72233,72497-72502,72888-72893
+apps/web/src/lib/service-clients/service-storage/openapi.json
+  s_f385c1167dfa50::t_a9471bcac22a40 2294-2506,33252-33261,45258-45269,45287-45308
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4b3502a55d5e7581f499f0b9787874bb6694bffc",
+  "prompts": {},
+  "sessions": {
+    "s_f385c1167dfa50": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c74b-242d-7891-a934-0dbc0677f3cf",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
