@@ -242,7 +242,13 @@ in
       noto-fonts-color-emoji
     ];
 
-    virtualisation.docker.enable = true;
+    virtualisation.docker = {
+      enable = true;
+      # Images and containers survive image updates on the data disk.
+      daemon.settings = lib.mkIf (cfg.dataDisk != null) {
+        data-root = "/home/.system/docker";
+      };
+    };
 
     # Agents install with `nix shell` and `nix profile install`.
     nix.settings = {
@@ -332,10 +338,39 @@ in
       };
     };
 
+    # Keeps the Claude token root-only; Claude runs as macro. /etc/systemd is
+    # read-only here, so enrollment installs no units of its own.
+    systemd.services.macrod-token-store = {
+      description = "Private Claude token storage";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "macrod-enroll.service" ];
+      unitConfig.ConditionPathExists = enrolledMarker;
+      serviceConfig = {
+        ExecStart = "${lib.getExe' cfg.macrod "macrod"} computer-token-store --owner ${toString config.users.users.macro.uid}";
+        RuntimeDirectory = "macrod";
+        RuntimeDirectoryMode = "0755";
+        UMask = "0077";
+        NoNewPrivileges = true;
+        ProtectSystem = "strict";
+        # The state may live under /home, on the data disk.
+        ProtectHome = "tmpfs";
+        BindPaths = lib.optional (cfg.dataDisk != null) persistentMacrodState;
+        PrivateTmp = true;
+        PrivateDevices = true;
+        RestrictAddressFamilies = "AF_UNIX";
+        ReadWritePaths = [
+          persistentMacrodState
+          "/run/macrod"
+        ];
+        Restart = "on-failure";
+        RestartSec = 2;
+      };
+    };
+
     systemd.services.macrod = {
       description = "Macro agent daemon";
       wantedBy = [ "multi-user.target" ];
-      # Enrollment installs macrod-token-store; macrod reads the Claude token
+      # macrod reads the Claude token from the token store's socket on start.
       # from its socket on start.
       wants = [
         "network-online.target"
