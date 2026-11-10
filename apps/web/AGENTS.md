@@ -1,5 +1,7 @@
 ## Development Commands
 
+- Keep dev response middleware single-install per response across reloads, and parse terminal inline source-map comments without a regular expression over the complete generated module.
+
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
 - `bun run test`: run tests 
 - Keep generated Gradle/Tauri output directories out of Vite file watching to avoid exhausting host watchers.
