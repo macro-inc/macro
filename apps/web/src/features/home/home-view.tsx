@@ -1,6 +1,5 @@
 import { useViewShell, ViewShell } from '@app/components/view-shell';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
-import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { calendarSearch } from '@app/features/calendar-view/calendar-url';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { createSearchParams, SplitRouter } from '@app/lib/split-router';
@@ -96,7 +95,6 @@ function HomeListPane(props: {
 }
 
 function HomeViewRoot() {
-  const inlinePreviewLayout = useInlinePreviewLayout();
   const panel = useSplitPanelOrThrow();
   const { previewTarget, calendarOpen, openPreview, closePreview } =
     useHomeView();
@@ -121,7 +119,7 @@ function HomeViewRoot() {
         <SplitPanel.Root>
           <SplitPanel.Body>
             <Show
-              when={!inlinePreviewLayout()}
+              when={isTouchDevice()}
               fallback={
                 <div class="size-full min-h-0 bg-panel">
                   <ViewShell.Root
@@ -185,7 +183,6 @@ function HomeViewRoot() {
  * itself waits for identity; the frame keeps the screen from going blank.
  */
 export function HomePendingView() {
-  const inlinePreviewLayout = useInlinePreviewLayout();
   const listSkeleton = (
     <div class="mt-3 min-h-0 min-w-0 flex-1 overflow-hidden touch:mt-0 touch:pt-(--mobile-content-inset-top)">
       <HomeListSkeleton grouped />
@@ -196,7 +193,7 @@ export function HomePendingView() {
     <SplitPanel.Root>
       <SplitPanel.Body>
         <Show
-          when={!inlinePreviewLayout()}
+          when={isTouchDevice()}
           fallback={
             <div class="size-full min-h-0 bg-panel">
               <ViewShell.Root

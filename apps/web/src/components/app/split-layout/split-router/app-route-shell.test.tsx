@@ -100,3 +100,46 @@ it.each([undefined, 0])(
     expect(redirect).toHaveBeenCalledOnce();
   }
 );
+
+it.each([390, 1000])(
+  'keeps desktop-only Home details standalone on touch at %spx and after widening',
+  (initialWidth) => {
+    const [width, setWidth] = createSignal(initialWidth);
+    device.width = width;
+    const redirect = vi.fn();
+    function StandaloneDetail() {
+      onMount(redirect);
+      return <p>Standalone Home detail</p>;
+    }
+    render(() => (
+      <AppView
+        id="home"
+        detailDesktopOnly
+        detailRequested={() => true}
+        detailFallback={<StandaloneDetail />}
+      >
+        <p>Home preview</p>
+      </AppView>
+    ));
+    expect(redirect).toHaveBeenCalledOnce();
+    setWidth(1400);
+    expect(redirect).toHaveBeenCalledOnce();
+    expect(screen.queryByText('Home preview')).toBeNull();
+  }
+);
+
+it('retains desktop Home previews', () => {
+  device.touch = false;
+  render(() => (
+    <AppView
+      id="home"
+      detailDesktopOnly
+      detailRequested={() => true}
+      detailFallback={<p>Standalone Home detail</p>}
+    >
+      <p>Home preview</p>
+    </AppView>
+  ));
+  expect(screen.getByText('Home preview')).toBeTruthy();
+  expect(screen.queryByText('Standalone Home detail')).toBeNull();
+});

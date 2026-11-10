@@ -190,3 +190,58 @@ for (const { width, nested } of [
     ).toHaveAttribute('aria-pressed', 'true');
   });
 }
+
+for (const width of [390, 1000]) {
+  test(`Notifications stays full frame on touch at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto(
+      '/src/components/view-shell/browser-test/touch-sidebar.html?home'
+    );
+    const scroller = page.getByTestId('notifications-scroll');
+    await expect(scroller).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Signal', exact: true })
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'New chat' })).toBeHidden();
+    await expect(
+      page.getByRole('button', { name: 'Show navigation' })
+    ).toBeHidden();
+    await expect(page.getByRole('complementary')).toHaveCount(0);
+    const bounds = await page.evaluate(() => {
+      const main = document
+        .querySelector('[data-view-shell-main]')!
+        .getBoundingClientRect();
+      const scroll = document
+        .querySelector('[data-testid="notifications-scroll"]')!
+        .getBoundingClientRect();
+      const row = document
+        .querySelector('[data-notification-row="0"]')!
+        .getBoundingClientRect();
+      const header = document.querySelector('header')!.getBoundingClientRect();
+      return {
+        main: { x: main.x, y: main.y, width: main.width, height: main.height },
+        scroll: {
+          x: scroll.x,
+          y: scroll.y,
+          width: scroll.width,
+          height: scroll.height,
+        },
+        rowTop: row.top,
+        headerBottom: header.bottom,
+      };
+    });
+    expect(bounds.scroll).toEqual(bounds.main);
+    expect(bounds.rowTop).toBeGreaterThan(bounds.headerBottom);
+    await page.getByRole('button', { name: 'Noise', exact: true }).tap();
+    await expect(page.getByText('Selected: noise')).toHaveCount(1);
+    await scroller.evaluate((element) => {
+      element.scrollTop = 200;
+    });
+    const rowTop = await page
+      .locator('[data-notification-row="0"]')
+      .evaluate((element) => element.getBoundingClientRect().top);
+    expect(rowTop).toBeLessThan(bounds.headerBottom);
+  });
+}

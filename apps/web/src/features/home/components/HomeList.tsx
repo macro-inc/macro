@@ -1,4 +1,3 @@
-import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import {
   TutorialRow,
   TutorialSidebarItem,
@@ -125,7 +124,6 @@ function HomeTutorial() {
 
 /** Compact notification list used by the Notifications workspace. */
 export function HomeList(props: HomeListProps) {
-  const inlinePreviewLayout = useInlinePreviewLayout();
   const channels = useChannelsContext();
   const channelName = (entity: WithNotification<EntityData>) =>
     entity.type === 'channel_thread'
@@ -198,7 +196,7 @@ export function HomeList(props: HomeListProps) {
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
-    if (inlinePreviewLayout() && !newSplit) {
+    if (!isTouchDevice() && !newSplit) {
       if (!isNonMemberChannelEntity(sourceRow.entity)) {
         markChannelNotificationsSeenOnOpen(
           sourceRow.entity,
@@ -379,7 +377,7 @@ export function HomeList(props: HomeListProps) {
         previewAfterNavigation.clear();
 
         const row = event.result?.item;
-        if (inlinePreviewLayout() && row?.kind === 'entity') {
+        if (!isTouchDevice() && row?.kind === 'entity') {
           previewAfterNavigation(row.entity);
         }
 

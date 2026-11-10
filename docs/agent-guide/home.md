@@ -9,10 +9,10 @@ touched-by-me recents are not merged in; that merge is desktop Home's Signal
 only, so sent mail and AI chats without notifications appear only on desktop.
 Signal, including its empty state, starts with the Home tutorial entry (from `features/video-tutorials`) once that video is in its catalog: a `TutorialSidebarItem` in the desktop rail, a `TutorialRow` on touch. It sits outside the virtualized rows, so list keyboard focus skips it.
 
-Above 720px on touch, the notification list docks beside the inline preview.
-The title's right-hand collapse button hides the list; the preview header's
-leading navigation button restores it. At 720px or less the feed fills the pane
-and tapping an item opens its full-screen detail.
+At every touch width, including unfolded Duo, Notifications fills the pane with
+floating Signal/Noise pills. Home's sidebar, composer, and inline previews are
+desktop-only. Selecting a notification opens its standalone page; opening or
+restoring a Home detail URL on touch redirects there as well.
 
 On a cold launch, notification transport follows the GraphQL Soup flag reactively:
 if the flag arrives after REST starts, the GraphQL notification query must actually
@@ -179,7 +179,7 @@ Generation status updates do not extend that deadline. Retry starts a fresh
 45-second wait. Free users get suggestions from the free-tier model; if the
 plan refuses the request (403), the row says suggestions are unavailable and
 offers no retry. Shift+Enter adds a line. Selecting a Home row replaces
-the composer with its preview. Home uses the shared sidebar (256px on desktop, 352px on wide touch) and collapses
+the composer with its preview. Desktop Home uses the shared 256px sidebar and collapses
 navigation below 720px. The hamburger or `Cmd+.` opens the full feed as a
 slide-over. Activating a row or **New chat** closes that overlay to show content;
 arrow-key browsing keeps it open. Preview headers start with **Home >**. Clicking
@@ -198,7 +198,7 @@ project row, switching tabs, returning Home, and reopening the same comment.
 Desktop previews use the same header controls as their standalone views, with
 the **Home >** return breadcrumb added. Calendar shares its date, search,
 navigation, view, and New controls; email shares its action, navigation, AI/task,
-and Share groups. Touch previews retain their existing compact headers.
+and Share groups. Touch opens standalone pages with their existing compact headers.
 
 Conversation breadcrumbs preserve identity: human DMs show the other participant's
 avatar, agent DMs show the persona avatar, and named channels show their picture
