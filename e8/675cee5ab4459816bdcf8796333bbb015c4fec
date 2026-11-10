@@ -1,0 +1,21 @@
+services/agent_harness_service/src/config/test.rs
+  s_977a3c5a93eb37::t_b22e6dcaf3bd80 71-75
+services/agent_harness_service/src/scheduling/config/test.rs
+  s_977a3c5a93eb37::t_1a13245f1b4514 134-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e8675cee5ab4459816bdcf8796333bbb015c4fec",
+  "prompts": {},
+  "sessions": {
+    "s_977a3c5a93eb37": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1c606-7308-7b61-8401-e2c20a6b8bfd",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
