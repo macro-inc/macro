@@ -46,6 +46,11 @@ Seed with `INSERT ... SELECT FROM generate_series(...)`, then `ANALYZE`:
   A table that holds only the tenant under test makes a sequential scan look
   cheap and correct.
 
+For a table that is not in the size tiers, assume it is large: seed the
+largest tenant at 100,000 rows or more and state the assumption. Bulk inserts
+that trip foreign keys or triggers you are not testing can run under
+`SET session_replication_role = replica` in the scratch database.
+
 Say in the result how far the seed is below the production tier. A scan that
 is acceptable on 500,000 rows is still a scan of a table with over 100 million.
 
@@ -69,8 +74,10 @@ SET plan_cache_mode = force_generic_plan;   -- the plan a long-lived connection 
 EXPLAIN (ANALYZE, BUFFERS) EXECUTE q('…', now(), 50);
 ```
 
-- Run each once cold and once warm, with the parameters of the largest tenant
-  and with the filter value that matches the most rows.
+- Run each twice and keep both timings; the first shows a cold cache. Use the
+  largest tenant's parameters, and for each optional filter the value that
+  matches the most rows and a value that matches none: a filter that matches
+  nothing makes a `LIMIT` scan read everything looking for a first row.
 - The generic plan matters: SQLx prepares statements, and Postgres switches a
   prepared statement to a plan built without the parameter values after a few
   executions. An optional filter written `$2 IS NULL OR col < $2` is an index
@@ -121,6 +128,11 @@ custom and generic plan. When the runs differ in where a per-row function or
 subquery sits, or in whether a predicate is an index condition, the good plan
 is luck. Force the order (an `OFFSET 0` fence around the narrowed set, a
 `MATERIALIZED` CTE, a rewritten join or predicate) and measure all runs again.
+
+Some queries cannot pass by rewriting: the scope key and the sort column live
+on different tables, or no index matches the filter. Then the fix is in the
+schema (an index, or the scope key copied onto the table that is sorted). Say
+so and take that to the user; don't commit the query as it is.
 
 ## 8. Record
 

@@ -40,7 +40,10 @@ The plan must show all four, judged against [table sizes](../query-review/table-
    `dynamic_email_thread_cursor` in `crates/email`) or a pool created with the
    option (`crates/github/src/outbound/pg_github_repo.rs`). Most pools set no
    default, so a slow query otherwise runs until it finishes, long after the
-   client gave up and retried. A lookup of one row by primary key needs none.
+   client gave up and retried. A repository that is handed its pool does not
+   know that pool's settings: find where the service builds it, and if it sets
+   no timeout, set one in the query's transaction. A lookup of one row by
+   primary key needs none.
 
 If a local database is not available, say so and stop before committing the
 query; don't substitute reasoning for the plan.
@@ -97,6 +100,13 @@ details in it matter:
   stops being an index condition once the prepared statement gets a generic
   plan. Separate first-page and next-page queries
   (`crates/activity/src/outbound/pg_activity_repo/timeline.rs`) work too.
+
+The scope key, the sort columns, and the tiebreaker must sit in one index on
+one table. When the scope is on a parent (a channel's messages) and the sort
+is on a child (their attachments), no index can serve the page and Postgres
+reads the whole parent. Sort by the parent's column instead, or put the scope
+key on the child with an index; the second is a schema change to raise with
+the user.
 
 `OFFSET` is acceptable only on a set that is small by construction, such as
 one entity's pending requests.
@@ -165,7 +175,8 @@ after checking that no existing index already leads with those columns
 ## Before committing
 
 1. Measure, as above, and fix until the plan passes all four checks in every
-   run.
+   run. If no rewrite can pass without a schema change, stop and report that
+   with the plans instead of committing.
 2. Run the [`sqlx-query-validator`](../sqlx-query-validator/SKILL.md) skill
    for macro use and the `.sqlx` cache.
 3. Record the evidence listed in
