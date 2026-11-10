@@ -291,6 +291,11 @@ export type ComputerSize = 'standard' | 'large' | 'xl';
  */
 export type ComputerStatus = {
     /**
+     * Agents bound to the computer's live harness, teammates' private ones
+     * included: the ones releasing it deletes.
+     */
+    agentCount: number;
+    /**
      * Whether a cancel at period end can still be undone; false once its
      * billing item was removed ahead of the renewal.
      */
@@ -311,6 +316,11 @@ export type ComputerStatus = {
      * Time the computer was reserved.
      */
     createdAt: string;
+    /**
+     * Bot id of the coding agent the computer came with; null until macrod
+     * first connects. It can name an agent the team since deleted.
+     */
+    defaultAgentId?: string | null;
     /**
      * Root disk limit saved at purchase.
      */
@@ -337,10 +347,19 @@ export type ComputerStatus = {
      */
     poweredOn: boolean;
     /**
+     * The Macro user who bought it; with the team owner, the one who may
+     * finish its setup and manage its Claude account.
+     */
+    purchasedBy: string;
+    /**
      * When the disk is destroyed, for a canceled computer.
      */
     retainedUntil?: string | null;
     setup?: null | SetupProgress;
+    /**
+     * When the team finished the guided setup; null while it is unfinished.
+     */
+    setupCompletedAt?: string | null;
     /**
      * Purchased catalog size.
      */
@@ -4695,6 +4714,28 @@ export type RetryTeamComputerResponses = {
 };
 
 export type RetryTeamComputerResponse = RetryTeamComputerResponses[keyof RetryTeamComputerResponses];
+
+export type CompleteTeamComputerSetupData = {
+    body?: never;
+    path: {
+        computer_id: string;
+    };
+    query?: never;
+    url: '/team/computers/{computer_id}/setup-complete';
+};
+
+export type CompleteTeamComputerSetupErrors = {
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type CompleteTeamComputerSetupError = CompleteTeamComputerSetupErrors[keyof CompleteTeamComputerSetupErrors];
+
+export type CompleteTeamComputerSetupResponses = {
+    200: ComputerStatus;
+};
+
+export type CompleteTeamComputerSetupResponse = CompleteTeamComputerSetupResponses[keyof CompleteTeamComputerSetupResponses];
 
 export type PatchTeamCrmSettingsData = {
     body: PatchTeamCrmSettingsRequest;

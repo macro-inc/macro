@@ -160,6 +160,8 @@ pub struct ComputerDisplayMetadata {
     pub catalog_entry: String,
     /// Reservation timestamp.
     pub created_at: DateTime<Utc>,
+    /// The Macro user who bought it.
+    pub purchased_by: String,
 }
 
 impl From<&Computer> for ComputerDisplayMetadata {
@@ -172,6 +174,7 @@ impl From<&Computer> for ComputerDisplayMetadata {
             disk_gib: i64::from(computer.resources.disk_gib.get()),
             catalog_entry: computer.catalog_entry.as_str().to_owned(),
             created_at: computer.created_at,
+            purchased_by: computer.created_by.to_string(),
         }
     }
 }
@@ -483,6 +486,9 @@ pub struct ComputerStatus {
     pub harness_id: Option<HarnessId>,
     /// Time the computer was reserved.
     pub created_at: DateTime<Utc>,
+    /// The Macro user who bought it; with the team owner, the one who may
+    /// finish its setup and manage its Claude account.
+    pub purchased_by: String,
     /// When the team finished the guided setup; null while it is unfinished.
     pub setup_completed_at: Option<DateTime<Utc>>,
     /// Bot id of the coding agent the computer came with; null until macrod
@@ -552,6 +558,7 @@ impl Computer {
             retained_until,
             harness_id: self.harness_id,
             created_at: self.created_at,
+            purchased_by: self.created_by.to_string(),
             setup_completed_at: self.setup_completed_at,
             default_agent_id: self.default_agent_id,
             agent_count,
@@ -582,6 +589,7 @@ impl ComputerRecord {
                 retained_until: None,
                 harness_id: None,
                 created_at: display.created_at,
+                purchased_by: display.purchased_by.clone(),
                 setup_completed_at: None,
                 default_agent_id: None,
                 agent_count,

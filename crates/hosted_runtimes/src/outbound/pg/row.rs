@@ -109,6 +109,7 @@ impl PgComputerRepo {
             disk_gib: i64::from(row.disk_gib),
             catalog_entry: row.catalog_entry.clone(),
             created_at: row.created_at,
+            purchased_by: row.created_by.clone(),
         };
         match Computer::try_from(row) {
             Ok(computer) => computer.into(),
