@@ -483,6 +483,41 @@ async fn a_refused_row_is_left_for_the_next_run_and_the_rest_are_written() {
     );
 }
 
+#[tokio::test]
+async fn a_batch_whose_every_row_is_refused_stops_retrying_after_a_few_refusals() {
+    let (service, repository, tables, _, granola, _) = service();
+    granola
+        .meetings
+        .lock()
+        .unwrap()
+        .extend((0..40u128).map(|n| ImportedCallRecord {
+            id: Uuid::from_u128(1_000 + n),
+            title: Some(REFUSED.to_string()),
+            external_id: ExternalCallId(format!("note_{n}")),
+            ..review()
+        }));
+    let sync = service
+        .create_sync(
+            alice_edits(DATABASE),
+            NewSync {
+                id: SYNC,
+                source: SyncSource::GranolaMeetings,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert!(service.run_due().await.unwrap());
+
+    assert_eq!(*tables.refusals.lock().unwrap(), 16);
+    assert!(tables.table_rows(sync.table_id).is_empty());
+    assert!(repository.rows.lock().unwrap().is_empty());
+    assert_eq!(
+        repository.syncs.lock().unwrap()[0].status,
+        SyncStatus::Synced
+    );
+}
+
 fn notion_page(id: &str, title: &str, status: &str, owner: &str) -> NotionPage {
     NotionPage {
         id: NotionId::parse(id).unwrap(),

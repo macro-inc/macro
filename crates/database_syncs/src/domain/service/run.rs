@@ -26,6 +26,10 @@ use crate::domain::source::SourceItem;
 
 /// Rows per write. A run writes, then records, one batch at a time.
 const BATCH: usize = 500;
+/// Refused rows a batch retries around before it leaves the rest of the
+/// batch for the next run. Each refusal names one row, so without a bound a
+/// batch whose every row is refused costs one request per row.
+const REFUSALS_PER_BATCH: usize = 16;
 
 /// Why a run stopped, and what went wrong.
 struct RunFailure {
@@ -345,6 +349,7 @@ where
             .await
             .map_err(repository_failure)?;
 
+        let mut refusals = 0;
         while !rows.is_empty() {
             let op = DatabaseOp::Rows {
                 table: target.table,
@@ -373,13 +378,20 @@ where
                     let Some(index) = refused_row(&error, rows.len()) else {
                         return Err(database_failure(error));
                     };
-                    let (skipped, _) = rows.remove(index);
-                    tracing::warn!(error = %error, "a synced row was refused; it is retried next run");
+                    refusals += 1;
+                    let skipped: Vec<String> = if refusals < REFUSALS_PER_BATCH {
+                        vec![rows.remove(index).0.external_id.clone()]
+                    } else {
+                        rows.drain(..)
+                            .map(|(insert, _)| insert.external_id.clone())
+                            .collect()
+                    };
+                    tracing::warn!(error = %error, skipped = skipped.len(), "synced rows were refused; they are retried next run");
                     self.repository
-                        .forget_rows(sync.id, std::slice::from_ref(&skipped.external_id))
+                        .forget_rows(sync.id, &skipped)
                         .await
                         .map_err(repository_failure)?;
-                    counts.skipped += 1;
+                    counts.skipped += skipped.len();
                 }
             }
         }
@@ -407,6 +419,7 @@ where
     ) -> Result<(), RunFailure> {
         let mut rows: Vec<&RowUpdate> = batch.iter().collect();
 
+        let mut refusals = 0;
         while !rows.is_empty() {
             let op = DatabaseOp::Rows {
                 table: target.table,
@@ -432,9 +445,15 @@ where
                     let Some(index) = refused_row(&error, rows.len()) else {
                         return Err(database_failure(error));
                     };
-                    rows.remove(index);
-                    tracing::warn!(error = %error, "a synced row was refused; it is retried next run");
-                    counts.skipped += 1;
+                    refusals += 1;
+                    let skipped = if refusals < REFUSALS_PER_BATCH {
+                        rows.remove(index);
+                        1
+                    } else {
+                        rows.drain(..).count()
+                    };
+                    tracing::warn!(error = %error, skipped, "synced rows were refused; they are retried next run");
+                    counts.skipped += skipped;
                 }
             }
         }

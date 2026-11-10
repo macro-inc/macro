@@ -250,6 +250,8 @@ pub(crate) struct FakeTables {
     pub(crate) databases: Arc<Mutex<HashMap<DatabaseId, Vec<SyncTable>>>>,
     pub(crate) rows: Arc<Mutex<StoredRows>>,
     pub(crate) batches: Arc<Mutex<Vec<Vec<DatabaseOp>>>>,
+    /// How many batches it refused.
+    pub(crate) refusals: Arc<Mutex<usize>>,
     pub(crate) created_databases: Arc<Mutex<Vec<(String, String)>>>,
 }
 
@@ -471,6 +473,7 @@ impl SyncTables for FakeTables {
                 Err(error) => {
                     *self.databases.lock().unwrap() = saved_databases;
                     *self.rows.lock().unwrap() = saved_rows;
+                    *self.refusals.lock().unwrap() += 1;
                     return Err(error);
                 }
             }
