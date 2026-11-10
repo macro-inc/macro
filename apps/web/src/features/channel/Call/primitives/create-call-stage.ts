@@ -1,7 +1,7 @@
 import { beginInteraction } from '@app/observability/flow';
 import { makePersisted } from '@solid-primitives/storage';
 import type { RemoteParticipant } from 'livekit-client';
-import { type Accessor, createEffect, createSignal, on } from 'solid-js';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { createStore, produce, unwrap } from 'solid-js/store';
 import {
   activeCallPin,
@@ -13,7 +13,13 @@ import {
   selectCallStageParticipant,
 } from '../call-layout';
 
-type CallStageState = { pin?: CallPin<RemoteParticipant>; hidden: boolean };
+type CallStageState = {
+  pin?: CallPin<RemoteParticipant>;
+  pinRevision: number;
+  hidden: boolean;
+  hiddenShareRevision: number;
+};
+type ActivePin = { revision: number; pin?: CallPin<RemoteParticipant> };
 type CallStageSources = {
   participants: Accessor<RemoteParticipant[]>;
   screens: Accessor<RemoteParticipant[]>;
@@ -27,21 +33,34 @@ type CallStageSources = {
 export function createCallStage(options: CallStageSources) {
   // The same selection owns participant and screen pins. A removed target never
   // becomes pinned again if its identity reconnects later.
-  const [state, setState] = createStore<CallStageState>({ hidden: false });
+  const [state, setState] = createStore<CallStageState>({
+    pinRevision: 0,
+    hidden: false,
+    hiddenShareRevision: 0,
+  });
   const selectedPin = () => unwrap(state.pin);
   const setSelectedPin = (pin: CallPin<RemoteParticipant> | undefined) =>
     setState(
       produce((state) => {
         state.pin = pin;
+        state.pinRevision += 1;
       })
     );
-  const activePin = () =>
-    activeCallPin(
-      selectedPin(),
-      options.participants(),
-      options.screens(),
-      options.screenSharing()
-    );
+  const selected = createMemo<ActivePin>((previous) => {
+    const revision = state.pinRevision;
+    // Once a publication or participant leaves, the same selection stays retired.
+    if (previous?.revision === revision && !previous.pin) return previous;
+    return {
+      revision,
+      pin: activeCallPin(
+        selectedPin(),
+        options.participants(),
+        options.screens(),
+        options.screenSharing()
+      ),
+    };
+  });
+  const activePin = () => selected().pin;
   const togglePin = (target: CallPin<RemoteParticipant>) => {
     const interaction = beginInteraction('call.pin');
     try {
@@ -52,13 +71,13 @@ export function createCallStage(options: CallStageSources) {
     }
   };
 
-  createEffect(() => {
-    // Consume both roster and publication changes before clearing the stored pin.
-    if (selectedPin() && !activePin()) setSelectedPin(undefined);
-  });
-
-  const hasAnyScreenShare = () =>
-    options.screenSharing() || options.screens().length > 0;
+  const hasAnyScreenShare = createMemo(
+    () => options.screenSharing() || options.screens().length > 0
+  );
+  const shareRevision = createMemo((previous: number) => {
+    hasAnyScreenShare();
+    return previous + 1;
+  }, 0);
 
   const [savedLayout, setSavedLayout] = makePersisted(
     createSignal<CallLayout>('auto'),
@@ -74,8 +93,10 @@ export function createCallStage(options: CallStageSources) {
     }
   );
   const layout = () => (options.mobile() ? 'auto' : savedLayout());
-  const hideParticipants = () => state.hidden;
-  const setHideParticipants = (hidden: boolean) => setState('hidden', hidden);
+  const hideParticipants = () =>
+    state.hidden && state.hiddenShareRevision === shareRevision();
+  const setHideParticipants = (hidden: boolean) =>
+    setState({ hidden, hiddenShareRevision: shareRevision() });
   const changeParticipantVisibility = (value: boolean) => {
     const interaction = beginInteraction('call.participants.visibility');
     try {
@@ -84,11 +105,6 @@ export function createCallStage(options: CallStageSources) {
       interaction.end();
     }
   };
-  createEffect(
-    on(hasAnyScreenShare, (sharing) => {
-      if (!sharing) setHideParticipants(false);
-    })
-  );
   const pinnedShare = () => {
     const selected = activePin();
     return selected && typeof selected === 'object' && 'share' in selected

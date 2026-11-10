@@ -33,6 +33,7 @@ import {
   type JSXElement,
   lazy,
   Match,
+  on,
   onCleanup,
   Show,
   Suspense,
@@ -121,14 +122,18 @@ export function CallOverlay(props: {
   const setSelectedTab = panel.selectTab;
   const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
   const [entranceReady, setEntranceReady] = createSignal(false);
-  createEffect(() => {
-    const width = resizeContext()?.size() ?? 0;
-    if (width <= 0 || entranceReady()) return;
-    let frame = requestAnimationFrame(() => {
-      frame = requestAnimationFrame(() => setEntranceReady(true));
-    });
-    onCleanup(() => cancelAnimationFrame(frame));
-  });
+  createEffect(
+    on(
+      () => resizeContext()?.size() ?? 0,
+      (width) => {
+        if (width <= 0 || entranceReady()) return;
+        let frame = requestAnimationFrame(() => {
+          frame = requestAnimationFrame(() => setEntranceReady(true));
+        });
+        onCleanup(() => cancelAnimationFrame(frame));
+      }
+    )
+  );
   const [panelWidth, setPanelWidth] = createSignal(DEFAULT_SIDE_PANEL_WIDTH);
   const [sidebarMount, setSidebarMount] = createSignal<HTMLDivElement>();
   const [overlayMount, setOverlayMount] = createSignal<HTMLDivElement>();

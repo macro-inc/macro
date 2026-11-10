@@ -1,5 +1,5 @@
-import { createEffect, onCleanup } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createMemo, onCleanup } from 'solid-js';
+import { createStore, produce, unwrap } from 'solid-js/store';
 import type { CallMediaDevice } from '../call-media-permissions';
 
 type Media = {
@@ -17,8 +17,12 @@ export function createCallMediaPermissionHelp(media: Media) {
   const [state, setState] = createStore<PermissionHelpState>({
     pending: { microphone: false, camera: false },
   });
-  const help = () => state.help;
-  const setHelp = (value: typeof state.help) => setState('help', value);
+  const setHelp = (value: typeof state.help) =>
+    setState(
+      produce((state) => {
+        state.help = value;
+      })
+    );
   let revision = 0;
   let returnFocus: HTMLElement | undefined;
   let disposed = false;
@@ -30,10 +34,16 @@ export function createCallMediaPermissionHelp(media: Media) {
     device === 'microphone'
       ? media.microphonePermission?.()
       : media.cameraPermission?.();
-  createEffect(() => {
-    const current = help();
-    if (current && permission(current.device) === 'granted') setHelp(undefined);
+  const retiredHelp = createMemo<typeof state.help>((previous) => {
+    const current = unwrap(state.help);
+    return current && permission(current.device) === 'granted'
+      ? current
+      : previous;
   });
+  const help = () => {
+    const current = unwrap(state.help);
+    return current === retiredHelp() ? undefined : current;
+  };
   const close = () => {
     revision++;
     setHelp(undefined);

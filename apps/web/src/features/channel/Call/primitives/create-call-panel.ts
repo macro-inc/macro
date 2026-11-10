@@ -1,4 +1,4 @@
-import { type Accessor, createEffect, on } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { CallPanelTab } from '../chat/components/CallChatPanel';
 
@@ -7,34 +7,53 @@ type CallPanelState = {
   mounted: boolean;
   tab: CallPanelTab;
   focusOnOpen: boolean;
+  defaultRevision: number;
 };
 
 export function createCallPanel(
   opensByDefault: Accessor<boolean>,
   restoreFocus: () => void
 ) {
+  const defaultOpen = createMemo(opensByDefault);
+  const defaultRevision = createMemo(
+    (previous: number) => (defaultOpen() ? previous + 1 : previous),
+    0
+  );
   const [state, setState] = createStore<CallPanelState>({
     open: false,
     mounted: false,
     tab: 'chat',
     focusOnOpen: true,
+    defaultRevision: 0,
+  });
+  const view = createMemo(() => {
+    const automatic = defaultRevision() > state.defaultRevision;
+    return {
+      open: automatic || state.open,
+      mounted: defaultRevision() > 0 || state.mounted,
+      tab: state.tab,
+      focusOnOpen: automatic ? false : state.focusOnOpen,
+    };
   });
   const open = (focusOnOpen: boolean, tab = state.tab) =>
-    setState({ open: true, mounted: true, tab, focusOnOpen });
+    setState({
+      open: true,
+      mounted: true,
+      tab,
+      focusOnOpen,
+      defaultRevision: defaultRevision(),
+    });
   const close = () => {
-    setState('open', false);
+    setState({ open: false, defaultRevision: defaultRevision() });
     restoreFocus();
   };
-  createEffect(
-    on(opensByDefault, (value) => {
-      if (value) open(false);
-    })
-  );
   return {
-    state,
+    get state() {
+      return view();
+    },
     open,
     close,
-    toggle: () => (state.open ? close() : open(true)),
+    toggle: () => (view().open ? close() : open(true)),
     selectTab: (tab: CallPanelTab) => setState({ tab, focusOnOpen: false }),
   };
 }
