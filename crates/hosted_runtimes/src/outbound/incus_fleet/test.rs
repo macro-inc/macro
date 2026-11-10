@@ -418,3 +418,18 @@ fn listing_ignores_foreign_and_unlabelled_computers_before_parsing_them() {
         }]
     );
 }
+
+#[test]
+fn only_a_conflict_means_the_data_volume_already_exists() {
+    assert!(volume_exists(&IncusError::Rejected {
+        status: 409,
+        message: "Volume by that name already exists".to_owned(),
+    }));
+    assert!(!volume_exists(&IncusError::Rejected {
+        status: 400,
+        message: "Invalid size".to_owned(),
+    }));
+    assert!(!volume_exists(&IncusError::NotFound {
+        message: "Storage pool not found".to_owned(),
+    }));
+}

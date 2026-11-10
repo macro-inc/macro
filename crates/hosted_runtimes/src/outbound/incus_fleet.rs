@@ -295,7 +295,8 @@ impl Fleet for IncusFleet {
                     )
                     .await
                 {
-                    Ok(()) | Err(IncusError::Rejected { status: 409, .. }) => {}
+                    Ok(()) => {}
+                    Err(error) if volume_exists(&error) => {}
                     Err(error) => return Err(error.into()),
                 }
                 let enrollment = enrollment.issue().await?;
@@ -513,6 +514,13 @@ pub fn instance_name(computer_id: ComputerId) -> InstanceName {
 /// The computer's data volume.
 fn volume_name(computer_id: ComputerId) -> Result<StorageVolumeName, InvalidName> {
     StorageVolumeName::try_new(&format!("{}-data", instance_name(computer_id)))
+}
+
+/// Whether creating a volume failed because one by that name exists:
+/// Incus answers 409 Conflict ("Volume by that name already exists",
+/// `storagePoolVolumesPost` in incusd 7.0).
+fn volume_exists(error: &IncusError) -> bool {
+    matches!(error, IncusError::Rejected { status: 409, .. })
 }
 
 /// The image an existing instance's root disk was built from.
