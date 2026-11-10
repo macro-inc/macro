@@ -57,6 +57,12 @@ impl EditorSession {
             compatibility: None,
         })
     }
+    /// Observe current authorization using the generated Access enum values.
+    /// This neither consumes output nor authorizes a later mutation.
+    #[wasm_bindgen(js_name=effectiveAccess)]
+    pub fn effective_access(&self) -> u8 {
+        u8::from(self.machine.effective_access())
+    }
     /// Deliver a cold Bebop input.
     pub fn input(&mut self, msg: &[u8], now: f64, wall: f64) -> Result<u32, JsError> {
         self.machine.input(msg, now, wall).map_err(js)

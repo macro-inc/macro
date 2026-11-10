@@ -299,3 +299,5 @@ fn row(seq: u64) -> StoredWalRecord {
         delivered: false,
     }
 }
+
+mod effective_access;

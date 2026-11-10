@@ -240,3 +240,5 @@ the baseline on view detach. Direct initialize is a full-remount exposure and
 requires prior queued output to be consumed, preserving its real I/O. Renderer
 failure requires remount recovery, not a successful-paint acknowledgement. Custom
 asynchronous consumers require an explicit consumption acknowledgement.
+
+Use the pure EditorSession.effectiveAccess() observation for current authorization, mapped through the generated Access enum; it does not drain output or grant admission. Ordinary getters are not a recursive callback transaction port: scoped native callbacks must reject ordinary session reentry or use separately issued scoped authority.

@@ -110,3 +110,5 @@ an adopted update or a published transition. Check publication receipts separate
 Use EditorConfig.namespace for both rich paste and clipboard export; application MarkdownSync uses the source document namespace, while portable standalone sessions retain their configured default.
 
 Invalidate the injected durable ID key recursively at Critical/Before InsertClipboardNodes and yield to insertion handlers; never invalidate snapshot/remote imports or history restoration. Cross-document JSON/HTML, repeated paste, destination identity and exact undo/redo controls live in src/editor/clipboard_id_test.rs.
+
+Read current effective access through effective_access, which delegates to SyncCore; never infer it from construction or UI flags. Treat it as observation only and keep normal handle admission checks after queued permission changes.
