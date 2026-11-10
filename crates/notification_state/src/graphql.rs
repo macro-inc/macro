@@ -1,6 +1,6 @@
-//! GraphQL state adapter, also usable by browser-side filter materialization.
+//! GraphQL state and lane adapters, also usable by browser-side filter materialization.
 
-use crate::NotificationState;
+use crate::{NotificationLane, NotificationState};
 
 /// The notification state as represented by GraphQL variables and responses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -32,6 +32,36 @@ impl From<GraphqlNotificationState> for NotificationState {
             GraphqlNotificationState::Unseen => Self::Unseen,
             GraphqlNotificationState::Seen => Self::Seen,
             GraphqlNotificationState::Done => Self::Done,
+        }
+    }
+}
+
+/// The notification lane as represented by GraphQL variables and responses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+#[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
+#[cfg_attr(feature = "graphql", graphql(name = "NotificationLane"))]
+pub enum GraphqlNotificationLane {
+    /// Delivered normally: pushed, digested and counted as unread.
+    Signal,
+    /// Stored and shown in the Noise view, but never pushed, digested or counted as unread.
+    Noise,
+}
+
+impl From<NotificationLane> for GraphqlNotificationLane {
+    fn from(lane: NotificationLane) -> Self {
+        match lane {
+            NotificationLane::Signal => Self::Signal,
+            NotificationLane::Noise => Self::Noise,
+        }
+    }
+}
+
+impl From<GraphqlNotificationLane> for NotificationLane {
+    fn from(lane: GraphqlNotificationLane) -> Self {
+        match lane {
+            GraphqlNotificationLane::Signal => Self::Signal,
+            GraphqlNotificationLane::Noise => Self::Noise,
         }
     }
 }
