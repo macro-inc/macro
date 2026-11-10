@@ -25,6 +25,7 @@ import {
 import { COMPOSER_STORAGE_CLEARED } from '@core/auth/clear-composer-storage';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
+import type { TagMentionLifecycle } from '@core/component/LexicalMarkdown/plugins/tags';
 import type { MentionLinkResolver } from '@core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';
 import {
   initializeEditorEmpty,
@@ -55,11 +56,12 @@ import {
   batch,
   createEffect,
   createSignal,
+  on,
   onCleanup,
   onMount,
   untrack,
 } from 'solid-js';
-import { reconcile, unwrap } from 'solid-js/store';
+import { createStore, reconcile, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
 import {
   freshTaskFromTemplate,
@@ -130,10 +132,14 @@ export type TaskComposerHost = {
   openPendingTask(): { show(task: OpenableTask): void; cancel(): void };
 };
 
-/**
- * Draft, property, and submission state for one task composer, shared by the
- * desktop and mobile views through the `TaskComposer` parts.
- */
+type TaskComposerDraftState = {
+  title: string;
+  content: string;
+  templateSelection: TaskTemplateSelection;
+  templateBaseline: TaskTemplateContents | undefined;
+};
+
+/** Draft, property, and submission state shared by desktop and mobile composers. */
 export function createTaskComposer(
   props: ComposeTaskProps,
   host: TaskComposerHost
@@ -232,33 +238,56 @@ export function createTaskComposer(
   };
 
   const initialState = initializeFromDraft();
-  const [title, setTitle] = createSignal(initialState.title);
-  // The durable checkpoint takes precedence over an older editing draft.
-  const [templateSelection, setTemplateSelection] =
-    createSignal<TaskTemplateSelection>(
+  // Replace snapshots with root patches; nested store writes would merge union variants
+  // and mutate the identities used to reject stale template responses.
+  const [draftState, setDraftState] = createStore<TaskComposerDraftState>({
+    title: initialState.title,
+    content: initialState.content,
+    // The durable checkpoint takes precedence over an older editing draft.
+    templateSelection:
       recovered?.draft.templateSelection?.kind === 'saved'
         ? recovered.draft.templateSelection
-        : (initialState.templateSelection ?? { kind: 'none' })
-    );
+        : (initialState.templateSelection ?? { kind: 'none' }),
+    templateBaseline: undefined,
+  });
+  const title = () => draftState.title;
+  const setTitle = (value: string) => setDraftState('title', value);
+  const content = () => draftState.content;
+  const setContent = (value: string) => setDraftState('content', value);
+  const templateSelection = () => unwrap(draftState.templateSelection);
+  const setTemplateSelection = (
+    next:
+      | TaskTemplateSelection
+      | ((selection: TaskTemplateSelection) => TaskTemplateSelection)
+  ) => {
+    const selection =
+      typeof next === 'function' ? next(templateSelection()) : next;
+    setDraftState({ templateSelection: selection });
+  };
+  const templateBaseline = () =>
+    draftState.templateBaseline && unwrap(draftState.templateBaseline);
+  const setTemplateBaseline = (contents: TaskTemplateContents | undefined) =>
+    setDraftState({ templateBaseline: contents });
   const isSavingTemplate = () =>
     host.templatesEnabled() && templateWorkflow.pending();
   const submitKind = () =>
     host.templatesEnabled() ? templateSubmitKind(templateSelection()) : 'task';
   const canSubmit = () => {
     const selection = templateSelection();
-    return (
-      !isCreating() &&
-      (!host.templatesEnabled() ||
-        (selection.kind !== 'new' && selection.kind !== 'editing') ||
-        (definitionsReady() &&
-          Boolean(selection.name.trim()) &&
-          (selection.kind !== 'new' ||
-            !selection.teamId ||
-            selection.teamId === team()?.id))) &&
-      (submitKind() === 'template' || Boolean(title().trim()))
-    );
+    if (isCreating()) return false;
+    const savingTemplate =
+      host.templatesEnabled() &&
+      (selection.kind === 'new' || selection.kind === 'editing');
+    if (!savingTemplate) return Boolean(title().trim());
+    if (!definitionsReady() || !selection.name.trim()) return false;
+    if (
+      selection.kind === 'new' &&
+      selection.teamId &&
+      selection.teamId !== team()?.id
+    )
+      return false;
+    return true;
   };
-  const [content, setContent] = createSignal(initialState.content);
   const [bodyEditor, setBodyEditor] = createSignal<LexicalEditor>();
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
   const [attachHotkeys, composeHotkeyScope] = useHotkeyDOMScope(
@@ -354,9 +383,7 @@ export function createTaskComposer(
     propertyDefaults: structuredClone(unwrap(propertyValues)),
     descriptionMarkdown: content(),
   });
-  const [templateBaseline, setTemplateBaseline] = createSignal<
-    TaskTemplateContents | undefined
-  >(
+  setTemplateBaseline(
     initialState.isDraftLoaded
       ? initialState.templateBaseline
       : currentTemplateState()
@@ -404,8 +431,9 @@ export function createTaskComposer(
   const liveDraftSnapshot = () => ({
     title: title(),
     shareWithTeam: shareWithTeam(),
-    templateSelection: structuredClone(templateSelection()),
-    templateBaseline: templateBaseline() && structuredClone(templateBaseline()),
+    templateSelection: structuredClone(unwrap(templateSelection())),
+    templateBaseline:
+      templateBaseline() && structuredClone(unwrap(templateBaseline())),
     content: content(),
     editorState: bodyEditor()?.getEditorState().toJSON(),
     propertyValues: structuredClone(unwrap(propertyValues)),
@@ -429,24 +457,27 @@ export function createTaskComposer(
     clearTaskComposerDraft(draftStorage);
   };
 
-  createEffect(() => {
-    // Deeply read propertyValues so this effect subscribes to any property
-    // change (e.g. setting a due date). unwrap()'d access doesn't subscribe,
-    // so without this the draft only saved when title/content changed.
-    JSON.stringify(propertyValues);
-    const snapshot = draftSnapshot();
+  createEffect(
+    on(
+      () => {
+        // Track nested property edits; unwrap() does not subscribe to them.
+        JSON.stringify(propertyValues);
+        return draftSnapshot();
+      },
+      (snapshot) => {
+        if (skipNextDraftSave) {
+          skipNextDraftSave = false;
+          return;
+        }
+        if (hasInitializedFromDraft) {
+          hasInitializedFromDraft = false;
+          return;
+        }
 
-    if (skipNextDraftSave) {
-      skipNextDraftSave = false;
-      return;
-    }
-    if (hasInitializedFromDraft) {
-      hasInitializedFromDraft = false;
-      return;
-    }
-
-    debouncedSave(snapshot);
-  });
+        debouncedSave(snapshot);
+      }
+    )
+  );
 
   // A title-mode pill that ends a picker session with no tags left has nothing
   // to show, so drop it back to the property row instead of leaving an empty
@@ -934,16 +965,37 @@ export function createTaskComposer(
 
   setBodyEditor(editorConfig.buildHandle().lexical);
   const [bodyReady, setBodyReady] = createSignal(false);
-  createEffect(() => {
-    if (!host.templatesEnabled()) {
-      untrack(() => templateWorkflow.suspend());
-      return;
-    }
-    if (!bodyReady() || !definitionsReady() || !canChangeTemplate()) return;
-    untrack(() => templateWorkflow.resume());
-  });
+  createEffect(
+    on(
+      () => {
+        // Keep the disabled branch independent of editor readiness and save state.
+        const enabled = host.templatesEnabled();
+        if (!enabled) return [false] as const;
+        const ready = bodyReady();
+        if (!ready) return [true, false] as const;
+        const definitionsAvailable = definitionsReady();
+        if (!definitionsAvailable) return [true, true, false] as const;
+        return [true, true, true, canChangeTemplate()] as const;
+      },
+      ([enabled, ready, definitionsAvailable, canChange]) => {
+        if (!enabled) {
+          untrack(() => templateWorkflow.suspend());
+          return;
+        }
+        if (!ready || !definitionsAvailable || !canChange) return;
+        untrack(() => templateWorkflow.resume());
+      }
+    )
+  );
   const portalScope = (): PortalScope => (host.isPopover() ? 'local' : 'block');
 
+  const applyTitleTag = (tag: TagMentionLifecycle) => {
+    setTagLayoutMode('title');
+    fireAndForget(
+      composerTags.applyTag(tag.scope, tag.optionId),
+      'compose-task'
+    );
+  };
   return {
     props,
     draftOwner,
@@ -988,6 +1040,7 @@ export function createTaskComposer(
     tagLayoutMode,
     setTagLayoutMode,
     handleTitleTagPickerActive,
+    applyTitleTag,
     deleteTitleTagsAtStart,
     properties,
     showCustomerContact,

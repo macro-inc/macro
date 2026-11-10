@@ -209,17 +209,7 @@ function Title() {
             onUserInput={() => {
               if (composer.errorMessage()) composer.setErrorMessage('');
             }}
-            onTagSelected={
-              mode === 'task'
-                ? (tag) => {
-                    composer.setTagLayoutMode('title');
-                    fireAndForget(
-                      composer.composerTags.applyTag(tag.scope, tag.optionId),
-                      'compose-task'
-                    );
-                  }
-                : undefined
-            }
+            onTagSelected={mode === 'task' ? composer.applyTitleTag : undefined}
             onDeleteTagsAtStart={
               mode === 'task' ? composer.deleteTitleTagsAtStart : undefined
             }
@@ -434,18 +424,17 @@ function Submit() {
       ? t('create.taskCreateMore')
       : t('create.taskCreate');
   };
+  const submit = () => {
+    const action = composer.isTemplateMode()
+      ? composer.saveTemplate
+      : composer.createTask;
+    fireAndForget(action(), 'compose-task');
+  };
   return (
     <EntityComposer.Submit
       variant="primary"
       size="sm"
-      onClick={() =>
-        fireAndForget(
-          composer.isTemplateMode()
-            ? composer.saveTemplate()
-            : composer.createTask(),
-          'compose-task'
-        )
-      }
+      onClick={submit}
       disabled={!composer.canSubmit() || composer.isCreating()}
       hasContent={composer.canSubmit()}
     >

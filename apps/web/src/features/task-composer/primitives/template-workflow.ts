@@ -6,7 +6,8 @@ import { t } from '@app/lib/i18n';
 import type { TaskComposerDraft } from '@block-md/util/taskComposerStorage';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import type { PropertyDefinitionDomain } from '@property/types';
-import { type Accessor, batch, createSignal, onCleanup } from 'solid-js';
+import { type Accessor, batch, onCleanup } from 'solid-js';
+import { createStore, unwrap } from 'solid-js/store';
 import type {
   SavedTaskTemplate,
   TaskTemplateEditorDraft,
@@ -43,13 +44,29 @@ type TemplateWorkflowOptions = {
   updateTemplate: TaskComposerHost['updateTemplate'];
 };
 
+type TemplateWorkflowState = {
+  taskDraft: TaskDraft | undefined;
+  suspendedEditor: TaskTemplateEditorDraft | undefined;
+  pending: boolean;
+};
 /** A separate editing session with an immutable task snapshot beneath it. */
 export function createTemplateWorkflow(options: TemplateWorkflowOptions) {
-  const [taskDraft, setTaskDraft] = createSignal<TaskDraft>();
-  const [suspendedEditor, setSuspendedEditor] = createSignal(
-    options.initialEditor && structuredClone(options.initialEditor)
-  );
-  const [pending, setPending] = createSignal(false);
+  const [state, setState] = createStore<TemplateWorkflowState>({
+    taskDraft: undefined,
+    suspendedEditor:
+      options.initialEditor && structuredClone(options.initialEditor),
+    pending: false,
+  });
+  // Root patches replace captured snapshots; raw reads keep them cloneable for persistence.
+  const taskDraft = () => state.taskDraft && unwrap(state.taskDraft);
+  const suspendedEditor = () =>
+    state.suspendedEditor && unwrap(state.suspendedEditor);
+  const pending = () => state.pending;
+  const setTaskDraft = (draft: TaskDraft | undefined) =>
+    setState({ taskDraft: draft });
+  const setSuspendedEditor = (editor: TaskTemplateEditorDraft | undefined) =>
+    setState({ suspendedEditor: editor });
+  const setPending = (value: boolean) => setState('pending', value);
   let request: TaskTemplateEditorDraft['request'];
   let requestVersion = 0;
   let alive = true;
@@ -101,6 +118,7 @@ export function createTemplateWorkflow(options: TemplateWorkflowOptions) {
     });
   };
   const suspend = () => {
+    // Invalidate saves before restoring the task when template access disappears.
     requestVersion += 1;
     const underlying = taskDraft();
     if (!underlying) return;
