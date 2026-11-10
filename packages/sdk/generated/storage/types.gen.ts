@@ -32190,6 +32190,23 @@ export type EntityMessageEditResponses = {
 
 export type EntityMessageEditResponse = EntityMessageEditResponses[keyof EntityMessageEditResponses];
 
+export type EntityMessageRemoveLinkPreviewsData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+        id: string;
+    };
+    query?: never;
+    url: '/messages/{parent_type}/{parent_id}/items/{id}/link_previews';
+};
+
+export type EntityMessageRemoveLinkPreviewsResponses = {
+    200: Message;
+};
+
+export type EntityMessageRemoveLinkPreviewsResponse = EntityMessageRemoveLinkPreviewsResponses[keyof EntityMessageRemoveLinkPreviewsResponses];
+
 export type EntityMessageReactData = {
     body: ReactionInput;
     path: {

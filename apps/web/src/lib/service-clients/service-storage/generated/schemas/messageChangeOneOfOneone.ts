@@ -9,8 +9,8 @@ import type { MessageChangeOneOfOneoneType } from './messageChangeOneOfOneoneTyp
 
 /**
  * The previews of the pages a message links to changed after a post or
-edit. Viewers apply it like an edit; it produces no notifications,
-broker facts, activity, or sharing.
+edit, or its sender removed them. Viewers apply it like an edit; it
+produces no notifications, broker facts, activity, or sharing.
  */
 export type MessageChangeOneOfOneone = {
   /** Persisted message with its current previews. */

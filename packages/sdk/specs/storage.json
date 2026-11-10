@@ -21907,6 +21907,52 @@
         }
       }
     },
+    "/messages/{parent_type}/{parent_id}/items/{id}/link_previews": {
+      "delete": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Remove the caller's own message's link previews for everyone. The message\ngets none again, whatever links a later edit adds.",
+        "operationId": "entity_message_remove_link_previews",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/messages/{parent_type}/{parent_id}/items/{id}/reactions": {
       "post": {
         "tags": ["messages::inbound::axum_router"],
@@ -47415,7 +47461,7 @@
           },
           {
             "type": "object",
-            "description": "The previews of the pages a message links to changed after a post or\nedit. Viewers apply it like an edit; it produces no notifications,\nbroker facts, activity, or sharing.",
+            "description": "The previews of the pages a message links to changed after a post or\nedit, or its sender removed them. Viewers apply it like an edit; it\nproduces no notifications, broker facts, activity, or sharing.",
             "required": ["message", "type"],
             "properties": {
               "message": {
