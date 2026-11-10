@@ -1,0 +1,81 @@
+step: resolve inbox database failure
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/messages/labels",
+    "auth": "user A",
+    "body": {
+      "message_ids": [
+        "<msg:m1a>"
+      ],
+      "label_id": "<label:A/Label_work>",
+      "value": true
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "status": 500,
+    "content-type": "application/json",
+    "body": {
+      "message": "unable to resolve inbox for messages"
+    }
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":500,"http.route":"/email/messages/labels","latency_ms":"<volatile>","otel.kind":"server","otel.status_code":"ERROR","otel.status_description":"Status code: 500 Internal Server Error","request.id":"<volatile>","url.path":"/email/messages/labels"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:A>","user_id":"<user:A>"}
+    INFO fetch_owned_link_for_message {"message_id":"<msg:m1a>"}
+logs:
+  [
+    {
+      "level": "ERROR",
+      "span": [
+        "handler",
+        "fetch_owned_link_for_message"
+      ],
+      "message": null,
+      "fields": {
+        "error": "error returned from database: relation \"email_links\" does not exist"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "handler"
+      ],
+      "message": "unable to resolve inbox for messages",
+      "fields": {
+        "error": "error returned from database: relation \"email_links\" does not exist\n\nCaused by:\n    relation \"email_links\" does not exist"
+      }
+    },
+    {
+      "level": "ERROR",
+      "span": [
+        "http.request"
+      ],
+      "message": "http request failed",
+      "fields": {
+        "error": "Status code: 500 Internal Server Error",
+        "latency_ms": "<volatile>"
+      }
+    }
+  ]
+sql:
+  ef48b1f66ab1 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+

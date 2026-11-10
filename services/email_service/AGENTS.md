@@ -10,6 +10,9 @@ the gateway `/email` prefix.
 
 - `src/main.rs` / `src/lib.rs`: entrypoint and `run()`.
 - `src/api.rs` + `src/api/context.rs`: HTTP surface and `ApiContext`.
+- `src/composition/api.rs`: production API dependencies and service wiring.
+- `src/parity/`: HTTP characterization lab and message-label goldens; see its
+  README for recording, normalization, and the providers it cannot isolate.
 - `src/pubsub/`: SQS pubsub workers, one module per concern — `inbox_sync`,
   `link_manager` (Gmail re-subscribe, health checks, inbox deletion),
   `scheduled` (scheduled sends),
@@ -51,6 +54,16 @@ the gateway `/email` prefix.
 - `cargo test -p email_service` (`SQLX_OFFLINE` unset; the `label_write_sim`
   tests also need Redis, at `REDIS_URI` or `redis://127.0.0.1:6379`).
 - `just check` (from this directory) runs `cargo check` with `SQLX_OFFLINE=true`.
+- Run the parity suite under `cargo nextest run -p email_service --lib -j 8 parity`
+  with private Postgres/Redis URLs (no `ENVIRONMENT` needed). It requires nextest's
+  process-per-test isolation; plain `cargo test` prints a skip message and returns
+  from parity tests before installing their global subscriber or starting a lab.
+  Use `PARITY_UPDATE=1` only to record an intentional baseline, and `PARITY_OUT`
+  to compare transcripts and callsite sidecars between builds.
+  The full span tree is in `*.debug-spans.txt`; goldens retain production INFO+
+  spans. Suites declare their output directory through `LabOptions.suite`.
+  SQL text is shared in `golden/<suite>/sql/<hash>.sql`; normal comparison runs
+  reject orphan statement files after `PARITY_UPDATE` refreshes the goldens.
 - Local SQS: `just create-localstack` / `create-queues` before running
   `pubsub_workers` locally; queue names are in the `justfile`.
 

@@ -1,0 +1,50 @@
+step: unrelated user
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/messages/labels",
+    "auth": "user C",
+    "body": {
+      "message_ids": [
+        "<msg:m1a>"
+      ],
+      "label_id": "<label:A/Label_work>",
+      "value": true
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "status": 404,
+    "content-type": "application/json",
+    "body": {
+      "message": "message not found"
+    }
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":404,"http.route":"/email/messages/labels","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/messages/labels"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+  INFO handler {"fusionauth_user_id":"<fusion:C>","user_id":"<user:C>"}
+    INFO fetch_owned_link_for_message {"message_id":"<msg:m1a>"}
+logs:
+  []
+sql:
+  15a3b9b88d4d rows_affected=1 rows_returned=1
+  37359ad5e8f0 rows_affected=2 rows_returned=2
+  ef48b1f66ab1 rows_affected=0 rows_returned=0
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+

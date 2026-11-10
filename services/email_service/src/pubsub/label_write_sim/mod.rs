@@ -4,9 +4,9 @@
 //! simulation checks that sync never undoes an unconfirmed write and that
 //! Gmail and the database end on the user's last effective action.
 
-mod fake_gmail;
-mod fake_sqs;
+pub(crate) mod fake_gmail;
+pub(crate) mod fake_sqs;
 mod sim;
 mod test;
-mod wiring;
-mod world;
+pub(crate) mod wiring;
+pub(crate) mod world;

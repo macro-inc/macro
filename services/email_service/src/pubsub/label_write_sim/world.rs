@@ -136,19 +136,19 @@ pub fn link_uuid(shard: u32) -> Uuid {
     Uuid::from_u128(0x5100_0000_0000_0000_0000_0000_0000_0000 + u128::from(shard))
 }
 
-fn thread_uuid(shard: u32, index: usize) -> Uuid {
+pub(crate) fn thread_uuid(shard: u32, index: usize) -> Uuid {
     Uuid::from_u128(
         0x5200_0000_0000_0000_0000_0000_0000_0000 + (u128::from(shard) << 16) + index as u128,
     )
 }
 
-fn message_uuid(shard: u32, index: usize) -> Uuid {
+pub(crate) fn message_uuid(shard: u32, index: usize) -> Uuid {
     Uuid::from_u128(
         0x5300_0000_0000_0000_0000_0000_0000_0000 + (u128::from(shard) << 16) + index as u128,
     )
 }
 
-fn label_uuid(shard: u32, index: usize) -> Uuid {
+pub(crate) fn label_uuid(shard: u32, index: usize) -> Uuid {
     Uuid::from_u128(
         0x5400_0000_0000_0000_0000_0000_0000_0000 + (u128::from(shard) << 16) + index as u128,
     )

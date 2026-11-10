@@ -1,0 +1,82 @@
+step: non-JSON body
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/messages/labels",
+    "auth": "user A",
+    "body": "not JSON",
+    "body_format": "raw",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "status": 400,
+    "content-type": "text/plain; charset=utf-8",
+    "body": "Failed to parse the request body as JSON: expected ident at line 1 column 2"
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":400,"http.route":"/email/messages/labels","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/messages/labels"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+
+step: invalid UUID
+request:
+  {
+    "method": "PATCH",
+    "path": "/email/messages/labels",
+    "auth": "user A",
+    "body": {
+      "message_ids": [
+        "not-a-uuid"
+      ],
+      "label_id": "<label:A/Label_work>",
+      "value": true
+    },
+    "body_format": "json",
+    "content-type": "application/json"
+  }
+response:
+  {
+    "status": 422,
+    "content-type": "text/plain; charset=utf-8",
+    "body": "Failed to deserialize the JSON body into the target type: message_ids[0]: UUID parsing failed: invalid character: found `n` at 1 at line 1 column 28"
+  }
+spans:
+  INFO http.request {"http.request.method":"PATCH","http.response.status_code":422,"http.route":"/email/messages/labels","latency_ms":"<volatile>","otel.kind":"server","request.id":"<volatile>","url.path":"/email/messages/labels"}
+    INFO validate_macro_api_token {}
+    INFO agent_sdk_request {}
+  INFO authorize_identity {}
+    INFO validate_credential {}
+      INFO validate_macro_api_token {}
+logs:
+  []
+sql:
+  []
+provider_http:
+  []
+sqs:
+  []
+kafka:
+  []
+redis:
+  {}
+db:
+  {}
+

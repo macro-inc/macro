@@ -98,6 +98,7 @@ pub struct GmailState {
     pub next_reads: VecDeque<Reply>,
     pub default_read: Reply,
     pub log: Vec<Logged>,
+    pub http_recording: Option<crate::parity::HttpRecording>,
     pause: Option<Pause>,
 }
 
@@ -350,6 +351,29 @@ impl GmailState {
 }
 
 async fn handle(State(gmail): State<FakeGmail>, method: Method, uri: Uri, body: Bytes) -> Response {
+    let recording = gmail.lock().http_recording.clone();
+    // Reserve the entry at arrival so a paused request keeps its position.
+    let entry = recording.as_ref().and_then(|recording| {
+        if method == Method::GET && uri.path() == "/" {
+            return None;
+        }
+        let mut recording = recording.lock().expect("HTTP recording");
+        let index = recording.len();
+        recording.push(
+            serde_json::json!({"method": method.as_str(), "path": uri.to_string(),
+            "body": crate::parity::http_body(&body), "status": null}),
+        );
+        Some(index)
+    });
+    let response = reply(State(gmail.clone()), method, uri, body).await;
+    if let (Some(recording), Some(index)) = (recording, entry) {
+        recording.lock().expect("HTTP recording")[index]["status"] =
+            serde_json::json!(response.status().as_u16());
+    }
+    response
+}
+
+async fn reply(State(gmail): State<FakeGmail>, method: Method, uri: Uri, body: Bytes) -> Response {
     let request = parse(&method, &uri, &body);
     // The answer is decided on arrival, even when it is applied later.
     let reply = gmail.choose_reply(&request);

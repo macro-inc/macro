@@ -1,0 +1,1 @@
+SELECT id, link_id, provider_label_id, name, created_at, message_list_visibility as "message_list_visibility: _", label_list_visibility as "label_list_visibility: _", type as "type_: _" FROM email_labels WHERE id = $1 AND link_id = $2

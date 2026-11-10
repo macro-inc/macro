@@ -1,0 +1,1 @@
+INSERT INTO email_gmail_pending_label_writes (message_id, provider_label_id, write_id, label_present, label_present_before, expires_at) SELECT m.id, $3, $4, $5, NOT $5, now() + interval '12 hours' FROM email_messages m WHERE m.id = ANY($1) AND m.link_id = $2 ORDER BY m.id ON CONFLICT (message_id, provider_label_id, write_id) DO NOTHING

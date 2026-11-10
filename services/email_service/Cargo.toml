@@ -199,6 +199,8 @@ macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+log = { workspace = true }
+rdkafka = { workspace = true }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["trace", "testing"] }
 tracing-opentelemetry = { workspace = true }

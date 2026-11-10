@@ -24,6 +24,8 @@ pub mod crm_enrichment_worker;
 pub mod mailbox_sync_worker;
 /// Outbound infrastructure adapters for email provider capabilities.
 pub mod outbound;
+#[cfg(test)]
+mod parity;
 pub mod pubsub;
 mod server;
 pub mod util;

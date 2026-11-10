@@ -1,0 +1,1 @@
+SELECT m.id AS "id!" FROM unnest($1::uuid[]) AS m(id) WHERE EXISTS ( SELECT 1 FROM email_effective_message_labels ml JOIN email_labels l ON l.id = ml.label_id WHERE ml.message_id = m.id AND l.link_id = $2 AND l.provider_label_id = $3 ) <> $4

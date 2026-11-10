@@ -1,0 +1,1 @@
+INSERT INTO email_message_labels (message_id, label_id) SELECT unnested_message_id, l.id FROM UNNEST($1::uuid[]) AS t(unnested_message_id) CROSS JOIN email_labels l WHERE l.link_id = $2 AND l.provider_label_id = $3 ON CONFLICT (message_id, label_id) DO NOTHING

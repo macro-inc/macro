@@ -5,10 +5,11 @@
 //! simulation, which owns delivery and the virtual clock.
 
 use axum::Router;
-use axum::body::Bytes;
+use axum::body::{Body, Bytes};
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
+use http_body_util::BodyExt;
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
@@ -33,11 +34,15 @@ pub enum Ack {
 #[derive(Default)]
 pub struct SqsState {
     pub sent: Vec<Sent>,
+    pub calls: Vec<serde_json::Value>,
     pub acks: Vec<Ack>,
     /// While set, every SendMessage fails, as if the SDK had used up its
     /// retries against an SQS outage.
     pub outage: bool,
+    /// Fail this numbered send attempt (batch entries count individually).
+    pub fail_nth_send: Option<u64>,
     pub failed_sends: Vec<Sent>,
+    send_attempts: u64,
     next_id: u64,
     /// Holds the next SendMessage until released.
     paused_send: Option<(oneshot::Sender<()>, oneshot::Receiver<()>)>,
@@ -83,6 +88,12 @@ impl FakeSqs {
         self.lock().outage = outage;
     }
 
+    pub fn fail_nth_send(&self, nth: u64) {
+        assert!(nth > 0, "send attempts start at one");
+        let mut state = self.lock();
+        state.fail_nth_send = Some(state.send_attempts + nth);
+    }
+
     /// Holds the next SendMessage. Returns (arrived, release).
     pub fn pause_next_send(&self) -> (oneshot::Receiver<()>, oneshot::Sender<()>) {
         let (arrived_tx, arrived_rx) = oneshot::channel();
@@ -109,6 +120,27 @@ pub fn client(endpoint: &str, retries: bool) -> aws_sdk_sqs::Client {
 }
 
 async fn handle(State(sqs): State<FakeSqs>, headers: HeaderMap, body: Bytes) -> Response {
+    let response = reply(State(sqs.clone()), headers.clone(), body.clone()).await;
+    let (parts, response_body) = response.into_parts();
+    let response_body = response_body
+        .collect()
+        .await
+        .expect("fake SQS response")
+        .to_bytes();
+    let operation = headers
+        .get("x-amz-target")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .trim_start_matches("AmazonSQS.")
+        .to_string();
+    sqs.lock().calls.push(serde_json::json!({
+        "operation": operation, "request": crate::parity::http_body(&body),
+        "status": parts.status.as_u16(), "response": crate::parity::http_body(&response_body),
+    }));
+    Response::from_parts(parts, Body::from(response_body))
+}
+
+async fn reply(State(sqs): State<FakeSqs>, headers: HeaderMap, body: Bytes) -> Response {
     let target = headers
         .get("x-amz-target")
         .and_then(|value| value.to_str().ok())
@@ -143,7 +175,8 @@ async fn handle(State(sqs): State<FakeSqs>, headers: HeaderMap, body: Bytes) -> 
                     .unwrap_or(0),
                 message_id: format!("msg-{}", state.next_id),
             };
-            if state.outage {
+            state.send_attempts += 1;
+            if state.outage || state.fail_nth_send == Some(state.send_attempts) {
                 state.failed_sends.push(sent);
                 return (
                     StatusCode::INTERNAL_SERVER_ERROR,
@@ -169,6 +202,7 @@ async fn handle(State(sqs): State<FakeSqs>, headers: HeaderMap, body: Bytes) -> 
             }
             let queue_url = text("QueueUrl");
             let mut successful = Vec::new();
+            let mut failed = Vec::new();
             for entry in request
                 .get("Entries")
                 .and_then(Value::as_array)
@@ -176,20 +210,28 @@ async fn handle(State(sqs): State<FakeSqs>, headers: HeaderMap, body: Bytes) -> 
                 .unwrap_or_default()
             {
                 state.next_id += 1;
+                state.send_attempts += 1;
                 let message_id = format!("msg-{}", state.next_id);
-                state.sent.push(Sent {
+                let sent = Sent {
                     queue_url: queue_url.clone(),
                     body: entry["MessageBody"].as_str().unwrap_or("").to_string(),
                     delay_seconds: entry["DelaySeconds"].as_u64().unwrap_or(0),
                     message_id: message_id.clone(),
-                });
+                };
+                if state.fail_nth_send == Some(state.send_attempts) {
+                    state.failed_sends.push(sent);
+                    failed.push(json!({"Id":entry["Id"],"Code":"InternalError",
+                        "Message":"injected nth-send failure","SenderFault":false}));
+                    continue;
+                }
+                state.sent.push(sent);
                 successful.push(json!({
                     "Id": entry["Id"],
                     "MessageId": message_id,
                     "MD5OfMessageBody": "",
                 }));
             }
-            json_response(json!({ "Successful": successful, "Failed": [] }))
+            json_response(json!({ "Successful": successful, "Failed": failed }))
         }
         "DeleteMessage" => {
             state.acks.push(Ack::Deleted {
