@@ -145,7 +145,7 @@
     await document.name();
     const link = document.toMention();
     await macro.channels.byId(channelId).send({
-      content: `📣 ${title} is out: ${link.tag}`,
+      content: `📣 Release notes are out: ${link.tag}`,
       mentions: [link.mention],
     });
     await macro.initiatives.byId(projectId).comment({
