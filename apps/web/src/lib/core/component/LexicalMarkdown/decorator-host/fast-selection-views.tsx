@@ -42,8 +42,7 @@ export function createNativeFastSelectionDecoratorViews<
       GroupMentionDecoratorProps & DecoratorSelectionHostProp
     >(GroupMentionNode, (node, context) => {
       const value = node.props().groupAlias;
-      if (typeof value !== 'string')
-        throw new Error('Invalid group alias');
+      if (typeof value !== 'string') throw new Error('Invalid group alias');
       return {
         groupAlias: value,
         key: String(node.key),
